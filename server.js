@@ -909,6 +909,7 @@ function publicUser(row) {
     greetingMessage: row.greeting_message || null,
     awayEnabled: !!row.away_enabled,
     awayMessage: row.away_message || null,
+    awaySchedule: row.away_schedule === 'outside_hours' ? 'outside_hours' : 'always',
     lat: row.lat != null ? Number(row.lat) : null,
     lng: row.lng != null ? Number(row.lng) : null,
     dob: row.dob ? new Date(row.dob).toISOString().slice(0, 10) : null,
@@ -1428,9 +1429,27 @@ async function pushToUser(userId, { title, body, url, tag }) {
     }
   }));
 }
+// Is the user currently inside their quiet-hours (DND) window? Uses the stored
+// device UTC offset so it reflects the user's local clock. Overnight windows
+// (start > end, e.g. 22:00–07:00) wrap across midnight.
+function userInDnd(d, nowMs) {
+  if (!d || !d.dnd_enabled) return false;
+  const start = Number(d.dnd_start_min), end = Number(d.dnd_end_min), off = Number(d.dnd_tz_offset) || 0;
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start === end) return false;
+  const t = new Date((nowMs || Date.now()) + off * 60000);
+  const cur = t.getUTCHours() * 60 + t.getUTCMinutes(); // minutes since the user's local midnight
+  return end > start ? (cur >= start && cur < end) : (cur >= start || cur < end);
+}
 async function sendPushForNotif(userId, actorId, type) {
   const verb = PUSH_VERBS[type];
   if (!verb) return; // only push the user-facing, actionable types
+  if (!push.isConfigured()) return;
+  // Quiet hours: suppress the push banner/sound during the window (the in-app
+  // notification is still created by notify() — only the alert is muted).
+  try {
+    const d = (await db.query('SELECT dnd_enabled, dnd_start_min, dnd_end_min, dnd_tz_offset FROM users WHERE id = $1', [userId])).rows[0];
+    if (userInDnd(d)) return;
+  } catch {}
   let actorName = 'Someone';
   try { const a = await db.query('SELECT name FROM users WHERE id = $1', [actorId]); if (a.rows[0]) actorName = a.rows[0].name; } catch {}
   await pushToUser(userId, { title: 'Atwe', body: `${actorName} ${verb}`, tag: type });
@@ -3053,7 +3072,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, business_hours, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, business_hours, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -3164,7 +3183,7 @@ const REQUEST_VIS = ['everyone', 'network', 'nobody'];
 const GROUPADD_VIS = ['everyone', 'connections', 'nobody'];
 app.get('/api/account-privacy', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT presence_visibility, connections_visible, who_can_request, who_can_add_groups, share_profile_updates, personalized, silence_unknown_callers FROM users WHERE id = $1', [req.user.id]);
+    const { rows } = await db.query('SELECT presence_visibility, connections_visible, who_can_request, who_can_add_groups, share_profile_updates, personalized, silence_unknown_callers, dnd_enabled, dnd_start_min, dnd_end_min, dnd_tz_offset FROM users WHERE id = $1', [req.user.id]);
     const u = rows[0] || {};
     res.json({
       presenceVisibility: PRESENCE_VIS.includes(u.presence_visibility) ? u.presence_visibility : 'everyone',
@@ -3174,6 +3193,10 @@ app.get('/api/account-privacy', auth.requireAuth, async (req, res) => {
       shareProfileUpdates: u.share_profile_updates !== false,
       personalized: u.personalized !== false,
       silenceUnknownCallers: u.silence_unknown_callers === true,
+      dndEnabled: u.dnd_enabled === true,
+      dndStartMin: Number.isFinite(u.dnd_start_min) ? u.dnd_start_min : 1320,
+      dndEndMin: Number.isFinite(u.dnd_end_min) ? u.dnd_end_min : 420,
+      dndTzOffset: Number.isFinite(u.dnd_tz_offset) ? u.dnd_tz_offset : 0,
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load privacy settings.' }); }
 });
@@ -3186,6 +3209,11 @@ app.put('/api/account-privacy', auth.requireAuth, async (req, res) => {
   if ('shareProfileUpdates' in b) { vals.push(b.shareProfileUpdates !== false); fields.push(`share_profile_updates = $${vals.length}`); }
   if ('personalized' in b) { vals.push(b.personalized !== false); fields.push(`personalized = $${vals.length}`); }
   if ('silenceUnknownCallers' in b) { vals.push(b.silenceUnknownCallers === true); fields.push(`silence_unknown_callers = $${vals.length}`); }
+  if ('dndEnabled' in b) { vals.push(b.dndEnabled === true); fields.push(`dnd_enabled = $${vals.length}`); }
+  const clampMin = (v) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.max(0, Math.min(1439, n)) : null; };
+  if ('dndStartMin' in b) { const n = clampMin(b.dndStartMin); if (n !== null) { vals.push(n); fields.push(`dnd_start_min = $${vals.length}`); } }
+  if ('dndEndMin' in b) { const n = clampMin(b.dndEndMin); if (n !== null) { vals.push(n); fields.push(`dnd_end_min = $${vals.length}`); } }
+  if ('dndTzOffset' in b) { const n = Math.round(Number(b.dndTzOffset)); if (Number.isFinite(n) && Math.abs(n) <= 840) { vals.push(n); fields.push(`dnd_tz_offset = $${vals.length}`); } }
   if (!fields.length) return res.json({ ok: true });
   try {
     vals.push(req.user.id);
@@ -3439,6 +3467,7 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
   if ('greetingMessage' in req.body) { vals.push((req.body.greetingMessage || '').trim().slice(0, 500) || null); fields.push(`greeting_message = $${vals.length}`); }
   if ('awayEnabled' in req.body) { vals.push(req.body.awayEnabled === true); fields.push(`away_enabled = $${vals.length}`); }
   if ('awayMessage' in req.body) { vals.push((req.body.awayMessage || '').trim().slice(0, 500) || null); fields.push(`away_message = $${vals.length}`); }
+  if ('awaySchedule' in req.body) { vals.push(req.body.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always'); fields.push(`away_schedule = $${vals.length}`); }
   // Geo coordinates for "near me" (set both, or clear both with null). Validated ranges.
   if ('lat' in req.body && 'lng' in req.body) {
     const lat = req.body.lat === null ? null : Number(req.body.lat);
@@ -4474,11 +4503,25 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
 // derived from message history, so it's cheap and exact.
 const AUTO_GREETING_COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000; // 14 days — mirrors WhatsApp's "new or long-absent customer"
 const AUTO_AWAY_COOLDOWN_MS = 12 * 60 * 60 * 1000; // 12h — long enough that a live back-and-forth isn't spammed
+// Is a business currently open, per its 7-element Mon..Sun business_hours, on the
+// server's wall clock (same basis as the booking-slot generator)? Returns
+// true / false, or null when hours aren't set (caller decides the fallback).
+function businessOpenNow(hours) {
+  if (!Array.isArray(hours) || hours.length !== 7) return null;
+  const now = new Date();
+  const d = hours[(now.getDay() + 6) % 7]; // JS 0=Sun → our 6; 1=Mon → 0
+  if (!d || d.closed || !d.open || !d.close) return false;
+  const toMin = (s) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(s)); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+  const o = toMin(d.open), c = toMin(d.close);
+  if (o == null || c == null) return false;
+  const cur = now.getHours() * 60 + now.getMinutes();
+  return c > o ? (cur >= o && cur < c) : (cur >= o || cur < c); // c<=o → overnight span
+}
 async function maybeAutoReply(businessId, customerId) {
   if (businessId === customerId) return;
   try {
     const b = (await db.query(
-      'SELECT account_type, greeting_enabled, greeting_message, away_enabled, away_message FROM users WHERE id = $1',
+      'SELECT account_type, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, business_hours FROM users WHERE id = $1',
       [businessId]
     )).rows[0];
     if (!b || b.account_type !== 'business') return;
@@ -4510,7 +4553,13 @@ async function maybeAutoReply(businessId, customerId) {
       return; // one auto-message per incoming customer message — greeting takes priority
     }
     if (b.away_enabled && b.away_message && dueFor('away', AUTO_AWAY_COOLDOWN_MS)) {
-      await send('away', b.away_message);
+      // 'outside_hours' schedule: only auto-reply while the business is currently
+      // closed. If open right now, stay quiet (they can answer live). With no hours
+      // set (open === null), fall through and send — the schedule can't be applied.
+      const outsideOnly = b.away_schedule === 'outside_hours';
+      if (!outsideOnly || businessOpenNow(Array.isArray(b.business_hours) ? b.business_hours : null) !== true) {
+        await send('away', b.away_message);
+      }
     }
   } catch (e) { console.error('maybeAutoReply failed:', e.message); }
 }
@@ -12825,6 +12874,126 @@ app.post('/api/wallet/send', auth.requireAuth, blockImpersonation, rateLimit(20,
     await walletStoreIdem(req.user.id, cid, 'send', result);
     res.json(result);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the money.' }); }
+});
+
+/* ─── Money requests (wallet "Request" action) ───
+   A requester asks a payer for an amount; the payer pays it from their balance
+   (a normal balance→balance transfer) or declines. Money only moves when the
+   PAYER acts, guarded claim-first on status so a double-tap can't pay twice. */
+function mapMoneyRequest(r, meId) {
+  const other = (u) => u ? { id: u.id, name: u.name, username: u.username, avatar: u.avatar, accountType: u.account_type } : null;
+  return {
+    id: r.id, amountCents: r.amount_cents, note: r.note || null, status: r.status,
+    createdAt: r.created_at, resolvedAt: r.resolved_at || null,
+    iAmRequester: r.requester_id === meId,
+    requester: other({ id: r.requester_id, name: r.requester_name, username: r.requester_username, avatar: r.requester_avatar, account_type: r.requester_type }),
+    payer: other({ id: r.payer_id, name: r.payer_name, username: r.payer_username, avatar: r.payer_avatar, account_type: r.payer_type }),
+  };
+}
+const MONEY_REQ_SELECT = `
+  SELECT mr.*,
+    rq.name AS requester_name, rq.username AS requester_username, rq.avatar AS requester_avatar, rq.account_type AS requester_type,
+    py.name AS payer_name, py.username AS payer_username, py.avatar AS payer_avatar, py.account_type AS payer_type
+  FROM money_requests mr
+  JOIN users rq ON rq.id = mr.requester_id
+  JOIN users py ON py.id = mr.payer_id `;
+// Create a request: I (requester) ask @payer for an amount. Drops a payable card
+// into the payer's DM + notifies them. No money moves here.
+app.post('/api/wallet/request', auth.requireAuth, rateLimit(20, 60000, 'wallet-request'), requireFeature('wallet'), async (req, res) => {
+  const amountCents = parseWalletAmount(req.body.amount);
+  if (amountCents === null) return res.status(400).json({ error: 'Enter an amount between $1 and $2,000.' });
+  const note = (req.body.note || '').toString().trim().slice(0, 200) || null;
+  try {
+    if (!(await requireHandle(req, res))) return;
+    let payer;
+    if (req.body.toId != null && String(req.body.toId).length) {
+      const tid = parseInt(req.body.toId, 10);
+      if (Number.isInteger(tid)) payer = (await db.query('SELECT id, name, username FROM users WHERE id = $1', [tid])).rows[0];
+    } else {
+      const uname = String(req.body.to || '').trim().replace(/^@/, '').slice(0, 40);
+      if (uname) payer = (await db.query('SELECT id, name, username FROM users WHERE lower(username) = lower($1)', [uname])).rows[0];
+    }
+    if (!payer || !payer.username) return res.status(404).json({ error: 'No one found with that username.' });
+    if (payer.id === req.user.id) return res.status(400).json({ error: 'You can’t request money from yourself.' });
+    if (await blockedEither(req.user.id, payer.id)) return res.status(403).json({ error: 'You can’t request money from this person.' });
+    const ins = await db.query(
+      'INSERT INTO money_requests (requester_id, payer_id, amount_cents, note) VALUES ($1,$2,$3,$4) RETURNING id',
+      [req.user.id, payer.id, amountCents, note]
+    );
+    const reqId = ins.rows[0].id;
+    notify(payer.id, req.user.id, 'money_request');
+    pushMetaCard(req.user.id, payer.id, { t: 'moneyrequest', requestId: reqId, amountCents, note }).catch(() => {});
+    const row = (await db.query(MONEY_REQ_SELECT + 'WHERE mr.id = $1', [reqId])).rows[0];
+    res.json({ ok: true, request: mapMoneyRequest(row, req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the request.' }); }
+});
+// List my money requests — incoming (I'm asked to pay) or outgoing (I asked).
+app.get('/api/wallet/requests', auth.requireAuth, async (req, res) => {
+  const scope = req.query.scope === 'outgoing' ? 'outgoing' : 'incoming';
+  try {
+    const col = scope === 'outgoing' ? 'mr.requester_id' : 'mr.payer_id';
+    const { rows } = await db.query(MONEY_REQ_SELECT + `WHERE ${col} = $1 ORDER BY mr.created_at DESC LIMIT 100`, [req.user.id]);
+    res.json({ requests: rows.map((r) => mapMoneyRequest(r, req.user.id)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your requests.' }); }
+});
+// Get one request (requester or payer only).
+app.get('/api/wallet/requests/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const row = (await db.query(MONEY_REQ_SELECT + 'WHERE mr.id = $1', [id])).rows[0];
+    if (!row || (row.requester_id !== req.user.id && row.payer_id !== req.user.id)) return res.status(404).json({ error: 'Request not found.' });
+    res.json({ request: mapMoneyRequest(row, req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the request.' }); }
+});
+// Pay a request I received. Claim-first on status so overlapping taps pay once.
+app.post('/api/wallet/requests/:id/pay', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'wallet-request-pay'), requireFeature('wallet'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const mr = (await db.query('SELECT requester_id, payer_id, status FROM money_requests WHERE id = $1', [id])).rows[0];
+    if (!mr || mr.payer_id !== req.user.id) return res.status(404).json({ error: 'Request not found.' });
+    if (mr.status !== 'pending') return res.json({ ok: true, already: true, status: mr.status });
+    // Claim the pending request before any money moves.
+    const claim = await db.query(
+      "UPDATE money_requests SET status = 'paid', resolved_at = now() WHERE id = $1 AND payer_id = $2 AND status = 'pending' RETURNING requester_id, amount_cents, note",
+      [id, req.user.id]
+    );
+    if (!claim.rowCount) return res.json({ ok: true, already: true });
+    const { requester_id, amount_cents, note } = claim.rows[0];
+    const unclaim = () => db.query("UPDATE money_requests SET status = 'pending', resolved_at = NULL WHERE id = $1 AND status = 'paid'", [id]).catch(() => {});
+    const vel = await walletVelocityCheck(req.user.id, amount_cents);
+    if (!vel.ok) { await unclaim(); return res.status(429).json(walletVelocityError(vel)); }
+    let t;
+    try { t = await walletTransfer(req.user.id, requester_id, amount_cents, note ? ('Request: ' + note) : 'Money request', false); }
+    catch (e) { await unclaim(); throw e; }
+    if (!t.ok) { await unclaim(); return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance to pay this request.' : 'Could not pay the request.', insufficientBalance: !!t.insufficient }); }
+    notify(requester_id, req.user.id, 'money_request_paid');
+    rtPush(requester_id, 'wallet', { type: 'receive', amountCents: amount_cents });
+    rtPush(req.user.id, 'wallet', { type: 'update', amountCents: amount_cents });
+    res.json({ ok: true, paidCents: amount_cents });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not pay the request.' }); }
+});
+// Decline a request I received (payer) — status → declined, notify requester.
+app.post('/api/wallet/requests/:id/decline', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const upd = await db.query("UPDATE money_requests SET status = 'declined', resolved_at = now() WHERE id = $1 AND payer_id = $2 AND status = 'pending' RETURNING requester_id", [id, req.user.id]);
+    if (!upd.rowCount) return res.status(404).json({ error: 'Request not found.' });
+    notify(upd.rows[0].requester_id, req.user.id, 'money_request_declined');
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not decline the request.' }); }
+});
+// Cancel a request I sent (requester) — status → cancelled.
+app.post('/api/wallet/requests/:id/cancel', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const upd = await db.query("UPDATE money_requests SET status = 'cancelled', resolved_at = now() WHERE id = $1 AND requester_id = $2 AND status = 'pending' RETURNING id", [id, req.user.id]);
+    if (!upd.rowCount) return res.status(404).json({ error: 'Request not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel the request.' }); }
 });
 
 /* ─── Savings pots / goals (wallet sub-balances) ─── */

@@ -383,8 +383,17 @@ quality filters** (`users.notif_filters`, `NOTIF_FILTERS`: people you don't
 follow / who don't follow you / new accounts / no profile photo / unconfirmed
 email) — `notify()` drops a muteable social notification when the **actor**
 matches an enabled filter, but **never for people you follow**. `GET/PUT
-/api/notification-filters`; `toggleNotifFilter` persists them. Display prefs
-persist per-device (`applyDisplayPrefs`, `body.big-text`/`body.reduce-motion`).
+/api/notification-filters`; `toggleNotifFilter` persists them. The Notifications
+page also has **Quiet hours / Do Not Disturb** (`users.dnd_enabled` +
+`dnd_start_min`/`dnd_end_min` = minutes since local midnight + `dnd_tz_offset` =
+the device's UTC offset captured client-side). While enabled and inside the window
+(`userInDnd`, overnight windows wrap, half-open at the end), **`sendPushForNotif`
+suppresses the push alert** — the notification row is still created so it shows
+in-app; only the banner/sound is muted. It rides on `GET/PUT /api/account-privacy`
+(`dndEnabled`/`dndStartMin`/`dndEndMin`/`dndTzOffset`); client
+`acLoadDnd`/`acDndToggle`/`acDndSave` (a switch + two `<input type=time>`), the
+offset re-captured on every save so it tracks the device's real clock. Display
+prefs persist per-device (`applyDisplayPrefs`, `body.big-text`/`body.reduce-motion`).
 
 **Theming (Black · Light · System).** The app has a CSS-variable theme
 system: components reference variables only (never hardcoded colours); each theme
@@ -548,7 +557,21 @@ below).
 > background** (`.me-ic`; the `color` param on `item(lbl, ic, onclick, color,
 > danger)` is accepted for back-compat but no longer applied to anything, every
 > row is just the glyph in `var(--t1)`, `var(--red)` for `.danger` rows) under
-> category labels (Work & network · App), all gutter-aligned. Same full-width,
+> category labels, all gutter-aligned. **The hub is the blueprint's "everything
+> yours" home — ~35 personal surfaces migrated out of Engine, grouped:** an account
+> group (Edit profile · Upgrade/Manage plan · Get verified), then **Money** (Wallet ·
+> Send money · Money requests · Invoices · Quotes · Split a bill · Money pools ·
+> Scheduled payments · Payment links · Gift cards · Atwe Card · Rewards · Invite
+> friends · Get a handle · Help & refunds), **Selling & business** (Business dashboard ·
+> My listings · Manage store [biz] · Sales & analytics · Business analytics [biz] ·
+> Advertise · Ads Manager · Affiliate program · Team · Affiliation), **Work & network**
+> (My network · Post a job · Jobs I posted · My applications · Saved jobs · Job alerts ·
+> Saved candidates · Resumes · Open to work), **Library** (Collections · Orders · Cart ·
+> Bookings · Saved items · Subscriptions · My courses · Newsletters · Showcase ·
+> Addresses), **Planning** (Calendar · Appointments · Events), **Tools** (Do it for me ·
+> QR code), and **App** (Settings · Notifications · Devices · Help · Admin · Log out).
+> `_ME_IC` carries the glyph set; biz-only rows are gated by `acIsBiz(u)`. Same
+> full-width,
 > page-bg-coloured hairline treatment as `.iset-row` (see the Settings UI section
 > above) — every row's own `border-bottom` plus the group's `border-top` frame
 > the whole card top-and-bottom, not just between rows.
@@ -578,10 +601,21 @@ replies (`d.replies`, served from `/api/social/profile`); Media = posts with
 photos/video; About gathers the professional sections (categories, subscriptions,
 featured, experience, education, certifications, skills, recommendations);
 Business (business accounts) = `acBizSections` (reviews, shop, bookings, jobs,
-people — `#acShopBox` is lazy-filled by `acLoadShop`). Editing uses the
-X-style **`#profileOverlay`** editor (`.pf-card`: banner+avatar cameras, boxed
-floating-label fields, AI "Improve" on headline/bio) via `openProfileEdit`/
-`saveProfile`.
+people — `#acShopBox` is lazy-filled by `acLoadShop`). **Panes build LAZILY
+(memory / iOS crash fix):** `acRenderProfile` renders ONLY the active **Posts**
+pane on open and stashes the payload (`AC._profData`/`AC._profMine`); the other
+panes are empty placeholders (`data-built="0"`) that **`acBuildProfPane(name)`**
+fills on first tab tap (`acProfTab` calls it), then runs that pane's own loaders
+(About → `acLoadShowcase`/`acLoadCoursesProfile`; Business → `acLoadShop`/
+`acLoadBizQA` — all guard `if(!box)return`). Building every pane up front — posts +
+replies + media (media was **double-rendered**) + all About sections + the whole
+Business surface, each a full post card with its often-base64 image/video — was a
+huge synchronous render that spiked memory and made **iOS crash the WebContent
+process on a content-heavy profile** ("A problem repeatedly occurred on /<handle>",
+which also read as the random reload-to-home). The profile posts query is `LIMIT
+50`. Editing uses the X-style **`#profileOverlay`** editor (`.pf-card`:
+banner+avatar cameras, boxed floating-label fields, AI "Improve" on headline/bio)
+via `openProfileEdit`/`saveProfile`.
 
 ## Admin dashboard (`public/admin.html`)
 
@@ -1127,6 +1161,34 @@ standalone). The chrome respects the safe-area insets:
 > when adding a listener or an image: passive unless you preventDefault; lazy for
 > in-list content, eager for the thing the user is looking at.
 
+> **Axis-locked scrolling + bounded feed DOM (iOS reliability).** Three related
+> rules that keep scrolling clean and stop iOS from reloading the PWA:
+> - **Tab strips scroll horizontally only.** `.tb-feedtabs` (the home For You/…/
+>   Collections row *and* the Beam All/Chats/Calls/Contacts row) carries
+>   `touch-action:pan-x` + `overflow-y:hidden` + `overscroll-behavior:contain`, so a
+>   drag on the strip pans it left/right and never leaks into vertical page scroll
+>   (the old "the tabs move up/down, feels messy" bug).
+> - **The main scroller scrolls vertically only.** `.ac-list` (feed, profile,
+>   Me-hub, most screens) carries `overflow-x:hidden` so a child a hair wider than
+>   the viewport can't make the whole surface drift sideways during an up/down scroll
+>   (the "sloppy left/right on my profile" bug). Deliberately NOT `touch-action:pan-y`
+>   — that would freeze the inner horizontal carousels (who-to-follow, story tray,
+>   highlights), which keep their own `overflow-x` box.
+> - **The infinite feed is DOM-bounded.** `acLoadFeedMore` used to `insertAdjacentHTML`
+>   post cards forever; after a minute or two of scrolling the DOM held hundreds of
+>   cards + images + IntersectionObservers, and iOS jettisoned the WebContent process
+>   and **reloaded the PWA** (the "white flash → back to homepage, sometimes logged
+>   out" bug — a real document reload, not a code path; boot then restores the last
+>   tab, or the login screen if the session 401s). **`acTrimFeed()`** (called after
+>   each appended page) keeps a sliding window of `FEED_DOM_CAP`=90 post cards: once
+>   past the cap it removes the oldest (far above the viewport), unobserves them from
+>   the `Dwell` IntersectionObserver, and — capturing `scrollTop` **before** removal
+>   (the browser clamps it to the now-shorter content as nodes go, so reading it after
+>   and subtracting double-counts and jumps to 0) — subtracts the removed height so the
+>   viewport stays put. `#acFeed` sets `overflow-anchor:none` so the browser's own
+>   scroll-anchoring doesn't double-correct. Removed ids stay in `AC._feedSeen` (never
+>   re-fetched); the sentinel/end-cap are never removed. Small feeds (≤cap) early-return.
+
 > **Accessibility baseline:** the app ships global `:focus-visible` outlines
 > (`button`/`a`/`[role=button]`/`[tabindex]` → 2px accent ring), a full
 > `@media (prefers-reduced-motion: reduce)` reset (all animation/transition durations
@@ -1171,6 +1233,16 @@ messaging + social product layered on the same accounts/auth/DB. It only works f
 live under `/api/atchat/*`, `/api/social/*`, `/api/feeds/*`, `/api/circles/*`,
 `/api/rt/*`. The frontend lives in one big `AC` state object + `AC.*`/`ac*`
 functions, organized by banner comments.
+
+> **World naming (design blueprint).** The five bottom-nav worlds are **Home ·
+> Beam · Engine · Atwe AI · Profile**. The messaging world is user-facing **Beam**
+> (nav `aria-label`, the `syncTopbar` `chat` label, the desktop right-rail tile) and
+> the discovery world is **Engine** — but the **internal tab ids stay `'chat'` and
+> `'search'`** everywhere (`appTab('chat')`, `syncTopbar('chat')`, `_searchScope`,
+> `AC_NAV_HIDE`, etc.), so routing/state code is unchanged; only the labels moved.
+> "Search" as a *verb* (the search box, the "Search Atwe" rail button, the scope
+> tabs) is still "Search" — only the *world* is named Engine. Full `/beam` `/engine`
+> deep-link world routing + the redesigned Beam header are Phase-0 work (not in yet).
 
 ### Surfaces
 
@@ -1381,7 +1453,11 @@ functions, organized by banner comments.
   to jump between a person's threads or start a new one, and picking someone in New Chat
   who you already have history with asks **Continue vs Start a new chat**
   (`acComposePickPerson` → `#threadChoice`). `resolveDmThread` validates a thread
-  belongs to the pair. **Unread never lingers:** the conversations + threads + bottom-nav
+  belongs to the pair. **Export chat** (`acHeadAct('export')` → `acExportChat`, in
+  both the DM and group ⋯ menus, WhatsApp-style) builds a readable `.txt` transcript
+  from the already-loaded thread (`[date, time] Sender: message` lines; media/rich
+  cards noted via `acMetaLabel`; deleted/pending bubbles skipped) and downloads it
+  (or shares via the native sheet on mobile). **Unread never lingers:** the conversations + threads + bottom-nav
   unread queries are all thread-scoped and skip messages that have **expired**
   (disappearing) or the reader **deleted-for-me** (`expires_at`/`deleted_for` filters),
   so a read chat's badge clears and an expired/deleted-unread message can't leave a
@@ -1777,6 +1853,12 @@ functions, organized by banner comments.
   "Edited" label on cards/detail. Own posts get an overflow menu (`acOwnPostMenu`
   → Edit / Delete); editing reuses the composer in a body-only edit mode
   (`acEditPost`/`acSaveEditedPost`).
+  **Undo toast** (design blueprint): after a **live** post (not a scheduled one),
+  `acSubmitPost` shows a bottom-center **10s "Post shared · Undo"** toast
+  (`acUndoToast(msg, actionLabel, onAction, ms=10000)`, `.undo-toast`, one at a
+  time, blue text action) — tapping Undo `DELETE`s the just-created post (its id
+  comes from the create response `{post}`) and refreshes the surface. Scheduled
+  posts keep their own "Scheduled for …" confirmation and aren't undo-toasted.
   **Postshot** (`acPostshot(id)`) — an overflow-menu action (both the own-post
   `#ownPostActions` and the other-post `#postActions` sheets) that renders **just that
   post** to a clean, shareable **PNG** via a **dependency-free Canvas 2D** painter
@@ -1880,8 +1962,9 @@ functions, organized by banner comments.
   **For You** feed is engagement-
   ranked with a recency decay (`ln(likes + 2·reposts + replies)·3 − age/8h`);
   **Following** stays chronological. **Home-feed layout** (X-style): the feed scope
-  tabs (`#tbFeedTabs`) are **exactly four** — **For You · Following · Collections ·
-  Circles** (`AC_FEED_TABS`; "Collections" is the bookmarks scope relabelled) — a
+  tabs (`#tbFeedTabs`) are **exactly four** — **For You · Following · Circles ·
+  Collections** (`AC_FEED_TABS`; "Collections" is the bookmarks scope relabelled —
+  order per the design blueprint, Circles before Collections) — a
   horizontally-scrollable row with **no underline**, all tabs the **same size**
   (active = bold white, inactive = muted gray — the active tab never resizes). On **mobile** home the row leads with the **≡ menu**
   (the home avatar is gone; `syncTopbar`/`acShow` show `#sbToggle` on home, the avatar
@@ -2088,6 +2171,16 @@ functions, organized by banner comments.
   blocks, non-open feeds, and circle-only posts. Profile update uses a fixed column
   whitelist (no `is_admin`/`plan`/`verified` mass-assignment). `plan` is **not** a
   security boundary (only widens `max_tokens`).
+- **Chat privacy notice (honest — NOT E2EE).** Atwe is server-mediated, so it is
+  **not** end-to-end encrypted (messages are stored server-side so history syncs
+  across devices). Every thread renders a small centred `.msg-enc` chip at the top
+  (`acChatPrivacyNotice`, prepended in `acRenderThread`) — *"Messages are encrypted
+  in transit and private to this chat. Tap to learn more."* — that opens
+  `#chatPrivacyView` (`acShowChatPrivacy`), a plain-English explainer which
+  **explicitly states "Not end-to-end encrypted"** and describes the real model
+  (encrypted in transit via HTTPS, private to the chat, stored securely + never
+  sold/ad-targeted, plus block/report · disappearing · view-once · locked chats ·
+  privacy settings). Never word this as an E2EE claim.
 
 ## Business networking & jobs marketplace
 
@@ -2298,7 +2391,12 @@ whitelist, same pattern as `businessHours`). `auto_reply_log` (one row per
 `(business_id, peer_id, kind)`, upserted not appended) drives the cooldowns:
 a **greeting** fires once per customer per 14 days on their first DM to the
 business; an **away** message fires (only if the greeting didn't) once per
-12 hours while `away_enabled`. Triggered from **`maybeAutoReply(businessId,
+12 hours while `away_enabled`. **Away schedule** (`users.away_schedule`,
+`always` | `outside_hours`): `outside_hours` only auto-replies while the business
+is currently **closed** per its `business_hours` — evaluated server-side by
+**`businessOpenNow(hours)`** (7-element Mon..Sun, server wall-clock, same basis as
+the booking-slot generator; handles overnight spans). If open right now it stays
+quiet; with no hours set (open === null) it falls through and sends. Triggered from **`maybeAutoReply(businessId,
 customerId)`**, called fire-and-forget right after the existing `notify(...,
 'message', ...)` in the DM send route — it inserts a normal `at_messages` row
 from the business and pushes it live (`rtPush`/`notify`), so it looks like a
@@ -2307,10 +2405,14 @@ real reply, not a system message. Only fires when the recipient is a
 **business-only** "Auto-messages" item in the chat-list ⋯ tools menu
 (`#chatMenuAutoMsg`, gated by `acIsBiz(S.user)` in `acOpenChatMenu`) opens
 `#autoMsgView` (a `.job-card-modal` sheet, two `.ios-switch` toggle+message
-sections) — `acOpenAutoMessages()`/`acSaveAutoMessages()`. **Note:** the
+sections + an `#amAwaySched` "when to send" picker — Always / Outside business
+hours) — `acOpenAutoMessages()`/`acSaveAutoMessages()`. **Note:** the
 profile-update route requires both `name` and `username` in every PUT
 payload (a pre-existing whitelist-route requirement, not new to this
-feature) — `acSaveAutoMessages()` must send both.
+feature) — `acSaveAutoMessages()` must send both. `S.user`'s boot hydration
+(both `onAuthSuccess` + token-boot) now carries `greetingEnabled`/
+`greetingMessage`/`awayEnabled`/`awayMessage`/`awaySchedule` so the sheet
+reflects the saved state after a reload (they were previously omitted).
 
 > **Boot hydration:** `S.user` (set in both `onAuthSuccess` and the token-boot path)
 > must include the business fields — `accountType`, `businessVerifyStatus`,
@@ -3351,11 +3453,24 @@ in the product form's physical-only Subscribe & Save section (`acProdSubToggle`)
 > `box-shadow:none` — so it blends into the page (the `.overlay` scrim provides the
 > separation) instead of reading as an outlined card-in-a-box; it runs wider (`max-width
 > 520px`, tight `14px` padding, and `.overlay:has(> .job-card-modal)` trims the side
-> gutter on phones). **Primary buttons:** `.ac-pill-btn.accent` is a **solid accent
-> fill** (base rule at `.ac-pill-btn.danger`'s side) — previously only the wallet card
-> styled it, so accent form buttons elsewhere fell back to the outline base; the
-> `.wallet-actions .ac-pill-btn.accent` white-on-gradient rule is more specific and
-> still wins on the balance card.
+> gutter on phones). **Primary buttons — WHITE-primary token system (design
+> blueprint "white acts, blue identifies"):** the ONE primary CTA per screen is a
+> **WHITE pill** (`--primary` `#FFFFFF` fill + `--on-primary` `#1D1D1F` label on the
+> Black theme; Light theme flips to a near-black `#111114` fill + white label). The
+> canonical primary classes — `.ac-pill-btn.accent`, `.auth-btn-primary`,
+> `.ac-post-btn` (composer Post) and `.ac-follow-btn` (Follow) — all reference
+> `var(--primary)`/`var(--on-primary)`, so the whole app flips in one place. This
+> **supersedes the old blue auth buttons** (Log in / Post / Buy now / Send are now
+> white); `--accent` (blue) is reserved for **identity** only — links, active tab,
+> selected/toggle-on states, verified badges, the AI hero card, and semantic fills
+> stay their own colors. Secondary actions are plain `.ac-pill-btn` (grey-glass), so a
+> Buy-now (white `.accent`) + Add-to-cart (grey plain) pair is never two loud buttons.
+> The white primary carries no blue glow (neutral press-flare + `brightness(.92)` +
+> `scale(.97)` on press). The `.wallet-actions .ac-pill-btn.accent` white-on-gradient
+> rule is more specific and still wins on the (blue-gradient) balance card, keeping its
+> Send pill white with a blue label. **Not yet flipped (deliberately, noted for a
+> later pass):** `.ac-conn-btn` (Connect) stays blue, and a scattering of inline
+> `background:var(--accent)` CTAs that don't use the shared classes.
 
 ### Sales tax + carrier-rate shipping (`shiptax.js`)
 
@@ -3589,6 +3704,26 @@ send money to any other username.**
   Validates not-self / exists / blocks-aware / $1–$2,000. **If your balance covers
   it → instant, free internal transfer**; otherwise it charges the full amount
   (Stripe `metadata.type=wallet_send`, or demo) and the money lands in their balance.
+
+**Money requests (wallet "Request" action, design blueprint Send·Request·Add·Cash out).**
+A requester asks a payer for an amount; **money only moves when the PAYER pays**, from
+their balance. `money_requests` (requester_id, payer_id, amount_cents, note, `status`
+pending|paid|declined|cancelled). Routes: `POST /api/wallet/request {to|toId, amount,
+note}` (not-self / exists / blocks-aware / $1–$2,000; notifies the payer + drops a
+server-built **`meta.t='moneyrequest'`** payable DM card), `GET /api/wallet/requests?
+scope=incoming|outgoing`, `GET /api/wallet/requests/:id` (party-only), `POST …/:id/pay`
+(payer — **claim-first** `UPDATE … status='pending'→'paid' RETURNING` before any money
+moves, so overlapping taps pay once; then `walletTransfer` payer→requester, velocity-
+checked + `blockImpersonation`, reverts to pending on transfer fail; a second call
+returns `{already:true}`), `POST …/:id/decline` (payer), `POST …/:id/cancel`
+(requester). Notif verbs `money_request`/`money_request_paid`/`money_request_declined`
+(never muteable — money) deep-link to the requests view. Client: a **Request** pill on
+the wallet card (`acOpenRequestMoney` → `#requestMoneyView`), a **Money requests** row
+(with a live "N to pay" count via `acWalletReqCount`) → `#moneyRequestsView` (To pay /
+You asked tabs, `acMoneyReqTab`/`acLoadMoneyRequests`/`acMoneyReqRow`, Pay/Decline/
+Cancel), and the `moneyrequest` DM meta-card with an inline **Pay $X** for the payer.
+Balance-funded + zero-sum (no Stripe path — top up first); covered by a live end-to-end
+check (create → pay moves money once, idempotent; decline/cancel; self/unknown guarded).
 
 Core helpers are **transaction-safe** (a real `pg` client with `BEGIN/COMMIT`):
 `walletCredit(client,...)` (balance + ledger row), `walletTransfer(from,to,amount,
@@ -4048,11 +4183,15 @@ already produce — no separate ML model:
   grey hairline inset to `--feed-gutter`, scrollable); no pill chips. The empty state
   (`acSearchDiscover` → `.ac-explore`, inside `#acSearchPageResults`) is a clean
   **Explore**: a beautiful gradient **"Ask Atwe AI"** hero (`.xp-ai`, `acOpenAiMatch`),
-  then **shortcut tiles** (`.xp-tile` — borderless icon-in-rounded-square tiles) where
-  **each category is its own single horizontal-scroll row** (`.xp-grid`, a flex
-  overflow-x row with a right-edge fade, scroll R→L like the scope tabs) under labels
-  **Jobs & hiring · Network · Marketplace · Money · Tools** (every feature kept, just
-  decluttered — the cart tile keeps `#acCartBadge`), then the live discovery sections
+  then a single **DISCOVER** row of **shortcut tiles** (`.xp-tile` — borderless
+  icon-in-rounded-square tiles in a horizontal-scroll `.xp-grid`). **Engine is
+  discovery-only (design blueprint: "search + discover the world, nothing personal"):**
+  the tiles are Jobs · Find workers · Marketplace · Shop with AI · Services · Businesses ·
+  Events · Courses · Communities · Newsletters · Showcase. **Every personal surface
+  (Wallet, Send money, Orders, Cart, Sell, Subscriptions, Rewards, Gift cards, Invoices,
+  Quotes, Business dashboard, Appointments, Bookings, Resumes, Ads, …) moved to the
+  Profile hub** (see the Me-hub section) and no longer appears here. Then the live
+  discovery sections
   **Trending** (`#acTrending`), **Who to follow** (`#acPymkSection`), **Discover
   shorts** (`#acDiscoverShorts`), and a **Circles** section that is an **optional
   search** (`#acCircleSearchInput` → `acCircleSearch` → `#acCircleResults`) rather than

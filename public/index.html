@@ -85,6 +85,14 @@ a{text-decoration:none;color:inherit;}
   --accent-light: #409CFF;
   --accent-tint:  #DBE9FF;   /* text on a solid blue fill — never pure white */
 
+  /* Primary action fill — the design blueprint's "white acts, blue identifies":
+     the ONE primary CTA per screen is WHITE on the black stage (dark label),
+     superseding the old blue auth buttons. Blue (--accent) stays reserved for
+     IDENTITY only (links, active tab, selected, verified, toggles-on, AI hero).
+     Light theme flips to a near-black fill with a white label (set in body.light). */
+  --primary:      #FFFFFF;
+  --on-primary:   #1D1D1F;
+
   /* Verified seal — neutral silver-white (dark) / slate (light): part of the
      grey family, deliberately never blue (blue would read as "this account
      is the primary action", which isn't what a verified badge means) */
@@ -297,7 +305,7 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-btn:active{transform:scale(.97);filter:brightness(.85);}
 @media(hover:hover){.auth-btn:hover{filter:brightness(1.15);}}
 /* Primary (blue): solid --accent fill, tint text, no border/edge of any kind. */
-.auth-btn-primary{background:var(--accent);color:var(--accent-tint);box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;}
+.auth-btn-primary{background:var(--primary);color:var(--on-primary);box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;}
 .auth-btn-primary:active,.auth-continue:active{filter:brightness(.85);}
 .auth-btn-primary:disabled{opacity:.4;cursor:default;background:var(--s2);color:var(--t2);}
 .auth-btn-primary:disabled:active{transform:none;filter:none;}
@@ -803,14 +811,17 @@ body.light .rim-flood,body.light .rim-inner{display:none;}
     filter .2s var(--ease),transform var(--t-fast) var(--ease);
   position:relative;overflow:hidden;
 }
+/* White primary (blueprint): no blue glow/wash — the fill is solidified light.
+   A neutral press-flare only; hover/press handled by brightness + scale below. */
 .ac-pill-btn.accent{
-  box-shadow:0 0 calc(16px*var(--boost,0)) -6px rgba(10,132,255,.45);
+  box-shadow:none;
 }
 .ac-pill-btn.accent::after{
   content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
   background:radial-gradient(100px 76px at var(--mx,50%) var(--my,120%),
-    rgba(150,182,255,.6),rgba(219,233,255,.32) 40%,transparent 72%);
-  opacity:calc(.14 + .22*var(--boost,0));transition:opacity .3s var(--ease);}
+    rgba(0,0,0,.06),transparent 72%);
+  opacity:calc(.10*var(--boost,0));transition:opacity .3s var(--ease);}
+.ac-pill-btn.accent:active{transform:scale(.97);filter:brightness(.92);}
 /* Excludes .auth-btn-primary/.auth-continue: those get a flat white/blue
    fill (see below) — this wash is only for the grey-glass secondary button. */
 .auth-btn:not(.auth-btn-primary):not(.auth-continue){
@@ -1911,7 +1922,14 @@ body.feeds-immersive #statusScrim{display:none;} /* immersive shorts manage thei
   .topbar.tb-chat .tb-feedtab:hover{background:var(--s1);color:var(--t1);}
   .topbar.tb-chat .tb-feedtab.active::after{width:30px;}
 }
-.tb-feedtabs{display:flex;align-items:center;gap:2px;min-width:0;flex-shrink:0;overflow-x:auto;scrollbar-width:none;}
+/* The tab strip (home For You/Following/… and chat All/Chats/…) scrolls ONLY
+   horizontally. touch-action:pan-x tells the browser a drag here pans the strip
+   left/right and never leaks into vertical page scroll (the old "moves up/down,
+   feels messy" bug); overflow-y:hidden + overscroll-behavior:contain stop any
+   vertical drift / scroll chaining into the feed underneath. */
+.tb-feedtabs{display:flex;align-items:center;gap:2px;min-width:0;flex-shrink:0;
+  overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
+  touch-action:pan-x;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
 .tb-feedtabs::-webkit-scrollbar{display:none;}
 .tb-feedtab{position:relative;background:none;border:none;cursor:pointer;color:var(--t3);font-size:15px;font-weight:600;
   padding:6px 11px;white-space:nowrap;transition:color var(--t-fast) var(--ease);}
@@ -3211,6 +3229,7 @@ body.light{
   --accent:#007AFF;--accent-hover:#0066D6;--accent-light:#3395FF;
   --accent-dim:rgba(0,122,255,.10);--accent-mid:rgba(0,122,255,.20);--accent-glow:rgba(0,122,255,.30);
   --accent-tint:#FFFFFF;   /* Apple's own light-mode blue buttons use white text */
+  --primary:#111114;--on-primary:#FFFFFF;   /* Light-theme primary: near-black fill, white label */
   --t1:#1D1D1F;--t2:#6E6E73;--t3:#6E6E73;--t4:#aab8c2;
   --verify:#5b7083;
   --rose:#007AFF;--rose-bg:rgba(0,122,255,.1);--rose-bg-2:rgba(0,122,255,.18);--rose-line:rgba(0,122,255,.4);
@@ -3329,6 +3348,15 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 /* Top margin is larger to offset the gap the first message of the day carries
    (.msg-row.gap, +11px below), so the date sits visually centred between them. */
 .msg-day{display:flex;align-items:center;gap:14px;align-self:stretch;font-size:11px;color:var(--t3);margin:15px 2px 4px;font-weight:600;}
+/* Chat privacy notice (top of thread) — honest, not an E2EE claim */
+.msg-enc{align-self:center;max-width:82%;display:flex;align-items:center;gap:7px;margin:8px auto 12px;padding:7px 13px;border:none;cursor:pointer;
+  background:var(--accent-dim);color:var(--t2);border-radius:12px;font-size:11.5px;line-height:1.35;text-align:center;font-family:inherit;}
+.msg-enc svg{flex-shrink:0;width:14px;height:14px;fill:none;stroke:var(--accent);stroke-width:1.8;}
+.cp-lock{display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:50%;background:var(--accent-dim);}
+.cp-lock svg{width:26px;height:26px;fill:none;stroke:var(--accent);stroke-width:1.8;}
+.cp-body{margin:12px 0 4px;}
+.cp-body p{font-size:13.5px;line-height:1.5;color:var(--t2);margin:0 0 12px;}
+.cp-body b{color:var(--t1);}
 /* The message above has a reaction (≈19px overhang) — pull the date up to stay centred. */
 .msg-day.mday-tight{margin-top:-1px;}
 .msg-day::before,.msg-day::after{content:"";flex:1;height:1px;background:var(--b2);}
@@ -4387,7 +4415,7 @@ body.light .ac-post{border-bottom-color:rgba(0,0,0,.07);}
 /* Home feed: one consistent left gutter for every row (avatar, body, actions,
    inline who-to-follow), full-width hairline dividers, and a slightly smaller, more
    inset card — so the whole column shares one start line with the floating nav. */
-#acFeed{padding-left:0;padding-right:0;}
+#acFeed{padding-left:0;padding-right:0;overflow-anchor:none;}
 /* The hairline divider between posts is INSET to the same gutter the content (and
    the floating nav) use, so it starts/ends exactly where the posts do. */
 #acFeed .ac-post{--post-indent:53px;margin:0;padding:14px var(--feed-gutter);border-bottom:none;position:relative;}
@@ -4660,6 +4688,17 @@ body.reduce-motion #acFeed{animation:none!important;}
 .wallet-actions .ac-pill-btn{flex:1;background:rgba(255,255,255,.16);border:none;color:#fff;}
 .wallet-actions .ac-pill-btn.accent{background:#fff;color:var(--accent);}
 .wallet-cashout{display:block;width:100%;margin-top:11px;min-height:40px;padding:8px 0;background:none;border:none;color:rgba(255,255,255,.92);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;text-align:center;}
+/* Money-request rows (wallet "Request" flow) */
+.mr-row{padding:12px 2px;border-bottom:1px solid var(--b1);}
+.mr-top{display:flex;align-items:flex-start;gap:11px;}
+.mr-main{flex:1;min-width:0;}
+.mr-line{font-size:14.5px;font-weight:600;color:var(--t1);}
+.mr-note{font-size:13px;color:var(--t3);margin-top:2px;word-break:break-word;}
+.mr-amt{flex:0 0 auto;font-size:15px;font-weight:800;color:var(--t1);text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:3px;}
+.mr-badge{font-size:11px;font-weight:700;color:var(--t3);background:var(--s2);border-radius:999px;padding:1px 8px;}
+.mr-badge.paid{color:var(--green);background:var(--money-bg);}
+.mr-acts{display:flex;gap:8px;margin-top:10px;}
+.mr-acts .ac-pill-btn{flex:0 0 auto;padding:7px 16px;}
 /* ── Premium Atwe card (gift card + Atwe Card) — compact, solid, vertical flip ── */
 .atwe-card{position:relative;width:100%;max-width:340px;margin:2px auto 0;aspect-ratio:1.6/1;perspective:1400px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .16s var(--ease);}
 .atwe-card:active{transform:scale(.98);}
@@ -5804,8 +5843,8 @@ body.light .ac-adcard{box-shadow:0 4px 16px rgba(15,20,25,.07);}
 .ac-trend-n{font-size:11.5px;color:var(--t3);}
 
 /* New-post composer */
-.ac-post-btn{background:var(--accent);color:var(--accent-tint);border:none;border-radius:var(--r-pill);padding:7px 18px;
-  font-size:14px;font-weight:700;cursor:pointer;flex-shrink:0;transition:background var(--t-fast) var(--ease);}
+.ac-post-btn{background:var(--primary);color:var(--on-primary);border:none;border-radius:var(--r-pill);padding:7px 18px;
+  font-size:14px;font-weight:700;cursor:pointer;flex-shrink:0;transition:background var(--t-fast) var(--ease),filter var(--t-fast) var(--ease);}
 .ac-post-btn:disabled{opacity:.5;}
 .ac-postbody{flex:1;overflow-y:auto;padding:16px;}
 .ac-postbody textarea{width:100%;background:none;border:none;outline:none;resize:none;color:var(--t1);
@@ -5917,7 +5956,7 @@ body.light .ac-adcard{box-shadow:0 4px 16px rgba(15,20,25,.07);}
 .ac-item .ac-prof-cats{margin:6px 0 0;gap:5px;}
 .ac-item .ac-cat-chip{font-size:11.5px;padding:4px 9px;cursor:inherit;}
 .ac-follow-btn{flex:1;border-radius:var(--r-pill);padding:9px;font-size:14px;font-weight:700;cursor:pointer;
-  border:none;background:#fff;color:#000;transition:all var(--t-fast) var(--ease);}
+  border:none;background:var(--primary);color:var(--on-primary);transition:all var(--t-fast) var(--ease);}
 .ac-follow-btn::after{content:"Follow";}
 /* Following: neutral "Following" pill; tapping it opens an Unfollow popup (X-style). */
 .ac-follow-btn.following{background:transparent;color:var(--t1);}
@@ -5942,13 +5981,12 @@ body.light .ac-adcard{box-shadow:0 4px 16px rgba(15,20,25,.07);}
 /* Primary action: a solid accent fill (was previously only styled inside the wallet
    card, so accent form buttons elsewhere rendered as a weak outline). The more-specific
    .wallet-actions rule still wins on the gradient balance card. */
-.ac-pill-btn.accent{background:var(--accent);border-color:var(--accent);color:var(--accent-tint);}
-.ac-pill-btn.accent:hover{background:var(--accent);filter:brightness(1.06);}
+.ac-pill-btn.accent{background:var(--primary);border-color:var(--primary);color:var(--on-primary);}
+.ac-pill-btn.accent:hover{filter:brightness(.97);}
 .ac-prof-stats{display:flex;gap:22px;margin-top:16px;}
 .ac-stat{font-size:13.5px;color:var(--t3);cursor:default;}
 .ac-stat b{color:var(--t1);font-weight:700;}
 .ac-prof-head{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);padding:14px 16px 2px;}
-body.light .ac-follow-btn{background:var(--accent);color:var(--accent-tint);}
 body.light .ac-follow-btn.following{background:transparent;color:var(--t1);}
 /* Floating back arrow over a profile banner (no top menu, X-style) */
 .ac-prof-back{position:absolute;top:max(12px,calc(env(safe-area-inset-top,0px) + 8px));left:12px;z-index:8;
@@ -6101,7 +6139,14 @@ body.light .ac-brand-logo{filter:invert(1);}
 .ac-searchbar .search-ic{width:17px;height:17px;color:var(--t3);flex-shrink:0;}
 .ac-searchbar input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);font-size:15px;font-family:inherit;}
 .ac-searchbar input::placeholder{color:var(--t3);}
-.ac-list{flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:4px 8px 10px;}
+/* The app's main vertical scroller (feed, profile, Me-hub, most screens). It must
+   scroll ONLY vertically — overflow-x:hidden kills the "sloppy sideways drift on
+   up/down scroll" bug (a child a hair wider than the viewport would otherwise let
+   the whole surface pan left/right). Inner horizontal carousels (who-to-follow,
+   story tray, highlights) keep their OWN overflow-x box, so they still scroll —
+   which is why this uses overflow-x:hidden and NOT touch-action:pan-y (pan-y on
+   the container would freeze those inner carousels). */
+.ac-list{flex:1;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:4px 8px 10px;}
 
 /* ─── Bulk select: a row becomes a selectable shell (checkbox + dimmed inner),
    and a frosted action bar floats above the FAB/nav. ─── */
@@ -6569,6 +6614,20 @@ body.light .ac-scope-chip.active{color:var(--t1);}
 .offline-banner.online{background:rgba(48,209,88,.97);}
 .offline-banner .ob-dot{width:7px;height:7px;border-radius:50%;background:var(--red);box-shadow:0 0 0 3px rgba(255,69,58,.25);}
 .offline-banner.online .ob-dot{background:var(--green);box-shadow:0 0 0 3px rgba(48,209,88,.25);}
+/* Undo toast (blueprint: 10s undo after posting). Bottom-center pill above the
+   floating nav, with a blue text "Undo" action; auto-dismisses. */
+.undo-toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 84px);transform:translateX(-50%) translateY(12px);
+  z-index:100000;background:rgba(40,40,44,.98);color:#fff;font-size:13px;font-weight:600;letter-spacing:.01em;
+  padding:9px 6px 9px 16px;border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.45);
+  display:inline-flex;align-items:center;gap:8px;white-space:nowrap;opacity:0;pointer-events:none;
+  transition:opacity .25s var(--ease),transform .25s var(--ease);max-width:calc(100vw - 28px);}
+.undo-toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto;}
+.undo-toast .ut-btn{background:none;border:none;color:var(--accent-light);font-weight:800;font-size:13px;
+  padding:5px 13px;cursor:pointer;font-family:inherit;border-radius:999px;-webkit-tap-highlight-color:transparent;}
+@media(hover:hover){.undo-toast .ut-btn:hover{background:rgba(255,255,255,.12);}}
+.undo-toast .ut-btn:active{transform:scale(.95);}
+body.light .undo-toast{background:rgba(28,28,30,.98);color:#fff;}
+@media(prefers-reduced-motion:reduce){.undo-toast{transition:opacity .2s linear;}}
 /* Advertise (promote) day picker */
 .ad-days{display:flex;gap:7px;padding:8px 12px 4px;}
 .ad-day{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:0;background:var(--s2);border:none;border-radius:12px;padding:8px 4px;cursor:pointer;color:var(--t1);font-family:inherit;}
@@ -9033,6 +9092,13 @@ body.light #signupDob{color-scheme:light;}
     </div>
     <div class="iset-body hidden" data-page="notifications" data-title="Notifications">
 <div class="iset-group"><div class="iset-row" data-static id="pushRow"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 0 1 12 0c0 4.5 2 5.5 2 5.5H4s2-1 2-5.5"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></svg></span><div class="iset-main"><div class="iset-label">Push notifications</div><div class="iset-sub" id="pushDesc">Get alerts even when Atwe is closed</div></div><label class="ios-switch"><input type="checkbox" id="pushSwitch" onchange="togglePush()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-cap">Push notifications arrive on this device even when the app is closed. While a tab is open you’ll always get live in-app alerts.</div>
+<div class="iset-cap" style="margin-top:18px;font-weight:600;color:var(--t2);">Quiet hours</div>
+<div class="iset-group">
+  <div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M20 15a8 8 0 0 1-9.9-9.9A8 8 0 1 0 20 15z"/></svg></span><div class="iset-main"><div class="iset-label">Do not disturb</div><div class="iset-sub">Mute notification alerts during set hours</div></div><label class="ios-switch"><input type="checkbox" id="dndToggle" onchange="acDndToggle(this.checked)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>
+  <div class="iset-row" data-static id="dndFromRow"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></span><div class="iset-main"><div class="iset-label">From</div></div><input type="time" class="iset-select" id="dndFrom" onchange="acDndSave()" style="min-width:110px;"/></div>
+  <div class="iset-row" data-static id="dndToRow"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 9 14"/></svg></span><div class="iset-main"><div class="iset-label">To</div></div><input type="time" class="iset-select" id="dndTo" onchange="acDndSave()" style="min-width:110px;"/></div>
+</div>
+<div class="iset-cap">During quiet hours you won’t be alerted — messages and notifications still arrive, you’ll just see them when you open the app. Uses this device’s clock.</div>
 <div class="iset-cap" style="margin-top:18px;font-weight:600;color:var(--t2);">Notify me about</div>
 <div class="iset-group" id="notifPrefGroup"><div class="iset-row" data-static><div class="iset-main"><div class="iset-sub">Loading…</div></div></div></div>
 <div class="iset-cap">Choose which activity sends you a notification. Messages, payments and requests always notify you.</div>
@@ -9284,8 +9350,8 @@ body.light #signupDob{color-scheme:light;}
       <div class="tb-feedtabs hidden" id="tbFeedTabs">
         <button class="tb-feedtab" id="acFeedTab-foryou" onclick="acSetFeed('foryou')">For You</button>
         <button class="tb-feedtab" id="acFeedTab-following" onclick="acSetFeed('following')">Following</button>
-        <button class="tb-feedtab" id="acFeedTab-bookmarks" onclick="acSetFeed('bookmarks')">Collections</button>
         <button class="tb-feedtab" id="acFeedTab-circles" onclick="acSetFeed('circles')">Circles</button>
+        <button class="tb-feedtab" id="acFeedTab-bookmarks" onclick="acSetFeed('bookmarks')">Collections</button>
         <button class="tb-feedtab tb-feedtab-ai spin" id="acFeedTabAi" onclick="acOpenFeedAiMenu(event)" aria-label="Atwe AI" title="Atwe AI"><svg class="tb-aidots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
       </div>
       <div class="tb-feedtabs hidden" id="tbChatTabs">
@@ -9383,11 +9449,11 @@ body.light #signupDob{color-scheme:light;}
       <button class="bn-tab" id="bnav-home" onclick="appTab('home')" aria-label="Home" data-i18n-aria="Home">
         <span class="bn-icon" style="--ic:url('/nav-narch.png')"></span>
       </button>
-      <button class="bn-tab" id="bnav-chat" onclick="appTab('chat')" aria-label="Chat" data-i18n-aria="Chat">
+      <button class="bn-tab" id="bnav-chat" onclick="appTab('chat')" aria-label="Beam" data-i18n-aria="Beam">
         <span class="bn-icon" style="--ic:url('/nav-equals.png')"></span>
         <span class="bn-dot hidden" id="bnavDot"></span>
       </button>
-      <button class="bn-tab" id="bnav-search" onclick="appTab('search')" aria-label="Search" data-i18n-aria="Search">
+      <button class="bn-tab" id="bnav-search" onclick="appTab('search')" aria-label="Engine" data-i18n-aria="Engine">
         <span class="bn-icon" style="--ic:url('/nav-ring.png')"></span>
       </button>
       <button class="bn-tab" id="bnav-ai" onclick="appTab('ai')" aria-label="Atwe AI">
@@ -9411,7 +9477,7 @@ body.light #signupDob{color-scheme:light;}
       <div class="rr-quick">
         <button class="rr-tile" onclick="appTab('chat')">
           <span class="rr-tile-ic"><svg viewBox="0 0 24 24"><path d="M12 3.3a8.7 8.7 0 0 0-8.7 8.7c0 1.6.43 3.1 1.18 4.4l-1.36 3.5a.62.62 0 0 0 .8.8l3.5-1.36c1.3.75 2.8 1.18 4.58 1.18a8.7 8.7 0 1 0 0-17.4z"/></svg></span>
-          <span class="rr-tile-tx"><b>Messages</b><span>Chat with your network</span></span>
+          <span class="rr-tile-tx"><b>Beam</b><span>Chat with your network</span></span>
           <svg class="rr-tile-go" viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg>
         </button>
         <button class="rr-tile" onclick="appTab('ai')">
@@ -10108,10 +10174,10 @@ body.light #signupDob{color-scheme:light;}
 
 <!-- Lists -->
 <div class="overlay hidden" id="listsView">
-  <div class="notif-card" role="dialog" aria-modal="true" aria-label="Lists">
+  <div class="notif-card" role="dialog" aria-modal="true" aria-label="Collections">
     <div class="notif-head">
       <button class="notif-back" onclick="closeOverlay('listsView')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
-      <span class="notif-title">Lists</span>
+      <span class="notif-title">Collections</span>
       <div style="display:flex;gap:6px;align-items:center;margin-left:auto;">
         <button class="ac-pill-btn accent" style="padding:6px 13px;" onclick="acCreateList()">＋ New</button>
       </div>
@@ -10476,6 +10542,23 @@ body.light #signupDob{color-scheme:light;}
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Member options">
     <button class="sheet-close" onclick="closeOverlay('gmemActions')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div id="gmemActionsBody"><div class="ac-empty" style="padding:24px;">Loading…</div></div>
+  </div>
+</div>
+
+<!-- Chat privacy / security explainer (honest — Atwe is not end-to-end encrypted) -->
+<div class="overlay hidden" id="chatPrivacyView" onclick="if(event.target===this)closeOverlay('chatPrivacyView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Chat privacy">
+    <button class="sheet-close" onclick="closeOverlay('chatPrivacyView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div style="text-align:center;padding:6px 0 2px;">
+      <span class="cp-lock"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>
+      <div class="jp-title" style="margin-top:10px;">Your chat is private</div>
+    </div>
+    <div class="cp-body">
+      <p><b>Encrypted in transit.</b> Messages are sent over an encrypted (HTTPS) connection between your device and Atwe, and are only shown to you and the people in this chat.</p>
+      <p><b>Not end-to-end encrypted.</b> Unlike some apps, Atwe stores your messages on its servers so your chat history syncs across your devices and you never lose it. We never sell your messages or use them to target ads.</p>
+      <p><b>You're in control.</b> Extra protection is built in: block &amp; report, disappearing messages, view-once media, locked chats, and your privacy settings.</p>
+    </div>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:6px;" onclick="closeOverlay('chatPrivacyView')">Got it</button>
   </div>
 </div>
 
@@ -11146,11 +11229,17 @@ body.light #signupDob{color-scheme:light;}
       <div class="wallet-bal-label">Balance</div>
       <div class="wallet-bal" id="walletBal">$0.00</div>
       <div class="wallet-actions">
-        <button class="ac-pill-btn accent" onclick="acOpenSendMoneyByUsername()">Send money</button>
-        <button class="ac-pill-btn" onclick="acOpenAddMoney()"><svg viewBox="0 0 24 24" style="width:16px;height:16px;vertical-align:-2px;margin-right:5px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add money</button>
+        <button class="ac-pill-btn accent" onclick="acOpenSendMoneyByUsername()">Send</button>
+        <button class="ac-pill-btn" onclick="acOpenRequestMoney()">Request</button>
+        <button class="ac-pill-btn" onclick="acOpenAddMoney()"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:4px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add</button>
       </div>
       <button class="wallet-cashout" onclick="acOpenCashout()">Cash out to bank →</button>
     </div>
+    <button class="wallet-cardrow" onclick="acOpenMoneyRequests()">
+      <span class="wallet-cardrow-ic"><svg viewBox="0 0 24 24"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+      <span class="wallet-cardrow-tx"><span class="wallet-cardrow-t">Money requests</span><span class="wallet-cardrow-s" id="walletReqSub">Request money or pay a request</span></span>
+      <span class="wallet-cardrow-chev">›</span>
+    </button>
     <button class="wallet-cardrow" onclick="acOpenDebitCard()">
       <span class="wallet-cardrow-ic"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2.5"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg></span>
       <span class="wallet-cardrow-tx"><span class="wallet-cardrow-t">Atwe Card</span><span class="wallet-cardrow-s">Spend your balance anywhere · coming soon</span></span>
@@ -11197,6 +11286,33 @@ body.light #signupDob{color-scheme:light;}
     <input class="jp-in" id="sendMoneyNote" type="text" placeholder="What's it for? (optional)" maxlength="200" style="margin-top:8px;"/>
     <button class="ac-pill-btn accent jp-submit" id="sendMoneyBtn" onclick="acSendMoney()">Send</button>
     <div class="send-hint" id="sendMoneyHint"></div>
+  </div>
+</div>
+
+<!-- Request money — ask someone to pay you -->
+<div class="overlay hidden" id="requestMoneyView" onclick="if(event.target===this)closeOverlay('requestMoneyView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Request money">
+    <button class="sheet-close" onclick="closeOverlay('requestMoneyView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Request money</div>
+    <div id="reqMoneyTo"></div>
+    <input class="jp-in" id="reqMoneyUser" type="text" placeholder="@username to request from" autocomplete="off" autocapitalize="none" spellcheck="false" style="margin-bottom:8px;"/>
+    <div class="send-amt-big">$<input id="reqMoneyAmt" type="number" min="1" max="2000" step="0.01" placeholder="0" inputmode="decimal"/></div>
+    <input class="jp-in" id="reqMoneyNote" type="text" placeholder="What's it for? (optional)" maxlength="200" style="margin-top:8px;"/>
+    <button class="ac-pill-btn accent jp-submit" id="reqMoneyBtn" onclick="acSendMoneyRequest()">Send request</button>
+    <div class="send-hint" id="reqMoneyHint">They’ll get a request they can pay from their wallet.</div>
+  </div>
+</div>
+
+<!-- Money requests — incoming (to pay) / outgoing (you asked) -->
+<div class="overlay hidden" id="moneyRequestsView" onclick="if(event.target===this)closeOverlay('moneyRequestsView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Money requests">
+    <button class="sheet-close" onclick="closeOverlay('moneyRequestsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Money requests</div>
+    <div class="ac-job-views" style="margin:6px 0 12px;">
+      <button class="ac-jv on" id="mrTab-incoming" onclick="acMoneyReqTab('incoming')">To pay</button>
+      <button class="ac-jv" id="mrTab-outgoing" onclick="acMoneyReqTab('outgoing')">You asked</button>
+    </div>
+    <div id="moneyRequestsBody"></div>
   </div>
 </div>
 
@@ -11507,6 +11623,8 @@ body.light #signupDob{color-scheme:light;}
     <div class="pf-sec-label" style="margin-top:16px;">Away message</div>
     <div class="iset-row" data-static style="margin-bottom:8px;"><div class="iset-main"><div class="iset-label">Currently away</div><div class="iset-sub">Auto-reply while you can't respond personally</div></div><label class="ios-switch"><input type="checkbox" id="amAwayOn"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>
     <textarea class="jp-in" id="amAwayMsg" maxlength="500" placeholder="We're away right now — we'll reply as soon as we're back." style="min-height:80px;"></textarea>
+    <div class="iset-row" data-static style="margin-top:8px;"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></span><div class="iset-main"><div class="iset-label">When to send</div><div class="iset-sub" id="amAwaySchedSub">Whenever away is on</div></div><select class="iset-select" id="amAwaySched" onchange="acAwaySchedChanged()"><option value="always">Always</option><option value="outside_hours">Outside business hours</option></select></div>
+    <div class="ac-disc-sub" id="amAwaySchedHint" style="margin:6px 2px 0;display:none;">Set your open hours in your business profile — the away message will only send when you're closed.</div>
     <button class="ac-pill-btn accent jp-submit" id="amSaveBtn" style="margin-top:14px;" onclick="acSaveAutoMessages()">Save</button>
   </div>
 </div>
@@ -11934,9 +12052,9 @@ body.light #signupDob{color-scheme:light;}
 
 <!-- Dashboard — unified owner hub for everything the account manages -->
 <div class="overlay hidden" id="dashboardView" onclick="if(event.target===this)closeOverlay('dashboardView')">
-  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Dashboard">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Business dashboard">
     <button class="sheet-close" onclick="closeOverlay('dashboardView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-    <div class="jp-title" style="margin:0 0 2px;">Dashboard</div>
+    <div class="jp-title" style="margin:0 0 2px;">Business dashboard</div>
     <div class="ac-disc-sub" style="margin:0 0 12px;">Everything you run — requests, orders and bookings in one place.</div>
     <div id="dashboardBody"></div>
   </div>
@@ -13715,7 +13833,7 @@ async function onAuthSuccess(token, user) {
   API.setToken(token);
   S.token = token;
   S.guest = false;
-  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null };
+  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null };
   S.plan  = user.plan || 'free';
   Accounts.upsert(token, user);
   try { await loadFromServer(); } catch {}
@@ -13899,6 +14017,42 @@ async function acLoadNotifPrefs() {
       ).join('');
     } catch (e) { fel.innerHTML = '<div class="iset-row" data-static><div class="iset-main"><div class="iset-sub">Couldn’t load. Reopen to retry.</div></div></div>'; }
   }
+  acLoadDnd();
+}
+// ── Quiet hours / Do Not Disturb ──
+function _minToTime(m) { const h = Math.floor((m % 1440) / 60), mm = (m % 60); return String(h).padStart(2, '0') + ':' + String(mm).padStart(2, '0'); }
+function _timeToMin(s) { const m = /^(\d{1,2}):(\d{2})$/.exec(s || ''); return m ? (Math.min(23, +m[1]) * 60 + Math.min(59, +m[2])) : null; }
+async function acLoadDnd() {
+  const t = document.getElementById('dndToggle'); if (!t) return;
+  try {
+    const p = AC._accPriv || await API.req('GET', '/api/account-privacy');
+    AC._accPriv = p;
+    t.checked = !!p.dndEnabled;
+    document.getElementById('dndFrom').value = _minToTime(Number.isFinite(p.dndStartMin) ? p.dndStartMin : 1320);
+    document.getElementById('dndTo').value = _minToTime(Number.isFinite(p.dndEndMin) ? p.dndEndMin : 420);
+    acDndSyncRows();
+  } catch (e) { /* leave defaults */ }
+}
+function acDndSyncRows() {
+  const on = document.getElementById('dndToggle').checked;
+  document.getElementById('dndFromRow').style.display = on ? '' : 'none';
+  document.getElementById('dndToRow').style.display = on ? '' : 'none';
+}
+function acDndToggle(on) { acDndSyncRows(); acDndSave(); }
+async function acDndSave() {
+  const enabled = document.getElementById('dndToggle').checked;
+  const startMin = _timeToMin(document.getElementById('dndFrom').value);
+  const endMin = _timeToMin(document.getElementById('dndTo').value);
+  // Capture THIS device's UTC offset (local = UTC + offset) so the server can
+  // evaluate the window against the user's local clock.
+  const tzOffset = -new Date().getTimezoneOffset();
+  const body = { dndEnabled: enabled, dndTzOffset: tzOffset };
+  if (startMin !== null) body.dndStartMin = startMin;
+  if (endMin !== null) body.dndEndMin = endMin;
+  try {
+    await API.req('PUT', '/api/account-privacy', body);
+    if (AC._accPriv) Object.assign(AC._accPriv, { dndEnabled: enabled, dndStartMin: startMin ?? AC._accPriv.dndStartMin, dndEndMin: endMin ?? AC._accPriv.dndEndMin, dndTzOffset: tzOffset });
+  } catch (e) { showNotif(e.message || 'Could not update quiet hours.'); }
 }
 async function toggleNotifPref(key, el) {
   const on = !!el.checked;
@@ -18916,7 +19070,7 @@ function acJumpToPinned(id) {
 /* ─── Starred messages (aggregate view across every DM + group) ─── */
 function _starredPreview(m) {
   if (m.body) return escHtml(m.body);
-  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'quote' ? '📋 Quote' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'product' ? '🛍️ Product' : m.meta.t === 'split' ? '🧮 Split request' : m.meta.t === 'pool' ? '🫙 Money pool' : m.meta.t === 'offer' ? '🏷️ Offer' : m.meta.t === 'storyreply' ? (m.meta.emoji ? '↩ Story reaction' : '↩ Story reply') : m.meta.t === 'gift' ? '🎁 Gift card' : m.meta.t === 'digital' ? '⚡ Download' : m.meta.t === 'money' ? '💸 Money' : 'Message';
+  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'quote' ? '📋 Quote' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'product' ? '🛍️ Product' : m.meta.t === 'split' ? '🧮 Split request' : m.meta.t === 'pool' ? '🫙 Money pool' : m.meta.t === 'offer' ? '🏷️ Offer' : m.meta.t === 'storyreply' ? (m.meta.emoji ? '↩ Story reaction' : '↩ Story reply') : m.meta.t === 'gift' ? '🎁 Gift card' : m.meta.t === 'digital' ? '⚡ Download' : m.meta.t === 'money' ? '💸 Money' : m.meta.t === 'moneyrequest' ? '💰 Money request' : 'Message';
   if (m.image || m.mediaKind === 'image') return '📷 Photo';
   if (m.mediaKind === 'video') return '🎬 Video';
   if (m.mediaKind === 'audio') return '🎤 Voice message';
@@ -20046,63 +20200,21 @@ function acSearchDiscover() {
     qr: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="18" y1="14" x2="21" y2="14"/><line x1="21" y1="18" x2="21" y2="21"/><line x1="17" y1="21" x2="14" y2="21"/></svg>',
     handle: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.6 7.2"/></svg>',
   };
-  const cartBadge = `<span class="ac-cart-badge hidden" id="acCartBadge"></span>`;
-  const work = [
-    T("acGoJobsBoard('jobs')", 'Find a job', I.findjob),
-    T("acPostJobOpen()", 'Post a job', I.postjob),
+  // Engine = discovery only (design blueprint): "search + discover the world,
+  // nothing personal." Every personal surface (wallet, orders, sell, jobs-I-posted,
+  // subscriptions, appointments, …) now lives in the Profile hub instead.
+  const discover = [
+    T("acGoJobsBoard('jobs')", 'Jobs', I.findjob),
     T("acGoJobsBoard('workers')", 'Find workers', I.workers),
-    T("acOpenResumes()", 'Resumes', I.resumes),
-    T("acOpenPrefs()", 'Open to work', I.otw),
-    acIsBiz(S.user) ? T("acOpenBizAnalytics()", 'Analytics', I.analytics) : '',
-  ].join('');
-  const network = [
-    T("acOpenCommunities()", 'Communities', I.communities),
-    T("acOpenEvents()", 'Events', I.events),
-    T("acOpenNewsletters()", 'Newsletters', I.newsletters),
-    T("acOpenAppointments('mine')", 'Appointments', I.appts),
-    T("acOpenAgenda()", 'Agenda', I.agenda),
-    T("acOpenTeam()", 'Team', I.team),
-    T("acOpenAffiliation()", 'Affiliation', I.team),
-    T("acOpenDirectory()", 'Businesses', I.businesses),
-    T("acOpenServices()", 'Services', I.services),
-    T("acOpenShowcaseDiscover()", 'Showcase', I.showcase),
-  ].join('');
-  const market = [
     T("acOpenMarketplace()", 'Marketplace', I.marketplace),
     T("acOpenAiShop()", 'Shop with AI', I.aishop),
-    T("acOpenSell()", 'Sell', I.sell),
-    T("acOpenCart()", 'Cart', I.cart, cartBadge),
-    T("acOpenOrders('buyer')", 'Orders', I.orders),
-    T("acOpenBookings('guest')", 'Bookings', I.orders),
-    T("acOpenSaved()", 'Saved', I.saved),
-    T("acOpenSubs()", 'Subscriptions', I.subs),
-    T("acOpenAddresses()", 'Addresses', I.addresses),
-    T("acOpenShopAnalytics()", 'Sales', I.sales),
-  ].join('');
-  const money = [
-    T("acOpenWallet()", 'Wallet', I.wallet),
-    T("acOpenSendMoneyByUsername()", 'Send money', I.send),
-    T("acOpenInvoices('received')", 'Invoices', I.invoices),
-    T("acOpenDashboard()", 'Dashboard', I.dashboard),
-    T("acOpenQuotes('received')", 'Quotes', I.quotes),
+    T("acOpenServices()", 'Services', I.services),
+    T("acOpenDirectory()", 'Businesses', I.businesses),
+    T("acOpenEvents()", 'Events', I.events),
     T("acOpenCourses('discover')", 'Courses', I.courses),
-    T("acOpenSplits()", 'Split a bill', I.split),
-    T("acOpenPools()", 'Pools', I.pools),
-    T("acOpenSchedPays()", 'Scheduled', I.scheduled),
-    T("acOpenLoyalty()", 'Rewards', I.rewards),
-    T("acOpenGiftCards()", 'Gift cards', I.gift),
-    T("acOpenDebitCard()", 'Atwe Card', I.card),
-    T("acOpenPayLinks()", 'Payment link', I.paylink),
-    T("acOpenAffiliate()", 'Affiliate', I.affiliate),
-    T("acOpenReferrals()", 'Invite', I.invite),
-    T("acOpenClaimHandle()", 'Get a handle', I.handle),
-    T("acOpenAdCreate()", 'Advertise', I.ads),
-    T("acOpenAds()", 'Ads Manager', I.ads),
-    T("acOpenRefunds()", 'Help & refunds', I.invoices),
-  ].join('');
-  const tools = [
-    T("acOpenAgent()", 'Do it for me', I.doit),
-    T("acOpenMyQR()", 'QR code', I.qr),
+    T("acOpenCommunities()", 'Communities', I.communities),
+    T("acOpenNewsletters()", 'Newsletters', I.newsletters),
+    T("acOpenShowcaseDiscover()", 'Showcase', I.showcase),
   ].join('');
   return `<div class="ac-explore">
     <button class="xp-ai" onclick="acOpenAiMatch()">
@@ -20110,11 +20222,7 @@ function acSearchDiscover() {
       <span class="xp-ai-tx"><span class="xp-ai-t">Ask Atwe AI</span><span class="xp-ai-s">Describe what you need — find the right job, worker, or service.</span></span>
       <svg class="xp-ai-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
     </button>
-    <div class="xp-catlabel">Jobs &amp; hiring</div><div class="xp-grid">${work}</div>
-    <div class="xp-catlabel">Network</div><div class="xp-grid">${network}</div>
-    <div class="xp-catlabel">Marketplace</div><div class="xp-grid">${market}</div>
-    <div class="xp-catlabel">Money</div><div class="xp-grid">${money}</div>
-    <div class="xp-catlabel">Tools</div><div class="xp-grid">${tools}</div>
+    <div class="xp-catlabel">Discover</div><div class="xp-grid">${discover}</div>
     <div id="acTrending"></div>
     <div id="acPymkSection"></div>
     <div id="acDiscoverShorts"></div>
@@ -21977,7 +22085,7 @@ function syncTopbar(tab) {
   const feedTabs = document.getElementById('tbFeedTabs');
   const chatTabs = document.getElementById('tbChatTabs');
   if (!label || !search) return;
-  const labels = { home: 'Atwe', chat: 'Atwe Chat', call: 'Atwe Call', contacts: 'Contacts', ai: 'Atwe AI', search: '', profile: 'Profile' };
+  const labels = { home: 'Atwe', chat: 'Beam', call: 'Atwe Call', contacts: 'Contacts', ai: 'Atwe AI', search: '', profile: 'Profile' };
   // Top-level navigation always shows the main bar (a drill-in via acShow may re-hide it).
   document.querySelector('.topbar')?.classList.remove('hidden');
   const isSearch = tab === 'search';
@@ -22397,7 +22505,7 @@ function notifRow(n, i) {
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
-  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad — pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge — it’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking — pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund — money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal — your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing — add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item' };
+  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad — pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge — it’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking — pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund — money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal — your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing — add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -22408,7 +22516,9 @@ function notifRow(n, i) {
   const isRec = n.type === 'rec_received' || n.type === 'rec_request';
   const isProduct = (n.type === 'restock' || n.type === 'sub_renewed' || n.type === 'sub_payment_failed' || n.type === 'sub_out_of_stock' || n.type === 'sub_paused' || n.type === 'price_drop' || n.type === 'market_match' || n.type === 'affiliate' || n.type === 'product_ad_review') && n.productId;
   const isTeam = n.type === 'team_invite' || n.type === 'team_joined';
-  const go = isFeed ? `acOpenFeed(${n.feedId})`
+  const isMoneyReq = n.type === 'money_request' || n.type === 'money_request_paid' || n.type === 'money_request_declined';
+  const go = isMoneyReq ? `acOpenMoneyRequests()`
+    : isFeed ? `acOpenFeed(${n.feedId})`
     : isGroup ? (n.type === 'group_request' ? `appTab('chat');acOpenGroupRequests(${n.groupId})` : `appTab('chat');acOpenGroup(${n.groupId})`)
     : isChat ? `appTab('chat');acOpenChat(${a.id})`
     : isJob ? (n.jobId ? `acOpenJob(${n.jobId})` : `appTab('search')`)
@@ -22421,7 +22531,7 @@ function notifRow(n, i) {
   const snip = isJob ? (n.jobTitle ? `<div class="notif-snip">${escHtml(n.jobTitle)}</div>` : '')
     : isProduct ? (n.productName ? `<div class="notif-snip">${escHtml(n.productName)}</div>` : '')
     : (!isFeed && !isGroup && !isChat && n.postBody) ? `<div class="notif-snip">${escHtml(n.postBody.slice(0, 80))}</div>` : '';
-  return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');${(isChat || isGroup || isJob || isConn || isEndorse || isRec || isProduct || isTeam) ? '' : "appTab('home');"}${go}">
+  return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');${(isChat || isGroup || isJob || isConn || isEndorse || isRec || isProduct || isTeam || isMoneyReq) ? '' : "appTab('home');"}${go}">
     <div class="notif-ava-wrap">${acAvatarHtml(a.name, a.avatar, 'user-avatar', acIsBiz(a))}</div>
     <div class="ac-item-main"><div class="notif-text"><b>${escHtml(a.name)}</b>${acIsVerified(a) ? vbadge(true) : ''}${acAffBadge(a)} ${verb} · <span class="notif-time">${acTime(n.created_at)}</span></div>${snip}</div>
     ${n.read ? '' : '<span class="notif-dot"></span>'}
@@ -22554,7 +22664,10 @@ function acTopBack() {
 let _acFeedScope = 'foryou';
 function acGoHome() { acStopMic(); acShow('acHomeScreen', 'home'); acSetFeed(_acFeedScope); }
 // The four home feed tabs, in order (drives the tab row + swipe navigation).
-const AC_FEED_TABS = ['foryou', 'following', 'bookmarks', 'circles'];
+// Order per the design blueprint: For You · Following · Circles · Collections
+// (Circles — the 200+ industry feeds — is the differentiator and sits before
+// Collections; 'bookmarks' renders as "Collections").
+const AC_FEED_TABS = ['foryou', 'following', 'circles', 'bookmarks'];
 function acSetFeed(scope) {
   const prevScope = _acFeedScope;
   _acFeedScope = scope;
@@ -23494,6 +23607,46 @@ const _ME_IC = {
   sent: '<svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
   co: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="9" height="18"/><path d="M12 8h9v13h-9"/><line x1="6" y1="7" x2="9" y2="7"/><line x1="6" y1="11" x2="9" y2="11"/><line x1="6" y1="15" x2="9" y2="15"/><line x1="15" y1="12" x2="18" y2="12"/><line x1="15" y1="16" x2="18" y2="16"/></svg>',
   people: '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  // Extra glyphs for the grouped Profile hub (personal surfaces migrated from Engine).
+  grid: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>',
+  list: '<svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
+  wallet: '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H5"/><circle cx="16.5" cy="12.5" r="1.3"/></svg>',
+  send: '<svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
+  request: '<svg viewBox="0 0 24 24"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+  invoices: '<svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v6h6"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>',
+  quotes: '<svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>',
+  gift: '<svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>',
+  card: '<svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2.5"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg>',
+  split: '<svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>',
+  pools: '<svg viewBox="0 0 24 24"><path d="M3 7h18v6a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><circle cx="12" cy="11" r="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+  scheduled: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2.4"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><polyline points="9 14 11 16 15 12"/></svg>',
+  rewards: '<svg viewBox="0 0 24 24"><polygon points="12 2.5 14.7 8.6 21.5 9.3 16.5 13.9 17.9 20.6 12 17.1 6.1 20.6 7.5 13.9 2.5 9.3 9.3 8.6"/></svg>',
+  paylink: '<svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>',
+  affiliate: '<svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg>',
+  invite: '<svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>',
+  handle: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.6 7.2"/></svg>',
+  ads: '<svg viewBox="0 0 24 24"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>',
+  cart: '<svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg>',
+  orders: '<svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>',
+  saved: '<svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>',
+  subs: '<svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/></svg>',
+  addresses: '<svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+  sales: '<svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>',
+  analytics: '<svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
+  resumes: '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/></svg>',
+  otw: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>',
+  appts: '<svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><path d="M8 13l2.5 2.5L16 11"/></svg>',
+  agenda: '<svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2.5" x2="8" y2="6"/><line x1="16" y1="2.5" x2="16" y2="6"/></svg>',
+  events: '<svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2.5" x2="8" y2="6"/><line x1="16" y1="2.5" x2="16" y2="6"/></svg>',
+  courses: '<svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
+  team: '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  sell: '<svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="10" y1="11" x2="14" y2="11"/></svg>',
+  store: '<svg viewBox="0 0 24 24"><path d="M3 9l1.5-5h15L21 9"/><path d="M3 9h18v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 14v6h14v-6"/></svg>',
+  newsletters: '<svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>',
+  showcase: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+  qr: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="18" y1="14" x2="21" y2="14"/><line x1="21" y1="18" x2="21" y2="21"/><line x1="17" y1="21" x2="14" y2="21"/></svg>',
+  doit: '<svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
+  refund: '<svg viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M3.5 13a9 9 0 1 0 2.1-9.4L3 7"/><path d="M12 8v5l3 2"/></svg>',
 };
 // Jump to the Jobs board in a given view (mine / saved / applied / forme / all).
 function acOpenJobsView(view) { AC._jobView = view || 'all'; AC._jobBoard = 'jobs'; _searchScope = 'jobs'; appTab('search'); }
@@ -23521,16 +23674,74 @@ function acGoProfileHub() {
     html += item(S.plan === 'pro' ? 'Manage plan' : 'Upgrade to Pro', _ME_IC.star, "profilePlanAction()", null);
     if (!verified) html += item('Get verified', _ME_IC.badge, "acGetVerified()", null);
     html += '</div>';
+    // Everything personal that used to live in Engine now lives here, grouped
+    // (design blueprint: "Engine = discovery only; ~35 personal surfaces in Profile").
+    // Money
+    html += '<div class="me-catlabel">Money</div><div class="me-group">';
+    html += item('Wallet', _ME_IC.wallet, "acOpenWallet()", null);
+    html += item('Send money', _ME_IC.send, "acOpenSendMoneyByUsername()", null);
+    html += item('Money requests', _ME_IC.request, "acOpenMoneyRequests()", null);
+    html += item('Invoices', _ME_IC.invoices, "acOpenInvoices('received')", null);
+    html += item('Quotes', _ME_IC.quotes, "acOpenQuotes('received')", null);
+    html += item('Split a bill', _ME_IC.split, "acOpenSplits()", null);
+    html += item('Money pools', _ME_IC.pools, "acOpenPools()", null);
+    html += item('Scheduled payments', _ME_IC.scheduled, "acOpenSchedPays()", null);
+    html += item('Payment links', _ME_IC.paylink, "acOpenPayLinks()", null);
+    html += item('Gift cards', _ME_IC.gift, "acOpenGiftCards()", null);
+    html += item('Atwe Card', _ME_IC.card, "acOpenDebitCard()", null);
+    html += item('Rewards', _ME_IC.rewards, "acOpenLoyalty()", null);
+    html += item('Invite friends', _ME_IC.invite, "acOpenReferrals()", null);
+    html += item('Get a handle', _ME_IC.handle, "acOpenClaimHandle()", null);
+    html += item('Help &amp; refunds', _ME_IC.refund, "acOpenRefunds()", null);
+    html += '</div>';
+    // Selling & business
+    html += '<div class="me-catlabel">Selling &amp; business</div><div class="me-group">';
+    html += item('Business dashboard', _ME_IC.grid, "acOpenDashboard()", null);
+    html += item('My listings', _ME_IC.sell, "acOpenSell()", null);
+    if (acIsBiz(u)) html += item('Manage store', _ME_IC.store, "acOpenStoreManage()", null);
+    html += item('Sales &amp; analytics', _ME_IC.sales, "acOpenShopAnalytics()", null);
+    if (acIsBiz(u)) html += item('Business analytics', _ME_IC.analytics, "acOpenBizAnalytics()", null);
+    html += item('Advertise', _ME_IC.ads, "acOpenAdCreate()", null);
+    html += item('Ads Manager', _ME_IC.ads, "acOpenAds()", null);
+    html += item('Affiliate program', _ME_IC.affiliate, "acOpenAffiliate()", null);
+    html += item('Team', _ME_IC.team, "acOpenTeam()", null);
+    html += item('Affiliation', _ME_IC.badge, "acOpenAffiliation()", null);
+    html += '</div>';
+    // Work & network
     html += '<div class="me-catlabel">Work &amp; network</div><div class="me-group">';
-    html += item('Dashboard', _ME_IC.grid || _ME_IC.co, "acOpenDashboard()", null);
     html += item('My network', _ME_IC.people, "acOpenConnections()", null);
-    html += item('Lists', _ME_IC.list || _ME_IC.people, "acOpenLists()", null);
-    html += item('My job listings', _ME_IC.job, "acOpenJobsView('mine')", null);
-    html += item('Saved jobs', _ME_IC.bmk, "acOpenJobsView('saved')", null);
+    html += item('Post a job', _ME_IC.job, "acPostJobOpen()", null);
+    html += item('Jobs I posted', _ME_IC.job, "acOpenJobsView('mine')", null);
     html += item('My applications', _ME_IC.sent, "acOpenJobsView('applied')", null);
+    html += item('Saved jobs', _ME_IC.bmk, "acOpenJobsView('saved')", null);
     html += item('Job alerts', _ME_IC.bell, "acOpenSavedSearches()", null);
     html += item('Saved candidates', _ME_IC.bmk, "acOpenSavedCandidates()", null);
-    html += item('Businesses', _ME_IC.co, "acOpenCompaniesScope()", null);
+    html += item('Resumes', _ME_IC.resumes, "acOpenResumes()", null);
+    html += item('Open to work', _ME_IC.otw, "acOpenPrefs()", null);
+    html += '</div>';
+    // Library
+    html += '<div class="me-catlabel">Library</div><div class="me-group">';
+    html += item('Collections', _ME_IC.list, "acOpenLists()", null);
+    html += item('Orders', _ME_IC.orders, "acOpenOrders('buyer')", null);
+    html += item('Cart', _ME_IC.cart, "acOpenCart()", null);
+    html += item('Bookings', _ME_IC.orders, "acOpenBookings('guest')", null);
+    html += item('Saved items', _ME_IC.saved, "acOpenSaved()", null);
+    html += item('Subscriptions', _ME_IC.subs, "acOpenSubs()", null);
+    html += item('My courses', _ME_IC.courses, "acOpenCourses('enrolled')", null);
+    html += item('Newsletters', _ME_IC.newsletters, "acOpenNewsletters()", null);
+    html += item('Showcase', _ME_IC.showcase, "acOpenShowcaseDiscover()", null);
+    html += item('Addresses', _ME_IC.addresses, "acOpenAddresses()", null);
+    html += '</div>';
+    // Planning
+    html += '<div class="me-catlabel">Planning</div><div class="me-group">';
+    html += item('Calendar', _ME_IC.agenda, "acOpenAgenda()", null);
+    html += item('Appointments', _ME_IC.appts, "acOpenAppointments('mine')", null);
+    html += item('Events', _ME_IC.events, "acOpenEvents()", null);
+    html += '</div>';
+    // Tools
+    html += '<div class="me-catlabel">Tools</div><div class="me-group">';
+    html += item('Do it for me', _ME_IC.doit, "acOpenAgent()", null);
+    html += item('QR code', _ME_IC.qr, "acOpenMyQR()", null);
     html += '</div>';
     html += '<div class="me-catlabel">App</div><div class="me-group">';
     html += item('Settings', _ME_IC.gear, "openSettings()", null);
@@ -24668,6 +24879,36 @@ function acFeedEndCap() {
   d.textContent = _acFeedScope === 'following' ? 'You’re all caught up.' : 'You’re all caught up — check back later for more.';
   el.appendChild(d);
 }
+// Sliding-window DOM cap. The infinite feed used to append post cards forever, so
+// after a minute or two of scrolling the DOM held hundreds of cards + images +
+// IntersectionObservers — enough memory that iOS jettisons the WebContent process
+// and RELOADS the PWA (the "white flash → back to homepage, sometimes logged out"
+// bug). We keep only a window of the most-recent cards in the DOM: once past the
+// cap, drop the oldest (far above the viewport) and subtract their height from the
+// scroll position so nothing visibly jumps. `#acFeed` has overflow-anchor:none so
+// the browser's own scroll-anchoring doesn't double-correct. Removed ids stay in
+// AC._feedSeen (never re-fetched); AC._feedPosts keeps the data if we ever need it.
+const FEED_DOM_CAP = 90;
+function acTrimFeed() {
+  const feed = document.getElementById('acFeed');
+  if (!feed) return;
+  const postCount = feed.querySelectorAll('.ac-post').length;
+  if (postCount <= FEED_DOM_CAP) return;
+  let toDrop = postCount - FEED_DOM_CAP; // number of post cards to remove from the top
+  const startScroll = feed.scrollTop;    // capture BEFORE removal — the browser clamps scrollTop
+                                         // to the new (shorter) content as we remove, so reading it
+                                         // afterward and subtracting would double-count and jump to 0.
+  let removedH = 0, node = feed.firstElementChild;
+  while (node && toDrop > 0) {
+    const next = node.nextElementSibling;
+    if (node.id === 'acFeedSentinel' || node.id === 'acFeedEnd') { node = next; continue; } // never remove the sentinel/end-cap
+    removedH += node.offsetHeight || 0;
+    if (node.classList.contains('ac-post')) { toDrop--; try { if (Dwell.io) Dwell.io.unobserve(node); } catch (_) {} } // stop observing before removal
+    node.remove(); // topmost card is far above the viewport (we only trim while paging near the bottom)
+    node = next;
+  }
+  if (removedH > 0) feed.scrollTop = Math.max(0, startScroll - removedH); // keep the viewport steady
+}
 async function acLoadFeedMore() {
   const scope = _acFeedScope;
   if (AC._feedLoadingMore || !AC._feedHasMore || (scope !== 'foryou' && scope !== 'following')) return;
@@ -24694,6 +24935,7 @@ async function acLoadFeedMore() {
       else document.getElementById('acFeed').insertAdjacentHTML('beforeend', html);
       Dwell.scan(); // measure time-on-post for the newly appended cards too
       acAdObserve(document.getElementById('acFeed')); // track impressions on newly woven ads
+      acTrimFeed(); // keep the DOM bounded (iOS memory) — drop the oldest off-screen cards
     }
     acFeedSetupSentinel(); // re-arm (or drop in the end-cap when exhausted)
   } catch (e) { /* a failed page just stops paging; the user can scroll-retry */ }
@@ -24890,7 +25132,15 @@ function acOpenAutoMessages() {
   document.getElementById('amGreetMsg').value = u.greetingMessage || '';
   document.getElementById('amAwayOn').checked = !!u.awayEnabled;
   document.getElementById('amAwayMsg').value = u.awayMessage || '';
+  document.getElementById('amAwaySched').value = u.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always';
+  acAwaySchedChanged();
   showOverlay('autoMsgView');
+}
+function acAwaySchedChanged() {
+  const sched = document.getElementById('amAwaySched').value;
+  const outside = sched === 'outside_hours';
+  document.getElementById('amAwaySchedSub').textContent = outside ? 'Only while you’re closed' : 'Whenever away is on';
+  document.getElementById('amAwaySchedHint').style.display = outside ? 'block' : 'none';
 }
 async function acSaveAutoMessages() {
   const btn = document.getElementById('amSaveBtn');
@@ -24898,12 +25148,16 @@ async function acSaveAutoMessages() {
   const greetingMessage = document.getElementById('amGreetMsg').value.trim();
   const awayEnabled = document.getElementById('amAwayOn').checked;
   const awayMessage = document.getElementById('amAwayMsg').value.trim();
+  const awaySchedule = document.getElementById('amAwaySched').value === 'outside_hours' ? 'outside_hours' : 'always';
   if (greetingEnabled && !greetingMessage) { showNotif('Add a greeting message, or turn the toggle off.'); return; }
   if (awayEnabled && !awayMessage) { showNotif('Add an away message, or turn the toggle off.'); return; }
+  if (awayEnabled && awaySchedule === 'outside_hours' && !(Array.isArray(S.user.businessHours) && S.user.businessHours.length === 7)) {
+    showNotif('Set your business hours in your profile first, or choose “Always”.'); return;
+  }
   btn.disabled = true;
   try {
-    await API.req('PUT', '/api/auth/profile', { name: S.user.name, username: S.user.username, greetingEnabled, greetingMessage, awayEnabled, awayMessage });
-    Object.assign(S.user, { greetingEnabled, greetingMessage, awayEnabled, awayMessage });
+    await API.req('PUT', '/api/auth/profile', { name: S.user.name, username: S.user.username, greetingEnabled, greetingMessage, awayEnabled, awayMessage, awaySchedule });
+    Object.assign(S.user, { greetingEnabled, greetingMessage, awayEnabled, awayMessage, awaySchedule });
     Store.save();
     showNotif('Auto-messages saved.');
     closeOverlay('autoMsgView');
@@ -26351,12 +26605,30 @@ async function acSubmitPost() {
   const loc = acLocationValue(); if (loc) payload.location = loc;
   const sched = acScheduleValue(); if (sched) payload.scheduledAt = sched;
   try {
-    await API.req('POST', '/api/social/posts', payload);
+    const res = await API.req('POST', '/api/social/posts', payload);
     if (AC._draftId) { API.req('DELETE', '/api/social/drafts/' + AC._draftId).catch(() => {}); AC._draftId = null; }
-    showNotif(sched ? 'Scheduled for ' + new Date(sched).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Posted!');
-    if (AC._postFeedCtx) acOpenFeed(AC._postFeedCtx);
-    else if (AC._postCircleCtx) acOpenCircle(AC._postCircleCtx);
+    const feedCtx = AC._postFeedCtx, circleCtx = AC._postCircleCtx;
+    if (feedCtx) acOpenFeed(feedCtx);
+    else if (circleCtx) acOpenCircle(circleCtx);
     else acGoHome();
+    // Blueprint: a 10s Undo toast after a live post (scheduled posts show their
+    // own confirmation and aren't undoable this way). Undo deletes the new post.
+    const newId = res && res.post && res.post.id;
+    if (sched) {
+      showNotif('Scheduled for ' + new Date(sched).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }));
+    } else if (newId) {
+      acUndoToast('Post shared', 'Undo', async () => {
+        try {
+          await API.req('DELETE', '/api/social/posts/' + newId);
+          showNotif('Post removed.');
+          if (feedCtx) acOpenFeed(feedCtx);
+          else if (circleCtx) acOpenCircle(circleCtx);
+          else acGoHome();
+        } catch (e) { showNotif('Could not undo — the post may already be gone.'); }
+      });
+    } else {
+      showNotif('Posted!');
+    }
   } catch (e) { showNotif(e.message || 'Could not post.'); btn.disabled = false; btn.textContent = btnLabel; }
 }
 async function acSaveEditedPost() {
@@ -26651,10 +26923,10 @@ async function acLoadProfile(username, mine) {
     acRenderProfile(d, mine);
     if (!mine && d.user && d.user.id) API.req('POST', '/api/profile-view/' + d.user.id).catch(() => {}); // record the view
     if (mine) acLoadProfileViewCount(); // refresh "viewed your profile this week"
-    if (mine) acLoadProfileStrength();  // profile-completeness meter
-    if (d.user && d.user.accountType === 'business') { acLoadShop(d.user.id, mine); acLoadBizQA(d.user.id, mine); } // shop + Q&A
-    if (d.user && d.user.username) acLoadShowcase(d.user.username, mine); // showcase (all accounts)
-    if (d.user && d.user.username) acLoadCoursesProfile(d.user.username, mine); // courses (all accounts)
+    if (mine) acLoadProfileStrength();  // profile-completeness meter (header, not a tab pane)
+    // Shop / Q&A / showcase / courses now load lazily when their tab pane is first
+    // opened (acBuildProfPane) — not eagerly on profile open — so a content-heavy
+    // profile doesn't build every pane at once and spike memory.
   } catch (e) {
     // A 404/410/403 is definitive (deleted/deactivated/blocked) — show the
     // not-found state with a way out instead of a misleading network error.
@@ -26898,6 +27170,14 @@ function acCatSearch(cat) {
 }
 function acRenderProfile(d, mine) {
   const u = d.user;
+  // Stash the payload so the non-active tab panes (Replies / Media / About /
+  // Business) can be built LAZILY on first tap instead of all at once. Building
+  // every pane up front — posts + replies + media (media double-rendered) + all
+  // the About sections + the whole Business surface, each a full post card with
+  // its (often base64) image/video — was a huge synchronous render that spiked
+  // memory and made iOS crash the WebContent process on a content-heavy profile
+  // ("A problem repeatedly occurred on /<handle>"). Now only Posts renders on open.
+  AC._profData = d; AC._profMine = mine; AC._profTab = 'posts';
   if (!mine) {
     AC._authors = AC._authors || {}; AC._authors[u.id] = u;
     AC._contactIds = AC._contactIds || new Set();
@@ -26931,32 +27211,21 @@ function acRenderProfile(d, mine) {
   const banner = u.banner
     ? `<div class="ac-prof-banner has ac-avaopen" style="background-image:url('${u.banner}')" onclick="openImageViewer('${u.banner}', this)"></div>`
     : `<div class="ac-prof-banner"></div>`;
-  // ── Tabbed panes (X-style). Posts / About / Media, plus Business for a
-  //    business account. The professional sections live under About. ──
+  // ── Tabbed panes (X-style). Posts / Replies / About / [Business] / Media.
+  //    Only the active Posts pane is built now; the rest are empty placeholders
+  //    (data-built="0") that acProfTab → acBuildProfPane fills on first tap. ──
   const isBiz = acIsBiz(u);
-  const hasMedia = (p) => !!((p.images && p.images.length) || p.image || (p.media && p.mediaKind === 'video'));
-  const mediaPosts = (d.posts || []).filter(hasMedia);
-  const mediaPane = mediaPosts.length ? mediaPosts.map(acPostCard).join('') : '<div class="ac-tab-empty">No photos or videos yet.</div>';
-  const repliesPane = (d.replies && d.replies.length) ? d.replies.map(acPostCard).join('') : '<div class="ac-tab-empty">No replies yet.</div>';
-  let about = acCatChips(u.categories, true) + acCreatorSubCard(d, mine) +
-    `<div id="acShowcaseBox"></div>` +
-    `<div id="acCoursesBox"></div>` +
-    acFeaturedSection(d, mine) + acExperienceSection(d, mine) + acEducationSection(d, mine) +
-    acCertSection(d, mine) + acSkillsSection(d, mine) + acRecsSection(d, mine);
-  if (!about.trim()) about = '<div class="ac-tab-empty">No details to show yet.</div>';
-  const bizPane = isBiz ? acBizSections(d, mine) : '';
-  // Tab bar (X order: Posts · Replies · About · [Business] · Media).
   const tabs = [['posts', 'Posts'], ['replies', 'Replies'], ['about', 'About']];
   if (isBiz) tabs.push(['business', 'Business']);
   tabs.push(['media', 'Media']);
   const tabBar = `<div class="ac-prof-tabs" id="acProfTabs">${tabs.map((t, i) =>
     `<button class="ac-ptab${i === 0 ? ' on' : ''}" data-ptab="${t[0]}" onclick="acProfTab('${t[0]}')">${t[1]}</button>`).join('')}</div>`;
   const panes = `<div id="acProfPanes">
-    <div class="ac-tabpane" data-tab="posts">${posts}</div>
-    <div class="ac-tabpane hidden" data-tab="replies">${repliesPane}</div>
-    <div class="ac-tabpane hidden" data-tab="about">${about}</div>
-    ${isBiz ? `<div class="ac-tabpane hidden" data-tab="business">${bizPane}</div>` : ''}
-    <div class="ac-tabpane hidden" data-tab="media">${mediaPane}</div>
+    <div class="ac-tabpane" data-tab="posts" data-built="1">${posts}</div>
+    <div class="ac-tabpane hidden" data-tab="replies" data-built="0"></div>
+    <div class="ac-tabpane hidden" data-tab="about" data-built="0"></div>
+    ${isBiz ? `<div class="ac-tabpane hidden" data-tab="business" data-built="0"></div>` : ''}
+    <div class="ac-tabpane hidden" data-tab="media" data-built="0"></div>
   </div>`;
   document.getElementById('acProfileBody').innerHTML = `
     ${banner}
@@ -26992,8 +27261,38 @@ function acRenderProfile(d, mine) {
   acLoadHighlights(u.username, mine);
 }
 // Switch profile tabs (Posts / About / Media / Business).
+// Build one profile tab pane on demand (memory: don't render every pane up front).
+function acBuildProfPane(name) {
+  const d = AC._profData, mine = AC._profMine;
+  if (!d) return;
+  const pane = document.querySelector(`#acProfPanes .ac-tabpane[data-tab="${name}"]`);
+  if (!pane || pane.getAttribute('data-built') === '1') return; // Posts is pre-built
+  const u = d.user || {};
+  let html = '';
+  if (name === 'replies') {
+    html = (d.replies && d.replies.length) ? d.replies.map(acPostCard).join('') : '<div class="ac-tab-empty">No replies yet.</div>';
+  } else if (name === 'media') {
+    const hasMedia = (p) => !!((p.images && p.images.length) || p.image || (p.media && p.mediaKind === 'video'));
+    const mediaPosts = (d.posts || []).filter(hasMedia);
+    html = mediaPosts.length ? mediaPosts.map(acPostCard).join('') : '<div class="ac-tab-empty">No photos or videos yet.</div>';
+  } else if (name === 'about') {
+    html = acCatChips(u.categories, true) + acCreatorSubCard(d, mine) +
+      `<div id="acShowcaseBox"></div>` + `<div id="acCoursesBox"></div>` +
+      acFeaturedSection(d, mine) + acExperienceSection(d, mine) + acEducationSection(d, mine) +
+      acCertSection(d, mine) + acSkillsSection(d, mine) + acRecsSection(d, mine);
+    if (!html.trim()) html = '<div class="ac-tab-empty">No details to show yet.</div>';
+  } else if (name === 'business') {
+    html = acBizSections(d, mine);
+  }
+  pane.innerHTML = html;
+  pane.setAttribute('data-built', '1');
+  // Now that the pane's boxes exist, fire its lazy content loaders.
+  if (name === 'about' && u.username) { acLoadShowcase(u.username, mine); acLoadCoursesProfile(u.username, mine); }
+  if (name === 'business' && u.id != null) { acLoadShop(u.id, mine); acLoadBizQA(u.id, mine); }
+}
 function acProfTab(name) {
   AC._profTab = name;
+  acBuildProfPane(name); // lazy-build this pane on first activation (keeps profile-open memory low)
   document.querySelectorAll('#acProfTabs .ac-ptab').forEach(b => b.classList.toggle('on', b.getAttribute('data-ptab') === name));
   document.querySelectorAll('#acProfPanes .ac-tabpane').forEach(p => p.classList.toggle('hidden', p.getAttribute('data-tab') !== name));
   const sc = document.getElementById('acProfileBody');
@@ -27281,10 +27580,20 @@ async function acLoadWallet() {
     AC._balance = balanceCents; if (S.user) S.user.balanceCents = balanceCents;
     const bal = document.getElementById('walletBal'); if (bal) bal.textContent = acMoneyFmt(balanceCents);
     acLoadPots();
+    acWalletReqCount();
     const h = document.getElementById('walletHistory'); if (!h) return;
     if (!transactions.length) { h.innerHTML = '<div class="ac-empty" style="padding:20px;">No transactions yet. Add money or send some to a friend.</div>'; return; }
     h.innerHTML = transactions.map(acWalletRow).join('');
   } catch (e) { const h = document.getElementById('walletHistory'); if (h) h.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load your wallet.') + '</div>'; }
+}
+// Show a "N to pay" count on the wallet's Money-requests row (pending incoming).
+async function acWalletReqCount() {
+  const sub = document.getElementById('walletReqSub'); if (!sub) return;
+  try {
+    const { requests } = await API.req('GET', '/api/wallet/requests?scope=incoming');
+    const pending = (requests || []).filter((r) => r.status === 'pending').length;
+    sub.textContent = pending ? (pending + (pending === 1 ? ' request to pay' : ' requests to pay')) : 'Request money or pay a request';
+  } catch (e) { /* leave default */ }
 }
 /* ─── Savings pots / goals ─── */
 async function acLoadPots() {
@@ -27425,6 +27734,97 @@ async function acSendMoney() {
   } catch (e) {
     showNotif(e.message || 'Could not send the money.');
   } finally { if (btn) { btn.disabled = false; btn.textContent = 'Send'; } }
+}
+// ── Money requests (wallet "Request" action) ──
+// Open the request sheet, optionally prefilled to a specific person.
+function acOpenRequestMoney(id, name, username) {
+  let u = (id && name && username) ? { id, name, username } : null;
+  AC._reqTo = u ? u.id : null;
+  document.getElementById('reqMoneyTo').innerHTML = u
+    ? `<div class="send-target">${acAvatarHtml(u.name, null, 'user-avatar sm', false)}<div><div class="send-target-name">${escHtml(u.name || '')}</div><div class="send-target-user">@${escHtml(u.username || '')}</div></div></div>`
+    : '';
+  const uf = document.getElementById('reqMoneyUser'); uf.style.display = u ? 'none' : ''; uf.value = '';
+  document.getElementById('reqMoneyAmt').value = '';
+  document.getElementById('reqMoneyNote').value = '';
+  closeOverlay('walletView');
+  showOverlay('requestMoneyView');
+  setTimeout(() => { const f = document.getElementById(u ? 'reqMoneyAmt' : 'reqMoneyUser'); if (f) f.focus(); }, 120);
+}
+async function acSendMoneyRequest() {
+  const amount = parseFloat(document.getElementById('reqMoneyAmt').value);
+  if (!(amount >= 1 && amount <= 2000)) { showNotif('Enter an amount between $1 and $2,000.'); return; }
+  const note = document.getElementById('reqMoneyNote').value.trim();
+  const body = { amount, note };
+  if (AC._reqTo) body.toId = AC._reqTo;
+  else {
+    const uname = document.getElementById('reqMoneyUser').value.trim().replace(/^@/, '');
+    if (!uname) { showNotif('Enter a username to request from.'); return; }
+    body.to = uname;
+  }
+  const btn = document.getElementById('reqMoneyBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  try {
+    const r = await API.req('POST', '/api/wallet/request', body);
+    closeOverlay('requestMoneyView');
+    const who = r.request && r.request.payer ? ' from @' + r.request.payer.username : '';
+    showNotif('Requested ' + acMoneyFmt(Math.round(amount * 100)) + who + '.');
+  } catch (e) {
+    showNotif(e.message || 'Could not send the request.');
+  } finally { if (btn) { btn.disabled = false; btn.textContent = 'Send request'; } }
+}
+function acOpenMoneyRequests() { closeOverlay('walletView'); AC._mrTab = 'incoming'; showOverlay('moneyRequestsView'); acMoneyReqTab('incoming'); }
+function acMoneyReqTab(scope) {
+  AC._mrTab = scope;
+  document.getElementById('mrTab-incoming').classList.toggle('on', scope === 'incoming');
+  document.getElementById('mrTab-outgoing').classList.toggle('on', scope === 'outgoing');
+  acLoadMoneyRequests(scope);
+}
+async function acLoadMoneyRequests(scope) {
+  const box = document.getElementById('moneyRequestsBody');
+  box.innerHTML = '<div class="ac-empty" style="padding:18px;">Loading…</div>';
+  try {
+    const { requests } = await API.req('GET', '/api/wallet/requests?scope=' + scope);
+    if (!requests.length) {
+      box.innerHTML = `<div class="ac-empty" style="padding:26px 18px;">${scope === 'incoming' ? 'No requests to pay.' : 'You haven’t requested any money yet.'}</div>`;
+      return;
+    }
+    box.innerHTML = requests.map((r) => acMoneyReqRow(r, scope)).join('');
+  } catch (e) { box.innerHTML = '<div class="ac-empty" style="padding:18px;">Could not load requests.</div>'; }
+}
+function acMoneyReqRow(r, scope) {
+  const other = scope === 'incoming' ? r.requester : r.payer;
+  const amt = acMoneyFmt(r.amountCents);
+  let action = '';
+  if (r.status === 'pending' && scope === 'incoming') {
+    action = `<div class="mr-acts"><button class="ac-pill-btn accent" onclick="acPayMoneyRequest(${r.id})">Pay ${amt}</button><button class="ac-pill-btn" onclick="acDeclineMoneyRequest(${r.id})">Decline</button></div>`;
+  } else if (r.status === 'pending' && scope === 'outgoing') {
+    action = `<div class="mr-acts"><button class="ac-pill-btn" onclick="acCancelMoneyRequest(${r.id})">Cancel request</button></div>`;
+  }
+  const statusLbl = r.status === 'paid' ? '<span class="mr-badge paid">Paid</span>'
+    : r.status === 'declined' ? '<span class="mr-badge">Declined</span>'
+    : r.status === 'cancelled' ? '<span class="mr-badge">Cancelled</span>' : '';
+  const line = scope === 'incoming' ? ('@' + (other ? other.username : '?') + ' requested') : ('You requested from @' + (other ? other.username : '?'));
+  return `<div class="mr-row">
+    <div class="mr-top">${acAvatarHtml(other ? other.name : '?', other ? other.avatar : null, 'user-avatar sm', other && acIsBiz(other))}
+      <div class="mr-main"><div class="mr-line">${escHtml(line)}</div>${r.note ? `<div class="mr-note">${escHtml(r.note)}</div>` : ''}</div>
+      <div class="mr-amt">${amt}${statusLbl}</div></div>
+    ${action}</div>`;
+}
+async function acPayMoneyRequest(id) {
+  if (!(await appConfirm('Pay this request from your wallet balance?'))) return;
+  try {
+    const r = await API.req('POST', '/api/wallet/requests/' + id + '/pay', {});
+    if (r.already) { showNotif('That request is no longer pending.'); }
+    else if (r.ok) { showNotif('Paid ' + acMoneyFmt(r.paidCents || 0) + '.'); acRefreshBalance && acRefreshBalance(); }
+    acLoadMoneyRequests(AC._mrTab || 'incoming');
+  } catch (e) { showNotif(e.message || 'Could not pay the request.'); }
+}
+async function acDeclineMoneyRequest(id) {
+  try { await API.req('POST', '/api/wallet/requests/' + id + '/decline', {}); acLoadMoneyRequests('incoming'); }
+  catch (e) { showNotif(e.message || 'Could not decline.'); }
+}
+async function acCancelMoneyRequest(id) {
+  try { await API.req('POST', '/api/wallet/requests/' + id + '/cancel', {}); acLoadMoneyRequests('outgoing'); }
+  catch (e) { showNotif(e.message || 'Could not cancel.'); }
 }
 const _ADD_AMTS = [10, 25, 50, 100];
 function acOpenAddMoney() {
@@ -34617,6 +35017,7 @@ function acThreadMenu(btn) {
     money: '<svg viewBox="0 0 24 24"><path d="M21 4 3 11l6 2.5L11 20z"/><path d="M21 4 11 14"/></svg>',
     invoice: '<svg viewBox="0 0 24 24"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M15 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M9 13h6M9 17h4"/></svg>',
     quote: '<svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>',
+    xport: '<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
   };
   if (AC.mode === 'group') {
     sheet.innerHTML =
@@ -34627,6 +35028,7 @@ function acThreadMenu(btn) {
       + `<button class="mm-item" onclick="acHeadAct('scheduled')">${IC.scheduled}<span class="mm-label">Scheduled messages</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('label')">${IC.label}<span class="mm-label">Label chat</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('wallpaper')">${IC.wallpaper}<span class="mm-label">Wallpaper</span></button>`
+      + `<button class="mm-item" onclick="acHeadAct('export')">${IC.xport}<span class="mm-label">Export chat</span></button>`
       + `<div class="mm-sep"></div>`
       + `<button class="mm-item danger" onclick="acHeadAct('leave')">${IC.leave}<span class="mm-label">Leave group</span></button>`
       + `<button class="mm-item danger" onclick="acHeadAct('delete')">${IC.trash}<span class="mm-label">Delete chat</span></button>`;
@@ -34654,6 +35056,7 @@ function acThreadMenu(btn) {
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('invoice')">${IC.invoice}<span class="mm-label">Send an invoice</span></button>`)
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('quote')">${IC.quote}<span class="mm-label">Send a quote</span></button>`)
       + `<button class="mm-item" onclick="acHeadAct('wallpaper')">${IC.wallpaper}<span class="mm-label">Wallpaper</span></button>`
+      + `<button class="mm-item" onclick="acHeadAct('export')">${IC.xport}<span class="mm-label">Export chat</span></button>`
       + dangerRows
       + `<button class="mm-item danger" onclick="acHeadAct('delete')">${IC.trash}<span class="mm-label">Delete chat</span></button>`;
   }
@@ -34679,10 +35082,59 @@ function acHeadAct(a) {
     else if (a === 'scheduled') acOpenScheduled();
     else if (a === 'label') acLabelChatOpen();
     else if (a === 'wallpaper') acOpenWallpaper();
+    else if (a === 'export') acExportChat();
     else if (a === 'invoice' && AC.peer) acInvoiceCreateOpen(AC.peer.id, AC.peer.name);
     else if (a === 'quote' && AC.peer) acQuoteCreateOpen(AC.peer.id, AC.peer.name);
     else if (a === 'money' && AC.peer) acOpenSendMoney(AC.peer.id, AC.peer.name, AC.peer.username);
   }, 60);
+}
+/* ── Export chat (WhatsApp-style: save the open conversation as a .txt) ──
+   Builds a readable transcript from the already-loaded thread (the read routes
+   load full history), then downloads it (or shares it on mobile). Media/rich
+   cards are noted with a placeholder; deleted/pending bubbles are skipped. */
+function acExportChat() {
+  const msgs = (AC.messages || []).filter(m => !m.deleted && !m.hidden && !m.pending && !m.failed);
+  if (!msgs.length) { showNotif('Nothing to export in this chat yet.'); return; }
+  const isGroup = AC.mode === 'group';
+  const title = (isGroup ? (AC.group && AC.group.name) : (AC.peer && AC.peer.name)) || 'chat';
+  const myName = (S.user && S.user.name) || 'You';
+  const out = [
+    'Atwe chat export',
+    (isGroup ? 'Group: ' : 'Chat with: ') + title,
+    'Exported: ' + new Date().toLocaleString(),
+    '',
+  ];
+  for (const m of msgs) {
+    let when = '';
+    try { when = new Date(m.created_at).toLocaleString([], { year: '2-digit', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch {}
+    const who = m.mine ? myName : (isGroup ? ((m.sender && m.sender.name) || 'Member') : title);
+    let content = (m.body || '').trim();
+    const attach = (m.meta && m.meta.t) ? acMetaLabel(m.meta.t)
+      : (m.images && m.images.length > 1) ? `<${m.images.length} photos>`
+      : m.image ? '<photo>'
+      : m.media_kind === 'audio' ? '<voice message>'
+      : m.media_kind === 'video' ? '<video>'
+      : m.media ? '<attachment>' : '';
+    if (attach) content = content ? (attach + ' ' + content) : attach;
+    out.push('[' + when + '] ' + who + ': ' + content);
+  }
+  const blob = new Blob([out.join('\n')], { type: 'text/plain;charset=utf-8' });
+  const fname = 'atwe-chat-' + title.replace(/[^a-z0-9]+/gi, '-').toLowerCase().replace(/^-+|-+$/g, '').slice(0, 40) + '.txt';
+  try {
+    const file = new File([blob], fname, { type: 'text/plain' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: 'Chat export' }).catch(() => _acDownloadBlob(blob, fname));
+      return;
+    }
+  } catch (e) {}
+  _acDownloadBlob(blob, fname);
+  showNotif('Chat exported.');
+}
+function _acDownloadBlob(blob, fname) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = fname;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 /* ── In-chat search (WhatsApp-style: search the open thread, jump match→match) ──
    Searches the messages already loaded in the open conversation (the read routes
@@ -37921,6 +38373,19 @@ if (!window._hugResizeBound) {
     _hugTimer = setTimeout(() => _hugBubbleLines(document.getElementById('acThread')), 120);
   });
 }
+// A small, HONEST privacy notice at the top of every thread. Atwe is NOT
+// end-to-end encrypted (messages are stored server-side so history syncs across
+// devices) — so this never claims E2EE; it states the real protection (encrypted
+// in transit + private to the chat) and taps through to the plain-English detail.
+function acChatPrivacyNotice() {
+  return `<button class="msg-enc" onclick="acShowChatPrivacy()">
+    <svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+    <span>Messages are encrypted in transit and private to this chat. Tap to learn more.</span>
+  </button>`;
+}
+function acShowChatPrivacy() {
+  showOverlay('chatPrivacyView');
+}
 function acRenderThread() {
   const el = document.getElementById('acThread');
   acApplyWallpaper(); // per-conversation wallpaper
@@ -37941,7 +38406,7 @@ function acRenderThread() {
   // everything already loaded (opening a chat shouldn't animate the whole history).
   const convKey = isGroup ? 'g' + AC.groupId : 'p' + (AC.peer && AC.peer.id);
   if (AC._seenKey !== convKey) { AC._seenKey = convKey; AC._seen = new Set(AC.messages.map(m => m.id)); }
-  let html = '', lastT = 0, lastDay = '';
+  let html = acChatPrivacyNotice(), lastT = 0, lastDay = '';
   AC.messages.forEach((m, i) => {
    try {
     const t = new Date(m.created_at).getTime();
@@ -38817,7 +39282,7 @@ function acSketchSend() {
 
 /* ── Render a rich message card + handle voting / RSVPs ── */
 function acMetaLabel(t) {
-  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'livelocation' ? '📍 Live location' : t === 'sticker' ? '🌟 Sticker' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'quote' ? '📋 Quote' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'pool' ? '🫙 Money pool' : t === 'offer' ? '🏷️ Offer' : t === 'storyreply' ? '↩ Story reply' : t === 'gift' ? '🎁 Gift card' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'doc' ? '📄 Document' : t === 'call' ? '📞 Call' : 'Message';
+  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'livelocation' ? '📍 Live location' : t === 'sticker' ? '🌟 Sticker' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'quote' ? '📋 Quote' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'pool' ? '🫙 Money pool' : t === 'offer' ? '🏷️ Offer' : t === 'storyreply' ? '↩ Story reply' : t === 'gift' ? '🎁 Gift card' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'moneyrequest' ? '💰 Money request' : t === 'doc' ? '📄 Document' : t === 'call' ? '📞 Call' : 'Message';
 }
 function acMetaCard(m) {
   const meta = m.meta; if (!meta) return '';
@@ -38974,6 +39439,16 @@ function acMetaCard(m) {
     return `<div class="meta-card mc-invoice"${meta.orderId ? ` onclick="event.stopPropagation();acOpenOrder(${meta.orderId})"` : ''}>
       <div class="mc-inv-top"><span class="mc-inv-ic" style="background:linear-gradient(135deg,var(--accent),var(--accent));"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
         <div class="mc-inv-main"><div class="mc-inv-title">⚡ Digital delivery</div><div class="mc-inv-sub">${mine ? 'Sent · buyer can access it' : (items.length ? items.map(i => escHtml(i.name)).join(', ') : 'Your download is ready') + ' · tap to open'}</div></div></div>
+    </div>`;
+  }
+  if (meta.t === 'moneyrequest') {
+    const mine = !!m.mine; // I'm the requester (sent the card); the peer is the payer
+    const amt = '$' + ((meta.amountCents || 0) / 100).toFixed(2);
+    return `<div class="meta-card mc-money recv" onclick="event.stopPropagation();acOpenMoneyRequests()">
+      <div class="mc-inv-top"><span class="mc-inv-ic mc-money-ic"><svg viewBox="0 0 24 24"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+        <div class="mc-inv-main"><div class="mc-inv-title">${mine ? 'You requested money' : 'Payment requested'}</div><div class="mc-inv-sub">${meta.note ? escHtml(meta.note) : (mine ? 'Waiting to be paid' : 'Tap to pay from your wallet')}</div></div>
+        <div class="mc-inv-amt">${amt}</div></div>
+      ${!mine && meta.requestId ? `<button class="ac-pill-btn accent" style="width:100%;margin-top:9px;" onclick="event.stopPropagation();acPayMoneyRequest(${meta.requestId})">Pay ${amt}</button>` : ''}
     </div>`;
   }
   if (meta.t === 'money') {
@@ -39942,6 +40417,34 @@ function showNotif(msg) {
   }, 2800);
 }
 
+// Undo toast (blueprint): a bottom pill with a single "Undo" action that stays
+// for `ms` (default 10s) then melts. Only one at a time. `onAction` runs on tap.
+function acUndoToast(msg, actionLabel, onAction, ms) {
+  ms = ms || 10000;
+  const prev = document.getElementById('acUndoToast');
+  if (prev) prev.remove();
+  if (acUndoToast._t) clearTimeout(acUndoToast._t);
+  const el = document.createElement('div');
+  el.className = 'undo-toast';
+  el.id = 'acUndoToast';
+  el.setAttribute('role', 'status');
+  const txt = document.createElement('span'); txt.className = 'ut-msg'; txt.textContent = msg;
+  const btn = document.createElement('button'); btn.className = 'ut-btn'; btn.type = 'button';
+  btn.textContent = actionLabel || 'Undo';
+  el.appendChild(txt); el.appendChild(btn);
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  announce(msg);
+  const dismiss = () => {
+    if (acUndoToast._t) { clearTimeout(acUndoToast._t); acUndoToast._t = null; }
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 280);
+  };
+  acUndoToast._t = setTimeout(dismiss, ms);
+  btn.onclick = () => { dismiss(); try { onAction && onAction(); } catch (e) {} };
+  return el;
+}
+
 /* ═══════════════════════════════════════════════
    ENTER / SUBMIT on modals with Enter key
 ═══════════════════════════════════════════════ */
@@ -40539,7 +41042,7 @@ const _bootDone = (async function boot() {
     if (user) {
       S.token = API.token();
       S.guest = false;
-      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null };
+      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null };
       S.plan  = user.plan || 'free';
       Accounts.upsert(API.token(), user);
       try { await loadFromServer(); } catch {}

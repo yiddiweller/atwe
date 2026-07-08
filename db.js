@@ -378,6 +378,16 @@ async function initSchema() {
   //    you don't already know (not a saved contact / connection / follow / prior DM)
   //    is silently declined instead of ringing; it still lands as a missed-call record.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS silence_unknown_callers BOOLEAN NOT NULL DEFAULT false;`);
+  //  - Quiet hours / DND: while enabled and inside [dnd_start_min, dnd_end_min)
+  //    (minutes since the user's local midnight; overnight windows wrap), push
+  //    notification alerts are suppressed — the notification is still recorded
+  //    in-app, only the banner/sound is muted. `dnd_tz_offset` is the device's
+  //    UTC offset in minutes (local = UTC + offset), captured client-side so the
+  //    server can evaluate the window without its own timezone.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dnd_enabled BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dnd_start_min INTEGER NOT NULL DEFAULT 1320;`); // 22:00
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dnd_end_min INTEGER NOT NULL DEFAULT 420;`);   // 07:00
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dnd_tz_offset INTEGER NOT NULL DEFAULT 0;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMPTZ;`);
   // Admin enforcement status (distinct from self-service `deactivated` hibernation):
@@ -1078,6 +1088,22 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS split_shares_user_idx ON split_shares(user_id) WHERE paid = false;`);
+  // Money requests (wallet "Request" action): a requester asks a payer for an
+  // amount; the payer pays from balance (a normal money send) or declines.
+  await query(`
+    CREATE TABLE IF NOT EXISTS money_requests (
+      id           SERIAL PRIMARY KEY,
+      requester_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      payer_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      amount_cents INTEGER NOT NULL,
+      note         TEXT,
+      status       TEXT NOT NULL DEFAULT 'pending',
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      resolved_at  TIMESTAMPTZ
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS money_requests_payer_idx ON money_requests(payer_id) WHERE status = 'pending';`);
+  await query(`CREATE INDEX IF NOT EXISTS money_requests_requester_idx ON money_requests(requester_id);`);
   // Geo coordinates for "near me" discovery (businesses/services set their own; optional).
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;`);
@@ -2901,13 +2927,14 @@ async function initSchema() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS business_hours JSONB;`);
   // Auto-messages (WhatsApp-Business style): a business can auto-send a one-time
   // "greeting" to a new/long-absent customer, and/or an "away" reply while they
-  // can't respond personally. Kept simple and honest — `away_enabled` is a plain
-  // on/off the business flips themselves (not auto-derived from business_hours,
-  // which has no stored timezone and is only ever evaluated client-side today).
+  // can't respond personally. `away_schedule` = 'always' (whenever away is on) or
+  // 'outside_hours' (only when the business is currently closed per business_hours,
+  // evaluated server-side on the server's wall clock, like the booking slots).
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS greeting_enabled BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS greeting_message TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS away_enabled BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS away_message TEXT;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS away_schedule TEXT NOT NULL DEFAULT 'always';`);
   // One row per (business, peer, kind) — tracks when we last auto-replied so a
   // greeting doesn't repeat on every message and an away reply doesn't spam a
   // fast back-and-forth. Updated (not appended) each time we send one.
