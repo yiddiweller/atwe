@@ -4454,7 +4454,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     await startSecretTimers(req.user.id, other, thread);
     const { rows } = await db.query(
       `SELECT id, sender_id, body, image, images, media, media_kind, media_name, created_at, read_at, deleted_all, reply_to, edited, forwarded, meta, client_id, view_once, secret, expires_at, ($1 = ANY(viewed_by)) AS viewed,
-              ($1 = ANY(hidden_for)) AS hidden, ($1 = ANY(starred_by)) AS starred, reactions FROM at_messages
+              ($1 = ANY(hidden_for)) AS hidden, ($1 = ANY(starred_by)) AS starred, (pinned_at IS NOT NULL) AS pinned, reactions FROM at_messages
        WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
          AND thread_id IS NOT DISTINCT FROM $3
          AND created_at > COALESCE((SELECT cleared_at FROM at_cleared WHERE user_id = $1 AND other_id = $2), '-infinity'::timestamptz)
@@ -4503,7 +4503,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
         media: vo ? null : (m.media || null), media_kind: m.media_kind || null, media_name: m.media_name || null,
         viewOnce: vo, viewed: vo ? !!m.viewed : false,
         created_at: m.created_at, mine: m.sender_id === req.user.id, read_at: showReceipts ? (m.read_at || null) : null, clientId: m.client_id || null,
-        deleted: !!m.deleted_all, hidden: !!m.hidden, starred: !!m.starred, reactions: m.reactions || {},
+        deleted: !!m.deleted_all, hidden: !!m.hidden, starred: !!m.starred, pinned: !!m.pinned, reactions: m.reactions || {},
         reply_to: m.reply_to || null, edited: !!m.edited, forwarded: !!m.forwarded, meta: m.meta || null,
         secret: !!m.secret, expiresAt: m.expires_at || null,
         };
@@ -4599,7 +4599,7 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
   if (media === undefined) return res.status(400).json({ error: 'That file could not be attached (unsupported type or too large — 16 MB max).' });
   const meta = cleanMeta(req.body.meta);
   if (meta === undefined) return res.status(400).json({ error: 'That couldn’t be attached.' });
-  const replyTo = Number.isInteger(req.body.replyTo) ? req.body.replyTo : null;
+  let replyTo = Number.isInteger(req.body.replyTo) ? req.body.replyTo : null;
   const clientId = (typeof req.body.clientId === 'string' && req.body.clientId.length <= 64) ? req.body.clientId : null;
   // View-once is only meaningful for a photo/video — never for plain text.
   const viewOnce = req.body.viewOnce === true && !!(image || media.data);
@@ -4618,6 +4618,18 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
     // Which conversation (thread) — null = main chat. A bogus id is rejected.
     const thread = await resolveDmThread(req.user.id, other, req.body.threadId);
     if (thread === undefined) return res.status(404).json({ error: 'Conversation not found.' });
+    // Validate the reply target belongs to THIS conversation and isn't deleted (mirror
+    // the group path). A stale/foreign id would otherwise quote another chat's message.
+    if (replyTo != null) {
+      const rt = await db.query(
+        `SELECT 1 FROM at_messages
+          WHERE id = $1 AND NOT deleted_all
+            AND ((sender_id = $2 AND recipient_id = $3) OR (sender_id = $3 AND recipient_id = $2))
+            AND thread_id IS NOT DISTINCT FROM $4`,
+        [replyTo, req.user.id, other, thread]
+      );
+      if (!rt.rowCount) replyTo = null; // silently drop a bad reference rather than store a dangling quote
+    }
     // Idempotent insert: a resend with the same clientId hits the unique
     // (sender_id, client_id) index and inserts nothing; we then return the
     // original row (and skip re-delivery) so a retry never duplicates a message.
@@ -5496,7 +5508,7 @@ app.get('/api/atchat/starred', auth.requireAuth, async (req, res) => {
          FROM at_group_messages m
          JOIN at_groups g ON g.id = m.group_id
          JOIN users u ON u.id = m.sender_id
-        WHERE $1 = ANY(m.starred_by)
+        WHERE $1 = ANY(m.starred_by) AND NOT m.deleted_all
           AND (m.expires_at IS NULL OR m.expires_at > now())`,
       [uid]
     );
@@ -6001,7 +6013,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       || members.rows.some((m) => m.id === req.user.id && m.role === 'admin');
     const msgs = await db.query(
       `SELECT m.id, m.body, m.image, m.images, m.media, m.media_kind, m.media_name, m.created_at, m.sender_id, m.forwarded, m.meta, m.client_id,
-              m.reply_to, m.deleted_all, m.edited, m.reactions, ($2 = ANY(m.starred_by)) AS starred, ($2 = ANY(m.hidden_for)) AS hidden,
+              m.reply_to, m.deleted_all, m.edited, m.reactions, ($2 = ANY(m.starred_by)) AS starred, ($2 = ANY(m.hidden_for)) AS hidden, (m.pinned_at IS NOT NULL) AS pinned,
               u.name AS sender_name, u.username AS sender_username, u.avatar AS sender_avatar, u.verified AS sender_verified
        FROM at_group_messages m JOIN users u ON u.id = m.sender_id
        WHERE m.group_id = $1 AND (m.expires_at IS NULL OR m.expires_at > now()) AND NOT ($2 = ANY(m.deleted_for)) ORDER BY m.created_at ASC`,
@@ -6033,7 +6045,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
         id: m.id, body: m.body, image: m.image || null,
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
         created_at: m.created_at, mine: m.sender_id === req.user.id, forwarded: !!m.forwarded, meta: m.meta || null, clientId: m.client_id || null,
-        starred: !!m.starred, images: (Array.isArray(m.images) && m.images.length) ? m.images : (m.image ? [m.image] : []),
+        starred: !!m.starred, pinned: !!m.pinned, images: (Array.isArray(m.images) && m.images.length) ? m.images : (m.image ? [m.image] : []),
         reply_to: m.reply_to || null, deleted: !!m.deleted_all, hidden: !!m.hidden, edited: !!m.edited, reactions: m.reactions || {},
         sender: { id: m.sender_id, name: m.sender_name, username: m.sender_username, avatar: m.sender_avatar || null, verified: !!m.sender_verified },
       })),

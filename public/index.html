@@ -19106,6 +19106,13 @@ function acMsgMenu(id, btn) {
     const starIc = '<svg viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.85-4.25 4.15 1 5.9L12 17l-5.25 2.75 1-5.9L3.5 9.65l5.9-.85z"/></svg>';
     starBtn.innerHTML = `${starIc}<span class="mm-label">${(mm && mm.starred) ? 'Unstar' : 'Star'}</span>`;
   }
+  // The Pin row flips to "Unpin" when already pinned — so a pinned message is
+  // never stranded (previously only the top pin's banner X could unpin it).
+  const pinBtn = document.getElementById('mmPinItem');
+  if (pinBtn) {
+    const pinIc = '<svg viewBox="0 0 24 24"><path d="M9 4h6M10 4l-.7 6.5-2.3 2v1.5h10V12.5l-2.3-2L14 4"/><path d="M12 16v4.5"/></svg>';
+    pinBtn.innerHTML = `${pinIc}<span class="mm-label">${(mm && mm.pinned) ? 'Unpin' : 'Pin'}</span>`;
+  }
   // Lifted message preview (a clone of the tapped bubble) above the menu.
   const prev = document.getElementById('mmPreview');
   if (prev && btn) {
@@ -19542,11 +19549,16 @@ function acMsgInfo(id) {
 }
 // Pin a message for the whole conversation (shown in the pin banner).
 async function acMsgPin(id) {
+  // Toggle: if this message is already pinned, unpin it (so an already-pinned
+  // message is never stranded — re-tapping the menu row unpins it).
+  const m = (AC.messages || []).find((x) => x.id === id);
+  const pin = !(m && m.pinned);
   try {
-    if (AC.mode === 'group') await API.req('POST', '/api/atchat/groups/' + AC.groupId + '/messages/' + id + '/pin', { pin: true });
-    else await API.req('POST', '/api/atchat/message/' + id + '/pin', { pin: true });
-    showNotif('Pinned'); acLoadPins();
-  } catch (e) { showNotif(e.message || 'Could not pin.'); }
+    if (AC.mode === 'group') await API.req('POST', '/api/atchat/groups/' + AC.groupId + '/messages/' + id + '/pin', { pin });
+    else await API.req('POST', '/api/atchat/message/' + id + '/pin', { pin });
+    if (m) m.pinned = pin;
+    showNotif(pin ? 'Pinned' : 'Unpinned'); acLoadPins();
+  } catch (e) { showNotif(e.message || (pin ? 'Could not pin.' : 'Could not unpin.')); }
 }
 function acUnpin(id) {
   const p = (AC.mode === 'group')
@@ -40455,7 +40467,9 @@ function acVoiceFinalize() {
   if (acRecCancel) { acRecChunks = []; return; }
   const blob = new Blob(acRecChunks, { type: (acRec && acRec.mimeType) || 'audio/webm' });
   acRecChunks = [];
-  if (!blob.size) return;
+  // An empty/near-silent blob means the tap was too quick (released during mic
+  // spin-up). Tell the user instead of dropping it silently.
+  if (blob.size < 512) { if (autoSend) showNotif('Hold to record — that was too short.'); return; }
   if (blob.size > AC_MEDIA_MAX) { showNotif('That voice note is too long (16 MB max).'); return; }
   const reader = new FileReader();
   reader.onload = () => { acSetAttach({ data: reader.result, kind: 'audio', name: null }); if (autoSend) acSend(); };
