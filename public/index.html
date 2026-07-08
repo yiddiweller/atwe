@@ -28751,8 +28751,9 @@ async function acSendMoney() {
     if (typeof r.balanceCents === 'number' && S.user) S.user.balanceCents = r.balanceCents;
     AC._sendCid = acPayCid(); // next send is a new transaction
     closeOverlay('sendMoneyView');
-    showNotif('Sent ' + acMoneyFmt(Math.round(amount * 100)) + (r.to ? ' to @' + r.to.username : '') + '.');
+    acOrderSuccessPulse(null, 'Sent ' + acMoneyFmt(Math.round(amount * 100)) + (r.to ? ' to @' + r.to.username : ''));
     const wv = document.getElementById('walletView'); if (wv && !wv.classList.contains('hidden')) acLoadWallet();
+    acRefreshBalance && acRefreshBalance();
   } catch (e) {
     showNotif(e.message || 'Could not send the money.');
   } finally { if (btn) { btn.disabled = false; btn.textContent = 'Send'; } }
@@ -28788,7 +28789,7 @@ async function acSendMoneyRequest() {
     const r = await API.req('POST', '/api/wallet/request', body);
     closeOverlay('requestMoneyView');
     const who = r.request && r.request.payer ? ' from @' + r.request.payer.username : '';
-    showNotif('Requested ' + acMoneyFmt(Math.round(amount * 100)) + who + '.');
+    acOrderSuccessPulse(null, 'Requested ' + acMoneyFmt(Math.round(amount * 100)) + who);
   } catch (e) {
     showNotif(e.message || 'Could not send the request.');
   } finally { if (btn) { btn.disabled = false; btn.textContent = 'Send request'; } }
@@ -32522,12 +32523,13 @@ async function acCheckoutPay(payWith, giftCardId) {
 }
 // Green-check success pulse shown the instant an order is placed, before the
 // order-confirmation opens. Reduced-motion → a brief static check.
-function acOrderSuccessPulse(next) {
+function acOrderSuccessPulse(next, msg) {
   const reduce = document.body.classList.contains('reduce-motion');
+  try { if (navigator.vibrate) navigator.vibrate(30); } catch (e) {}
   const ov = document.createElement('div');
   ov.className = 'order-success';
   ov.setAttribute('role', 'status');
-  ov.innerHTML = `<div class="os-check${reduce ? ' noanim' : ''}"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M15 27l7 7 15-15"/></svg></div><div class="os-msg">Order placed</div>`;
+  ov.innerHTML = `<div class="os-check${reduce ? ' noanim' : ''}"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M15 27l7 7 15-15"/></svg></div><div class="os-msg">${escHtml(msg || 'Order placed')}</div>`;
   document.body.appendChild(ov);
   requestAnimationFrame(() => ov.classList.add('show'));
   setTimeout(() => { ov.classList.remove('show'); setTimeout(() => ov.remove(), 240); if (next) next(); }, reduce ? 550 : 1050);

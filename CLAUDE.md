@@ -3803,7 +3803,11 @@ prefilled from a profile/chat **or** a blank `@username` field —
 sheet (`#addMoneyView`), a 💸 `money` meta-card (`acMetaCard`), entry points on
 **every profile** (a send icon by the ⋯ options), in the **chat header ⋯ menu**,
 the **user-actions sheet** (`paMoney`), and **Discover** tiles (Wallet +
-Send money); `?pay=success|cancel` / `?topup=success|cancel` on return.
+Send money); `?pay=success|cancel` / `?topup=success|cancel` on return. A
+successful **Send** or **Request** shows the shared **green-check success pulse**
+(`acOrderSuccessPulse(next, msg)` — generalized from the checkout pulse to take a
+custom message; fires a short `navigator.vibrate` haptic, honours reduce-motion)
+instead of a plain toast, matching the Profile-world blueprint's money-success cue.
 
 **Webhook idempotency (money-safe):** Stripe delivers events *at-least-once*, so
 the `/api/billing/webhook` handler **claims each `event.id`** in
