@@ -3772,20 +3772,22 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .msg-row.me .msg-bubble.msg-unseen .vn-speed{background:rgba(29,29,31,.12);color:var(--text-black);}
 /* Inset the bar so the resting ball doesn't hug the play button — gives even
    spacing between the avatar, the play button and the line. */
-.vn-track{flex:1;min-width:0;cursor:pointer;padding:11px 8px;-webkit-tap-highlight-color:transparent;}
-.vn-bar{position:relative;height:3px;border-radius:3px;background:rgba(255,255,255,.28);}
-.msg-row.me .vn-bar{background:rgba(255,255,255,.34);}
-.msg-row.team .vn-bar{background:var(--s4);}
-.msg-row.me .msg-bubble.msg-unseen .vn-bar{background:rgba(29,29,31,.2);}
-/* Smooth, continuous glide: interpolate between the (coarse) timeupdate ticks
-   so the fill + ball move fluidly instead of stepping. */
-.vn-fill{position:absolute;left:0;top:0;height:100%;width:0;border-radius:3px;background:#fff;transition:width .22s linear;}
-.msg-row.team .vn-fill{background:var(--accent-light);}
-.msg-row.me .msg-bubble.msg-unseen .vn-fill{background:var(--accent);}
-.vn-knob{position:absolute;top:50%;left:0;width:12px;height:12px;border-radius:50%;background:#fff;
-  transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.35);transition:left .22s linear;}
-.msg-row.team .vn-knob{background:var(--accent-light);}
-.msg-row.me .msg-bubble.msg-unseen .vn-knob{background:var(--accent);}
+.vn-track{flex:1;min-width:0;cursor:pointer;padding:4px 6px;-webkit-tap-highlight-color:transparent;}
+/* Waveform: two identical stacked bar-rows (deterministic heights per message).
+   The base row is dim; the coloured "fill" row is revealed left-to-right by a
+   clip-path driven from playback progress (replaces the old flat line + knob —
+   the rounded bubble, avatar, play button and duration are unchanged). */
+.vn-wave{position:relative;flex:1;min-width:0;height:26px;}
+.vn-wave-row{position:absolute;inset:0;display:flex;align-items:center;gap:2px;}
+.vn-wave-row i{flex:1;min-width:2px;border-radius:2px;display:block;height:35%;}
+.vn-wave-row.base i{background:rgba(255,255,255,.30);}
+.msg-row.me .vn-wave-row.base i{background:rgba(255,255,255,.34);}
+.msg-row.team .vn-wave-row.base i{background:var(--s4);}
+.msg-row.me .msg-bubble.msg-unseen .vn-wave-row.base i{background:rgba(29,29,31,.22);}
+.vn-wave-row.fill{clip-path:inset(0 100% 0 0);will-change:clip-path;transition:clip-path .22s linear;}
+.vn-wave-row.fill i{background:#fff;}
+.msg-row.team .vn-wave-row.fill i{background:var(--accent-light);}
+.msg-row.me .msg-bubble.msg-unseen .vn-wave-row.fill i{background:var(--accent);}
 .vn-time{flex-shrink:0;font-size:12.5px;font-weight:600;opacity:.8;min-width:32px;text-align:right;font-variant-numeric:tabular-nums;}
 .msg-file{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit;min-width:172px;max-width:250px;padding:1px;}
 .msg-file-ic{width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
@@ -8147,7 +8149,7 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 }
 @media(prefers-reduced-motion:reduce){
   .msg-send,.ac-mic,.msg-attach,.ac-callbtn,.ac-rec-del,.ac-rec-send,.aatile,.mc-rsvp button,.vn-play,.vn-speed{transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
-  .vn-fill,.vn-knob{transition:none;}
+  .vn-wave-row.fill{transition:none;}
 }
 
 /* ─── Calls (WebRTC) ─── */
@@ -38780,7 +38782,7 @@ function acMsgMedia(m) {
       <svg class="vn-ic-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
       <svg class="vn-ic-pause" viewBox="0 0 24 24"><rect x="6.5" y="5" width="3.6" height="14" rx="1.1"/><rect x="13.9" y="5" width="3.6" height="14" rx="1.1"/></svg>
     </button>
-    <div class="vn-track" onclick="vnSeek(event,this)"><div class="vn-bar"><div class="vn-fill"></div><span class="vn-knob"></span></div></div>
+    <div class="vn-track" onclick="vnSeek(event,this)"><div class="vn-wave"><div class="vn-wave-row base">${_vnWaveHtml(m.id)}</div><div class="vn-wave-row fill">${_vnWaveHtml(m.id)}</div></div></div>
     <span class="vn-time">0:00</span>
     <audio class="vn-audio" src="${m.media}" preload="metadata"></audio>
   </div>`;
@@ -40596,13 +40598,26 @@ function _vnChime(delay) {
     osc.start(s); osc.stop(s + 0.5);
   });
 }
+// Deterministic waveform bars for a voice note (stable per message id, so it
+// looks like a real envelope and never reshuffles on re-render). 34 bars.
+function _vnWaveHtml(mid) {
+  const s = String(mid == null ? '' : mid); let seed = 0;
+  for (let i = 0; i < s.length; i++) seed = (seed * 31 + s.charCodeAt(i)) & 0x7fffffff;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return (seed % 1000) / 1000; };
+  let out = '';
+  for (let i = 0; i < 34; i++) {
+    const h = 30 + Math.round(66 * Math.abs(0.65 * Math.sin(i * 0.7) + 0.55 * (rnd() - 0.5)));
+    out += `<i style="height:${Math.max(22, Math.min(100, h))}%"></i>`;
+  }
+  return out;
+}
 function _bindVoiceNotes(el) {
   el.querySelectorAll('.msg-voice').forEach((vn) => {
     if (vn._vnWired) return; vn._vnWired = true;
     const audio = vn.querySelector('.vn-audio');
     const timeEl = vn.querySelector('.vn-time');
-    const fill = vn.querySelector('.vn-fill');
-    const knob = vn.querySelector('.vn-knob');
+    const fill = vn.querySelector('.vn-wave-row.fill'); // coloured waveform layer
+    const setP = (p) => { if (fill) fill.style.clipPath = 'inset(0 ' + ((1 - Math.min(1, Math.max(0, p))) * 100) + '% 0 0)'; };
     if (!audio) return;
     // Restore the speed the user picked before the last re-render.
     const mid = vn.closest('.msg-bubble')?.dataset.mid;
@@ -40640,8 +40655,7 @@ function _bindVoiceNotes(el) {
       const d = realDur();
       if (d) {
         const p = Math.min(1, audio.currentTime / d);
-        fill.style.width = (p * 100) + '%';
-        if (knob) knob.style.left = (p * 100) + '%';
+        setP(p);
         timeEl.textContent = _vnFmt(audio.currentTime);
       }
       if (!audio.paused && !audio.ended) _raf = requestAnimationFrame(paintBar);
@@ -40649,30 +40663,28 @@ function _bindVoiceNotes(el) {
     audio.addEventListener('timeupdate', () => {
       if (!audio.paused) return;                    // rAF drives playback
       const d = realDur(); if (!d) return;
-      const p = Math.min(1, audio.currentTime / d);
-      fill.style.width = (p * 100) + '%';
-      if (knob) knob.style.left = (p * 100) + '%';
+      setP(Math.min(1, audio.currentTime / d));
     });
     // `started` reveals the speed control (WhatsApp-style: only once you play);
     // it stays through a pause so you can change speed, and clears when it ends.
     audio.addEventListener('play', () => {
       vn.classList.add('playing', 'started');
-      fill.style.transition = 'none'; if (knob) knob.style.transition = 'none'; // rAF drives it
+      if (fill) fill.style.transition = 'none'; // rAF drives the clip
       cancelAnimationFrame(_raf); _raf = requestAnimationFrame(paintBar);
     });
     audio.addEventListener('pause', () => { vn.classList.remove('playing'); cancelAnimationFrame(_raf); });
     audio.addEventListener('ended', () => {
       cancelAnimationFrame(_raf);
       vn.classList.remove('playing', 'started');
-      // 1) Make sure the ball reaches the very end of the line.
-      fill.style.transition = 'none'; if (knob) knob.style.transition = 'none';
-      fill.style.width = '100%'; if (knob) knob.style.left = '100%';
+      // 1) Make sure the waveform is fully coloured at the very end.
+      if (fill) fill.style.transition = 'none';
+      setP(1);
       // 2) Schedule the bell now (synchronous → iOS-safe), timed to land on the reset.
       _vnChime(0.38);
       // 3) After a brief beat at the end, snap back to the start, then hand off.
       setTimeout(() => {
-        fill.style.transition = 'width .18s ease-out'; if (knob) knob.style.transition = 'left .18s ease-out';
-        fill.style.width = '0%'; if (knob) knob.style.left = '0%';
+        if (fill) fill.style.transition = 'clip-path .18s ease-out';
+        setP(0);
         try { audio.currentTime = 0; } catch (_) {}
         paintTime();
         const idx = AC.messages.findIndex(x => String(x.id) === String(mid));
