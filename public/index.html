@@ -3739,8 +3739,8 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:12px;}
 .msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:12px;}
 .msg-row.team:not(.tail) .msg-bubble.voice{border-bottom-left-radius:12px;}
-.msg-voice{display:flex;align-items:center;gap:13px;width:280px;max-width:100%;padding:10px 20px 10px 10px;background:transparent;}
-.msg-row.team .msg-voice{flex-direction:row-reverse;padding:10px 10px 10px 20px;}
+.msg-voice{display:flex;align-items:center;gap:9px;width:284px;max-width:100%;padding:10px 18px 10px 8px;background:transparent;}
+.msg-row.team .msg-voice{flex-direction:row-reverse;padding:10px 8px 10px 18px;}
 .msg-row.team .vn-time{text-align:left;}
 .vn-audio{display:none;}
 /* Sender avatar in the rounded-left slot (swaps to the speed control on play). */
@@ -3774,26 +3774,29 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .msg-row.me .msg-bubble.msg-unseen .vn-speed{background:rgba(29,29,31,.12);color:var(--text-black);}
 /* Inset the bar so the resting ball doesn't hug the play button — gives even
    spacing between the avatar, the play button and the line. */
-.vn-track{flex:1;min-width:0;cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent;touch-action:none;}
+.vn-track{flex:1;min-width:0;cursor:pointer;padding:4px 3px;-webkit-tap-highlight-color:transparent;touch-action:none;} /* tighter side padding → the waveform spans wider */
 /* Waveform: two identical stacked bar-rows (deterministic heights per message).
    The base row is dim; the coloured "fill" row is revealed left-to-right by a
    clip-path driven from playback progress (replaces the old flat line + knob —
    the rounded bubble, avatar, play button and duration are unchanged). */
 .vn-wave{position:relative;flex:1;min-width:0;height:20px;} /* overflow VISIBLE so the tall scrub line isn't clipped */
 .vn-wave-clip{position:absolute;inset:0;overflow:hidden;} /* the BARS are clipped here (never spill behind time/button/avatar) */
-.vn-wave-row{position:absolute;inset:0;display:flex;align-items:center;gap:2px;}
-.vn-wave-row i{flex:1;min-width:1.5px;border-radius:2px;display:block;height:32%;}
-/* Scrub handle: a thin, TALL line at the play position (WhatsApp's dot → a line).
-   Marks the boundary between played + unplayed; drag the track to move it. */
-.vn-scrub{position:absolute;top:50%;left:0;width:2.5px;height:26px;border-radius:2px;
-  transform:translate(-50%,-50%);background:#fff;box-shadow:0 0 4px rgba(0,0,0,.35);z-index:1;pointer-events:none;}
-.msg-row.team .vn-scrub{background:#fff;}
-.msg-row.me .vn-scrub{background:var(--accent-tint);box-shadow:0 0 4px rgba(0,0,0,.28);}
+/* space-between keeps EVERY bar an identical fixed 2px width (flex:1 was rounding
+   some bars to different widths); the gaps flex instead. */
+.vn-wave-row{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;}
+.vn-wave-row i{width:2px;flex:0 0 2px;border-radius:2px;display:block;height:32%;}
+/* Scrub handle: a thin, TALL line at the play position (WhatsApp's dot → a line),
+   the SAME 2px width as the bars, coloured like the ALREADY-PLAYED bars. */
+.vn-scrub{position:absolute;top:50%;left:0;width:2px;height:26px;border-radius:2px;
+  transform:translate(-50%,-50%);z-index:1;pointer-events:none;opacity:0;} /* hidden until the note is played */
+.msg-voice.started .vn-scrub{opacity:1;}
+.msg-row.team .vn-scrub{background:var(--accent-light);}            /* dark bubble: played = blue → line blue */
+.msg-row.me .vn-scrub{background:#fff;}                             /* blue bubble: played = white → line white */
 .msg-row.me .msg-bubble.msg-unseen .vn-scrub{background:var(--accent);}
-.vn-wave-row.base i{background:rgba(255,255,255,.30);}
+.vn-wave-row.base i{background:rgba(255,255,255,.32);}
 .msg-row.me .vn-wave-row.base i{background:rgba(255,255,255,.34);}
-.msg-row.team .vn-wave-row.base i{background:var(--s4);}
-.msg-row.me .msg-bubble.msg-unseen .vn-wave-row.base i{background:rgba(29,29,31,.22);}
+.msg-row.team .vn-wave-row.base i{background:rgba(255,255,255,.34);} /* unplayed bars were nearly invisible (--s4); lift them so they read */
+.msg-row.me .msg-bubble.msg-unseen .vn-wave-row.base i{background:rgba(29,29,31,.26);}
 .vn-wave-row.fill{clip-path:inset(0 100% 0 0);will-change:clip-path;transition:clip-path .22s linear;}
 .vn-wave-row.fill i{background:#fff;}
 .msg-row.team .vn-wave-row.fill i{background:var(--accent-light);}
@@ -40691,7 +40694,7 @@ function _vnWaveHtml(mid) {
   for (let i = 0; i < s.length; i++) seed = (seed * 31 + s.charCodeAt(i)) & 0x7fffffff;
   const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return (seed % 1000) / 1000; };
   let out = '';
-  for (let i = 0; i < 34; i++) {
+  for (let i = 0; i < 40; i++) {
     const h = 26 + Math.round(56 * Math.abs(0.65 * Math.sin(i * 0.7) + 0.55 * (rnd() - 0.5)));
     out += `<i style="height:${Math.max(20, Math.min(88, h))}%"></i>`;
   }
