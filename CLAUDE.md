@@ -1453,7 +1453,13 @@ functions, organized by banner comments.
   to jump between a person's threads or start a new one, and picking someone in New Chat
   who you already have history with asks **Continue vs Start a new chat**
   (`acComposePickPerson` → `#threadChoice`). `resolveDmThread` validates a thread
-  belongs to the pair. **Export chat** (`acHeadAct('export')` → `acExportChat`, in
+  belongs to the pair. **Per-thread pin / mute / lock / archive / draft:** the
+  client key (`acPinKey('dm', peerId, threadId)` + `acDraftKey`) suffixes an extra
+  thread with `:t<threadId>`, so those per-conversation toggles are scoped to the
+  exact thread; the **main** thread (threadId null) keeps the plain `d<id>` key, so
+  no migration is needed and single-thread behavior is byte-identical. The chat-list
+  row carries `data-tid` so its long-press menu + swipe act on the right thread.
+  **Export chat** (`acHeadAct('export')` → `acExportChat`, in
   both the DM and group ⋯ menus, WhatsApp-style) builds a readable `.txt` transcript
   from the already-loaded thread (`[date, time] Sender: message` lines; media/rich
   cards noted via `acMetaLabel`; deleted/pending bubbles skipped) and downloads it
