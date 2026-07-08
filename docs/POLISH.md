@@ -396,6 +396,14 @@ Overrides of earlier locked decisions, per the owner's Phase-5 blueprint (all ex
 - **Edit window**: server `POST_EDIT_WINDOW_MS` 60min → **15min**.
 - Verified in a real browser (mock-post render + forced signed-in Home bar) dark + light, 0 console errors; intro sheets still gate once-only. SW → v958.
 
-*Still to land (Wave 2+, not yet built): stories rail on Home (72px row / 56px avatars / 2px blue ring), Circles hub rebuild (search + My Circles/Browse + Join→Joined + pin), pinned-circle feed tab, new-posts blue pill, product-tag price chip (+ `posts.product_id`), video duration chip, composer full-screen → floating-card sheet, "Copy link" in post menus, empty-Following glyph + white CTA, pull-to-refresh light-sweep, swipe-between-feeds, feed-tab desktop de-pill, full RTL/SR sweep.*
+*Wave 2 (2026-07-08, published): Circles hub + stories + discovery chrome.*
+- **Circles hub rebuild** (`acRenderCircles`): a search field ("Find your industry — 200+ circles"), a **My circles** section (joined) + a **Browse** section (not-joined), each row with a WHITE **Join** pill that flips to a grey **Joined**; joined circles carry a **pin control**.
+- **Pinned-circle feed tab**: `acTogglePinCircle` pins ONE circle (`localStorage.atwe_pinned_circle`); `acSyncPinnedTab` inserts a `#acFeedTab-pinned` button after Collections; `acSetFeed('pinned')` → `acLoadPinnedFeed` renders that circle's posts inline. Restored on `acGoHome`.
+- **New-posts pill** (`#acNewPosts`): a small floating **BLUE** pill top-center (blue = status, not action); a gated 60s poll (`acPollNewPosts`, Home + For You/Following + scrolled-down only) reveals it when the newest post id changes; tap (`acShowNewPosts`) merges (reload) + jumps to top.
+- **Stories rail on Home**: a `.js-story-tray` (`#acHomeStories`) prepended to the For You/Following feed (scrolls IG-style) — **72px row, 56px avatars, a 2px BLUE ring on unseen (with a bg gap), no ring once viewed, own slot with a plus badge**. Reuses `acRenderStoryTray`/`acOpenStory`.
+- **Empty Following state**: a glyph in a disc + one line + a **WHITE CTA** ("Find people to follow" / "Create a post").
+- Verified in a real browser (dark + light) with mock data, 0 console errors. SW → v959.
+
+*Still to land (Wave 3, not yet built): composer full-screen → floating-card sheet + "Tag product" chip, product-tag price chip on media (+ `posts.product_id`), video duration chip, "Copy link" in post menus, pull-to-refresh Living-Light sweep, swipe-between-feeds (with a careful guard), feed-tab desktop de-pill, post-detail action-row icon parity, full RTL/SR sweep + intro once-only re-verify.*
 
 *Phase 3 adjustment (2026-07-08, by Yiddi): **Layer C — the opening lap — removed entirely** (the viewport lap orb, its per-session seen registry, the appTab wrapper that fired it, AND the older engine boot-lap on `.spin` elements). No light plays on its own at boot, login, or a tab's first open; every remaining layer is pointer- or AI-driven only (pool, rim, flares, comets — all verified intact after removal). This supersedes §9.8's opening-lap policy.*

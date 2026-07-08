@@ -4418,6 +4418,16 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 /* Light: the white-primary token flips to a SOLID near-black disc with a white +
    (var(--primary)/var(--on-primary) already resolve to #111114 / #fff here), so the
    base rule is correct — no override needed beyond the token flip. */
+/* New-posts pill (blueprint §Home): a small floating BLUE pill top-center — blue is
+   correct here because it's a status indicator, not a primary action. */
+.ac-newposts{position:absolute;top:calc(env(safe-area-inset-top,0px) + 12px);left:50%;transform:translateX(-50%);z-index:7;
+  display:flex;align-items:center;gap:6px;padding:8px 16px 8px 13px;border:none;border-radius:var(--r-pill);cursor:pointer;
+  background:var(--accent);color:#fff;font-size:14px;font-weight:700;font-family:inherit;
+  box-shadow:0 6px 20px rgba(10,132,255,.4);animation:acNewPop .28s var(--ease);}
+.ac-newposts svg{width:16px;height:16px;}
+.ac-newposts:active{transform:translateX(-50%) scale(.95);}
+@keyframes acNewPop{from{opacity:0;transform:translateX(-50%) translateY(-8px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
+body.reduce-motion .ac-newposts{animation:none;}
 .ac-screen.hidden{display:none;}
 /* Opening a chat slides the thread in from the right (native chat-app feel). The
    .main container is overflow:hidden with a black background, so nothing else
@@ -4973,6 +4983,18 @@ body.reduce-motion #acFeed{animation:none!important;}
 .story-ring.add{background:var(--s2);}
 .story-add{position:absolute;right:-1px;bottom:-1px;width:20px;height:20px;border-radius:50%;background:var(--accent);color:var(--accent-tint);display:grid;place-items:center;font-size:15px;font-weight:700;border:2px solid var(--bg);}
 .story-name{font-size:11.5px;color:var(--t2);max-width:66px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* Home stories rail (blueprint §Home): a 72px row, 56px avatars, a 2px BLUE ring on
+   unseen/active + no ring once viewed, the own slot with a plus badge. Rides on top of
+   the feed (scrolls away). */
+.ac-home-stories{gap:14px;padding:8px var(--feed-gutter) 12px;border-bottom:0.5px solid var(--b2);}
+body.light .ac-home-stories{border-bottom-color:rgba(0,0,0,.08);}
+.ac-home-stories .story-cell{width:64px;gap:6px;}
+.ac-home-stories .story-ring{width:56px;height:56px;padding:0;background:none;}
+.ac-home-stories .story-ring .user-avatar{width:56px;height:56px;border:none;}
+.ac-home-stories .story-ring.unseen{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent);}
+.ac-home-stories .story-ring.seen{box-shadow:none;}
+.ac-home-stories .story-ring.add{box-shadow:0 0 0 2px var(--bg),0 0 0 3px var(--b3);}
+.ac-home-stories .story-name{font-size:11.5px;max-width:64px;}
 /* Multiple conversations with the same person */
 .ac-thread-badge{position:absolute;right:-3px;top:-3px;min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:var(--accent-tint);font-size:11px;font-weight:800;display:grid;place-items:center;padding:0 4px;border:2px solid var(--bg);}
 .tp-ic{flex:0 0 auto;width:38px;height:38px;border-radius:11px;background:var(--accent-dim);color:var(--accent);display:grid;place-items:center;}
@@ -6662,6 +6684,13 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 body.light .call-fab-opt:active{background:rgba(0,0,0,.07);}
 @media(hover:hover){body.light .call-fab-opt:hover{background:rgba(0,0,0,.05);}}
 .ac-empty{text-align:center;color:var(--t3);font-size:14px;padding:40px 24px;line-height:1.6;}
+/* Designed empty feed state (blueprint §Home): glyph · one line · WHITE CTA. */
+.ac-feed-empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:56px 32px 30px;}
+.ac-feed-empty-ic{width:60px;height:60px;border-radius:50%;background:var(--s2);display:flex;align-items:center;justify-content:center;margin-bottom:18px;}
+.ac-feed-empty-ic svg{width:28px;height:28px;stroke:var(--t2);}
+.ac-feed-empty-line{font-size:18px;font-weight:800;color:var(--t1);letter-spacing:-.01em;}
+.ac-feed-empty-sub{font-size:14px;color:var(--t3);margin-top:6px;max-width:280px;line-height:1.5;}
+.ac-feed-empty-cta{margin-top:20px;min-width:180px;justify-content:center;}
 .ac-feed-end{text-align:center;color:var(--t3);font-size:13px;padding:26px 24px 40px;}
 .ac-err{display:flex;flex-direction:column;align-items:center;text-align:center;padding:48px 28px;gap:4px;}
 .ac-err-ic{width:48px;height:48px;border-radius:50%;background:var(--s2);display:flex;align-items:center;justify-content:center;margin-bottom:10px;}
@@ -7944,6 +7973,29 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 /* A joined circle shows a red "Unjoin" (the .unjoin modifier, both themes). */
 .ac-join-btn.unjoin,body.light .ac-join-btn.unjoin{background:var(--rose-bg);border-color:var(--rose-line);color:var(--rose);}
 .ac-join-btn.unjoin:hover{background:var(--rose-bg-2);}
+
+/* ── Circles hub (blueprint §Home) ── */
+.ac-circ-search{display:flex;align-items:center;gap:9px;margin:6px var(--feed-gutter) 12px;padding:10px 15px;
+  background:var(--s2);border-radius:var(--r-pill);}
+.ac-circ-search svg{width:17px;height:17px;stroke:var(--t3);flex-shrink:0;}
+.ac-circ-search input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);font-size:15px;font-family:inherit;}
+.ac-circ-search input::placeholder{color:var(--t3);}
+.ac-circ-item{align-items:center;gap:11px;}
+/* WHITE Join pill → grey Joined pill (white acts, grey = done). */
+.ac-circ-join{flex:0 0 auto;border:none;border-radius:var(--r-pill);padding:8px 18px;font-size:14px;font-weight:700;
+  cursor:pointer;white-space:nowrap;background:var(--primary);color:var(--on-primary);
+  transition:transform var(--t-fast) var(--ease),filter var(--t-fast) var(--ease);}
+.ac-circ-join:active{transform:scale(.95);}
+.ac-circ-join:hover{filter:brightness(.96);}
+.ac-circ-join.joined{background:var(--s3);color:var(--t2);}
+body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
+/* Pin control — outline pin, blue when this circle is pinned as a tab. */
+.ac-circ-pin{flex:0 0 auto;width:38px;height:38px;border:none;border-radius:50%;background:none;color:var(--t3);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
+.ac-circ-pin svg{width:19px;height:19px;}
+@media(hover:hover){.ac-circ-pin:hover{background:var(--s2);color:var(--t1);}}
+.ac-circ-pin.on{color:var(--accent);}
+.ac-circ-pin.on svg{fill:var(--accent);}
 .ac-post-circle{font-size:12.5px;color:var(--accent);font-weight:600;cursor:pointer;margin-top:1px;}
 .ac-post-circle:hover{text-decoration:underline;}
 
@@ -13033,6 +13085,10 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <div class="ac-screen hidden" id="acHomeScreen">
       <div class="ac-topscrim" id="acTopScrim" aria-hidden="true"></div>
       <div class="ac-live-strip hidden" id="acLiveStrip"></div>
+      <button class="ac-newposts hidden" id="acNewPosts" onclick="acShowNewPosts()" aria-label="Show new posts">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+        <span>New posts</span>
+      </button>
       <div class="ac-list" id="acFeed"></div>
       <button class="ac-fab" id="acHomeFab" onclick="acOpenPost()" aria-label="New post">
         <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -23046,7 +23102,14 @@ function acTopBack() {
   acGoHome();
 }
 let _acFeedScope = 'foryou';
-function acGoHome() { acStopMic(); acShow('acHomeScreen', 'home'); acSetFeed(_acFeedScope); }
+function acGoHome() {
+  acStopMic(); acShow('acHomeScreen', 'home');
+  // Restore a pinned circle as its own feed tab (blueprint §Home).
+  if (AC._pinnedCircle === undefined) { try { AC._pinnedCircle = JSON.parse(localStorage.getItem('atwe_pinned_circle') || 'null'); } catch (e) { AC._pinnedCircle = null; } }
+  acSyncPinnedTab();
+  acSetFeed(_acFeedScope);
+  acStartNewPostsPoll();
+}
 // The four home feed tabs, in order (drives the tab row + swipe navigation).
 // Order per the design blueprint: For You · Following · Circles · Collections
 // (Circles — the 200+ industry feeds — is the differentiator and sits before
@@ -23057,7 +23120,7 @@ function acSetFeed(scope) {
   _acFeedScope = scope;
   if (typeof acFeedResetPaging === 'function') acFeedResetPaging(); // drop the infinite-scroll observer/state from the previous scope (incl. circles/feeds)
   const scrim = document.getElementById('acTopScrim'); if (scrim) scrim.style.opacity = '0'; // reset on reload (scroll resets to top)
-  [...AC_FEED_TABS, 'feeds'].forEach(s => document.getElementById('acFeedTab-' + s)?.classList.toggle('active', s === scope));
+  [...AC_FEED_TABS, 'feeds', 'pinned'].forEach(s => document.getElementById('acFeedTab-' + s)?.classList.toggle('active', s === scope));
   // Horizontal page-slide between feeds (X-style pager) — works for a tab TAP and a
   // swipe alike: the new feed slides in from the side it came from. Animating the
   // #acFeed container means the skeleton + loaded content slide in as one piece.
@@ -23078,6 +23141,7 @@ function acSetFeed(scope) {
   document.body.classList.toggle('feeds-immersive', scope === 'feeds');
   const fab = document.getElementById('acHomeFab');
   if (scope === 'circles') { if (fab) fab.style.display = 'none'; acLoadCircles(); _introSoon('circles'); }
+  else if (scope === 'pinned') { if (fab) { fab.style.display = ''; fab.onclick = acOpenPost; } acLoadPinnedFeed(); }
   else if (scope === 'feeds') { if (fab) { fab.style.display = ''; fab.onclick = acFeedCompose; } acLoadFeedTimeline(); }
   else { if (fab) { fab.style.display = ''; fab.onclick = acOpenPost; } acLoadFeed(); }
   acLoadLiveStrip();
@@ -23611,34 +23675,95 @@ async function acLoadCircles() {
     acRenderCircles();
   } catch (e) { acErr(el, 'acLoadCircles()'); }
 }
+const _PIN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.5V4h6v6.5l2 3.5H7z"/></svg>';
+// The Circles hub (blueprint §Home): a search field, a MY CIRCLES section (joined +
+// a pin control that promotes one circle to a feed tab), and a BROWSE list with a
+// WHITE Join pill that flips to a grey Joined state.
 function acRenderCircles() {
   const el = document.getElementById('acFeed');
   const list = AC._circles || [];
-  const mine = list.filter(c => c.isMember);
-  const disc = list.filter(c => !c.isMember);
-  const row = (c) => `<div class="ac-item" onclick="acOpenCircle(${c.id})">
+  const q = (AC._circleQuery || '').trim().toLowerCase();
+  const match = c => !q || (c.name || '').toLowerCase().includes(q);
+  const mine = list.filter(c => c.isMember && match(c));
+  const disc = list.filter(c => !c.isMember && match(c));
+  const pinnedId = AC._pinnedCircle && AC._pinnedCircle.id;
+  const row = (c) => {
+    const pinned = c.id === pinnedId;
+    const pinBtn = c.isMember
+      ? `<button class="ac-circ-pin ${pinned ? 'on' : ''}" onclick="event.stopPropagation();acTogglePinCircle(${c.id})" aria-pressed="${pinned}" aria-label="${pinned ? 'Unpin' : 'Pin'} ${escHtml(c.name)} as a feed tab" title="${pinned ? 'Unpin from tabs' : 'Pin as a feed tab'}">${_PIN_ICON}</button>`
+      : '';
+    return `<div class="ac-item ac-circ-item" onclick="acOpenCircle(${c.id})">
       ${acCircleAvatarHtml(c)}
       <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span></div>
-        <div class="ac-item-last">${c.members} member${c.members === 1 ? '' : 's'}</div></div>
-      <button class="ac-join-btn ${c.isMember ? 'joined unjoin' : ''}" onclick="event.stopPropagation();acToggleJoin(${c.id},this)">${c.isMember ? 'Unjoin' : 'Join'}</button>
+        <div class="ac-item-last">${acCompact(c.members)} member${c.members === 1 ? '' : 's'}</div></div>
+      ${pinBtn}
+      <button class="ac-circ-join ${c.isMember ? 'joined' : ''}" onclick="event.stopPropagation();acToggleJoin(${c.id},this)" aria-pressed="${c.isMember}">${c.isMember ? 'Joined' : 'Join'}</button>
     </div>`;
-  // Circles ARE the industries (company-defined) — join your field, like communities.
-  let html = `<div class="ac-section-row"><span class="ac-prof-head">Circles</span></div>`;
-  if (mine.length) html += `<div class="ac-prof-head">Your circles</div>` + mine.map(row).join('');
-  if (disc.length) html += `<div class="ac-prof-head">${mine.length ? 'More industries' : 'Industries'}</div>` + disc.map(row).join('');
-  if (!mine.length && !disc.length) html += '<div class="ac-empty">Industries will appear here.</div>';
+  };
+  let html = `<div class="ac-circ-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`
+    + `<input id="acCircleSearch" type="search" autocomplete="off" placeholder="Find your industry — 200+ circles" aria-label="Find your industry" oninput="acCircleSearchInput(this.value)" value="${escHtml(AC._circleQuery || '')}"/></div>`;
+  if (mine.length) html += `<div class="ac-prof-head">My circles</div>` + mine.map(row).join('');
+  if (disc.length) html += `<div class="ac-prof-head">Browse</div>` + disc.map(row).join('');
+  if (!mine.length && !disc.length) html += `<div class="ac-empty">${q ? 'No circles match “' + escHtml(q) + '”.' : 'Industries will appear here.'}</div>`;
   el.innerHTML = html;
+}
+function acCircleSearchInput(v) {
+  AC._circleQuery = v;
+  const el = document.getElementById('acCircleSearch');
+  const caret = el ? el.selectionStart : null;
+  acRenderCircles();
+  const again = document.getElementById('acCircleSearch');
+  if (again) { again.focus(); if (caret != null) { try { again.setSelectionRange(caret, caret); } catch (e) {} } }
 }
 async function acToggleJoin(id, btn) {
   if (btn._busy) return; btn._busy = true;
   const joined = btn.classList.contains('joined');
-  btn.classList.toggle('joined', !joined); btn.classList.toggle('unjoin', !joined); btn.textContent = !joined ? 'Unjoin' : 'Join';
+  btn.classList.toggle('joined', !joined); btn.setAttribute('aria-pressed', String(!joined)); btn.textContent = !joined ? 'Joined' : 'Join';
   try {
     await API.req(joined ? 'DELETE' : 'POST', '/api/circles/' + id + '/join');
     const c = (AC._circles || []).find(x => x.id === id);
     if (c) { c.isMember = !joined; c.members += joined ? -1 : 1; }
-  } catch (e) { btn.classList.toggle('joined', joined); btn.classList.toggle('unjoin', joined); btn.textContent = joined ? 'Unjoin' : 'Join'; showNotif(e.message || 'Could not update.'); }
+    // A left circle can't stay pinned as a tab.
+    if (joined && AC._pinnedCircle && AC._pinnedCircle.id === id) { AC._pinnedCircle = null; try { localStorage.removeItem('atwe_pinned_circle'); } catch (e) {} acSyncPinnedTab(); }
+    acRenderCircles(); // move the row between My circles / Browse + show/hide its pin control
+  } catch (e) { btn.classList.toggle('joined', joined); btn.setAttribute('aria-pressed', String(joined)); btn.textContent = joined ? 'Joined' : 'Join'; showNotif(e.message || 'Could not update.'); }
   btn._busy = false;
+}
+// Pin ONE circle so it shows as its own feed tab after Collections (blueprint §Home).
+function acTogglePinCircle(id) {
+  const c = (AC._circles || []).find(x => x.id === id); if (!c) return;
+  const already = AC._pinnedCircle && AC._pinnedCircle.id === id;
+  AC._pinnedCircle = already ? null : { id: c.id, name: c.name };
+  try { if (AC._pinnedCircle) localStorage.setItem('atwe_pinned_circle', JSON.stringify(AC._pinnedCircle)); else localStorage.removeItem('atwe_pinned_circle'); } catch (e) {}
+  acSyncPinnedTab();
+  acRenderCircles();
+  if (!already) showNotif('Pinned “' + c.name + '” as a feed tab.');
+}
+// Insert/remove the pinned-circle tab button after Collections.
+function acSyncPinnedTab() {
+  const row = document.getElementById('tbFeedTabs'); if (!row) return;
+  let btn = document.getElementById('acFeedTab-pinned');
+  const p = AC._pinnedCircle;
+  if (!p) { if (btn) btn.remove(); if (_acFeedScope === 'pinned') acSetFeed('foryou'); return; }
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.className = 'tb-feedtab'; btn.id = 'acFeedTab-pinned';
+    btn.onclick = () => acSetFeed('pinned');
+    const ai = document.getElementById('acFeedTabAi');
+    row.insertBefore(btn, ai || null); // after Collections, before the AI ⋯
+  }
+  btn.textContent = p.name;
+  btn.setAttribute('aria-label', p.name + ' circle feed');
+}
+async function acLoadPinnedFeed() {
+  const el = document.getElementById('acFeed'); const p = AC._pinnedCircle;
+  if (!p) { acSetFeed('foryou'); return; }
+  el.innerHTML = acSkelFeed();
+  try {
+    const d = await API.req('GET', '/api/circles/' + p.id);
+    const posts = (d.posts && d.posts.length) ? d.posts.map(acPostCard).join('') : `<div class="ac-empty">No posts in ${escHtml(p.name)} yet.<br/>Be the first to post in this circle.</div>`;
+    el.innerHTML = posts;
+  } catch (e) { acErr(el, 'acLoadPinnedFeed()'); }
 }
 async function acOpenCircle(id) {
   AC._circleId = id; acStopMic();
@@ -25335,6 +25460,32 @@ async function acLoadFeedMore() {
   } catch (e) { /* a failed page just stops paging; the user can scroll-retry */ }
   finally { AC._feedLoadingMore = false; }
 }
+// New-posts pill: tap to merge fresh posts and jump to the top of the feed.
+function acShowNewPosts() {
+  document.getElementById('acNewPosts')?.classList.add('hidden');
+  const feed = document.getElementById('acFeed'); if (feed) feed.scrollTop = 0;
+  acLoadFeed();
+}
+let _newPostsTimer = null;
+function acStartNewPostsPoll() { acStopNewPostsPoll(); _newPostsTimer = setInterval(acPollNewPosts, 60000); }
+function acStopNewPostsPoll() { if (_newPostsTimer) { clearInterval(_newPostsTimer); _newPostsTimer = null; } }
+// Gated poll: only while Home's For You / Following feed is the visible, scrolled-down
+// surface. If the newest post id changed (and isn't already on screen), reveal the pill.
+async function acPollNewPosts() {
+  if (document.hidden || _appTab !== 'home') return;
+  if (_acFeedScope !== 'foryou' && _acFeedScope !== 'following') return;
+  const feed = document.getElementById('acFeed');
+  if (!feed || feed.scrollTop < 400 || !AC._feedNewestId) return;
+  const pill = document.getElementById('acNewPosts');
+  if (pill && !pill.classList.contains('hidden')) return; // already showing
+  try {
+    const { posts } = await API.req('GET', '/api/social/feed?scope=' + _acFeedScope);
+    const top = posts && posts[0];
+    if (top && top.id !== AC._feedNewestId && !feed.querySelector('.ac-post[data-postid="' + top.id + '"]')) {
+      pill?.classList.remove('hidden');
+    }
+  } catch (e) {}
+}
 async function acLoadFeed() {
   const el = document.getElementById('acFeed');
   const scope = _acFeedScope;
@@ -25349,6 +25500,9 @@ async function acLoadFeed() {
     const { posts, hasMore } = await API.req('GET', url);
     if (scope !== _acFeedScope) return; // a tab switch happened mid-load
     AC._feedPosts = posts;
+    // Track the newest post id for the "New posts" pill, and clear the pill on load.
+    if (scope === 'foryou' || scope === 'following') AC._feedNewestId = (posts && posts[0]) ? posts[0].id : AC._feedNewestId;
+    document.getElementById('acNewPosts')?.classList.add('hidden');
     AC._feedHasMore = (scope === 'foryou' || scope === 'following') ? !!hasMore : false;
     (posts || []).forEach((p) => AC._feedSeen.add(p.id));
     if (posts.length) AC._feedLastCreated = posts[posts.length - 1].created_at;
@@ -25365,15 +25519,19 @@ async function acLoadFeed() {
       // Weave sponsored ads into the home feed (every ~6 cards).
       let list = cards;
       if (scope === 'foryou' || scope === 'following') { const ads = await acFeedAds(); if (scope === _acFeedScope) list = acWeaveAds(cards, ads, 6); }
-      el.innerHTML = bar + list.join('');
-      if (scope === 'foryou' || scope === 'following') { Dwell.scan(); acFeedSetupSentinel(); acAdObserve(el); } // measure dwell + arm infinite scroll + track ad impressions
+      // A stories rail rides on top of the feed on Home (blueprint §Home) — it scrolls
+      // away like Instagram. acLoadStoryTray() fills every .js-story-tray (this one too).
+      const railHtml = (scope === 'foryou' || scope === 'following') ? '<div class="story-tray js-story-tray ac-home-stories hidden" id="acHomeStories"></div>' : '';
+      el.innerHTML = railHtml + bar + list.join('');
+      if (scope === 'foryou' || scope === 'following') { acLoadStoryTray(); Dwell.scan(); acFeedSetupSentinel(); acAdObserve(el); } // stories + measure dwell + arm infinite scroll + track ad impressions
     } else if (scope === 'bookmarks') {
       el.innerHTML = bar + `<div class="ac-empty">${AC._bmkFolder ? 'No bookmarks in this folder yet.' : 'No bookmarks yet.<br/>Tap the bookmark on a post to save it here — only you can see them.'}</div>`;
     } else {
-      const msg = scope === 'following'
-        ? 'Posts from people you follow show up here.<br/>Follow a few people to get started.'
-        : 'Nothing here yet.<br/>Follow some people, or tap the + to share the first post.';
-      el.innerHTML = `<div class="ac-empty">${msg}</div><div id="acFeedSuggest"></div>`;
+      // Designed empty state: a glyph, one line, and a WHITE call-to-action.
+      const empty = scope === 'following'
+        ? { icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>', line: 'Your Following feed is quiet.', sub: 'Follow a few people and their posts show up here.', cta: 'Find people to follow', act: "acSetFeed('foryou')" }
+        : { icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>', line: 'Nothing here yet.', sub: 'Share the first post — tap below to start.', cta: 'Create a post', act: 'acOpenPost()' };
+      el.innerHTML = `<div class="ac-feed-empty"><div class="ac-feed-empty-ic">${empty.icon}</div><div class="ac-feed-empty-line">${empty.line}</div><div class="ac-feed-empty-sub">${empty.sub}</div><button class="ac-pill-btn accent ac-feed-empty-cta" onclick="${empty.act}">${empty.cta}</button></div><div id="acFeedSuggest"></div>`;
       acLoadSuggestions('acFeedSuggest');
     }
   } catch (e) {
