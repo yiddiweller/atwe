@@ -5374,6 +5374,7 @@ app.delete('/api/atchat/message/:id', auth.requireAuth, async (req, res) => {
       );
       const other = req.user.id === m.sender_id ? m.recipient_id : m.sender_id;
       rtPush(other, 'dm_deleted', { peerId: req.user.id, id: mid }); // live-tombstone on their side
+      if (other !== req.user.id) rtPush(req.user.id, 'dm_deleted', { peerId: other, id: mid }); // + my other devices
     } else {
       await db.query(
         'UPDATE at_messages SET deleted_for = array_append(deleted_for, $1) WHERE id = $2 AND NOT ($1 = ANY(deleted_for))',
@@ -5432,6 +5433,7 @@ app.post('/api/atchat/message/:id/react', auth.requireAuth, async (req, res) => 
     await db.query('UPDATE at_messages SET reactions = $1 WHERE id = $2', [JSON.stringify(reactions), mid]);
     const other = req.user.id === m.sender_id ? m.recipient_id : m.sender_id;
     rtPush(other, 'dm_reaction', { peerId: req.user.id, id: mid, reactions });
+    if (other !== req.user.id) rtPush(req.user.id, 'dm_reaction', { peerId: other, id: mid, reactions }); // + my other devices
     res.json({ ok: true, reactions });
   } catch (err) {
     console.error(err);
@@ -5623,6 +5625,7 @@ app.post('/api/atchat/message/:id/pin', auth.requireAuth, async (req, res) => {
     await db.query('UPDATE at_messages SET pinned_at = $1 WHERE id = $2', [pin ? new Date() : null, mid]);
     const other = req.user.id === m.sender_id ? m.recipient_id : m.sender_id;
     rtPush(other, 'pin', { scope: 'dm', peerId: req.user.id, id: mid, pinned: pin });
+    if (other !== req.user.id) rtPush(req.user.id, 'pin', { scope: 'dm', peerId: other, id: mid, pinned: pin }); // + my other devices
     res.json({ ok: true, pinned: pin });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
@@ -5651,7 +5654,7 @@ app.post('/api/atchat/groups/:id/messages/:mid/pin', auth.requireAuth, async (re
     const m = await db.query('SELECT id FROM at_group_messages WHERE id = $1 AND group_id = $2', [mid, gid]);
     if (!m.rows[0]) return res.status(404).json({ error: 'Message not found.' });
     await db.query('UPDATE at_group_messages SET pinned_at = $1 WHERE id = $2', [pin ? new Date() : null, mid]);
-    for (const id of await groupMemberIds(gid, req.user.id)) rtPush(id, 'pin', { scope: 'group', groupId: gid, id: mid, pinned: pin });
+    for (const id of await groupMemberIds(gid, null)) rtPush(id, 'pin', { scope: 'group', groupId: gid, id: mid, pinned: pin }); // null = include actor's other devices too
     res.json({ ok: true, pinned: pin });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
@@ -5690,6 +5693,7 @@ app.put('/api/atchat/with/:id/disappearing', auth.requireAuth, async (req, res) 
   try {
     await db.query('INSERT INTO dm_disappearing (a, b, seconds) VALUES ($1,$2,$3) ON CONFLICT (a,b) DO UPDATE SET seconds = $3', [lo, hi, sec]);
     rtPush(other, 'disappearing', { scope: 'dm', peerId: req.user.id, seconds: sec });
+    if (other !== req.user.id) rtPush(req.user.id, 'disappearing', { scope: 'dm', peerId: other, seconds: sec }); // + my other devices
     res.json({ ok: true, seconds: sec });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
 });
@@ -5709,7 +5713,7 @@ app.put('/api/atchat/groups/:id/disappearing', auth.requireAuth, async (req, res
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
     if (!(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only group admins can change disappearing messages.' });
     await db.query('UPDATE at_groups SET disappearing = $1 WHERE id = $2', [sec, gid]);
-    for (const id of await groupMemberIds(gid, req.user.id)) rtPush(id, 'disappearing', { scope: 'group', groupId: gid, seconds: sec });
+    for (const id of await groupMemberIds(gid, null)) rtPush(id, 'disappearing', { scope: 'group', groupId: gid, seconds: sec }); // null = include actor's other devices
     res.json({ ok: true, seconds: sec });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
 });
@@ -5729,6 +5733,7 @@ app.post('/api/atchat/message/:id/edit', auth.requireAuth, async (req, res) => {
     if (!m.body) return res.status(400).json({ error: 'This message has no text to edit.' });
     await db.query('UPDATE at_messages SET body = $1, edited = true WHERE id = $2', [body, mid]);
     rtPush(m.recipient_id, 'dm_edited', { peerId: req.user.id, id: mid, body });
+    if (m.recipient_id !== req.user.id) rtPush(req.user.id, 'dm_edited', { peerId: m.recipient_id, id: mid, body }); // + my other devices
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -6125,6 +6130,21 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
     if (isNew) {
       const out = { kind: 'group', groupId: gid, message: { ...base, mine: false } };
       for (const id of await groupMemberIds(gid, req.user.id)) rtPush(id, 'msg', out);
+      // @mention notifications: a group member you @named gets pinged (in a group you
+      // DON'T get a per-message notif like a DM, so this is how a mention reaches them).
+      if (body) {
+        const handles = extractMentions(body);
+        if (handles.length) {
+          try {
+            const mem = await db.query(
+              `SELECT u.id FROM at_group_members gm JOIN users u ON u.id = gm.user_id
+               WHERE gm.group_id = $1 AND lower(u.username) = ANY($2) AND u.id <> $3`,
+              [gid, handles, req.user.id]
+            );
+            for (const row of mem.rows) notify(row.id, req.user.id, 'mention', null, null, gid);
+          } catch (_) { /* mentions are best-effort */ }
+        }
+      }
     }
     res.json({ message: { ...base, mine: true } });
   } catch (err) {
@@ -6140,9 +6160,11 @@ async function groupMsgFor(gid, mid, uid) {
   const r = await db.query('SELECT * FROM at_group_messages WHERE id = $1 AND group_id = $2', [mid, gid]);
   return r.rows[0] || null;
 }
-// Fan a live event out to the other group members.
+// Fan a live message-mutation event (delete/react/edit) out to EVERY group member,
+// including the actor's own other devices (idempotent on the acting device), so a
+// change made on one device shows up on the same user's other open sessions too.
 async function fanGroup(gid, uid, event, payload) {
-  for (const id of await groupMemberIds(gid, uid)) rtPush(id, event, payload);
+  for (const id of await groupMemberIds(gid, null)) rtPush(id, event, payload);
 }
 // Delete a group message: scope 'me' (per-user) or 'everyone' (sender-only tombstone).
 app.delete('/api/atchat/groups/:id/messages/:mid', auth.requireAuth, async (req, res) => {
@@ -6226,10 +6248,11 @@ async function loadMetaMsg(mid, gid, uid, type) {
 // Fan a meta update out to the other participant(s) so their card updates live.
 async function pushMetaUpd(row, gid, uid, mid, meta) {
   if (gid) {
-    for (const id of await groupMemberIds(gid, uid)) rtPush(id, 'metaupd', { scope: 'group', groupId: gid, id: mid, meta });
+    for (const id of await groupMemberIds(gid, null)) rtPush(id, 'metaupd', { scope: 'group', groupId: gid, id: mid, meta }); // null = actor's other devices too
   } else {
     const other = row.sender_id === uid ? row.recipient_id : row.sender_id;
     rtPush(other, 'metaupd', { scope: 'dm', peerId: uid, id: mid, meta });
+    if (other !== uid) rtPush(uid, 'metaupd', { scope: 'dm', peerId: other, id: mid, meta }); // + my other devices
   }
 }
 
