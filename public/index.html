@@ -5077,6 +5077,11 @@ body.reduce-motion #acFeed{animation:none!important;}
 .escrow-banner b{color:var(--t1);}
 .escrow-banner.warn{background:rgba(255,204,0,.12);border-color:rgba(255,204,0,.4);}
 .escrow-banner.ok{background:var(--money-bg);border-color:var(--money-line);}
+/* Always-visible buyer-protection chip (listing detail) + checkout escrow note. */
+.esc-chip{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--t2);margin:10px 0 2px;}
+.esc-note{display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:1.4;color:var(--t3);margin:8px 2px 0;}
+.esc-dot{width:8px;height:8px;border-radius:50%;background:var(--green);flex:0 0 auto;box-shadow:0 0 0 3px rgba(48,209,88,.15);margin-top:3px;}
+.esc-chip .esc-dot{margin-top:0;}
 /* Stories / Status */
 .story-tray{display:flex;gap:12px;overflow-x:auto;padding:10px 14px;border-bottom:1px solid var(--b1);scrollbar-width:none;}
 .story-tray::-webkit-scrollbar{display:none;}
@@ -29231,7 +29236,10 @@ function acRenderListingBuy(l, own) {
   // Affiliate: any non-owner can grab a referral link and earn a commission on sales.
   const earnRow = !own
     ? `<button class="ac-link-btn" style="margin:8px 2px 0;" onclick="acGetAffiliateLink(${l.id})"><svg viewBox="0 0 24 24" style="width:14px;height:14px;vertical-align:-2px;margin-right:5px;fill:none;stroke:currentColor;stroke-width:2;"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg>Share &amp; earn — get an affiliate link</button>` : '';
-  return `<div class="mkt-detail-meta"><span class="mkt-price">${priceLbl}</span><span class="shop-kind">${_PROD_KIND[l.kind] || 'Item'}</span>${stockBadge}${l.active ? '' : '<span class="shop-off">Hidden</span>'}</div>${shipLine}${qtyRow}${buyRow}${subRow}${offerRow}${earnRow}`;
+  // Always-visible buyer-protection promise, above the fold (design blueprint):
+  // escrow holds the buyer's funds until they confirm delivery.
+  const escChip = (!own && !soldOut) ? `<div class="esc-chip"><span class="esc-dot"></span>Buyer protection — funds held in escrow</div>` : '';
+  return `<div class="mkt-detail-meta"><span class="mkt-price">${priceLbl}</span><span class="shop-kind">${_PROD_KIND[l.kind] || 'Item'}</span>${stockBadge}${l.active ? '' : '<span class="shop-off">Hidden</span>'}</div>${shipLine}${escChip}${qtyRow}${buyRow}${subRow}${offerRow}${earnRow}`;
 }
 /* ─── Rentals — booking on the listing detail + a Bookings surface ─── */
 // Shared rental helpers (keep in sync with server rentalUnits + RENTAL_PERIODS).
@@ -31019,7 +31027,8 @@ function acRenderCheckout() {
   const payAttr = src && src.startsWith('gift:') ? `acCheckoutPay('balance', ${src.slice(5)})` : src === 'balance' ? `acCheckoutPay('balance')` : `acCheckoutPay()`;
   const pay = `${srcBlock}
     <button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" ${canPay ? '' : 'disabled'} onclick="${payAttr}">Place order · ${acMoney(total)}</button>
-    ${bal ? `<button class="ac-pill-btn pay-prot" style="width:100%;margin-top:8px;" ${canPay ? '' : 'disabled'} onclick="acCheckoutPay('escrow')"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:5px;"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>Buy with protection</button>` : ''}
+    ${bal ? `<button class="ac-pill-btn pay-prot" style="width:100%;margin-top:8px;" ${canPay ? '' : 'disabled'} onclick="acCheckoutPay('escrow')"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:5px;"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>Buy with protection</button>
+    <div class="esc-note"><span class="esc-dot"></span>With protection, your money is held in escrow and released when you confirm delivery.</div>` : ''}
     ${(c.needsShipping && !pickupMode && !AC._coAddrId) ? '<div class="ac-disc-sub" style="margin-top:8px;text-align:center;">Add a shipping address to continue.</div>' : ''}`;
   b.innerHTML = `${c.name ? `<div class="co-item">${escHtml(c.name)}${c.qty > 1 ? ' × ' + c.qty : ''}</div>` : ''}${fulfill}${addrBlock}${rateBlock}${promo}${summary}${pay}`;
 }
