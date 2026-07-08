@@ -19700,17 +19700,22 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
     // retired — a business is a real Atwe account now).
     if (scope === 'businesses' || scope === 'companies') {
       const r = await db.query(
-        `SELECT id, name, username, avatar, verified, categories, account_type, headline, business_verify_status FROM users
-         WHERE account_type = 'business' AND username IS NOT NULL AND NOT deactivated AND (
-           username ILIKE $1 OR name ILIKE $1
-           OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $1)
+        `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.categories, u.account_type, u.headline, u.business_verify_status, u.business_hours,
+                (SELECT ROUND(AVG(br.rating)::numeric, 1) FROM business_reviews br WHERE br.business_id = u.id) AS rating,
+                (SELECT COUNT(*)::int FROM business_reviews br WHERE br.business_id = u.id) AS review_count
+         FROM users u WHERE u.account_type = 'business' AND u.username IS NOT NULL AND NOT u.deactivated AND (
+           u.username ILIKE $1 OR u.name ILIKE $1
+           OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(u.categories) c WHERE c ILIKE $1)
          )
-         AND id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $3)
-         AND id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $3)
-         ORDER BY (lower(username) = lower($2)) DESC, (username ILIKE $1) DESC, lower(name) LIMIT 40`,
+         AND u.id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $3)
+         AND u.id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $3)
+         ORDER BY (lower(u.username) = lower($2)) DESC, (u.username ILIKE $1) DESC, lower(u.name) LIMIT 40`,
         [like, q, me]
       );
-      return res.json({ businesses: r.rows.map(mapSearchUser) });
+      return res.json({ businesses: r.rows.map((u) => Object.assign(mapSearchUser(u), {
+        rating: u.rating != null ? Number(u.rating) : null, reviewCount: u.review_count || 0,
+        openNow: businessOpenNow(u.business_hours), // true / false / null
+      })) });
     }
     // Shop scope: marketplace listings (items / services) matched by name/description.
     if (scope === 'shop') {

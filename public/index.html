@@ -22662,9 +22662,12 @@ function acApplyYN(qid, val, btn) { const h = document.getElementById('sc_' + qi
 // A business account row in the Businesses search (opens its profile = its page).
 function acSearchCompanyRow(c) {
   const sub = c.headline ? escHtml(c.headline) : ('@' + escHtml(c.username));
+  const star = c.rating != null ? `<span class="ny-rating"><svg viewBox="0 0 24 24"><polygon points="12 2 15 8.5 22 9.3 17 14 18.3 21 12 17.5 5.7 21 7 14 2 9.3 9 8.5"/></svg>${c.rating.toFixed(1)}${c.reviewCount ? ` (${c.reviewCount})` : ''}</span>` : '';
+  const open = c.openNow === true ? `<span class="ny-open">Open now</span>` : (c.openNow === false ? `<span class="ny-open closed">Closed</span>` : '');
+  const meta = (star || open) ? `<div class="ny-meta">${star}${open}</div>` : '';
   return `<div class="ac-item" onclick="acGoProfile(${jsAttr(c.username)})">${acAvatarHtml(c.name, c.avatar, 'user-avatar', true)}
     <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}${c.businessVerified ? BIZ_VBADGE : ''}</span><span class="ac-biz-tag">Business</span></div>
-    <div class="ac-item-last">${sub}</div></div></div>`;
+    <div class="ac-item-last">${sub}</div>${meta}</div></div>`;
 }
 function acOpenCompaniesScope() { _searchScope = 'companies'; appTab('search'); }
 async function acLoadCompanies(q) {
