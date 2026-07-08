@@ -5614,7 +5614,7 @@ body.light .ac-home-stories{border-bottom-color:rgba(0,0,0,.08);}
 .mkt-detail-imgwrap{position:relative;}
 .mkt-gallery{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;border-radius:14px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
 .mkt-gallery::-webkit-scrollbar{display:none;}
-.mkt-detail-img.gal{flex:0 0 100%;scroll-snap-align:center;height:240px;background-size:cover;background-position:center;}
+.mkt-detail-img.gal{flex:0 0 100%;scroll-snap-align:center;aspect-ratio:1/1;height:auto;max-height:min(70vh,420px);background-size:cover;background-position:center;}
 .mkt-gdots{display:flex;gap:5px;justify-content:center;margin:7px 0 2px;}
 .mkt-gdots span{width:6px;height:6px;border-radius:50%;background:var(--b3);}
 .mkt-gdots span.on{background:var(--accent);}
@@ -29215,6 +29215,12 @@ function acListingCard(l) {
 }
 // The currently effective variant on the open listing (null = none chosen).
 function acListingVariant() { const l = AC._listingCur; if (!l || !l.hasVariants) return null; return (l.variants || []).find(v => v.id === AC._listingVar) || null; }
+// Live gallery dots: light the dot for the slide currently snapped into view.
+function acGalScroll(el) {
+  const dots = el.parentElement && el.parentElement.querySelector('.mkt-gdots'); if (!dots) return;
+  const i = el.clientWidth ? Math.round(el.scrollLeft / el.clientWidth) : 0;
+  [...dots.children].forEach((d, k) => d.classList.toggle('on', k === i));
+}
 // Render the price-meta + stock + qty + buy block (re-rendered when a variant is picked).
 function acRenderListingBuy(l, own) {
   if (own === undefined) own = l.seller.id === (S.user && S.user.id);
@@ -29440,7 +29446,7 @@ async function acOpenListing(id) {
     const imgs = (l.images && l.images.length) ? l.images : (l.image ? [l.image] : []);
     const alt = escHtml(l.name);
     const img = imgs.length > 1
-      ? `<div class="mkt-gallery" id="mktGallery" role="group" aria-label="${alt} photos">${imgs.map((u, i) => `<div class="mkt-detail-img gal" role="img" aria-label="${alt} photo ${i + 1}" style="background-image:url('${u}')"></div>`).join('')}</div><div class="mkt-gdots">${imgs.map((_, i) => `<span class="${i === 0 ? 'on' : ''}"></span>`).join('')}</div>`
+      ? `<div class="mkt-gallery" id="mktGallery" role="group" aria-label="${alt} photos" onscroll="acGalScroll(this)">${imgs.map((u, i) => `<div class="mkt-detail-img gal" role="img" aria-label="${alt} photo ${i + 1}" style="background-image:url('${u}')"></div>`).join('')}</div><div class="mkt-gdots">${imgs.map((_, i) => `<span class="${i === 0 ? 'on' : ''}"></span>`).join('')}</div>`
       : (imgs.length ? `<div class="mkt-detail-img" role="img" aria-label="${alt}" style="background-image:url('${imgs[0]}')"></div>` : `<div class="mkt-detail-img noimg">${_MKT_BOX_SVG}</div>`);
     const store = biz ? `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="closeOverlay('listingView');closeOverlay('marketplaceView');appTab('home');acGoProfile(${jsAttr(l.seller.username || '')})">Visit ${escHtml(l.seller.name)}’s store</button>` : '';
     const own = l.seller.id === (S.user && S.user.id);
@@ -32978,7 +32984,7 @@ async function acOpenShowcase(id) {
     AC._scCur = s;
     const imgs = s.images || [];
     const gal = imgs.length > 1
-      ? `<div class="sc-gallery" id="scGallery">${imgs.map((u, i) => `<div class="sc-img" role="img" aria-label="${escHtml(s.title)} photo ${i + 1}" style="background-image:url('${u}')"></div>`).join('')}</div><div class="mkt-gdots">${imgs.map((_, i) => `<span class="${i === 0 ? 'on' : ''}"></span>`).join('')}</div>`
+      ? `<div class="sc-gallery" id="scGallery" onscroll="acGalScroll(this)">${imgs.map((u, i) => `<div class="sc-img" role="img" aria-label="${escHtml(s.title)} photo ${i + 1}" style="background-image:url('${u}')"></div>`).join('')}</div><div class="mkt-gdots">${imgs.map((_, i) => `<span class="${i === 0 ? 'on' : ''}"></span>`).join('')}</div>`
       : (imgs.length ? `<div class="sc-img solo" role="img" aria-label="${escHtml(s.title)}" style="background-image:url('${imgs[0]}')"></div>` : '');
     const liked = s.liked;
     const ownerMenu = s.mine ? `<div class="ac-section-row" style="margin-top:6px;"><span></span><span><button class="ac-link-btn" onclick="acShowcaseFormOpen(${s.id})">Edit</button> · <button class="ac-link-btn" style="color:var(--red);" onclick="acDeleteShowcase(${s.id})">Delete</button></span></div>` : '';
