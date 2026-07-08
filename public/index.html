@@ -2064,9 +2064,14 @@ body.light .tb-feedtab.active{color:var(--t1);}
   .topbar.tb-chat .tb-feedtabs{flex:1;justify-content:flex-start;gap:34px;margin-left:8px;padding-left:16px;padding-right:0;
     -webkit-mask-image:linear-gradient(to right,transparent 0,#000 16px);
     mask-image:linear-gradient(to right,transparent 0,#000 16px);}
-  .topbar.tb-chat .tb-feedtab{padding:6px 0;font-size:15px;font-weight:600;color:var(--t2);}
+  /* Beam tabs bottom-align to the hairline so the active tab carries a short BLUE
+     underline sitting on it (blueprint §Beam) — mirrors the Home feed tabs. */
+  .topbar.tb-chat .tb-feedtabs{align-self:stretch;align-items:flex-end;}
+  .topbar.tb-chat .tb-feedtab{padding:6px 0 12px;font-size:15px;font-weight:600;color:var(--t2);}
   .topbar.tb-chat .tb-feedtab.active{font-weight:700;color:#fff;}
   body.light .topbar.tb-chat .tb-feedtab.active{color:var(--t1);}
+  .topbar.tb-chat .tb-feedtab.active::after{content:"";position:absolute;left:50%;transform:translateX(-50%);
+    bottom:0;width:22px;height:3px;border-radius:3px;background:var(--accent);}
 
   /* ── Phase 5: two-row Home top bar (blueprint §Home) ──
      Row 1 (52px): avatar → Profile · "Home" title · bell + compose.
@@ -3514,7 +3519,7 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .msg-ghead .user-avatar{width:26px;height:26px;font-size:11px;flex-shrink:0;}
 .msg-gh-name{font-size:13px;font-weight:700;color:var(--t1);line-height:1;}
 .msg-gh-user{font-size:12px;color:var(--t3);line-height:1;}
-.msg-bubble{max-width:75%;padding:10px 15px;border-radius:22px;font-size:15px;line-height:1.4;
+.msg-bubble{max-width:75%;padding:10px 15px;border-radius:18px;font-size:15px;line-height:1.4;
   white-space:pre-wrap;word-break:break-word;
   /* Long-press opens our own options menu — suppress iOS's native text-selection
      callout ("Copy / Look Up / Translate") and the blue selection handles. */
@@ -3522,6 +3527,17 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
   transition:background-color .3s ease;}
 .msg-row.team .msg-bubble{background:var(--s3);color:var(--t1);}
 .msg-row.me .msg-bubble{background:var(--accent);color:var(--accent-tint);}
+/* Persistent micro-timestamp + delivery ticks inside a bubble (blueprint §Beam).
+   Floats to the bottom-right; text wraps around it (WhatsApp-style). */
+.msg-tickline{float:right;display:inline-flex;align-items:center;gap:3px;margin:5px -2px -2px 10px;
+  font-size:10px;line-height:1;color:var(--t3);user-select:none;white-space:nowrap;pointer-events:none;}
+.msg-row.me .msg-tickline{color:var(--accent-tint);opacity:.75;}
+.msg-row.me .msg-bubble.msg-unseen .msg-tickline{color:rgba(0,0,0,.45);opacity:1;}
+.mtk{width:15px;height:10px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+.mtk2{width:18px;}
+.mtks{display:inline-flex;align-items:center;}
+.mtks.read .mtk{stroke:#8FE0FF;}   /* read = bright blue-tint ticks on the blue bubble */
+body.rtl .msg-tickline{float:left;margin:5px 10px -2px -2px;}
 /* Two-state sent bubble (WhatsApp/iMessage read semantics): until the recipient
    has actually SEEN it (read_at), the bubble stays the light blue tint with dark
    text. The moment they read it, it smoothly fades to the solid accent blue with
@@ -3562,10 +3578,14 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
      • bubble has one below (run continues)     → :not(.tail) → bottom corner flat
    So the run's outer top, outer bottom, and the off-side corners stay round —
    e.g. a received tail keeps its rounded bottom-left as the anchor. */
-.msg-row.team:not(.gap) .msg-bubble{border-top-left-radius:12px;}
-.msg-row.team:not(.tail) .msg-bubble{border-bottom-left-radius:12px;}
-.msg-row.me:not(.gap) .msg-bubble{border-top-right-radius:12px;}
-.msg-row.me:not(.tail) .msg-bubble{border-bottom-right-radius:12px;}
+.msg-row.team:not(.gap) .msg-bubble{border-top-left-radius:6px;}
+.msg-row.team:not(.tail) .msg-bubble{border-bottom-left-radius:6px;}
+.msg-row.me:not(.gap) .msg-bubble{border-top-right-radius:6px;}
+.msg-row.me:not(.tail) .msg-bubble{border-bottom-right-radius:6px;}
+/* The run's LAST bubble (.tail, incl. a lone .gap.tail) carries a small 4px TAIL
+   corner on the sender side (blueprint §Beam — radius 18 + a 4pt tail corner). */
+.msg-row.team.tail .msg-bubble{border-bottom-left-radius:4px;}
+.msg-row.me.tail .msg-bubble{border-bottom-right-radius:4px;}
 .msg-bubble.photo{padding:2px;background:transparent;}
 /* Grouped photos/videos: flatten the IMAGE's connecting corner too (concentric
    with the bubble's 7px corner) so consecutive pictures read as connected. */
@@ -6572,7 +6592,13 @@ body.light .gp-card{background:#fff;}
    an inner wrapper (.ac-item-inner, see acChatRowDM/acChatRowGroup) that slides
    during a swipe, revealing a growing action bubble underneath (see below). */
 #acListScreen .ac-item{margin:0 -8px;padding:0;border-radius:0;position:relative;overflow:hidden;-webkit-tap-highlight-color:transparent;}
-#acListScreen .ac-item-inner{gap:13px;padding:14px var(--feed-gutter);position:relative;touch-action:pan-y;}
+#acListScreen .ac-item-inner{gap:13px;padding:12px var(--feed-gutter);position:relative;touch-action:pan-y;}
+/* Beam chats list (blueprint §Beam): 48px avatars, ~72px rows, headline-weight name. */
+#acListScreen .ac-item .user-avatar{width:48px;height:48px;font-size:18px;}
+#acListScreen .ac-item-name{font-size:15px;font-weight:700;}
+/* Pinned chats float at top on a subtle elevated fill. */
+#acListScreen .ac-item.ac-pinned .ac-item-inner{background:var(--s1);}
+body.light #acListScreen .ac-item.ac-pinned .ac-item-inner{background:var(--s2);}
 #acListScreen .ac-item::after{content:"";position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:1px;background:var(--b2);transition:opacity .2s var(--ease);}
 body.light #acListScreen .ac-item::after{background:rgba(0,0,0,.07);}
 /* Desktop hover matches Home's cards exactly (same opacity + timing) instead of
@@ -6695,6 +6721,8 @@ body.light #acListScreen .ac-item-inner::before{background:rgba(0,0,0,.07);}
 .ac-item.unread .ac-item-time{color:var(--accent);font-weight:700;}
 .ac-item-unread{min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--accent);color:var(--accent-tint);
   font-size:11.5px;font-weight:800;display:flex;align-items:center;justify-content:center;}
+/* A single unread renders as a plain dot (blueprint §Beam). */
+.ac-item-unread.dot{min-width:11px;width:11px;height:11px;padding:0;}
 /* Recent-calls list */
 .ac-call-sub{display:flex;align-items:center;gap:5px;}
 .ac-call-sub svg{width:14px;height:14px;stroke:currentColor;stroke-width:2.2;fill:none;flex-shrink:0;color:var(--t4);}
@@ -6744,9 +6772,10 @@ body.light .call-fab-opt:active{background:rgba(0,0,0,.07);}
 .ac-err-ic svg{width:24px;height:24px;stroke:var(--t3);stroke-width:1.9;fill:none;}
 .ac-err-title{font-size:16px;font-weight:700;color:var(--t1);}
 .ac-err-sub{font-size:13.5px;color:var(--t3);line-height:1.5;max-width:260px;}
-.ac-err-btn{margin-top:14px;background:var(--accent-dim);color:var(--accent);border:1px solid rgba(10,132,255,.3);
+/* Honest error retry = a GREY secondary button (blueprint) — not blue. */
+.ac-err-btn{margin-top:14px;background:var(--s2);color:var(--t1);border:none;
   border-radius:var(--r-pill);padding:9px 20px;font-size:13.5px;font-weight:700;cursor:pointer;transition:all var(--t-fast) var(--ease);}
-.ac-err-btn:hover{background:var(--accent-mid);border-color:rgba(10,132,255,.5);}
+.ac-err-btn:hover{background:var(--s3);}
 .ac-err-btn:active{transform:scale(.96);}
 /* Empty-search "Discover" panel */
 /* On-screen search-scope chips (mobile — sidebar scopes are inside the drawer) */
@@ -24364,8 +24393,8 @@ function acGoProfileHub() {
 // Chats = direct-only, Groups = group chats only (both reuse the message list);
 // Calls/Contacts duplicate the standalone screens via the shared scoped renderers.
 const AC_CHATS_FAB = {
-  chats:    { ic: "<span class='nav-fab-ic' style=\"--ic:url('/nav-equals.png')\"></span>", label: 'New' },
-  groups:   { ic: "<span class='nav-fab-ic' style=\"--ic:url('/nav-equals.png')\"></span>", label: 'New group' },
+  chats:    { ic: '<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>', label: 'New' },
+  groups:   { ic: '<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>', label: 'New group' },
   calls:    { ic: "<span class='nav-fab-ic' style=\"--ic:url('/nav-target.png')\"></span>", label: 'New call' },
   contacts: { ic: '<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>', label: 'Add contact' },
 };
@@ -34696,7 +34725,7 @@ function acRenderChats() {
       : AC._labelFilter ? '<div class="ac-empty">No chats with this label yet.<br/>Open a chat → ⋯ → Label chat to add one.</div>'
       : unreadOnly ? '<div class="ac-empty">No unread chats — you’re all caught up.<br/><button class="ac-link-btn" onclick="acToggleUnreadFilter()" style="margin-top:6px;">Show all chats</button></div>'
       : AC._chatsFilter === 'groups' ? '<div class="ac-empty">No group chats yet.<br/>Tap the pencil to start a group.</div>'
-      : '<div class="ac-empty">No chats yet.<br/>Tap the pencil to message someone, or start a group.</div>';
+      : `<div class="ac-feed-empty"><div class="ac-feed-empty-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div><div class="ac-feed-empty-line">Your inbox is empty</div><div class="ac-feed-empty-sub">Message anyone, start a group, or create a channel.</div><button class="ac-pill-btn accent ac-feed-empty-cta" onclick="acNewChatMenu()">Start a chat</button></div>`;
     el.innerHTML = (archHeader ? archHeader.html : '') + (lockHeader ? lockHeader.html : '') + empty;
     return;
   }
@@ -34762,6 +34791,11 @@ function acRowName(e, el) {
   last.classList.toggle('show-user', showUser);
   last.textContent = showUser ? (last.dataset.user || '') : (last.dataset.last || '');
 }
+// Unread badge (blueprint §Beam): a count, but a plain dot when there's just one.
+function acUnreadBadge(n, muted) {
+  if (!n) return '';
+  return `<span class="ac-item-unread${muted ? ' muted' : ''}${n === 1 ? ' dot' : ''}" aria-label="${n} unread">${n === 1 ? '' : n}</span>`;
+}
 function acChatRowDM(c) {
   const last = c.last_deleted ? 'This message was deleted'
     : c.last_hidden ? 'Hidden message'
@@ -34781,7 +34815,7 @@ function acChatRowDM(c) {
   const draft = tid == null ? Drafts.get('d:' + c.id) : '';
   const lastHtml = draft ? `<span class="ac-draft">Draft:</span> ${escHtml(draft)}` : escHtml(last);
   const lastPlain = draft ? ('Draft: ' + draft) : last;
-  return `<div class="ac-item ${on ? 'online' : ''} ${unread ? 'unread' : ''}" data-uid="${c.id}" onclick="acDmRowTap(${c.id},${tk})">
+  return `<div class="ac-item ${on ? 'online' : ''} ${unread ? 'unread' : ''} ${acIsPinned('dm', c.id) ? 'ac-pinned' : ''}" data-uid="${c.id}" onclick="acDmRowTap(${c.id},${tk})">
     <div class="ac-item-inner">
       <div class="ac-ava-wrap" onclick="event.stopPropagation();acOpenContactFromRow(${c.id})">${acAvatarHtml(c.name, c.avatar)}<span class="ac-online-dot"></span></div>
       <div class="ac-item-main">
@@ -34790,7 +34824,7 @@ function acChatRowDM(c) {
       </div>
       <div class="ac-item-right">
         <span class="ac-item-time">${acTime(c.last_at)}</span>
-        ${unread ? `<span class="ac-item-unread">${unread}</span>` : ''}
+        ${acUnreadBadge(unread)}
       </div>
     </div>
   </div>`;
@@ -34802,7 +34836,7 @@ function acChatRowGroup(g) {
     : (g.last_image ? who + 'Photo' : (lbl ? who + lbl : `${g.members} members`));
   const draft = Drafts.get('g:' + g.id);
   const lastHtml = draft ? `<span class="ac-draft">Draft:</span> ${escHtml(draft)}` : escHtml(last);
-  return `<div class="ac-item ${g.unread && !g.muted ? 'unread' : ''}" data-gid="${g.id}" onclick="acOpenGroup(${g.id})">
+  return `<div class="ac-item ${g.unread && !g.muted ? 'unread' : ''} ${acIsPinned('group', g.id) ? 'ac-pinned' : ''}" data-gid="${g.id}" onclick="acOpenGroup(${g.id})">
     <div class="ac-item-inner">
       ${acGroupAvatarHtml(g)}
       <div class="ac-item-main">
@@ -34811,7 +34845,7 @@ function acChatRowGroup(g) {
       </div>
       <div class="ac-item-right">
         <span class="ac-item-time">${acTime(g.last_at || g.created_at)}</span>
-        ${g.unread ? `<span class="ac-item-unread ${g.muted ? 'muted' : ''}">${g.unread}</span>` : ''}
+        ${acUnreadBadge(g.unread, g.muted)}
       </div>
     </div>
   </div>`;
@@ -39080,6 +39114,17 @@ function acChatPrivacyNotice() {
 function acShowChatPrivacy() {
   showOverlay('chatPrivacyView');
 }
+// A persistent micro-timestamp + delivery ticks inside each bubble (blueprint §Beam).
+function _msgClock(ts) { try { return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; } }
+const _TICK1 = '<svg class="mtk" viewBox="0 0 16 11"><path d="M2 6 5 9 10.5 2.5"/></svg>';
+const _TICK2 = '<svg class="mtk mtk2" viewBox="0 0 20 11"><path d="M2 6 5 9 10.5 2.5"/><path d="M7.5 9 13 2.5"/></svg>';
+// Ticks only on MY messages: 1 check = sent (still pending), 2 = delivered, 2 blue-tint = read.
+function acMsgTicks(m) {
+  if (!m || !m.mine || m.failed) return '';
+  if (m.read_at) return `<span class="mtks read" aria-label="Read">${_TICK2}</span>`;
+  const pending = m.pending || typeof m.id === 'string'; // optimistic temp bubble not yet server-confirmed
+  return pending ? `<span class="mtks" aria-label="Sent">${_TICK1}</span>` : `<span class="mtks" aria-label="Delivered">${_TICK2}</span>`;
+}
 function acRenderThread() {
   const el = document.getElementById('acThread');
   acApplyWallpaper(); // per-conversation wallpaper
@@ -39202,9 +39247,13 @@ function acRenderThread() {
       ? `<span class="msg-secret"${m.expiresAt ? ` data-exp="${escHtml(m.expiresAt)}"` : ''}><svg viewBox="0 0 24 24"><path d="M12 2c1 4 4 5 4 9a4 4 0 0 1-8 0c0-1.5 .7-2.5 .7-2.5S9 11 10 11s1-3 2-9z"/></svg>${m.expiresAt ? '<span class="ms-cd">' + acSecretLeft(m.expiresAt) + '</span>' : 'Secret'}</span>`
       : '';
     if (m.secret && !isDeleted && !concealed) bcls += ' msg-secret-bub';
+    // Persistent micro-timestamp + delivery ticks (text/caption bubbles only —
+    // media/voice/rich-card bubbles keep the swipe-revealed time).
+    const tickline = (!isDeleted && !concealed && !emojiN && !!m.body && !hasMeta && !isVoice)
+      ? `<span class="msg-tickline">${_msgClock(m.created_at)}${acMsgTicks(m)}</span>` : '';
     const inner = hasReply
-      ? `${fwdLabel}${quoteHtml}<div class="mq-body">${metaHtml}${img}${txt}${editedHtml}${secretHtml}</div>`
-      : `${fwdLabel}${quoteHtml}${metaHtml}${img}${txt}${editedHtml}${secretHtml}`;
+      ? `${fwdLabel}${quoteHtml}<div class="mq-body">${metaHtml}${img}${txt}${editedHtml}${secretHtml}${tickline}</div>`
+      : `${fwdLabel}${quoteHtml}${metaHtml}${img}${txt}${editedHtml}${secretHtml}${tickline}`;
     // Select mode: the whole row toggles selection (and a checkbox shows); the
     // bubble's own tap (reveal hidden) is suppressed.
     const selMode = !!AC._selectMode;
