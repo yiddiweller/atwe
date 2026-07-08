@@ -926,6 +926,7 @@ function publicUser(row) {
     hasPassword: row.has_password !== false, // false only for Google-only accounts
     onboarded: row.onboarded === undefined ? true : !!row.onboarded, // missing → don't force onboarding
     intent: row.intent || null,
+    introSeen: Array.isArray(row.intro_seen) ? row.intro_seen : [], // feature-intro sheets already shown (per-account, cross-device)
     twoFactorEnabled: !!row.totp_enabled,
     subPriceCents: row.sub_price_cents || 0, // own creator-subscription price (0 = off)
     readReceipts: row.read_receipts !== false,
@@ -3784,6 +3785,26 @@ app.post('/api/onboarding/finish', auth.requireAuth, async (req, res) => {
   try {
     await db.query('UPDATE users SET onboarded = true, intent = COALESCE($1, intent) WHERE id = $2', [intent, req.user.id]);
     res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save.' }); }
+});
+
+// Feature-intro sheets: mark one as seen for this account so it never shows again
+// (cross-session/device/reinstall). Idempotent — a duplicate id is a no-op. The id
+// is a short slug; anything longer/oddly-shaped is ignored rather than stored.
+app.post('/api/intro-seen', auth.requireAuth, async (req, res) => {
+  const id = String(req.body.id || '').trim().slice(0, 40);
+  if (!/^[a-z0-9_-]{1,40}$/.test(id)) return res.status(400).json({ error: 'Invalid sheet id.' });
+  try {
+    // Append the id only if not already present (jsonb), atomically.
+    const { rows } = await db.query(
+      `UPDATE users
+         SET intro_seen = CASE WHEN intro_seen ? $1 THEN intro_seen
+                               ELSE intro_seen || to_jsonb($1::text) END
+       WHERE id = $2
+       RETURNING intro_seen`,
+      [id, req.user.id]
+    );
+    res.json({ ok: true, introSeen: (rows[0] && rows[0].intro_seen) || [] });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save.' }); }
 });
 

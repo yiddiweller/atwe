@@ -4241,6 +4241,35 @@ universal Search/AI/Complete-profile/Feed tips). Triggered after signup
 (`suShowProfileSetup`) and on boot for any not-yet-onboarded account; `obFinish`
 drops the member straight onto their For You feed.
 
+### Feature-intro sheets (per-world one-time welcome)
+
+An Apple-style welcome card shown **once per account** the first time it enters
+each of the four worlds — **Beam · Circles · Atwe AI · Wallet**. Distinct from
+onboarding (which runs once at signup); these teach a world on first arrival.
+"Seen" is a per-account server registry — **`users.intro_seen`** JSONB (idempotent
+jsonb-append via `POST /api/intro-seen {id}`; the id is slug-validated
+`^[a-z0-9_-]{1,40}$`), exposed on `publicUser.introSeen` and hydrated into `S.user`
+— **mirrored in `localStorage.atwe_intro_seen`** so a dismissed sheet never
+re-appears across sessions/devices/reinstalls even before the server round-trips.
+Component: the shared `#introSheet` overlay (rises from the bottom via `sheetUp`,
+near-black `--s1` surface / light-panel in Light, 28px top radius, grab handle,
+84px glyph disc with a **blue identity halo**, 22/700 title, subtitle, exactly 3
+benefit rows [blue dot + bold headline + caption], full-width **WHITE-primary**
+CTA). Blue is identity-only (halo + dots); the appear "lap" reuses the Phase-3
+`.spin` bulb-rim driven by `introLap()`, scoped to the card (NOT the removed global
+opening lap). Registry `INTRO_SHEETS` holds each sheet's glyph/title/sub/benefits —
+**extensible: a new sheet is one entry + one `_introSoon` call**. Trigger:
+`_introSoon(id)` fires from each world's entry (`acGoMessages`/`acSetFeed('circles')`
+/`appTab('ai')`/`acOpenWallet`) → `maybeIntro(id)`, which self-gates on `_introReady`
+(armed 1.5s after boot/login lands, so a restored/deep-linked tab never auto-pops),
+signed-in-with-username, onboarding-done, a `BLOCKERS` overlay list (login/signup/
+onboarding/app-lock/plans/splash — a world that is itself an overlay like Wallet does
+NOT suppress its own sheet), and the seen registry. **One at a time** — a second
+world's sheet queues to that world's next visit rather than stacking. Dismiss
+(button / scrim tap / drag-down) calls `markIntroSeen` (local cache first, then the
+server, retry-on-fail). Reduced-motion → fade (no rim lap); RTL-mirrored;
+`role=dialog`+`aria-modal`+`aria-labelledby`, CTA auto-focus + ≥44pt target.
+
 ## Loyalty / rewards points
 
 A rewards program on top of the wallet: buyers **earn points on purchases** (~1% back —

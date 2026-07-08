@@ -806,6 +806,38 @@ body.light .spin::before,body.light .spin::after,
 body.light .rim-flood,body.light .rim-inner{display:none;}
 @media(prefers-reduced-motion:reduce){.spin::before,.spin::after,.rim-flood,.rim-inner{transition:none;}}
 
+/* ═══ Feature-intro sheets (Phase 4) — an Apple-style welcome card shown ONCE
+   per account the first time it enters a world (Beam / Circles / Atwe AI /
+   Wallet). Rises from the bottom, near-black surface, blue reserved for
+   identity only (the glyph halo + benefit dots). Reuses the .spin bulb-rim for
+   the appear "lap" (driven by introLap()), and the shared sheetUp keyframe. */
+.intro-overlay{align-items:flex-end;justify-content:center;background:rgba(0,0,0,.45);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:1400;padding:0;}
+.intro-card{position:relative;background:var(--s1);width:100%;max-width:480px;
+  border-radius:28px 28px 0 0;padding:10px 24px calc(26px + env(safe-area-inset-bottom,0px));
+  box-shadow:0 -12px 54px rgba(0,0,0,.55);text-align:center;
+  animation:sheetUp .34s cubic-bezier(.22,.61,.36,1);}
+.intro-grab{width:36px;height:5px;border-radius:3px;background:var(--b3);margin:2px auto 20px;}
+.intro-glyph{width:84px;height:84px;margin:6px auto 20px;border-radius:24px;background:var(--s2);
+  display:flex;align-items:center;justify-content:center;position:relative;
+  box-shadow:0 8px 26px rgba(0,0,0,.42);}
+.intro-glyph::after{content:"";position:absolute;inset:-16px;border-radius:34px;z-index:-1;
+  background:radial-gradient(circle,rgba(10,132,255,.30),transparent 68%);filter:blur(7px);}
+.intro-glyph svg{width:44px;height:44px;stroke:var(--t1);fill:none;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round;}
+.intro-title{font-size:22px;font-weight:700;color:var(--t1);letter-spacing:-.01em;margin-bottom:7px;}
+.intro-sub{font-size:15px;color:var(--t3);line-height:1.45;margin:0 auto 24px;max-width:340px;}
+.intro-benefits{display:flex;flex-direction:column;gap:16px;text-align:left;margin:0 4px 26px;}
+.intro-ben{display:flex;gap:13px;align-items:flex-start;}
+.intro-ben-dot{width:9px;height:9px;border-radius:50%;background:var(--accent);margin-top:6px;
+  flex:0 0 auto;box-shadow:0 0 9px rgba(10,132,255,.55);}
+.intro-ben-txt{flex:1;min-width:0;}
+.intro-ben-h{font-size:15px;font-weight:700;color:var(--t1);margin-bottom:2px;}
+.intro-ben-c{font-size:13.5px;color:var(--t3);line-height:1.4;}
+.intro-cta{width:100%;min-height:48px;font-size:16px;}
+body.rtl .intro-benefits{text-align:right;}
+@media(prefers-reduced-motion:reduce){.intro-card{animation:overlayIn .22s var(--ease);}}
+
 /* Button + input light — additive to the Phase 1 recipes (fills, hairlines,
    text colors are untouched). A soft movement flare in each button's own
    color, plus a cursor-anchored wash on the grey/blue/input surfaces. */
@@ -10006,6 +10038,18 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Feature-intro sheet (Phase 4) — one-time welcome card per world -->
+<div class="overlay intro-overlay hidden" id="introSheet" role="dialog" aria-modal="true" aria-labelledby="introTitle" onclick="if(event.target===this)introDismiss()">
+  <div class="intro-card spin" id="introCard">
+    <div class="intro-grab" aria-hidden="true"></div>
+    <div class="intro-glyph" id="introGlyph" aria-hidden="true"></div>
+    <div class="intro-title" id="introTitle"></div>
+    <div class="intro-sub" id="introSub"></div>
+    <div class="intro-benefits" id="introBenefits"></div>
+    <button class="ac-pill-btn accent intro-cta" id="introCta" onclick="introDismiss()">Continue</button>
+  </div>
+</div>
+
 <!-- WhatsApp-style "Delete message" sheet -->
 <div class="overlay hidden" id="msgDeleteOverlay" onclick="if(event.target===this)closeMsgDelete()">
   <div class="md-card" role="dialog" aria-modal="true" aria-label="Delete message">
@@ -13944,7 +13988,7 @@ async function onAuthSuccess(token, user) {
   API.setToken(token);
   S.token = token;
   S.guest = false;
-  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null };
+  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [] };
   S.plan  = user.plan || 'free';
   Accounts.upsert(token, user);
   try { await loadFromServer(); } catch {}
@@ -13956,6 +14000,9 @@ async function onAuthSuccess(token, user) {
   rtConnect();
   consumePendingRoute();
   maybeClaimReferral();
+  // Arm feature-intro sheets a beat after a fresh sign-in/sign-up lands (onboarding,
+  // if any, runs first and self-suppresses the sheets via the BLOCKERS guard).
+  setTimeout(() => { _introReady = true; }, 1500);
 }
 // Claim a stashed referral code once, after sign-in (server enforces new-account + once).
 async function maybeClaimReferral() {
@@ -15929,6 +15976,160 @@ function maybeStartOnboarding(user) {
   user = user || S.user;
   if (!user || !user.username || user.onboarded !== false || OB._active) return;
   obStart();
+}
+
+/* ═══ Feature-intro sheets (Phase 4) ═══════════════════════════════════════
+   A one-time Apple-style welcome card the first time an account enters each
+   world. "Seen" is a per-account server registry (users.intro_seen), mirrored
+   in localStorage so it never re-shows across sessions/devices/reinstalls even
+   before the server round-trips. One entry per sheet — extensible. */
+const INTRO_SHEETS = {
+  beam: {
+    glyph: '<svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>',
+    title: 'Meet Beam', sub: 'Every conversation, in one place — private, fast and yours.',
+    benefits: [
+      { h: 'Chats, calls & groups', c: 'Message anyone, hop on a voice or video call, or start a group.' },
+      { h: 'Send money in the chat', c: 'Pay, request or split a bill without leaving the conversation.' },
+      { h: 'Private by design', c: 'Encrypted in transit, disappearing messages and locked chats.' },
+    ],
+  },
+  circles: {
+    glyph: '<svg viewBox="0 0 24 24"><circle cx="8" cy="9" r="4"/><circle cx="16" cy="15" r="4"/></svg>',
+    title: 'Meet Circles', sub: 'Join your industry and see what your field is talking about.',
+    benefits: [
+      { h: 'Your industry, curated', c: 'Company-defined circles for every field — just join the ones you fit.' },
+      { h: 'A feed that fits you', c: 'Posts and people from the circles you follow, front and centre.' },
+      { h: 'Find your people', c: 'Meet peers, employers and talent who work where you do.' },
+    ],
+  },
+  ai: {
+    glyph: '<svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.4L19 10l-5.1 1.6L12 17l-1.9-5.4L5 10l5.1-1.6z"/><path d="M18 4l.7 1.9L20.5 6l-1.8.6L18 8l-.7-1.4L15.5 6l1.8-.7z"/></svg>',
+    title: 'Meet Atwe AI', sub: 'Your built-in assistant for work, writing and getting things done.',
+    benefits: [
+      { h: 'Ask anything', c: 'Draft messages, summarise, plan and research in seconds.' },
+      { h: 'Do it for you', c: 'Turn a request into an event, invoice or scheduled post — you confirm.' },
+      { h: 'Woven through Atwe', c: 'Improve a post, match a job, or shop with AI right where you work.' },
+    ],
+  },
+  wallet: {
+    glyph: '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M16 12h4v-2a2 2 0 0 0-2-2h-2z"/><circle cx="16.5" cy="12" r="1"/></svg>',
+    title: 'Your Wallet', sub: 'Real money, built in — send, request, spend and cash out.',
+    benefits: [
+      { h: 'Send & request instantly', c: 'Move money to any @username, or ask to get paid back.' },
+      { h: 'Spend across Atwe', c: 'Pay for anything in the marketplace straight from your balance.' },
+      { h: 'Cash out to your bank', c: 'Withdraw to your bank, set savings goals and earn rewards.' },
+    ],
+  },
+};
+let _introReady = false;            // set true a beat after boot (never fire during login/restore)
+let _introCurrent = null;           // the id of the sheet currently open
+const _introRetry = {};             // ids whose server-save failed → retried
+function _introLocalSeen() {
+  let arr = [];
+  try { arr = JSON.parse(localStorage.getItem('atwe_intro_seen') || '[]'); } catch (e) {}
+  if (!Array.isArray(arr)) arr = [];
+  const srv = (S.user && Array.isArray(S.user.introSeen)) ? S.user.introSeen : [];
+  return new Set([...arr, ...srv]);
+}
+function _introReduced() {
+  return document.body.classList.contains('reduce-motion') ||
+    (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+// Decide whether a world's intro sheet should show, and show it. Safe to call on
+// every world entry — it self-gates and never stacks two sheets.
+function maybeIntro(id) {
+  if (!_introReady) return;                         // still booting / restoring a tab
+  if (!INTRO_SHEETS[id]) return;
+  if (!isAccount() || !S.user || !S.user.username) return;  // signed-in accounts only
+  if (S.user.onboarded === false || (window.OB && OB._active)) return; // let onboarding finish first
+  if (_introCurrent) return;                        // one at a time — re-fires on next visit
+  // Don't pop over a hard-blocking modal (auth, onboarding, app-lock, plans,
+  // splash). A world that is itself an overlay (e.g. Wallet) must NOT suppress
+  // its own intro, so this is a curated blocklist, not "any overlay open".
+  const BLOCKERS = ['loginOverlay', 'signupOverlay', 'onboardingFlow', 'appLockView',
+    'resetOverlay', 'plansOverlay', 'suSplash', 'suPremium', 'suProfileSetup', 'confirmOverlay'];
+  if (BLOCKERS.some(b => { const el = document.getElementById(b); return el && !el.classList.contains('hidden'); })) return;
+  if (_introLocalSeen().has(id)) return;            // already shown to this account
+  showIntro(id);
+}
+// Fire an intro shortly after a world's navigation/animation settles (so a
+// closing section-unlock pad or tab-slide can't block it). Safe to call from an
+// internal back-nav too — the seen registry keeps it strictly once-per-account.
+function _introSoon(id) { setTimeout(() => maybeIntro(id), 420); }
+function showIntro(id) {
+  const cfg = INTRO_SHEETS[id]; if (!cfg) return;
+  _introCurrent = id;
+  document.getElementById('introGlyph').innerHTML = cfg.glyph;
+  document.getElementById('introTitle').textContent = cfg.title;
+  document.getElementById('introSub').textContent = cfg.sub;
+  document.getElementById('introBenefits').innerHTML = cfg.benefits.map(b =>
+    `<div class="intro-ben"><span class="intro-ben-dot"></span><div class="intro-ben-txt"><div class="intro-ben-h">${escHtml(b.h)}</div><div class="intro-ben-c">${escHtml(b.c)}</div></div></div>`).join('');
+  const cta = document.getElementById('introCta');
+  cta.textContent = 'Continue';
+  cta.setAttribute('aria-label', cfg.title + ' — continue');
+  showOverlay('introSheet');
+  const card = document.getElementById('introCard');
+  card.style.transform = ''; card.style.transition = '';
+  _introBindDrag(card);
+  if (!_introReduced()) introLap(card); else card.style.setProperty('--rim', '0');
+  setTimeout(() => { try { cta.focus({ preventScroll: true }); } catch (e) {} }, 360);
+}
+// The 1.5-lap bulb-rim sweep on appear, then melt. Scoped to the intro card only
+// (this is NOT the removed global "opening lap" — it never runs on boot/tabs).
+function introLap(card) {
+  const start = performance.now(), lapMs = 1300;    // ~1.5 laps
+  card.style.setProperty('--gr', '520px');
+  card.style.setProperty('--rim', '0');
+  function frame(now) {
+    if (_introCurrent == null || card !== document.getElementById('introCard')) return;
+    const p = Math.min(1, (now - start) / lapMs);
+    const ang = (-90 + 540 * p) * Math.PI / 180;    // start at top, 1.5 turns
+    card.style.setProperty('--gx', (50 + 52 * Math.cos(ang)).toFixed(1) + '%');
+    card.style.setProperty('--gy', (50 + 60 * Math.sin(ang)).toFixed(1) + '%');
+    card.style.setProperty('--rim', (p < 0.35 ? (p / 0.35) * 0.9 : 0.9).toFixed(3));
+    if (p < 1) requestAnimationFrame(frame);
+    else card.style.setProperty('--rim', '0');       // melt (the .spin transition eases it out)
+  }
+  requestAnimationFrame(frame);
+}
+// Drag-down to dismiss (Apple sheet feel).
+function _introBindDrag(card) {
+  let y0 = null, dy = 0;
+  const onStart = e => { y0 = (e.touches ? e.touches[0].clientY : e.clientY); dy = 0; card.style.transition = 'none'; };
+  const onMove = e => {
+    if (y0 == null) return;
+    dy = Math.max(0, (e.touches ? e.touches[0].clientY : e.clientY) - y0);
+    if (dy > 0) card.style.transform = 'translateY(' + dy + 'px)';
+  };
+  const onEnd = () => {
+    if (y0 == null) return;
+    card.style.transition = 'transform .24s var(--ease)';
+    if (dy > 90) { introDismiss(); }
+    else card.style.transform = '';
+    y0 = null;
+  };
+  const grab = card;  // whole card is draggable (grab handle is the affordance)
+  grab.ontouchstart = onStart; grab.ontouchmove = onMove; grab.ontouchend = onEnd;
+}
+// Dismiss (button / scrim / drag) — writes "seen" immediately, then closes.
+function introDismiss() {
+  const id = _introCurrent;
+  if (id) markIntroSeen(id);
+  _introCurrent = null;
+  closeOverlay('introSheet');
+}
+// Persist "seen" — local cache first (instant, survives an offline dismiss), then
+// the server; a failed save is retried once the next request succeeds.
+function markIntroSeen(id) {
+  try {
+    let arr = JSON.parse(localStorage.getItem('atwe_intro_seen') || '[]');
+    if (!Array.isArray(arr)) arr = [];
+    if (!arr.includes(id)) { arr.push(id); localStorage.setItem('atwe_intro_seen', JSON.stringify(arr)); }
+  } catch (e) {}
+  if (S.user) { if (!Array.isArray(S.user.introSeen)) S.user.introSeen = []; if (!S.user.introSeen.includes(id)) S.user.introSeen.push(id); }
+  API.req('POST', '/api/intro-seen', { id })
+    .then(r => { if (r && Array.isArray(r.introSeen) && S.user) S.user.introSeen = r.introSeen; delete _introRetry[id]; })
+    .catch(() => { _introRetry[id] = true; });
 }
 const OB_STEPS = ['goal', 'topics', 'people', 'done'];
 function obStart() { OB._active = true; OB.intent = null; OB._topicsLoaded = false; OB._peopleLoaded = false; obStep('goal'); showOverlay('onboardingFlow'); }
@@ -19963,6 +20164,7 @@ function appTab(tab, opts) {
   else if (tab === 'call') acGoCall();
   else if (tab === 'contacts') requireSectionUnlock('contacts', acGoContacts);
   if (social) { acRefreshUnread(); acLoadContactIds(); rtConnect(); if (window.innerWidth <= 768) closeSidebar(); }
+  if (!_silent && tab === 'ai') _introSoon('ai');   // first-visit Atwe AI welcome
   acUpdateRail();
 }
 
@@ -22818,7 +23020,7 @@ function acSetFeed(scope) {
   // tabs, side/bottom nav) while it's open.
   document.body.classList.toggle('feeds-immersive', scope === 'feeds');
   const fab = document.getElementById('acHomeFab');
-  if (scope === 'circles') { if (fab) fab.style.display = 'none'; acLoadCircles(); }
+  if (scope === 'circles') { if (fab) fab.style.display = 'none'; acLoadCircles(); _introSoon('circles'); }
   else if (scope === 'feeds') { if (fab) { fab.style.display = ''; fab.onclick = acFeedCompose; } acLoadFeedTimeline(); }
   else { if (fab) { fab.style.display = ''; fab.onclick = acOpenPost; } acLoadFeed(); }
   acLoadLiveStrip();
@@ -23713,6 +23915,7 @@ function acGoMessages() {
   let t = AC._chatsTab; // last tab this session…
   if (!t) { try { t = localStorage.getItem('ac_chats_tab'); } catch {} } // …or the one persisted from a prior launch
   acChatsTab(t || 'chats'); acRefreshUnread(); acSyncChatPrefs();
+  _introSoon('beam');   // first-visit Beam welcome
 }
 // One unified chat list now — "Groups" just returns to it (kept for the
 // post-group-create / leave-group return flows).
@@ -27698,6 +27901,7 @@ function acOpenWallet() {
     document.getElementById('walletHistory').innerHTML = acSkelRows(3);
     await acLoadWallet();
     acLoadWalletGiftCards();
+    _introSoon('wallet');   // first-visit Wallet welcome
   });
 }
 // Show owned gift cards as a card stack in the Wallet (tap to flip).
@@ -41271,7 +41475,7 @@ const _bootDone = (async function boot() {
     if (user) {
       S.token = API.token();
       S.guest = false;
-      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null };
+      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [] };
       S.plan  = user.plan || 'free';
       Accounts.upsert(API.token(), user);
       try { await loadFromServer(); } catch {}
@@ -41284,6 +41488,10 @@ const _bootDone = (async function boot() {
       appTab(want);
       rtConnect();
       consumePendingRoute();
+      // Arm feature-intro sheets only AFTER the boot landing settles — so the
+      // restored/deep-linked tab we land on never auto-pops a sheet (that would
+      // read as "during login"); the user's first deliberate world visit does.
+      setTimeout(() => { _introReady = true; }, 1500);
       maybeStartOnboarding(user); // returning user who hasn't finished onboarding
       maybeClaimReferral(); // a ?ref= link captured this load (server enforces eligibility)
       return;

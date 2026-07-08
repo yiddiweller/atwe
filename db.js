@@ -416,6 +416,10 @@ async function initSchema() {
   // the goal they picked (hiring|job|network|sell|explore) — used to tailor it.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarded BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS intent TEXT;`);
+  // Feature-intro sheets already shown to this account (array of sheet ids, e.g.
+  // ["beam","circles"]). Per-account so a sheet never reappears across sessions,
+  // devices or reinstalls; extensible — a new sheet just adds its id here.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS intro_seen JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   // Per-DM mute expiry: { "d2": <epoch ms> } — a key present here mutes until that
   // time; a muted key absent here (or value 0) is muted "Always". Expired entries
   // are pruned client-side and ignored by the unread query.
