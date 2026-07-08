@@ -4029,6 +4029,28 @@ body.light .ac-rec-lock{background:rgba(255,255,255,.55);}
 .ac-rec.holding .ac-rec-bars,.ac-rec.holding .ac-rec-send{display:none;}
 .ac-rec.holding .ac-rec-del{pointer-events:none;background:var(--red-soft);
   transform:scale(calc(1 + var(--cancel,0) * .55));transition:transform .06s linear;}
+/* Pause (locked recording) + preview-play (hear it back) — same 32px grey-glass
+   discs as the trash; the send stays blue. WhatsApp-style: record → pause → play
+   back → send, all inside our recording pill (not a separate bar). */
+.ac-rec-pause,.ac-rec-prev{width:32px;height:32px;border-radius:50%;border:none;cursor:pointer;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;background:var(--s2);color:var(--t1);transition:filter var(--t-fast) var(--ease);}
+.ac-rec-pause svg,.ac-rec-prev svg{width:17px;height:17px;}
+.ac-rec-pause .rc-pause,.ac-rec-prev .rp-play,.ac-rec-prev .rp-pause{fill:currentColor;}
+.ac-rec-pause .rc-mic{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+/* icon swaps: pause↔mic on the pause button, play↔pause on the preview button */
+.ac-rec-pause .rc-mic{display:none;}
+.ac-rec.paused .ac-rec-pause .rc-pause{display:none;}
+.ac-rec.paused .ac-rec-pause .rc-mic{display:block;color:var(--red);}
+.ac-rec-prev .rp-pause{display:none;}
+.ac-rec-prev.playing .rp-play{display:none;}
+.ac-rec-prev.playing .rp-pause{display:block;}
+/* visibility per state */
+.ac-rec-prev{display:none;}
+.ac-rec.paused .ac-rec-prev{display:flex;}
+.ac-rec.holding .ac-rec-pause{display:none;}   /* no pause while the finger is held */
+.ac-rec.paused .ac-rec-dot{display:none;}      /* not "live" while paused */
+.ac-rec.paused .ac-rec-bars span{background:var(--t3);}         /* frozen preview waveform reads calmer */
+.ac-rec.paused .ac-rec-bars span.played{background:var(--accent);}  /* fills as the preview plays */
 
 /* The footer itself is fully see-through — the thread scrolls behind it; only the
    input pill (below) is the frosted-black blurry bar, like the menu sheets. */
@@ -13569,10 +13591,20 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
           <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
         </button>
         <span class="ac-rec-dot"></span>
+        <!-- Paused: a play/pause control to hear back what you've recorded so far. -->
+        <button class="ac-rec-prev" id="acRecPrev" onclick="acVoicePreviewToggle()" aria-label="Play back recording">
+          <svg class="rp-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          <svg class="rp-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+        </button>
         <span class="ac-rec-time" id="acRecTime">0:00</span>
         <div class="ac-rec-bars" id="acRecBars"></div>
         <span class="ac-rec-slide" id="acRecSlide"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>slide to cancel</span>
-        <button class="ac-rec-send" id="acRecSend" onclick="acVoiceStop()" aria-label="Stop & attach">
+        <!-- Locked recording: pause; while paused it becomes a resume-record mic. -->
+        <button class="ac-rec-pause" id="acRecPause" onclick="acVoiceTogglePause()" aria-label="Pause recording">
+          <svg class="rc-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+          <svg class="rc-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+        </button>
+        <button class="ac-rec-send" id="acRecSend" onclick="acVoiceSendFromRec()" aria-label="Send voice note">
           <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
         </button>
       </div>
@@ -40585,8 +40617,11 @@ function acAutosize() {
 
 /* ── Voice notes (MediaRecorder) ── */
 let acRec, acRecChunks = [], acRecTimer = null, acRecStart = 0, acRecCancel = false, _micAutoSend = false;
+// WhatsApp-style pause/resume + play-back-preview while recording (locked mode only).
+let _recPaused = false, _recPausedAccum = 0, _recPauseAt = 0, _recElapsedSec = 0;
+let _recPrevAudio = null, _recPrevUrl = null, _recPrevRaf = 0;
 // ── Live recording waveform (real mic loudness, scrolling right-to-left) ──
-let _recAC = null, _recAnalyser = null, _recRaf = 0, _recLevels = null, _recTD = null, _recBarEls = null;
+let _recAC = null, _recAnalyser = null, _recRaf = 0, _recLevels = null, _recTD = null, _recBarEls = null, _recDraw = null;
 function _recWaveStart(stream) {
   try {
     _recAC = new (window.AudioContext || window.webkitAudioContext)();
@@ -40611,10 +40646,15 @@ function _recWaveStart(stream) {
     for (let i = 0; i < N; i++) _recBarEls[i].style.height = Math.min(96, 8 + Math.round(_recLevels[i] * 84)) + '%';
     _recRaf = requestAnimationFrame(draw);
   };
+  _recDraw = draw;
   _recRaf = requestAnimationFrame(draw);
 }
+// Freeze the live waveform (paused) without tearing down the analyser/stream, so a
+// resume can pick the loudness meter right back up.
+function _recWavePause() { if (_recRaf) cancelAnimationFrame(_recRaf); _recRaf = 0; }
+function _recWaveResume() { if (_recDraw && _recAnalyser && !_recRaf) _recRaf = requestAnimationFrame(_recDraw); }
 function _recWaveStop() {
-  if (_recRaf) cancelAnimationFrame(_recRaf); _recRaf = 0;
+  if (_recRaf) cancelAnimationFrame(_recRaf); _recRaf = 0; _recDraw = null;
   _recAnalyser = null; _recBarEls = null;
   if (_recAC) { try { _recAC.close(); } catch (e) {} _recAC = null; }
 }
@@ -40642,9 +40682,13 @@ async function acVoiceStart(holdMode) {
   catch { try { acRec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined); } catch { acRec = new MediaRecorder(stream); } }
   acRec.ondataavailable = (ev) => { if (ev.data && ev.data.size) acRecChunks.push(ev.data); };
   acRec.onstop = () => { stream.getTracks().forEach(t => t.stop()); acVoiceFinalize(); };
-  acRec.start();
+  // Timeslice so chunks accumulate every second → a mid-recording preview (after
+  // pause) always has audio to play, and the final blob is already gathered.
+  try { acRec.start(1000); } catch { acRec.start(); }
   AC._recording = true; _micStarting = false; acRecStart = Date.now();
+  _recPaused = false; _recPausedAccum = 0; _recPauseAt = 0; _recElapsedSec = 0;
   const rec = document.getElementById('acRec');
+  rec.classList.remove('paused');
   // hold = "slide to cancel"; once the finger is up it's locked (stop/delete buttons).
   // Use the LIVE hold state, not the value passed at press time — the user may already
   // have let go while the mic was spinning up (a quick tap), in which case we lock.
@@ -40659,12 +40703,77 @@ async function acVoiceStart(holdMode) {
   else if (_micPending === 'lock') { _micPending = null; rec.classList.remove('holding'); }
 }
 function acVoiceTick() {
-  const s = Math.floor((Date.now() - acRecStart) / 1000);
+  const s = Math.floor((Date.now() - acRecStart - _recPausedAccum) / 1000); // paused time doesn't count
+  _recElapsedSec = s;
   const el = document.getElementById('acRecTime');
   if (el) el.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
   if (s >= 300) { acVoiceStop(); return; } // 5-minute cap
   acRecTimer = setTimeout(acVoiceTick, 250);
 }
+// ── Pause / resume + hear-it-back preview (WhatsApp-style, locked recording only) ──
+function acVoiceTogglePause() { if (_recPaused) acVoiceResume(); else acVoicePause(); }
+function acVoicePause() {
+  if (!acRec || acRec.state !== 'recording' || _recPaused) return;
+  if (typeof acRec.pause !== 'function') { showNotif('Pause isn’t supported in this browser.'); return; }
+  try { acRec.requestData(); } catch (_) {} // flush a chunk so the preview has audio
+  try { acRec.pause(); } catch (_) {}
+  if (acRec.state !== 'paused') { showNotif('Couldn’t pause the recording.'); return; } // older browsers — stay live
+  _recPaused = true; _recPauseAt = Date.now();
+  clearTimeout(acRecTimer); _recWavePause();
+  document.getElementById('acRec')?.classList.add('paused');
+}
+function acVoiceResume() {
+  if (!acRec || !_recPaused) return;
+  _recPreviewStop();
+  _recPausedAccum += Date.now() - _recPauseAt; // don't count the paused span
+  try { acRec.resume(); } catch (_) {}
+  _recPaused = false;
+  document.getElementById('acRec')?.classList.remove('paused');
+  _recWaveResume(); acVoiceTick();
+}
+// Play back what's recorded so far (built from the chunks flushed on pause).
+function acVoicePreviewToggle() {
+  if (_recPrevAudio && !_recPrevAudio.paused) { _recPreviewStop(); return; }
+  if (!acRecChunks.length) { showNotif('Nothing recorded yet.'); return; }
+  _recPreviewStop();
+  try {
+    const blob = new Blob(acRecChunks, { type: (acRec && acRec.mimeType) || 'audio/webm' });
+    _recPrevUrl = URL.createObjectURL(blob);
+    _recPrevAudio = new Audio(_recPrevUrl);
+    const btn = document.getElementById('acRecPrev');
+    btn?.classList.add('playing');
+    _recPrevAudio.onended = () => _recPreviewStop();
+    _recPrevAudio.play().catch(() => _recPreviewStop());
+    _recPrevProgress(); // colour the bars as it plays
+  } catch { _recPreviewStop(); }
+}
+function _recPrevProgress() {
+  cancelAnimationFrame(_recPrevRaf);
+  const step = () => {
+    if (!_recPrevAudio) return;
+    const dur = _recElapsedSec || _recPrevAudio.duration || 0;
+    const frac = dur ? Math.min(1, (_recPrevAudio.currentTime || 0) / dur) : 0;
+    const bars = document.getElementById('acRecBars');
+    if (bars) { const n = bars.children.length, k = Math.round(frac * n); for (let i = 0; i < n; i++) bars.children[i].classList.toggle('played', i < k); }
+    const t = document.getElementById('acRecTime');
+    if (t) { const c = Math.floor(_recPrevAudio.currentTime || 0); t.textContent = Math.floor(c / 60) + ':' + String(c % 60).padStart(2, '0'); }
+    if (!_recPrevAudio.paused) _recPrevRaf = requestAnimationFrame(step);
+  };
+  _recPrevRaf = requestAnimationFrame(step);
+}
+function _recPreviewStop() {
+  cancelAnimationFrame(_recPrevRaf); _recPrevRaf = 0;
+  if (_recPrevAudio) { try { _recPrevAudio.pause(); } catch (_) {} _recPrevAudio.onended = null; _recPrevAudio = null; }
+  if (_recPrevUrl) { try { URL.revokeObjectURL(_recPrevUrl); } catch (_) {} _recPrevUrl = null; }
+  document.getElementById('acRecPrev')?.classList.remove('playing');
+  // restore the paused waveform + the recorded time
+  const bars = document.getElementById('acRecBars');
+  if (bars) for (const s of bars.children) s.classList.remove('played');
+  const t = document.getElementById('acRecTime');
+  if (t && _recPaused) t.textContent = Math.floor(_recElapsedSec / 60) + ':' + String(_recElapsedSec % 60).padStart(2, '0');
+}
+// The pill's send button: finalize + send straight away (you've already reviewed it here).
+function acVoiceSendFromRec() { _recPreviewStop(); _micAutoSend = true; acVoiceStop(); }
 function acVoiceStop() {
   clearTimeout(acRecTimer);
   if (acRec && acRec.state !== 'inactive') { acRecCancel = false; try { acRec.stop(); } catch {} }
@@ -40677,9 +40786,10 @@ function acVoiceCancel() {
 }
 function acVoiceFinalize() {
   AC._recording = false;
+  _recPreviewStop(); _recPaused = false;
   _recWaveStop();
   const rec = document.getElementById('acRec');
-  rec.classList.add('hidden'); rec.classList.remove('holding');
+  rec.classList.add('hidden'); rec.classList.remove('holding', 'paused');
   document.getElementById('acCompose').style.display = '';
   acToggleSendMic();
   const autoSend = _micAutoSend; _micAutoSend = false; // hold-and-release sends straight away
@@ -40696,12 +40806,13 @@ function acVoiceFinalize() {
 }
 function acStopMic() {
   // Abort any in-progress recording when leaving a thread.
+  _recPreviewStop(); _recPaused = false;
   _recWaveStop();
   _micEnd();
   clearTimeout(acRecTimer);
   if (acRec && acRec.state !== 'inactive') { acRecCancel = true; try { acRec.stop(); } catch {} }
   AC._recording = false;
-  const r = document.getElementById('acRec'); if (r) { r.classList.add('hidden'); r.classList.remove('holding'); }
+  const r = document.getElementById('acRec'); if (r) { r.classList.add('hidden'); r.classList.remove('holding', 'paused'); }
   const c = document.getElementById('acCompose'); if (c) c.style.display = '';
   acCloseAttachMenu();
 }
