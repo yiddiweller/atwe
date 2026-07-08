@@ -3448,7 +3448,7 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 /* The message above has a reaction (≈19px overhang) — pull the date up to stay centred. */
 .msg-day.mday-tight{margin-top:-1px;}
 .msg-day::before,.msg-day::after{content:"";flex:1;height:1px;background:var(--b2);}
-.msg-row{display:flex;margin-top:0;align-items:flex-end;position:relative;} /* consecutive (grouped) messages sit tighter — only the flex gap between them */
+.msg-row{display:flex;margin-top:3px;align-items:flex-end;position:relative;} /* consecutive (grouped) messages sit tight but with a small breath (not flush); a new run gets .gap=11px */
 /* Multi-select mode: a checkbox on the left of each row; tap a row to select it. */
 .msg-row.selectable{padding-left:38px;cursor:pointer;}
 .msg-row.selected{background:var(--accent-dim);border-radius:10px;}
@@ -3781,9 +3781,12 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
    the rounded bubble, avatar, play button and duration are unchanged). */
 .vn-wave{position:relative;flex:1;min-width:0;height:20px;} /* overflow VISIBLE so the tall scrub line isn't clipped */
 .vn-wave-clip{position:absolute;inset:0;overflow:hidden;} /* the BARS are clipped here (never spill behind time/button/avatar) */
-/* space-between keeps EVERY bar an identical fixed 2px width (flex:1 was rounding
-   some bars to different widths); the gaps flex instead. */
-.vn-wave-row{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;}
+/* Each bar lives in an EQUAL flex slot (<span>) with a fixed 2px line centered in
+   it — so every gap between bars is identical (the old space-between flexed the
+   GAPS, which sub-pixel-rounded some wider than others; the user spotted it). The
+   slots fill 100% width, so the scrub/fill % still map exactly onto the bars. */
+.vn-wave-row{position:absolute;inset:0;display:flex;align-items:center;}
+.vn-wave-row span{flex:1 1 0;min-width:0;height:100%;display:flex;align-items:center;justify-content:center;}
 .vn-wave-row i{width:2px;flex:0 0 2px;border-radius:2px;display:block;height:32%;}
 /* Scrub handle: a thin, TALL line at the play position (WhatsApp's dot → a line),
    the SAME 2px width as the bars, coloured like the ALREADY-PLAYED bars. */
@@ -4107,6 +4110,14 @@ body.light .ac-item-unread.muted{background:var(--t3);}
 .msg-send:hover{background:var(--accent-light);}
 .msg-send:disabled{opacity:.4;}
 body.light .msg-inbox{background:rgba(255,255,255,.6);}
+/* Multi-row composer (ChatGPT-style): the textarea takes its own full-width row on
+   top; the +/mic/send wrap to a row beneath it — + stays left, send hugs the right.
+   Single-line stays exactly the one-row layout above. */
+.msg-inbox.multiline{flex-wrap:wrap;align-items:center;}
+.msg-inbox.multiline textarea{order:1;flex:1 1 100%;width:100%;padding:4px 4px 2px;}
+.msg-inbox.multiline .msg-attach{order:2;}
+.msg-inbox.multiline .ac-mic{order:3;margin-left:auto;}
+.msg-inbox.multiline .msg-send{order:4;margin-left:auto;}
 
 /* ── Atwe AI Support + "explain this" ── */
 .sa-pill{margin-left:auto;display:flex;align-items:center;gap:6px;background:var(--accent-dim);color:var(--accent);
@@ -40563,7 +40574,12 @@ function acAutosize() {
   const inp = document.getElementById('acInput');
   if (!inp) return;
   inp.style.height = 'auto';
-  inp.style.height = Math.min(inp.scrollHeight, 130) + 'px';
+  const h = inp.scrollHeight;
+  inp.style.height = Math.min(h, 130) + 'px';
+  // ChatGPT-style: once the text wraps past one line, the box grows the textarea to
+  // its OWN full-width row and drops the +/mic/send onto a row below (CSS .multiline).
+  const box = inp.closest('.msg-inbox');
+  if (box) box.classList.toggle('multiline', h > 44);
   acToggleSendMic();
 }
 
@@ -40808,7 +40824,9 @@ function _vnWaveHtml(mid) {
   let out = '';
   for (let i = 0; i < 30; i++) { // fewer bars → more space between the lines
     const h = 26 + Math.round(56 * Math.abs(0.65 * Math.sin(i * 0.7) + 0.55 * (rnd() - 0.5)));
-    out += `<i style="height:${Math.max(20, Math.min(88, h))}%"></i>`;
+    // Each bar sits in an EQUAL flex slot (<span>) with the 2px line centered — so the
+    // gap between every bar is identical (space-between rounded the gaps unevenly).
+    out += `<span><i style="height:${Math.max(20, Math.min(88, h))}%"></i></span>`;
   }
   return out;
 }
