@@ -4551,6 +4551,24 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.08);}
 .ac-vid-dur{position:absolute;right:10px;bottom:12px;background:rgba(0,0,0,.72);color:#fff;font-size:12px;font-weight:700;
   padding:2px 7px;border-radius:6px;pointer-events:none;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);}
 .ac-vid-dur:empty{display:none;}
+/* Product-tag price chip over tagged media (blueprint §Home). Blue = it's a
+   commerce affordance that opens the listing. */
+.ac-media-tag-wrap{position:relative;display:block;}
+.ac-prodtag{position:absolute;left:12px;bottom:14px;z-index:2;display:inline-flex;align-items:center;gap:5px;
+  background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);padding:6px 12px 6px 9px;
+  font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 3px 12px rgba(0,0,0,.4);}
+.ac-prodtag svg{width:15px;height:15px;}
+.ac-prodtag:active{transform:scale(.95);}
+/* Selected-product chip inside the composer. */
+.ac-compose-prodchip{display:flex;align-items:center;gap:10px;margin:10px 0 0;padding:8px 10px;background:var(--s2);border-radius:var(--r-md);}
+.ac-compose-prodchip img{width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;}
+.ac-compose-prodchip .cpc-name{flex:1;min-width:0;font-size:14px;font-weight:600;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ac-compose-prodchip .cpc-price{font-size:13px;font-weight:700;color:var(--accent);}
+.ac-compose-prodchip .cpc-x{background:none;border:none;color:var(--t3);cursor:pointer;padding:4px;display:flex;}
+.ac-compose-prodchip .cpc-x svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
+.ac-prodtag-row{align-items:center;gap:12px;}
+.cpc-thumb{width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;}
+.cpc-thumb-blank{background:var(--s3);}
 .ac-post-head{display:flex;align-items:center;gap:8px;}
 /* Keep the verified badge hugging the name (its own 3px margin) instead of inheriting
    the 8px header gap — so the space after the name matches the profile/lists. */
@@ -5972,6 +5990,20 @@ body.light .ac-adcard{box-shadow:0 4px 16px rgba(15,20,25,.07);}
 .ac-post-btn{background:var(--primary);color:var(--on-primary);border:none;border-radius:var(--r-pill);padding:7px 18px;
   font-size:14px;font-weight:700;cursor:pointer;flex-shrink:0;transition:background var(--t-fast) var(--ease),filter var(--t-fast) var(--ease);}
 .ac-post-btn:disabled{opacity:.5;}
+/* Composer as a floating rounded-card sheet (blueprint §Home) — same family as the
+   intro sheets: all four corners rounded, no grab handle, over a dimmed scrim. */
+#acPostScreen{position:fixed;inset:0;z-index:1400;background:rgba(0,0,0,.5);
+  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+  flex-direction:row;align-items:flex-end;justify-content:center;
+  padding:0 12px calc(12px + env(safe-area-inset-bottom,0px));}
+.ac-compose-card{background:var(--s1);width:100%;max-width:600px;max-height:min(90vh,760px);
+  border-radius:26px;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;box-shadow:0 18px 60px rgba(0,0,0,.55);
+  animation:sheetUp .32s cubic-bezier(.22,.61,.36,1);}
+body.light .ac-compose-card{background:var(--bg);}
+.ac-compose-card .msg-top{position:sticky;top:0;z-index:3;background:inherit;border-bottom:1px solid var(--b1);border-radius:26px 26px 0 0;}
+.ac-compose-card .ac-post-toolbar{position:sticky;bottom:0;z-index:3;background:inherit;border-top:1px solid var(--b1);}
+body.reduce-motion .ac-compose-card{animation:none;}
 .ac-postbody{flex:1;overflow-y:auto;padding:16px;}
 .ac-postbody textarea{width:100%;background:none;border:none;outline:none;resize:none;color:var(--t1);
   font-size:17px;font-family:inherit;line-height:1.5;min-height:120px;}
@@ -10609,6 +10641,16 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Composer: tag one of your own products (blueprint §Home) -->
+<div class="overlay hidden" id="prodTagSheet" onclick="if(event.target===this)closeOverlay('prodTagSheet')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Tag a product">
+    <button class="sheet-close" onclick="closeOverlay('prodTagSheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Tag a product</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Attach one of your listings — a price chip appears on your post's photo.</div>
+    <div id="prodTagBody"></div>
+  </div>
+</div>
+
 <!-- Chat wallpaper picker -->
 <div class="overlay hidden" id="wallpaperView" onclick="if(event.target===this)closeOverlay('wallpaperView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Wallpaper">
@@ -13207,9 +13249,10 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
 
     <!-- NEW POST -->
     <div class="ac-screen hidden" id="acPostScreen">
+     <div class="ac-compose-card" id="acComposeCard" role="dialog" aria-modal="true" aria-label="New post">
       <div class="msg-top">
-        <button class="msg-back" onclick="acPostComposeBack()" aria-label="Back">
-          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        <button class="msg-back" onclick="acPostComposeBack()" aria-label="Close">
+          <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
         <div class="ac-headtitle"><div class="ac-title" id="acPostTitle">New post</div></div>
         <button class="ac-post-btn" id="acPostBtn" onclick="acSubmitPost()">Post</button>
@@ -13221,6 +13264,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         </div>
         <div class="ac-mention-box hidden" id="acMentionBox"></div>
         <div id="acPostQuote"></div>
+        <div id="acPostProdChip"></div>
         <div class="msg-imgprev" id="acPostImgPrev" style="padding:0;"></div>
         <div class="ac-alt-row hidden" id="acPostAltRow" style="margin-top:8px;">
           <input class="jp-in" id="acPostAlt" type="text" maxlength="1000" placeholder="Describe the image (alt text, for accessibility)"/>
@@ -13303,11 +13347,15 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <button class="msg-attach" id="acThreadBtn" onclick="acThreadAdd()" aria-label="Add to thread">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.4"/><circle cx="12" cy="19" r="2.4"/><line x1="12" y1="7.4" x2="12" y2="16.6"/></svg>
         </button>
+        <button class="msg-attach" id="acTagProductBtn" onclick="acTagProductOpen()" aria-label="Tag a product">
+          <svg viewBox="0 0 24 24"><path d="M20.6 13.4 12 22l-9-9V4a1 1 0 0 1 1-1h8.6z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
+        </button>
         <button class="msg-attach" id="acDraftsBtn" onclick="acOpenDrafts()" aria-label="Drafts">
           <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         </button>
         <button class="msg-attach ac-ai-btn" id="acPostAiBtn" onclick="acComposeAi(event)" aria-label="Atwe AI writing assistant"><img src="/logo-mark.png" alt="" style="width:20px;height:20px;border-radius:6px;"/></button>
       </div>
+     </div>
     </div>
 
     <!-- New message (compose / search) screen -->
@@ -23165,13 +23213,33 @@ function acSetFeed(scope) {
   acBindFeedSwipe();
 }
 
-/* Switching feed tabs is tap-only (the active tab still runs the directional
-   page-slide in acSetFeed). The finger-swipe-to-change-tab gesture was removed
-   on purpose: a horizontal drag inside the feed (e.g. scrolling the "Who to
-   follow" carousel) would sometimes flip to the next tab. Tapping a tab is the
-   single, predictable way to move between For You / Following / Collections /
-   Circles. */
-function acBindFeedSwipe() { /* no-op: tab switching is tap-only */ }
+/* Swipe horizontally between feeds (blueprint §Home). Re-enabled with a strict
+   guard so the old bug (a drag inside the who-to-follow carousel / story rail
+   flipping tabs) can't recur: a swipe is IGNORED when it starts inside any
+   horizontal scroller or interactive control, and only fires on a clearly
+   horizontal gesture (≥65px and ≥1.6× the vertical delta). Bound once. */
+let _feedSwipeBound = false;
+function acBindFeedSwipe() {
+  if (_feedSwipeBound) return;
+  const feed = document.getElementById('acFeed'); if (!feed) return;
+  _feedSwipeBound = true;
+  let x0 = 0, y0 = 0, active = false;
+  const SKIP = '.ac-sg-scroll,.ac-home-stories,.story-tray,.ac-imgcar,.ac-imggrid,.ac-prodtag,.ac-newposts,.ac-circ-search,input,textarea,button,a,video';
+  feed.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1 || (e.target.closest && e.target.closest(SKIP))) { active = false; return; }
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; active = true;
+  }, { passive: true });
+  feed.addEventListener('touchend', (e) => {
+    if (!active) return; active = false;
+    const t = e.changedTouches[0]; const dx = t.clientX - x0, dy = t.clientY - y0;
+    if (Math.abs(dx) < 65 || Math.abs(dx) < Math.abs(dy) * 1.6) return; // not a clear horizontal swipe
+    const order = [...AC_FEED_TABS]; if (AC._pinnedCircle) order.push('pinned');
+    const cur = order.indexOf(_acFeedScope); if (cur < 0) return;
+    const next = dx < 0 ? cur + 1 : cur - 1; // swipe left → next tab, right → previous
+    if (next < 0 || next >= order.length) return;
+    acSetFeed(order[next]);
+  }, { passive: true });
+}
 
 /* ─── Feeds: short-form status timeline (text / photo / short video) ─── */
 const FEED_BGS = ['var(--s1)', 'var(--accent)', 'var(--accent)', 'var(--accent)', 'var(--s3)', 'var(--accent)', 'var(--s4)', 'var(--accent)', 'var(--accent)', 'var(--s2)'];
@@ -25165,8 +25233,14 @@ function acHeartBurst(x, y) {
   document.body.appendChild(w);
   setTimeout(() => w.remove(), 1000);
 }
+// A blue price chip over tagged media that opens the listing (blueprint §Home).
+function acProdTagWrap(p, mediaHtml) {
+  if (!p.product || !mediaHtml) return mediaHtml;
+  const price = acMoneyFmt(p.product.priceCents || 0);
+  return `<div class="ac-media-tag-wrap">${mediaHtml}<button class="ac-prodtag" onclick="event.stopPropagation();acOpenListing(${p.product.id})" aria-label="View ${escHtml(p.product.name)} — ${price}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 12 22l-9-9V4a1 1 0 0 1 1-1h8.6z"/><circle cx="7.5" cy="7.5" r="1.4"/></svg><span>${price}</span></button></div>`;
+}
 function acPostCard(p) {
-  const img = acPostMedia(p, true);
+  const img = acProdTagWrap(p, acPostMedia(p, true));
   AC._authors = AC._authors || {};
   AC._authors[p.author.id] = p.author;
   AC._postCache = AC._postCache || {};
@@ -26393,6 +26467,35 @@ function acCopyPostLink(id) {
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(ok).catch(fallback);
   else fallback();
 }
+// Composer "Tag a product" (blueprint §Home): pick one of your own active listings;
+// a blue price chip then rides on the post's media and opens the listing.
+async function acTagProductOpen() {
+  showOverlay('prodTagSheet');
+  const body = document.getElementById('prodTagBody');
+  body.innerHTML = acSkelRows(3);
+  try {
+    const { products } = await API.req('GET', '/api/my-listings');
+    const active = (products || []).filter((p) => p.active !== false);
+    AC._myListingsCache = active;
+    if (!active.length) { body.innerHTML = `<div class="ac-empty">You don't have any active listings yet.<br/>Create one from your storefront to tag it here.</div>`; return; }
+    body.innerHTML = active.map((p) => `<button class="ac-item ac-prodtag-row" onclick="acPickProduct(${p.id})">
+        ${p.image ? `<img class="cpc-thumb" src="${p.image}" alt="" loading="lazy"/>` : '<div class="cpc-thumb cpc-thumb-blank"></div>'}
+        <div class="ac-item-main"><div class="ac-item-name">${escHtml(p.name)}</div><div class="ac-item-last">${acMoneyFmt(p.priceCents || 0)}</div></div>
+      </button>`).join('');
+  } catch (e) { acErr(body, 'acTagProductOpen()'); }
+}
+function acPickProduct(id) {
+  const p = (AC._myListingsCache || []).find((x) => x.id === id); if (!p) return;
+  AC._postProduct = { id: p.id, name: p.name, priceCents: p.priceCents || 0, image: p.image || null };
+  closeOverlay('prodTagSheet');
+  acRenderPostProdChip();
+}
+function acClearProdTag() { AC._postProduct = null; acRenderPostProdChip(); }
+function acRenderPostProdChip() {
+  const el = document.getElementById('acPostProdChip'); if (!el) return;
+  const p = AC._postProduct;
+  el.innerHTML = p ? `<div class="ac-compose-prodchip">${p.image ? `<img src="${p.image}" alt=""/>` : ''}<span class="cpc-name">${escHtml(p.name)}</span><span class="cpc-price">${acMoneyFmt(p.priceCents)}</span><button class="cpc-x" onclick="acClearProdTag()" aria-label="Remove tagged product"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>` : '';
+}
 // Own-post overflow menu: Edit / Delete.
 function acOwnPostMenu(anchor, id) {
   AC._ownPostId = id;
@@ -26625,6 +26728,7 @@ function acOpenPost(circleId) {
   const cav = document.getElementById('acComposeAv');
   if (cav && S.user) cav.innerHTML = acAvatarHtml(S.user.name, S.user.avatar, 'user-avatar', acIsBiz(S.user));
   _acPostAtt = null; _acPostImgs = []; _acPostGif = null;
+  AC._postProduct = null; acRenderPostProdChip();
   acSetPostEditMode(false);
   AC._postCircleCtx = (typeof circleId === 'number') ? circleId : null;
   AC._postFeedCtx = null;
@@ -27187,6 +27291,7 @@ async function acSubmitPost() {
   else { const ppvEl = document.getElementById('acPpvPrice'); const pv = ppvEl && document.getElementById('acPpvRow') && !document.getElementById('acPpvRow').classList.contains('hidden') ? Math.round((parseFloat(ppvEl.value) || 0) * 100) : 0; if (pv >= 100 && AC._postToMain !== false && !(AC._postSel && AC._postSel.size)) payload.ppvCents = pv; }
   if (AC._postTagged && AC._postTagged.length) payload.taggedIds = AC._postTagged.map(u => u.id);
   if (AC._postCoAuth && AC._postCoAuth.length) payload.coAuthorIds = AC._postCoAuth.map(u => u.id);
+  if (AC._postProduct) payload.productId = AC._postProduct.id; // tagged product → price chip on media
   const loc = acLocationValue(); if (loc) payload.location = loc;
   const sched = acScheduleValue(); if (sched) payload.scheduledAt = sched;
   try {
@@ -27351,7 +27456,7 @@ function acPostInfo(id) {
 // The focal post: a larger, non-clickable card with a stats row.
 function acPostFocusCard(p) {
   const h = p.author.username;
-  const img = acPostMedia(p, false);
+  const img = acProdTagWrap(p, acPostMedia(p, false));
   const del = p.mine ? `<button class="ac-post-more" onclick="acOwnPostMenu(this,${p.id})" aria-label="Post options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>` : '';
   return `<div class="ac-postfocus">
     <div class="ac-pf-head">

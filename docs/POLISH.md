@@ -404,6 +404,16 @@ Overrides of earlier locked decisions, per the owner's Phase-5 blueprint (all ex
 - **Empty Following state**: a glyph in a disc + one line + a **WHITE CTA** ("Find people to follow" / "Create a post").
 - Verified in a real browser (dark + light) with mock data, 0 console errors. SW → v959.
 
-*Still to land (Wave 3, not yet built): composer full-screen → floating-card sheet + "Tag product" chip, product-tag price chip on media (+ `posts.product_id`), video duration chip, "Copy link" in post menus, pull-to-refresh Living-Light sweep, swipe-between-feeds (with a careful guard), feed-tab desktop de-pill, post-detail action-row icon parity, full RTL/SR sweep + intro once-only re-verify.*
+*Wave 3 (2026-07-08, published): the remaining Home items — **Phase 5 complete**.*
+- **Video duration chip** (`acVidDur`/`_fmtDur`): `acPostMedia` wraps a post video in `.ac-vid-wrap` with a `.ac-vid-dur` chip filled from the clip's real duration.
+- **"Copy link"** in both post menus (`acCopyPostLink` → `/post/:id`, clipboard + fallback).
+- **Post-detail action row**: same 18/20px Feather outline icons as the feed, full-width, hairline above + below; AI-explain button dropped.
+- **Pull-to-refresh Living-Light sweep**: replaced the spinning logo with a one-shot `.ptr-beam` sweep (reduced-motion-aware); the mark scales (not spins) during the pull.
+- **Composer → floating-card sheet**: `#acPostScreen` is now a dimmed-scrim fixed overlay with the composer wrapped in `.ac-compose-card` (26px all-corner rounded, sticky header + toolbar, no grab handle) — same family as the intro sheets; the FAB (56px white) was done in Wave 1.
+- **"Tag product" tool + product-tag chip**: a new composer toolbar tool (`acTagProductOpen` → `#prodTagSheet` picker of the seller's own active listings → `AC._postProduct` chip); the post carries `posts.product_id` (validated own-active on write, exposed via `POSTS_SELECT`/`mapPost` as `product`), and `acProdTagWrap` paints a **blue price chip** bottom-left over the media that opens the listing (`acOpenListing`).
+- **Swipe between feeds** re-enabled (`acBindFeedSwipe`, bound once): a strict guard ignores swipes starting inside horizontal scrollers / controls and requires a clear horizontal gesture (≥65px, ≥1.6× vertical), moving ±1 across `AC_FEED_TABS` (+ pinned) — so the old carousel-flip bug can't recur.
+- Verified in a real browser: composer sheet (26px corners, white Post), product tag end-to-end (create post w/ `productId` → feed returns the `product`), chip render dark + RTL + reduced-motion, all Phase-5 functions defined, intro sheets still gate, 0 console errors. SW → v961.
+
+**Phase 5 (Home world) is complete** across Waves 1–3.
 
 *Phase 3 adjustment (2026-07-08, by Yiddi): **Layer C — the opening lap — removed entirely** (the viewport lap orb, its per-session seen registry, the appTab wrapper that fired it, AND the older engine boot-lap on `.spin` elements). No light plays on its own at boot, login, or a tab's first open; every remaining layer is pointer- or AI-driven only (pool, rim, flares, comets — all verified intact after removal). This supersedes §9.8's opening-lap policy.*

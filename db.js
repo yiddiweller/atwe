@@ -1845,6 +1845,9 @@ async function initSchema() {
   // Posts can carry a video (a base64 data URL) alongside the optional image.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS media TEXT;`);
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS media_kind TEXT;`);
+  // A tagged product (Home §product-tag): a blue price chip over the post media that
+  // opens the listing. Only ever the poster's OWN active product (validated on write).
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS product_id INTEGER REFERENCES products(id) ON DELETE SET NULL;`);
   // Whether a post appears in the main (For You / Following) feed. Circle-only
   // posts set this false. Existing posts default true so they keep showing.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS to_main BOOLEAN NOT NULL DEFAULT true;`);

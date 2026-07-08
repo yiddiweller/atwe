@@ -7388,7 +7388,9 @@ const POSTS_SELECT = `
             FROM post_poll_options o WHERE o.post_id = p.id) AS poll_options,
          (SELECT option_id FROM post_poll_votes v WHERE v.post_id = p.id AND v.user_id = $1) AS my_vote,
          (SELECT json_agg(json_build_object('id', tu.id, 'name', tu.name, 'username', tu.username, 'avatar', tu.avatar, 'verified', tu.verified, 'kind', pt.kind))
-            FROM post_tags pt JOIN users tu ON tu.id = pt.user_id WHERE pt.post_id = p.id) AS tags
+            FROM post_tags pt JOIN users tu ON tu.id = pt.user_id WHERE pt.post_id = p.id) AS tags,
+         (SELECT json_build_object('id', pr.id, 'name', pr.name, 'priceCents', pr.price_cents, 'image', pr.image)
+            FROM products pr WHERE pr.id = p.product_id AND pr.active = true) AS product
   FROM posts p JOIN users u ON u.id = p.user_id `;
 function mapPost(r) {
   let poll = null;
@@ -7424,6 +7426,7 @@ function mapPost(r) {
     tagged: Array.isArray(r.tags) ? r.tags.filter((t) => t.kind === 'tag').map(({ kind, ...u }) => u) : [],
     coAuthors: Array.isArray(r.tags) ? r.tags.filter((t) => t.kind === 'author').map(({ kind, ...u }) => u) : [],
     editedAt: r.edited_at || null, promoted: !!r.promoted,
+    product: r.product || null,
     parentId: r.parent_id || null, location: r.location || null,
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
     reposts: r.reposts || 0, reposted: !!r.reposted, repostedBy: r.reposted_by || null,
@@ -9216,10 +9219,20 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), re
       ppvCents = Math.round(Number(req.body.ppvCents));
       if (!(ppvCents >= 100 && ppvCents <= 100000)) return res.status(400).json({ error: 'A pay-per-view price must be $1–$1,000.' });
     }
+    // Tagged product (top-level posts): only the poster's OWN active product — a blue
+    // price chip over the media that opens the listing.
+    let productId = null;
+    if (parentId == null && req.body.productId != null && req.body.productId !== '') {
+      const pid = parseInt(req.body.productId, 10);
+      if (Number.isInteger(pid)) {
+        const pr = await db.query('SELECT 1 FROM products WHERE id = $1 AND business_id = $2 AND active = true', [pid, req.user.id]);
+        if (pr.rowCount) productId = pid;
+      }
+    }
     const ins = await db.query(
-      `INSERT INTO posts (user_id, body, image, images, media, media_kind, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope, subscribers_only, image_alt, ppv_cents, min_tier_level)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamptz, now()), $10, $11, $12, $13, $14, $15, $16) RETURNING id`,
-      [req.user.id, body, image, images.length > 1 ? images : null, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId, replyScope, subscribersOnly, imageAlt, ppvCents, minTierLevel]
+      `INSERT INTO posts (user_id, body, image, images, media, media_kind, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope, subscribers_only, image_alt, ppv_cents, min_tier_level, product_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamptz, now()), $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id`,
+      [req.user.id, body, image, images.length > 1 ? images : null, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId, replyScope, subscribersOnly, imageAlt, ppvCents, minTierLevel, productId]
     );
     const postId = ins.rows[0].id;
     if (quoteOwner != null) notify(quoteOwner, req.user.id, 'quote', postId);

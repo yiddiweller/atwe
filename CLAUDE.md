@@ -1903,6 +1903,19 @@ functions, organized by banner comments.
   a **small author avatar left of the input** (`.ac-compose-row` > `#acComposeAv`,
   filled on open in `acOpenPost`/`acEditPost`), toolbar icons unified to the round-cap
   line set (`.msg-attach svg`, 1.8 stroke), and the AI logo shrunk to 20px.
+  **Composer is a floating rounded-card SHEET** (Home blueprint §5, Phase 5): `#acPostScreen`
+  is a dimmed-scrim `position:fixed` overlay whose content is wrapped in `.ac-compose-card`
+  (26px all-corner radius, `sheetUp` appear, sticky `.msg-top` header + sticky
+  `.ac-post-toolbar`, no grab handle — same family as the intro sheets) rather than a
+  full-bleed screen. The compose FAB (`.ac-fab`) is a **56px solid-white disc** with a dark
+  plus (flips to near-black + white plus in Light via `--primary`/`--on-primary`).
+  **Tag a product** (Home §product-tag): a composer toolbar tool `acTagProductOpen`
+  (`#prodTagSheet` picker of the seller's own active listings) sets `AC._postProduct` (a
+  removable `#acPostProdChip`); the post carries **`posts.product_id`** (validated to the
+  poster's OWN active product on write, `ON DELETE SET NULL`), exposed on `POSTS_SELECT`/
+  `mapPost` as `product{id,name,priceCents,image}`, and `acProdTagWrap` paints a **blue
+  price chip** (`.ac-prodtag`) bottom-left over the post media that opens the listing
+  (`acOpenListing`). Locked (sub-only/PPV) placeholder posts hide the product.
   **Bookmarks** (`post_bookmarks`, private; a Bookmarks feed tab + `bookmarked`
   on `mapPost`) with **folders** (`bookmark_folders` + `post_bookmarks.folder_id`,
   null = unsorted; deleting a folder keeps its bookmarks via `ON DELETE SET
