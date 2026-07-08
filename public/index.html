@@ -14322,9 +14322,17 @@ function exitImpersonation() {
 }
 async function handleUrlParams() {
   const p = new URLSearchParams(location.search);
-  const go = p.get('go');
+  let go = p.get('go');
+  // Blueprint world aliases: /?go=beam → chat, /?go=engine → search (old ids still work).
+  if (go === 'beam') go = 'chat';
+  else if (go === 'engine') go = 'search';
   if (go && ['home', 'search', 'chat', 'profile', 'call', 'contacts', 'ai'].includes(go)) { _pendingGo = go; stripParam(); }
-  else if (location.pathname === '/ai') { _pendingGo = 'ai'; } // pretty AI page: /ai
+  else {
+    // Pretty world-root paths: /ai, /beam (→chat), /engine (→search), /home, /profile.
+    const WORLD_PATH = { '/ai': 'ai', '/beam': 'chat', '/engine': 'search', '/home': 'home', '/profile': 'profile' };
+    const wp = WORLD_PATH[location.pathname.toLowerCase().replace(/\/$/, '')];
+    if (wp) _pendingGo = wp;
+  }
   if (p.get('verify')) {
     try { await API.req('POST', '/api/auth/verify', { token: p.get('verify') }); showNotif('Email verified — thank you!'); }
     catch (e) { showNotif(e.message || 'Verification link invalid or expired.'); }
@@ -14384,7 +14392,7 @@ function parseDeepLink() {
   if ((s0 === 'post' || s0 === 'job' || s0 === 'listing') && /^\d+$/.test(segs[1] || '')) return { type: s0, id: parseInt(segs[1], 10) };
   if (segs.length === 1) {
     const u = s0.replace(/^@/, '');
-    const RESERVED = ['index.html', 'admin.html', 'locked.html', 'api', 'sw.js', 'manifest.json', 'manifest.webmanifest', 'favicon.png', 'robots.txt', 'ai'];
+    const RESERVED = ['index.html', 'admin.html', 'locked.html', 'api', 'sw.js', 'manifest.json', 'manifest.webmanifest', 'favicon.png', 'robots.txt', 'ai', 'beam', 'engine', 'home', 'profile'];
     if (!RESERVED.includes(u) && /^[a-z0-9._-]{1,40}$/.test(u)) return { type: 'profile', username: u };
   }
   return null;
