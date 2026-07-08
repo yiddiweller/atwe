@@ -24634,7 +24634,8 @@ function acGoProfileHub() {
     html += '</div>';
     // Library
     html += '<div class="me-catlabel">Library</div><div class="me-group">';
-    html += item('Collections', _ME_IC.list, "acOpenLists()", null);
+    html += item('Collections', _ME_IC.bmk, "acOpenCollections()", null);
+    html += item('Lists', _ME_IC.list, "acOpenLists()", null);
     html += item('Orders', _ME_IC.orders, "acOpenOrders('buyer')", null);
     html += item('Cart', _ME_IC.cart, "acOpenCart()", null);
     html += item('Bookings', _ME_IC.orders, "acOpenBookings('guest')", null);
@@ -26698,6 +26699,12 @@ function acDrawSpark(cv, series, up) {
   ctx.shadowBlur = 0; ctx.shadowColor = 'transparent'; ctx.stroke();               // crisp line on top
 }
 /* ─── Lists (curated timelines) ─── */
+// Collections = the bookmarks world (with folders). Opens Home on the Collections
+// feed tab (folders-first chip bar + saved items). Reached from Profile → Library.
+function acOpenCollections() {
+  appTab('home');
+  acSetFeed('bookmarks');
+}
 async function acOpenLists() {
   showOverlay('listsView');
   const body = document.getElementById('listsBody'); body.innerHTML = acSkelRows(3);
@@ -40099,6 +40106,9 @@ async function acSendOne(tmp) {
       const _bub = _el && _el.querySelector('.msg-bubble[data-mid="' + tmp.id + '"]');
       if (_bub) { _bub.dataset.mid = message.id; tmp.id = message.id; } else acRenderThread();
     } else acRenderThread();
+    // 10-second UNDO toast on a FRESH send (not a retry / sticker) — tapping it
+    // retracts the message (delete-for-everyone), matching the post-publish undo.
+    if (!_wasFailed && !isSticker) acUndoToast('Message sent', 'Undo', () => acRetractSend(message.id));
   } catch (e) {
     tmp.pending = false; tmp.failed = true; acRenderThread();
   } finally {
@@ -40108,6 +40118,16 @@ async function acSendOne(tmp) {
 function acRetrySend(id) {
   const tmp = AC.messages.find(m => m.id === id);
   if (tmp && tmp._payload) acSendOne(tmp);
+}
+// Undo a just-sent message: remove the bubble locally and delete it for everyone
+// server-side (WhatsApp-style retract). Best-effort — leaves it sent on failure.
+async function acRetractSend(id) {
+  const idx = (AC.messages || []).findIndex(x => x.id === id);
+  if (idx < 0) return;
+  AC.messages.splice(idx, 1);
+  acRenderThread();
+  try { await API.req('DELETE', acMsgApi(id) + '?scope=everyone'); acLoadChats?.(); }
+  catch (e) { showNotif('Couldn’t undo — the message was already delivered.'); }
 }
 
 /* ── Attachments: photo / video / file ── */
