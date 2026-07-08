@@ -20777,8 +20777,11 @@ function acRenderSearchScopes() {
 function acGoSearch() {
   acStopMic();
   acShow('acSearchScreen', null);
-  acRenderSearchScopes();
   const inp = document.getElementById('tbSearchInput');
+  // Arriving with an empty field always lands on the discovery front page — reset a
+  // stale scope so the scope bar stays hidden and Discover shows (design blueprint).
+  if (inp && !inp.value.trim()) _searchScope = 'all';
+  acRenderSearchScopes();
   // Don't auto-focus on arrival — that pops the keyboard immediately. The keyboard
   // opens only when the user taps the search box.
   if (inp) { inp.placeholder = _searchPlaceholders[_searchScope] || 'Search'; acDoSearch(inp.value || ''); }
@@ -22692,8 +22695,15 @@ async function acLoadRecentSearches() {
 }
 function acRecentSearch(q) { const inp = document.getElementById('tbSearchInput'); if (inp) inp.value = q; acDoSearch(q); }
 async function acClearRecentSearches() { try { await API.req('DELETE', '/api/search/recent'); } catch {} const c = document.getElementById('acRecentSearches'); if (c) c.innerHTML = ''; }
+// Scope word-tabs appear only once the user starts typing (or is in a specific
+// scope) — the front page (discovery) shows no scope bar (design blueprint).
+function _syncScopeBar(q) {
+  const bar = document.getElementById('acSearchScopes'); if (!bar) return;
+  bar.classList.toggle('hidden', !((q && q.trim()) || _searchScope !== 'all'));
+}
 function acDoSearch(q) {
   q = (q || '').trim();
+  _syncScopeBar(q);
   clearTimeout(_searchT);
   // Log a committed search (after typing settles) — a recent-searches list + a soft
   // interest signal for the feed. Only meaningful queries, never partial keystrokes.
@@ -22712,9 +22722,14 @@ function acDoSearch(q) {
       const none = `<div class="ac-empty">No results for “${escHtml(q)}”.</div>`;
       let html = '';
       if (_searchScope === 'all') {
-        if (d.users && d.users.length) html += '<div class="ac-prof-head">People</div>' + d.users.map(acSearchUserRow).join('');
-        if (d.listings && d.listings.length) html += '<div class="ac-prof-head">Shop</div>' + d.listings.map(acListingCard).join('');
-        if (d.posts && d.posts.length) html += '<div class="ac-prof-head">Posts</div>' + d.posts.map(acPostCard).join('');
+        // Grouped by type; each group header carries a "See all" link that switches
+        // to that scope to show the full result set (design blueprint).
+        const grp = (label, scope, items, render) => (items && items.length)
+          ? `<div class="ac-section-row"><span class="ac-prof-head" style="padding:0;">${label}</span><button class="ac-link-btn" onclick="acSetSearchScope('${scope}')">See all</button></div>` + items.map(render).join('')
+          : '';
+        html = grp('People', 'people', d.users, acSearchUserRow)
+             + grp('Shop', 'shop', d.listings, acListingCard)
+             + grp('Posts', 'posts', d.posts, acPostCard);
         html = html || none;
       }
       else if (_searchScope === 'shop') html = (d.listings && d.listings.length) ? d.listings.map(acListingCard).join('') : none;
