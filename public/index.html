@@ -3774,14 +3774,22 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .msg-row.me .msg-bubble.msg-unseen .vn-speed{background:rgba(29,29,31,.12);color:var(--text-black);}
 /* Inset the bar so the resting ball doesn't hug the play button — gives even
    spacing between the avatar, the play button and the line. */
-.vn-track{flex:1;min-width:0;cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent;overflow:hidden;}
+.vn-track{flex:1;min-width:0;cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent;touch-action:none;}
 /* Waveform: two identical stacked bar-rows (deterministic heights per message).
    The base row is dim; the coloured "fill" row is revealed left-to-right by a
    clip-path driven from playback progress (replaces the old flat line + knob —
    the rounded bubble, avatar, play button and duration are unchanged). */
-.vn-wave{position:relative;flex:1;min-width:0;height:20px;overflow:hidden;} /* CLIP: bars must never spill behind the time / play button / avatar on a narrow bubble */
+.vn-wave{position:relative;flex:1;min-width:0;height:20px;} /* overflow VISIBLE so the tall scrub line isn't clipped */
+.vn-wave-clip{position:absolute;inset:0;overflow:hidden;} /* the BARS are clipped here (never spill behind time/button/avatar) */
 .vn-wave-row{position:absolute;inset:0;display:flex;align-items:center;gap:2px;}
 .vn-wave-row i{flex:1;min-width:1.5px;border-radius:2px;display:block;height:32%;}
+/* Scrub handle: a thin, TALL line at the play position (WhatsApp's dot → a line).
+   Marks the boundary between played + unplayed; drag the track to move it. */
+.vn-scrub{position:absolute;top:50%;left:0;width:2.5px;height:26px;border-radius:2px;
+  transform:translate(-50%,-50%);background:#fff;box-shadow:0 0 4px rgba(0,0,0,.35);z-index:1;pointer-events:none;}
+.msg-row.team .vn-scrub{background:#fff;}
+.msg-row.me .vn-scrub{background:var(--accent-tint);box-shadow:0 0 4px rgba(0,0,0,.28);}
+.msg-row.me .msg-bubble.msg-unseen .vn-scrub{background:var(--accent);}
 .vn-wave-row.base i{background:rgba(255,255,255,.30);}
 .msg-row.me .vn-wave-row.base i{background:rgba(255,255,255,.34);}
 .msg-row.team .vn-wave-row.base i{background:var(--s4);}
@@ -38804,7 +38812,7 @@ function acMsgMedia(m) {
       <svg class="vn-ic-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
       <svg class="vn-ic-pause" viewBox="0 0 24 24"><rect x="6.5" y="5" width="3.6" height="14" rx="1.1"/><rect x="13.9" y="5" width="3.6" height="14" rx="1.1"/></svg>
     </button>
-    <div class="vn-track" onclick="vnSeek(event,this)"><div class="vn-wave"><div class="vn-wave-row base">${_vnWaveHtml(m.id)}</div><div class="vn-wave-row fill">${_vnWaveHtml(m.id)}</div></div></div>
+    <div class="vn-track"><div class="vn-wave"><div class="vn-wave-clip"><div class="vn-wave-row base">${_vnWaveHtml(m.id)}</div><div class="vn-wave-row fill">${_vnWaveHtml(m.id)}</div></div><span class="vn-scrub"></span></div></div>
     <span class="vn-time">0:00</span>
     <audio class="vn-audio" src="${m.media}" preload="metadata"></audio>
   </div>`;
@@ -40695,7 +40703,12 @@ function _bindVoiceNotes(el) {
     const audio = vn.querySelector('.vn-audio');
     const timeEl = vn.querySelector('.vn-time');
     const fill = vn.querySelector('.vn-wave-row.fill'); // coloured waveform layer
-    const setP = (p) => { if (fill) fill.style.clipPath = 'inset(0 ' + ((1 - Math.min(1, Math.max(0, p))) * 100) + '% 0 0)'; };
+    const scrub = vn.querySelector('.vn-scrub');        // the tall position handle
+    const setP = (p) => {
+      const c = Math.min(1, Math.max(0, p));
+      if (fill) fill.style.clipPath = 'inset(0 ' + ((1 - c) * 100) + '% 0 0)';
+      if (scrub) scrub.style.left = (c * 100) + '%';
+    };
     if (!audio) return;
     // Restore the speed the user picked before the last re-render.
     const mid = vn.closest('.msg-bubble')?.dataset.mid;
@@ -40713,17 +40726,18 @@ function _bindVoiceNotes(el) {
     const glide = () => {
       if (!fill) return; const d = realDur(); if (!d) return;
       const remaining = Math.max(0.02, (d - audio.currentTime) / (audio.playbackRate || 1));
-      fill.style.transition = 'none'; setP(Math.min(1, audio.currentTime / d)); // pin to current
-      void fill.offsetWidth;                                                     // commit that start
+      fill.style.transition = 'none'; if (scrub) scrub.style.transition = 'none';
+      setP(Math.min(1, audio.currentTime / d)); // pin fill + handle to current
+      void fill.offsetWidth;                     // commit that start
       fill.style.transition = 'clip-path ' + remaining.toFixed(3) + 's linear';
-      setP(1);                                                                   // …then glide to the end
+      if (scrub) scrub.style.transition = 'left ' + remaining.toFixed(3) + 's linear';
+      setP(1);                                   // …then glide both to the end together
     };
     const freeze = () => {
-      if (!fill) return;
-      const cs = getComputedStyle(fill).clipPath; // current interpolated position
-      fill.style.transition = 'none'; fill.style.clipPath = cs;
+      if (fill) { const cs = getComputedStyle(fill).clipPath; fill.style.transition = 'none'; fill.style.clipPath = cs; }
+      if (scrub) { const ls = getComputedStyle(scrub).left; scrub.style.transition = 'none'; scrub.style.left = ls; }
     };
-    const snap = (p) => { if (fill) { fill.style.transition = 'none'; setP(p); } };
+    const snap = (p) => { if (fill) fill.style.transition = 'none'; if (scrub) scrub.style.transition = 'none'; setP(p); };
     // WebM from MediaRecorder reports duration:Infinity until a seek forces it.
     // Resolve it via a one-off seek (listening on durationchange, never on the
     // playback timeupdate) and always restore the position to 0 — so a press of
@@ -40792,6 +40806,33 @@ function _bindVoiceNotes(el) {
         }
       }, 480); // hold the fully-blue waveform a beat before resetting / auto-advancing
     });
+    // ── Drag the waveform to scrub (grab the tall handle and slide back/forward) ──
+    // A plain tap seeks to that point; a drag scrubs live. While dragging we pause
+    // and resume on release if it was playing, so the audio follows the finger.
+    const track = vn.querySelector('.vn-track');
+    if (track) {
+      let scrubbing = false, wasPlaying = false;
+      const waveRect = () => vn.querySelector('.vn-wave').getBoundingClientRect();
+      const scrubTo = (clientX) => {
+        const d = realDur(); if (!d) return;
+        const r = waveRect(); const frac = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+        try { audio.currentTime = frac * d; } catch (_) {}
+        snap(frac); timeEl.textContent = _vnFmt(frac * d);
+      };
+      track.addEventListener('pointerdown', (e) => {
+        if (AC._selectMode) return;
+        e.stopPropagation(); // the waveform is a scrub zone, not a bubble long-press
+        scrubbing = true; wasPlaying = !audio.paused;
+        if (wasPlaying) audio.pause(); // pause() freezes the glide; we drive it by finger now
+        cancelAnimationFrame(_raf);
+        try { track.setPointerCapture(e.pointerId); } catch (_) {}
+        scrubTo(e.clientX);
+      });
+      track.addEventListener('pointermove', (e) => { if (scrubbing) { e.stopPropagation(); scrubTo(e.clientX); } });
+      const endScrub = () => { if (!scrubbing) return; scrubbing = false; if (wasPlaying) audio.play().catch(() => {}); };
+      track.addEventListener('pointerup', endScrub);
+      track.addEventListener('pointercancel', endScrub);
+    }
   });
 }
 function vnToggle(btn, e) {
