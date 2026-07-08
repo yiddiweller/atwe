@@ -9371,8 +9371,8 @@ body.light #signupDob{color-scheme:light;}
         <button class="tb-feedtab tb-feedtab-ai spin" id="acFeedTabAi" onclick="acOpenFeedAiMenu(event)" aria-label="Atwe AI" title="Atwe AI"><svg class="tb-aidots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
       </div>
       <div class="tb-feedtabs hidden" id="tbChatTabs">
-        <button class="tb-feedtab active" id="acseg-all" onclick="acChatsTab('all')">All<span class="ac-chattab-badge hidden" id="acsegBadge-all">0</span></button>
-        <button class="tb-feedtab" id="acseg-chats" onclick="acChatsTab('chats')">Chats<span class="ac-chattab-badge hidden" id="acsegBadge-chats">0</span></button>
+        <button class="tb-feedtab active" id="acseg-chats" onclick="acChatsTab('chats')">Chats<span class="ac-chattab-badge hidden" id="acsegBadge-chats">0</span></button>
+        <button class="tb-feedtab" id="acseg-groups" onclick="acChatsTab('groups')">Groups<span class="ac-chattab-badge hidden" id="acsegBadge-groups">0</span></button>
         <button class="tb-feedtab" id="acseg-calls" onclick="acChatsTab('calls')">Calls<span class="ac-chattab-badge ac-chattab-dot hidden" id="acsegBadge-calls"></span></button>
         <button class="tb-feedtab" id="acseg-contacts" onclick="acChatsTab('contacts')">Contacts</button>
         <button class="tb-feedtab tb-feedtab-ai hidden" id="acChatMoreBtn" onclick="acOpenChatMenu(event)" aria-label="More" title="More"><svg class="tb-aidots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
@@ -23614,7 +23614,7 @@ function acGoMessages() {
   acStopMic(); acShow('acListScreen', 'messages'); syncTopbar('chat'); acBindChatRowLongPress(); acBindRowSwipeActions();
   let t = AC._chatsTab; // last tab this session…
   if (!t) { try { t = localStorage.getItem('ac_chats_tab'); } catch {} } // …or the one persisted from a prior launch
-  acChatsTab(t || 'all'); acRefreshUnread(); acSyncChatPrefs();
+  acChatsTab(t || 'chats'); acRefreshUnread(); acSyncChatPrefs();
 }
 // One unified chat list now — "Groups" just returns to it (kept for the
 // post-group-create / leave-group return flows).
@@ -23792,19 +23792,19 @@ function acGoProfileHub() {
     document.getElementById('acMeBody').innerHTML = html;
   });
 }
-// The chats page is tabbed (All · Chats · Calls · Contacts), home-feed-tab style.
-// All/Chats reuse the message list (Chats = direct-only); Calls/Contacts duplicate
-// the standalone screens via the shared, scoped renderers (nothing diverges).
+// The Beam page is tabbed (Chats · Groups · Calls · Contacts), home-feed-tab style.
+// Chats = direct-only, Groups = group chats only (both reuse the message list);
+// Calls/Contacts duplicate the standalone screens via the shared scoped renderers.
 const AC_CHATS_FAB = {
-  all:      { ic: "<span class='nav-fab-ic' style=\"--ic:url('/nav-equals.png')\"></span>", label: 'New' },
   chats:    { ic: "<span class='nav-fab-ic' style=\"--ic:url('/nav-equals.png')\"></span>", label: 'New' },
+  groups:   { ic: "<span class='nav-fab-ic' style=\"--ic:url('/nav-equals.png')\"></span>", label: 'New group' },
   calls:    { ic: "<span class='nav-fab-ic' style=\"--ic:url('/nav-target.png')\"></span>", label: 'New call' },
   contacts: { ic: '<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>', label: 'Add contact' },
 };
-const AC_CHATS_TABS = ['all', 'chats', 'calls', 'contacts'];
+const AC_CHATS_TABS = ['chats', 'groups', 'calls', 'contacts'];
 // dir: +1 came from a left-swipe / forward, -1 from a right-swipe / back, 0 a tap.
 function acChatsTab(tab, dir) {
-  if (!AC_CHATS_TABS.includes(tab)) tab = 'all';
+  if (!AC_CHATS_TABS.includes(tab)) tab = 'chats';
   if (AC._chatSelMode) { AC._chatSelMode = false; acChatSel().clear(); document.getElementById('acListScreen')?.classList.remove('selecting'); } // leave bulk-select on tab change
   // A plain tap (no dir) still gets a horizontal page-slide, computed from the
   // previous tab — matching the home feed's tab-tap slide.
@@ -23820,26 +23820,26 @@ function acChatsTab(tab, dir) {
   // Highlight the active tab.
   AC_CHATS_TABS.forEach(t => document.getElementById('acseg-' + t)?.classList.toggle('active', t === tab));
   // Show only the active pane.
-  document.getElementById('acList').classList.toggle('hidden', !(tab === 'all' || tab === 'chats'));
+  document.getElementById('acList').classList.toggle('hidden', !(tab === 'chats' || tab === 'groups'));
   document.getElementById('acCallList2').classList.toggle('hidden', tab !== 'calls');
   document.getElementById('acContactsHead2').classList.toggle('hidden', tab !== 'contacts');
   document.getElementById('acContactsList2').classList.toggle('hidden', tab !== 'contacts');
   // Slide the new pane in from the swipe direction (skipped for a plain tap).
   if (dir) {
-    const primary = { all: 'acList', chats: 'acList', calls: 'acCallList2', contacts: 'acContactsList2' }[tab];
+    const primary = { chats: 'acList', groups: 'acList', calls: 'acCallList2', contacts: 'acContactsList2' }[tab];
     const pel = document.getElementById(primary);
     if (pel) { pel.classList.remove('ac-pane-in-l', 'ac-pane-in-r'); void pel.offsetWidth; pel.classList.add(dir > 0 ? 'ac-pane-in-l' : 'ac-pane-in-r'); }
   }
   // Search · Starred · Unread-only now live in the ⋯ tools menu after the last tab;
-  // it shows only on the message lists (All / Chats), like the old top-bar icons.
-  const showFilter = tab === 'all' || tab === 'chats';
+  // it shows only on the message lists (Chats / Groups), like the old top-bar icons.
+  const showFilter = tab === 'chats' || tab === 'groups';
   document.getElementById('acChatMoreBtn')?.classList.toggle('hidden', !showFilter);
   if (!showFilter) { acHideChatSearch(); acCloseChatMenu(); } // leaving All/Chats closes the search + the menu
   // Swap the FAB's icon + label for the tab's primary action.
   const fab = document.getElementById('acChatsFab'), cfg = AC_CHATS_FAB[tab];
   if (fab && cfg) { document.getElementById('acChatsFabIc')?.remove(); fab.innerHTML = cfg.ic; fab.setAttribute('aria-label', cfg.label); }
   // Load the active pane's data.
-  if (tab === 'all' || tab === 'chats') { AC._chatsFilter = tab; AC._showArchived = false; acLoadChats(); }
+  if (tab === 'chats' || tab === 'groups') { AC._chatsFilter = tab; AC._showArchived = false; acLoadChats(); }
   else if (tab === 'calls') { try { localStorage.setItem('ac_calls_seen', Date.now()); } catch {} acLoadCalls('acCallList2'); }
   else if (tab === 'contacts') {
     AC._cScope = 'chats'; AC._contactSelect = false;
@@ -24071,7 +24071,7 @@ function acBindRowSwipeActions() {
 }
 // The chats-page FAB does the active tab's primary action.
 function acChatsFab() {
-  const tab = AC._chatsTab || 'all';
+  const tab = AC._chatsTab || 'chats';
   if (tab === 'calls') acChatsCallFab();
   else if (tab === 'contacts') acAddContactOpen();
   else acNewChatMenu();
@@ -24422,7 +24422,7 @@ async function acSyncChatPrefs() {
     } catch {}
     acPruneMutes(); // drop any timed mutes that lapsed while away
     if (mPins.size !== sPins.size || mArch.size !== sArch.size || mMute.size !== sMute.size) acSaveChatPrefs(); // push local-only entries up
-    const onTab = AC._chatsTab === 'all' || AC._chatsTab === 'chats';
+    const onTab = AC._chatsTab === 'chats' || AC._chatsTab === 'groups';
     document.getElementById('tbChatFilter')?.classList.toggle('on', AC._unreadOnly && onTab);
     acRenderChats(); acRefreshUnread(); // badge reflects synced mute/archive
   } catch { /* offline → keep the local cache */ }
@@ -33773,9 +33773,9 @@ async function acLoadChats(opts) {
   const firstLoad = !el.querySelector('.ac-item') && !(opts && opts.silent);
   if (firstLoad) el.innerHTML = acSkelRows();
   try {
-    // The "All" tab folds recent calls into the list; "Chats" is messages-only,
-    // so it skips the calls fetch.
-    const wantCalls = AC._chatsFilter !== 'chats';
+    // Chats/Groups are messages-only — calls live on their own tab now, so the
+    // list never folds them in and this fetch is skipped.
+    const wantCalls = false;
     const reqs = [
       API.req('GET', '/api/atchat/conversations'),
       API.req('GET', '/api/atchat/groups'),
@@ -33821,7 +33821,7 @@ async function acLoadLabels() {
 function acRenderLabelBar() {
   const bar = document.getElementById('acLabelBar'); if (!bar) return;
   const tab = AC._chatsTab || AC._chatsFilter;
-  const onChatsTab = tab === 'all' || tab === 'chats';
+  const onChatsTab = tab === 'chats' || tab === 'groups';
   const labels = AC._labels || [];
   if (!onChatsTab || (!labels.length && !AC._labelFilter)) { bar.classList.add('hidden'); bar.innerHTML = ''; return; }
   bar.classList.remove('hidden');
@@ -33988,11 +33988,14 @@ function acRenderChats() {
   // same threads with recent calls folded in by recency (like the home "For you").
   const archivedView = !!AC._showArchived && acArchived().size > 0;
   const selMode = !!AC._chatSelMode; // bulk-select: checkboxes + a bottom action bar
-  const withCalls = AC._chatsFilter !== 'chats' && !archivedView && !selMode;
+  const withCalls = false; // calls live on their own tab; never folded into the list
   const unreadOnly = acUnreadOnly() && !archivedView;
   const q = archivedView ? '' : (AC._chatQuery || '').trim().toLowerCase();
   let dms = (AC.conversations || []).map(c => ({ kind: 'dm', ts: ts(c.last_at), c, unread: c.id === S.user?.id ? 0 : (c.unread || 0), pin: acIsPinned('dm', c.id) }));
   let grps = (AC.groupsList || []).map(g => ({ kind: 'group', ts: ts(g.last_at || g.created_at), g, unread: g.unread || 0, pin: acIsPinned('group', g.id) }));
+  // Beam split: Chats = direct messages only, Groups = group chats only.
+  if (AC._chatsFilter === 'chats') grps = [];
+  else if (AC._chatsFilter === 'groups') dms = [];
   // Split off archived conversations: the archived view shows only those; every
   // other view hides them (and surfaces an "Archived" entry row instead).
   const isArch = (x) => acIsArchived(x.kind, x.kind === 'dm' ? x.c.id : x.g.id);
@@ -34039,6 +34042,7 @@ function acRenderChats() {
       : q ? '<div class="ac-empty">No chats match “' + escHtml(q) + '”.</div>'
       : AC._labelFilter ? '<div class="ac-empty">No chats with this label yet.<br/>Open a chat → ⋯ → Label chat to add one.</div>'
       : unreadOnly ? '<div class="ac-empty">No unread chats — you’re all caught up.<br/><button class="ac-link-btn" onclick="acToggleUnreadFilter()" style="margin-top:6px;">Show all chats</button></div>'
+      : AC._chatsFilter === 'groups' ? '<div class="ac-empty">No group chats yet.<br/>Tap the pencil to start a group.</div>'
       : '<div class="ac-empty">No chats yet.<br/>Tap the pencil to message someone, or start a group.</div>';
     el.innerHTML = (archHeader ? archHeader.html : '') + (lockHeader ? lockHeader.html : '') + empty;
     return;
@@ -39985,11 +39989,11 @@ async function acRefreshUnread() {
     if (dot) dot.classList.toggle('hidden', !unread);
     document.getElementById('acTabDot')?.classList.toggle('hidden', !dmUnread);
     document.getElementById('acTabDotG')?.classList.toggle('hidden', !groupUnread);
-    // Chat-page tab badges: All + Chats carry the unread-message count.
-    const tot = unread || 0, txt = tot > 99 ? '99+' : String(tot);
-    ['all', 'chats'].forEach(t => {
+    // Beam tab badges: Chats carries DM unread, Groups carries group unread.
+    const fmt = (n) => (n > 99 ? '99+' : String(n));
+    [['chats', dmUnread || 0], ['groups', groupUnread || 0]].forEach(([t, n]) => {
       const el = document.getElementById('acsegBadge-' + t);
-      if (el) { el.textContent = txt; el.classList.toggle('hidden', !tot); }
+      if (el) { el.textContent = fmt(n); el.classList.toggle('hidden', !n); }
     });
   } catch { /* ignore */ }
 }
