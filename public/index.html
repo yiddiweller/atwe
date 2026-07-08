@@ -1255,6 +1255,19 @@ body.light .tb-iconbtn.on{color:#fff;}
 .me-hero-handle{font-size:14.5px;color:var(--t3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .me-hero-go{width:19px;height:19px;flex-shrink:0;stroke:var(--t4);stroke-width:2;fill:none;}
 .me-catlabel{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);margin:18px 4px 9px;}
+/* Wallet card pinned directly under the Me-hub identity header (blueprint). */
+.me-wallet{display:block;width:100%;text-align:left;border:none;cursor:pointer;color:#fff;
+  margin:12px 0 6px;padding:15px 18px 14px;border-radius:20px;
+  background:linear-gradient(135deg,var(--accent) 0%,#123f96 100%);
+  box-shadow:0 8px 24px rgba(0,0,0,.26);-webkit-tap-highlight-color:transparent;}
+.me-wallet:active{transform:scale(.99);}
+.me-wallet-head{display:flex;align-items:center;justify-content:space-between;}
+.me-wallet-cap{font-size:13px;font-weight:600;letter-spacing:.02em;opacity:.9;}
+.me-wallet-chev{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;opacity:.75;}
+.me-wallet-bal{font-size:29px;font-weight:800;letter-spacing:-.01em;margin:5px 0 12px;}
+.me-wallet-acts{display:flex;gap:8px;}
+.me-wallet-act{flex:1;text-align:center;padding:8px 0;border-radius:999px;font-size:13px;font-weight:600;background:rgba(255,255,255,.18);transition:background .15s;}
+.me-wallet-act:active{background:rgba(255,255,255,.30);}
 /* Border-top on the group + border-bottom on every row is what frames the WHOLE
    group top-and-bottom in the page-bg colour, not just between rows — see the
    matching `.iset-group`/`.iset-row` comment above. */
@@ -23685,37 +23698,30 @@ function acGoProfileHub() {
         </div>
         <svg class="me-hero-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
       </button>`;
+    // Wallet card sits directly under the identity header (design blueprint).
+    html += `<button class="me-wallet" onclick="acOpenWallet()">
+        <div class="me-wallet-head"><span class="me-wallet-cap">Atwe Wallet</span><svg class="me-wallet-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+        <div class="me-wallet-bal">${acMoney(u.balanceCents || 0)}</div>
+        <div class="me-wallet-acts">
+          <span class="me-wallet-act" onclick="event.stopPropagation();acOpenSendMoneyByUsername()">Send</span>
+          <span class="me-wallet-act" onclick="event.stopPropagation();acOpenRequestMoney()">Request</span>
+          <span class="me-wallet-act" onclick="event.stopPropagation();acOpenAddMoney()">Add</span>
+        </div>
+      </button>`;
     html += '<div class="me-group">';
     html += item('Edit profile', _ME_IC.edit, "openProfileEdit()", null);
     html += item(S.plan === 'pro' ? 'Manage plan' : 'Upgrade to Pro', _ME_IC.star, "profilePlanAction()", null);
     if (!verified) html += item('Get verified', _ME_IC.badge, "acGetVerified()", null);
     html += '</div>';
     // Everything personal that used to live in Engine now lives here, grouped
-    // (design blueprint: "Engine = discovery only; ~35 personal surfaces in Profile").
-    // Money
-    html += '<div class="me-catlabel">Money</div><div class="me-group">';
-    html += item('Wallet', _ME_IC.wallet, "acOpenWallet()", null);
-    html += item('Send money', _ME_IC.send, "acOpenSendMoneyByUsername()", null);
-    html += item('Money requests', _ME_IC.request, "acOpenMoneyRequests()", null);
-    html += item('Invoices', _ME_IC.invoices, "acOpenInvoices('received')", null);
-    html += item('Quotes', _ME_IC.quotes, "acOpenQuotes('received')", null);
-    html += item('Split a bill', _ME_IC.split, "acOpenSplits()", null);
-    html += item('Money pools', _ME_IC.pools, "acOpenPools()", null);
-    html += item('Scheduled payments', _ME_IC.scheduled, "acOpenSchedPays()", null);
-    html += item('Payment links', _ME_IC.paylink, "acOpenPayLinks()", null);
-    html += item('Gift cards', _ME_IC.gift, "acOpenGiftCards()", null);
-    html += item('Atwe Card', _ME_IC.card, "acOpenDebitCard()", null);
-    html += item('Rewards', _ME_IC.rewards, "acOpenLoyalty()", null);
-    html += item('Invite friends', _ME_IC.invite, "acOpenReferrals()", null);
-    html += item('Get a handle', _ME_IC.handle, "acOpenClaimHandle()", null);
-    html += item('Help &amp; refunds', _ME_IC.refund, "acOpenRefunds()", null);
-    html += '</div>';
-    // Selling & business
-    html += '<div class="me-catlabel">Selling &amp; business</div><div class="me-group">';
+    // Apple-Settings style (design blueprint): Business · Work & network ·
+    // Library · Money · Planning · App.
+    // Business
+    html += '<div class="me-catlabel">Business</div><div class="me-group">';
     html += item('Business dashboard', _ME_IC.grid, "acOpenDashboard()", null);
     html += item('My listings', _ME_IC.sell, "acOpenSell()", null);
     if (acIsBiz(u)) html += item('Manage store', _ME_IC.store, "acOpenStoreManage()", null);
-    html += item('Sales &amp; analytics', _ME_IC.sales, "acOpenShopAnalytics()", null);
+    html += item('Sales & analytics', _ME_IC.sales, "acOpenShopAnalytics()", null);
     if (acIsBiz(u)) html += item('Business analytics', _ME_IC.analytics, "acOpenBizAnalytics()", null);
     html += item('Advertise', _ME_IC.ads, "acOpenAdCreate()", null);
     html += item('Ads Manager', _ME_IC.ads, "acOpenAds()", null);
@@ -23748,18 +23754,33 @@ function acGoProfileHub() {
     html += item('Showcase', _ME_IC.showcase, "acOpenShowcaseDiscover()", null);
     html += item('Addresses', _ME_IC.addresses, "acOpenAddresses()", null);
     html += '</div>';
+    // Money
+    html += '<div class="me-catlabel">Money</div><div class="me-group">';
+    html += item('Wallet', _ME_IC.wallet, "acOpenWallet()", null);
+    html += item('Send money', _ME_IC.send, "acOpenSendMoneyByUsername()", null);
+    html += item('Money requests', _ME_IC.request, "acOpenMoneyRequests()", null);
+    html += item('Invoices', _ME_IC.invoices, "acOpenInvoices('received')", null);
+    html += item('Quotes', _ME_IC.quotes, "acOpenQuotes('received')", null);
+    html += item('Split a bill', _ME_IC.split, "acOpenSplits()", null);
+    html += item('Money pools', _ME_IC.pools, "acOpenPools()", null);
+    html += item('Scheduled payments', _ME_IC.scheduled, "acOpenSchedPays()", null);
+    html += item('Payment links', _ME_IC.paylink, "acOpenPayLinks()", null);
+    html += item('Gift cards', _ME_IC.gift, "acOpenGiftCards()", null);
+    html += item('Atwe Card', _ME_IC.card, "acOpenDebitCard()", null);
+    html += item('Rewards', _ME_IC.rewards, "acOpenLoyalty()", null);
+    html += item('Invite friends', _ME_IC.invite, "acOpenReferrals()", null);
+    html += item('Get a handle', _ME_IC.handle, "acOpenClaimHandle()", null);
+    html += item('Help & refunds', _ME_IC.refund, "acOpenRefunds()", null);
+    html += '</div>';
     // Planning
     html += '<div class="me-catlabel">Planning</div><div class="me-group">';
     html += item('Calendar', _ME_IC.agenda, "acOpenAgenda()", null);
     html += item('Appointments', _ME_IC.appts, "acOpenAppointments('mine')", null);
     html += item('Events', _ME_IC.events, "acOpenEvents()", null);
     html += '</div>';
-    // Tools
-    html += '<div class="me-catlabel">Tools</div><div class="me-group">';
+    html += '<div class="me-catlabel">App</div><div class="me-group">';
     html += item('Do it for me', _ME_IC.doit, "acOpenAgent()", null);
     html += item('QR code', _ME_IC.qr, "acOpenMyQR()", null);
-    html += '</div>';
-    html += '<div class="me-catlabel">App</div><div class="me-group">';
     html += item('Settings', _ME_IC.gear, "openSettings()", null);
     html += item('Notifications', _ME_IC.bell, "openNotifications()", null);
     html += item('Devices', _ME_IC.device, "openDevices()", null);
