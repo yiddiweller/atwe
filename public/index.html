@@ -6220,6 +6220,8 @@ body.light .ac-follow-btn.following{background:transparent;color:var(--t1);}
 .ac-groupname{margin:10px 14px 4px;padding:12px 14px;background:var(--s2);border:none;border-radius:var(--r-md);
   color:var(--t1);font-size:15px;font-family:inherit;outline:none;transition:border-color var(--t-fast) var(--ease);}
 .ac-groupname:focus{border-color:var(--accent);}
+.ac-groupdesc{resize:none;line-height:1.35;}
+.ac-grp-desc{margin:8px 16px 0;font-size:14px;line-height:1.4;color:var(--t2);white-space:pre-wrap;word-break:break-word;text-align:center;}
 .ac-chips{display:flex;flex-wrap:wrap;gap:7px;padding:0 14px;margin-bottom:4px;}
 .ac-chips:empty{display:none;}
 .ac-chip{display:flex;align-items:center;gap:6px;background:var(--s3);border-radius:var(--r-pill);padding:4px 6px 4px 4px;font-size:13px;font-weight:600;}
@@ -13442,6 +13444,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
           <span class="ac-grp-avacam"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
         </button>
         <input class="ac-groupname" id="acGroupName" type="text" placeholder="Group name (optional)" maxlength="60" oninput="acGroupCreateState()"/>
+        <textarea class="ac-groupname ac-groupdesc" id="acGroupDesc" placeholder="Description (optional)" maxlength="500" rows="2" aria-label="Group description"></textarea>
         <div class="ac-uname-row" id="acGroupUnameRow">
           <span class="ac-uname-prefix">group@</span>
           <input class="ac-uname-input" id="acGroupUsername" type="text" placeholder="username" maxlength="40" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="acGroupUnameInput()"/>
@@ -13624,7 +13627,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
           <button class="msg-attach" id="acAttachBtn" onclick="acToggleAttachMenu(event)" aria-label="Add attachment">
             <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
-          <textarea id="acInput" rows="1" placeholder="Message" aria-label="Message" oninput="acAutosize();acTypingEmit();acSaveDraft();acChatMentionInput(this)" onblur="setTimeout(acChatMentionClose,150)"></textarea>
+          <textarea id="acInput" rows="1" placeholder="Message" aria-label="Message" oninput="acAutosize();acTypingEmit();acSaveDraft();acChatMentionInput(this);acQrSlashExpand(this)" onfocus="acQrEnsureLoaded()" onblur="setTimeout(acChatMentionClose,150)"></textarea>
           <button class="ac-mic" id="acMic" onpointerdown="micDown(event)" aria-label="Record voice note (hold to record, slide left to cancel)">
             <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
           </button>
@@ -33610,6 +33613,7 @@ function acOpenGroupCreate(variant) {
   acGroupConfigForm('create');
   acGroupApplyVariant(variant);
   document.getElementById('acGroupName').value = '';
+  document.getElementById('acGroupDesc').value = '';
   document.getElementById('acGroupUsername').value = '';
   acGroupSetBroadcast(variant === 'channel');
   acSetGroupAvatar(null);
@@ -33640,6 +33644,7 @@ function acEditGroup() {
   acGroupConfigForm('edit');
   acGroupApplyVariant(variant);
   document.getElementById('acGroupName').value = AC.group.name || '';
+  document.getElementById('acGroupDesc').value = AC.group.description || '';
   document.getElementById('acGroupUsername').value = AC.group.username || '';
   acGroupSetBroadcast(!!AC.group.broadcast);
   acSetGroupAvatar(AC.group.avatar || null);
@@ -33738,20 +33743,21 @@ async function acSubmitGroup() {
   }
   const variant = AC._groupVariant || 'group';
   const name = document.getElementById('acGroupName').value.trim();
+  const description = document.getElementById('acGroupDesc').value.trim();
   // Contact group: username-less. Just a name + people (+ optional photo).
   if (variant === 'contact') {
     if (!name) { showNotif('Name your group.'); return; }
     btn.disabled = true;
     try {
       if (mode === 'edit') {
-        const { group } = await API.req('PATCH', '/api/atchat/groups/' + AC.groupId, { contact: true, name, avatar: AC.groupAvatar });
+        const { group } = await API.req('PATCH', '/api/atchat/groups/' + AC.groupId, { contact: true, name, description, avatar: AC.groupAvatar });
         AC.group = { ...AC.group, ...group };
         showNotif('Group updated.');
         acOpenGroup(AC.groupId);
       } else {
         const members = [...AC.groupSel.keys()];
         if (!members.length) { showNotif('Add at least one person.'); btn.disabled = false; return; }
-        const { group } = await API.req('POST', '/api/atchat/groups', { contact: true, name, avatar: AC.groupAvatar, members });
+        const { group } = await API.req('POST', '/api/atchat/groups', { contact: true, name, description, avatar: AC.groupAvatar, members });
         showNotif('Group created!');
         acOpenGroup(group.id);
       }
@@ -33764,14 +33770,14 @@ async function acSubmitGroup() {
   try {
     const broadcast = !!AC._groupBroadcast;
     if (mode === 'edit') {
-      const { group } = await API.req('PATCH', '/api/atchat/groups/' + AC.groupId, { username, name, avatar: AC.groupAvatar, broadcast });
+      const { group } = await API.req('PATCH', '/api/atchat/groups/' + AC.groupId, { username, name, description, avatar: AC.groupAvatar, broadcast });
       AC.group = { ...AC.group, ...group };
       showNotif('Group updated.');
       acOpenGroup(AC.groupId);
     } else {
       const members = [...AC.groupSel.keys()];
       if (!members.length && !broadcast) { showNotif('Add at least one other person.'); btn.disabled = false; return; }
-      const { group } = await API.req('POST', '/api/atchat/groups', { username, name, avatar: AC.groupAvatar, members, broadcast });
+      const { group } = await API.req('POST', '/api/atchat/groups', { username, name, description, avatar: AC.groupAvatar, members, broadcast });
       showNotif(broadcast ? 'Channel created!' : 'Group created!');
       acOpenGroup(group.id);
     }
@@ -33787,6 +33793,7 @@ function acOpenGroupInfo() {
      <div class="ac-headtitle"><div class="ac-title">${isChannel ? 'Channel' : 'Group'} info</div></div><span class="msg-spacer"></span>`;
   const members = AC.members || [];
   const isAdmin = !!AC.group.iAmAdmin;
+  const isOwner = AC.group.createdBy === S.user?.id; // the creator can delete the whole group/channel
   const list = members.map(m => {
     const badge = m.isOwner ? '<span class="ac-admin-badge">Admin</span>'
       : (m.isAdmin ? '<span class="ac-admin-badge">Admin</span>' : '');
@@ -33833,6 +33840,7 @@ function acOpenGroupInfo() {
       <div class="ac-prof-name" style="margin-top:11px;"><span class="ac-prof-name-txt">${escHtml(AC.group.name)}</span></div>
       ${handle}
       <div class="ac-prof-handle">${AC.group.broadcast ? 'Channel · ' : ''}${members.length} member${members.length === 1 ? '' : 's'}</div>
+      ${AC.group.description ? `<div class="ac-grp-desc">${acLinkifyPost(escHtml(AC.group.description))}</div>` : ''}
       ${AC.group.broadcast ? `<div class="gp-chip" style="margin-top:10px;"><svg viewBox="0 0 24 24"><path d="M3 11a9 9 0 0 1 9 9"/><path d="M3 4a16 16 0 0 1 16 16"/><circle cx="4.5" cy="19.5" r="1.6"/></svg> Only admins post</div>` : ''}
     </div>
     ${editBtn}
@@ -33846,7 +33854,21 @@ function acOpenGroupInfo() {
     ${reqList}
     <div class="ac-prof-head">Members</div>
     ${list}
-    <button class="ac-info-act danger" onclick="acLeaveGroup()"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Leave ${kind}</button>`;
+    <button class="ac-info-act danger" onclick="acLeaveGroup()"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Leave ${kind}</button>
+    ${isOwner ? `<button class="ac-info-act danger" onclick="acDeleteGroup()"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg> Delete ${kind}</button>` : ''}`;
+}
+// Owner-only: delete the whole group/channel (cascades everything server-side).
+async function acDeleteGroup() {
+  if (!AC.group || AC.group.createdBy !== S.user?.id) return;
+  const ch = !!AC.group.broadcast, kind = ch ? 'channel' : 'group';
+  if (!(await appConfirm({ title: `Delete ${kind}?`, message: `This permanently deletes the ${kind} and all its messages for everyone. This can’t be undone.`, confirmText: `Delete ${kind}`, danger: true }))) return;
+  try {
+    await API.req('DELETE', '/api/atchat/groups/' + AC.groupId);
+    AC.groupsList = (AC.groupsList || []).filter(x => x.id !== AC.groupId);
+    if (AC._grpCache) delete AC._grpCache[AC.groupId];
+    showNotif(`${kind.charAt(0).toUpperCase() + kind.slice(1)} deleted.`);
+    acGoGroups();
+  } catch (e) { showNotif(e.message || 'Could not delete.'); }
 }
 // Group-info shortcut rows → existing chat tools. Search needs the thread visible,
 // so it navigates back first; disappearing + export work from anywhere.
@@ -34339,6 +34361,33 @@ function acQrInsert(id) {
   if (typeof acAutosize === 'function') acAutosize();
   if (typeof acToggleSendMic === 'function') acToggleSendMic();
   inp.focus();
+}
+// Lazily prefetch the quick-reply set once (on composer focus) so slash-expansion
+// can match a shortcut without the picker sheet being opened.
+function acQrEnsureLoaded() {
+  if (Array.isArray(AC._quickReplies) || AC._qrLoading) return;
+  AC._qrLoading = true;
+  API.req('GET', '/api/quick-replies').then(({ replies }) => { AC._quickReplies = replies || []; })
+    .catch(() => {}).finally(() => { AC._qrLoading = false; });
+}
+// WhatsApp-Business slash-expansion: typing "/shortcut " in the chat composer
+// expands to that quick reply's body in place (the shortcut is stored slash-free).
+function acQrSlashExpand(ta) {
+  const reps = AC._quickReplies; if (!Array.isArray(reps) || !reps.length) return;
+  const pos = ta.selectionStart || 0;
+  const left = ta.value.slice(0, pos);
+  const m = /(^|\s)\/([a-zA-Z0-9_-]{1,40})(\s)$/.exec(left);
+  if (!m) return;
+  const sc = m[2].toLowerCase();
+  const r = reps.find(x => (x.shortcut || '').toLowerCase() === sc);
+  if (!r) return;
+  const tokenStart = pos - m[0].length + m[1].length; // start of the "/word " token
+  const before = ta.value.slice(0, tokenStart), after = ta.value.slice(pos);
+  const insert = r.body + ' ';
+  ta.value = before + insert + after;
+  const caret = (before + insert).length;
+  ta.setSelectionRange(caret, caret);
+  acAutosize(); acToggleSendMic(); acSaveDraft();
 }
 function acQrNew() { AC._qrEditId = null; document.getElementById('qrTitle').value = ''; document.getElementById('qrShortcut').value = ''; document.getElementById('qrBody').value = ''; document.getElementById('qrSaveBtn').textContent = 'Save quick reply'; document.getElementById('qrDeleteBtn').classList.add('hidden'); _qrShowForm(true); }
 function acQrEdit(id) {
@@ -38009,7 +38058,7 @@ function onGroupRemoved(d) {
     && !document.getElementById('acThreadScreen').classList.contains('hidden');
   const inInfo = AC.mode === 'group' && AC.groupId === gid
     && !document.getElementById('acGroupInfoScreen').classList.contains('hidden');
-  if (viewing || inInfo) { showNotif('You were removed from ' + (d.name ? '“' + d.name + '”' : 'the group') + '.'); acBackToList(); }
+  if (viewing || inInfo) { showNotif(d.deleted ? ((d.name ? '“' + d.name + '”' : 'The group') + ' was deleted.') : ('You were removed from ' + (d.name ? '“' + d.name + '”' : 'the group') + '.')); acBackToList(); }
   try { acRefreshUnread(); } catch {}
   if (!document.getElementById('acListScreen')?.classList.contains('hidden')) { try { acLoadChats(); } catch {} }
 }

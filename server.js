@@ -5793,6 +5793,7 @@ app.post('/api/atchat/groups', auth.requireAuth, rateLimit(20, 60000, 'group-cre
   }
   const avatar = cleanImage(req.body.avatar);
   if (avatar === undefined) return res.status(400).json({ error: 'That image could not be used.' });
+  const description = ((req.body.description || '').toString().trim().slice(0, 500)) || null;
   const broadcast = !contact && req.body.broadcast === true;
   const members = Array.isArray(req.body.members) ? req.body.members : [];
   const ids = [...new Set(members.map((x) => parseInt(x, 10)).filter((n) => Number.isInteger(n) && n !== req.user.id))];
@@ -5821,8 +5822,8 @@ app.post('/api/atchat/groups', auth.requireAuth, rateLimit(20, 60000, 'group-cre
     let g;
     try {
       g = await db.query(
-        'INSERT INTO at_groups (name, username, avatar, created_by, broadcast) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-        [name, username, avatar, req.user.id, broadcast]
+        'INSERT INTO at_groups (name, username, avatar, created_by, broadcast, description) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+        [name, username, avatar, req.user.id, broadcast, description]
       );
     } catch (e) {
       if (e.code === '23505') return res.status(409).json({ error: 'That group username is already taken.' });
@@ -5832,7 +5833,7 @@ app.post('/api/atchat/groups', auth.requireAuth, rateLimit(20, 60000, 'group-cre
     const all = [req.user.id, ...valid.rows.map((r) => r.id)];
     const valuesSql = all.map((_, i) => `($1, $${i + 2})`).join(', ');
     await db.query(`INSERT INTO at_group_members (group_id, user_id) VALUES ${valuesSql} ON CONFLICT DO NOTHING`, [gid, ...all]);
-    res.json({ group: { id: gid, name, username, avatar: avatar || null, members: all.length, broadcast } });
+    res.json({ group: { id: gid, name, username, avatar: avatar || null, members: all.length, broadcast, description } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -5872,11 +5873,12 @@ app.patch('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     const vals = [name, username];
     if (setAvatar) { vals.push(avatarVal); fields.push(`avatar = $${vals.length}`); }
     if (typeof req.body.broadcast === 'boolean') { vals.push(req.body.broadcast); fields.push(`broadcast = $${vals.length}`); }
+    if ('description' in req.body) { vals.push(((req.body.description || '').toString().trim().slice(0, 500)) || null); fields.push(`description = $${vals.length}`); }
     vals.push(gid);
     let upd;
     try {
       upd = await db.query(
-        `UPDATE at_groups SET ${fields.join(', ')} WHERE id = $${vals.length} RETURNING id, name, username, avatar, created_by, broadcast`,
+        `UPDATE at_groups SET ${fields.join(', ')} WHERE id = $${vals.length} RETURNING id, name, username, avatar, created_by, broadcast, description`,
         vals
       );
     } catch (e) {
@@ -5884,7 +5886,7 @@ app.patch('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       throw e;
     }
     const r = upd.rows[0];
-    res.json({ group: { id: r.id, name: r.name, username: r.username, avatar: r.avatar || null, createdBy: r.created_by, broadcast: r.broadcast } });
+    res.json({ group: { id: r.id, name: r.name, username: r.username, avatar: r.avatar || null, createdBy: r.created_by, broadcast: r.broadcast, description: r.description || null } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -6008,7 +6010,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
     const g = await db.query(
-      `SELECT g.id, g.name, g.username, g.avatar, g.created_by, g.broadcast, g.disappearing,
+      `SELECT g.id, g.name, g.username, g.avatar, g.created_by, g.broadcast, g.disappearing, g.description,
               (SELECT (m.muted AND (m.muted_until IS NULL OR m.muted_until > now())) FROM at_group_members m WHERE m.group_id = g.id AND m.user_id = $2) AS muted
        FROM at_groups g WHERE g.id = $1`,
       [gid, req.user.id]
@@ -6047,7 +6049,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       requests = rq.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null }));
     }
     res.json({
-      group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by, broadcast: g.rows[0].broadcast, muted: !!g.rows[0].muted, disappearing: g.rows[0].disappearing || 0, iAmAdmin },
+      group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by, broadcast: g.rows[0].broadcast, muted: !!g.rows[0].muted, disappearing: g.rows[0].disappearing || 0, description: g.rows[0].description || null, iAmAdmin },
       requests,
       lastRead,
       live: ls ? liveStreamPublic(ls) : null,
@@ -6709,6 +6711,30 @@ app.delete('/api/atchat/groups/:id/members/me', auth.requireAuth, async (req, re
     await db.query('DELETE FROM at_group_members WHERE group_id = $1 AND user_id = $2', [gid, req.user.id]);
     // Clean up empty groups.
     await db.query('DELETE FROM at_groups g WHERE g.id = $1 AND NOT EXISTS (SELECT 1 FROM at_group_members m WHERE m.group_id = g.id)', [gid]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Delete the whole group / channel — creator (owner) only. Cascades away every
+// member, message, cloud item, join request and community link (all FKs are
+// ON DELETE CASCADE), and pushes a live `group-removed` to every member so their
+// client drops it. Distinct from Leave (members/me), which only removes yourself.
+app.delete('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  try {
+    const g = await db.query('SELECT created_by, name FROM at_groups WHERE id = $1', [gid]);
+    if (!g.rows[0]) return res.json({ ok: true }); // already gone — treat as success
+    if (g.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the group creator can delete this group.' });
+    // A community's announcement channel isn't a standalone group to delete here.
+    const isAnnounce = await db.query('SELECT 1 FROM communities WHERE announce_group_id = $1', [gid]);
+    if (isAnnounce.rowCount) return res.status(400).json({ error: 'This is a community’s announcement channel — delete the community instead.' });
+    const members = await groupMemberIds(gid, null); // capture before the cascade wipes them
+    await db.query('DELETE FROM at_groups WHERE id = $1', [gid]);
+    for (const id of members) rtPush(id, 'group-removed', { groupId: gid, name: g.rows[0].name || null, deleted: true });
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
