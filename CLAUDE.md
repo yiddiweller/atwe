@@ -3898,9 +3898,10 @@ get 403). Surfaced as "Ask a connection for a referral" on the job detail.
 `users.otw_visibility` (`off`/`recruiters`/`everyone`). A **Job-preferences hub**
 (`acOpenPrefs`, from the search Discover actions) sets it via `GET/PUT
 /api/open-to-work`, links to the worker listing, job alerts and resumes.
-`everyone` lights the **green #OpenToWork ring** on the avatar (`acAvatarHtml(…,
-otw)`) — exposed as `openToWork` on `/api/auth/me` + the social profile so the
-ring shows to everyone; `recruiters` stays private (no public ring).
+`everyone` lights the **blue #OpenToWork ring** on the avatar (`acAvatarHtml(…,
+otw)`, `--accent`; blue is the identity accent and the OTW ring is one of its
+allowed uses) — exposed as `openToWork` on `/api/auth/me` + the social profile so
+the ring shows to everyone; `recruiters` stays private (no public ring).
 
 ### Screening questions + applicant insights
 
