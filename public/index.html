@@ -3774,14 +3774,14 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .msg-row.me .msg-bubble.msg-unseen .vn-speed{background:rgba(29,29,31,.12);color:var(--text-black);}
 /* Inset the bar so the resting ball doesn't hug the play button — gives even
    spacing between the avatar, the play button and the line. */
-.vn-track{flex:1;min-width:0;cursor:pointer;padding:4px 6px;-webkit-tap-highlight-color:transparent;}
+.vn-track{flex:1;min-width:0;cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent;overflow:hidden;}
 /* Waveform: two identical stacked bar-rows (deterministic heights per message).
    The base row is dim; the coloured "fill" row is revealed left-to-right by a
    clip-path driven from playback progress (replaces the old flat line + knob —
    the rounded bubble, avatar, play button and duration are unchanged). */
-.vn-wave{position:relative;flex:1;min-width:0;height:20px;}
+.vn-wave{position:relative;flex:1;min-width:0;height:20px;overflow:hidden;} /* CLIP: bars must never spill behind the time / play button / avatar on a narrow bubble */
 .vn-wave-row{position:absolute;inset:0;display:flex;align-items:center;gap:2px;}
-.vn-wave-row i{flex:1;min-width:2px;border-radius:2px;display:block;height:32%;}
+.vn-wave-row i{flex:1;min-width:1.5px;border-radius:2px;display:block;height:32%;}
 .vn-wave-row.base i{background:rgba(255,255,255,.30);}
 .msg-row.me .vn-wave-row.base i{background:rgba(255,255,255,.34);}
 .msg-row.team .vn-wave-row.base i{background:var(--s4);}
