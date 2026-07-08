@@ -28214,6 +28214,7 @@ function acRenderProfile(d, mine) {
     ? `<button class="ac-pill-btn" onclick="closeAtChat();openProfileEdit()">Edit profile</button>
        <button class="ac-icon-btn" onclick="acOwnProfileMenu(this)" title="More" aria-label="More">${moreDots}</button>`
     : `<button class="ac-follow-btn ${d.isFollowing ? 'following' : ''}" onclick="acToggleFollow(${u.id},this)" aria-label="Follow"></button>
+       <button class="ac-icon-btn" onclick="acProfileMessage()" title="Message" aria-label="Message"><svg viewBox="0 0 24 24"><path d="M20 15.5a2 2 0 0 1-2 2H8l-4 3.5V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z"/></svg></button>
        <button class="ac-icon-btn" onclick="acOpenUserActions(this,${u.id},false)" title="More" aria-label="More">${moreDots}</button>`;
   // A pinned post sits above the timeline with a small "Pinned" label. Filter it
   // out of the regular list so it doesn't appear twice.
@@ -28273,6 +28274,12 @@ function acRenderProfile(d, mine) {
     ${panes}`;
   AC._profTab = 'posts';
   acLoadHighlights(u.username, mine);
+}
+// Open a Beam (DM) chat with the profile currently being viewed (grey Message
+// button in the identity header). Mirrors the ⋯ menu's paChat() entry point.
+function acProfileMessage() {
+  const u = AC._profileUser; if (!u) return;
+  acOpenChat(u.id);
 }
 // Switch profile tabs (Posts / About / Media / Business).
 // Build one profile tab pane on demand (memory: don't render every pane up front).

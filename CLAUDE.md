@@ -579,8 +579,11 @@ below).
 
 `acRenderProfile(d, mine)` renders an X-style profile: banner, a large
 overlapping avatar, action buttons, name/handle/headline/bio, a meta row.
-> **Both profile action rows are deliberately minimal — Follow + ⋯ (others),
-> Edit profile + ⋯ (own).** Everything else lives in the **⋯ menu**. *Others'*
+> **Both profile action rows are deliberately minimal — Follow + Message + ⋯
+> (others), Edit profile + ⋯ (own).** The Message button (a grey `.ac-icon-btn`
+> chat glyph → `acProfileMessage()` → `acOpenChat(AC._profileUser.id)`) opens a
+> Beam DM straight from the header, matching the Profile-world blueprint. Everything
+> else lives in the **⋯ menu**. *Others'*
 > menu (`acOpenUserActions` → `#postActions`): Connect via `acConnTap`,
 > notify-about-posts, view-their-feed, **Search their posts**, send money, message,
 > add-to-contact, tip/invoice, mute/block/report — `paConnectBtn`/`paNotifyBtn`/
