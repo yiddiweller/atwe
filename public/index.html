@@ -303,13 +303,16 @@ body.light .splash-mark{background-color:#d2d2d8;}
   box-shadow:0 0 0 .5px var(--divider) inset;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
   transition:transform var(--t-fast) var(--ease),filter .2s var(--ease);}
 .auth-btn:active{transform:scale(.97);filter:brightness(.85);}
-@media(hover:hover){.auth-btn:hover{filter:brightness(1.15);}}
+@media(hover:hover){.auth-btn:hover{filter:brightness(1.05);}}
 /* Primary (blue): solid --accent fill, tint text, no border/edge of any kind. */
 .auth-btn-primary{background:var(--primary);color:var(--on-primary);box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;}
-.auth-btn-primary:active,.auth-continue:active{filter:brightness(.85);}
+.auth-btn-primary:active,.auth-continue:active{transform:scale(.97);filter:brightness(.92);}
 .auth-btn-primary:disabled{opacity:.4;cursor:default;background:var(--s2);color:var(--t2);}
 .auth-btn-primary:disabled:active{transform:none;filter:none;}
-@media(hover:hover){.auth-btn-primary:hover,.auth-continue:hover{filter:brightness(1.05);}}
+/* White primary hover (blueprint D): a whisper-dim fill + a rim hint of light,
+   so the button reads as catching the light rather than washing out. */
+@media(hover:hover){.auth-btn-primary:hover,.auth-continue:hover{filter:brightness(.97);
+  box-shadow:0 0 0 1px rgba(255,255,255,.35),0 0 16px rgba(255,255,255,.16);}}
 .auth-ic{display:inline-flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;line-height:1;}
 .auth-ic svg{width:20px;height:20px;display:block;}
 .auth-input{width:100%;height:56px;border-radius:16px;border:1px solid var(--divider);background:var(--s2);
@@ -858,16 +861,20 @@ body.light .auth-danger,body.light .auth-input{box-shadow:none;}
    moment you let go — the ONLY reactive light on top of the hover wash
    above. Registered app-wide by the pointerdown listener in "PHASE 2
    ENGINE" (script block) for .auth-btn/.auth-btn-primary/.auth-danger/
-   .auth-continue/.ac-pill-btn.accent. */
+   .auth-continue/.ac-pill-btn.accent.
+   Deliberately SOFT (owner request): the press flash was too bright and washed
+   out nearby text, so its alphas are cut ~60% vs. the original (.55/.35 →
+   .20/.13) and it peaks at .85 opacity — same position, colors, radius and
+   timing, just a gentler bloom. Hover/movement/idle light is untouched. */
 .auth-btn::after,.auth-btn-primary::after,.auth-danger::after,.auth-continue::after{
   content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
   background:radial-gradient(90px 90px at var(--tx,50%) var(--ty,50%),
-    rgba(255,255,255,.55),rgba(120,160,255,.35) 45%,transparent 72%);
+    rgba(255,255,255,.20),rgba(120,160,255,.13) 45%,transparent 72%);
   opacity:0;transition:opacity .45s ease-out;
 }
 .auth-btn.tap-lit::after,.auth-btn-primary.tap-lit::after,
 .auth-danger.tap-lit::after,.auth-continue.tap-lit::after{
-  opacity:1;transition:opacity .05s ease-out;
+  opacity:.85;transition:opacity .05s ease-out;
 }
 @media(prefers-reduced-motion:reduce){
   .auth-btn::after,.auth-btn-primary::after,.auth-danger::after,
@@ -8275,6 +8282,93 @@ body.reduce-motion .notif-detail{transition:none;}
 .fg-opt{color:var(--t3);font-weight:400;}
 #signupDob{color-scheme:dark;}
 body.light #signupDob{color-scheme:light;}
+
+/* ═════════════════════════════════════════════════════════════
+   LIVING LIGHT — Phase 3 (design blueprint §05, layers A–E)
+   Engineering rules honored here:
+   • The light vars (--pool/--gx/--gy/--rim/--er) are PLAIN custom properties —
+     NEVER register them with @property inherits:false; that silently kills the
+     rim on nested surfaces.
+   • Scroll moves NO light: nothing below listens to scroll; positions come from
+     the pointer only, so content scrolling under a still cursor leaves every
+     glow exactly where it is.
+   • GPU only: every animated property is transform or opacity (the rim's
+     --gx/--gy shift a single hovered element's gradient origin — one element at
+     a time, matching the pre-existing .spin recipe).
+════════════════════════════════════════════════════════════════ */
+
+/* Layer A — cursor pool. ONE fixed, pointer-events:none stage (#page-glow)
+   hosts the pool orb, the opening-lap orb, and (blueprint) page-scope comets.
+   The pool is a soft deep-blue radial (--pool ramp) that follows the pointer at
+   ~12% peak over a 420px radius; on touch it appears under the finger during a
+   drag only. Black theme only. */
+#page-glow{position:fixed;inset:0;pointer-events:none;z-index:1100;overflow:hidden;}
+.pool-orb{position:absolute;left:0;top:0;width:840px;height:840px;border-radius:50%;
+  background:radial-gradient(closest-side, rgb(24,32,175) 0%, rgb(12,14,120) 42%, transparent 72%);
+  mix-blend-mode:screen;opacity:0;will-change:transform,opacity;
+  transition:opacity .5s ease-out;}
+#page-glow.pool-on .pool-orb{opacity:.12;}
+body.light #page-glow .pool-orb{display:none;}
+
+/* Layer B — bulb rim. A 2.5px ring hugging the surface's rounded edge at
+   --gx/--gy, twin geometry in one element: the sharp core (white→icy) is the
+   masked ring itself, the blurred halo rides identical geometry via
+   drop-shadows. Injected as a CHILD span (never a pseudo-element — arbitrary
+   cards already use ::before/::after for their own chrome). Invisible at rest;
+   ~3.5s melt after the pointer leaves. Black theme only. */
+.rim-ring{position:absolute;inset:0;border-radius:inherit;padding:2.5px;pointer-events:none;z-index:3;
+  background:radial-gradient(var(--gr,300px) circle at var(--gx,50%) var(--gy,-40%),
+    var(--light-core) 0%, var(--light-fringe) 9%, var(--light-mid) 22%,
+    var(--light-blue) 40%, var(--light-deep) 62%, transparent 80%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;
+  filter:drop-shadow(0 0 3px rgba(255,255,255,.85)) drop-shadow(0 0 10px rgba(96,130,255,.8));
+  opacity:0;transition:opacity 3.5s cubic-bezier(.25,.6,.3,1);}
+.rim-ring.on{opacity:.85;transition:opacity .18s ease-out;}
+body.light .rim-ring{display:none;}
+
+/* Layer C — opening lap. A bright orb with a blue halo that runs the screen's
+   perimeter ~2.5 decelerating laps on a surface's first open this session
+   (boot + each top-level tab once), then melts. Driven by JS transform only. */
+.lap-orb{position:absolute;left:0;top:0;width:10px;height:10px;border-radius:50%;
+  background:#fff;opacity:0;will-change:transform,opacity;
+  box-shadow:0 0 8px 2px rgba(255,255,255,.9),0 0 22px 8px rgba(96,130,255,.85),0 0 52px 22px rgba(46,76,255,.5);}
+body.light .lap-orb{display:none;}
+
+/* Layer D — button flares (blueprint values). White primary: hover keeps a
+   whisper-dim fill (.97) with a rim hint so it reads as lit; press .92 + scale
+   .97. Grey & semantic: hover brightness 1.05. Disabled: 40%, no light. */
+@media(hover:hover){
+  .ac-pill-btn.accent:hover{box-shadow:0 0 0 1px rgba(255,255,255,.35),0 0 16px rgba(255,255,255,.16);}
+  .ac-pill-btn:not(.accent):hover,.auth-danger:hover{filter:brightness(1.05);}
+}
+.ac-pill-btn:disabled,.ac-pill-btn.accent:disabled,.auth-btn:disabled,.auth-btn-primary:disabled,
+.auth-continue:disabled,.ac-post-btn:disabled,.ac-follow-btn:disabled,.ac-conn-btn:disabled{
+  opacity:.4;box-shadow:none;filter:none;}
+
+/* Layer E — AI comets: 2–3 small comets orbiting the answer container ONLY
+   while Atwe AI is actually working (thinking → streaming → one final lap →
+   gone). Light theme swaps comets for a travelling blue shimmer on the same
+   .ai-working container. No AI = no comets. */
+.ai-comets{position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:5;overflow:visible;}
+.ai-comet{position:absolute;left:0;top:0;width:6px;height:6px;border-radius:50%;
+  background:#fff;will-change:transform,opacity;opacity:.95;
+  box-shadow:0 0 6px 2px rgba(255,255,255,.85),0 0 16px 6px rgba(96,130,255,.75),0 0 34px 14px rgba(46,76,255,.4);}
+body.light .ai-comets{display:none;}
+body.light .ai-working{position:relative;overflow:hidden;}
+body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(105deg,transparent 30%,rgba(10,132,255,.10) 45%,rgba(10,132,255,.20) 50%,rgba(10,132,255,.10) 55%,transparent 70%);
+  background-size:220% 100%;animation:aiShimmer 1.6s linear infinite;}
+@keyframes aiShimmer{from{background-position:130% 0;}to{background-position:-130% 0;}}
+
+/* Reduced motion (blueprint): laps + comets are replaced by a simple static
+   soft-glow fade; the pool and rim render at their final state (the global
+   reduced-motion reset already collapses the melt transitions). */
+@media(prefers-reduced-motion:reduce){
+  .pool-orb,.lap-orb,.ai-comet{display:none!important;}
+  body.light .ai-working::after{animation:none;}
+  .ai-working{box-shadow:0 0 0 1px rgba(10,132,255,.28),0 0 24px rgba(10,132,255,.2);transition:box-shadow .6s ease;}
+}
 </style>
 </head>
 <body>
@@ -16654,6 +16748,10 @@ async function sendMessage() {
   showMessages();
   appendBubble('user', storeText, false, imageUrl);
   const aiNode = appendBubble('ai', '', true);
+  // Living Light layer E: comets orbit the answer block while Atwe AI works.
+  // Host = the bubble's parent (.msg-body) — the bubble's own innerHTML is
+  // rewritten by the typewriter, which would destroy an overlay inside it.
+  try { aiComets.start(aiNode.parentElement); } catch (e) {}
   scrollBottom();
 
   try {
@@ -16694,6 +16792,7 @@ async function sendMessage() {
     }
     renderStream(aiNode, errMsg);
   } finally {
+    try { aiComets.stop(aiNode.parentElement); } catch (e) {} // one final lap, then gone
     S.loading = false;
     sendBtn.disabled = !inp.value.trim() && !_pendingImage && !_pendingDoc;
   }
@@ -16853,6 +16952,7 @@ async function sendMessageFromHistory(chat) {
   S.loading = true;
   sendBtn.disabled = true;
   const aiNode = appendBubble('ai', '', true);
+  try { aiComets.start(aiNode.parentElement); } catch (e) {} // Living Light layer E
   scrollBottom();
   const ctrl = new AbortController();
   const timeout = setTimeout(() => ctrl.abort(), 30000);
@@ -16879,7 +16979,7 @@ async function sendMessageFromHistory(chat) {
     }
     renderStream(aiNode, errMsg);
   }
-  finally { S.loading = false; sendBtn.disabled = !inp.value.trim(); }
+  finally { try { aiComets.stop(aiNode.parentElement); } catch (e) {} S.loading = false; sendBtn.disabled = !inp.value.trim(); }
 }
 
 /* ═══════════════════════════════════════════════
@@ -26377,11 +26477,13 @@ async function acProfileAi(field) {
 async function acAiShowResult(apiBody) {
   showOverlay('acExplainOverlay');
   const card = document.getElementById('acExplainCard'); card.classList.add('loading');
+  try { aiComets.start(card); } catch (e) {} // Living Light layer E: comets while working
   const body = document.getElementById('acExplainBody'); body.className = 'ax-body'; body.innerHTML = '<div class="ax-dots"><span></span><span></span><span></span></div>';
   try {
     const r = await API.req('POST', '/api/ai/write', apiBody);
     card.classList.remove('loading'); body.className = 'ax-body ax-in'; body.textContent = r.text || 'No result.';
   } catch (e) { card.classList.remove('loading'); body.className = 'ax-body ax-in'; body.textContent = e.message || 'Atwe AI is unavailable right now.'; }
+  finally { try { aiComets.stop(card); } catch (e) {} }
 }
 // Build a short transcript of the open thread for AI context.
 function _acChatTranscript() {
@@ -40910,7 +41012,10 @@ function navInit() {
       var pr = pill.getBoundingClientRect();
       pill.style.setProperty('--mx', (e.clientX - pr.left) + 'px');
       pill.style.setProperty('--my', (e.clientY - pr.top) + 'px');
-      boost = 1;
+      // Press pulse (owner request: keep it subtle) — a gentle lift, not a jump
+      // to full energy: the old boost=1 flashed every --boost-driven wash to max
+      // on tap and washed out nearby text. The hover/movement ramp is untouched.
+      boost = Math.min(1, Math.max(boost, .4));
       return;
     }
     var btn = e.target.closest('.auth-btn,.auth-btn-primary,.auth-danger,.auth-continue');
@@ -40922,6 +41027,67 @@ function navInit() {
     clearTimeout(btn._tapT);
     btn._tapT = setTimeout(function () { btn.classList.remove('tap-lit'); }, 450);
   }, { passive: true });
+
+  // ═══ THE STAGE (#page-glow) — one fixed, pointer-events:none layer hosting
+  // Layer A (cursor pool) + Layer C (opening-lap orb). Created once; everything
+  // on it animates via transform/opacity only. ═══
+  var stage = document.createElement('div');
+  stage.id = 'page-glow'; stage.setAttribute('aria-hidden', 'true');
+  var poolOrb = document.createElement('span'); poolOrb.className = 'pool-orb';
+  var lapOrb = document.createElement('span'); lapOrb.className = 'lap-orb';
+  stage.appendChild(poolOrb); stage.appendChild(lapOrb);
+  document.body.appendChild(stage);
+
+  // ═══ Layer E — AI comets: ONLY while Atwe AI is actually working. ═══
+  // aiComets.start(host) rigs 3 comets orbiting the host's perimeter at
+  // ~160px/s; aiComets.stop(host) lets them run ONE final lap, then removes
+  // them. The .ai-working class doubles as the Light-theme blue shimmer and
+  // the reduced-motion static soft-glow (both pure CSS). No AI = no comets.
+  window.aiComets = {
+    start: function (host) {
+      if (!host || host._comets) return;
+      try { if (getComputedStyle(host).position === 'static') host.style.position = 'relative'; } catch (e) {}
+      host.classList.add('ai-working');
+      if (reduced) { host._comets = { reduced: true }; return; } // static glow only (CSS)
+      var layer = document.createElement('span');
+      layer.className = 'ai-comets';
+      var dots = [];
+      for (var i = 0; i < 3; i++) { var d = document.createElement('span'); d.className = 'ai-comet'; layer.appendChild(d); dots.push(d); }
+      host.appendChild(layer);
+      var st = { layer: layer, dots: dots, t0: performance.now(), stopAt: 0, done: false };
+      host._comets = st;
+      (function orbit() {
+        if (st.done || !layer.isConnected) { st.done = true; host.classList.remove('ai-working'); delete host._comets; return; }
+        var w = host.offsetWidth || 300, h = host.offsetHeight || 80, per = Math.max(2 * (w + h), 200);
+        var dist = (performance.now() - st.t0) / 1000 * 160; // ~160px/s along the perimeter
+        if (st.stopAt && dist >= st.stopAt) { // final lap complete → melt out
+          st.done = true;
+          layer.style.transition = 'opacity .45s ease-out'; layer.style.opacity = '0';
+          setTimeout(function () { layer.remove(); host.classList.remove('ai-working'); delete host._comets; }, 500);
+          return;
+        }
+        for (var i = 0; i < st.dots.length; i++) {
+          var u = ((dist / per) + i / st.dots.length) % 1;
+          var dd = u * per, x, y;
+          if (dd < w) { x = dd; y = 0; }
+          else { dd -= w; if (dd < h) { x = w; y = dd; } else { dd -= h; if (dd < w) { x = w - dd; y = h; } else { dd -= w; x = 0; y = h - dd; } } }
+          st.dots[i].style.transform = 'translate3d(' + (x - 3) + 'px,' + (y - 3) + 'px,0)';
+        }
+        requestAnimationFrame(orbit);
+      })();
+    },
+    stop: function (host) {
+      var st = host && host._comets;
+      if (!st) { if (host && host.classList) host.classList.remove('ai-working'); return; }
+      if (st.reduced) { // blueprint: a simple 600ms static soft-glow fade
+        setTimeout(function () { host.classList.remove('ai-working'); delete host._comets; }, 600);
+        return;
+      }
+      if (st.stopAt) return;
+      var w = host.offsetWidth || 300, h = host.offsetHeight || 80, per = Math.max(2 * (w + h), 200);
+      st.stopAt = (performance.now() - st.t0) / 1000 * 160 + per; // one final full lap, then gone
+    },
+  };
 
   function collect() {
     glows = Array.prototype.slice.call(
@@ -40962,12 +41128,21 @@ function navInit() {
     return;
   }
 
+  var curRim = null; // Layer B: the ONE surface currently under the pointer
   function paintB() {
     rafB = null;
     for (var i = 0; i < glows.length; i++) {
       var el = glows[i], r = el.getBoundingClientRect();
       el.style.setProperty('--mx', (px - r.left) + 'px');
       el.style.setProperty('--my', (py - r.top) + 'px');
+    }
+    // Layer B: keep the hovered surface's rim centered on the pointer. Only one
+    // element ever updates per frame; scrolling fires no events here, so the
+    // light stays put while content moves (the blueprint's "scroll does NOTHING").
+    if (curRim && curRim._rimRing) {
+      var rr = curRim.getBoundingClientRect();
+      curRim.style.setProperty('--gx', (px - rr.left) + 'px');
+      curRim.style.setProperty('--gy', (py - rr.top) + 'px');
     }
   }
   function bump(v) { boost = Math.min(1, boost + v); }
@@ -40977,8 +41152,19 @@ function navInit() {
     var mag = Math.hypot(e.movementX || 0, e.movementY || 0);
     bump(mag * .004);
     rim = Math.min(1, rim + mag * .004);
+    // Layer A: the pool lights while the pointer moves on the stage — for touch
+    // that means "under the finger during a drag only" (a stationary tap never
+    // shows it; pointerup below puts it out).
+    stage.classList.add('pool-on');
   }, { passive: true });
-  addEventListener('touchmove', function () { bump(.03); rim = Math.min(1, rim + .03); }, { passive: true });
+  addEventListener('pointerup', function (e) { if (e.pointerType === 'touch') stage.classList.remove('pool-on'); }, { passive: true });
+  addEventListener('pointercancel', function () { stage.classList.remove('pool-on'); }, { passive: true });
+  document.documentElement.addEventListener('pointerleave', function () { stage.classList.remove('pool-on'); });
+  addEventListener('touchmove', function (e) {
+    var t = e.touches && e.touches[0];
+    if (t) { px = t.clientX; py = t.clientY; if (!rafB) rafB = requestAnimationFrame(paintB); }
+    bump(.03); rim = Math.min(1, rim + .03);
+  }, { passive: true });
   // Scroll intentionally does NOTHING to the light — no listener here.
 
   // Idle drift on touch devices so surfaces stay alive without a cursor.
@@ -41024,6 +41210,9 @@ function navInit() {
     root.style.setProperty('--boost', boost.toFixed(3));
     root.style.setProperty('--rim', rim.toFixed(3));
     gx += (px - gx) * .18; gy += (py - gy) * .18;
+    // Layer A: the pool orb trails the pointer on the same smoothed track
+    // (~120ms ease-out follow), pure GPU transform.
+    poolOrb.style.transform = 'translate3d(' + (gx - 420) + 'px,' + (gy - 420) + 'px,0)';
     if (!intro) {
       for (var j = 0; j < spins.length; j++) {
         var s = spins[j], r = s.getBoundingClientRect();
@@ -41033,6 +41222,57 @@ function navInit() {
     }
     requestAnimationFrame(loop);
   })();
+
+  // ═══ Layer B — bulb rim on cards, inputs and sheets. The ring is rigged
+  // LAZILY on first hover (one extra child span per surface, so hundreds of
+  // off-screen cards cost nothing), lights while the pointer is on the surface,
+  // and melts over ~3.5s after it leaves (pure CSS transition). ═══
+  var RIM_SEL = '.job-card-modal,.notif-card,.set-sheet,.sheet-modal,.mk-card,.pf-card,.me-wallet,.xp-ai,.auth-input,.jp-in,.pf-finput,[data-rim]';
+  document.addEventListener('pointerover', function (e) {
+    var el = e.target.closest && e.target.closest(RIM_SEL);
+    if (el === curRim) return;
+    if (curRim && curRim._rimRing) curRim._rimRing.classList.remove('on'); // → 3.5s melt
+    curRim = el || null;
+    if (!curRim) return;
+    if (!curRim._rimRing) {
+      try { if (getComputedStyle(curRim).position === 'static') curRim.style.position = 'relative'; } catch (err) {}
+      var ring = document.createElement('span'); ring.className = 'rim-ring';
+      curRim.appendChild(ring); curRim._rimRing = ring;
+      curRim.style.setProperty('--gr', Math.max(200, Math.min(460, curRim.offsetWidth * .55)) + 'px');
+    }
+    curRim._rimRing.classList.add('on');
+  }, { passive: true });
+
+  // ═══ Layer C — the opening lap: ~2.5 decelerating laps around the screen's
+  // perimeter on a surface's first open THIS SESSION (boot + each top-level
+  // tab once — POLISH §9.8), then the orb melts. Transform/opacity only. ═══
+  var lapSeen = {}, lapActive = false;
+  function viewportLap(key) {
+    if (lapSeen[key]) return;
+    lapSeen[key] = true;              // once per screen per session, even if a
+    if (lapActive) return;            // running lap visually covers this open
+    lapActive = true;
+    var t0 = performance.now(), DUR = 3600, LAPS = 2.5;
+    (function step() {
+      var k = (performance.now() - t0) / DUR;
+      if (k >= 1) { lapOrb.style.opacity = '0'; lapActive = false; return; }
+      var ease = 1 - Math.pow(1 - k, 3); // decelerating (≈ cubic-bezier(.2,.8,.2,1))
+      var w = innerWidth, h = innerHeight, per = 2 * (w + h);
+      var d = ((ease * LAPS) % 1) * per, x, y;
+      if (d < w) { x = d; y = 0; }
+      else { d -= w; if (d < h) { x = w; y = d; } else { d -= h; if (d < w) { x = w - d; y = h; } else { d -= w; x = 0; y = h - d; } } }
+      lapOrb.style.transform = 'translate3d(' + (x - 5) + 'px,' + (y - 5) + 'px,0)';
+      lapOrb.style.opacity = k > .78 ? String(Math.max(0, (1 - k) / .22)) : '1'; // melt
+      requestAnimationFrame(step);
+    })();
+  }
+  // First open of each top-level tab fires its lap (wrapping appTab keeps the
+  // routing code untouched; the seen-set caps it at once per screen per session).
+  if (typeof appTab === 'function') {
+    var _lapAppTab = appTab;
+    appTab = function (t) { try { viewportLap('tab:' + t); } catch (err) {} return _lapAppTab.apply(this, arguments); };
+  }
+  viewportLap('boot'); // boot (and the login screen it shows) laps immediately
 })();
 
 const _bootDone = (async function boot() {
