@@ -9283,7 +9283,7 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), re
 // Edit a post's text (X-style). Author-only, and only within a short window
 // after publishing. Re-indexes hashtags; stamps edited_at so the UI can show
 // an "Edited" label. Media / poll / targeting are not changed by an edit.
-const POST_EDIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const POST_EDIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes (blueprint §Home)
 app.patch('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });

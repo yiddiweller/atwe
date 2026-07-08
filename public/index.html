@@ -96,7 +96,7 @@ a{text-decoration:none;color:inherit;}
   /* Verified seal — neutral silver-white (dark) / slate (light): part of the
      grey family, deliberately never blue (blue would read as "this account
      is the primary action", which isn't what a verified badge means) */
-  --verify: #d3d5d7;
+  --verify: var(--accent); /* verified seal = blue identity (blueprint §Home) */
 
   /* Market up/down — a functional signal (positive/negative), so it borrows
      the same green/red as every other success/destructive use in the app */
@@ -1932,6 +1932,15 @@ body.feeds-immersive #statusScrim{display:none;} /* immersive shorts manage thei
   background:rgba(0,0,0,.5);
 }
 .topbar-actions{display:flex;align-items:center;gap:6px;}
+/* Home top-bar bell + compose (blueprint §Home). Outline icons, 40px round tap area. */
+.tb-home-act{width:40px;height:40px;border-radius:50%;border:none;background:none;color:var(--t1);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;
+  -webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
+@media(hover:hover){.tb-home-act:hover{background:var(--s2);}}
+.tb-home-act:active{transform:scale(.92);}
+.tb-home-act svg{width:23px;height:23px;}
+.tb-home-dot{position:absolute;top:6px;right:7px;width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid var(--bg);}
+body.light .tb-home-dot{border-color:#fff;}
 .tb-btn{
   width:32px;height:32px;
   border-radius:var(--r-sm);
@@ -2058,6 +2067,24 @@ body.light .tb-feedtab.active{color:var(--t1);}
   .topbar.tb-chat .tb-feedtab{padding:6px 0;font-size:15px;font-weight:600;color:var(--t2);}
   .topbar.tb-chat .tb-feedtab.active{font-weight:700;color:#fff;}
   body.light .topbar.tb-chat .tb-feedtab.active{color:var(--t1);}
+
+  /* ── Phase 5: two-row Home top bar (blueprint §Home) ──
+     Row 1 (52px): avatar → Profile · "Home" title · bell + compose.
+     Row 2: the feed tabs, with a short BLUE active underline sitting on the hairline. */
+  .topbar.tb-home{display:grid;grid-template-columns:1fr auto;
+    grid-template-areas:"lead actions" "tabs tabs";align-items:center;height:auto;
+    padding:calc(env(safe-area-inset-top,0px) + 2px) var(--feed-gutter) 0;}
+  .topbar.tb-home .tb-left{grid-area:lead;flex:0 1 auto;gap:11px;min-height:52px;}
+  .topbar.tb-home .topbar-actions{grid-area:actions;min-height:52px;gap:2px;}
+  .topbar.tb-home .tb-homeava{width:32px;height:32px;}
+  .topbar.tb-home .tb-homeava .user-avatar{width:32px;height:32px;font-size:13px;}
+  .topbar.tb-home .tb-pagelabel{display:block;font-size:21px;font-weight:800;letter-spacing:-.02em;}
+  /* Feed tabs become their own full-width row (no left mask/fade now). */
+  .topbar.tb-home .tb-feedtabs{grid-area:tabs;flex:0 0 auto;margin:0;gap:26px;padding:0;
+    -webkit-mask-image:none;mask-image:none;}
+  .topbar.tb-home .tb-feedtab{padding:7px 0 12px;font-size:15px;}
+  .topbar.tb-home .tb-feedtab.active::after{content:"";position:absolute;left:50%;transform:translateX(-50%);
+    bottom:0;width:22px;height:3px;border-radius:3px;background:var(--accent);}
 }
 .tb-word{height:15px;width:auto;display:block;}
 .tb-profile{display:flex;align-items:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
@@ -3287,7 +3314,7 @@ body.light{
   --accent-tint:#FFFFFF;   /* Apple's own light-mode blue buttons use white text */
   --primary:#111114;--on-primary:#FFFFFF;   /* Light-theme primary: near-black fill, white label */
   --t1:#1D1D1F;--t2:#6E6E73;--t3:#6E6E73;--t4:#aab8c2;
-  --verify:#6E6E73;
+  --verify:var(--accent);
   --rose:#007AFF;--rose-bg:rgba(0,122,255,.1);--rose-bg-2:rgba(0,122,255,.18);--rose-line:rgba(0,122,255,.4);
   --violet:#007AFF;--violet-bg:rgba(0,122,255,.12);--violet-line:rgba(0,122,255,.38);
 }
@@ -4373,25 +4400,24 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
   background:linear-gradient(to bottom, var(--bg) 0%, var(--bg) 32%, transparent 100%);
   transition:opacity .15s linear;}
 /* Compose FAB: frosted light-grey capsule (fully rounded, a touch wider) with a bold plus. */
+/* Compose FAB (blueprint §Home): a 56px SOLID WHITE disc with a dark plus,
+   bottom-right above the nav. White = the one primary action per screen. */
 .ac-fab{position:absolute;right:18px;bottom:max(18px,calc(env(safe-area-inset-bottom,0px) + 10px));
-  width:52px;height:52px;border-radius:50%;color:var(--text-black);border:1px solid rgba(255,255,255,.10);cursor:pointer;
-  background:rgba(255,255,255,.36);
-  -webkit-backdrop-filter:blur(22px) saturate(150%) brightness(1.25);backdrop-filter:blur(22px) saturate(150%) brightness(1.25);
+  width:56px;height:56px;border-radius:50%;color:var(--on-primary);border:none;cursor:pointer;
+  background:var(--primary);
   display:flex;align-items:center;justify-content:center;z-index:6;
-  box-shadow:0 10px 28px rgba(0,0,0,.45);transition:transform var(--t-fast) var(--ease),background var(--t-fast) var(--ease),bottom .34s cubic-bezier(.33,0,.2,1);
+  box-shadow:0 10px 30px rgba(0,0,0,.5);transition:transform var(--t-fast) var(--ease),filter var(--t-fast) var(--ease),bottom .34s cubic-bezier(.33,0,.2,1);
   animation:popIn .18s var(--ease);}
-.ac-fab:hover{background:rgba(255,255,255,.5);transform:translateY(-1px) scale(1.04);}
-.ac-fab:active{transform:scale(.95);}
-.ac-fab svg{width:25px;height:25px;stroke:var(--text-black);stroke-width:2.6;fill:none;stroke-linecap:round;}
+.ac-fab:hover{transform:translateY(-1px) scale(1.04);filter:brightness(.96);}
+.ac-fab:active{transform:scale(.95);filter:brightness(.92);}
+.ac-fab svg{width:26px;height:26px;stroke:var(--on-primary);stroke-width:2.6;fill:none;stroke-linecap:round;}
 /* Custom nav-bar icon inside a FAB (= for chat, target for calls): mask +
    currentColor so it matches the FAB's icon color and can't be force-darked. */
 .ac-fab .nav-fab-ic{width:25px;height:25px;background:currentColor;
   -webkit-mask:var(--ic) center/contain no-repeat;mask:var(--ic) center/contain no-repeat;}
-/* Light: a dark frosted circle with a white +. Keep it solid enough that the white
-   icon clears the ~3:1 contrast floor over the white page (.42 was ~2.6:1). */
-body.light .ac-fab{background:rgba(20,20,22,.62);color:#fff;border-color:rgba(0,0,0,.3);}
-body.light .ac-fab:hover{background:rgba(20,20,22,.72);}
-body.light .ac-fab svg{stroke:#fff;}
+/* Light: the white-primary token flips to a SOLID near-black disc with a white +
+   (var(--primary)/var(--on-primary) already resolve to #111114 / #fff here), so the
+   base rule is correct — no override needed beyond the token flip. */
 .ac-screen.hidden{display:none;}
 /* Opening a chat slides the thread in from the right (native chat-app feel). The
    .main container is overflow:hidden with a black background, so nothing else
@@ -4474,12 +4500,13 @@ body.light .ac-post{border-bottom-color:rgba(0,0,0,.07);}
 #acFeed{padding-left:0;padding-right:0;overflow-anchor:none;}
 /* The hairline divider between posts is INSET to the same gutter the content (and
    the floating nav) use, so it starts/ends exactly where the posts do. */
-#acFeed .ac-post{--post-indent:53px;margin:0;padding:14px var(--feed-gutter);border-bottom:none;position:relative;}
-#acFeed .ac-post::after{content:"";position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:1px;background:var(--b2);}
-body.light #acFeed .ac-post::after{background:rgba(0,0,0,.07);}
+#acFeed .ac-post{--post-indent:52px;margin:0;padding:12px var(--feed-gutter);border-bottom:none;position:relative;}
+/* 0.5px hairline between posts (blueprint), inset to the content gutter. */
+#acFeed .ac-post::after{content:"";position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:0.5px;background:var(--b2);}
+body.light #acFeed .ac-post::after{background:rgba(0,0,0,.08);}
 /* The ⋯ menu's dots end flush with the inset divider's right edge (the gutter). */
 #acFeed .ac-post-more{padding-right:0;margin-right:-2px;}
-#acFeed .ac-post .user-avatar{width:42px;height:42px;font-size:16px;}
+#acFeed .ac-post .user-avatar{width:40px;height:40px;font-size:15px;}
 #acFeed .ac-sg-row{padding-left:var(--feed-gutter);padding-right:var(--feed-gutter);}
 #acFeed .ac-empty{padding-left:var(--feed-gutter);padding-right:var(--feed-gutter);}
 @media(hover:hover){.ac-post:hover{background:rgba(255,255,255,.025);}}
@@ -4613,11 +4640,17 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.07);}
 .ac-postimg-wrap{position:relative;border-radius:12px;overflow:hidden;}
 .ac-postimg-wrap img{width:100%;height:100%;max-height:240px;object-fit:cover;display:block;}
 .ac-postimgs:not(.multi) .ac-postimg-wrap img{max-height:300px;width:auto;object-fit:contain;}
-.ac-post-actions{display:flex;gap:22px;margin-top:12px;align-items:center;}
-/* Subtle, evenly-spaced engagement icons — filled (match the nav bar), small + sharp. */
-.ac-post-actions svg{width:15px!important;height:15px!important;fill:currentColor!important;stroke:none!important;}
-.ac-post-actions .ax-btn img{width:15px;height:15px;}
-@media(max-width:768px){.ac-post-actions{gap:20px;}}
+/* Engagement row (blueprint §Home): five OUTLINE icons at 18px spread full-width
+   (space-between), compact counts, 44px invisible touch targets. Active states
+   FILL — like = blue, repost = blue, bookmark = blue (via the token rules below). */
+.ac-post-actions{display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:4px;}
+.ac-post-actions svg{width:18px;height:18px;}
+.ac-post-actions .ax-btn img{width:18px;height:18px;}
+/* 44px invisible hit area on every action (padding out, margin back so layout is unchanged). */
+.ac-post .ac-post-actions>*{padding:13px 8px;margin:-13px -8px;}
+.ac-post .ac-post-actions>.ac-views{cursor:default;}
+@keyframes acLikePop{0%{transform:scale(1);}38%{transform:scale(1.34);}68%{transform:scale(.92);}100%{transform:scale(1);}}
+.ac-like.pop svg{animation:acLikePop .42s cubic-bezier(.2,.8,.25,1);}
 /* Postshot preview — a rendered PNG of a post to save/share */
 #postshotView{align-items:center;justify-content:center;padding:16px;}
 .psh-card{background:var(--s1);border:none;border-radius:22px;width:min(440px,calc(100vw - 24px));max-height:calc(100dvh - 80px);display:flex;flex-direction:column;padding:14px 14px 16px;box-shadow:0 24px 70px rgba(0,0,0,.55);}
@@ -6140,7 +6173,7 @@ body.light .ac-follow-btn.following{background:transparent;color:var(--t1);}
 #acPostView{padding:0;}
 .ac-postfocus{padding:16px 16px 12px;border-bottom:1px solid var(--b1);}
 .ac-pf-head{display:flex;align-items:center;gap:11px;}
-.ac-pf-head .user-avatar{width:46px;height:46px;font-size:17px;flex-shrink:0;cursor:pointer;}
+.ac-pf-head .user-avatar{width:48px;height:48px;font-size:18px;flex-shrink:0;cursor:pointer;}
 .ac-pf-who{min-width:0;cursor:pointer;}
 .ac-pf-who .ac-post-name{font-size:15.5px;}
 .ac-pf-text{font-size:17px;line-height:1.5;color:var(--t1);margin-top:13px;white-space:pre-wrap;word-break:break-word;}
@@ -6148,10 +6181,13 @@ body.light .ac-follow-btn.following{background:transparent;color:var(--t1);}
 .ac-pf-stats{display:flex;gap:22px;margin-top:12px;padding-top:12px;border-top:1px solid var(--b1);}
 .ac-pf-stats span{font-size:13.5px;color:var(--t3);}
 .ac-pf-stats b{color:var(--t1);font-weight:700;}
-.ac-pf-actions{display:flex;gap:26px;align-items:center;margin-top:12px;padding-top:11px;border-top:1px solid var(--b1);}
-/* Post-detail engagement icons — filled to match the feed (a touch larger for the focused view). */
-.ac-pf-actions svg{width:17px!important;height:17px!important;fill:currentColor!important;stroke:none!important;}
-.ac-pf-actions .ax-btn img{width:17px;height:17px;}
+/* Post-detail action row: full-width OUTLINE icons (a touch larger), a hairline above
+   AND below (blueprint §Home post detail). */
+.ac-pf-actions{display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:9px 0;
+  border-top:1px solid var(--b1);border-bottom:1px solid var(--b1);}
+.ac-pf-actions svg{width:20px;height:20px;}
+.ac-pf-actions .ax-btn img{width:20px;height:20px;}
+.ac-pf-actions>*{padding:11px 8px;margin:-11px -8px;}
 /* Reply / comment button on a post */
 .ac-reply{display:flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;color:var(--t3);
   font-size:13px;font-weight:600;padding:8px 0;margin:-8px 0;transition:color var(--t-fast) var(--ease);}
@@ -9504,6 +9540,13 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <button class="tb-feedtab tb-feedtab-ai hidden" id="acChatMoreBtn" onclick="acOpenChatMenu(event)" aria-label="More" title="More"><svg class="tb-aidots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
       </div>
       <div class="topbar-actions">
+        <button class="tb-home-act hidden" id="tbHomeBell" onclick="openNotifications()" aria-label="Notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="tb-home-dot hidden" id="tbHomeBellDot" aria-hidden="true"></span>
+        </button>
+        <button class="tb-home-act hidden" id="tbHomeCompose" onclick="acOpenPost()" aria-label="New post">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+        </button>
         <button class="tb-iconbtn tb-ai-btn" id="tbAiBtn" onclick="acOpenAiHub()" aria-label="Atwe AI" title="Atwe AI"><img src="/logo-mark.png" alt=""/></button>
         <button class="ac-post-btn hidden" id="tbSave" onclick="acSaveContact(AC._contactOpen)">Save</button>
         <button class="tb-login" id="loginPill" onclick="openLogin()">Log in</button>
@@ -22414,7 +22457,7 @@ function syncTopbar(tab) {
   const feedTabs = document.getElementById('tbFeedTabs');
   const chatTabs = document.getElementById('tbChatTabs');
   if (!label || !search) return;
-  const labels = { home: 'Atwe', chat: 'Beam', call: 'Atwe Call', contacts: 'Contacts', ai: 'Atwe AI', search: '', profile: 'Profile' };
+  const labels = { home: 'Home', chat: 'Beam', call: 'Atwe Call', contacts: 'Contacts', ai: 'Atwe AI', search: '', profile: 'Profile' };
   // Top-level navigation always shows the main bar (a drill-in via acShow may re-hide it).
   document.querySelector('.topbar')?.classList.remove('hidden');
   const isSearch = tab === 'search';
@@ -22426,22 +22469,34 @@ function syncTopbar(tab) {
   if (feedTabs) feedTabs.classList.toggle('hidden', !isHome);
   if (chatTabs) chatTabs.classList.toggle('hidden', !isChat);
   if (!isChat) { document.getElementById('acChatMoreBtn')?.classList.add('hidden'); if (typeof acCloseChatMenu === 'function') acCloseChatMenu(); if (typeof acHideChatSearch === 'function') acHideChatSearch(); } // chat-only controls
-  label.classList.toggle('hidden', isSearch || isHome || isChat);
+  // Home now shows a real "Home" title (Search/Chat hide the label for their tab rows).
+  label.classList.toggle('hidden', isSearch || isChat);
   label.textContent = labels[tab] || 'Atwe';
   document.querySelector('.topbar')?.classList.toggle('tb-home', isHome);
   document.querySelector('.topbar')?.classList.toggle('tb-chat', isChat);
   // Search + AI also lead with the ≡ — put it at the SAME gutter position as Home/Chat.
   document.querySelector('.topbar')?.classList.toggle('tb-plain', isSearch || tab === 'ai');
-  // Home AND Search lead with the ≡ menu (X-style) — no avatar in the top bar.
-  const showAva = false;
+  // Home leads with the account avatar (→ Profile), a "Home" title, and bell + compose
+  // on the right (blueprint §Home). The avatar replaces the ≡ hamburger on Home.
+  const showAva = isHome && isAccount();
   const homeAva = document.getElementById('tbHomeAva');
   if (homeAva) {
     homeAva.classList.toggle('hidden', !showAva);
-    if (showAva) homeAva.innerHTML = acAvatarHtml(S.user?.name, S.user?.avatar);
+    if (showAva) { homeAva.innerHTML = acAvatarHtml(S.user?.name, S.user?.avatar, '', acIsBiz(S.user)); homeAva.onclick = () => appTab('profile'); homeAva.setAttribute('aria-label', 'Your profile'); }
   }
+  // Bell + compose live in the top bar on Home only.
+  document.getElementById('tbHomeBell')?.classList.toggle('hidden', !showAva);
+  document.getElementById('tbHomeCompose')?.classList.toggle('hidden', !showAva);
+  if (showAva && typeof acSyncBellDot === 'function') acSyncBellDot();
   // Reset the hamburger to its CSS default (mobile-only) unless the avatar takes its place.
   const ham = document.getElementById('sbToggle');
   if (ham) ham.style.display = showAva ? 'none' : '';
+}
+// Show the blue "new" dot on the Home bell when there are unread notifications.
+function acSyncBellDot() {
+  const dot = document.getElementById('tbHomeBellDot');
+  if (!dot) return;
+  dot.classList.toggle('hidden', !(AC && AC._notifUnread > 0));
 }
 
 /* ─── Contacts ─── */
@@ -25003,23 +25058,22 @@ function acPostCard(p) {
       ${acLocHtml(p)}
       ${(!p.locked && p.body && !AC._noCashCard) ? acCashCardHtml(acFirstCashtag(p.body)) : ''}
       <div class="ac-post-actions">
-        <span class="ac-views" aria-label="${p.views || 0} views"><svg viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5C21.27 7.61 17 4.5 12 4.5Zm0 12a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Zm0-6.7a2.2 2.2 0 1 0 0 4.4 2.2 2.2 0 0 0 0-4.4Z"/></svg><span class="ac-act-n">${acCompact(p.views || 0)}</span></span>
         <button class="ac-reply" onclick="event.stopPropagation();acOpenPostView(${p.id})" aria-label="Reply">
-          <svg viewBox="0 0 24 24"><path d="M12 2.6C6.4 2.6 1.9 6.5 1.9 11.4c0 2.6 1.28 5 3.4 6.6-.12 1.4-.62 2.86-1.6 3.95a.55.55 0 0 0 .5.92c1.98-.3 3.56-1 4.76-1.78 1 .3 2.05.46 3.14.46 5.6 0 10.1-3.9 10.1-8.8S17.6 2.6 12 2.6Z"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
           <span class="ac-act-n">${p.replies || ''}</span>
         </button>
         <button class="ac-repost ${p.reposted ? 'on' : ''}" onclick="event.stopPropagation();acRepostMenu(this,${p.id})" aria-label="Repost">
-          <svg viewBox="0 0 24 24"><path d="M6.4 6.5h9.1l-1.3-1.3a1 1 0 0 1 1.42-1.42l3 3a1 1 0 0 1 0 1.42l-3 3a1 1 0 0 1-1.42-1.42l1.3-1.28H6.4c-.5 0-.9.4-.9.9V13a1 1 0 1 1-2 0V9.9a2.9 2.9 0 0 1 2.9-2.9Zm11.2 11H8.5l1.3 1.28a1 1 0 0 1-1.42 1.42l-3-3a1 1 0 0 1 0-1.42l3-3a1 1 0 1 1 1.42 1.42L8.5 15.5h9.1c.5 0 .9-.4.9-.9V11a1 1 0 1 1 2 0v3.6a2.9 2.9 0 0 1-2.9 2.9Z"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
           <span class="ac-rp-n ac-act-n">${p.reposts || ''}</span>
         </button>
         <button class="ac-like ${p.liked ? 'on' : ''}" onclick="event.stopPropagation();acToggleLike(this,${p.id})" aria-pressed="${p.liked ? 'true' : 'false'}" aria-label="${p.liked ? 'Unlike' : 'Like'}">
-          <svg viewBox="0 0 24 24"><path d="M12 21.3l-1.45-1.32C5.4 15.3 2 12.2 2 8.4 2 5.4 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.4 22 8.4c0 3.8-3.4 6.9-8.55 11.59L12 21.3Z"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>
           <span class="ac-like-n ac-act-n">${p.likes || ''}</span>
         </button>
-        <button class="ac-bookmark ${p.bookmarked ? 'on' : ''}" onclick="event.stopPropagation();acToggleBookmark(this,${p.id})" aria-pressed="${p.bookmarked ? 'true' : 'false'}" aria-label="${p.bookmarked ? 'Remove bookmark' : 'Bookmark'}">
-          <svg viewBox="0 0 24 24"><path d="M17 2.6H7A2.4 2.4 0 0 0 4.6 5v15.6a1 1 0 0 0 1.57.82L12 17.3l5.83 4.12A1 1 0 0 0 19.4 20.6V5A2.4 2.4 0 0 0 17 2.6Z"/></svg>
+        <span class="ac-views" aria-label="${p.views || 0} views"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg><span class="ac-act-n">${acCompact(p.views || 0)}</span></span>
+        <button class="ac-bookmark ${p.bookmarked ? 'on' : ''}" onclick="event.stopPropagation();acToggleBookmark(this,${p.id})" aria-pressed="${p.bookmarked ? 'true' : 'false'}" aria-label="${p.bookmarked ? 'Remove from Collections' : 'Save to Collections'}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
         </button>
-        ${p.body ? `<button class="ax-btn" onclick="event.stopPropagation();acExplainPost(${p.id})" aria-label="Explain with Atwe AI" title="Explain with Atwe AI"><img src="/logo-mark.png" alt=""/></button>` : ''}
       </div>
     </div>
   </div>`;
@@ -25616,6 +25670,7 @@ async function acToggleLike(btn, id) {
   btn.classList.toggle('on', !wasOn);
   btn.setAttribute('aria-pressed', String(!wasOn));
   btn.setAttribute('aria-label', !wasOn ? 'Unlike' : 'Like');
+  if (!wasOn && !document.body.classList.contains('reduce-motion')) { btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop'); setTimeout(() => btn.classList.remove('pop'), 450); } // small blue pulse on like
   nEl.textContent = (wasOn ? cur - 1 : cur + 1) > 0 ? (wasOn ? cur - 1 : cur + 1) : '';
   try {
     const r = await API.req(wasOn ? 'DELETE' : 'POST', '/api/social/posts/' + id + '/like');

@@ -381,4 +381,21 @@ The SPA has few *URLs*; most navigation is in-app. Complete inventory from `hand
 
 *Phase 4 refinement (2026-07-08, by Yiddi): the intro sheet is now a **floating rounded card**, not a bottom-anchored sheet — grab handle removed entirely; all four corners rounded equally at **30px** (matching the pill CTA's roundness); inset **16px** left/right/bottom (+ safe-area) so it floats above the dimmed backdrop. The padding rule is scoped `.overlay.intro-overlay` so it wins over the base `.overlay{padding:20px}`. Shared style — all four sheets (and any future one) render identically. Everything else unchanged (glyph+halo, title/subtitle, 3 benefit rows, white CTA, sheetUp appear, bulb-rim lap, both themes, reduced-motion, RTL, a11y). Re-verified: 30px×4 corners, 16px×3 insets, no handle, 0 console errors, dark + light. SW → v957.*
 
+## Phase 5 — Home world (in progress, delivered in tested waves)
+
+Overrides of earlier locked decisions, per the owner's Phase-5 blueprint (all explicitly restated by the owner): **verified seal → BLUE** (supersedes §9.5's neutral-silver), **stories rail returns to Home** (was moved to Feeds), **swipe between feeds** re-enabled (was removed), **Home leads with the account avatar + a "Home" title + bell + compose** (was ≡-led).
+
+*Wave 1 (2026-07-08, published): the visible chrome + post-card refinements.*
+- **Two-row Home top bar** (`.topbar.tb-home` → CSS grid, mobile): row 1 = 32px avatar → Profile · "Home" title · bell (`#tbHomeBell` + blue `#tbHomeBellDot` fed by `AC._notifUnread` via `acSyncBellDot`) · compose (`#tbHomeCompose`); row 2 = the feed tabs. Driven by `syncTopbar('home')` (showAva = home + signed-in; hamburger hidden on Home). The top bar was already static on scroll (only the nav + FAB move), so "never hides" holds.
+- **Feed tabs**: order unchanged (For You · Following · Circles · Collections); active tab now gets a **short blue underline** (`.tb-home .tb-feedtab.active::after`, 22px, `--accent`) on the tabs-row hairline; inactive stay `--t2` grey; no pills on mobile.
+- **Post card**: feed padding 14→**12v**/16h, avatar 42→**40**, divider **0.5px** inset hairline.
+- **Engagement row**: killed the `!important` 15px-filled override → **five 18px OUTLINE Feather icons** (reply · repost · like · views · bookmark) spread **full-width** (`space-between`), 44px invisible hit targets, compact counts; **like fills BLUE + a `acLikePop` pulse** (reduced-motion-aware); repost/bookmark already blue-on-active via tokens; the extra AI-explain button removed from the row.
+- **Verified seal → BLUE**: `--verify` now `var(--accent)` (both themes).
+- **Compose FAB**: 52→**56px**, translucent-frosted → **solid white** (`var(--primary)`/`var(--on-primary)`, so it flips to a near-black disc + white plus in Light).
+- **Post detail**: author avatar 46→**48**; action row → full-width outline icons with a hairline above **and** below.
+- **Edit window**: server `POST_EDIT_WINDOW_MS` 60min → **15min**.
+- Verified in a real browser (mock-post render + forced signed-in Home bar) dark + light, 0 console errors; intro sheets still gate once-only. SW → v958.
+
+*Still to land (Wave 2+, not yet built): stories rail on Home (72px row / 56px avatars / 2px blue ring), Circles hub rebuild (search + My Circles/Browse + Join→Joined + pin), pinned-circle feed tab, new-posts blue pill, product-tag price chip (+ `posts.product_id`), video duration chip, composer full-screen → floating-card sheet, "Copy link" in post menus, empty-Following glyph + white CTA, pull-to-refresh light-sweep, swipe-between-feeds, feed-tab desktop de-pill, full RTL/SR sweep.*
+
 *Phase 3 adjustment (2026-07-08, by Yiddi): **Layer C — the opening lap — removed entirely** (the viewport lap orb, its per-session seen registry, the appTab wrapper that fired it, AND the older engine boot-lap on `.spin` elements). No light plays on its own at boot, login, or a tab's first open; every remaining layer is pointer- or AI-driven only (pool, rim, flares, comets — all verified intact after removal). This supersedes §9.8's opening-lap policy.*
