@@ -3519,7 +3519,7 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .msg-ghead .user-avatar{width:26px;height:26px;font-size:11px;flex-shrink:0;}
 .msg-gh-name{font-size:13px;font-weight:700;color:var(--t1);line-height:1;}
 .msg-gh-user{font-size:12px;color:var(--t3);line-height:1;}
-.msg-bubble{max-width:75%;padding:10px 15px;border-radius:18px;font-size:15px;line-height:1.4;
+.msg-bubble{max-width:75%;padding:10px 15px;border-radius:22px;font-size:15px;line-height:1.4;
   white-space:pre-wrap;word-break:break-word;
   /* Long-press opens our own options menu — suppress iOS's native text-selection
      callout ("Copy / Look Up / Translate") and the blue selection handles. */
@@ -3527,17 +3527,6 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
   transition:background-color .3s ease;}
 .msg-row.team .msg-bubble{background:var(--s3);color:var(--t1);}
 .msg-row.me .msg-bubble{background:var(--accent);color:var(--accent-tint);}
-/* Persistent micro-timestamp + delivery ticks inside a bubble (blueprint §Beam).
-   Floats to the bottom-right; text wraps around it (WhatsApp-style). */
-.msg-tickline{float:right;display:inline-flex;align-items:center;gap:3px;margin:5px -2px -2px 10px;
-  font-size:10px;line-height:1;color:var(--t3);user-select:none;white-space:nowrap;pointer-events:none;}
-.msg-row.me .msg-tickline{color:var(--accent-tint);opacity:.75;}
-.msg-row.me .msg-bubble.msg-unseen .msg-tickline{color:rgba(0,0,0,.45);opacity:1;}
-.mtk{width:15px;height:10px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
-.mtk2{width:18px;}
-.mtks{display:inline-flex;align-items:center;}
-.mtks.read .mtk{stroke:#8FE0FF;}   /* read = bright blue-tint ticks on the blue bubble */
-body.rtl .msg-tickline{float:left;margin:5px 10px -2px -2px;}
 /* Two-state sent bubble (WhatsApp/iMessage read semantics): until the recipient
    has actually SEEN it (read_at), the bubble stays the light blue tint with dark
    text. The moment they read it, it smoothly fades to the solid accent blue with
@@ -3578,14 +3567,10 @@ body.rtl .msg-tickline{float:left;margin:5px 10px -2px -2px;}
      • bubble has one below (run continues)     → :not(.tail) → bottom corner flat
    So the run's outer top, outer bottom, and the off-side corners stay round —
    e.g. a received tail keeps its rounded bottom-left as the anchor. */
-.msg-row.team:not(.gap) .msg-bubble{border-top-left-radius:6px;}
-.msg-row.team:not(.tail) .msg-bubble{border-bottom-left-radius:6px;}
-.msg-row.me:not(.gap) .msg-bubble{border-top-right-radius:6px;}
-.msg-row.me:not(.tail) .msg-bubble{border-bottom-right-radius:6px;}
-/* The run's LAST bubble (.tail, incl. a lone .gap.tail) carries a small 4px TAIL
-   corner on the sender side (blueprint §Beam — radius 18 + a 4pt tail corner). */
-.msg-row.team.tail .msg-bubble{border-bottom-left-radius:4px;}
-.msg-row.me.tail .msg-bubble{border-bottom-right-radius:4px;}
+.msg-row.team:not(.gap) .msg-bubble{border-top-left-radius:12px;}
+.msg-row.team:not(.tail) .msg-bubble{border-bottom-left-radius:12px;}
+.msg-row.me:not(.gap) .msg-bubble{border-top-right-radius:12px;}
+.msg-row.me:not(.tail) .msg-bubble{border-bottom-right-radius:12px;}
 .msg-bubble.photo{padding:2px;background:transparent;}
 /* Grouped photos/videos: flatten the IMAGE's connecting corner too (concentric
    with the bubble's 7px corner) so consecutive pictures read as connected. */
@@ -24539,7 +24524,9 @@ function acRowSwipeCommit(el, dir) {
   el.style.maxHeight = el.getBoundingClientRect().height + 'px';
   requestAnimationFrame(() => { el.style.maxHeight = '0px'; el.style.opacity = '0'; });
   if (AC._openSwipeRow === el) AC._openSwipeRow = null;
-  if (dir < 0) { isGroup ? acChatLeave(id, true) : acChatDelete(id, true); }
+  // Left-swipe ARCHIVES (recoverable), it never deletes — deleting/leaving stays in
+  // the row's long-press menu. Archived chats live in the "Archived" view.
+  if (dir < 0) { acToggleArchive(isGroup ? 'group' : 'dm', id); }
   else { const unread = el.classList.contains('unread'); (unread ? acChatMarkRead : acChatMarkUnread)(isGroup ? 'group' : 'dm', id); }
 }
 function acRowSwipeEnsureBubble(el, dir) {
@@ -24553,9 +24540,9 @@ function acRowSwipeEnsureBubble(el, dir) {
   bub.dataset.kind = kind;
   bub.style.width = '0px';
   if (dir < 0) {
-    bub.innerHTML = _CRA_IC.trash;
-    bub.setAttribute('aria-label', isGroup ? 'Leave' : 'Delete');
-    bub.onclick = (e) => { e.stopPropagation(); acRowSwipeClose(el); isGroup ? acChatLeave(id) : acChatDelete(id); };
+    bub.innerHTML = _CRA_IC.arch;
+    bub.setAttribute('aria-label', 'Archive');
+    bub.onclick = (e) => { e.stopPropagation(); acRowSwipeClose(el); acToggleArchive(isGroup ? 'group' : 'dm', id); };
   } else {
     const unread = el.classList.contains('unread');
     bub.innerHTML = unread ? _CRA_IC.read : _CRA_IC.unread;
@@ -39114,17 +39101,6 @@ function acChatPrivacyNotice() {
 function acShowChatPrivacy() {
   showOverlay('chatPrivacyView');
 }
-// A persistent micro-timestamp + delivery ticks inside each bubble (blueprint §Beam).
-function _msgClock(ts) { try { return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; } }
-const _TICK1 = '<svg class="mtk" viewBox="0 0 16 11"><path d="M2 6 5 9 10.5 2.5"/></svg>';
-const _TICK2 = '<svg class="mtk mtk2" viewBox="0 0 20 11"><path d="M2 6 5 9 10.5 2.5"/><path d="M7.5 9 13 2.5"/></svg>';
-// Ticks only on MY messages: 1 check = sent (still pending), 2 = delivered, 2 blue-tint = read.
-function acMsgTicks(m) {
-  if (!m || !m.mine || m.failed) return '';
-  if (m.read_at) return `<span class="mtks read" aria-label="Read">${_TICK2}</span>`;
-  const pending = m.pending || typeof m.id === 'string'; // optimistic temp bubble not yet server-confirmed
-  return pending ? `<span class="mtks" aria-label="Sent">${_TICK1}</span>` : `<span class="mtks" aria-label="Delivered">${_TICK2}</span>`;
-}
 function acRenderThread() {
   const el = document.getElementById('acThread');
   acApplyWallpaper(); // per-conversation wallpaper
@@ -39247,13 +39223,9 @@ function acRenderThread() {
       ? `<span class="msg-secret"${m.expiresAt ? ` data-exp="${escHtml(m.expiresAt)}"` : ''}><svg viewBox="0 0 24 24"><path d="M12 2c1 4 4 5 4 9a4 4 0 0 1-8 0c0-1.5 .7-2.5 .7-2.5S9 11 10 11s1-3 2-9z"/></svg>${m.expiresAt ? '<span class="ms-cd">' + acSecretLeft(m.expiresAt) + '</span>' : 'Secret'}</span>`
       : '';
     if (m.secret && !isDeleted && !concealed) bcls += ' msg-secret-bub';
-    // Persistent micro-timestamp + delivery ticks (text/caption bubbles only —
-    // media/voice/rich-card bubbles keep the swipe-revealed time).
-    const tickline = (!isDeleted && !concealed && !emojiN && !!m.body && !hasMeta && !isVoice)
-      ? `<span class="msg-tickline">${_msgClock(m.created_at)}${acMsgTicks(m)}</span>` : '';
     const inner = hasReply
-      ? `${fwdLabel}${quoteHtml}<div class="mq-body">${metaHtml}${img}${txt}${editedHtml}${secretHtml}${tickline}</div>`
-      : `${fwdLabel}${quoteHtml}${metaHtml}${img}${txt}${editedHtml}${secretHtml}${tickline}`;
+      ? `${fwdLabel}${quoteHtml}<div class="mq-body">${metaHtml}${img}${txt}${editedHtml}${secretHtml}</div>`
+      : `${fwdLabel}${quoteHtml}${metaHtml}${img}${txt}${editedHtml}${secretHtml}`;
     // Select mode: the whole row toggles selection (and a checkbox shows); the
     // bubble's own tap (reveal hidden) is suppressed.
     const selMode = !!AC._selectMode;
