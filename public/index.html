@@ -3739,7 +3739,7 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:12px;}
 .msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:12px;}
 .msg-row.team:not(.tail) .msg-bubble.voice{border-bottom-left-radius:12px;}
-.msg-voice{display:flex;align-items:center;gap:11px;width:280px;max-width:100%;padding:10px 20px 10px 10px;background:transparent;}
+.msg-voice{display:flex;align-items:center;gap:13px;width:280px;max-width:100%;padding:10px 20px 10px 10px;background:transparent;}
 .msg-row.team .msg-voice{flex-direction:row-reverse;padding:10px 10px 10px 20px;}
 .msg-row.team .vn-time{text-align:left;}
 .vn-audio{display:none;}
@@ -3748,10 +3748,11 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .vn-ava .user-avatar{width:34px;height:34px;font-size:14px;}
 .msg-voice.started .vn-ava{display:none;}
 .vn-play{width:34px;height:34px;flex-shrink:0;border:none;border-radius:50%;cursor:pointer;padding:0;margin:0;
-  display:flex;align-items:center;justify-content:center;color:#fff;background:rgba(255,255,255,.18);
+  position:relative;z-index:2; /* sits clearly above the waveform, never blends into the bars */
+  display:flex;align-items:center;justify-content:center;color:#fff;background:rgba(255,255,255,.2);
   -webkit-tap-highlight-color:transparent;transition:transform .3s cubic-bezier(.34,1.56,.64,1),background var(--t-fast) var(--ease);}
-.msg-row.me .vn-play{background:rgba(255,255,255,.24);}
-.msg-row.team .vn-play{color:var(--t2);background:var(--s4);}
+.msg-row.me .vn-play{background:rgba(255,255,255,.34);}
+.msg-row.team .vn-play{color:var(--t1);background:rgba(255,255,255,.14);} /* distinct disc, NOT the same grey as the dim bars */
 .msg-row.me .msg-bubble.msg-unseen .vn-play{background:rgba(29,29,31,.16);color:var(--text-black);}
 .vn-play:active{transform:scale(.82);transition:transform .08s ease;}
 .vn-play svg{width:17px;height:17px;fill:currentColor;stroke:none;}
@@ -3761,6 +3762,7 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 /* Speed control: same circular size as the play button; hidden until the note
    starts playing, then it fades in to the left of play/pause. */
 .vn-speed{display:none;flex-shrink:0;width:34px;height:34px;padding:0;border:none;border-radius:50%;cursor:pointer;
+  position:relative;z-index:2;
   align-items:center;justify-content:center;
   font-family:inherit;font-size:12px;font-weight:700;color:inherit;background:rgba(255,255,255,.16);
   -webkit-tap-highlight-color:transparent;transition:transform .3s cubic-bezier(.34,1.56,.64,1),background var(--t-fast) var(--ease);font-variant-numeric:tabular-nums;}
@@ -3777,9 +3779,9 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
    The base row is dim; the coloured "fill" row is revealed left-to-right by a
    clip-path driven from playback progress (replaces the old flat line + knob —
    the rounded bubble, avatar, play button and duration are unchanged). */
-.vn-wave{position:relative;flex:1;min-width:0;height:26px;}
+.vn-wave{position:relative;flex:1;min-width:0;height:20px;}
 .vn-wave-row{position:absolute;inset:0;display:flex;align-items:center;gap:2px;}
-.vn-wave-row i{flex:1;min-width:2px;border-radius:2px;display:block;height:35%;}
+.vn-wave-row i{flex:1;min-width:2px;border-radius:2px;display:block;height:32%;}
 .vn-wave-row.base i{background:rgba(255,255,255,.30);}
 .msg-row.me .vn-wave-row.base i{background:rgba(255,255,255,.34);}
 .msg-row.team .vn-wave-row.base i{background:var(--s4);}
@@ -3963,11 +3965,17 @@ body.reduce-motion .mc-loc-pin.pulse{animation:none;}
 .mk-submit:disabled{opacity:.38;cursor:default;}
 
 /* Voice-note recording bar */
-.ac-rec{display:flex;align-items:center;gap:12px;padding:10px 16px max(10px,env(safe-area-inset-bottom));
-  border-top:1px solid var(--b1);flex-shrink:0;position:relative;
+/* The recording bar IS the input pill (same frosted rounded pill as .msg-inbox,
+   same footprint as .msg-compose) — recording stays "in the text bar", it doesn't
+   swap to a separate full-width black bar. */
+.ac-rec{display:flex;align-items:center;gap:10px;flex-shrink:0;position:relative;
+  margin:8px 20px max(10px,env(safe-area-inset-bottom));padding:6px 14px;
+  background:rgba(26,26,28,.72);backdrop-filter:blur(16px) saturate(1.7);-webkit-backdrop-filter:blur(16px) saturate(1.7);
+  border:1px solid rgba(255,255,255,.08);border-radius:24px;
   /* Press-and-hold the mic must NOT trigger iOS text selection of the "slide to
      cancel" label (the magnifier loupe + blue handles). */
   -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+body.light .ac-rec{background:rgba(255,255,255,.6);}
 .ac-rec.hidden{display:none;}
 .ac-rec-del,.ac-rec-send{width:38px;height:38px;border-radius:50%;border:none;cursor:pointer;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;transition:filter var(--t-fast) var(--ease);}
@@ -3978,11 +3986,11 @@ body.reduce-motion .mc-loc-pin.pulse{animation:none;}
 .ac-rec-dot{width:11px;height:11px;border-radius:50%;background:var(--red);flex-shrink:0;animation:recPulse 1.1s var(--ease) infinite;}
 @keyframes recPulse{0%,100%{opacity:1;}50%{opacity:.25;}}
 .ac-rec-time{font-size:14px;font-weight:600;color:var(--t1);font-variant-numeric:tabular-nums;min-width:42px;}
-.ac-rec-bars{flex:1;display:flex;align-items:center;gap:3px;height:24px;overflow:hidden;}
-.ac-rec-bars span{flex:1;background:var(--accent);border-radius:2px;opacity:.55;animation:recBar 1s var(--ease) infinite;}
-.ac-rec-bars span:nth-child(odd){animation-duration:.8s;}
-.ac-rec-bars span:nth-child(3n){animation-duration:1.3s;}
-@keyframes recBar{0%,100%{height:18%;}50%{height:92%;}}
+/* Live recording waveform: small bars scrolling right-to-left, each one's height
+   is the real mic loudness at that moment (loud = taller, quiet = shorter) — driven
+   by a Web-Audio analyser in acVoiceStart, NOT a fake CSS animation. */
+.ac-rec-bars{flex:1;display:flex;align-items:center;justify-content:flex-start;gap:2px;height:20px;overflow:hidden;}
+.ac-rec-bars span{flex:1;min-width:2px;background:var(--accent);border-radius:2px;height:10%;transition:height .07s linear;}
 /* Hold-to-record: the mic owns the pointer gesture (no scroll), and the bar
    shows a "slide to cancel" hint that follows the finger; the trash grows and
    the hint fades as you approach the cancel threshold. */
@@ -13534,7 +13542,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         </button>
         <span class="ac-rec-dot"></span>
         <span class="ac-rec-time" id="acRecTime">0:00</span>
-        <div class="ac-rec-bars"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="ac-rec-bars" id="acRecBars"></div>
         <span class="ac-rec-slide" id="acRecSlide"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>slide to cancel</span>
         <button class="ac-rec-send" id="acRecSend" onclick="acVoiceStop()" aria-label="Stop & attach">
           <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
@@ -40438,6 +40446,39 @@ function acAutosize() {
 
 /* ── Voice notes (MediaRecorder) ── */
 let acRec, acRecChunks = [], acRecTimer = null, acRecStart = 0, acRecCancel = false, _micAutoSend = false;
+// ── Live recording waveform (real mic loudness, scrolling right-to-left) ──
+let _recAC = null, _recAnalyser = null, _recRaf = 0, _recLevels = null, _recTD = null, _recBarEls = null;
+function _recWaveStart(stream) {
+  try {
+    _recAC = new (window.AudioContext || window.webkitAudioContext)();
+    if (_recAC.state === 'suspended') _recAC.resume();
+    const src = _recAC.createMediaStreamSource(stream);
+    _recAnalyser = _recAC.createAnalyser();
+    _recAnalyser.fftSize = 512; _recAnalyser.smoothingTimeConstant = 0.55;
+    src.connect(_recAnalyser);
+    _recTD = new Uint8Array(_recAnalyser.fftSize);
+  } catch (e) { _recAnalyser = null; return; }
+  const bars = document.getElementById('acRecBars'); if (!bars) return;
+  const N = 40;
+  bars.innerHTML = ''; _recBarEls = [];
+  for (let i = 0; i < N; i++) { const s = document.createElement('span'); bars.appendChild(s); _recBarEls.push(s); }
+  _recLevels = new Array(N).fill(0.05);
+  const draw = () => {
+    if (!_recAnalyser) return;
+    _recAnalyser.getByteTimeDomainData(_recTD);
+    let sum = 0; for (let i = 0; i < _recTD.length; i++) { const v = (_recTD[i] - 128) / 128; sum += v * v; }
+    const amp = Math.min(1, Math.sqrt(sum / _recTD.length) * 3.4); // RMS loudness, scaled for speech
+    _recLevels.push(amp); if (_recLevels.length > N) _recLevels.shift();
+    for (let i = 0; i < N; i++) _recBarEls[i].style.height = Math.min(96, 8 + Math.round(_recLevels[i] * 84)) + '%';
+    _recRaf = requestAnimationFrame(draw);
+  };
+  _recRaf = requestAnimationFrame(draw);
+}
+function _recWaveStop() {
+  if (_recRaf) cancelAnimationFrame(_recRaf); _recRaf = 0;
+  _recAnalyser = null; _recBarEls = null;
+  if (_recAC) { try { _recAC.close(); } catch (e) {} _recAC = null; }
+}
 async function acVoiceStart(holdMode) {
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
     showNotif('Voice notes aren’t supported in this browser.'); return;
@@ -40471,6 +40512,7 @@ async function acVoiceStart(holdMode) {
   rec.classList.toggle('holding', _micHold);
   rec.classList.remove('hidden');
   document.getElementById('acCompose').style.display = 'none';
+  _recWaveStart(stream); // live mic-loudness waveform
   acVoiceTick();
   // If they let go after a real hold before the mic was ready, send straight away.
   if (_micPending === 'send') { _micPending = null; _micAutoSend = true; acVoiceStop(); }
@@ -40496,6 +40538,7 @@ function acVoiceCancel() {
 }
 function acVoiceFinalize() {
   AC._recording = false;
+  _recWaveStop();
   const rec = document.getElementById('acRec');
   rec.classList.add('hidden'); rec.classList.remove('holding');
   document.getElementById('acCompose').style.display = '';
@@ -40514,6 +40557,7 @@ function acVoiceFinalize() {
 }
 function acStopMic() {
   // Abort any in-progress recording when leaving a thread.
+  _recWaveStop();
   _micEnd();
   clearTimeout(acRecTimer);
   if (acRec && acRec.state !== 'inactive') { acRecCancel = true; try { acRec.stop(); } catch {} }
@@ -40640,8 +40684,8 @@ function _vnWaveHtml(mid) {
   const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return (seed % 1000) / 1000; };
   let out = '';
   for (let i = 0; i < 34; i++) {
-    const h = 30 + Math.round(66 * Math.abs(0.65 * Math.sin(i * 0.7) + 0.55 * (rnd() - 0.5)));
-    out += `<i style="height:${Math.max(22, Math.min(100, h))}%"></i>`;
+    const h = 26 + Math.round(56 * Math.abs(0.65 * Math.sin(i * 0.7) + 0.55 * (rnd() - 0.5)));
+    out += `<i style="height:${Math.max(20, Math.min(88, h))}%"></i>`;
   }
   return out;
 }
@@ -40661,6 +40705,25 @@ function _bindVoiceNotes(el) {
     }
     const realDur = () => (isFinite(audio.duration) && audio.duration > 0) ? audio.duration : 0;
     const paintTime = () => { timeEl.textContent = _vnFmt(audio.paused ? (realDur() || audio.currentTime) : audio.currentTime); };
+    // Smoothness: instead of stepping the clip-path every animation frame (which
+    // repaints 34 bars and looks choppy), we let the browser animate the reveal with
+    // ONE long GPU-driven clip-path transition over the remaining play time. rAF only
+    // updates the little time counter. glide() (re)starts it from the current spot;
+    // freeze() stops it dead at wherever it visually is right now.
+    const glide = () => {
+      if (!fill) return; const d = realDur(); if (!d) return;
+      const remaining = Math.max(0.02, (d - audio.currentTime) / (audio.playbackRate || 1));
+      fill.style.transition = 'none'; setP(Math.min(1, audio.currentTime / d)); // pin to current
+      void fill.offsetWidth;                                                     // commit that start
+      fill.style.transition = 'clip-path ' + remaining.toFixed(3) + 's linear';
+      setP(1);                                                                   // …then glide to the end
+    };
+    const freeze = () => {
+      if (!fill) return;
+      const cs = getComputedStyle(fill).clipPath; // current interpolated position
+      fill.style.transition = 'none'; fill.style.clipPath = cs;
+    };
+    const snap = (p) => { if (fill) { fill.style.transition = 'none'; setP(p); } };
     // WebM from MediaRecorder reports duration:Infinity until a seek forces it.
     // Resolve it via a one-off seek (listening on durationchange, never on the
     // playback timeupdate) and always restore the position to 0 — so a press of
@@ -40685,37 +40748,37 @@ function _bindVoiceNotes(el) {
     // never reached the end before resetting.) timeupdate only covers the
     // paused case (e.g. a scrub).
     let _raf = 0;
-    const paintBar = () => {
-      const d = realDur();
-      if (d) {
-        const p = Math.min(1, audio.currentTime / d);
-        setP(p);
-        timeEl.textContent = _vnFmt(audio.currentTime);
-      }
-      if (!audio.paused && !audio.ended) _raf = requestAnimationFrame(paintBar);
+    const tickTime = () => {                        // rAF: ONLY the tiny time counter (cheap)
+      if (realDur()) timeEl.textContent = _vnFmt(audio.currentTime);
+      if (!audio.paused && !audio.ended) _raf = requestAnimationFrame(tickTime);
     };
     audio.addEventListener('timeupdate', () => {
-      if (!audio.paused) return;                    // rAF drives playback
+      if (!audio.paused) return;                    // while playing the CSS transition drives it
       const d = realDur(); if (!d) return;
-      setP(Math.min(1, audio.currentTime / d));
+      snap(Math.min(1, audio.currentTime / d));     // a paused scrub snaps instantly
     });
+    // A mid-play speed change re-times the glide so it still lands exactly on the end.
+    audio.addEventListener('ratechange', () => { if (!audio.paused) glide(); });
     // `started` reveals the speed control (WhatsApp-style: only once you play);
     // it stays through a pause so you can change speed, and clears when it ends.
     audio.addEventListener('play', () => {
       vn.classList.add('playing', 'started');
-      if (fill) fill.style.transition = 'none'; // rAF drives the clip
-      cancelAnimationFrame(_raf); _raf = requestAnimationFrame(paintBar);
+      glide();                                      // one smooth GPU transition to the end
+      cancelAnimationFrame(_raf); _raf = requestAnimationFrame(tickTime);
     });
-    audio.addEventListener('pause', () => { vn.classList.remove('playing'); cancelAnimationFrame(_raf); });
+    audio.addEventListener('pause', () => { vn.classList.remove('playing'); cancelAnimationFrame(_raf); freeze(); });
     audio.addEventListener('ended', () => {
       cancelAnimationFrame(_raf);
       vn.classList.remove('playing', 'started');
-      // 1) Make sure the waveform is fully coloured at the very end.
-      if (fill) fill.style.transition = 'none';
+      // 1) Always finish colouring the waveform to the very end — SMOOTHLY. A recorded
+      //    note's reported duration often overruns the real audio, so the glide can be
+      //    partway when playback actually ends; this catches it up to 100% cleanly
+      //    instead of freezing mid-bar.
+      if (fill) { fill.style.transition = 'clip-path .18s linear'; }
       setP(1);
       // 2) Schedule the bell now (synchronous → iOS-safe), timed to land on the reset.
       _vnChime(0.38);
-      // 3) After a brief beat at the end, snap back to the start, then hand off.
+      // 3) Hold at full a beat so the fully-blue bars are seen, then reset + hand off.
       setTimeout(() => {
         if (fill) fill.style.transition = 'clip-path .18s ease-out';
         setP(0);
@@ -40727,7 +40790,7 @@ function _bindVoiceNotes(el) {
           const na = document.querySelector(`#acThread .msg-bubble[data-mid="${nxt.id}"] .vn-audio`);
           if (na) { if (_vnRate[nxt.id]) na.playbackRate = _vnRate[nxt.id]; try { na.currentTime = 0; } catch (_) {} na.play().catch(() => {}); }
         }
-      }, 240);
+      }, 480); // hold the fully-blue waveform a beat before resetting / auto-advancing
     });
   });
 }
