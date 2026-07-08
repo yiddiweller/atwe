@@ -923,6 +923,7 @@ function publicUser(row) {
     dmConnectionsOnly: !!row.dm_connections_only,
     otwVisibility: ['recruiters', 'everyone'].includes(row.otw_visibility) ? row.otw_visibility : 'off',
     openToWork: row.otw_visibility === 'everyone', // drives the public #OpenToWork ring
+    profileCta: ['book', 'order', 'message'].includes(row.profile_cta) ? row.profile_cta : null,
     hasPassword: row.has_password !== false, // false only for Google-only accounts
     onboarded: row.onboarded === undefined ? true : !!row.onboarded, // missing → don't force onboarding
     intent: row.intent || null,
@@ -3073,7 +3074,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, business_hours, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, business_hours, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, profile_cta FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -3469,6 +3470,12 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
   if ('awayEnabled' in req.body) { vals.push(req.body.awayEnabled === true); fields.push(`away_enabled = $${vals.length}`); }
   if ('awayMessage' in req.body) { vals.push((req.body.awayMessage || '').trim().slice(0, 500) || null); fields.push(`away_message = $${vals.length}`); }
   if ('awaySchedule' in req.body) { vals.push(req.body.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always'); fields.push(`away_schedule = $${vals.length}`); }
+  // Business primary CTA pill (book / order / message). Anything else clears it.
+  if ('profileCta' in req.body) {
+    const c = req.body.profileCta;
+    vals.push(['book', 'order', 'message'].includes(c) ? c : null);
+    fields.push(`profile_cta = $${vals.length}`);
+  }
   // Geo coordinates for "near me" (set both, or clear both with null). Validated ranges.
   if ('lat' in req.body && 'lng' in req.body) {
     const lat = req.body.lat === null ? null : Number(req.body.lat);
@@ -3512,7 +3519,7 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
     const prev = (await db.query('SELECT name, username, headline, share_profile_updates FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
     const { rows } = await db.query(
       `UPDATE users SET ${fields.join(', ')} WHERE id = $${vals.length}
-       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, has_password`,
+       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, has_password, profile_cta`,
       vals
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -7698,7 +7705,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query(`SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, pinned_post_id, sub_price_cents, sub_blurb, created_at, deactivated, connections_visible, business_hours, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, (SELECT username FROM users bu WHERE bu.id = users.aff_business_id) AS aff_business_username FROM users WHERE lower(username) = lower($1)`, [handle]);
+    const u = await db.query(`SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, profile_cta, pinned_post_id, sub_price_cents, sub_blurb, created_at, deactivated, connections_visible, business_hours, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, (SELECT username FROM users bu WHERE bu.id = users.aff_business_id) AS aff_business_username FROM users WHERE lower(username) = lower($1)`, [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     // A hibernated (deactivated) account's profile is hidden from everyone but the owner.
@@ -7825,7 +7832,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     }
     res.json({
       businessJobs, businessPeople, mutualConnections, reviewSummary, trustScore, followedBy, followedByCount,
-      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone', joinedAt: t.created_at || null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null, affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: t.aff_business_username || null } : null },
+      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone', profileCta: ['book', 'order', 'message'].includes(t.profile_cta) ? t.profile_cta : null, joinedAt: t.created_at || null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null, affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: t.aff_business_username || null } : null },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       education: edu.rows.map(mapEducation),
       certifications: certs.rows.map(mapCertification),
@@ -7848,6 +7855,36 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       isMe: t.id === req.user.id,
       posts: posts.rows.map(mapPost),
     });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// A user's public Likes (X-style "Likes" profile tab), lazy-loaded on tab open so
+// the initial profile payload stays lean. Top-level, main-feed, publicly-visible
+// posts the user has liked, newest-like first; blocks-aware in both directions and
+// excludes posts by anyone the viewer blocks. mapPost still ships locked
+// placeholders for any sub-only/PPV post the viewer isn't entitled to.
+app.get('/api/social/likes/:username', auth.requireAuth, async (req, res) => {
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const handle = (req.params.username || '').replace(/^@/, '');
+    const u = await db.query('SELECT id, deactivated FROM users WHERE lower(username) = lower($1)', [handle]);
+    const t = u.rows[0];
+    if (!t) return res.status(404).json({ error: 'User not found.' });
+    if (t.deactivated && t.id !== req.user.id) return res.status(404).json({ error: 'User not found.' });
+    if (t.id !== req.user.id && await blockedEither(req.user.id, t.id)) return res.status(404).json({ error: 'User not found.' });
+    const q = await db.query(
+      POSTS_SELECT +
+      `JOIN post_likes pl ON pl.post_id = p.id AND pl.user_id = $2
+       WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()
+         AND p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1
+                               UNION SELECT blocker_id FROM blocks WHERE blocked_id = $1)
+       ORDER BY pl.created_at DESC LIMIT 50`,
+      [req.user.id, t.id]
+    );
+    res.json({ likes: q.rows.map(mapPost) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });

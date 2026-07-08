@@ -582,7 +582,14 @@ overlapping avatar, action buttons, name/handle/headline/bio, a meta row.
 > **Both profile action rows are deliberately minimal — Follow + Message + ⋯
 > (others), Edit profile + ⋯ (own).** The Message button (a grey `.ac-icon-btn`
 > chat glyph → `acProfileMessage()` → `acOpenChat(AC._profileUser.id)`) opens a
-> Beam DM straight from the header, matching the Profile-world blueprint. Everything
+> Beam DM straight from the header, matching the Profile-world blueprint. **Business
+> accounts also show ONE configurable primary CTA pill** below the identity block
+> (`acProfileCtaPill`, a full-width WHITE `.ac-prof-cta`): the owner picks
+> **Book · Order · Message** (or none) via a `#pfCta` select in the profile editor →
+> `users.profile_cta` (whitelisted in `PUT /api/auth/profile`, exposed on `publicUser`
+> + the social-profile payload as `profileCta`); the pill runs `acBookOpen` /
+> `acOpenStorefront` / `acProfileMessage`. Only shown to visitors on a business
+> profile that has chosen one. Everything
 > else lives in the **⋯ menu**. *Others'*
 > menu (`acOpenUserActions` → `#postActions`): Connect via `acConnTap`,
 > notify-about-posts, view-their-feed, **Search their posts**, send money, message,
@@ -600,9 +607,13 @@ overlapping avatar, action buttons, name/handle/headline/bio, a meta row.
 (location · website · **"Joined <Month Year>"** from `user.joinedAt`), stats, and
 (own profile) the views + strength meters. Below the header is a **sticky tab
 bar** (`.ac-prof-tabs`/`.ac-ptab`, `acProfTab(name)`): **Posts · Replies · About
-· [Business] · Media**. Posts = pinned + timeline; Replies = the user's public
+· [Business] · Media · Likes**. Posts = pinned + timeline; Replies = the user's public
 replies (`d.replies`, served from `/api/social/profile`); Media = posts with
-photos/video; About gathers the professional sections (categories, subscriptions,
+photos/video; **Likes** = posts the user has publicly liked (X-style), lazy-loaded on
+first tap from `GET /api/social/likes/:username` (top-level, main-feed, blocks-aware,
+newest-like first; `acLoadProfileLikes` fills the pane, `mapPost` still ships locked
+placeholders for sub-only/PPV posts the viewer can't access); About gathers the
+professional sections (categories, subscriptions,
 featured, experience, education, certifications, skills, recommendations);
 Business (business accounts) = `acBizSections` (reviews, shop, bookings, jobs,
 people — `#acShopBox` is lazy-filled by `acLoadShop`). **Panes build LAZILY

@@ -6244,6 +6244,8 @@ body.reduce-motion .ac-compose-card{animation:none;}
    .wallet-actions rule still wins on the gradient balance card. */
 .ac-pill-btn.accent{background:var(--primary);border-color:var(--primary);color:var(--on-primary);}
 .ac-pill-btn.accent:hover{filter:brightness(.97);}
+/* Business primary CTA pill (Book / Order / Message) — one prominent WHITE action. */
+.ac-prof-cta{display:block;width:100%;height:44px;margin:14px 0 2px;font-size:15px;font-weight:700;}
 .ac-prof-stats{display:flex;gap:22px;margin-top:16px;}
 .ac-stat{font-size:13.5px;color:var(--t3);cursor:default;}
 .ac-stat b{color:var(--t1);font-weight:700;}
@@ -13214,6 +13216,14 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       </div>
       <!-- Business hours (shown only for business accounts) -->
       <div id="pfHoursSec" class="hidden">
+        <div class="pf-sec-label">Profile button</div>
+        <select class="pf-finput" id="pfCta" aria-label="Profile call-to-action button">
+          <option value="">No button</option>
+          <option value="book">Book</option>
+          <option value="order">Order</option>
+          <option value="message">Message</option>
+        </select>
+        <div class="pf-hint">The one main action visitors see on your profile.</div>
         <div class="pf-sec-label">Business hours</div>
         <div class="pf-hours" id="pfHours"></div>
         <div class="pf-sec-label">Location (for “near me”)</div>
@@ -14309,7 +14319,7 @@ async function onAuthSuccess(token, user) {
   API.setToken(token);
   S.token = token;
   S.guest = false;
-  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [] };
+  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [] };
   S.plan  = user.plan || 'free';
   Accounts.upsert(token, user);
   try { await loadFromServer(); } catch {}
@@ -28233,6 +28243,7 @@ function acRenderProfile(d, mine) {
   const tabs = [['posts', 'Posts'], ['replies', 'Replies'], ['about', 'About']];
   if (isBiz) tabs.push(['business', 'Business']);
   tabs.push(['media', 'Media']);
+  tabs.push(['likes', 'Likes']);
   const tabBar = `<div class="ac-prof-tabs" id="acProfTabs">${tabs.map((t, i) =>
     `<button class="ac-ptab${i === 0 ? ' on' : ''}" data-ptab="${t[0]}" onclick="acProfTab('${t[0]}')">${t[1]}</button>`).join('')}</div>`;
   const panes = `<div id="acProfPanes">
@@ -28241,6 +28252,7 @@ function acRenderProfile(d, mine) {
     <div class="ac-tabpane hidden" data-tab="about" data-built="0"></div>
     ${isBiz ? `<div class="ac-tabpane hidden" data-tab="business" data-built="0"></div>` : ''}
     <div class="ac-tabpane hidden" data-tab="media" data-built="0"></div>
+    <div class="ac-tabpane hidden" data-tab="likes" data-built="0"></div>
   </div>`;
   document.getElementById('acProfileBody').innerHTML = `
     ${banner}
@@ -28260,6 +28272,7 @@ function acRenderProfile(d, mine) {
       ${acProfMeta(u)}
       ${acTrustChip(d.trustScore)}
       ${acProfMore(u)}
+      ${acProfileCtaPill(u, mine)}
       <div class="ac-prof-stats">
         ${d.counts.connections != null ? `<span class="ac-stat ac-stat-link" onclick="acOpenConnections('${u.username}')"><b>${d.counts.connections}</b> Connections</span>` : ''}
         <span class="ac-stat ac-stat-link" onclick="acOpenFollowList('${u.username}','following')"><b>${d.counts.following}</b> Following</span>
@@ -28304,12 +28317,38 @@ function acBuildProfPane(name) {
     if (!html.trim()) html = '<div class="ac-tab-empty">No details to show yet.</div>';
   } else if (name === 'business') {
     html = acBizSections(d, mine);
+  } else if (name === 'likes') {
+    html = '<div class="ac-tab-empty">Loading…</div>'; // filled async by acLoadProfileLikes
   }
   pane.innerHTML = html;
   pane.setAttribute('data-built', '1');
   // Now that the pane's boxes exist, fire its lazy content loaders.
   if (name === 'about' && u.username) { acLoadShowcase(u.username, mine); acLoadCoursesProfile(u.username, mine); }
   if (name === 'business' && u.id != null) { acLoadShop(u.id, mine); acLoadBizQA(u.id, mine); }
+  if (name === 'likes' && u.username) acLoadProfileLikes(u.username);
+}
+// The public "Likes" profile tab — fetched lazily on first tab tap so the initial
+// profile payload stays lean. Reuses the standard post card renderer.
+async function acLoadProfileLikes(username) {
+  const pane = document.querySelector('#acProfPanes .ac-tabpane[data-tab="likes"]'); if (!pane) return;
+  try {
+    const { likes } = await API.req('GET', '/api/social/likes/' + encodeURIComponent(username));
+    pane.innerHTML = (likes && likes.length) ? likes.map(acPostCard).join('') : '<div class="ac-tab-empty">No likes yet.</div>';
+  } catch (e) { pane.innerHTML = '<div class="ac-tab-empty">Couldn’t load likes. Pull to refresh.</div>'; }
+}
+// A business account's ONE configurable primary CTA pill (book / order / message),
+// shown to visitors on its profile (design blueprint). WHITE primary. Owners set
+// it in the profile editor; personal accounts and un-set businesses show nothing.
+function acProfileCtaPill(u, mine) {
+  if (mine || !u || u.accountType !== 'business' || !u.profileCta) return '';
+  const bizArg = JSON.stringify({ id: u.id, name: u.name, username: u.username || '', avatar: u.avatar || '', headline: u.headline || '' }).replace(/"/g, '&quot;');
+  const map = {
+    book:    { label: 'Book', onclick: `acBookOpen(${u.id},${jsAttr(u.name)})` },
+    order:   { label: 'Order', onclick: `acOpenStorefront(${bizArg})` },
+    message: { label: 'Message', onclick: `acProfileMessage()` },
+  };
+  const c = map[u.profileCta]; if (!c) return '';
+  return `<button class="ac-pill-btn accent ac-prof-cta" onclick="${c.onclick}">${escHtml(c.label)}</button>`;
 }
 function acProfTab(name) {
   AC._profTab = name;
@@ -41392,6 +41431,7 @@ function openProfileEdit(focusUsername) {
   const isBiz = acIsBiz(S.user);
   document.getElementById('pfHoursSec').classList.toggle('hidden', !isBiz);
   if (isBiz) { renderPfHours(S.user?.businessHours); _pfGeo = (S.user?.lat != null && S.user?.lng != null) ? { lat: S.user.lat, lng: S.user.lng } : undefined; acRenderPfGeo(); }
+  { const cta = document.getElementById('pfCta'); if (cta) cta.value = S.user?.profileCta || ''; }
   document.getElementById('unameWrap').classList.toggle('has-val', !!S.user?.username);
   const pfAv = document.getElementById('pfAvatar');
   pfAv.classList.toggle('biz', isBiz); // business → app-shaped avatar in the editor too
@@ -41485,7 +41525,7 @@ async function saveProfile() {
     note: document.getElementById('pfNote').value.trim(),
     socials,
   };
-  if (acIsBiz(S.user)) payload.businessHours = readPfHours();
+  if (acIsBiz(S.user)) { payload.businessHours = readPfHours(); payload.profileCta = document.getElementById('pfCta')?.value || null; }
   // Geo: only send when changed (new point or explicit clear). Both keys go together.
   if (acIsBiz(S.user) && _pfGeo !== undefined) { payload.lat = _pfGeo ? _pfGeo.lat : null; payload.lng = _pfGeo ? _pfGeo.lng : null; }
   if (_pendingAvatar !== undefined) payload.avatar = _pendingAvatar;
@@ -41505,6 +41545,7 @@ async function saveProfile() {
     S.user.note = user.note || null;
     S.user.socials = user.socials || {};
     if ('businessHours' in payload) S.user.businessHours = payload.businessHours;
+    if ('profileCta' in payload) S.user.profileCta = user.profileCta || null;
     if ('lat' in payload) { S.user.lat = payload.lat; S.user.lng = payload.lng; _pfGeo = undefined; }
     Store.save();
     initUI();
@@ -42479,7 +42520,7 @@ const _bootDone = (async function boot() {
     if (user) {
       S.token = API.token();
       S.guest = false;
-      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [] };
+      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [] };
       S.plan  = user.plan || 'free';
       Accounts.upsert(API.token(), user);
       try { await loadFromServer(); } catch {}

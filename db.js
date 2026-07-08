@@ -2942,6 +2942,11 @@ async function initSchema() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS away_enabled BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS away_message TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS away_schedule TEXT NOT NULL DEFAULT 'always';`);
+  // Business profiles pick ONE primary call-to-action pill shown to visitors on
+  // their profile: 'book' (open the booking sheet), 'order' (open the storefront)
+  // or 'message' (start a DM). NULL = no explicit CTA (a personal account, or a
+  // business that hasn't chosen one).
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_cta TEXT;`);
   // One row per (business, peer, kind) — tracks when we last auto-replied so a
   // greeting doesn't repeat on every message and an away reply doesn't spam a
   // fast back-and-forth. Updated (not appended) each time we send one.
