@@ -6558,6 +6558,9 @@ body.light .gp-card{background:#fff;}
 .feed-c-sw.active{border-color:#fff;transform:scale(1.16);}
 .ac-section{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);
   padding:12px 10px 6px;}
+/* Contacts A·B·C… section header: gutter-aligned + sticky (iOS Contacts feel). */
+.ac-contact-sec{position:sticky;top:0;z-index:2;background:var(--bg);padding-left:var(--feed-gutter);
+  font-size:13px;font-weight:800;color:var(--t2);}
 .ac-item{display:flex;align-items:center;gap:12px;padding:10px 10px;border-radius:var(--r-md);cursor:pointer;
   transition:background var(--t-fast) var(--ease);}
 .ac-item:hover{background:rgba(255,255,255,.05);}
@@ -20525,10 +20528,10 @@ function acRenderCalls(listId) {
   const el = document.getElementById(listId || 'acCallList');
   const list = AC.calls || [];
   if (!list.length) {
-    el.innerHTML = acCallLinkRow() + '<div class="ac-empty">No calls yet.<br/>Tap the button to start a call.</div>';
+    el.innerHTML = acCallLinkRow() + `<div class="ac-feed-empty"><div class="ac-feed-empty-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div><div class="ac-feed-empty-line">No calls yet</div><div class="ac-feed-empty-sub">Start a voice or video call — your history shows up here.</div><button class="ac-pill-btn accent ac-feed-empty-cta" onclick="acCallStart('audio')">Start a call</button></div>`;
     return;
   }
-  el.innerHTML = acCallLinkRow() + list.map(c => {
+  el.innerHTML = acCallLinkRow() + '<div class="ac-section ac-contact-sec">Recent</div>' + list.map(c => {
     const p = c.peer;
     AC._authors = AC._authors || {}; AC._authors[p.id] = p;
     const callIc = c.media === 'video' ? AC_VIDEO_IC : AC_PHONE_IC;
@@ -22672,8 +22675,13 @@ function acRenderContacts() {
   if (counts) counts.innerHTML = `<b>${cc.count}</b> contact${cc.count === 1 ? '' : 's'} · <b>${cc.reverse}</b> ${cc.reverse === 1 ? 'person has' : 'people have'} you`;
   const sel = AC._contactSelect;
   AC._authors = AC._authors || {}; all.forEach(c => { AC._authors[c.id] = c; });
-  if (!list.length) { el.innerHTML = `<div class="ac-empty">${q ? 'No contacts match “' + escHtml(q) + '”.' : 'No contacts yet.<br/>Tap ➕ to add someone by @username.'}</div>`; acUpdateSelCount(); return; }
-  el.innerHTML = list.map(c => {
+  if (!list.length) {
+    el.innerHTML = q
+      ? `<div class="ac-empty">No contacts match “${escHtml(q)}”.</div>`
+      : `<div class="ac-feed-empty"><div class="ac-feed-empty-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></div><div class="ac-feed-empty-line">No contacts yet</div><div class="ac-feed-empty-sub">Add someone by their @username to keep them close.</div><button class="ac-pill-btn accent ac-feed-empty-cta" onclick="acAddContactOpen()">Add a contact</button></div>`;
+    acUpdateSelCount(); return;
+  }
+  const rowHtml = (c) => {
     const checked = AC._contactSel && AC._contactSel.has(c.id);
     if (sel) {
       return `<div class="ac-item ac-contact-sel ${checked ? 'on' : ''}" onclick="acToggleContactPick(${c.id})">
@@ -22691,7 +22699,22 @@ function acRenderContacts() {
         <button class="ac-icon-btn2" onclick="event.stopPropagation();acOpenUserActions(this,${c.id},false)" title="More" aria-label="More"><svg viewBox="0 0 24 24" style="fill:currentColor;stroke:none;"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
       </div>
     </div>`;
-  }).join('');
+  };
+  // Normal mode: iOS-Contacts-style A·B·C… section headers. Select mode stays a
+  // flat checklist (grouping fights the bulk-select flow).
+  const sortLetter = (c) => { const ch = (c.name || '@').trim().charAt(0).toUpperCase(); return /[A-Z]/.test(ch) ? ch : '#'; };
+  if (sel) {
+    el.innerHTML = list.map(rowHtml).join('');
+  } else {
+    const sorted = list.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+    let out = '', letter = null;
+    for (const c of sorted) {
+      const L = sortLetter(c);
+      if (L !== letter) { out += `<div class="ac-section ac-contact-sec">${L}</div>`; letter = L; }
+      out += rowHtml(c);
+    }
+    el.innerHTML = out;
+  }
   acUpdateSelCount();
 }
 function acToggleContactSelect() {
