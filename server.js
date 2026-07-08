@@ -12468,15 +12468,22 @@ app.get('/api/businesses/directory', auth.requireAuth, async (req, res) => {
       orderBy = 'dist_km ASC';
     }
     const { rows } = await db.query(
-      `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.categories, u.account_type, u.business_verify_status, u.headline,
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.categories, u.account_type, u.business_verify_status, u.headline, u.business_hours,
               (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = u.id) AS followers,
               (SELECT COUNT(*)::int FROM jobs j WHERE j.posted_by = u.id) AS jobs,
+              (SELECT ROUND(AVG(br.rating)::numeric, 1) FROM business_reviews br WHERE br.business_id = u.id) AS rating,
+              (SELECT COUNT(*)::int FROM business_reviews br WHERE br.business_id = u.id) AS review_count,
               ${distSelect}
        FROM users u WHERE ${where.join(' AND ')}
        ORDER BY ${orderBy} LIMIT 100`,
       params
     );
-    res.json({ businesses: rows.map((u) => Object.assign(mapSearchUser(u), { followers: u.followers, jobs: u.jobs, distanceKm: u.dist_km != null ? Math.round(u.dist_km * 10) / 10 : null })), near: !!near });
+    res.json({ businesses: rows.map((u) => Object.assign(mapSearchUser(u), {
+      followers: u.followers, jobs: u.jobs,
+      distanceKm: u.dist_km != null ? Math.round(u.dist_km * 10) / 10 : null,
+      rating: u.rating != null ? Number(u.rating) : null, reviewCount: u.review_count || 0,
+      openNow: businessOpenNow(u.business_hours), // true / false / null (no hours set)
+    })), near: !!near });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the directory.' }); }
 });
 
