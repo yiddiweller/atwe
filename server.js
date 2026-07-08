@@ -5492,12 +5492,13 @@ app.get('/api/atchat/starred', auth.requireAuth, async (req, res) => {
   const uid = req.user.id;
   try {
     const dm = await db.query(
-      `SELECT m.id, m.body, m.image, m.media_kind, m.meta, m.created_at, m.sender_id,
+      `SELECT m.id, m.body, m.image, m.media_kind, m.meta, m.created_at, m.sender_id, m.thread_id,
               CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END AS peer_id,
               p.name AS peer_name, p.username AS peer_username, p.avatar AS peer_avatar
          FROM at_messages m
          JOIN users p ON p.id = (CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END)
         WHERE $1 = ANY(m.starred_by) AND NOT m.deleted_all
+          AND NOT ($1 = ANY(m.deleted_for))
           AND (m.expires_at IS NULL OR m.expires_at > now())`,
       [uid]
     );
@@ -5509,13 +5510,14 @@ app.get('/api/atchat/starred', auth.requireAuth, async (req, res) => {
          JOIN at_groups g ON g.id = m.group_id
          JOIN users u ON u.id = m.sender_id
         WHERE $1 = ANY(m.starred_by) AND NOT m.deleted_all
+          AND NOT ($1 = ANY(m.deleted_for)) AND NOT ($1 = ANY(m.hidden_for))
           AND (m.expires_at IS NULL OR m.expires_at > now())`,
       [uid]
     );
     const items = [
       ...dm.rows.map((m) => ({
         id: m.id, scope: 'dm', body: m.body || '', image: !!m.image, mediaKind: m.media_kind || null,
-        meta: m.meta || null, created_at: m.created_at, mine: m.sender_id === uid,
+        meta: m.meta || null, created_at: m.created_at, mine: m.sender_id === uid, threadId: m.thread_id || null,
         peer: { id: m.peer_id, name: m.peer_name, username: m.peer_username, avatar: m.peer_avatar || null },
       })),
       ...gm.rows.map((m) => ({
@@ -5576,6 +5578,9 @@ app.get('/api/atchat/messages/search', auth.requireAuth, rateLimit(60, 60000, 'm
            JOIN at_group_members me ON me.group_id = m.group_id AND me.user_id = $1
            JOIN users u ON u.id = m.sender_id
           WHERE m.body ILIKE $2
+            AND NOT m.deleted_all
+            AND NOT ($1 = ANY(m.deleted_for))
+            AND NOT ($1 = ANY(m.hidden_for))
             AND (m.expires_at IS NULL OR m.expires_at > now())
             ${group ? 'AND m.group_id = $3' : ''}
           ORDER BY m.created_at DESC LIMIT 40`,
@@ -5702,6 +5707,7 @@ app.put('/api/atchat/groups/:id/disappearing', auth.requireAuth, async (req, res
   if (!Number.isInteger(gid) || !DISAPPEAR_OPTS.includes(sec)) return res.status(400).json({ error: 'Invalid request.' });
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+    if (!(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only group admins can change disappearing messages.' });
     await db.query('UPDATE at_groups SET disappearing = $1 WHERE id = $2', [sec, gid]);
     for (const id of await groupMemberIds(gid, req.user.id)) rtPush(id, 'disappearing', { scope: 'group', groupId: gid, seconds: sec });
     res.json({ ok: true, seconds: sec });

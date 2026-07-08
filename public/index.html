@@ -19681,7 +19681,7 @@ function acJumpToStarred(i) {
   const mid = m.id;
   const flash = () => setTimeout(() => acJumpToPinned(mid), 420);
   if (m.scope === 'group') { acOpenGroup(m.group.id).then(flash); }
-  else { acOpenChat(m.peer.id).then(flash); }
+  else { acOpenChat(m.peer.id, m.threadId || null).then(flash); } // open the exact conversation the starred DM lives in
 }
 // Per-message API base for the open thread — DM or group. Suffix-free; callers
 // append '/star', '/edit', '/react', '?scope=…' etc. so one code path serves both.
@@ -33597,7 +33597,7 @@ function acGroupAddPeople() {
 // Admin-only: edit this group's photo, display name and @username (or, for a
 // contact group, just its photo + name — it stays username-less).
 function acEditGroup() {
-  if (!AC.group || AC.group.createdBy !== S.user?.id) return;
+  if (!AC.group || !(AC.group.iAmAdmin || AC.group.createdBy === S.user?.id)) return; // any admin can edit (server authorizes via isGroupAdmin)
   AC.addToGroup = null; AC.groupSel = new Map(); AC._grpFound = new Map();
   const variant = AC.group.broadcast ? 'channel' : (AC.group.username ? 'group' : 'contact');
   acShow('acGroupCreateScreen', null);
@@ -34900,6 +34900,7 @@ function acChatRowDM(c) {
   const isSelf = c.id === S.user?.id;
   const on = !isSelf && !!(rtPresence[c.id] && rtPresence[c.id].online); // never show yourself as "online"
   const unread = isSelf ? 0 : c.unread; // your own notes are never "unread"
+  const muted = acIsMutedDm(c.id); // a muted DM shows a grey (not loud-blue) badge, like groups
   // Email-style: one row per conversation thread. thread_id null = the main chat;
   // an extra thread shows its title (or "New conversation") so the two rows read apart.
   const tid = (c.thread_id == null) ? null : c.thread_id;
@@ -34909,16 +34910,16 @@ function acChatRowDM(c) {
   const draft = tid == null ? Drafts.get('d:' + c.id) : '';
   const lastHtml = draft ? `<span class="ac-draft">Draft:</span> ${escHtml(draft)}` : escHtml(last);
   const lastPlain = draft ? ('Draft: ' + draft) : last;
-  return `<div class="ac-item ${on ? 'online' : ''} ${unread ? 'unread' : ''} ${acIsPinned('dm', c.id) ? 'ac-pinned' : ''}" data-uid="${c.id}" onclick="acDmRowTap(${c.id},${tk})">
+  return `<div class="ac-item ${on ? 'online' : ''} ${unread && !muted ? 'unread' : ''} ${acIsPinned('dm', c.id) ? 'ac-pinned' : ''}" data-uid="${c.id}" onclick="acDmRowTap(${c.id},${tk})">
     <div class="ac-item-inner">
       <div class="ac-ava-wrap" onclick="event.stopPropagation();acOpenContactFromRow(${c.id})">${acAvatarHtml(c.name, c.avatar)}<span class="ac-online-dot"></span></div>
       <div class="ac-item-main">
-        <div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}${isSelf ? ' <span class="ac-self-you">(You)</span>' : ''}</span>${threadTag}${acIsMutedDm(c.id) ? '<span class="ac-mute-ic" title="Muted"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-9.33-5"/><path d="M6 9v5l-3 3h13"/><line x1="3" y1="3" x2="21" y2="21"/></svg></span>' : ''}${acIsPinned('dm', c.id) ? AC_PIN_IC : ''}</div>
+        <div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}${isSelf ? ' <span class="ac-self-you">(You)</span>' : ''}</span>${threadTag}${muted ? '<span class="ac-mute-ic" title="Muted"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-9.33-5"/><path d="M6 9v5l-3 3h13"/><line x1="3" y1="3" x2="21" y2="21"/></svg></span>' : ''}${acIsPinned('dm', c.id) ? AC_PIN_IC : ''}</div>
         <div class="ac-item-last">${lastHtml}</div>
       </div>
       <div class="ac-item-right">
         <span class="ac-item-time">${acTime(c.last_at)}</span>
-        ${acUnreadBadge(unread)}
+        ${acUnreadBadge(unread, muted)}
       </div>
     </div>
   </div>`;
@@ -35563,7 +35564,7 @@ function syncOnlineBanner(initial) {
   // (rtResync still runs on the `online` event to restore the SSE stream; only the
   // banner is suppressed.) try/catch: CALL/GROUPCALL are `let`s declared later; the
   // boot-time call runs before their declaration (TDZ), so guard the reference.
-  try { if (CALL || GROUPCALL || Date.now() < _postCallNetGrace) return; } catch (_) {}
+  try { if (CALL || GROUPCALL || LIVE || SPACE || Date.now() < _postCallNetGrace) return; } catch (_) {}
   if (navigator.onLine === false) showOfflineBanner();
   else if (!initial) showBackOnlineBanner();
 }
@@ -39709,6 +39710,10 @@ function acRetrySend(id) {
 const AC_MEDIA_MAX = 16 * 1024 * 1024; // ~16 MB, matches the server cap
 function acToggleAttachMenu(e) {
   if (e) e.stopPropagation();
+  // Secret mode (view-once / auto-vanish) is DM-only server-side — hide the tile in groups
+  // so it can't lie ("your next message vanishes" never applies to a group send).
+  const sec = document.getElementById('acAtileSecret');
+  if (sec) sec.style.display = (AC.mode === 'group') ? 'none' : '';
   document.getElementById('acAttachMenu').classList.toggle('hidden');
 }
 function acCloseAttachMenu() { document.getElementById('acAttachMenu')?.classList.add('hidden'); }
@@ -39989,12 +39994,12 @@ async function acOpenScheduled() {
     body.innerHTML = scheduled.map(s => `<div class="ac-item" style="align-items:flex-start;">
       <div class="ac-item-main"><div class="ac-item-last" style="color:var(--t1);white-space:normal;">${escHtml(s.body)}</div>
         <div class="ac-item-last" style="color:var(--accent);font-size:12px;margin-top:3px;">${escHtml(acSchedWhen(s.sendAt))}</div></div>
-      <button class="ac-post-more" onclick="acCancelScheduled(${s.id})" aria-label="Cancel"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+      <button class="ac-post-more" onclick="acCancelScheduledMsg(${s.id})" aria-label="Cancel"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
     </div>`).join('');
   } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load.</div>'; }
 }
 function acSchedWhen(d) { try { return 'Sends ' + new Date(d).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch { return 'Scheduled'; } }
-async function acCancelScheduled(id) {
+async function acCancelScheduledMsg(id) { // scheduled *message* cancel (distinct from acCancelScheduled, the scheduled-post one)
   try { await API.req('DELETE', '/api/atchat/scheduled/' + id); showNotif('Canceled.'); acOpenScheduled(); }
   catch (e) { showNotif(e.message || 'Could not cancel.'); }
 }
