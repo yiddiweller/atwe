@@ -38764,12 +38764,15 @@ function acMsgMedia(m) {
   // sender / already-opened show a static "opened" / "view once" chip.
   if (m.viewOnce) {
     const opened = !!m.viewed;
+    const isAudio = m.media_kind === 'audio';
+    const noun = isAudio ? 'Voice message' : (m.media_kind === 'video' ? 'Video' : 'Photo');
+    const verb = isAudio ? 'play' : 'view';
     if (!m.mine && !opened) {
       return `<button class="msg-viewonce" onclick="event.stopPropagation();acOpenViewOnce(${m.id})">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.4"/><path d="M12 5C5 5 2 12 2 12s3 7 10 7 10-7 10-7-3-7-10-7z"/></svg>
-        <span>Photo · tap to view once</span></button>`;
+        <span>${noun} · tap to ${verb} once</span></button>`;
     }
-    return `<div class="msg-viewonce done"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.4"/><path d="M12 5C5 5 2 12 2 12s3 7 10 7 10-7 10-7-3-7-10-7z"/></svg><span>${m.mine ? 'Photo · view once' : 'Opened'}</span></div>`;
+    return `<div class="msg-viewonce done"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.4"/><path d="M12 5C5 5 2 12 2 12s3 7 10 7 10-7 10-7-3-7-10-7z"/></svg><span>${m.mine ? noun + ' · view once' : 'Opened'}</span></div>`;
   }
   const imgs = (m.images && m.images.length) ? m.images : (m.image ? [m.image] : []);
   if (imgs.length > 1) {
@@ -38818,12 +38821,16 @@ async function acOpenViewOnce(id) {
       // Reuse a simple full-screen overlay for video.
       const ov = document.getElementById('viewOnceVideo');
       if (ov) { ov.querySelector('video').src = r.media; showOverlay('viewOnceVideo'); }
+    } else if (r.media && r.media_kind === 'audio') {
+      // Play the voice note a single time (bytes came from the view endpoint once).
+      try { const a = new Audio(r.media); a.play().catch(() => {}); } catch (e2) {}
+      showNotif('Playing once…');
     } else if (r.image || (r.images && r.images.length)) {
       openImageViewer(r.image || r.images[0], null);
     }
   } catch (e) {
-    if (e.status === 410 || /already opened/i.test(e.message || '')) { if (m) { m.viewed = true; acRenderThread(); } showNotif('This photo has already been opened.'); }
-    else showNotif(e.message || 'Could not open the photo.');
+    if (e.status === 410 || /already opened/i.test(e.message || '')) { if (m) { m.viewed = true; acRenderThread(); } showNotif('This has already been opened.'); }
+    else showNotif(e.message || 'Could not open this.');
   }
 }
 // Short label for a conversation/group last-message preview.
@@ -40360,7 +40367,7 @@ function acClearAttach() {
 function acViewOnceEligible() {
   if (AC.mode === 'group') return false;
   if (AC.imgs && AC.imgs.length === 1) return true;
-  return !!(AC.att && (AC.att.kind === 'image' || AC.att.kind === 'video'));
+  return !!(AC.att && (AC.att.kind === 'image' || AC.att.kind === 'video' || AC.att.kind === 'audio'));
 }
 function acToggleViewOnce() { AC._viewOnce = !AC._viewOnce; acRenderAttPrev(); }
 function acViewOnceChip() {
