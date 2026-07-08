@@ -3244,7 +3244,7 @@ body.light{
   --accent-tint:#FFFFFF;   /* Apple's own light-mode blue buttons use white text */
   --primary:#111114;--on-primary:#FFFFFF;   /* Light-theme primary: near-black fill, white label */
   --t1:#1D1D1F;--t2:#6E6E73;--t3:#6E6E73;--t4:#aab8c2;
-  --verify:#5b7083;
+  --verify:#6E6E73;
   --rose:#007AFF;--rose-bg:rgba(0,122,255,.1);--rose-bg-2:rgba(0,122,255,.18);--rose-line:rgba(0,122,255,.4);
   --violet:#007AFF;--violet-bg:rgba(0,122,255,.12);--violet-line:rgba(0,122,255,.38);
 }
@@ -6053,7 +6053,7 @@ body.light .ac-follow-btn.following{background:transparent;color:var(--t1);}
 .ac-grp-ava svg{width:55%;height:55%;stroke:#fff;stroke-width:2;fill:none;}
 /* Per-circle gradient icon (inline background set by acCircleAvatarHtml). */
 .ac-circ-ic{display:flex;align-items:center;justify-content:center;overflow:hidden;}
-.ac-circ-ic svg{width:54%;height:54%;stroke:rgba(255,255,255,.96);stroke-width:2;fill:none;}
+.ac-circ-ic svg{width:54%;height:54%;stroke:var(--accent);stroke-width:2;fill:none;}
 /* Company logos are rounded squares (distinct from people/circle round avatars). */
 .ac-co-sq{border-radius:26%!important;}
 .ac-prof-link{color:var(--accent);font-size:14px;font-weight:600;text-decoration:none;word-break:break-all;}
@@ -6886,7 +6886,7 @@ body.light .ac-job-tag.featured{color:var(--accent);}
 .pf-chk-row.done{color:var(--t3);}
 .pf-chk-ic{flex:0 0 auto;width:22px;height:22px;display:grid;place-items:center;}
 .pf-chk-ic svg{width:20px;height:20px;stroke:var(--t3);stroke-width:2;fill:none;}
-.pf-chk-row.done .pf-chk-ic svg{stroke:var(--green);}
+.pf-chk-row.done .pf-chk-ic svg{stroke:var(--accent);}
 .ac-cert-link{display:inline-block;margin-top:3px;font-size:13px;color:var(--accent);text-decoration:none;}
 .ac-exp{display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid var(--b1);}
 .ac-exp:last-child{border-bottom:none;}
@@ -7379,9 +7379,9 @@ body.light .ac-job-early{color:var(--accent);background:var(--accent-dim);}
 .ac-sal-bar i{position:absolute;top:0;bottom:0;background:linear-gradient(90deg,var(--accent),var(--green));border-radius:99px;}
 .ac-sal-mark{position:absolute;top:-2px;width:3px;height:10px;border-radius:2px;background:var(--t1);}
 /* #OpenToWork avatar ring */
-.user-avatar.otw{box-shadow:0 0 0 2px var(--bg-1,#0d0d0d),0 0 0 4px var(--green);position:relative;}
+.user-avatar.otw{box-shadow:0 0 0 2px var(--bg-1,#0d0d0d),0 0 0 4px var(--accent);position:relative;}
 .user-avatar.otw::after{content:'OPEN TO WORK';position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);
-  background:var(--green);color:var(--text-black);font-size:7px;font-weight:800;letter-spacing:.02em;padding:1px 5px;border-radius:99px;white-space:nowrap;line-height:1.4;}
+  background:var(--accent);color:var(--accent-tint);font-size:7px;font-weight:800;letter-spacing:.02em;padding:1px 5px;border-radius:99px;white-space:nowrap;line-height:1.4;}
 .ac-prof-ava.otw::after{font-size:9px;bottom:-9px;padding:2px 8px;}
 /* Preferences hub (Open to work / Job alerts) */
 .prefs-sec{font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);margin:18px 2px 9px;}
@@ -7814,7 +7814,7 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
 .bn-tab.active svg,.bn-tab.active .bn-logo{transform:scale(1.18);}
 .bn-tab:active svg,.bn-tab:active .bn-logo{transform:scale(.88);}
 .bn-tab:active .bn-icon{transform:scale(1.3);}
-.bn-dot{position:absolute;top:5px;right:9px;width:9px;height:9px;border-radius:50%;background:var(--red);border:2px solid rgba(64,64,68,.95);z-index:2;}
+.bn-dot{position:absolute;top:5px;right:9px;width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid rgba(64,64,68,.95);z-index:2;}
 .bn-dot.hidden{display:none;}
 
 
@@ -23238,8 +23238,10 @@ function _circleIcon(name) {
 }
 // Each circle gets a cohesive, deterministic gradient + a themed industry glyph,
 // so all 200+ circles look distinct yet on-brand without stored images.
-function _circleHue(s) { s = String(s || ''); let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h % 360; }
-function _circleGrad(c) { const h = _circleHue((c && (c.username || c.name)) || ''); return `linear-gradient(140deg, hsl(${h}, 70%, 55%), hsl(${(h + 40) % 360}, 72%, 43%))`; }
+// Color-law: no rainbow. Every circle placeholder is a flat elevated surface with
+// its industry glyph in identity-blue (the blueprint's "placeholder = --elev +
+// blue-tint content"), so all 200+ circles read as one on-brand family.
+function _circleGrad(c) { return 'var(--s2)'; }
 function acCircleAvatarHtml(c, extra) {
   extra = extra ? ' ' + extra : '';
   if (c && c.avatar) return `<div class="user-avatar${extra} has-img" style="--avatar:url('${c.avatar}')"></div>`;
@@ -25955,7 +25957,7 @@ async function _renderPostshot(p) {
   const light = document.body.classList.contains('light');
   const bg = _psVar('--bg', light ? '#fff' : '#000'), t1 = _psVar('--t1', light ? '#1d1d1f' : '#ffffff'),
     t3 = _psVar('--t3', '#6e6e73'), accent = _psVar('--accent', '#0a84ff'), rose = _psVar('--rose', '#0a84ff'),
-    verify = _psVar('--verify', light ? '#5b7083' : '#d3d5d7'),
+    verify = _psVar('--verify', light ? '#6E6E73' : '#d3d5d7'),
     border = light ? 'rgba(0,0,0,.09)' : 'rgba(255,255,255,.13)';
   const a = p.author || {};
   const imgSrc = (p.images && p.images[0]) || p.image || null;

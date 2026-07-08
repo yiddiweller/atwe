@@ -335,7 +335,7 @@ The SPA has few *URLs*; most navigation is in-app. Complete inventory from `hand
 1. **Engagement icons → OUTLINE.** Convert the engagement row (and post-detail row) to the stroke icon language.
 2. **Rating stars → KEEP GOLD** — recorded as an approved color-law exception (amber `--amber` fill on stars only).
 3. **Open-to-Work ring → BLUE** (`--accent`), keep the "OPEN TO WORK" label.
-4. **Auth primary buttons → BLUE** — restyle login/signup primaries (incl. `.is-loading`) to the blue-pill anatomy.
+4. **Auth primary buttons → ~~BLUE~~ WHITE.** ⚠️ **SUPERSEDED (2026-07, by Yiddi) — see the Design Blueprint "Complete Edition".** The blueprint's Law 2 ("white acts, blue identifies") makes the ONE primary action per screen a **WHITE** pill (`#FFFFFF` fill, `#1D1D1F` label; Light theme `#111114`/white); this **explicitly supersedes decision 9.4** ("Log in, Post, Buy now, Pay, Send, Join are all white"). Blue (`--accent`) is now reserved for identity only. The codebase already follows this via the `--primary`/`--on-primary` tokens on `.auth-btn-primary`/`.ac-pill-btn.accent`/`.ac-post-btn`/`.ac-follow-btn`. So Phase 2 must **keep auth buttons WHITE**, not revert them to blue.
 5. **Verified badge on Light → NEUTRAL GREY** (replace slate-blue `#5b7083` with a non-blue neutral).
 6. **Admin back-office → DARK-ONLY, exempt** from the Light-theme requirement (by design; document in CLAUDE.md).
 7. **Transactional emails → LIGHT BASE** — redesign the shared template on white with `#1D1D1F`/`#6E6E73` text and `#0A84FF` accents.

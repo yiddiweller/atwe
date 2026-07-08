@@ -2260,7 +2260,7 @@ async function sendProfileChangedEmail(user, changes) {
       preheader: `Your Atwe ${what} changed`,
       heading: 'Account details changed',
       intro: `Hi ${safeName(user.name)}, your Atwe ${what} ${changes.length > 1 ? 'were' : 'was'} just changed.`,
-      bodyHtml: `If this was you, you can ignore this email. If you didn’t make this change, <a href="${mailer.appUrl()}" style="color:#0ea5e9;">reset your password</a> and email support@atwe.com right away.`,
+      bodyHtml: `If this was you, you can ignore this email. If you didn’t make this change, <a href="${mailer.appUrl()}" style="color:#0A84FF;">reset your password</a> and email support@atwe.com right away.`,
     }),
   });
 }
@@ -2281,7 +2281,7 @@ async function sendLoginAlertEmail(user, req) {
       preheader: 'New sign-in to your Atwe account',
       heading: 'New sign-in to your account',
       intro: `Hi ${safeName(user.name)}, we noticed a new sign-in to your Atwe account from a device we haven’t seen before:`,
-      bodyHtml: `<b>When:</b> ${escapeHtml(when)}<br/>${whereHtml}<b>Device:</b> ${escapeHtml(ua) || 'Unknown'}<br/><br/>If this was you, you can ignore this email. If not, <a href="${mailer.appUrl()}" style="color:#0ea5e9;">reset your password</a> right away.`,
+      bodyHtml: `<b>When:</b> ${escapeHtml(when)}<br/>${whereHtml}<b>Device:</b> ${escapeHtml(ua) || 'Unknown'}<br/><br/>If this was you, you can ignore this email. If not, <a href="${mailer.appUrl()}" style="color:#0A84FF;">reset your password</a> right away.`,
     }),
   });
 }

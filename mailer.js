@@ -58,7 +58,7 @@ function appUrl() {
 // A clean, email-client-safe layout (table-based, inline styles): a dark Atwe
 // header with the logo, a white card with the message, an optional big code or
 // accent button, and a footer. Renders nicely in Gmail / Apple Mail / Outlook.
-const ACCENT = '#0ea5e9';
+const ACCENT = '#0A84FF';
 function esc(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -87,16 +87,16 @@ function brand({ preheader = '', heading = '', intro = '', code = '', bodyHtml =
         </td></tr>
         <tr><td style="padding:32px 32px 30px;">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-            ${heading ? `<tr><td style="font-size:22px;font-weight:800;color:#0b0b0c;letter-spacing:-.02em;padding-bottom:12px;">${esc(heading)}</td></tr>` : ''}
-            ${intro ? `<tr><td style="font-size:15px;line-height:1.62;color:#3f3f46;padding-bottom:10px;">${intro}</td></tr>` : ''}
+            ${heading ? `<tr><td style="font-size:22px;font-weight:800;color:#1D1D1F;letter-spacing:-.02em;padding-bottom:12px;">${esc(heading)}</td></tr>` : ''}
+            ${intro ? `<tr><td style="font-size:15px;line-height:1.62;color:#1D1D1F;padding-bottom:10px;">${intro}</td></tr>` : ''}
             ${codeBlock}
-            ${bodyHtml ? `<tr><td style="font-size:15px;line-height:1.62;color:#3f3f46;padding-bottom:8px;">${bodyHtml}</td></tr>` : ''}
+            ${bodyHtml ? `<tr><td style="font-size:15px;line-height:1.62;color:#1D1D1F;padding-bottom:8px;">${bodyHtml}</td></tr>` : ''}
             ${btn}
           </table>
         </td></tr>
         <tr><td style="padding:18px 32px 26px;border-top:1px solid #eeeef1;">
-          <div style="font-size:12.5px;color:#a0a0a8;line-height:1.7;">
-            <a href="${base}" style="color:#a0a0a8;text-decoration:none;">atwe.com</a> &nbsp;·&nbsp; The network built for business.<br/>
+          <div style="font-size:12.5px;color:#6E6E73;line-height:1.7;">
+            <a href="${base}" style="color:#6E6E73;text-decoration:none;">atwe.com</a> &nbsp;·&nbsp; The network built for business.<br/>
             © Atwe INC. You're receiving this because you have an Atwe account.
           </div>
         </td></tr>
