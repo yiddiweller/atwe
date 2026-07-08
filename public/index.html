@@ -9707,7 +9707,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <span class="tb-pagelabel" id="tbPageLabel">Atwe</span>
         <div class="tb-search hidden" id="tbSearch">
           <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input id="tbSearchInput" type="text" placeholder="Search people and posts" aria-label="Search people and posts" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="acDoSearch(this.value)"/>
+          <input id="tbSearchInput" type="text" placeholder="Search everything on Atwe" aria-label="Search everything on Atwe" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="acDoSearch(this.value)"/>
         </div>
       </div>
       <div class="tb-feedtabs hidden" id="tbFeedTabs">
@@ -20542,14 +20542,14 @@ function acRenderSidebarContext(tab) {
       <button class="sb-btn" onclick="acOpenGoLive()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19A10 10 0 0 1 5 5"/></svg> Go Live</button>
       <button class="sb-btn" onclick="appTab('search')">${ic.search} Search</button>`;
   } else if (tab === 'search') {
-    const scopes = [['all', 'Search all', ic.layers], ['posts', 'Search Posts', ic.doc], ['circles', 'Search in circles', ic.circle], ['chats', 'Search in chats', ic.chat], ['groups', 'Search in groups', ic.groups]];
+    const scopes = [['all', 'Search all', ic.layers], ['posts', 'Search Posts', ic.doc], ['circles', 'Search in circles', ic.circle], ['groups', 'Search in groups', ic.groups]];
     html = scopes.map(([s, lbl, icon]) => `<button class="sb-btn ${_searchScope === s ? 'active' : ''}" onclick="acSetSearchScope('${s}')">${icon} ${lbl}</button>`).join('');
   } else if (tab === 'chat') {
     html = `<button class="sb-btn accent" onclick="acOpenCompose()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New message</button>
       <button class="sb-btn" onclick="acOpenGroupCreate('contact')"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> New contact group</button>
       <button class="sb-btn" onclick="acOpenGroupCreate('group')"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M2.5 21v-2a4 4 0 0 1 4-4h5a4 4 0 0 1 4 4v2"/><line x1="19" y1="7" x2="19" y2="13"/><line x1="22" y1="10" x2="16" y2="10"/></svg> New group</button>
       <button class="sb-btn" onclick="acOpenGroupCreate('channel')"><svg viewBox="0 0 24 24"><path d="M3 11a9 9 0 0 1 9 9"/><path d="M3 4a16 16 0 0 1 16 16"/><circle cx="4.5" cy="19.5" r="1.7"/></svg> New channel</button>
-      <button class="sb-btn" onclick="appTab('search');acSetSearchScope('chats')">${ic.search} Search</button>
+      <button class="sb-btn" onclick="acGoMessages()">${ic.search} Search</button>
       <button class="sb-btn" onclick="openContactPrivacy()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Chat settings</button>`;
   } else if (tab === 'contacts') {
     html = `${contactsBtn}<button class="sb-btn" onclick="acGoContacts()">All contacts</button>`;
@@ -20736,10 +20736,12 @@ function acPickCall(id) {
 /* ─── Search (scoped: posts / circles / chats / groups) ─── */
 let _searchScope = 'all';
 let _searchT = null;
-const _searchPlaceholders = { all: 'Search people, items, posts…', people: 'Search professionals by name or industry', jobs: 'Search jobs by title, company or skill', companies: 'Search businesses by name or @handle', shop: 'Search items & services for sale', services: 'Find a service — “magician”, “plumber”…', posts: 'Search posts', circles: 'Search industries & circles', chats: 'Search your chats', groups: 'Search your groups' };
+const _searchPlaceholders = { all: 'Search everything on Atwe', people: 'Search professionals by name or industry', jobs: 'Search jobs by title, company or skill', companies: 'Search businesses by name or @handle', shop: 'Search items & services for sale', services: 'Find a service — “magician”, “plumber”…', posts: 'Search posts', circles: 'Search industries & circles', groups: 'Search groups' };
 // Scope chips shown on the search screen itself (the sidebar scopes are hidden
 // inside the drawer on mobile, so phones need an on-screen way to switch).
-const _searchScopeChips = [['all', 'All'], ['people', 'People'], ['services', 'Services'], ['shop', 'Shop'], ['jobs', 'Jobs'], ['companies', 'Businesses'], ['circles', 'Industries'], ['posts', 'Posts'], ['feeds', 'Feeds'], ['chats', 'Chats'], ['groups', 'Groups']];
+// Engine is discovery of the world only — the "Chats" scope (private-message search)
+// was removed from here; message search lives in Talk (§POLISH 9.9 + the purity rule).
+const _searchScopeChips = [['all', 'All'], ['people', 'People'], ['services', 'Services'], ['shop', 'Shop'], ['jobs', 'Jobs'], ['companies', 'Businesses'], ['circles', 'Industries'], ['posts', 'Posts'], ['feeds', 'Feeds'], ['groups', 'Groups']];
 // A person result row (name + verified + @handle + industry chips).
 function acSearchUserRow(u) {
   const sub = u.headline ? escHtml(u.headline) : '@' + escHtml(u.username);
@@ -20760,6 +20762,7 @@ function acGoSearch() {
   if (inp) { inp.placeholder = _searchPlaceholders[_searchScope] || 'Search'; acDoSearch(inp.value || ''); }
 }
 function acSetSearchScope(s) {
+  if (s === 'chats') s = 'all'; // Engine never searches private messages (purity rule → Talk owns that)
   _searchScope = s;
   acRenderSidebarContext('search'); // refresh the desktop sidebar highlight
   acRenderSearchScopes();            // refresh the on-screen chips
