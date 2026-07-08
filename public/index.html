@@ -3964,7 +3964,7 @@ body.reduce-motion .mc-loc-pin.pulse{animation:none;}
 
 /* Voice-note recording bar */
 .ac-rec{display:flex;align-items:center;gap:12px;padding:10px 16px max(10px,env(safe-area-inset-bottom));
-  border-top:1px solid var(--b1);flex-shrink:0;
+  border-top:1px solid var(--b1);flex-shrink:0;position:relative;
   /* Press-and-hold the mic must NOT trigger iOS text selection of the "slide to
      cancel" label (the magnifier loupe + blue handles). */
   -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
@@ -3991,6 +3991,16 @@ body.reduce-motion .mc-loc-pin.pulse{animation:none;}
   font-size:13.5px;font-weight:500;transform:translateX(var(--slide,0px));opacity:calc(1 - var(--cancel,0) * .75);}
 .ac-rec-slide svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.2;fill:none;}
 .ac-rec.holding .ac-rec-slide{display:flex;}
+/* Slide-UP-to-lock affordance (WhatsApp-style): a little lock pill above the mic
+   that fills/rises as you drag up; crossing the threshold locks hands-free. */
+.ac-rec-lock{position:absolute;right:14px;bottom:calc(100% + 8px);display:none;flex-direction:column;align-items:center;
+  gap:5px;width:40px;padding:9px 0 7px;border-radius:20px;background:var(--s2);color:var(--t2);pointer-events:none;
+  opacity:calc(.45 + var(--lockp,0)*.55);transform:translateY(calc(var(--lockp,0)*-7px));transition:opacity .1s linear,transform .1s linear,background .12s linear,color .12s linear;}
+.ac-rec.holding .ac-rec-lock{display:flex;}
+.ac-rec-lock svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
+.ac-rec-lock .rl-up{font-size:12px;line-height:1;color:var(--accent);opacity:calc(.4 + var(--lockp,0)*.6);}
+.ac-rec-lock.armed{background:var(--accent);color:#fff;}
+.ac-rec-lock.armed .rl-up{color:#fff;opacity:1;}
 .ac-rec.holding .ac-rec-bars,.ac-rec.holding .ac-rec-send{display:none;}
 .ac-rec.holding .ac-rec-del{pointer-events:none;background:var(--red-soft);
   transform:scale(calc(1 + var(--cancel,0) * .55));transition:transform .06s linear;}
@@ -13518,6 +13528,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <div class="msg-imgprev" id="acAttPrev"></div>
       <!-- Voice-note recording bar -->
       <div class="ac-rec hidden" id="acRec">
+        <div class="ac-rec-lock" id="acRecLock" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span class="rl-up">⌃</span></div>
         <button class="ac-rec-del" id="acRecDel" onclick="acVoiceCancel()" aria-label="Cancel recording">
           <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
         </button>
@@ -40456,6 +40467,8 @@ async function acVoiceStart(holdMode) {
   acVoiceTick();
   // If they let go after a real hold before the mic was ready, send straight away.
   if (_micPending === 'send') { _micPending = null; _micAutoSend = true; acVoiceStop(); }
+  // Slid up to lock before the mic was ready → start hands-free (buttons), not holding.
+  else if (_micPending === 'lock') { _micPending = null; rec.classList.remove('holding'); }
 }
 function acVoiceTick() {
   const s = Math.floor((Date.now() - acRecStart) / 1000);
@@ -40507,14 +40520,15 @@ function acStopMic() {
    Press & hold the mic to record; slide left past the threshold to cancel;
    release to send. A quick tap instead locks into hands-free recording (the
    old behaviour) so you can keep talking and stop/send with the buttons. */
-let _micHold = false, _micStartX = 0, _micStartT = 0, _micMoved = false, _micCancelled = false, _micPending = null, _micStarting = false;
+let _micHold = false, _micStartX = 0, _micStartY = 0, _micStartT = 0, _micMoved = false, _micCancelled = false, _micLocked = false, _micPending = null, _micStarting = false;
 const MIC_CANCEL = 90;   // px to slide left before it cancels
+const MIC_LOCK = 70;     // px to slide UP before it locks hands-free
 const MIC_TAP_MS = 450;  // shorter than this (and no slide) counts as a tap → lock
 function micDown(e) {
   if (AC._recording || AC._selectMode || _micHold || _micStarting) return;
   e.preventDefault();
-  _micHold = true; _micCancelled = false; _micMoved = false; _micPending = null;
-  _micStartX = e.clientX; _micStartT = Date.now();
+  _micHold = true; _micCancelled = false; _micLocked = false; _micMoved = false; _micPending = null;
+  _micStartX = e.clientX; _micStartY = e.clientY; _micStartT = Date.now();
   acVoiceStart(true);
   document.addEventListener('pointermove', _micMove);
   document.addEventListener('pointerup', _micUp);
@@ -40522,10 +40536,22 @@ function micDown(e) {
 }
 function _micMove(e) {
   if (!_micHold) return;
-  const dx = e.clientX - _micStartX;
-  if (Math.abs(dx) > 6) _micMoved = true;
-  const slide = Math.min(0, dx); // leftward only
+  const dx = e.clientX - _micStartX, dy = e.clientY - _micStartY;
+  if (Math.abs(dx) > 6 || Math.abs(dy) > 6) _micMoved = true;
   const rec = document.getElementById('acRec');
+  const lock = document.getElementById('acRecLock');
+  // Slide UP to lock hands-free (only when the drag is clearly more vertical than
+  // horizontal, so it never fights slide-left-to-cancel). The pill fills as you rise.
+  const up = Math.min(0, dy);
+  if (lock && Math.abs(dy) >= Math.abs(dx)) { const lp = Math.min(1, Math.abs(up) / MIC_LOCK); rec.style.setProperty('--lockp', lp.toFixed(3)); lock.classList.toggle('armed', lp >= 1); }
+  if (up <= -MIC_LOCK && Math.abs(dy) > Math.abs(dx)) { // slid up far enough → lock
+    if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e2) {} }
+    if (AC._recording) { rec.classList.remove('holding'); _micLocked = true; } // hands-free: buttons show
+    else { _micPending = 'lock'; }                                             // mic not ready → lock on start
+    _micEnd(); // detach the gesture — releasing the finger now does nothing; recording continues
+    return;
+  }
+  const slide = Math.min(0, dx); // leftward only
   rec.style.setProperty('--slide', slide + 'px');
   rec.style.setProperty('--cancel', Math.min(1, Math.abs(slide) / MIC_CANCEL).toFixed(3));
   if (slide <= -MIC_CANCEL) { // slid far enough → cancel
@@ -40557,7 +40583,8 @@ function _micEnd() {
   document.removeEventListener('pointerup', _micUp);
   document.removeEventListener('pointercancel', _micUp);
   const rec = document.getElementById('acRec');
-  if (rec) { rec.style.removeProperty('--slide'); rec.style.removeProperty('--cancel'); }
+  if (rec) { rec.style.removeProperty('--slide'); rec.style.removeProperty('--cancel'); rec.style.removeProperty('--lockp'); }
+  document.getElementById('acRecLock')?.classList.remove('armed');
 }
 
 /* ── Custom voice-note player (play/pause, scrub, speed) ──
