@@ -417,3 +417,54 @@ Overrides of earlier locked decisions, per the owner's Phase-5 blueprint (all ex
 **Phase 5 (Home world) is complete** across Waves 1–3.
 
 *Phase 3 adjustment (2026-07-08, by Yiddi): **Layer C — the opening lap — removed entirely** (the viewport lap orb, its per-session seen registry, the appTab wrapper that fired it, AND the older engine boot-lap on `.spin` elements). No light plays on its own at boot, login, or a tab's first open; every remaining layer is pointer- or AI-driven only (pool, rim, flares, comets — all verified intact after removal). This supersedes §9.8's opening-lap policy.*
+
+## Phase 7 — Engine world (COMPLETE, delivered in tested waves A–I, all published live)
+
+Engine is the discovery world — discovery of the outside world only, nothing personal.
+Executed 2026-07-08/09 in nine tested, individually-published waves (SW v986→v994):
+
+- **A — Purity.** Removed the "Chats" (private-message) scope from Engine entirely
+  (scope chips, desktop sidebar, chat-tab Search button → Talk); acSetSearchScope
+  redirects any stale/deep-linked `chats` scope to `all`. Search field copy →
+  "Search everything on Atwe". Front-page discover tiles were already personal-free.
+- **B — Front page (blueprint, top to bottom).** Ask Atwe AI hero deep-links into the
+  AI world carrying the typed query (acEngineAskAi); DISCOVER is a clean grid of
+  near-black cards with blue-tint icon discs — the 8 tiles Marketplace · Jobs · Services ·
+  Businesses · Events · Courses · Circles (→ same Home Circles hub) · Shorts; a
+  "More to explore" row keeps Find workers · Shop with AI · Communities · Newsletters ·
+  Showcase; Trending kept; new NEAR YOU section (nearby businesses · gold rating ·
+  distance · open state, opt-in location). Directory API now returns rating/reviewCount/
+  openNow (businessOpenNow). Dropped inline circle-search + PYMK + inline shorts row.
+- **C — Search behavior.** Scope word-tabs appear only once typing (or in a non-all
+  scope) via _syncScopeBar; fresh arrival with an empty field resets to the discovery
+  front page; the "All" view groups by type (People · Shop · Posts) with a per-group
+  "See all" link switching to that scope. Recent searches + Clear already existed.
+- **D — Result rows.** Business rows show gold rating + open state (search businesses
+  branch enhanced like the directory). People rows already matched (avatar · name ·
+  blue seal · handle). Services stay contact-by-chat (no fake Book/rating — data-model
+  honest). Products keep image·title·price; jobs keep role·company·location·pay.
+- **E — Buyer protection visible.** Always-visible green-dot escrow chip on the listing
+  detail ("Buyer protection — funds held in escrow"); a green escrow note in checkout
+  ("released when you confirm delivery"). Action hierarchy (grey Add to cart + white
+  Buy now) and the wallet-first payment picker were already correct.
+- **F — Storefront.** Escrow reassurance line for shoppers on #storefrontView (owner
+  tools already gate on isOwner). Full tabbed public business page = the profile.
+- **G — Jobs hub.** Added the AI MATCH card (near-black card, blue sparkle disc,
+  Living-Light rim → acOpenAiMatch); Easy Apply "Applied" pill → grey + GREEN text
+  (was blue). Search/filters/bookmark/Easy-Apply/Post-a-job already present.
+- **H — Listing gallery.** Square (aspect-ratio 1/1); dot indicators now track the swipe
+  (acGalScroll) on both the marketplace + services galleries. Variant chips already show
+  the blue hairline + tint on select; full-screen zoom via the image viewer.
+- **I — Checkout success pulse.** Green check-mark pulse ("Order placed") before the
+  order confirmation (which carries the tracking row + escrow banner); reduced-motion
+  static, both themes, role=status, semantic green only.
+
+**Final QA (render sweep, 4 modes):** front page (13 tiles), Jobs hub, business + people
+rows all render; every Engine function defined; **0 console errors in dark, light, RTL,
+and reduced-motion.** Backend endpoints (search, directory rating/openNow, orders) were
+schema-checked + node --check'd per wave. The live money-moving E2E (real checkout) is
+best re-run against a seeded DB in a dedicated pass.
+
+**Deliberately deferred (noted, low-risk):** a fully sticky bottom buy-bar on the listing
+detail (the buy row is currently inline — the grey/white hierarchy is already correct);
+light Events/Courses/Shorts hub restyles beyond what they inherit from the shared tokens.
