@@ -6144,6 +6144,20 @@ body.light .ac-adcard{box-shadow:0 4px 16px rgba(15,20,25,.07);}
   -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
   flex-direction:row;align-items:flex-end;justify-content:center;
   padding:0 12px calc(12px + env(safe-area-inset-bottom,0px));}
+/* Desktop: pop-up sheets that anchor to the bottom edge on mobile (composer, new
+   chat, emoji, reply-scope, comments, more-menu, group preview) float CENTRED in
+   the viewport as fully-rounded cards instead. Mobile keeps the bottom-sheet feel. */
+@media(min-width:769px){
+  #acPostScreen,.emoji-ov,#replyScopeSheet,.fcmt-sheet,.fmore-sheet,.overlay.gp-sheet,.nc-overlay{
+    align-items:center!important;padding-top:24px;padding-bottom:24px;}
+  .fcmt-card,.fmore-card,.gp-card{border-radius:var(--r-xl);}
+  .nc-sheet{margin-bottom:0;}
+}
+/* Hide native number-input spinner arrows on styled inputs (money amounts, prices);
+   the app uses its own +/- steppers where a stepper is wanted. */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+input[type=number]{-moz-appearance:textfield;appearance:textfield;}
 .ac-compose-card{background:var(--s1);width:100%;max-width:600px;max-height:min(90vh,760px);
   border-radius:26px;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;
   -webkit-overflow-scrolling:touch;box-shadow:0 18px 60px rgba(0,0,0,.55);
