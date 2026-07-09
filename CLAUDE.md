@@ -2523,6 +2523,47 @@ Two Google-Business-profile staples on business accounts:
   notify `qa_question`/`qa_answer`). Client: a Q&A section on the Business tab
   (`acLoadBizQA` → `#acBizQA`, ask box for visitors, per-question answer box).
 
+### Cart recovery (abandoned-cart nudge via Beam)
+
+When a signed-in shopper abandons a cart with a business, the business sends **one**
+polite Beam message after a configurable delay (default 1h, business-set 1–24h) to
+win the sale back. Built on the existing cart + Beam + flusher infrastructure.
+- **DB:** `users.cart_recovery_enabled`/`cart_recovery_delay_hours` (business
+  settings) + `users.cart_reminders_off` (member global opt-out). `cart_recovery_log`
+  (business_id, customer_id, `cart_sig`, sent_at, recovered_at) — the **unique
+  `(business,customer,cart_sig)` index enforces "one nudge per exact cart, ever"**;
+  `cart_recovery_mutes` is the per-shop opt-out.
+- **Flusher `flushCartRecovery`** (`CARTREC_FLUSH_MS`, default 5min, `.unref()`,
+  `registerJob`/`trackJob`): finds carts whose newest item is older than the
+  business's delay, then per candidate enforces STRICT anti-spam — a **weekly cap**
+  (no `cart_recovery_log` row in the last 7 days), the **per-cart unique** claim
+  (`INSERT … ON CONFLICT DO NOTHING RETURNING`, claim-first like every money path),
+  **mute** (`cart_recovery_mutes`), **block** (`blockedEither`), **DND/quiet-hours**
+  (`userInDnd` → held for a later tick), the member **global opt-out**, and a
+  **sold-out skip** (never nudges a fully sold-out cart; prices are the CURRENT
+  variant-aware price via `cartLineState`). Sends a `meta.t='cartrecovery'` DM card
+  (built server-side) via the `maybeAutoReply` pattern (`at_messages` insert + `rtPush`
+  both sides + `notify('message')`). `markCartRecovered(business, customer)` stamps
+  `recovered_at` when the shopper then pays that seller (wired into `recordOrderPaid`
+  + `fundEscrowOrder`, right where the cart is cleared).
+- **Routes:** `GET/PUT /api/cart-recovery/settings` (business — enabled/delayHours +
+  `sentCount`/`recoveredCount`), `POST /api/cart-recovery/mute {businessId,on}` +
+  `GET /api/cart-recovery/mute/:businessId` (shopper per-shop mute), and the global
+  opt-out rides on `GET/PUT /api/notification-prefs` as `cartRemindersOff`.
+  `publicUser` exposes `cartRecoveryEnabled`/`cartRecoveryDelayHours`/`cartRemindersOff`.
+- **Client:** the `cartrecovery` DM card (`acMetaCard`) renders a compact product card
+  with a WHITE **Complete checkout** button **only on the shopper's copy** (the
+  business's own bubble just shows the card) → `acCartRecoveryCheckout(businessId)`
+  reloads the live cart and opens the seller's checkout with the exact restored items;
+  chat-list preview "🛍️ Your cart is waiting". A **Cart recovery** row in **Manage
+  store** → `#cartRecoveryView` (`acOpenCartRecovery`: on/off switch default on, a
+  1–24h delay picker, and Nudges-sent / Carts-recovered counters). A **"Mute reminders
+  from this shop"** row in the DM ⋯ menu (business peers only, `acToggleShopReminders`)
+  and a global **"Cart reminders"** switch on the Notifications settings page
+  (`toggleCartReminders`). Verified end-to-end (real DB, short flush interval): nudges
+  once, the weekly cap + per-cart unique block a 2nd nudge, mute + global opt-out
+  suppress it, and paying stamps `recovered_at`.
+
 ### Auto-messages (greeting + away)
 
 WhatsApp-Business-style automated DM replies for business accounts — **free on

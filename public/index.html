@@ -5894,6 +5894,11 @@ body.light .ac-home-stories{border-bottom-color:rgba(0,0,0,.08);}
 .mc-prod-name{font-size:14px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .mc-prod-price{font-size:14px;font-weight:800;color:var(--accent);margin:1px 0;}
 .mc-prod-cta{font-size:12px;color:var(--t3);}
+/* Cart-recovery Beam card. */
+.mc-cart{display:flex;flex-direction:column;gap:10px;}
+.mc-cart-top{display:flex;gap:11px;align-items:center;}
+.mc-cart-sub{font-size:13px;color:var(--t2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mc-cart-cta{margin:0;}
 .sp-row{display:flex;align-items:center;gap:11px;width:100%;background:none;border:none;border-top:1px solid var(--b1);padding:10px 2px;cursor:pointer;text-align:start;}
 .sp-row:first-of-type{border-top:none;}
 .sp-img{width:46px;height:46px;border-radius:10px;background-size:cover;background-position:center;flex:0 0 auto;background-color:var(--s3);}
@@ -12772,6 +12777,16 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Cart recovery (abandoned-cart nudge via Beam) -->
+<div class="overlay hidden" id="cartRecoveryView" onclick="if(event.target===this)closeOverlay('cartRecoveryView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Cart recovery">
+    <button class="sheet-close" onclick="closeOverlay('cartRecoveryView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Cart recovery</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Win back shoppers who left items in their cart — one friendly Beam reminder.</div>
+    <div id="cartRecoveryBody"></div>
+  </div>
+</div>
+
 <!-- Public storefront (opened from a business profile) -->
 <div class="overlay hidden" id="storefrontView" onclick="if(event.target===this)closeOverlay('storefrontView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Storefront">
@@ -14747,11 +14762,14 @@ async function acLoadNotifPrefs() {
   const el = document.getElementById('notifPrefGroup');
   if (el) {
     try {
-      const { categories } = await API.req('GET', '/api/notification-prefs');
-      el.innerHTML = categories.map(c => {
+      const { categories, cartRemindersOff } = await API.req('GET', '/api/notification-prefs');
+      let html = categories.map(c => {
         const col = _NP_ICONS[c.key] || 'var(--s3)';
         return `<div class="iset-row" data-static><span class="iset-ic" style="background:${col}"><svg viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 0 1 12 0c0 4.5 2 5.5 2 5.5H4s2-1 2-5.5"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></svg></span><div class="iset-main"><div class="iset-label">${escHtml(c.label)}</div></div><label class="ios-switch"><input type="checkbox" ${c.on ? 'checked' : ''} onchange="toggleNotifPref('${c.key}', this)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>`;
       }).join('');
+      // Global "Cart reminders" opt-out (abandoned-cart nudges from any shop).
+      html += `<div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg></span><div class="iset-main"><div class="iset-label">Cart reminders</div><div class="iset-sub">Reminders from shops about items left in your cart</div></div><label class="ios-switch"><input type="checkbox" ${cartRemindersOff ? '' : 'checked'} onchange="toggleCartReminders(this)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>`;
+      el.innerHTML = html;
     } catch (e) { el.innerHTML = '<div class="iset-row" data-static><div class="iset-main"><div class="iset-sub">Couldn’t load. Reopen to retry.</div></div></div>'; }
   }
   const fel = document.getElementById('notifFilterGroup');
@@ -14804,6 +14822,14 @@ async function toggleNotifPref(key, el) {
   const on = !!el.checked;
   try {
     await API.req('PUT', '/api/notification-prefs', { prefs: { [key]: on } });
+  } catch (e) { el.checked = !on; showNotif(e.message || 'Could not update.'); }
+}
+// Global cart-reminders opt-out (checked = reminders ON, so send cartRemindersOff = !checked).
+async function toggleCartReminders(el) {
+  const on = !!el.checked;
+  try {
+    await API.req('PUT', '/api/notification-prefs', { cartRemindersOff: !on });
+    if (S.user) S.user.cartRemindersOff = !on;
   } catch (e) { el.checked = !on; showNotif(e.message || 'Could not update.'); }
 }
 async function toggleNotifFilter(key, el) {
@@ -20082,7 +20108,7 @@ function acJumpToPinned(id) {
 /* ─── Starred messages (aggregate view across every DM + group) ─── */
 function _starredPreview(m) {
   if (m.body) return escHtml(m.body);
-  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'quote' ? '📋 Quote' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'product' ? '🛍️ Product' : m.meta.t === 'split' ? '🧮 Split request' : m.meta.t === 'pool' ? '🫙 Money pool' : m.meta.t === 'offer' ? '🏷️ Offer' : m.meta.t === 'storyreply' ? (m.meta.emoji ? '↩ Story reaction' : '↩ Story reply') : m.meta.t === 'gift' ? '🎁 Gift card' : m.meta.t === 'digital' ? '⚡ Download' : m.meta.t === 'money' ? '💸 Money' : m.meta.t === 'moneyrequest' ? '💰 Money request' : 'Message';
+  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'quote' ? '📋 Quote' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'product' ? '🛍️ Product' : m.meta.t === 'split' ? '🧮 Split request' : m.meta.t === 'pool' ? '🫙 Money pool' : m.meta.t === 'offer' ? '🏷️ Offer' : m.meta.t === 'storyreply' ? (m.meta.emoji ? '↩ Story reaction' : '↩ Story reply') : m.meta.t === 'gift' ? '🎁 Gift card' : m.meta.t === 'digital' ? '⚡ Download' : m.meta.t === 'money' ? '💸 Money' : m.meta.t === 'moneyrequest' ? '💰 Money request' : m.meta.t === 'cartrecovery' ? '🛍️ Your cart is waiting' : 'Message';
   if (m.image || m.mediaKind === 'image') return '📷 Photo';
   if (m.mediaKind === 'video') return '🎬 Video';
   if (m.mediaKind === 'audio') return '🎤 Voice message';
@@ -30865,6 +30891,17 @@ function acCheckout(sellerId) {
   acOpenCheckout({ mode: 'cart', sellerId, name: g.items.length + ' item' + (g.items.length === 1 ? '' : 's') + ' from ' + g.seller.name,
     subtotalCents: g.totalCents, needsShipping: !!g.needsShipping, shippingCents: g.shippingCents || 0 });
 }
+// "Complete checkout" from a cart-recovery Beam card: (re)load the live cart, then
+// open the seller's checkout with the exact restored items.
+async function acCartRecoveryCheckout(businessId) {
+  try {
+    const { carts } = await API.req('GET', '/api/cart');
+    AC._carts = carts || [];
+    const g = AC._carts.find((c) => c.seller.id === businessId);
+    if (!g || !g.items.length) { showNotif('Your cart is empty — those items may no longer be available.'); return; }
+    acCheckout(businessId);
+  } catch (e) { showNotif((e && e.message) || 'Could not open checkout.'); }
+}
 /* ─── Universal details & amenities editor (shared by product + service forms) ─── */
 const _AMENITY_SUGGEST = ['Wi-Fi', 'Air conditioning', 'Heating', 'Free parking', 'Kitchen', 'Washer', 'Dryer', 'TV', 'Pool', 'Gym', 'Elevator', 'Pet-friendly', 'Smoke-free', 'Wheelchair accessible', 'Balcony', 'Garden', 'Furnished', 'Utilities included', 'Security', 'Great neighborhood', 'Workspace', 'Free cancellation'];
 function acDetailsInit(obj) {
@@ -32774,9 +32811,38 @@ async function acOpenStoreManage() {
     ${row(SI.megaphone, 'Sponsored ads', 'Pay per click for a "Sponsored" search slot', 'closeOverlay(\'storeManageView\');acOpenProductAds()')}
     ${row(SI.receipt, 'Orders', pending ? pending + ' to fulfil' : 'Manage and ship orders', 'closeOverlay(\'storeManageView\');acOpenOrders(\'seller\')', pending || '')}
     ${row(SI.chart, 'Sales & analytics', 'Revenue, orders and top products', 'closeOverlay(\'storeManageView\');acOpenShopAnalytics()')}
+    ${row(SI.megaphone, 'Cart recovery', 'Win back abandoned carts via Beam', 'closeOverlay(\'storeManageView\');acOpenCartRecovery()')}
     ${row(SI.wallet, 'Wallet & payouts', 'Your balance and cash-out', 'closeOverlay(\'storeManageView\');acOpenWallet()')}
   </div>`;
   });
+}
+// Cart recovery settings + counters (business owner).
+async function acOpenCartRecovery() {
+  showOverlay('cartRecoveryView');
+  const b = document.getElementById('cartRecoveryBody'); if (!b) return;
+  b.innerHTML = acSkelRows(2);
+  try {
+    const s = await API.req('GET', '/api/cart-recovery/settings');
+    const opts = [1, 2, 4, 8, 12, 24];
+    if (!opts.includes(s.delayHours)) opts.push(s.delayHours);
+    opts.sort((a, c) => a - c);
+    b.innerHTML = `
+      <div class="ba-grid" style="margin-bottom:14px;">
+        <div class="ba-card"><div class="ba-n">${s.sentCount || 0}</div><div class="ba-l">Nudges sent</div></div>
+        <div class="ba-card"><div class="ba-n">${s.recoveredCount || 0}</div><div class="ba-l">Carts recovered</div></div>
+      </div>
+      <div class="iset-group">
+        <div class="iset-row" data-static><div class="iset-main"><div class="iset-label">Cart recovery</div><div class="iset-sub">Send one polite Beam reminder when a shopper leaves items in their cart</div></div><label class="ios-switch"><input type="checkbox" id="crEnabled" ${s.enabled ? 'checked' : ''} onchange="acSaveCartRecovery()"><span class="ios-track"></span><span class="ios-knob"></span></label></div>
+        <div class="iset-row" data-static><div class="iset-main"><div class="iset-label">Wait before sending</div><div class="iset-sub">How long after a cart is abandoned</div></div><select class="iset-select" id="crDelay" onchange="acSaveCartRecovery()">${opts.map((h) => `<option value="${h}" ${s.delayHours === h ? 'selected' : ''}>${h} hour${h === 1 ? '' : 's'}</option>`).join('')}</select></div>
+      </div>
+      <div class="iset-cap">One reminder per abandoned cart, at most once per shopper per week. It respects blocks, quiet hours, and never nudges a sold-out cart. Shoppers can mute reminders from your shop or turn them off entirely.</div>`;
+  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml((e && e.message) || 'Could not load cart recovery.') + '</div>'; }
+}
+async function acSaveCartRecovery() {
+  const en = document.getElementById('crEnabled'), dl = document.getElementById('crDelay');
+  if (!en || !dl) return;
+  try { await API.req('PUT', '/api/cart-recovery/settings', { enabled: en.checked, delayHours: parseInt(dl.value, 10) || 1 }); showNotif('Cart recovery updated.'); }
+  catch (e) { showNotif((e && e.message) || 'Could not save.'); }
 }
 // Open my own storefront (owner preview). Reads S.user directly — avoids embedding a
 // JSON object (with quotes) in an HTML onclick, which broke the old button.
@@ -36891,6 +36957,7 @@ function acThreadMenu(btn) {
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('quote')">${IC.quote}<span class="mm-label">Send a quote</span></button>`)
       + `<button class="mm-item" onclick="acHeadAct('wallpaper')">${IC.wallpaper}<span class="mm-label">Wallpaper</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('export')">${IC.xport}<span class="mm-label">Export chat</span></button>`
+      + ((!self && AC.peer && AC.peer.accountType === 'business') ? `<button class="mm-item" onclick="acHeadAct('cartmute')"><svg viewBox="0 0 24 24"><path d="M13.7 21a2 2 0 0 1-3.4 0"/><path d="M18 8a6 6 0 0 0-9.3-5"/><path d="M6 9v4l-2 3h12"/><line x1="3" y1="3" x2="21" y2="21"/></svg><span class="mm-label">Mute reminders from this shop</span></button>` : '')
       + dangerRows
       + `<button class="mm-item danger" onclick="acHeadAct('delete')">${IC.trash}<span class="mm-label">Delete chat</span></button>`;
   }
@@ -36909,6 +36976,7 @@ function acHeadAct(a) {
     else if (a === 'block') acBlockPeer();
     else if (a === 'report') acReportPeer();
     else if (a === 'select') acStartSelect();
+    else if (a === 'cartmute') acToggleShopReminders();
     else if (a === 'threads' && AC.peer) acOpenThreadPicker(AC.peer.id);
     else if (a === 'ai') acChatAi();
     else if (a === 'search') acThreadSearchOpen();
@@ -36921,6 +36989,16 @@ function acHeadAct(a) {
     else if (a === 'quote' && AC.peer) acQuoteCreateOpen(AC.peer.id, AC.peer.name);
     else if (a === 'money' && AC.peer) acOpenSendMoney(AC.peer.id, AC.peer.name, AC.peer.username);
   }, 60);
+}
+// Mute / unmute cart-recovery reminders from THIS shop (per-shop opt-out).
+async function acToggleShopReminders() {
+  if (!AC.peer || !AC.peer.id) return;
+  try {
+    const cur = await API.req('GET', '/api/cart-recovery/mute/' + AC.peer.id);
+    const next = !cur.muted;
+    await API.req('POST', '/api/cart-recovery/mute', { businessId: AC.peer.id, on: next });
+    showNotif(next ? 'You won’t get cart reminders from this shop.' : 'Cart reminders from this shop are back on.');
+  } catch (e) { showNotif((e && e.message) || 'Could not update.'); }
 }
 /* ── Export chat (WhatsApp-style: save the open conversation as a .txt) ──
    Builds a readable transcript from the already-loaded thread (the read routes
@@ -41235,7 +41313,7 @@ function acSketchSend() {
 
 /* ── Render a rich message card + handle voting / RSVPs ── */
 function acMetaLabel(t) {
-  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'livelocation' ? '📍 Live location' : t === 'sticker' ? '🌟 Sticker' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'quote' ? '📋 Quote' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'pool' ? '🫙 Money pool' : t === 'offer' ? '🏷️ Offer' : t === 'storyreply' ? '↩ Story reply' : t === 'gift' ? '🎁 Gift card' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'moneyrequest' ? '💰 Money request' : t === 'doc' ? '📄 Document' : t === 'call' ? '📞 Call' : 'Message';
+  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'livelocation' ? '📍 Live location' : t === 'sticker' ? '🌟 Sticker' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'quote' ? '📋 Quote' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'pool' ? '🫙 Money pool' : t === 'offer' ? '🏷️ Offer' : t === 'storyreply' ? '↩ Story reply' : t === 'gift' ? '🎁 Gift card' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'moneyrequest' ? '💰 Money request' : t === 'cartrecovery' ? '🛍️ Your cart is waiting' : t === 'doc' ? '📄 Document' : t === 'call' ? '📞 Call' : 'Message';
 }
 function acMetaCard(m) {
   const meta = m.meta; if (!meta) return '';
@@ -41352,6 +41430,18 @@ function acMetaCard(m) {
       <div class="mc-prod-main"><div class="mc-prod-name">${escHtml(meta.name || 'Product')}</div><div class="mc-prod-price">${price}</div>
         <div class="mc-prod-cta">${m.mine ? 'Shared · tap to view' : 'Tap to view & buy'}</div></div>
     </div>`;
+  }
+  if (meta.t === 'cartrecovery') {
+    // Abandoned-cart nudge from a shop. Only the CUSTOMER gets a "Complete checkout"
+    // button (the business's own copy of the bubble just shows the card).
+    const price = '$' + ((meta.totalCents || 0) / 100).toFixed(2);
+    const img = meta.image ? `<div class="mc-prod-img" style="background-image:url('${meta.image}')"></div>` : `<div class="mc-prod-img noimg">${_MKT_BOX_SVG}</div>`;
+    const items = (meta.count || 1) + ' item' + ((meta.count || 1) === 1 ? '' : 's');
+    const nameLine = meta.name ? escHtml(meta.name) + (meta.more ? ' + ' + meta.more + ' more' : '') : items;
+    const cta = m.mine ? '' : `<button class="btn-white mc-cart-cta" onclick="event.stopPropagation();acCartRecoveryCheckout(${meta.businessId})">Complete checkout</button>`;
+    return `<div class="meta-card mc-cart">
+      <div class="mc-cart-top">${img}<div class="mc-prod-main"><div class="mc-prod-name">Your cart is waiting</div><div class="mc-cart-sub">${nameLine} · ${price}</div></div></div>
+      ${cta}</div>`;
   }
   if (meta.t === 'storyreply') {
     const st = meta.story || {};

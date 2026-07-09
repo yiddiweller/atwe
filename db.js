@@ -3000,6 +3000,35 @@ async function initSchema() {
       PRIMARY KEY (business_id, peer_id, kind)
     );
   `);
+  // Cart recovery (abandoned-cart nudge via Beam). A business sends ONE polite Beam
+  // message a configurable delay after a signed-in shopper abandons a cart. Strict
+  // anti-spam: one nudge per exact abandoned cart EVER (the unique cart_sig), a hard
+  // cap of ≤1 recovery per (shopper, business) per week (sent_at window), never if
+  // muted (`cart_recovery_mutes`) / blocked / opted-out (`users.cart_reminders_off`),
+  // respects DND/quiet-hours, and never for a sold-out cart. `recovered_at` is stamped
+  // when the shopper then pays that seller (dashboard "carts recovered").
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS cart_recovery_enabled BOOLEAN NOT NULL DEFAULT true;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS cart_recovery_delay_hours INTEGER NOT NULL DEFAULT 1;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS cart_reminders_off BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS cart_recovery_log (
+      id           SERIAL PRIMARY KEY,
+      business_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      customer_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      cart_sig     TEXT NOT NULL,
+      sent_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+      recovered_at TIMESTAMPTZ
+    );
+  `);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS cart_recovery_sig_idx ON cart_recovery_log(business_id, customer_id, cart_sig);`);
+  await query(`CREATE INDEX IF NOT EXISTS cart_recovery_recent_idx ON cart_recovery_log(business_id, customer_id, sent_at DESC);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS cart_recovery_mutes (
+      business_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      customer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (business_id, customer_id)
+    );
+  `);
   // Business Q&A (Google-Business style): anyone can ask a public question on a business
   // profile; anyone can answer (the owner's answer is highlighted). Owner can moderate.
   await query(`

@@ -923,6 +923,9 @@ function publicUser(row) {
     awayEnabled: !!row.away_enabled,
     awayMessage: row.away_message || null,
     awaySchedule: row.away_schedule === 'outside_hours' ? 'outside_hours' : 'always',
+    cartRecoveryEnabled: row.cart_recovery_enabled !== false,
+    cartRecoveryDelayHours: row.cart_recovery_delay_hours || 1,
+    cartRemindersOff: !!row.cart_reminders_off,
     lat: row.lat != null ? Number(row.lat) : null,
     lng: row.lng != null ? Number(row.lng) : null,
     dob: row.dob ? new Date(row.dob).toISOString().slice(0, 10) : null,
@@ -3097,7 +3100,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, business_hours, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, profile_cta FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, business_hours, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -3252,10 +3255,10 @@ app.put('/api/account-privacy', auth.requireAuth, async (req, res) => {
 // (every muteable category, defaulting ON when not explicitly turned off).
 app.get('/api/notification-prefs', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT notif_prefs FROM users WHERE id = $1', [req.user.id]);
+    const { rows } = await db.query('SELECT notif_prefs, cart_reminders_off FROM users WHERE id = $1', [req.user.id]);
     const saved = (rows[0] && rows[0].notif_prefs) || {};
     const categories = NOTIF_CATEGORIES.map((c) => ({ key: c.key, label: c.label, on: saved[c.key] !== false }));
-    res.json({ categories });
+    res.json({ categories, cartRemindersOff: !!(rows[0] && rows[0].cart_reminders_off) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load notification settings.' }); }
 });
 // PUT merges a partial { prefs: { likes:false, ... } } map (unknown keys ignored).
@@ -3264,6 +3267,12 @@ app.put('/api/notification-prefs', auth.requireAuth, async (req, res) => {
   const clean = {};
   for (const [k, v] of Object.entries(incoming)) {
     if (NOTIF_CAT_KEYS.has(k)) clean[k] = (v !== false); // store explicit bool
+  }
+  // Global "cart reminders" opt-out (a dedicated column, since the recovery nudge is a
+  // real Beam message, not a notify() category). Accepted alongside the prefs merge.
+  if ('cartRemindersOff' in req.body) {
+    await db.query('UPDATE users SET cart_reminders_off = $1 WHERE id = $2', [req.body.cartRemindersOff === true, req.user.id]).catch(() => {});
+    if (!Object.keys(clean).length) return res.json({ ok: true, cartRemindersOff: req.body.cartRemindersOff === true });
   }
   if (!Object.keys(clean).length) return res.json({ ok: true });
   try {
@@ -4614,6 +4623,143 @@ async function maybeAutoReply(businessId, customerId) {
     }
   } catch (e) { console.error('maybeAutoReply failed:', e.message); }
 }
+
+/* ─── Cart recovery (abandoned-cart nudge via Beam) ───
+   A business sends ONE polite Beam message a configurable delay (default 1h,
+   1–24h) after a signed-in shopper abandons a cart. STRICT anti-spam — one nudge
+   per exact abandoned cart ever (unique cart_sig), ≤1 per (shopper, business) per
+   week, never if muted / blocked / opted-out, respects DND (retries later), and
+   never for a sold-out cart with an honest current price. See CLAUDE.md. */
+const CARTREC_FLUSH_MS = Math.max(30000, parseInt(process.env.CARTREC_FLUSH_MS, 10) || 300000);
+const CARTREC_WEEK_MS = 7 * 24 * 3600 * 1000;
+// Mark any open recovery nudges for (business → customer) as recovered once they pay.
+function markCartRecovered(businessId, customerId) {
+  db.query('UPDATE cart_recovery_log SET recovered_at = now() WHERE business_id = $1 AND customer_id = $2 AND recovered_at IS NULL', [businessId, customerId]).catch(() => {});
+}
+// Resolve a cart line's CURRENT unit price + sold-out state (variant-aware).
+function cartLineState(row) {
+  const variants = Array.isArray(row.variants) ? row.variants : [];
+  if (row.variant_id != null) {
+    const v = variants.find((x) => String(x.id) === String(row.variant_id));
+    const price = (v && v.priceCents != null) ? v.priceCents : row.price_cents;
+    const soldOut = v ? (typeof v.stock === 'number' && v.stock <= 0) : (typeof row.stock === 'number' && row.stock <= 0);
+    return { price, soldOut };
+  }
+  const soldOut = variants.length ? variants.every((v) => typeof v.stock === 'number' && v.stock <= 0) : (typeof row.stock === 'number' && row.stock <= 0);
+  const price = variants.length ? Math.min(...variants.map((v) => (v.priceCents != null ? v.priceCents : row.price_cents))) : row.price_cents;
+  return { price, soldOut };
+}
+async function flushCartRecovery() {
+  let sent = 0;
+  let candidates;
+  try {
+    candidates = (await db.query(
+      `SELECT c.user_id AS customer_id, p.business_id AS seller_id,
+              MAX(c.created_at) AS last_added,
+              MAX(b.cart_recovery_delay_hours) AS delay_hours,
+              string_agg(c.product_id || ':' || COALESCE(c.variant_id,0) || 'x' || c.qty, ',' ORDER BY c.product_id, COALESCE(c.variant_id,0)) AS sig
+         FROM cart_items c
+         JOIN products p ON p.id = c.product_id AND p.active = true
+         JOIN users b ON b.id = p.business_id
+         JOIN users cu ON cu.id = c.user_id
+        WHERE b.account_type = 'business' AND b.cart_recovery_enabled = true AND NOT b.deactivated
+          AND NOT cu.cart_reminders_off AND NOT cu.deactivated
+        GROUP BY c.user_id, p.business_id
+        HAVING MAX(c.created_at) < now() - (MAX(b.cart_recovery_delay_hours) || ' hours')::interval
+        LIMIT 200`
+    )).rows;
+  } catch (e) { return 0; } // table may not exist on a very old DB; degrade silently
+  for (const cand of candidates) {
+    const seller = cand.seller_id, customer = cand.customer_id;
+    try {
+      // Weekly cap (a different cart can't re-nudge within 7 days).
+      const recent = await db.query(`SELECT 1 FROM cart_recovery_log WHERE business_id = $1 AND customer_id = $2 AND sent_at > now() - interval '7 days' LIMIT 1`, [seller, customer]);
+      if (recent.rowCount) continue;
+      // Muted this shop, or blocked either way → never send.
+      if ((await db.query('SELECT 1 FROM cart_recovery_mutes WHERE business_id = $1 AND customer_id = $2', [seller, customer])).rowCount) continue;
+      if (await blockedEither(seller, customer)) continue;
+      // Quiet hours / DND: hold off (a later tick will pick it up once the window ends).
+      const dnd = (await db.query('SELECT dnd_enabled, dnd_start_min, dnd_end_min, dnd_tz_offset FROM users WHERE id = $1', [customer])).rows[0];
+      if (userInDnd(dnd)) continue;
+      // Load the current cart lines for this seller; skip if EVERY line is sold out.
+      const lines = (await db.query(
+        `SELECT c.product_id, c.variant_id, c.qty, p.name, p.image, p.price_cents, p.stock, p.variants
+           FROM cart_items c JOIN products p ON p.id = c.product_id
+          WHERE c.user_id = $1 AND p.business_id = $2 AND p.active = true`,
+        [customer, seller]
+      )).rows;
+      if (!lines.length) continue;
+      let totalCents = 0, count = 0, firstImg = null, firstName = null, anyInStock = false;
+      for (const ln of lines) {
+        const st = cartLineState(ln);
+        if (st.soldOut) continue;
+        anyInStock = true;
+        totalCents += st.price * ln.qty;
+        count += ln.qty;
+        if (!firstName) { firstName = ln.name; firstImg = ln.image || null; }
+      }
+      if (!anyInStock) continue; // don't nudge a fully sold-out cart
+      // Claim-first: the unique (business,customer,sig) row enforces "one nudge per
+      // exact cart, ever". A conflict means we already nudged this cart → skip.
+      const claim = await db.query(
+        `INSERT INTO cart_recovery_log (business_id, customer_id, cart_sig) VALUES ($1,$2,$3)
+         ON CONFLICT (business_id, customer_id, cart_sig) DO NOTHING RETURNING id`,
+        [seller, customer, cand.sig]
+      );
+      if (!claim.rowCount) continue;
+      if (!(await dmAllowed(seller, customer))) continue;
+      const bname = (await db.query('SELECT name FROM users WHERE id = $1', [seller])).rows[0];
+      const meta = { t: 'cartrecovery', businessId: seller, count, totalCents, image: firstImg, name: firstName, more: Math.max(0, lines.filter((l) => !cartLineState(l).soldOut).length - 1) };
+      const body = `Still thinking it over? Your cart at ${(bname && bname.name) || 'our shop'} is waiting — complete your checkout whenever you're ready. 🛍️`;
+      const m = await db.query(`INSERT INTO at_messages (sender_id, recipient_id, body, meta) VALUES ($1,$2,$3,$4) RETURNING id, created_at`, [seller, customer, body, JSON.stringify(meta)]);
+      const msg = { id: m.rows[0].id, body, image: null, images: [], media: null, media_kind: null, media_name: null, created_at: m.rows[0].created_at, reply_to: null, forwarded: false, meta, viewOnce: false, threadId: null, secret: false, mine: false };
+      rtPush(customer, 'msg', { kind: 'dm', peerId: seller, message: msg });
+      rtPush(seller, 'msg', { kind: 'dm', peerId: customer, message: { ...msg, mine: true } });
+      notify(customer, seller, 'message', null);
+      sent++;
+    } catch (e) { /* per-candidate best-effort */ }
+  }
+  return sent;
+}
+
+// Business-facing settings + counters for the dashboard.
+app.get('/api/cart-recovery/settings', auth.requireAuth, async (req, res) => {
+  try {
+    const u = (await db.query('SELECT account_type, cart_recovery_enabled, cart_recovery_delay_hours FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!u || u.account_type !== 'business') return res.status(403).json({ error: 'Cart recovery is a business feature.' });
+    const stats = (await db.query('SELECT COUNT(*)::int AS sent, COUNT(*) FILTER (WHERE recovered_at IS NOT NULL)::int AS recovered FROM cart_recovery_log WHERE business_id = $1', [req.user.id])).rows[0];
+    res.json({ enabled: u.cart_recovery_enabled !== false, delayHours: u.cart_recovery_delay_hours || 1, sentCount: stats.sent, recoveredCount: stats.recovered });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load cart recovery.' }); }
+});
+app.put('/api/cart-recovery/settings', auth.requireAuth, async (req, res) => {
+  try {
+    const u = (await db.query('SELECT account_type FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!u || u.account_type !== 'business') return res.status(403).json({ error: 'Cart recovery is a business feature.' });
+    const fields = [], vals = [];
+    if ('enabled' in req.body) { vals.push(req.body.enabled === true); fields.push(`cart_recovery_enabled = $${vals.length}`); }
+    if ('delayHours' in req.body) { const h = Math.max(1, Math.min(24, Math.round(Number(req.body.delayHours) || 1))); vals.push(h); fields.push(`cart_recovery_delay_hours = $${vals.length}`); }
+    if (fields.length) { vals.push(req.user.id); await db.query(`UPDATE users SET ${fields.join(', ')} WHERE id = $${vals.length}`, vals); }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save.' }); }
+});
+// Shopper: mute / unmute cart reminders from ONE shop.
+app.post('/api/cart-recovery/mute', auth.requireAuth, async (req, res) => {
+  const bid = parseInt(req.body.businessId, 10);
+  if (!Number.isInteger(bid)) return res.status(400).json({ error: 'Invalid shop.' });
+  try {
+    if (req.body.on === false) await db.query('DELETE FROM cart_recovery_mutes WHERE business_id = $1 AND customer_id = $2', [bid, req.user.id]);
+    else await db.query('INSERT INTO cart_recovery_mutes (business_id, customer_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [bid, req.user.id]);
+    res.json({ ok: true, muted: req.body.on !== false });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+app.get('/api/cart-recovery/mute/:businessId', auth.requireAuth, async (req, res) => {
+  const bid = routeId(req.params.businessId);
+  if (!Number.isInteger(bid)) return res.status(400).json({ error: 'Invalid shop.' });
+  try {
+    const r = await db.query('SELECT 1 FROM cart_recovery_mutes WHERE business_id = $1 AND customer_id = $2', [bid, req.user.id]);
+    res.json({ muted: r.rowCount > 0 });
+  } catch (err) { res.json({ muted: false }); }
+});
 
 // Send a DM to another user.
 app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-send'), async (req, res) => {
@@ -16329,6 +16475,7 @@ async function recordOrderPaid(orderId, sellerCredited) {
   if (!o) return false;
   // Clear the bought items from the buyer's cart (products belonging to this seller).
   await db.query('DELETE FROM cart_items WHERE user_id = $1 AND product_id IN (SELECT id FROM products WHERE business_id = $2)', [o.buyer_id, o.seller_id]).catch(() => {});
+  markCartRecovered(o.seller_id, o.buyer_id);
   try {
     if (await dmAllowed(o.buyer_id, o.seller_id)) {
       const meta = { t: 'order', id: orderId, totalCents: o.total_cents };
@@ -16516,6 +16663,7 @@ async function fundEscrowOrder(buyerId, sellerId, orderId, totalCents) {
     client.release();
   }
   await db.query('DELETE FROM cart_items WHERE user_id = $1 AND product_id IN (SELECT id FROM products WHERE business_id = $2)', [buyerId, sellerId]).catch(() => {});
+  markCartRecovered(sellerId, buyerId);
   try {
     if (await dmAllowed(buyerId, sellerId)) {
       const meta = { t: 'order', id: orderId, totalCents, escrow: true };
@@ -17568,6 +17716,7 @@ async function flushProductSubs() {
   } catch (e) { /* DB not ready / transient */ }
 }
 registerJob('product_subs', 'Subscribe & Save', SUB_FLUSH_MS); setInterval(trackJob('product_subs', flushProductSubs), SUB_FLUSH_MS).unref?.();
+registerJob('cart_recovery', 'Cart recovery nudges', CARTREC_FLUSH_MS); setInterval(trackJob('cart_recovery', flushCartRecovery), CARTREC_FLUSH_MS).unref?.();
 
 /* ─── Returns / RMA ─── */
 const RETURN_OK_STATES = ['paid', 'fulfilled', 'delivered', 'released']; // refundable, non-escrow-pending
