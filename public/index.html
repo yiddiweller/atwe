@@ -2105,7 +2105,10 @@ body.light .tb-feedtab.active{color:var(--t1);}
 .tb-search input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);font-size:15px;font-family:inherit;}
 .tb-search input::placeholder{color:var(--t3);}
 /* Desktop: center the search bar at the top instead of letting it fill from the left. */
-@media(min-width:769px){.tb-search{flex:0 1 560px;margin:0 auto;}}
+/* Desktop: the Engine search box fills the centre column (it only shows on the
+   Engine tab) so its left/right edges line up with the Discover grid + cards
+   below, instead of floating centred and narrower than the content. */
+@media(min-width:769px){.tb-search{flex:1 1 auto;max-width:none;margin:0;}}
 .brand-menu{
   position:fixed;z-index:600;min-width:248px;
   background:var(--menu-bg);
