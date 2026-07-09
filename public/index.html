@@ -42271,8 +42271,29 @@ document.addEventListener('keydown', (e) => {
     if (!isAccount()) return;
     e.preventDefault();
     if (typeof acOpenPost === 'function') acOpenPost();
+  } else if (e.key === 'j' || e.key === 'k') {
+    // Feed post navigation (X-style): j = next post, k = previous. Home feed only.
+    const home = document.getElementById('acHomeScreen');
+    if (!home || home.classList.contains('hidden')) return;
+    e.preventDefault();
+    acFeedKeyNav(e.key === 'j' ? 1 : -1);
   }
 });
+// Scroll the home feed to the next (dir=1) / previous (dir=-1) post card.
+function acFeedKeyNav(dir) {
+  const feed = document.getElementById('acFeed'); // this IS the .ac-list scroller
+  if (!feed) return;
+  const cards = [...feed.querySelectorAll('.ac-post[data-postid]')];
+  if (!cards.length) return;
+  const top = feed.getBoundingClientRect().top;
+  const tol = 6;
+  const rel = cards.map(c => c.getBoundingClientRect().top - top); // offset from scroller top
+  let target;
+  if (dir > 0) target = cards.find((c, i) => rel[i] > tol);
+  else { for (let i = cards.length - 1; i >= 0; i--) { if (rel[i] < -tol) { target = cards[i]; break; } } }
+  if (!target) target = dir > 0 ? cards[cards.length - 1] : cards[0];
+  target.scrollIntoView({ behavior: (typeof _jellyReduced === 'function' && _jellyReduced()) ? 'auto' : 'smooth', block: 'start' });
+}
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (!document.getElementById('liveViewersOverlay').classList.contains('hidden')) { closeOverlay('liveViewersOverlay'); return; }
