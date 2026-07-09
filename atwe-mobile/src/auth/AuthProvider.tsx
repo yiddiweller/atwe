@@ -28,23 +28,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const tokenRef = useRef<string | null>(null);
 
-  // Give the API client a synchronous way to read the token.
-  useEffect(() => {
-    setAuthTokenGetter(() => tokenRef.current);
-    setUnauthorizedHandler(() => {
-      // Global 401 → drop the session.
-      void hardLogout();
-    });
-    return () => setUnauthorizedHandler(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const hardLogout = useCallback(async () => {
     tokenRef.current = null;
     setUserState(null);
     realtime.close();
     await clearToken();
   }, []);
+
+  // Give the API client a synchronous way to read the token, and a global
+  // 401 handler that drops the session.
+  useEffect(() => {
+    setAuthTokenGetter(() => tokenRef.current);
+    setUnauthorizedHandler(() => {
+      void hardLogout();
+    });
+    return () => setUnauthorizedHandler(null);
+  }, [hardLogout]);
 
   // Bootstrap: restore token → hydrate user → open realtime.
   useEffect(() => {
