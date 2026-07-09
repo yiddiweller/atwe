@@ -3208,6 +3208,12 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
 @media(min-width:769px) and (max-width:1024px){
   :root{--sidebar-w:210px;}
 }
+/* Wide desktop: widen the left nav toward the Desktop Design Spec (~275px) so the
+   centred 3-column container (nav 275 · center 600 · rail 350) reads roomier, with
+   clean pure-black gutters on ultra-wide monitors. Mobile/tablet are untouched. */
+@media(min-width:1100px){
+  :root{--sidebar-w:275px;}
+}
 
 /* ─────────────────────────────────────────────
    UTILITIES
