@@ -42808,35 +42808,50 @@ function navInit() {
   stage.appendChild(poolOrb);
   document.body.appendChild(stage);
 
-  // ═══ Media shield ═══ So a photo/video the pointer is over stays CLEAN while
-  // the pool keeps glowing around it: instead of hiding the whole pool over media
-  // (which killed the effect everywhere), we lay an exact clean COPY of the hovered
-  // image on top of the glow (z above #page-glow), so the copy is never tinted and
-  // the real surface still glows behind/around it. The clone tracks the original's
-  // rect each frame (survives scroll) and is removed the moment the pointer leaves.
-  var mediaShield = null, shieldedMedia = null;
+  // ═══ Media shield ═══ Photos/videos must NEVER catch the pool glow — even while
+  // the pointer only APPROACHES them — so they always feel like they sit on top of
+  // the screen. For every media element within the pool's reach of the cursor we
+  // lay an exact clean COPY on top of the glow (z above #page-glow): the copy is
+  // never tinted, while the real surface still glows around it. Clones track their
+  // originals each frame (survive scroll) and drop the instant they leave reach.
+  var shields = new Map();           // original media element -> clean clone
+  var POOL_REACH = 360;              // px: a touch beyond the visible glow radius
   function positionShield(clone, media) {
     var r = media.getBoundingClientRect();
     clone.style.left = r.left + 'px'; clone.style.top = r.top + 'px';
     clone.style.width = r.width + 'px'; clone.style.height = r.height + 'px';
   }
-  function clearMediaShield() { if (mediaShield) { mediaShield.remove(); mediaShield = null; } shieldedMedia = null; }
-  function setMediaShield(media) {
-    if (media === shieldedMedia) return;
-    clearMediaShield();
-    shieldedMedia = media || null;
-    if (!media) return;
+  function makeShield(media) {
     try {
       var cs = getComputedStyle(media);
       var clone = media.cloneNode(false);
       clone.id = ''; clone.className = ''; clone.removeAttribute('loading');
+      clone.setAttribute('data-pool-shield', '1'); // so the scan never re-shields a clone
       if (clone.tagName === 'VIDEO') { clone.removeAttribute('autoplay'); clone.muted = true; }
       clone.style.cssText = 'position:fixed;margin:0;pointer-events:none;z-index:1101;object-fit:' +
         cs.objectFit + ';object-position:' + cs.objectPosition + ';border-radius:' + cs.borderRadius + ';';
       positionShield(clone, media);
       document.body.appendChild(clone);
-      mediaShield = clone;
-    } catch (e) { clearMediaShield(); }
+      shields.set(media, clone);
+    } catch (e) {}
+  }
+  function clearAllShields() { shields.forEach(function (c) { c.remove(); }); shields.clear(); }
+  // Rebuild the shield set from media within POOL_REACH of the cursor (px,py).
+  // Cheap: skips off-screen media and tiny icons/logos (< 44px).
+  function syncShields() {
+    if (!stage.classList.contains('pool-on')) { if (shields.size) clearAllShields(); return; }
+    var want = null, list = document.querySelectorAll('img,video');
+    for (var i = 0; i < list.length; i++) {
+      var m = list[i];
+      if (m.hasAttribute('data-pool-shield')) continue;                 // never re-shield a clone
+      var r = m.getBoundingClientRect();
+      if (r.width < 44 || r.height < 44) continue;
+      if (px < r.left - POOL_REACH || px > r.right + POOL_REACH ||
+          py < r.top - POOL_REACH || py > r.bottom + POOL_REACH) continue;
+      (want || (want = new Set())).add(m);
+      if (!shields.has(m)) makeShield(m);
+    }
+    shields.forEach(function (c, m) { if (!want || !want.has(m)) { c.remove(); shields.delete(m); } });
   }
 
   // ═══ Layer E — AI comets: ONLY while Atwe AI is actually working. ═══
@@ -42953,16 +42968,14 @@ function navInit() {
     var mag = Math.hypot(e.movementX || 0, e.movementY || 0);
     bump(mag * .004);
     rim = Math.min(1, rim + mag * .004);
-    // Layer A: the pool lights while the pointer moves on the stage. It stays lit
-    // over media too (so the background keeps glowing) — the clean media SHIELD
-    // above keeps the hovered photo/video itself untinted instead of killing the
-    // whole pool.
+    // Layer A: the pool lights while the pointer moves on the stage, and stays lit
+    // over media too (background keeps glowing) — the media SHIELD (synced in the
+    // loop) keeps every nearby photo/video itself untinted, even on approach.
     stage.classList.add('pool-on');
-    setMediaShield(e.target && e.target.closest ? e.target.closest('img,video') : null);
   }, { passive: true });
-  addEventListener('pointerup', function (e) { if (e.pointerType === 'touch') { stage.classList.remove('pool-on'); clearMediaShield(); } }, { passive: true });
-  addEventListener('pointercancel', function () { stage.classList.remove('pool-on'); clearMediaShield(); }, { passive: true });
-  document.documentElement.addEventListener('pointerleave', function () { stage.classList.remove('pool-on'); clearMediaShield(); });
+  addEventListener('pointerup', function (e) { if (e.pointerType === 'touch') { stage.classList.remove('pool-on'); clearAllShields(); } }, { passive: true });
+  addEventListener('pointercancel', function () { stage.classList.remove('pool-on'); clearAllShields(); }, { passive: true });
+  document.documentElement.addEventListener('pointerleave', function () { stage.classList.remove('pool-on'); clearAllShields(); });
   addEventListener('touchmove', function (e) {
     var t = e.touches && e.touches[0];
     if (t) { px = t.clientX; py = t.clientY; if (!rafB) rafB = requestAnimationFrame(paintB); }
@@ -42986,7 +42999,7 @@ function navInit() {
   // boot / first tab open) was REMOVED entirely at Yiddi's request (2026-07-08).
   // Pointer-driven light only: the .spin rim below follows the smoothed cursor
   // track from the first frame; nothing plays on its own at boot or tab switch.
-  var gx = innerWidth / 2, gy = 0;
+  var gx = innerWidth / 2, gy = 0, shieldTick = 0;
   (function loop() {
     boost = Math.max(0, boost - .02);
     rim = Math.max(0, rim - .0045);
@@ -43001,12 +43014,14 @@ function navInit() {
       s.style.setProperty('--gx', (gx - r.left) + 'px');
       s.style.setProperty('--gy', (gy - r.top) + 'px');
     }
-    // Keep the media shield glued to its image (tracks scroll/reflow); drop it if
-    // the image left the DOM.
-    if (mediaShield && shieldedMedia) {
-      if (!shieldedMedia.isConnected) clearMediaShield();
-      else positionShield(mediaShield, shieldedMedia);
-    }
+    // Media shields: re-scan which media are within reach a few times a second
+    // (catches approach + scroll), and glue existing clones to their originals
+    // every frame; drop any whose original left the DOM.
+    if ((shieldTick = (shieldTick + 1) % 4) === 0) syncShields();
+    if (shields.size) shields.forEach(function (c, m) {
+      if (!m.isConnected) { c.remove(); shields.delete(m); }
+      else positionShield(c, m);
+    });
     requestAnimationFrame(loop);
   })();
 
