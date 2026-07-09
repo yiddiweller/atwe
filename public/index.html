@@ -4722,6 +4722,18 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.08);}
   background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);padding:8px 14px 8px 11px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 3px 14px rgba(0,0,0,.5);}
 .feed-prodtag svg{width:16px;height:16px;}
 .feed-prodtag:active{transform:scale(.95);}
+/* Who-viewed-your-profile screen. */
+.pv-teaser{font-size:14px;color:var(--t2);padding:2px 2px 12px;}
+.pv-teaser b{color:var(--t1);font-weight:800;}
+.pv-empty{text-align:center;padding:26px 16px 20px;}
+.pv-empty-ic{width:56px;height:56px;margin:0 auto 12px;border-radius:50%;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;}
+.pv-empty-ic svg{width:26px;height:26px;color:var(--accent);}
+.pv-empty-t{font-size:17px;font-weight:700;color:var(--t1);margin-bottom:5px;}
+.pv-empty-s{font-size:13.5px;color:var(--t3);line-height:1.45;max-width:300px;margin:0 auto;}
+.pv-lock{position:relative;margin-top:2px;}
+.pv-lock-blur{filter:blur(5px);pointer-events:none;opacity:.6;}
+.pv-lock-cta{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:12px;}
+.pv-lock-t{font-size:15px;font-weight:700;color:var(--t1);}
 .ac-post-head{display:flex;align-items:center;gap:8px;}
 /* Keep the verified badge hugging the name (its own 3px margin) instead of inheriting
    the 8px header gap — so the space after the name matches the profile/lists. */
@@ -9675,7 +9687,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
 <div class="iset-group"><button class="iset-row" onclick="changeName()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.6 3.1-5.6 7-5.6s7 2 7 5.6"/></svg></span><div class="iset-main"><div class="iset-label">Display name</div></div><span class="iset-val" id="profileNameDesc"></span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="changeUsername()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 12v1.6a2.4 2.4 0 0 0 4.8 0V12a8.8 8.8 0 1 0-3.4 7"/></svg></span><div class="iset-main"><div class="iset-label">Username</div></div><span class="iset-val" id="profileUserDesc"></span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 21h16v-7H4z"/><path d="M6 14v-3a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v3"/><path d="M12 9V5"/><circle cx="12" cy="4" r="0.6"/></svg></span><div class="iset-main"><div class="iset-label">Birthday</div><div class="iset-sub">Only you can see this</div></div><input type="date" class="settings-date" id="settingsBirthday" onchange="saveBirthday(this.value)"/></div><button class="iset-row" onclick="openChangeEmail()"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7.5l8.5 5.5 8.5-5.5"/></svg></span><div class="iset-main"><div class="iset-label">Email</div></div><span class="iset-val" id="setAcctEmail"></span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Your account information is private — only you can see your email and birthday.</div><div class="iset-group"><button class="iset-row" id="settingsPwRow" onclick="changePassword()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="8" cy="13" r="3.2"/><path d="M10.6 11.6l8-8M16 6l2.4 2.4M14 8l2 2"/></svg></span><div class="iset-main"><div class="iset-label" id="settingsPwLabel">Password</div><div class="iset-sub" id="settingsPwDesc">We’ll email you a secure reset link</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="shareProfile()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.4"/><circle cx="17.5" cy="6" r="2.4"/><circle cx="17.5" cy="18" r="2.4"/><line x1="8.1" y1="10.9" x2="15.4" y2="7.1"/><line x1="8.1" y1="13.1" x2="15.4" y2="16.9"/></svg></span><div class="iset-main"><div class="iset-label">Share profile</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acDownloadData()"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8"/><path d="M10 3v2.4M14 3v2.4M10 18.6V21M14 18.6V21M3 10h2.4M3 14h2.4M18.6 10H21M18.6 14H21"/></svg></span><div class="iset-main"><div class="iset-label">Download an archive of your data</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="openDeactivate()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12.5"/><circle cx="12" cy="16" r="0.6"/></svg></span><div class="iset-main"><div class="iset-label">Deactivate account</div><div class="iset-sub">Hide your profile temporarily — sign back in to restore it</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="openDeleteAccount()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Delete account</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div>
     </div>
     <div class="iset-body hidden" data-page="privacy" data-title="Privacy & safety">
-<div class="iset-group"><button class="iset-row" onclick="closeSettings();openContactPrivacy()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.4 7.2L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"/></svg></span><div class="iset-main"><div class="iset-label">Who can contact you</div><div class="iset-sub">Choose who can message &amp; call you</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><polyline points="3 12.5 6.6 16 12 9.5"/><polyline points="11.5 13 13.2 14.8 21 6.5"/></svg></span><div class="iset-main"><div class="iset-label">Read receipts</div><div class="iset-sub" id="rrDesc">Send &amp; see blue “seen” ticks</div></div><label class="ios-switch"><input type="checkbox" id="rrSwitch" onchange="toggleReadReceipts()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg></span><div class="iset-main"><div class="iset-label">Private profile views</div><div class="iset-sub" id="ppvDesc">Browse without being recorded</div></div><label class="ios-switch"><input type="checkbox" id="ppvSwitch" onchange="togglePrivateViews()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4.5 5.5c0 7.5 6.5 14 14 14l1.5-3-4-1.8-2 2a12 12 0 0 1-5.7-5.7l2-2L8.5 5z"/><line x1="4" y1="4" x2="20" y2="20"/></svg></span><div class="iset-main"><div class="iset-label">Silence unknown callers</div><div class="iset-sub">Calls from people you don’t know won’t ring — they land as a missed call</div></div><label class="ios-switch"><input type="checkbox" id="apSilenceUnknown" onchange="toggleAccPriv('silenceUnknownCallers', this.checked)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-group"><button class="iset-row" onclick="openBlockedAccounts()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.7" y1="5.7" x2="18.3" y2="18.3"/></svg></span><div class="iset-main"><div class="iset-label">Blocked accounts</div><div class="iset-sub">They can’t see or reach you</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenMutedAccounts()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M11 5 6.5 9H3.5v6h3L11 19z"/><line x1="15.5" y1="9.5" x2="20.5" y2="14.5"/><line x1="20.5" y1="9.5" x2="15.5" y2="14.5"/></svg></span><div class="iset-main"><div class="iset-label">Muted accounts</div><div class="iset-sub">Their posts are hidden from your feed</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenMutedWords()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 8h15M3.5 14h12"/><path d="M10 4 8 20M16 4l-1.5 11"/></svg></span><div class="iset-main"><div class="iset-label">Muted words</div><div class="iset-sub">Hide posts containing these</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Your profile is public, but blocks, mutes and contact controls put you in charge of who reaches you.</div>
+<div class="iset-group"><button class="iset-row" onclick="closeSettings();openContactPrivacy()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.4 7.2L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"/></svg></span><div class="iset-main"><div class="iset-label">Who can contact you</div><div class="iset-sub">Choose who can message &amp; call you</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><polyline points="3 12.5 6.6 16 12 9.5"/><polyline points="11.5 13 13.2 14.8 21 6.5"/></svg></span><div class="iset-main"><div class="iset-label">Read receipts</div><div class="iset-sub" id="rrDesc">Send &amp; see blue “seen” ticks</div></div><label class="ios-switch"><input type="checkbox" id="rrSwitch" onchange="toggleReadReceipts()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg></span><div class="iset-main"><div class="iset-label">Private browsing</div><div class="iset-sub" id="ppvDesc">Browse profiles anonymously — but you won’t see who viewed you either</div></div><label class="ios-switch"><input type="checkbox" id="ppvSwitch" onchange="togglePrivateViews()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4.5 5.5c0 7.5 6.5 14 14 14l1.5-3-4-1.8-2 2a12 12 0 0 1-5.7-5.7l2-2L8.5 5z"/><line x1="4" y1="4" x2="20" y2="20"/></svg></span><div class="iset-main"><div class="iset-label">Silence unknown callers</div><div class="iset-sub">Calls from people you don’t know won’t ring — they land as a missed call</div></div><label class="ios-switch"><input type="checkbox" id="apSilenceUnknown" onchange="toggleAccPriv('silenceUnknownCallers', this.checked)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-group"><button class="iset-row" onclick="openBlockedAccounts()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.7" y1="5.7" x2="18.3" y2="18.3"/></svg></span><div class="iset-main"><div class="iset-label">Blocked accounts</div><div class="iset-sub">They can’t see or reach you</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenMutedAccounts()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M11 5 6.5 9H3.5v6h3L11 19z"/><line x1="15.5" y1="9.5" x2="20.5" y2="14.5"/><line x1="20.5" y1="9.5" x2="15.5" y2="14.5"/></svg></span><div class="iset-main"><div class="iset-label">Muted accounts</div><div class="iset-sub">Their posts are hidden from your feed</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenMutedWords()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 8h15M3.5 14h12"/><path d="M10 4 8 20M16 4l-1.5 11"/></svg></span><div class="iset-main"><div class="iset-label">Muted words</div><div class="iset-sub">Hide posts containing these</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Your profile is public, but blocks, mutes and contact controls put you in charge of who reaches you.</div>
 <div class="iset-cap" style="margin-top:18px;font-weight:600;color:var(--t2);">Connections &amp; visibility</div>
 <div class="iset-group">
   <div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></svg></span><div class="iset-main"><div class="iset-label">Active status</div><div class="iset-sub">Who sees when you’re online</div></div><select class="iset-select" id="apPresence" aria-label="Active status visibility" onchange="setAccPriv('presenceVisibility', this.value)"><option value="everyone">Everyone</option><option value="connections">Connections</option><option value="nobody">No one</option></select></div>
@@ -24995,6 +25007,7 @@ function acGoProfileHub() {
     // Work & network
     html += '<div class="me-catlabel">Work &amp; network</div><div class="me-group">';
     html += item('My network', _ME_IC.people, "acOpenConnections()", null);
+    html += item('Who viewed my profile', (_ME_IC.eye || '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>'), "acOpenProfileViewers()", null);
     html += item('Post a job', _ME_IC.job, "acPostJobOpen()", null);
     html += item('Jobs I posted', _ME_IC.job, "acOpenJobsView('mine')", null);
     html += item('My applications', _ME_IC.sent, "acOpenJobsView('applied')", null);
@@ -28571,18 +28584,54 @@ async function acLoadProfileViewCount() {
     if (el) { el.querySelector('b').textContent = String(weekCount || 0); el.classList.toggle('hidden', false); }
   } catch { /* ignore */ }
 }
+// Whether the detailed viewer LIST is gated behind Atwe Pro. The teaser count is
+// always free; flip this to true later to gate the identified list to Pro (the
+// server already returns the list — this is the only switch the client needs).
+const PROF_VIEWERS_PRO_GATED = false;
+function acViewerRow(v) {
+  return `<div class="ac-item ac-conn-item" onclick="closeOverlay('viewersList');acGoProfile(${jsAttr(v.username)})">
+      ${acAvatarHtml(v.name, v.avatar, 'user-avatar', acIsBiz(v))}
+      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(v.name)}${vbadge(acIsVerified(v))}</span></div>
+      <div class="ac-item-last">${v.headline ? escHtml(v.headline) : '@' + escHtml(v.username)} · ${acTime(v.viewedAt)}</div></div></div>`;
+}
 async function acOpenProfileViewers() {
   showOverlay('viewersList');
   const el = document.getElementById('viewersBody'); el.innerHTML = acSkelRows(3);
+  document.getElementById('viewersTitle').textContent = 'Who viewed your profile';
   try {
-    const { viewers, weekCount } = await API.req('GET', '/api/profile-views');
-    document.getElementById('viewersTitle').textContent = weekCount ? (weekCount + ' viewed you this week') : 'Profile viewers';
-    if (!viewers.length) { el.innerHTML = '<div class="ac-empty" style="padding:16px;">No one has viewed your profile yet.</div>'; return; }
-    viewers.forEach(v => { AC._connState = AC._connState || {}; });
-    el.innerHTML = viewers.map(v => `<div class="ac-item ac-conn-item" onclick="closeOverlay('viewersList');acGoProfile(${jsAttr(v.username)})">
-      ${acAvatarHtml(v.name, v.avatar, 'user-avatar', acIsBiz(v))}
-      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(v.name)}${vbadge(acIsVerified(v))}</span></div>
-      <div class="ac-item-last">${v.headline ? escHtml(v.headline) : '@' + escHtml(v.username)} · ${acTime(v.viewedAt)}</div></div></div>`).join('');
+    const { viewers, weekCount, private: isPrivate } = await API.req('GET', '/api/profile-views');
+    const teaser = weekCount
+      ? `<div class="pv-teaser"><b>${weekCount}</b> ${weekCount === 1 ? 'person' : 'people'} viewed your profile this week</div>`
+      : '';
+    // Private-browsing reciprocity: while you browse anonymously you can't see who
+    // viewed you. Make the trade-off explicit + a one-tap way to change it.
+    if (isPrivate) {
+      el.innerHTML = teaser + `<div class="pv-empty">
+        <div class="pv-empty-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10 10 0 0 1 12 20c-7 0-11-8-11-8a18 18 0 0 1 5.06-5.94M9.9 4.24A9 9 0 0 1 12 4c7 0 11 8 11 8a18 18 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg></div>
+        <div class="pv-empty-t">You're browsing privately</div>
+        <div class="pv-empty-s">While private browsing is on, your visits stay anonymous — so you can't see who viewed you either. Turn it off to reveal your viewers.</div>
+        <button class="btn-white" style="margin-top:14px;" onclick="closeOverlay('viewersList');openSettings();setTimeout(()=>setNav('privacy'),120);">Change privacy settings</button>
+      </div>`;
+      return;
+    }
+    if (!viewers.length) {
+      el.innerHTML = `<div class="pv-empty">
+        <div class="pv-empty-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></div>
+        <div class="pv-empty-t">No profile views yet</div>
+        <div class="pv-empty-s">When someone opens your profile, they'll show up here. Share your profile to get discovered.</div>
+        <button class="btn-white" style="margin-top:14px;" onclick="closeOverlay('viewersList');shareProfile(S.user&&S.user.username);">Share your profile</button>
+      </div>`;
+      return;
+    }
+    let list = viewers.map(acViewerRow).join('');
+    // Pro gate (off at launch): show the first viewer, lock the rest behind an upgrade.
+    if (PROF_VIEWERS_PRO_GATED && S.plan !== 'pro' && viewers.length > 1) {
+      list = acViewerRow(viewers[0]) + `<div class="pv-lock">
+        <div class="pv-lock-blur">${viewers.slice(1, 4).map(acViewerRow).join('')}</div>
+        <div class="pv-lock-cta"><div class="pv-lock-t">See everyone who viewed you</div><button class="btn-white" onclick="closeOverlay('viewersList');profilePlanAction&&profilePlanAction();">Upgrade to Pro</button></div>
+      </div>`;
+    }
+    el.innerHTML = teaser + list;
   } catch (e) { el.innerHTML = '<div class="ac-empty">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
 // Business-category chips. On a profile they're tappable and jump to a

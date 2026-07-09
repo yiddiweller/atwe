@@ -8184,24 +8184,46 @@ app.post('/api/profile-view/:id', auth.requireAuth, async (req, res) => {
     // isn't recorded against the profile they visited.
     const me = await db.query('SELECT private_profile_views FROM users WHERE id = $1', [req.user.id]);
     if (me.rows[0] && me.rows[0].private_profile_views) return res.json({ ok: true, private: true });
+    // Never record a view across a block (either direction) — fail closed.
+    if (await blockedEither(req.user.id, other)) return res.json({ ok: true });
+    // Dedup 1 view / viewer / 24h: the row is unique per (viewer, viewed); a re-visit
+    // within 24h keeps the original time rather than constantly refreshing to "just now".
     await db.query(
       `INSERT INTO profile_views (viewer_id, viewed_id) VALUES ($1,$2)
-       ON CONFLICT (viewer_id, viewed_id) DO UPDATE SET viewed_at = now()`,
+       ON CONFLICT (viewer_id, viewed_id) DO UPDATE SET viewed_at = now()
+       WHERE profile_views.viewed_at < now() - interval '24 hours'`,
       [req.user.id, other]
     );
     res.json({ ok: true });
   } catch (err) { res.json({ ok: false }); }
 });
-// Who viewed MY profile (recent viewers + a 7-day count).
+// Who viewed MY profile — most-recent-first over a rolling 90-day window, plus a
+// 7-day teaser count. Excludes blocked (either way) + deactivated viewers; the owner's
+// own visits are never recorded. RECIPROCITY (LinkedIn model): while I'm in private
+// browsing I can't be seen as a viewer, so in exchange I can't see who viewed me — the
+// list is withheld and `private:true` is returned so the client explains the trade-off.
 app.get('/api/profile-views', auth.requireAuth, async (req, res) => {
   try {
-    const cnt = await db.query(`SELECT COUNT(*)::int AS n FROM profile_views WHERE viewed_id = $1 AND viewed_at > now() - interval '7 days'`, [req.user.id]);
-    const { rows } = await db.query(
-      `SELECT ${CONN_USER_COLS}, v.viewed_at FROM profile_views v JOIN users u ON u.id = v.viewer_id
-       WHERE v.viewed_id = $1 ORDER BY v.viewed_at DESC LIMIT 50`,
+    const me = (await db.query('SELECT private_profile_views FROM users WHERE id = $1', [req.user.id])).rows[0];
+    // The block/deactivated filter, shared by the count + list so they always agree.
+    const FILT = `AND NOT u.deactivated
+      AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $1 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = $1))`;
+    const cnt = await db.query(
+      `SELECT COUNT(*)::int AS n FROM profile_views v JOIN users u ON u.id = v.viewer_id
+       WHERE v.viewed_id = $1 AND v.viewed_at > now() - interval '7 days' ${FILT}`,
       [req.user.id]
     );
-    res.json({ weekCount: cnt.rows[0].n, viewers: rows.map((u) => ({ ...mapConnUser(u), viewedAt: u.viewed_at })) });
+    if (me && me.private_profile_views) {
+      // Anonymized teaser count only; identities withheld under reciprocity.
+      return res.json({ weekCount: cnt.rows[0].n, viewers: [], private: true });
+    }
+    const { rows } = await db.query(
+      `SELECT ${CONN_USER_COLS}, v.viewed_at FROM profile_views v JOIN users u ON u.id = v.viewer_id
+       WHERE v.viewed_id = $1 AND v.viewed_at > now() - interval '90 days' ${FILT}
+       ORDER BY v.viewed_at DESC LIMIT 100`,
+      [req.user.id]
+    );
+    res.json({ weekCount: cnt.rows[0].n, viewers: rows.map((u) => ({ ...mapConnUser(u), viewedAt: u.viewed_at })), private: false });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load viewers.' }); }
 });
 // "People you may know" — friends-of-friends ranked by mutual connections.

@@ -2390,6 +2390,26 @@ functions, banner-comment sections); routes are in `server.js`.
   **Work experience**
   (`experiences`, with an optional `company_user_id` FK linking to a business account),
   **profile views** (`profile_views` → viewer list + count).
+- **Who viewed your profile** (`profile_views`, LinkedIn-style): `POST
+  /api/profile-view/:id` records a view when a signed-in user opens a profile —
+  **skips self**, **skips a viewer in private browsing** (`private_profile_views`),
+  **skips across a block** (`blockedEither`, fails closed), and **dedups to 1
+  view/viewer/24h** (the `ON CONFLICT ... WHERE viewed_at < now()-interval '24 hours'`
+  only bumps the timestamp once a day). `GET /api/profile-views` returns a 7-day
+  **teaser count** + the viewer list over a rolling **90-day window**, most-recent-first,
+  excluding blocked-either + deactivated viewers. **Reciprocity:** while the requester
+  is in private browsing the identified list is **withheld** (`private:true`, only the
+  anonymized count is returned) — you can't be seen as a viewer, so you can't see who
+  viewed you. Client: a **"Who viewed my profile"** row in the Me-hub **Work & network**
+  group + the profile's `#acProfViews` pill both open `acOpenProfileViewers()` →
+  `#viewersList` (teaser count + `acViewerRow` list, a designed empty state with a WHITE
+  "Share your profile" CTA, and a private-browsing reciprocity explainer with a "Change
+  privacy settings" button). The detailed list is **structured to gate behind Atwe Pro
+  later** (`PROF_VIEWERS_PRO_GATED`, false at launch — the server always returns the list;
+  flip the flag to show the teaser free + lock the identified list behind
+  `profilePlanAction`). Privacy toggle relabelled **"Private browsing"** on Privacy &
+  safety (`#ppvSwitch`/`togglePrivateViews`, `private_profile_views`) with a caption
+  spelling out the reciprocity trade-off.
 - **Connection-gated messaging:** opt-in `users.dm_connections_only` (off by default)
   restricts DMs to connections.
 - **Featured** (`featured_items`: user_id, `kind` ∈ post/link, post_id FK or
