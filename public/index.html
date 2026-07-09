@@ -42108,6 +42108,33 @@ document.addEventListener('click', (e) => {
   }
 });
 
+// Desktop keyboard shortcuts (Desktop Design Spec): "/" focuses search, "n" opens
+// the composer. Escape (close any modal) is handled by the global handler below.
+// Guarded so they never fire while typing, with a modifier held, or on mobile.
+document.addEventListener('keydown', (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+  if (window.innerWidth < 769) return; // desktop keyboard shortcuts only
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  // Don't hijack keys while a real modal/confirm/composer is already open.
+  const modalOpen = ['confirmOverlay', 'callOverlay', 'liveOverlay', 'imgViewer', 'introSheet'].some(id => {
+    const el = document.getElementById(id); return el && !el.classList.contains('hidden');
+  });
+  if (modalOpen) return;
+  if (e.key === '/') {
+    e.preventDefault();
+    if (!isAccount()) { openLogin(); return; }
+    appTab('search');
+    setTimeout(() => {
+      const sp = document.getElementById('acSearchInput'); const tb = document.getElementById('tbSearchInput');
+      if (sp && sp.offsetParent !== null) sp.focus(); else if (tb && tb.offsetParent !== null) tb.focus();
+    }, 90);
+  } else if (e.key === 'n' || e.key === 'N') {
+    if (!isAccount()) return;
+    e.preventDefault();
+    if (typeof acOpenPost === 'function') acOpenPost();
+  }
+});
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (!document.getElementById('liveViewersOverlay').classList.contains('hidden')) { closeOverlay('liveViewersOverlay'); return; }
