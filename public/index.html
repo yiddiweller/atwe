@@ -8004,14 +8004,16 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
 .sb-navbtn{display:flex;align-items:center;gap:12px;width:100%;padding:9px 11px;border-radius:var(--r-sm);
   background:none;border:none;color:var(--t2);font-size:14.5px;font-weight:600;cursor:pointer;text-align:left;
   transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);position:relative;}
-.sb-navbtn svg{width:18px;height:18px;fill:currentColor;flex-shrink:0;}
+.sb-navbtn svg{width:16px;height:16px;fill:currentColor;flex-shrink:0;}
 /* Atwe mark as a mask so it takes the same color (currentColor) as the other
    sidebar icons — matching width, color, and active/hover states. */
-.sb-navbtn .sb-navlogo{width:18px;height:18px;flex-shrink:0;background-color:currentColor;
+.sb-navbtn .sb-navlogo{width:16px;height:16px;flex-shrink:0;background-color:currentColor;
   -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
 /* Custom designed nav icons (same set as the bottom-nav), masked so they pick up
-   currentColor + the active/hover states. Sized to match the other sidebar icons. */
-.sb-navbtn .sb-navic{width:18px;height:18px;flex-shrink:0;background-color:currentColor;
+   currentColor + the active/hover states. Sized to match the other sidebar icons.
+   The masked PNG art fills its box edge-to-edge (no viewBox padding like the SVGs),
+   so it's held a touch smaller than the line icons to read at the same weight. */
+.sb-navbtn .sb-navic{width:16px;height:16px;flex-shrink:0;background-color:currentColor;
   -webkit-mask:var(--ic) center/contain no-repeat;mask:var(--ic) center/contain no-repeat;}
 .sb-navbtn:hover{background:var(--s2);color:var(--t1);}
 .sb-navbtn.active{background:var(--accent-dim);color:var(--accent);}
