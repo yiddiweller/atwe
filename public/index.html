@@ -8763,7 +8763,7 @@ body.light #signupDob{color-scheme:light;}
    black content (a hovered post #060606, hairlines, avatars, text) a strong orb
    is what makes the gloss read at all, while genuine #000000 stays perfectly
    black regardless of opacity. (At .12 the pool was effectively invisible.) */
-#page-glow.pool-on .pool-orb{opacity:.45;}
+#page-glow.pool-on .pool-orb{opacity:.2;}
 body.light #page-glow .pool-orb{display:none;}
 
 /* Layer B — bulb rim. A 2.5px ring hugging the surface's rounded edge at
@@ -42926,8 +42926,12 @@ function navInit() {
     rim = Math.min(1, rim + mag * .004);
     // Layer A: the pool lights while the pointer moves on the stage — for touch
     // that means "under the finger during a drag only" (a stationary tap never
-    // shows it; pointerup below puts it out).
-    stage.classList.add('pool-on');
+    // shows it; pointerup below puts it out). But NEVER over media: no CSS can
+    // pull an <img>/<video> out from under a full-screen blend overlay, so we
+    // gate it here — when the pointer is over a photo/video the pool fades out,
+    // and restores the moment it moves back onto normal UI.
+    if (e.target && e.target.closest && e.target.closest('img,video')) stage.classList.remove('pool-on');
+    else stage.classList.add('pool-on');
   }, { passive: true });
   addEventListener('pointerup', function (e) { if (e.pointerType === 'touch') stage.classList.remove('pool-on'); }, { passive: true });
   addEventListener('pointercancel', function () { stage.classList.remove('pool-on'); }, { passive: true });
