@@ -15454,14 +15454,15 @@ function openLogin() {
   document.getElementById('signupOverlay').classList.add('hidden');
   showOverlay('loginOverlay');
 }
-// Guest "back" from the login gate → return to the Atwe AI assistant.
+// Guest AI access has been removed — everyone must sign in. Signed-in users can
+// dismiss the gate; a signed-out visitor keeps it up (no guest fallthrough).
 function loginBackToAI() {
-  document.getElementById('loginOverlay').classList.add('hidden');
-  document.getElementById('signupOverlay').classList.add('hidden');
-  if (!isAccount()) {
-    if (!S.guest) guestLogin();
-    appTab('ai');
+  if (isAccount()) {
+    document.getElementById('loginOverlay').classList.add('hidden');
+    document.getElementById('signupOverlay').classList.add('hidden');
+    return;
   }
+  openLogin();
 }
 // Account-only: there is no guest fallthrough. Closing keeps the login gate up
 // unless the user is signed in.
@@ -20533,10 +20534,10 @@ function appTab(tab, opts) {
   // which un-hides the previously-visible screen itself and must not let a
   // loader re-render it (that would destroy the preserved scroll position).
   const _silent = !!(opts && opts.silent);
-  if (tab !== 'ai') {
-    if (!isAccount()) { openLogin(); return; }
-    if (!S.user?.username) { showNotif('Pick a username to start.'); openProfileEdit(true); return; }
-  }
+  // Everyone must be signed in to use ANY part of the app, including Atwe AI.
+  // (Guest mode was removed — nothing is usable without an account.)
+  if (!isAccount()) { openLogin(); return; }
+  if (tab !== 'ai' && !S.user?.username) { showNotif('Pick a username to start.'); openProfileEdit(true); return; }
   _appTab = tab;
   if (tab !== 'call') { try { localStorage.setItem('atwe_last_tab', tab); } catch {} }
   const social = tab !== 'ai';
@@ -42834,15 +42835,13 @@ const _bootDone = (async function boot() {
     // back online can still recover the session without re-entering a password.
   }
 
-  // Not signed in. Only the /ai page is open to guests (e.g. via atwe.ai → /ai);
-  // bare atwe.com and every other path show the regular login gate.
-  if (_pendingGo === 'ai') {
-    guestLogin();
-    appTab('ai');
-  } else {
-    S.user = null; S.guest = false;
-    renderProjects();
-  }
+  // Not signed in → a MANDATORY login gate for everything, including Atwe AI.
+  // Guest mode has been removed: bare atwe.com, /ai, and every other path all
+  // show the login/signup gate first — nothing in the app is usable without an
+  // account. (The login/signup pages themselves are unchanged.)
+  S.user = null; S.guest = false;
+  renderProjects();
+  openLogin();
 })();
 
 // Reveal the app once boot settles — with a brief logo moment + a safety net.

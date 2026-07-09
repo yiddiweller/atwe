@@ -21249,7 +21249,7 @@ app.post('/api/admin/broadcast', auth.requireAdmin, rateLimit(10, 60000, 'admin-
    Plan is taken from the authenticated user (authoritative);
    guests (no token) fall back to the client-sent plan, local-only.
 ═══════════════════════════════════════════════ */
-app.post('/api/chat', auth.optionalAuth, rateLimit(30, 60000, 'chat'), requireFeature('ai'), async (req, res) => {
+app.post('/api/chat', auth.requireAuth, rateLimit(30, 60000, 'chat'), requireFeature('ai'), async (req, res) => {
   const { messages, plan: clientPlan } = req.body;
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {

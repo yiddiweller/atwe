@@ -312,9 +312,20 @@ Everything lives in one file, organized by banner comments
   - **Signed-in accounts** (a JWT in `localStorage.atwe_token`): source of truth
     is the **server**. On boot/login the app calls `/api/auth/me` + loads chats
     and projects from the API into `S`.
-  - **Guests** (no token): **local-only**, stored in `localStorage` (`atwe_user`,
-    `atwe_chats`, `atwe_projects`, `atwe_plan`) via `Store`. Nothing is sent to
-    the DB. Guest mode is intentionally preserved.
+  - **Guests** (no token): **guest mode has been REMOVED — the whole app is
+    behind a mandatory login gate.** A signed-out visitor sees the login/signup
+    gate first and can use **nothing**, including Atwe AI. Enforced in three
+    places: `boot()`'s not-signed-in branch calls `openLogin()` (no guest
+    fallthrough, no guest `/ai` peek), `appTab()` gates **every** tab incl. `'ai'`
+    (`if (!isAccount()) { openLogin(); return; }`), `loginBackToAI()` keeps the
+    gate up for a signed-out visitor, and the AI endpoint `POST /api/chat` is now
+    `requireAuth` (was `optionalAuth`). The login/signup PAGES themselves are
+    unchanged — only the gating logic changed. The old `guestLogin()`/`S.guest`
+    plumbing is now inert. (Planned next, live-DB session: an X-style deep-link
+    **peek** — a signed-out visitor opening a shared `/username`/post link may VIEW
+    that one public entity, then hit the gate on any further interaction; needs the
+    public read routes opened to guests + a peek/click-gate.) The `localStorage`
+    caches (`atwe_user` etc.) are dormant now that no guest session is created.
 - **`API`** — tiny fetch wrapper that attaches the bearer token and throws on
   non-2xx. **`Sync`** — write-through helpers (`saveChat`, `deleteChat`,
   `clearChats`, `saveProject`, `deleteProject`, `setPlan`) that are **no-ops in
