@@ -8755,7 +8755,7 @@ body.light #signupDob{color-scheme:light;}
 #page-glow{position:fixed;inset:0;pointer-events:none;z-index:1100;overflow:hidden;
   mix-blend-mode:color-dodge;}
 .pool-orb{position:absolute;left:0;top:0;width:840px;height:840px;border-radius:50%;
-  background:radial-gradient(closest-side, rgb(24,32,175) 0%, rgb(12,14,120) 42%, transparent 72%);
+  background:radial-gradient(closest-side, rgb(150,195,255) 0%, rgb(96,156,250) 42%, transparent 72%);
   mix-blend-mode:normal;opacity:0;will-change:transform,opacity;
   transition:opacity .5s ease-out;}
 /* Opacity is high because the blend is color-dodge on true black: dodge lifts
@@ -8763,7 +8763,7 @@ body.light #signupDob{color-scheme:light;}
    black content (a hovered post #060606, hairlines, avatars, text) a strong orb
    is what makes the gloss read at all, while genuine #000000 stays perfectly
    black regardless of opacity. (At .12 the pool was effectively invisible.) */
-#page-glow.pool-on .pool-orb{opacity:.7;}
+#page-glow.pool-on .pool-orb{opacity:.45;}
 body.light #page-glow .pool-orb{display:none;}
 
 /* Layer B — bulb rim. A 2.5px ring hugging the surface's rounded edge at
