@@ -8744,22 +8744,24 @@ body.light #signupDob{color-scheme:light;}
    The pool is a soft deep-blue radial (--pool ramp) that follows the pointer at
    ~12% peak over a 420px radius; on touch it appears under the finger during a
    drag only. Black theme only. */
-/* A soft AZURE radial in the --accent family (#0A84FF, matching the login-panel
-   glow + the shop-icon blue) that follows the pointer, composited NORMALLY over
-   the page so it fades perfectly smooth. An earlier color-dodge version banded
-   into hard concentric rings and skewed the blue toward purple (dodge is
-   extreme-contrast + amplifies the blue channel) — normal blend is exactly why
-   the login glow it's modelled on is buttery. The gradient fades to alpha-0 of
-   its OWN colour (never `transparent`, which would interpolate through a grey
-   ring). Black theme only; it never shows over media — the pointer handler fades
-   it out over <img>/<video>. */
-#page-glow{position:fixed;inset:0;pointer-events:none;z-index:1100;overflow:hidden;}
+/* A soft AZURE radial (--accent family #0A84FF, matching the login-panel glow +
+   the shop-icon blue) that follows the pointer, composited with SOFT-LIGHT on the
+   stage. Soft-light satisfies all four asks at once: it's INVISIBLE on true
+   #000000 (soft-light(#000,x)=#000, so the black void never lights), it lifts any
+   non-black surface (a hovered post, avatars, cards, text) SMOOTHLY — being a
+   low-contrast blend it never bands into the concentric rings color-dodge did,
+   nor skews the blue toward purple (dodge over-amplified the blue channel) — and
+   it reads soft. Blurred + faded to alpha-0 of its own colour for an extra-smooth
+   falloff. Black theme only; the pointer handler fades it out over <img>/<video>
+   so media never tints. */
+#page-glow{position:fixed;inset:0;pointer-events:none;z-index:1100;overflow:hidden;
+  mix-blend-mode:soft-light;}
 .pool-orb{position:absolute;left:0;top:0;width:840px;height:840px;border-radius:50%;
-  background:radial-gradient(closest-side, rgba(70,150,255,.95) 0%, rgba(64,140,255,.5) 38%, rgba(60,135,255,0) 74%);
-  mix-blend-mode:normal;opacity:0;will-change:transform,opacity;
+  background:radial-gradient(closest-side, rgba(90,170,255,1) 0%, rgba(70,150,255,.5) 40%, rgba(60,140,255,0) 76%);
+  mix-blend-mode:normal;opacity:0;will-change:transform,opacity;filter:blur(16px);
   transition:opacity .5s ease-out;}
-/* Soft peak — a gentle azure wash, not a strong ball. */
-#page-glow.pool-on .pool-orb{opacity:.2;}
+/* Full opacity — soft-light is inherently gentle, so this still reads soft. */
+#page-glow.pool-on .pool-orb{opacity:1;}
 body.light #page-glow .pool-orb{display:none;}
 
 /* Layer B — bulb rim. A 2.5px ring hugging the surface's rounded edge at
