@@ -8124,6 +8124,17 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
      conversation is open, so the list pane never loses its header. */
   body.beam2 .topbar.hidden{display:flex!important;}
 }
+/* Beam two-pane is centred on screen exactly like the rest of the app. In beam2
+   mode rail-on is off, so the sidebar never got the margin-left:auto that centres
+   the normal 3-column group and the whole [sidebar + panes] block hugged the left.
+   Centre it the same way here: sidebar margin-left:auto + a width-capped .main with
+   margin-right:auto splits the free space evenly on both sides. Matches the app's
+   own centring breakpoint (≥1100px); 1000–1099px keeps the panes full-width like the
+   feed does at that width. */
+@media(min-width:1100px){
+  body.beam2 .sidebar{margin-left:auto;}
+  body.beam2 .main{flex:0 1 1120px;margin-right:auto;}
+}
 #acTabs{display:none!important;} /* replaced by the app nav */
 /* On social tabs, hide the AI chat surface (keep the topbar for the menu) */
 .main.social .chat-wrap,.main.social #inputWrap{display:none!important;}
@@ -9718,16 +9729,17 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <span class="sb-navic" style="--ic:url('/nav-knot.png')" aria-hidden="true"></span>
         <span>Atwe AI</span>
       </button>
+      <!-- Desktop X-style Post button (proxies the home compose FAB) — sits as the
+           last nav action, directly above Profile and above the hairline. -->
+      <button class="sb-post" id="sbPost" onclick="sbPostClick()" title="Post" style="display:none;">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>Post</span>
+      </button>
       <button class="sb-navbtn" id="snav-profile" onclick="appTab('profile')">
         <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-4 0-7 2.2-7 5 0 .6.4 1 1 1h12c.6 0 1-.4 1-1 0-2.8-3-5-7-5z"/></svg>
         <span>Profile</span>
       </button>
     </nav>
-    <!-- Desktop X-style Post button (proxies the home compose FAB) -->
-    <button class="sb-post" id="sbPost" onclick="sbPostClick()" title="Post" style="display:none;">
-      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      <span>Post</span>
-    </button>
     <div class="sb-divider sb-nav-sep"></div>
 
     <!-- AI tools (shown only on the Atwe AI tab) -->
@@ -20709,7 +20721,10 @@ function acUpdateRail() {
   const isAI = _appTab === 'ai';
   const railable = acct && (isAI || RAIL_SCREENS.includes(cur));
   const sbPost = document.getElementById('sbPost');
-  if (sbPost) sbPost.style.display = (w >= 769 && acct && !isAI && POST_SCREENS.includes(cur)) ? 'flex' : 'none';
+  // The Post button lives in the primary nav (just above Profile), so it's a
+  // persistent desktop nav action across the social worlds — not feed-only. Hidden
+  // on the Atwe AI tab (that world has its own tools) and on mobile (compose FAB there).
+  if (sbPost) sbPost.style.display = (w >= 769 && acct && !isAI) ? 'flex' : 'none';
   // Desktop Beam two-pane (Desktop Design Spec): on the Beam list/thread at >=1000px,
   // lay the conversation list + open conversation side by side (CSS in body.beam2),
   // and drop the right rail so the width goes to the two panes.
@@ -20798,10 +20813,10 @@ function acRenderSidebarContext(tab) {
       <button class="sb-btn" onclick="appTab('search')">${ic.search} Search</button>
       <button class="sb-btn" onclick="openContactPrivacy()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Call settings</button>`;
   }
-  // Bottom group on every page: Contacts (with a divider under it), then Upgrade → Download.
-  const ctxSepTight = '<div class="sb-divider sb-divider-tight"></div>';
-  // Hug the Contacts row with tight dividers so its gap matches the follow-counts row.
-  html += (tab !== 'contacts' ? ctxSepTight + contactsBtn + ctxSepTight : ctxSep) + upgradeBtn + getVerifiedBtn + downloadBtn;
+  // Bottom group on every page: Upgrade → Get verified → Download.
+  // (The standalone "Contacts" sidebar button was removed by request — Contacts is
+  // still reachable from Beam's Contacts tab.)
+  html += ctxSep + upgradeBtn + getVerifiedBtn + downloadBtn;
   el.innerHTML = html;
 }
 // Your follow counts under the sidebar Profile option.
