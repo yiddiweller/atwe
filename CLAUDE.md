@@ -1289,6 +1289,23 @@ functions, organized by banner comments.
 > tabs) is still "Search" — only the *world* is named Engine. Full `/beam` `/engine`
 > deep-link world routing + the redesigned Beam header are Phase-0 work (not in yet).
 
+> **Desktop Beam two-pane (Desktop Design Spec).** On desktop (≥1000px) the Beam
+> surface becomes a two-pane master/detail: a **conversation LIST pane** (`~36%`,
+> `clamp(320px,36%,400px)`) beside the **open conversation pane** (`~64%`, flex:1),
+> both inside the widened `.social-wrap .ac-win` (`max-width:1120px`, `flex-direction:
+> row`). Driven by CSS on `body.beam2` (set in `acUpdateRail` when the active screen
+> is `acListScreen`/`acThreadScreen` and `w>=1000` — it also drops the right rail in
+> this mode) + `body.beam-has-chat` (toggled in `acShow`: on when `acThreadScreen`
+> is shown). CSS un-hides BOTH `#acListScreen` (order:1, left) and either
+> `#acThreadScreen` (has-chat, order:2) or `#beamEmptyPane` (no chat — a centered
+> "Start a conversation" glyph + WHITE **New message** button → `acChatsFab()`). The
+> shared top bar (Chats/Groups/Calls/Contacts tabs) stays pinned above both panes
+> even when a chat is open (`body.beam2 .topbar.hidden{display:flex!important}`) so
+> the list never loses its header; the thread keeps its own `.msg-top`. Opening a
+> chat fills the right pane with no reload; mobile (<1000px) is byte-identical to the
+> existing single-column swap. Verified live (real DB, two seeded accounts + a DM):
+> list-left/thread-right geometry, open→back→empty transitions, both themes, 0 errors.
+
 ### Surfaces
 
 > **Chat-list top bar (X-style, mirrors the home feed).** `#tbChatTabs` is a
