@@ -8107,7 +8107,7 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
 .be-glyph svg{width:38px;height:38px;}
 .be-title{font-size:22px;font-weight:800;letter-spacing:-.02em;color:var(--t1);}
 .be-sub{font-size:14px;color:var(--t3);max-width:280px;line-height:1.45;}
-.be-new{margin-top:12px;height:44px;padding:0 22px;font-size:15px;font-weight:700;}
+.be-new{flex:0 0 auto;align-self:center;width:auto;margin-top:12px;height:44px;padding:0 22px;font-size:15px;font-weight:700;}
 @media(min-width:1000px){
   body.beam2 .social-wrap{align-items:stretch;}
   body.beam2 .social-wrap .ac-win{max-width:1120px;width:100%;display:flex;flex-direction:row;border-left:1px solid var(--b2);border-right:1px solid var(--b2);}
@@ -9695,24 +9695,24 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <div class="sb-scroll">
     <!-- Primary navigation (the 5 app tabs) -->
     <nav class="sb-nav" id="sbNav">
-      <button class="sb-navbtn" id="snav-home" onclick="appTab('home')" title="Home">
+      <button class="sb-navbtn" id="snav-home" onclick="appTab('home')">
         <span class="sb-navic" style="--ic:url('/nav-narch.png')" aria-hidden="true"></span>
         <span>Home</span>
       </button>
-      <button class="sb-navbtn" id="snav-chat" onclick="appTab('chat')" title="Chat">
+      <button class="sb-navbtn" id="snav-chat" onclick="appTab('chat')">
         <span class="sb-navic" style="--ic:url('/nav-equals.png')" aria-hidden="true"></span>
         <span>Chat</span>
         <span class="ac-badge hidden" id="acBadgeNav">0</span>
       </button>
-      <button class="sb-navbtn" id="snav-search" onclick="appTab('search')" title="Search">
+      <button class="sb-navbtn" id="snav-search" onclick="appTab('search')">
         <span class="sb-navic" style="--ic:url('/nav-ring.png')" aria-hidden="true"></span>
         <span>Search</span>
       </button>
-      <button class="sb-navbtn" id="snav-ai" onclick="appTab('ai')" title="Atwe AI">
+      <button class="sb-navbtn" id="snav-ai" onclick="appTab('ai')">
         <span class="sb-navic" style="--ic:url('/nav-knot.png')" aria-hidden="true"></span>
         <span>Atwe AI</span>
       </button>
-      <button class="sb-navbtn" id="snav-profile" onclick="appTab('profile')" title="Profile">
+      <button class="sb-navbtn" id="snav-profile" onclick="appTab('profile')">
         <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-4 0-7 2.2-7 5 0 .6.4 1 1 1h12c.6 0 1-.4 1-1 0-2.8-3-5-7-5z"/></svg>
         <span>Profile</span>
       </button>
