@@ -7871,6 +7871,56 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   }
 });
 
+// PUBLIC profile read — for the signed-out X-style deep-link "peek". A visitor who
+// opens a shared /username link may VIEW that one profile (read-only), then hits the
+// login gate on any further interaction (enforced client-side). Deliberately a
+// SEPARATE, no-auth endpoint (never touches the authed /api/social/profile route, so
+// signed-in flows carry zero risk): it returns only public fields with NO
+// viewer-relative state (no follow/block/mutual), and a viewer id of 0 so mapPost
+// still ships locked placeholders for any sub-only/PPV posts.
+app.get('/api/public/profile/:username', async (req, res) => {
+  try {
+    const handle = (req.params.username || '').replace(/^@/, '');
+    if (!handle) return res.status(404).json({ error: 'User not found.' });
+    const u = await db.query(
+      `SELECT id, name, username, avatar, banner, bio, location, website, headline, verified,
+              categories, account_type, business_verify_status, otw_visibility, created_at, deactivated,
+              profile_cta, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label
+       FROM users WHERE lower(username) = lower($1)`, [handle]);
+    const t = u.rows[0];
+    if (!t || t.deactivated) return res.status(404).json({ error: 'User not found.' });
+    const [counts, posts] = await Promise.all([
+      db.query(`SELECT (SELECT COUNT(*)::int FROM follows WHERE following_id = $1) AS followers,
+                       (SELECT COUNT(*)::int FROM follows WHERE follower_id  = $1) AS following,
+                       (SELECT COUNT(*)::int FROM posts WHERE user_id = $1 AND parent_id IS NULL) AS posts`, [t.id]),
+      db.query(POSTS_SELECT + 'WHERE p.user_id = $2 AND p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() ORDER BY p.created_at DESC LIMIT 30', [0, t.id]),
+    ]);
+    res.json({
+      user: {
+        id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null,
+        bio: t.bio || null, location: t.location || null, website: t.website || null, headline: t.headline || null,
+        verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [],
+        accountType: t.account_type === 'business' ? 'business' : 'personal',
+        businessVerified: t.business_verify_status === 'verified',
+        businessVerifyStatus: ['pending', 'verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none',
+        openToWork: t.otw_visibility === 'everyone', joinedAt: t.created_at || null,
+        profileCta: ['book', 'order', 'message'].includes(t.profile_cta) ? t.profile_cta : null,
+        affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: null } : null,
+      },
+      counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts, connections: null },
+      posts: posts.rows.map(mapPost),
+      replies: [], skills: [], recommendations: [], featured: [], experiences: [], education: [], certifications: [],
+      connectionState: 'none', isFollowing: false, isContact: false, isBlocked: false, isNotifying: false, isMe: false,
+      pinnedPost: null, mutualConnections: 0, followedBy: [], followedByCount: 0, trustScore: null,
+      subPrice: 0, subBlurb: null, isSubscribed: false, subscriberCount: 0, subTiers: [], myTierId: null,
+      isMuted: false, isPeek: true,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
 // A user's public Likes (X-style "Likes" profile tab), lazy-loaded on tab open so
 // the initial profile payload stays lean. Top-level, main-feed, publicly-visible
 // posts the user has liked, newest-like first; blocks-aware in both directions and

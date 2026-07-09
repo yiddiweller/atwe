@@ -321,11 +321,33 @@ Everything lives in one file, organized by banner comments
     gate up for a signed-out visitor, and the AI endpoint `POST /api/chat` is now
     `requireAuth` (was `optionalAuth`). The login/signup PAGES themselves are
     unchanged — only the gating logic changed. The old `guestLogin()`/`S.guest`
-    plumbing is now inert. (Planned next, live-DB session: an X-style deep-link
-    **peek** — a signed-out visitor opening a shared `/username`/post link may VIEW
-    that one public entity, then hit the gate on any further interaction; needs the
-    public read routes opened to guests + a peek/click-gate.) The `localStorage`
-    caches (`atwe_user` etc.) are dormant now that no guest session is created.
+    plumbing is now inert. The `localStorage` caches (`atwe_user` etc.) are dormant
+    now that no guest session is created.
+  - **X-style deep-link "peek" (SHIPPED).** The one exception to the hard gate: a
+    signed-out visitor who opens a shared **profile** link (`/<username>` or
+    `?u=<username>` — e.g. found via a Google search) may VIEW that one public
+    profile, then hits the login/signup gate on any interaction. Backed by a
+    dedicated **no-auth `GET /api/public/profile/:username`** (separate from the
+    authed `/api/social/profile/:username`, which still 401s — signed-in flows carry
+    zero risk) that returns public-only fields + defaulted viewer state
+    (`connectionState:'none'`, `isFollowing:false`, `isMe:false`, …) + `isPeek:true`,
+    with the user's public top-level posts (LIMIT 30); 404 on unknown/deactivated.
+    Frontend: `boot()`'s signed-out branch routes a **profile** `_pendingRoute` to
+    **`acPeekProfile(username)`** (other deep-link types — post/job/listing/group/
+    circle — have no public read yet, so they fall through to `openLogin()`).
+    `acPeekProfile` fetches the public payload, enters a lightweight guest chrome
+    (`S._peek=true`, `S.guest=true`, a `Guest` `S.user`), shows the social surface +
+    the profile screen directly (bypassing the auth-gated `appTab`), renders via the
+    pure `acRenderProfile(d,false)`, and shows a slim bottom **`#peekBar`** ("Sign in
+    to see more of Atwe" + Create-account/Log-in). The real gate is a **capture-phase
+    document click-listener** (no-op unless `S._peek`): any tap outside `#peekBar`/
+    `#loginOverlay`/`#signupOverlay` is intercepted → `openLogin()`. `closeLoginSheet`
+    /`loginBackToAI` are dismissable in peek (close the gate → back to the profile, X-
+    style). `onAuthSuccess` calls **`acExitPeek()`** (drops the click-gate + bar).
+    Peek skips authed profile side-loaders (`acLoadHighlights` early-returns) so the
+    console stays clean. Verified live (real DB): desktop + mobile peek render the
+    public profile, click→gate→close→profile, nonexistent→gate, signed-in unaffected,
+    zero API errors.
 - **`API`** — tiny fetch wrapper that attaches the bearer token and throws on
   non-2xx. **`Sync`** — write-through helpers (`saveChat`, `deleteChat`,
   `clearChats`, `saveProject`, `deleteProject`, `setPlan`) that are **no-ops in
