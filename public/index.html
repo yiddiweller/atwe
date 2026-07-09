@@ -42278,8 +42278,8 @@ document.addEventListener('keydown', (e) => {
   if (window.innerWidth < 769) return; // desktop keyboard shortcuts only
   const t = e.target;
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-  // Don't hijack keys while a real modal/confirm/composer is already open.
-  const modalOpen = ['confirmOverlay', 'callOverlay', 'liveOverlay', 'imgViewer', 'introSheet'].some(id => {
+  // Don't hijack keys while a real modal/confirm/composer/media-viewer is open.
+  const modalOpen = ['confirmOverlay', 'callOverlay', 'liveOverlay', 'imgViewer', 'introSheet', 'storyViewer', 'userFeedOverlay'].some(id => {
     const el = document.getElementById(id); return el && !el.classList.contains('hidden');
   });
   if (modalOpen) return;
@@ -42318,6 +42318,15 @@ function acFeedKeyNav(dir) {
   if (!target) target = dir > 0 ? cards[cards.length - 1] : cards[0];
   target.scrollIntoView({ behavior: (typeof _jellyReduced === 'function' && _jellyReduced()) ? 'auto' : 'smooth', block: 'start' });
 }
+// Media viewer keyboard nav: while the story viewer is open, ←/→ step between
+// stories (Esc closes via the global Escape handler below). Physical-keyboard only.
+document.addEventListener('keydown', (e) => {
+  const sv = document.getElementById('storyViewer');
+  if (!sv || sv.classList.contains('hidden')) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === 'ArrowRight') { e.preventDefault(); if (typeof acStoryNext === 'function') acStoryNext(); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); if (typeof acStoryPrev === 'function') acStoryPrev(); }
+});
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (!document.getElementById('liveViewersOverlay').classList.contains('hidden')) { closeOverlay('liveViewersOverlay'); return; }
