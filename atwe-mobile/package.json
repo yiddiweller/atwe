@@ -1,0 +1,50 @@
+{
+  "name": "atwe-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Atwe — native iOS (and Android) app. Expo + TypeScript client for the existing Atwe backend.",
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "ios": "expo start --ios",
+    "android": "expo start --android",
+    "web": "expo start --web",
+    "lint": "eslint . --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "doctor": "npx expo-doctor"
+  },
+  "dependencies": {
+    "expo": "^53.0.0",
+    "expo-router": "~5.0.0",
+    "expo-constants": "~17.0.0",
+    "expo-linking": "~7.0.0",
+    "expo-status-bar": "~2.0.0",
+    "expo-splash-screen": "~0.29.0",
+    "expo-secure-store": "~14.0.0",
+    "expo-local-authentication": "~16.0.0",
+    "expo-haptics": "~14.0.0",
+    "expo-image": "~2.0.0",
+    "expo-blur": "~14.0.0",
+    "expo-notifications": "~0.29.0",
+    "expo-device": "~7.0.0",
+    "expo-system-ui": "~4.0.0",
+    "expo-font": "~13.0.0",
+    "react": "19.0.0",
+    "react-native": "0.79.0",
+    "react-native-safe-area-context": "4.12.0",
+    "react-native-screens": "~4.4.0",
+    "react-native-gesture-handler": "~2.20.0",
+    "react-native-reanimated": "~3.16.0",
+    "@tanstack/react-query": "^5.62.0",
+    "@expo/vector-icons": "^14.0.0",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.0.0",
+    "typescript": "~5.7.0",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~8.0.0",
+    "prettier": "^3.3.0"
+  }
+}

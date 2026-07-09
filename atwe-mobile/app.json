@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "Atwe",
+    "slug": "atwe",
+    "scheme": "atwe",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#07080A"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.atwe.app",
+      "buildNumber": "1",
+      "config": { "usesNonExemptEncryption": false },
+      "infoPlist": {
+        "UIBackgroundModes": ["remote-notification"],
+        "NSCameraUsageDescription": "Atwe uses the camera for photos, video, stories, and QR scanning.",
+        "NSPhotoLibraryUsageDescription": "Atwe lets you attach photos and video to posts, messages, and listings.",
+        "NSMicrophoneUsageDescription": "Atwe uses the microphone for voice notes and calls.",
+        "NSFaceIDUsageDescription": "Atwe uses Face ID to unlock the app and protected sections.",
+        "NSLocationWhenInUseUsageDescription": "Atwe uses your location for near-me discovery and live location sharing.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.atwe.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#07080A"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-local-authentication",
+      "expo-notifications",
+      [
+        "expo-splash-screen",
+        { "backgroundColor": "#07080A", "image": "./assets/splash.png", "imageWidth": 180 }
+      ]
+    ],
+    "experiments": { "typedRoutes": true },
+    "extra": {
+      "apiUrl": "https://atwe.com",
+      "eas": { "projectId": "REPLACE_WITH_EAS_PROJECT_ID" }
+    }
+  }
+}
