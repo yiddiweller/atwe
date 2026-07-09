@@ -4683,9 +4683,45 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.08);}
 .ac-compose-prodchip .cpc-price{font-size:13px;font-weight:700;color:var(--accent);}
 .ac-compose-prodchip .cpc-x{background:none;border:none;color:var(--t3);cursor:pointer;padding:4px;display:flex;}
 .ac-compose-prodchip .cpc-x svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
+.ac-prodtag.ac-prodtag-multi{padding-left:10px;}
 .ac-prodtag-row{align-items:center;gap:12px;}
 .cpc-thumb{width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;}
 .cpc-thumb-blank{background:var(--s3);}
+/* Composer multi-tag picker: selected state + checkmark, plus an inline add button. */
+.ac-prodtag-hint{font-size:12.5px;color:var(--t3);font-weight:600;margin:0 2px 8px;}
+.ac-prodtag-rows{max-height:44vh;overflow-y:auto;}
+.ac-prodtag-row.on{background:var(--accent-dim);}
+.ac-prodtag-check{width:24px;height:24px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:50%;border:1.5px solid var(--b2);}
+.ac-prodtag-check.on{background:var(--accent);border-color:var(--accent);}
+.ac-prodtag-check svg{width:14px;height:14px;fill:none;stroke:var(--accent-tint,#fff);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;}
+.ac-compose-prodadd{margin:10px 0 0;padding:8px 14px;background:var(--s2);border:1px dashed var(--b2);border-radius:var(--r-md);color:var(--accent);font-weight:700;font-size:13.5px;cursor:pointer;}
+.ac-compose-prodadd:active{transform:scale(.97);}
+/* Quick-buy preview sheet (tap a tagged product). */
+.qb-modal{max-width:420px;}
+.qb-head{display:flex;gap:14px;align-items:center;margin:2px 0 12px;}
+.qb-img{width:88px;height:88px;border-radius:14px;background-size:cover;background-position:center;flex-shrink:0;background-color:var(--s3);}
+.qb-img.noimg{background:var(--s3);}
+.qb-hmain{min-width:0;flex:1;}
+.qb-name{font-size:17px;font-weight:700;color:var(--t1);line-height:1.3;margin-bottom:4px;}
+.qb-price{font-size:22px;font-weight:800;color:var(--t1);letter-spacing:-.02em;}
+.qb-head .stock-badge{margin-top:6px;display:inline-block;}
+.qb-seller{display:flex;align-items:center;gap:9px;width:100%;background:var(--s2);border:none;border-radius:var(--r-md);padding:8px 12px;margin:0 0 10px;cursor:pointer;text-align:start;}
+.qb-seller .qb-sav{width:30px;height:30px;flex-shrink:0;}
+.qb-sname{flex:1;min-width:0;font-size:14px;font-weight:600;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;}
+.qb-sview{font-size:12.5px;font-weight:600;color:var(--accent);flex-shrink:0;}
+.qb-vpick{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px;}
+.qb-cta{display:flex;gap:10px;}
+.qb-cta .ac-pill-btn{flex:1;}
+.qb-full{display:block;width:100%;text-align:center;margin-top:12px;}
+.qb-unavail{text-align:center;padding:26px 16px;}
+.qb-unavail svg{width:44px;height:44px;color:var(--t3);margin-bottom:10px;}
+.qb-unavail-t{font-size:16px;font-weight:700;color:var(--t1);margin-bottom:4px;}
+.qb-unavail-s{font-size:13px;color:var(--t3);}
+/* Tagged-product chip on an immersive reel/short (above the bottom nav). */
+.feed-prodtag{position:absolute;left:14px;bottom:calc(var(--nav-bottom, 84px) + 8px);z-index:4;display:inline-flex;align-items:center;gap:6px;
+  background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);padding:8px 14px 8px 11px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 3px 14px rgba(0,0,0,.5);}
+.feed-prodtag svg{width:16px;height:16px;}
+.feed-prodtag:active{transform:scale(.95);}
 .ac-post-head{display:flex;align-items:center;gap:8px;}
 /* Keep the verified badge hugging the name (its own 3px margin) instead of inheriting
    the 8px header gap — so the space after the name matches the profile/lists. */
@@ -5253,6 +5289,13 @@ body.light .ac-home-stories{border-bottom-color:rgba(0,0,0,.08);}
 .story-text span{color:#fff;font-size:26px;font-weight:700;line-height:1.3;word-break:break-word;}
 .story-cap{position:absolute;left:0;right:0;bottom:64px;z-index:3;padding:0 16px;pointer-events:none;}
 .story-cap-in{background:rgba(0,0,0,.55);color:#fff;font-size:15px;padding:8px 12px;border-radius:12px;display:inline-block;text-shadow:0 1px 2px rgba(0,0,0,.5);}
+/* Shoppable story: a tagged-product pill (its own pointer-events, since .story-cap is inert). */
+.story-prodtag{pointer-events:auto;display:inline-flex;align-items:center;gap:8px;margin-top:10px;max-width:100%;
+  background:rgba(255,255,255,.96);color:#111;border:none;border-radius:var(--r-pill);padding:9px 14px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.4);}
+.story-prodtag svg{width:17px;height:17px;flex-shrink:0;stroke:#111;}
+.story-prodtag .sp-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.story-prodtag .sp-price{color:var(--accent);font-weight:800;flex-shrink:0;}
+.story-prodtag:active{transform:scale(.96);}
 .story-nav{position:absolute;top:60px;bottom:60px;width:35%;background:none;border:none;cursor:pointer;z-index:2;}
 .story-nav.left{left:0;}
 .story-nav.right{right:0;width:65%;}
@@ -6705,6 +6748,12 @@ body.light .gp-card{background:#fff;}
 .feed-c-share{background:#fff;color:#000;border:none;font-family:inherit;font-size:14.5px;font-weight:700;
   cursor:pointer;padding:9px 20px;border-radius:999px;flex-shrink:0;transition:opacity .15s var(--ease);}
 .feed-c-share.is-empty{opacity:.4;pointer-events:none;}
+/* Reel/short composer: tag-products row (dark full-screen stage). */
+.feed-c-prodrow{padding:8px 16px 0;display:flex;flex-direction:column;gap:6px;}
+.feed-c-prodrow .ac-compose-prodchip{background:rgba(255,255,255,.1);}
+.feed-c-prodrow .cpc-name{color:#fff;}
+.feed-c-tagbtn{align-self:flex-start;padding:8px 14px;background:rgba(255,255,255,.1);border:1px dashed rgba(255,255,255,.3);border-radius:var(--r-md);color:#fff;font-weight:700;font-size:13.5px;cursor:pointer;}
+.feed-c-tagbtn:active{transform:scale(.97);}
 .feed-c-stage{flex:1;position:relative;min-height:0;display:flex;}
 .feed-c-text{flex:1;display:flex;align-items:center;justify-content:center;padding:30px;transition:background .2s var(--ease);}
 .feed-c-text textarea{width:100%;max-width:680px;background:none;border:none;outline:none;resize:none;color:#fff;
@@ -8901,6 +8950,10 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <div class="feed-c-mediaph" id="feedCMediaPh" onclick="acFeedCPick()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="m21 15-5-5L5 21"/></svg><span id="feedCPickLabel">Choose a photo</span></div>
     </div>
   </div>
+  <div class="feed-c-prodrow" id="feedCProdRow">
+    <div id="feedProdChip"></div>
+    <button class="feed-c-tagbtn" onclick="acTagProductOpen()" type="button">＋ Tag products</button>
+  </div>
   <div class="feed-c-swatches" id="feedCSwatches"></div>
   <input type="file" id="feedCFile" class="hidden" accept="image/*" onchange="acFeedCFile(event)"/>
 </div>
@@ -10950,9 +11003,26 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
 <div class="overlay hidden" id="prodTagSheet" onclick="if(event.target===this)closeOverlay('prodTagSheet')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Tag a product">
     <button class="sheet-close" onclick="closeOverlay('prodTagSheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-    <div class="jp-title" style="margin:0 0 2px;">Tag a product</div>
-    <div class="ac-disc-sub" style="margin:0 0 12px;">Attach one of your listings — a price chip appears on your post's photo.</div>
+    <div class="jp-title" style="margin:0 0 2px;">Tag products</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Attach your listings — shoppers can buy right from your post, reel or story.</div>
     <div id="prodTagBody"></div>
+  </div>
+</div>
+
+<!-- Quick-buy preview: tap a tagged product on a post / reel / story -->
+<div class="overlay hidden" id="quickBuySheet" onclick="if(event.target===this)closeOverlay('quickBuySheet')">
+  <div class="job-card-modal qb-modal" role="dialog" aria-modal="true" aria-label="Product preview">
+    <button class="sheet-close" onclick="closeOverlay('quickBuySheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="quickBuyBody"></div>
+  </div>
+</div>
+
+<!-- Multiple tagged products → pick one -->
+<div class="overlay hidden" id="tagProductsSheet" onclick="if(event.target===this)closeOverlay('tagProductsSheet')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Tagged products">
+    <button class="sheet-close" onclick="closeOverlay('tagProductsSheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 12px;">Products in this post</div>
+    <div id="tagProductsBody"></div>
   </div>
 </div>
 
@@ -12170,6 +12240,8 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <button class="st-aud" id="stAudClose" onclick="acStoryAud('close')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="8.5 12 11 14.5 15.5 9.5"/></svg>Close friends</button>
       <button class="st-aud-edit" onclick="acOpenCloseFriends()">Edit list</button>
     </div>
+    <div id="stProdChip"></div>
+    <button class="ac-compose-prodadd" style="margin-top:8px;" onclick="acTagProductOpen()" type="button">＋ Tag products</button>
     <button class="ac-pill-btn accent jp-submit" id="stPostBtn" onclick="acStoryPost()">Share to story</button>
   </div>
 </div>
@@ -21484,6 +21556,12 @@ function acRenderBizAnalytics(a) {
       ${C((a.posts && a.posts.reposts) || 0, 'Reposts')}
       ${C((a.jobs && a.jobs.views) || 0, 'Job views')}
     </div>
+    <div class="ba-sec">Shopping</div>
+    <div class="ba-grid">
+      ${C((a.tagTaps && a.tagTaps.total) || 0, 'Product-tag taps', 'On your posts, reels & stories')}
+      ${C((a.tagTaps && a.tagTaps.last30) || 0, 'Taps (30 days)')}
+      ${C((a.tagTaps && a.tagTaps.unique30) || 0, 'Unique shoppers (30d)')}
+    </div>
     <div class="ba-sec">Hiring</div>
     <div class="ba-grid">
       ${C((a.jobs && a.jobs.count) || 0, 'Jobs posted')}
@@ -24099,7 +24177,21 @@ function acFeedCardHtml(p) {
     + `<div class="feed-head-txt"><span class="feed-head-name">${escHtml(a.name || '')}${vbadge(acIsVerified(a))}</span>`
     + `<span class="feed-head-handle">@${h} · ${acTime(p.created_at)}</span></div></div>`;
   (AC._immPosts = AC._immPosts || {})[p.id] = p; // lookup for the rail/comments/more menu
-  return `<div class="feed-card" data-id="${p.id}">${body}<div class="feed-overlay">${del}${sound}${head}${acFeedRailHtml(p)}</div></div>`;
+  return `<div class="feed-card" data-id="${p.id}">${body}<div class="feed-overlay">${del}${sound}${head}${acFeedProdTagChip(p)}${acFeedRailHtml(p)}</div></div>`;
+}
+// A tagged-product chip on an immersive reel/short (bottom-left over the media).
+function acFeedProdTagChip(p) {
+  const products = (p.products && p.products.length) ? p.products : [];
+  if (!products.length) return '';
+  AC._tagProducts = AC._tagProducts || {};
+  AC._tagProducts['feedpost:' + p.id] = products;
+  const tagIc = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 12 22l-9-9V4a1 1 0 0 1 1-1h8.6z"/><circle cx="7.5" cy="7.5" r="1.4"/></svg>';
+  const bag = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>';
+  if (products.length === 1) {
+    const pr = products[0];
+    return `<button class="feed-prodtag" onclick="event.stopPropagation();acQuickBuy(${pr.id}, 'feedpost', ${p.id})" aria-label="View ${escHtml(pr.name)}">${tagIc}<span>${acTagProductPrice(pr)}</span></button>`;
+  }
+  return `<button class="feed-prodtag" onclick="event.stopPropagation();acProdTagList(${p.id}, 'feedpost')" aria-label="View ${products.length} tagged products">${bag}<span>${products.length} products</span></button>`;
 }
 // Toggle sound for feed videos (a single session-wide preference). Applies to the
 // on-screen video immediately and updates every sound button's icon.
@@ -24201,6 +24293,7 @@ function acFeedCompose() {
   document.getElementById('feedCInput').value = '';
   document.getElementById('feedCText').style.background = _feedC.bg;
   document.getElementById('feedCMedia').innerHTML = acFeedMediaPh('photo');
+  AC._postProducts = []; acRenderPostProdChip(); // fresh product tags per composer open
   acFeedRenderSwatches();
   acFeedCType('text');
   showOverlay('feedComposeOverlay');
@@ -24211,6 +24304,8 @@ function acFeedCType(kind) {
   _feedC.kind = kind;
   document.querySelectorAll('.feed-c-type').forEach(b => b.classList.toggle('active', b.dataset.k === kind));
   const text = document.getElementById('feedCText'), media = document.getElementById('feedCMedia'), sw = document.getElementById('feedCSwatches');
+  // Product tags need a media surface — only offer them on photo/video shorts.
+  const prodRow = document.getElementById('feedCProdRow'); if (prodRow) prodRow.style.display = (kind === 'text') ? 'none' : '';
   if (kind === 'text') {
     text.classList.remove('hidden'); media.classList.add('hidden'); sw.classList.remove('hidden');
     setTimeout(() => document.getElementById('feedCInput').focus(), 30);
@@ -24260,6 +24355,7 @@ async function acFeedShare() {
   } else {
     if (!_feedC.media) return;
     payload.media = _feedC.media;
+    if ((AC._postProducts || []).length) payload.productIds = AC._postProducts.map((p) => p.id);
   }
   document.getElementById('feedCShare').classList.add('is-empty');
   try {
@@ -25853,12 +25949,108 @@ function acHeartBurst(x, y) {
   document.body.appendChild(w);
   setTimeout(() => w.remove(), 1000);
 }
-// A blue price chip over tagged media that opens the listing (blueprint §Home).
-function acProdTagWrap(p, mediaHtml) {
-  if (!p.product || !mediaHtml) return mediaHtml;
-  const price = acMoneyFmt(p.product.priceCents || 0);
-  return `<div class="ac-media-tag-wrap">${mediaHtml}<button class="ac-prodtag" onclick="event.stopPropagation();acOpenListing(${p.product.id})" aria-label="View ${escHtml(p.product.name)} — ${price}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 12 22l-9-9V4a1 1 0 0 1 1-1h8.6z"/><circle cx="7.5" cy="7.5" r="1.4"/></svg><span>${price}</span></button></div>`;
+// Tagged-product overlay on media (blueprint §Home): a single blue price chip, or a
+// "N products" indicator for multiple, bottom-left. Tapping opens the quick-buy
+// preview (single) or a list of the tagged products (multi). Shared by posts,
+// reels/shorts and stories via a small (kind,id) registry so the list can resolve.
+function acTagProductPrice(pr) {
+  if (pr.available === false || pr.soldOut) return 'View';
+  return pr.hasVariants ? ('from ' + acMoneyFmt(pr.priceFromCents || pr.priceCents || 0)) : acMoneyFmt(pr.priceCents || 0);
 }
+function acProdTagWrap(p, mediaHtml, contentKind) {
+  const products = (p.products && p.products.length) ? p.products : (p.product ? [p.product] : []);
+  if (!products.length || !mediaHtml) return mediaHtml;
+  contentKind = contentKind || 'post';
+  AC._tagProducts = AC._tagProducts || {};
+  AC._tagProducts[contentKind + ':' + p.id] = products;
+  const bag = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>';
+  const tagIc = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 12 22l-9-9V4a1 1 0 0 1 1-1h8.6z"/><circle cx="7.5" cy="7.5" r="1.4"/></svg>';
+  let chip;
+  if (products.length === 1) {
+    const pr = products[0];
+    chip = `<button class="ac-prodtag" onclick="event.stopPropagation();acQuickBuy(${pr.id}, '${contentKind}', ${p.id})" aria-label="View ${escHtml(pr.name)}">${tagIc}<span>${acTagProductPrice(pr)}</span></button>`;
+  } else {
+    chip = `<button class="ac-prodtag ac-prodtag-multi" onclick="event.stopPropagation();acProdTagList(${p.id}, '${contentKind}')" aria-label="View ${products.length} tagged products">${bag}<span>${products.length} products</span></button>`;
+  }
+  return `<div class="ac-media-tag-wrap">${mediaHtml}${chip}</div>`;
+}
+// The multi-tag list sheet: pick one tagged product → its quick-buy preview.
+function acProdTagList(contentId, contentKind) {
+  const products = (AC._tagProducts || {})[contentKind + ':' + contentId] || [];
+  if (!products.length) return;
+  if (products.length === 1) { acQuickBuy(products[0].id, contentKind, contentId); return; }
+  showOverlay('tagProductsSheet');
+  const body = document.getElementById('tagProductsBody');
+  body.innerHTML = products.map((pr) => {
+    const price = (pr.available === false) ? 'Unavailable' : (pr.soldOut ? 'Sold out' : (pr.hasVariants ? 'from ' + acMoneyFmt(pr.priceFromCents || pr.priceCents || 0) : acMoneyFmt(pr.priceCents || 0)));
+    return `<button class="ac-item ac-prodtag-row" onclick="closeOverlay('tagProductsSheet');acQuickBuy(${pr.id}, '${contentKind}', ${contentId})">
+        ${pr.image ? `<img class="cpc-thumb" src="${pr.image}" alt="" loading="lazy"/>` : '<div class="cpc-thumb cpc-thumb-blank"></div>'}
+        <div class="ac-item-main"><div class="ac-item-name">${escHtml(pr.name)}</div><div class="ac-item-last">${price}</div></div>
+        <svg class="me-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>`;
+  }).join('');
+}
+// Quick-buy preview — a compact floating sheet for a tagged product. Fetches the
+// CURRENT listing (honest price / sold-out / unavailable), shows the seller + a
+// buyer-protection promise + variant chips, and routes Buy now / Add to cart / View
+// full listing through the SAME wallet checkout as the listing detail.
+async function acQuickBuy(productId, contentKind, contentId) {
+  // Fire-and-forget tap analytics — never blocks the UI.
+  try { API.req('POST', '/api/product-tags/tap', { productId, contentKind: contentKind || null, contentId: contentId || null }); } catch (e) {}
+  showOverlay('quickBuySheet');
+  const body = document.getElementById('quickBuyBody');
+  body.innerHTML = acSkelRows(2);
+  AC._qbVar = null;
+  try {
+    const { listing } = await API.req('GET', '/api/listings/' + productId);
+    AC._qbListing = listing;
+    acQuickBuyRender();
+  } catch (e) {
+    AC._qbListing = null;
+    body.innerHTML = `<div class="qb-unavail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="8" x2="16" y2="16"/></svg><div class="qb-unavail-t">This item is no longer available</div><div class="qb-unavail-s">The seller may have removed or hidden this listing.</div></div>`;
+  }
+}
+function acQuickBuyPickVar(id) { AC._qbVar = (AC._qbVar === id) ? null : id; acQuickBuyRender(); }
+function acQuickBuyRender() {
+  const body = document.getElementById('quickBuyBody'); const l = AC._qbListing; if (!body || !l) return;
+  const own = l.seller && l.seller.id === (S.user && S.user.id);
+  const v = l.hasVariants ? (l.variants || []).find((x) => x.id === AC._qbVar) : null;
+  const needPick = l.hasVariants && !v;
+  const unitPrice = v ? v.priceCents : (l.hasVariants ? l.priceFromCents : l.priceCents);
+  const soldOut = v ? v.soldOut : l.soldOut;
+  const priceLbl = needPick ? ('from ' + acMoneyFmt(l.priceFromCents)) : acMoneyFmt(unitPrice);
+  const sellerBiz = l.seller && l.seller.accountType === 'business';
+  const escChip = (!own && !soldOut) ? `<div class="esc-chip"><span class="esc-dot"></span>Buyer protection — funds held in escrow</div>` : '';
+  const variantChips = l.hasVariants ? `<div class="qb-vpick">${(l.variants || []).map((vr) => `<button class="vchip ${vr.soldOut ? 'out' : ''} ${AC._qbVar === vr.id ? 'on' : ''}" ${vr.soldOut ? 'disabled' : ''} onclick="acQuickBuyPickVar(${vr.id})">${escHtml(vr.label)}${vr.priceCents != null ? ' · ' + acMoneyFmt(vr.priceCents) : ''}</button>`).join('')}</div>` : '';
+  let cta;
+  if (own) cta = `<div class="ac-empty" style="padding:10px;">This is your listing.</div>`;
+  else if (soldOut) cta = `<button class="ac-pill-btn" style="width:100%;" disabled>Sold out</button>`;
+  else if (needPick) cta = `<button class="ac-pill-btn" style="width:100%;" disabled>Select an option</button>`;
+  else cta = `<div class="qb-cta"><button class="ac-pill-btn" onclick="acQuickBuyAddCart()">Add to cart</button><button class="ac-pill-btn accent" onclick="acQuickBuyNow()">Buy now · ${acMoneyFmt(unitPrice)}</button></div>`;
+  const img = l.image ? `<div class="qb-img" style="background-image:url('${l.image}')"></div>` : '<div class="qb-img noimg"></div>';
+  const stockBadge = (!needPick && soldOut) ? '<span class="stock-badge out">Sold out</span>'
+    : (l.needsShipping && typeof (v ? v.stock : l.stock) === 'number' && (v ? v.stock : l.stock) <= 5 && (v ? v.stock : l.stock) > 0 ? `<span class="stock-badge low">Only ${v ? v.stock : l.stock} left</span>` : '');
+  body.innerHTML = `
+    <div class="qb-head">${img}<div class="qb-hmain"><div class="qb-name">${escHtml(l.name)}</div><div class="qb-price">${priceLbl}</div>${stockBadge}</div></div>
+    <button class="qb-seller" onclick="acQuickBuyViewSeller()" aria-label="View ${escHtml((l.seller && l.seller.name) || 'seller')}">${acAvatarHtml((l.seller && l.seller.name) || '', l.seller && l.seller.avatar, 'user-avatar qb-sav', sellerBiz)}<span class="qb-sname">${escHtml((l.seller && l.seller.name) || '')}${vbadge(!!(l.seller && l.seller.verified))}</span><span class="qb-sview">View store</span></button>
+    ${escChip}${variantChips}${cta}
+    <button class="ac-link-btn qb-full" onclick="acQuickBuyFull()">View full listing</button>`;
+}
+function acQuickBuyNow() {
+  const l = AC._qbListing; if (!l) return;
+  const v = l.hasVariants ? (l.variants || []).find((x) => x.id === AC._qbVar) : null;
+  AC._listingVar = v ? v.id : null; AC._listingQty = 1; // acBuyNow reads these
+  closeOverlay('quickBuySheet');
+  acBuyNow(l.id, l);
+}
+function acQuickBuyAddCart() {
+  const l = AC._qbListing; if (!l) return;
+  const v = l.hasVariants ? (l.variants || []).find((x) => x.id === AC._qbVar) : null;
+  AC._listingCur = l; AC._listingVar = v ? v.id : null; // acAddToCart reads these for variants
+  acAddToCart(l.id);
+}
+function acQuickBuyFull() { const l = AC._qbListing; if (!l) return; closeOverlay('quickBuySheet'); acOpenListing(l.id); }
+function acQuickBuyViewSeller() { const l = AC._qbListing; if (!l || !l.seller || !l.seller.username) return; closeOverlay('quickBuySheet'); acGoProfile(l.seller.username); }
 function acPostCard(p) {
   const img = acProdTagWrap(p, acPostMedia(p, true));
   AC._authors = AC._authors || {};
@@ -27115,8 +27307,11 @@ function acCopyPostLink(id) {
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(ok).catch(fallback);
   else fallback();
 }
-// Composer "Tag a product" (blueprint §Home): pick one of your own active listings;
-// a blue price chip then rides on the post's media and opens the listing.
+// Composer "Tag a product" (blueprint §Home): tag up to 5 of your own active
+// listings; each becomes a blue price chip (single) / "N products" indicator (multi)
+// that rides on the media and opens a quick-buy preview. Shared by the post, reel/
+// short (feed) and story composers via AC._postProducts (reset on each composer open).
+const PRODTAG_MAX = 5;
 async function acTagProductOpen() {
   showOverlay('prodTagSheet');
   const body = document.getElementById('prodTagBody');
@@ -27126,23 +27321,57 @@ async function acTagProductOpen() {
     const active = (products || []).filter((p) => p.active !== false);
     AC._myListingsCache = active;
     if (!active.length) { body.innerHTML = `<div class="ac-empty">You don't have any active listings yet.<br/>Create one from your storefront to tag it here.</div>`; return; }
-    body.innerHTML = active.map((p) => `<button class="ac-item ac-prodtag-row" onclick="acPickProduct(${p.id})">
+    acRenderProdTagPicker();
+  } catch (e) { acErr(body, 'acTagProductOpen()'); }
+}
+function acRenderProdTagPicker() {
+  const body = document.getElementById('prodTagBody'); if (!body) return;
+  const active = AC._myListingsCache || [];
+  const chosen = (AC._postProducts || []).map((p) => p.id);
+  const count = chosen.length;
+  const rows = active.map((p) => {
+    const on = chosen.includes(p.id);
+    return `<button class="ac-item ac-prodtag-row ${on ? 'on' : ''}" role="checkbox" aria-checked="${on}" onclick="acPickProduct(${p.id})">
         ${p.image ? `<img class="cpc-thumb" src="${p.image}" alt="" loading="lazy"/>` : '<div class="cpc-thumb cpc-thumb-blank"></div>'}
         <div class="ac-item-main"><div class="ac-item-name">${escHtml(p.name)}</div><div class="ac-item-last">${acMoneyFmt(p.priceCents || 0)}</div></div>
-      </button>`).join('');
-  } catch (e) { acErr(body, 'acTagProductOpen()'); }
+        <span class="ac-prodtag-check ${on ? 'on' : ''}" aria-hidden="true">${on ? '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>' : ''}</span>
+      </button>`;
+  }).join('');
+  body.innerHTML = `<div class="ac-prodtag-hint">Tag up to ${PRODTAG_MAX} of your products · ${count}/${PRODTAG_MAX}</div>
+    <div class="ac-prodtag-rows">${rows}</div>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="closeOverlay('prodTagSheet')">Done${count ? ' · ' + count + ' tagged' : ''}</button>`;
 }
 function acPickProduct(id) {
   const p = (AC._myListingsCache || []).find((x) => x.id === id); if (!p) return;
-  AC._postProduct = { id: p.id, name: p.name, priceCents: p.priceCents || 0, image: p.image || null };
-  closeOverlay('prodTagSheet');
+  AC._postProducts = AC._postProducts || [];
+  const idx = AC._postProducts.findIndex((x) => x.id === id);
+  if (idx >= 0) AC._postProducts.splice(idx, 1);
+  else {
+    if (AC._postProducts.length >= PRODTAG_MAX) { showNotif('You can tag up to ' + PRODTAG_MAX + ' products.'); return; }
+    AC._postProducts.push({ id: p.id, name: p.name, priceCents: p.priceCents || 0, image: p.image || null });
+  }
+  acRenderProdTagPicker();
   acRenderPostProdChip();
 }
-function acClearProdTag() { AC._postProduct = null; acRenderPostProdChip(); }
+function acRemoveProdTag(id) {
+  AC._postProducts = (AC._postProducts || []).filter((p) => p.id !== id);
+  acRenderPostProdChip();
+  if (document.getElementById('prodTagSheet') && !document.getElementById('prodTagSheet').classList.contains('hidden')) acRenderProdTagPicker();
+}
+function acClearProdTag() { AC._postProducts = []; acRenderPostProdChip(); }
+// Render the tagged-product chips into whichever composer chip container is present
+// (post / story / reel all share AC._postProducts + the same picker).
 function acRenderPostProdChip() {
-  const el = document.getElementById('acPostProdChip'); if (!el) return;
-  const p = AC._postProduct;
-  el.innerHTML = p ? `<div class="ac-compose-prodchip">${p.image ? `<img src="${p.image}" alt=""/>` : ''}<span class="cpc-name">${escHtml(p.name)}</span><span class="cpc-price">${acMoneyFmt(p.priceCents)}</span><button class="cpc-x" onclick="acClearProdTag()" aria-label="Remove tagged product"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>` : '';
+  const list = AC._postProducts || [];
+  const chips = list.map((p) => `<div class="ac-compose-prodchip">${p.image ? `<img src="${p.image}" alt=""/>` : ''}<span class="cpc-name">${escHtml(p.name)}</span><span class="cpc-price">${acMoneyFmt(p.priceCents)}</span><button class="cpc-x" onclick="acRemoveProdTag(${p.id})" aria-label="Remove ${escHtml(p.name)}"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>`).join('');
+  ['acPostProdChip', 'stProdChip', 'feedProdChip'].forEach((cid) => {
+    const el = document.getElementById(cid); if (!el) return;
+    let html = chips;
+    // In the POST editor the toolbar is hidden in edit mode, so surface an inline
+    // add affordance there.
+    if (cid === 'acPostProdChip' && AC._postEditId && list.length < PRODTAG_MAX) html += `<button class="ac-compose-prodadd" onclick="acTagProductOpen()" type="button">＋ ${list.length ? 'Edit products' : 'Tag products'}</button>`;
+    el.innerHTML = html;
+  });
 }
 // Own-post overflow menu: Edit / Delete.
 function acOwnPostMenu(anchor, id) {
@@ -27356,6 +27585,10 @@ async function acEditPost(id) {
   acResetPoll(); acResetLocation(); acResetSchedule();
   AC._postEditId = id;
   acSetPostEditMode(true);
+  // Product tags are editable within the edit window — preload the existing ones as
+  // removable chips, with an inline "Tag products" affordance (edit-mode only).
+  AC._postProducts = (p.products || []).map((pr) => ({ id: pr.id, name: pr.name, priceCents: pr.priceCents || 0, image: pr.image || null }));
+  acRenderPostProdChip();
   // Show existing media read-only above the editor so the author has context.
   _acPostAtt = null; _acPostImgs = []; _acPostGif = null; acRenderPostPrev();
   const prev = document.getElementById('acPostImgPrev');
@@ -27376,7 +27609,7 @@ function acOpenPost(circleId) {
   const cav = document.getElementById('acComposeAv');
   if (cav && S.user) cav.innerHTML = acAvatarHtml(S.user.name, S.user.avatar, 'user-avatar', acIsBiz(S.user));
   _acPostAtt = null; _acPostImgs = []; _acPostGif = null;
-  AC._postProduct = null; acRenderPostProdChip();
+  AC._postProducts = []; acRenderPostProdChip();
   acSetPostEditMode(false);
   AC._postCircleCtx = (typeof circleId === 'number') ? circleId : null;
   AC._postFeedCtx = null;
@@ -27971,7 +28204,7 @@ async function acSubmitPost() {
   else { const ppvEl = document.getElementById('acPpvPrice'); const pv = ppvEl && document.getElementById('acPpvRow') && !document.getElementById('acPpvRow').classList.contains('hidden') ? Math.round((parseFloat(ppvEl.value) || 0) * 100) : 0; if (pv >= 100 && AC._postToMain !== false && !(AC._postSel && AC._postSel.size)) payload.ppvCents = pv; }
   if (AC._postTagged && AC._postTagged.length) payload.taggedIds = AC._postTagged.map(u => u.id);
   if (AC._postCoAuth && AC._postCoAuth.length) payload.coAuthorIds = AC._postCoAuth.map(u => u.id);
-  if (AC._postProduct) payload.productId = AC._postProduct.id; // tagged product → price chip on media
+  if ((AC._postProducts || []).length) payload.productIds = AC._postProducts.map((p) => p.id); // tagged products → chip / quick-buy on media
   const loc = acLocationValue(); if (loc) payload.location = loc;
   const sched = acScheduleValue(); if (sched) payload.scheduledAt = sched;
   try {
@@ -28007,8 +28240,9 @@ async function acSaveEditedPost() {
   const btn = document.getElementById('acPostBtn'); const lbl = btn.textContent;
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
-    await API.req('PATCH', '/api/social/posts/' + id, { body });
-    AC._postEditId = null;
+    // Persist any product-tag changes made during the edit window (empty = cleared).
+    await API.req('PATCH', '/api/social/posts/' + id, { body, productIds: (AC._postProducts || []).map((p) => p.id) });
+    AC._postEditId = null; AC._postProducts = [];
     showNotif('Post updated.');
     const vis = (s) => !document.getElementById(s).classList.contains('hidden');
     // Refresh whatever surface the user came from.
@@ -34803,6 +35037,7 @@ function acOpenStoryComposer() {
   const pick = document.getElementById('stImgPick'); pick.style.backgroundImage = ''; pick.classList.remove('has'); pick.innerHTML = '<span>＋ Add a photo or video</span>';
   document.getElementById('stBgRow').innerHTML = _STORY_BGS.map(b => `<button class="story-bg ${b.id === 'g1' ? 'on' : ''}" data-bg="${b.id}" style="background:${b.css}" onclick="acStoryBgPick('${b.id}')"></button>`).join('');
   document.getElementById('stTextPrev').style.background = _storyBgCss('g1');
+  AC._postProducts = []; acRenderPostProdChip(); // fresh product tags per composer open
   acStoryTab('photo');
   showOverlay('storyCompose');
 }
@@ -35058,6 +35293,7 @@ async function acStoryPost() {
     body = { kind: 'image', media: AC._stImg, caption: document.getElementById('stCaption').value.trim() || undefined };
   }
   if (AC._stAud === 'close') body.audience = 'close';
+  if ((AC._postProducts || []).length) body.productIds = AC._postProducts.map((p) => p.id);
   if (btn) { btn.disabled = true; btn.textContent = 'Sharing…'; }
   try {
     await API.req('POST', '/api/stories', body);
@@ -35086,6 +35322,21 @@ async function acStoryEnterGroup(gi, si) {
   if (!sv.items.length) return acStoryEnterGroup(gi + (si === 'last' ? -1 : 1), si); // skip empty/expired
   acStoryShow(si === 'last' ? sv.items.length - 1 : 0);
 }
+// A tagged-product pill on a story (above the caption; pointer-guarded so tapping it
+// doesn't advance/pause the story).
+function acStoryProdTag(it) {
+  const products = (it.products && it.products.length) ? it.products : [];
+  if (!products.length) return '';
+  AC._tagProducts = AC._tagProducts || {};
+  AC._tagProducts['story:' + it.id] = products;
+  const guard = 'onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()"';
+  const bag = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>';
+  if (products.length === 1) {
+    const pr = products[0];
+    return `<button class="story-prodtag" ${guard} onclick="event.stopPropagation();acQuickBuy(${pr.id}, 'story', ${it.id})" aria-label="View ${escHtml(pr.name)}">${bag}<span class="sp-name">${escHtml(pr.name)}</span><span class="sp-price">${acTagProductPrice(pr)}</span></button>`;
+  }
+  return `<button class="story-prodtag" ${guard} onclick="event.stopPropagation();acProdTagList(${it.id}, 'story')" aria-label="View ${products.length} tagged products">${bag}<span class="sp-name">View products</span><span class="sp-price">${products.length}</span></button>`;
+}
 function acStoryShow(si) {
   const sv = AC._sv; if (!sv) return;
   clearTimeout(sv.timer);
@@ -35103,9 +35354,10 @@ function acStoryShow(si) {
   if (it.kind === 'text') bodyEl.innerHTML = `<div class="story-text" style="background:${_storyBgCss(it.bg)}"><span>${escHtml(it.caption || '')}</span></div>`;
   else if (it.kind === 'video') bodyEl.innerHTML = `<video class="story-vid" id="storyVid" src="${it.media}" autoplay playsinline></video><button class="story-sound" id="storySoundBtn" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()" onclick="event.stopPropagation();acStoryToggleSound()" aria-label="Toggle sound">${_storyMuted ? FEED_SND_OFF : FEED_SND_ON}</button>`;
   else bodyEl.innerHTML = `<img class="story-img" src="${it.media}" alt=""/>`;
-  // Caption (for media).
+  // Caption (for media) + any tagged products (shoppable story).
   const capEl = document.getElementById('storyCap');
-  capEl.innerHTML = (it.kind !== 'text' && it.caption) ? `<div class="story-cap-in">${escHtml(it.caption)}</div>` : '';
+  const capTxt = (it.kind !== 'text' && it.caption) ? `<div class="story-cap-in">${escHtml(it.caption)}</div>` : '';
+  capEl.innerHTML = capTxt + acStoryProdTag(it);
   // Footer: own → viewers + delete; others → empty.
   const foot = document.getElementById('storyFoot');
   if (sv.highlight) {

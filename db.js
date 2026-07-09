@@ -1871,6 +1871,42 @@ async function initSchema() {
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS promoted_until TIMESTAMPTZ;`);
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;`);
 
+  // Product tags (multi) — a piece of content (a post, a reel/short feed_post, or a
+  // 24h story) can tag up to 5 of the poster's OWN active products. Each tag renders
+  // as a blue price chip / "View products" indicator over the media that opens a
+  // quick-buy preview → the normal wallet checkout. Backward-compatible with the
+  // single legacy `posts.product_id` (that column stays the first tag for old rows /
+  // list previews; this table is the source of truth for multi-tags). `content_id`
+  // is polymorphic (no FK — ids are never reused since all three sources are SERIAL,
+  // so a deleted-content orphan is harmless and never re-read). Deleting a product
+  // cascades its tag rows away. Ownership + active are validated on write.
+  await query(`
+    CREATE TABLE IF NOT EXISTS content_product_tags (
+      id           SERIAL PRIMARY KEY,
+      content_kind TEXT NOT NULL,               -- 'post' | 'feedpost' | 'story'
+      content_id   INTEGER NOT NULL,
+      product_id   INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      position     INTEGER NOT NULL DEFAULT 0,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS content_product_tags_unique ON content_product_tags(content_kind, content_id, product_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS content_product_tags_lookup ON content_product_tags(content_kind, content_id, position);`);
+  await query(`CREATE INDEX IF NOT EXISTS content_product_tags_product_idx ON content_product_tags(product_id);`);
+  // Product tag taps (analytics) — a viewer opened the quick-buy preview for a tagged
+  // product. Append-only; aggregated for the seller's Business dashboard "tag taps".
+  await query(`
+    CREATE TABLE IF NOT EXISTS product_tag_taps (
+      id           SERIAL PRIMARY KEY,
+      product_id   INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      content_kind TEXT,
+      content_id   INTEGER,
+      tapper_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS product_tag_taps_product_idx ON product_tag_taps(product_id, created_at DESC);`);
+
   // Feeds — short-form status posts shown to a member's followers: a text status
   // (words on a background colour), a photo, or a small video (base64 data URL,
   // same as post media). Text statuses expire after 24h (expires_at set);

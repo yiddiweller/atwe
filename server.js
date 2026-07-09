@@ -7104,6 +7104,7 @@ function mapStory(s, me) {
     createdAt: s.created_at, expiresAt: s.expires_at,
     mine: s.user_id === me, seen: !!s.seen, viewCount: s.view_count != null ? Number(s.view_count) : undefined,
     audience: s.audience === 'close' ? 'close' : 'all',
+    products: tagProductsFrom(s),
   };
 }
 // Post a story (photo or text). Visible for 24h to your followers.
@@ -7131,17 +7132,22 @@ app.post('/api/stories', auth.requireAuth, rateLimit(30, 60000, 'story-post'), r
     return res.status(400).json({ error: 'Write something for your story.' });
   }
   try {
+    // Tagged products (≤5 of the poster's OWN active products) on a story.
+    const taggedProductIds = await validateOwnProductIds(req.user.id, req.body.productIds);
     const r = await db.query(
       'INSERT INTO stories (user_id, kind, media, caption, bg, audience) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, user_id, kind, media, caption, bg, audience, created_at, expires_at',
       [req.user.id, kind, media, caption, bg, audience]
     );
+    if (taggedProductIds.length) await saveContentProductTags('story', r.rows[0].id, taggedProductIds);
     // Refresh the open clients of the audience: all followers, or — for a close-
     // friends story — only the people on the close-friends list.
     const aud = audience === 'close'
       ? await db.query('SELECT friend_id AS follower_id FROM close_friends WHERE user_id = $1', [req.user.id])
       : await db.query('SELECT follower_id FROM follows WHERE following_id = $1', [req.user.id]);
     for (const f of aud.rows) rtPush(f.follower_id, 'story', { type: 'new', userId: req.user.id });
-    res.status(201).json({ story: mapStory(r.rows[0], req.user.id) });
+    const story = mapStory(r.rows[0], req.user.id);
+    if (taggedProductIds.length) story.products = await loadContentTagProducts('story', r.rows[0].id);
+    res.status(201).json({ story });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post your story.' }); }
 });
 // The story tray: people I follow (+ me) who have an active story, grouped by user,
@@ -7186,6 +7192,9 @@ app.get('/api/stories/:userId', auth.requireAuth, async (req, res) => {
     const { rows } = await db.query(
       `SELECT s.id, s.user_id, s.kind, s.media, s.caption, s.bg, s.audience, s.created_at, s.expires_at,
               (sv.viewer_id IS NOT NULL) AS seen,
+              (SELECT json_agg(json_build_object('id', tpr.id, 'name', tpr.name, 'price_cents', tpr.price_cents, 'image', tpr.image, 'active', tpr.active, 'stock', tpr.stock, 'variants', tpr.variants) ORDER BY cpt.position, cpt.id)
+                 FROM content_product_tags cpt JOIN products tpr ON tpr.id = cpt.product_id
+                WHERE cpt.content_kind = 'story' AND cpt.content_id = s.id) AS tagged_products,
               ${uid === me ? '(SELECT COUNT(*) FROM story_views v WHERE v.story_id = s.id)' : 'NULL'} AS view_count
          FROM stories s
          LEFT JOIN story_views sv ON sv.story_id = s.id AND sv.viewer_id = $1
@@ -7486,9 +7495,75 @@ const POSTS_SELECT = `
          (SELECT option_id FROM post_poll_votes v WHERE v.post_id = p.id AND v.user_id = $1) AS my_vote,
          (SELECT json_agg(json_build_object('id', tu.id, 'name', tu.name, 'username', tu.username, 'avatar', tu.avatar, 'verified', tu.verified, 'kind', pt.kind))
             FROM post_tags pt JOIN users tu ON tu.id = pt.user_id WHERE pt.post_id = p.id) AS tags,
-         (SELECT json_build_object('id', pr.id, 'name', pr.name, 'priceCents', pr.price_cents, 'image', pr.image)
-            FROM products pr WHERE pr.id = p.product_id AND pr.active = true) AS product
+         (SELECT json_build_object('id', pr.id, 'name', pr.name, 'price_cents', pr.price_cents, 'image', pr.image, 'active', pr.active, 'stock', pr.stock, 'variants', pr.variants)
+            FROM products pr WHERE pr.id = p.product_id AND pr.active = true) AS product,
+         (SELECT json_agg(json_build_object('id', tpr.id, 'name', tpr.name, 'price_cents', tpr.price_cents, 'image', tpr.image, 'active', tpr.active, 'stock', tpr.stock, 'variants', tpr.variants) ORDER BY cpt.position, cpt.id)
+            FROM content_product_tags cpt JOIN products tpr ON tpr.id = cpt.product_id
+            WHERE cpt.content_kind = 'post' AND cpt.content_id = p.id) AS tagged_products
   FROM posts p JOIN users u ON u.id = p.user_id `;
+// The quick-buy shape for a product tagged on a post / reel / story: the CURRENT
+// price + availability at read time (honest "unavailable / sold out / updated
+// price" states), a subset of mapProduct focused on the chip + preview sheet.
+function mapTagProduct(p) {
+  if (!p || !p.id) return null;
+  const rawVariants = Array.isArray(p.variants) ? p.variants : [];
+  const variants = rawVariants.map((v) => mapVariant(v, p.price_cents));
+  const priceFrom = variants.length ? Math.min(...variants.map((v) => v.priceCents)) : p.price_cents;
+  const soldOut = variants.length ? variants.every((v) => v.soldOut) : (typeof p.stock === 'number' && p.stock <= 0);
+  const active = p.active !== false;
+  return {
+    id: p.id, name: p.name, priceCents: p.price_cents, priceFromCents: priceFrom,
+    image: p.image || null, active, soldOut, hasVariants: variants.length > 0,
+    available: active && !soldOut,
+  };
+}
+// Build the tagged-products array for a content row: the multi-tag rows when
+// present, else the single legacy `posts.product_id` (as a one-element list).
+function tagProductsFrom(row) {
+  const raw = Array.isArray(row.tagged_products) && row.tagged_products.length
+    ? row.tagged_products
+    : (row.product ? [row.product] : []);
+  return raw.map(mapTagProduct).filter(Boolean);
+}
+// Validate a raw list of product ids as the caller's OWN active products, de-duped,
+// preserving the client's order, capped at 5. Returns the ordered valid id list.
+async function validateOwnProductIds(ownerId, rawIds) {
+  const ids = [...new Set((Array.isArray(rawIds) ? rawIds : [])
+    .map((x) => parseInt(x, 10)).filter(Number.isInteger))].slice(0, 5);
+  if (!ids.length) return [];
+  const valid = new Set((await db.query(
+    'SELECT id FROM products WHERE id = ANY($1) AND business_id = $2 AND active = true',
+    [ids, ownerId]
+  )).rows.map((r) => r.id));
+  return ids.filter((id) => valid.has(id)); // preserve client order
+}
+// Persist the product tags for a piece of content (post/feedpost/story). Replaces
+// any existing tags for that content, then writes the ordered set. Best-effort.
+async function saveContentProductTags(kind, contentId, orderedIds) {
+  try {
+    await db.query('DELETE FROM content_product_tags WHERE content_kind = $1 AND content_id = $2', [kind, contentId]);
+    for (let i = 0; i < orderedIds.length; i++) {
+      await db.query(
+        `INSERT INTO content_product_tags (content_kind, content_id, product_id, position) VALUES ($1,$2,$3,$4)
+         ON CONFLICT (content_kind, content_id, product_id) DO UPDATE SET position = EXCLUDED.position`,
+        [kind, contentId, orderedIds[i], i]
+      );
+    }
+  } catch (e) { /* tags are best-effort */ }
+}
+// Load a piece of content's tagged products (with CURRENT price/availability) — used
+// where the read query can't inline the subquery (e.g. the story create response).
+async function loadContentTagProducts(kind, contentId) {
+  try {
+    const { rows } = await db.query(
+      `SELECT json_agg(json_build_object('id', tpr.id, 'name', tpr.name, 'price_cents', tpr.price_cents, 'image', tpr.image, 'active', tpr.active, 'stock', tpr.stock, 'variants', tpr.variants) ORDER BY cpt.position, cpt.id) AS list
+         FROM content_product_tags cpt JOIN products tpr ON tpr.id = cpt.product_id
+        WHERE cpt.content_kind = $1 AND cpt.content_id = $2`,
+      [kind, contentId]
+    );
+    return (rows[0] && rows[0].list ? rows[0].list : []).map(mapTagProduct).filter(Boolean);
+  } catch (e) { return []; }
+}
 function mapPost(r) {
   let poll = null;
   if (r.poll_options && r.poll_options.length) {
@@ -7523,7 +7598,7 @@ function mapPost(r) {
     tagged: Array.isArray(r.tags) ? r.tags.filter((t) => t.kind === 'tag').map(({ kind, ...u }) => u) : [],
     coAuthors: Array.isArray(r.tags) ? r.tags.filter((t) => t.kind === 'author').map(({ kind, ...u }) => u) : [],
     editedAt: r.edited_at || null, promoted: !!r.promoted,
-    product: r.product || null,
+    products: tagProductsFrom(r), product: (tagProductsFrom(r)[0] || null),
     parentId: r.parent_id || null, location: r.location || null,
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
     reposts: r.reposts || 0, reposted: !!r.reposted, repostedBy: r.reposted_by || null,
@@ -9010,13 +9085,16 @@ const FEEDPOST_SELECT = `
          (SELECT COUNT(*) FROM feed_post_comments c WHERE c.post_id = fp.id)::int AS comment_count,
          COALESCE((SELECT l.value FROM feed_post_likes l WHERE l.post_id = fp.id AND l.user_id = $1), 0) AS my_vote,
          EXISTS (SELECT 1 FROM feed_post_saves s WHERE s.post_id = fp.id AND s.user_id = $1) AS my_saved,
-         EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $1 AND f.following_id = fp.user_id) AS i_follow
+         EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $1 AND f.following_id = fp.user_id) AS i_follow,
+         (SELECT json_agg(json_build_object('id', tpr.id, 'name', tpr.name, 'price_cents', tpr.price_cents, 'image', tpr.image, 'active', tpr.active, 'stock', tpr.stock, 'variants', tpr.variants) ORDER BY cpt.position, cpt.id)
+            FROM content_product_tags cpt JOIN products tpr ON tpr.id = cpt.product_id
+            WHERE cpt.content_kind = 'feedpost' AND cpt.content_id = fp.id) AS tagged_products
   FROM feed_posts fp JOIN users u ON u.id = fp.user_id `;
 function mapFeedPost(r) {
   return {
     id: r.id, kind: r.kind, text: r.text || null, bg: r.bg || null,
     media: r.media || null, created_at: r.created_at, expiresAt: r.expires_at || null,
-    mine: !!r.mine,
+    mine: !!r.mine, products: tagProductsFrom(r),
     likes: r.likes || 0, dislikes: r.dislikes || 0, comments: r.comment_count || 0,
     myVote: r.my_vote || 0, saved: !!r.my_saved, iFollow: !!r.i_follow,
     author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified, accountType: r.author_type === 'business' ? 'business' : 'personal' },
@@ -9044,11 +9122,14 @@ app.post('/api/feedposts', auth.requireAuth, rateLimit(30, 60000, 'feedpost'), a
     } else {
       return res.status(400).json({ error: 'Unsupported feed type.' });
     }
+    // Tagged products (≤5 of the poster's OWN active products) on a reel/short.
+    const taggedProductIds = await validateOwnProductIds(req.user.id, req.body.productIds);
     const { rows } = await db.query(
       `INSERT INTO feed_posts (user_id, kind, text, bg, media, expires_at)
        VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
       [req.user.id, kind, text.trim() || null, kind === 'text' ? (bg || null) : null, kind === 'text' ? null : media, expiresAt]
     );
+    if (taggedProductIds.length) await saveContentProductTags('feedpost', rows[0].id, taggedProductIds);
     const out = await db.query(FEEDPOST_SELECT + 'WHERE fp.id = $2', [req.user.id, rows[0].id]);
     res.json({ post: mapFeedPost(out.rows[0]) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
@@ -9396,16 +9477,20 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), re
       ppvCents = Math.round(Number(req.body.ppvCents));
       if (!(ppvCents >= 100 && ppvCents <= 100000)) return res.status(400).json({ error: 'A pay-per-view price must be $1–$1,000.' });
     }
-    // Tagged product (top-level posts): only the poster's OWN active product — a blue
-    // price chip over the media that opens the listing.
-    let productId = null;
-    if (parentId == null && req.body.productId != null && req.body.productId !== '') {
-      const pid = parseInt(req.body.productId, 10);
-      if (Number.isInteger(pid)) {
-        const pr = await db.query('SELECT 1 FROM products WHERE id = $1 AND business_id = $2 AND active = true', [pid, req.user.id]);
-        if (pr.rowCount) productId = pid;
-      }
+    // Tagged products (top-level posts): up to 5 of the poster's OWN active products —
+    // a blue price chip (single) / "View products" indicator (multi) over the media
+    // that opens a quick-buy preview. `productIds` (array) is the new multi-tag field;
+    // the legacy single `productId` still works. The first valid id is mirrored into
+    // posts.product_id for back-compat / list previews; the full set lands in
+    // content_product_tags below (after we have the post id).
+    let taggedProductIds = [];
+    if (parentId == null) {
+      const raw = Array.isArray(req.body.productIds) && req.body.productIds.length
+        ? req.body.productIds
+        : (req.body.productId != null && req.body.productId !== '' ? [req.body.productId] : []);
+      taggedProductIds = await validateOwnProductIds(req.user.id, raw);
     }
+    const productId = taggedProductIds[0] || null;
     const ins = await db.query(
       `INSERT INTO posts (user_id, body, image, images, media, media_kind, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope, subscribers_only, image_alt, ppv_cents, min_tier_level, product_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamptz, now()), $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id`,
@@ -9418,6 +9503,8 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), re
     for (const tag of extractHashtags(body)) {
       await db.query('INSERT INTO post_hashtags (post_id, tag) VALUES ($1, $2) ON CONFLICT DO NOTHING', [postId, tag]).catch(() => {});
     }
+    // Persist the multi-product tags (validated above).
+    if (taggedProductIds.length) await saveContentProductTags('post', postId, taggedProductIds);
     // Tagged people (kind='tag') + co-authors (kind='author'). Validate each is a real,
     // non-deactivated, non-blocked, non-self account; insert + notify.
     try {
@@ -9496,6 +9583,14 @@ app.patch('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
     await db.query('DELETE FROM post_hashtags WHERE post_id = $1', [id]).catch(() => {});
     for (const tag of extractHashtags(body)) {
       await db.query('INSERT INTO post_hashtags (post_id, tag) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id, tag]).catch(() => {});
+    }
+    // Product tags are editable within the same window. Only touch them when the
+    // client actually sends `productIds` (an empty array clears them) — a plain body
+    // edit that omits the field leaves the existing tags untouched.
+    if ('productIds' in req.body && Array.isArray(req.body.productIds)) {
+      const ordered = await validateOwnProductIds(req.user.id, req.body.productIds);
+      await saveContentProductTags('post', id, ordered);
+      await db.query('UPDATE posts SET product_id = $1 WHERE id = $2', [ordered[0] || null, id]).catch(() => {});
     }
     const { rows } = await db.query(POSTS_SELECT + 'WHERE p.id = $2', [req.user.id, id]);
     res.json({ post: mapPost(rows[0]) });
@@ -12120,7 +12215,7 @@ app.get('/api/business/analytics', auth.requireAuth, async (req, res) => {
     if (!acc.rows[0] || acc.rows[0].account_type !== 'business') {
       return res.status(403).json({ error: 'Analytics are available on business accounts.' });
     }
-    const [pvTot, pv30, pvUniq, pvDays, followers, connections, posts, jobs, jobViews] = await Promise.all([
+    const [pvTot, pv30, pvUniq, pvDays, followers, connections, posts, jobs, jobViews, tagTaps] = await Promise.all([
       db.query('SELECT COUNT(*)::int AS n FROM profile_views WHERE viewed_id = $1', [uid]),
       db.query(`SELECT COUNT(*)::int AS n FROM profile_views WHERE viewed_id = $1 AND viewed_at > now() - interval '30 days'`, [uid]),
       db.query(`SELECT COUNT(DISTINCT viewer_id)::int AS n FROM profile_views WHERE viewed_id = $1 AND viewed_at > now() - interval '30 days'`, [uid]),
@@ -12136,6 +12231,12 @@ app.get('/api/business/analytics', auth.requireAuth, async (req, res) => {
                        COALESCE((SELECT COUNT(*) FROM job_applications a JOIN jobs j2 ON j2.id = a.job_id WHERE j2.posted_by = $1),0)::int AS applicants
                 FROM jobs j WHERE j.posted_by = $1`, [uid]),
       db.query(`SELECT COALESCE((SELECT COUNT(*) FROM job_views v JOIN jobs j ON j.id = v.job_id WHERE j.posted_by = $1),0)::int AS n`, [uid]),
+      // Product-tag taps: how often shoppers opened a quick-buy preview for a product
+      // this seller tagged on a post/reel/story (total + last-30 + unique tappers-30).
+      db.query(`SELECT COUNT(*)::int AS total,
+                       COUNT(*) FILTER (WHERE t.created_at > now() - interval '30 days')::int AS last30,
+                       COUNT(DISTINCT t.tapper_id) FILTER (WHERE t.created_at > now() - interval '30 days')::int AS uniq30
+                FROM product_tag_taps t JOIN products p ON p.id = t.product_id WHERE p.business_id = $1`, [uid]),
     ]);
     const vmap = {}; pvDays.rows.forEach((r) => { vmap[new Date(r.day).toISOString().slice(0, 10)] = r.n; });
     const days = [];
@@ -12146,6 +12247,7 @@ app.get('/api/business/analytics', auth.requireAuth, async (req, res) => {
       connections: connections.rows[0].n || 0,
       posts: { count: posts.rows[0].posts || 0, views: posts.rows[0].views || 0, likes: posts.rows[0].likes || 0, reposts: posts.rows[0].reposts || 0 },
       jobs: { count: jobs.rows[0].jobs || 0, applicants: jobs.rows[0].applicants || 0, views: jobViews.rows[0].n || 0 },
+      tagTaps: { total: tagTaps.rows[0].total || 0, last30: tagTaps.rows[0].last30 || 0, unique30: tagTaps.rows[0].uniq30 || 0 },
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load analytics.' }); }
 });
@@ -15158,6 +15260,23 @@ app.get('/api/listings/:id', auth.requireAuth, async (req, res) => {
     listing.moreFromSeller = more.rows.map(mapListing);
     res.json({ listing });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the listing.' }); }
+});
+// Product-tag tap (analytics): a viewer opened the quick-buy preview for a product
+// tagged on a post / reel / story. Append-only, best-effort — never blocks the UI.
+// Aggregated for the seller's Business dashboard "tag taps" counter.
+app.post('/api/product-tags/tap', auth.requireAuth, async (req, res) => {
+  const pid = parseInt(req.body.productId, 10);
+  if (!Number.isInteger(pid)) return res.status(400).json({ error: 'Invalid product.' });
+  const kind = ['post', 'feedpost', 'story'].includes(req.body.contentKind) ? req.body.contentKind : null;
+  const cid = Number.isInteger(parseInt(req.body.contentId, 10)) ? parseInt(req.body.contentId, 10) : null;
+  try {
+    // Only record a tap on a real product; don't count the seller tapping their own.
+    const pr = await db.query('SELECT business_id FROM products WHERE id = $1', [pid]);
+    if (pr.rows[0] && pr.rows[0].business_id !== req.user.id) {
+      await db.query('INSERT INTO product_tag_taps (product_id, content_kind, content_id, tapper_id) VALUES ($1,$2,$3,$4)', [pid, kind, cid, req.user.id]).catch(() => {});
+    }
+    res.json({ ok: true });
+  } catch (err) { res.json({ ok: true }); } // analytics must never surface an error
 });
 // Wishlist / save-for-later (private). Toggle + list.
 app.get('/api/saved-products', auth.requireAuth, async (req, res) => {

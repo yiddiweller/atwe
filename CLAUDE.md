@@ -3397,6 +3397,51 @@ trusted from the client. The recipient taps it → the normal listing detail + c
 (`#shareProductSheet`, `acDoShareProduct`); `acMetaCard` renders the `product` branch
 (`.mc-prod`), and the chat-list preview shows "🛍️ Product".
 
+### Product tags everywhere (shoppable posts / reels / stories)
+
+A creator can tag up to **5 of their own active products** on a **post, reel/short
+(feed_post), or 24h story** — a blue price chip (single) / "N products" indicator
+(multi) rides on the media and opens a **quick-buy preview** that flows into the
+existing wallet checkout (escrow-aware). Reuses the whole store pipeline; nothing
+duplicated.
+- **DB:** `content_product_tags` (`content_kind` `post|feedpost|story` + `content_id`
+  (polymorphic, no FK — SERIAL ids are never reused so orphans are harmless) +
+  `product_id` FK `ON DELETE CASCADE` + `position`, unique per (kind,id,product)) is
+  the multi-tag source of truth; the legacy single `posts.product_id` stays the first
+  tag for old rows / list previews. `product_tag_taps` (append-only analytics:
+  product/kind/content/tapper) powers the dashboard "tag taps" counter.
+- **Server helpers:** `mapTagProduct(p)` = the quick-buy shape with the **CURRENT**
+  price/availability (`priceCents`/`priceFromCents`/`soldOut`/`active`/`available`,
+  honest "unavailable/updated-price" states); `tagProductsFrom(row)` builds the array
+  (multi rows, else the legacy single); `validateOwnProductIds(owner, ids)` (≤5, own +
+  active only, client order preserved) + `saveContentProductTags(kind,id,ids)` (replace
+  then insert) + `loadContentTagProducts(kind,id)`. `POSTS_SELECT`/`FEEDPOST_SELECT` +
+  the story read query inline a `tagged_products` json_agg; `mapPost`/`mapFeedPost`/
+  `mapStory` expose `products[]` (+ `mapPost` keeps `product` for back-compat).
+- **Write:** the post-create + feedpost-create + story-create routes accept
+  `productIds` (array; the post route still accepts the legacy single `productId`); the
+  post PATCH edits tags **only when `productIds` is present** (a plain body edit leaves
+  them untouched), within the edit window.
+- **Tap analytics:** `POST /api/product-tags/tap {productId,contentKind,contentId}`
+  (fire-and-forget, never errors, excludes the seller tapping their own). Surfaced on
+  `GET /api/business/analytics` as `tagTaps{total,last30,unique30}` → a **Shopping**
+  section in the biz analytics (`acRenderBizAnalytics`).
+- **Client:** the composer picker is now **multi-select** (`acRenderProdTagPicker`/
+  `acPickProduct` toggle `AC._postProducts`, ≤5, `#prodTagSheet`); `acRenderPostProdChip`
+  fills whichever chip container is present (`#acPostProdChip` post / `#stProdChip` story
+  / `#feedProdChip` reel — all share `AC._postProducts`, reset on each composer open, sent
+  as `productIds`). Rendering: `acProdTagWrap(p, mediaHtml, kind)` (feed posts) /
+  `acFeedProdTagChip(p)` (immersive reels) / `acStoryProdTag(it)` (stories) draw the chip;
+  a single tag → **`acQuickBuy(productId, kind, contentId)`** (records the tap, fetches
+  the live listing, renders the floating `#quickBuySheet`: image, title, current price in
+  Display type, seller row, green-dot **buyer-protection** escrow chip, variant chips,
+  WHITE **Buy now** + grey **Add to cart** + "View full listing" — routing through the
+  existing `acBuyNow`/`acAddToCart`/`acOpenListing`); multiple tags → `acProdTagList` (a
+  picker sheet `#tagProductsSheet`) → the same quick-buy. Unavailable/removed listings
+  show an honest "no longer available" state. Verified end-to-end (real DB): tag on
+  post/reel/story, inactive-drop, current-price, tap analytics (self-tap excluded),
+  edit add/remove + body-only preservation, quick-buy → escrow order lands in Orders.
+
 ### Price-drop & saved-search alerts
 
 Two marketplace alerts built on the wishlist + the restock pattern. **Price drop:**
