@@ -53,7 +53,9 @@ auth.js                bcrypt + JWT + single-use token helpers; auth middleware
 mailer.js              nodemailer transport; sendMail() with console fallback
 billing.js             Stripe wrapper; checkout sessions + webhook event parsing
 package.json           deps: express, @anthropic-ai/sdk, dotenv, pg, bcryptjs,
-                       jsonwebtoken, nodemailer, stripe
+                       jsonwebtoken, nodemailer, stripe, compression
+                       (gzip/brotli the ~2.9MB static shell; scoped to skip
+                       /api/* so SSE + the raw-body Stripe webhook are untouched)
 geoip.js               best-effort IP → "City, Country" for the Devices list +
                        login-alert emails (optional; free no-key HTTPS provider)
 push.js                web-push (VAPID) wrapper; isConfigured()/publicKey()/send()

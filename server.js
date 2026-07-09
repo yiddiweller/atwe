@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const compression = require('compression');
 const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
 
@@ -531,6 +532,18 @@ app.use((req, res, next) => {
   res.set('Cache-Control', 'no-store');
   return res.sendFile(path.join(__dirname, 'public', 'locked.html'));
 });
+
+// gzip/deflate the static shell + assets. The app is one ~2.9MB inline-everything
+// index.html, so compression cuts first-load transfer ~85-90%. Scoped to skip
+// /api/* — the SSE stream (text/event-stream) must never be buffered/compressed,
+// and the Stripe webhook needs its raw body — leaving realtime + billing untouched.
+// (compression.filter already skips already-compressed images/video by content-type.)
+app.use(compression({
+  filter(req, res) {
+    if (req.path.startsWith('/api/')) return false;
+    return compression.filter(req, res);
+  },
+}));
 
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders(res, filePath) {
