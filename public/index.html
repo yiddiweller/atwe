@@ -8061,11 +8061,14 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
   /* Column lines match the sidebar's divider exactly (--b2). The left line is
      the sidebar's own border-right, so the column only needs a right border +
      the divider under the tabs (no doubled line on the left). */
-  body.rail-on .main{flex:0 0 600px;min-width:0;border-right:1px solid var(--b2);}
-  body.rail-on .social-wrap .ac-win{border-left:none;border-right:none;} /* borders live on the column now */
+  /* Center column 680 + rail 440 = 1120 content, matching the Beam two-pane's own
+     content width exactly — so every desktop world sits at the same footprint
+     (sidebar + 1120) and has the same, tighter side gutters. */
+  body.rail-on .main{flex:0 0 680px;min-width:0;border-right:1px solid var(--b2);}
+  body.rail-on .social-wrap .ac-win{border-left:none;border-right:none;max-width:none;} /* borders live on the column now; fill the wider column */
   body.rail-on .topbar{border-bottom:1px solid var(--b2);}
   body.rail-on .right-rail{
-    display:flex;width:350px;height:100vh;height:100dvh;overflow-y:auto;overscroll-behavior:contain;
+    display:flex;width:440px;height:100vh;height:100dvh;overflow-y:auto;overscroll-behavior:contain;
     background:var(--bg);margin-right:auto;scrollbar-width:thin;
   }
 }
@@ -9729,12 +9732,6 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <span class="sb-navic" style="--ic:url('/nav-knot.png')" aria-hidden="true"></span>
         <span>Atwe AI</span>
       </button>
-      <!-- Desktop X-style Post button (proxies the home compose FAB) — sits as the
-           last nav action, directly above Profile and above the hairline. -->
-      <button class="sb-post" id="sbPost" onclick="sbPostClick()" title="Post" style="display:none;">
-        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        <span>Post</span>
-      </button>
       <button class="sb-navbtn" id="snav-profile" onclick="appTab('profile')">
         <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-4 0-7 2.2-7 5 0 .6.4 1 1 1h12c.6 0 1-.4 1-1 0-2.8-3-5-7-5z"/></svg>
         <span>Profile</span>
@@ -9803,6 +9800,12 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <button class="sb-login" id="sbLogin" onclick="openLogin()">
         <svg class="sb-login-ic" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-4 0-7 2.2-7 5 0 .6.4 1 1 1h12c.6 0 1-.4 1-1 0-2.8-3-5-7-5z"/></svg>
         <span>Log in</span>
+      </button>
+      <!-- Desktop Post button (proxies the compose FAB) — sits at the bottom of the
+           sidebar, directly above the account Profile row. -->
+      <button class="sb-post" id="sbPost" onclick="sbPostClick()" title="Post" style="display:none;">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>Post</span>
       </button>
       <!-- Account: Profile, then Notifications, then Settings -->
       <div class="sb-settings" id="sbProfile" style="display:none;position:relative;" onclick="toggleProfileMenu(event)">
