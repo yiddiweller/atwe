@@ -3081,6 +3081,14 @@ body.rtl{direction:rtl;}
 body.rtl .iset-chev,body.rtl .ac-prof-tabs,body.rtl .bn-icon{transform:scaleX(1);}
 body.rtl .iset-chev{transform:scaleX(-1);}
 body.rtl .iset-row,body.rtl .iset-search{text-align:right;}
+/* RTL: mirror the most visible floating/edge-pinned controls (the FAB, chat back
+   arrow, and modal close X) so they don't stay on the wrong side. Full logical-
+   property RTL of every surface is a larger, separate pass. */
+body.rtl .ac-fab{right:auto;left:18px;}
+body.rtl .ac-top-bar .msg-back{left:auto;right:12px;}
+body.rtl .job-card-modal .sheet-close{left:auto;right:6px;}
+body.rtl .mk-card .sheet-close,body.rtl .set-fs .iset-head .iset-back{left:auto;right:6px;}
+body.rtl .msg-back{transform:scaleX(-1);}
 body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
   animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;}
 
@@ -8889,7 +8897,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     </div>
     <div class="auth-handle">
       <span class="auth-at">@</span>
-      <input class="auth-handle-input" type="text" id="loginEmail" placeholder="username" autocomplete="username" autocapitalize="none" spellcheck="false" oninput="authToggleContinue()" onkeydown="if(event.key==='Enter')authContinue()"/>
+      <input class="auth-handle-input" type="text" id="loginEmail" aria-label="Email or username" placeholder="username" autocomplete="username" autocapitalize="none" spellcheck="false" oninput="authToggleContinue()" onkeydown="if(event.key==='Enter')authContinue()"/>
     </div>
     <div class="auth-error" id="usernameError"></div>
     <button class="auth-btn auth-continue is-empty" id="authStep1Btn" onclick="authContinue()">Continue</button>
@@ -8901,7 +8909,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <button class="auth-backarrow" onclick="authLandingBack()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
     </div>
     <div class="auth-handle">
-      <input class="auth-handle-input" type="email" id="loginEmailAddr" placeholder="you@example.com" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" oninput="authToggleEmail()" onkeydown="if(event.key==='Enter')emailContinue()"/>
+      <input class="auth-handle-input" type="email" id="loginEmailAddr" aria-label="Email address" placeholder="you@example.com" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" oninput="authToggleEmail()" onkeydown="if(event.key==='Enter')emailContinue()"/>
     </div>
     <div class="auth-error" id="emailError"></div>
     <button class="auth-btn auth-continue is-empty" id="emailStepBtn" onclick="emailContinue()">Continue</button>
@@ -8915,14 +8923,14 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     </div>
     <div class="auth-handle-static" id="authEmailEcho"><span class="auth-at">@</span> username</div>
     <div class="auth-pw">
-      <input class="auth-pw-input" type="password" id="loginPass" placeholder="Password" autocomplete="current-password" oninput="authToggleContinue()" onkeydown="if(event.key==='Enter')doLogin()"/>
+      <input class="auth-pw-input" type="password" id="loginPass" aria-label="Password" placeholder="Password" autocomplete="current-password" oninput="authToggleContinue()" onkeydown="if(event.key==='Enter')doLogin()"/>
       <button type="button" class="auth-eye pwd-eye" onclick="togglePwd(this)" aria-label="Show password">
         <svg class="eye-open" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
         <svg class="eye-off" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
       </button>
     </div>
     <div class="auth-pw hidden" id="login2faWrap" style="margin-top:10px;">
-      <input class="auth-pw-input" type="text" maxlength="20" id="login2fa" placeholder="Authenticator or recovery code" autocomplete="one-time-code" oninput="authToggleContinue()" onkeydown="if(event.key==='Enter')doLogin()"/>
+      <input class="auth-pw-input" type="text" maxlength="20" id="login2fa" aria-label="Two-factor code" placeholder="Authenticator or recovery code" autocomplete="one-time-code" oninput="authToggleContinue()" onkeydown="if(event.key==='Enter')doLogin()"/>
     </div>
     <div class="auth-error" id="loginError"></div>
     <button class="auth-btn auth-continue is-empty" id="loginBtn" onclick="doLogin()">Continue</button>
@@ -8983,7 +8991,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <h1 class="auth-steptitle">Reset password</h1>
     <p class="auth-stepsub">Password should be at least 8 characters long.</p>
     <div class="auth-pw">
-      <input class="auth-pw-input" type="password" id="resetNewPass" placeholder="New password" autocomplete="new-password" oninput="resetPwToggle()" onkeydown="if(event.key==='Enter')resetConfirm()"/>
+      <input class="auth-pw-input" type="password" id="resetNewPass" aria-label="New password" placeholder="New password" autocomplete="new-password" oninput="resetPwToggle()" onkeydown="if(event.key==='Enter')resetConfirm()"/>
       <button type="button" class="auth-eye pwd-eye" onclick="togglePwd(this)" aria-label="Show password">
         <svg class="eye-open" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
         <svg class="eye-off" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -9016,7 +9024,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <h1 class="auth-steptitle">What's your email?</h1>
     <p class="auth-stepsub">We'll send a code to verify it.</p>
     <div class="auth-handle">
-      <input class="auth-handle-input" type="email" id="suEmail" placeholder="you@example.com" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" oninput="suEmailToggle()" onkeydown="if(event.key==='Enter')suStart()"/>
+      <input class="auth-handle-input" type="email" id="suEmail" aria-label="Email" placeholder="you@example.com" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" oninput="suEmailToggle()" onkeydown="if(event.key==='Enter')suStart()"/>
     </div>
     <div class="auth-error" id="suEmailError"></div>
     <button class="auth-btn auth-continue is-empty" id="suEmailBtn" style="margin-top:auto;" onclick="suStart()">Continue</button>
@@ -9067,7 +9075,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('name')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
     <h1 class="auth-steptitle" id="suNameTitle">What's your name?</h1>
     <div class="auth-handle" style="margin-top:18px;">
-      <input class="auth-handle-input" type="text" id="suName" placeholder="Your Name" autocomplete="name" oninput="suNameToggle()" onkeydown="if(event.key==='Enter')suNameContinue()"/>
+      <input class="auth-handle-input" type="text" id="suName" aria-label="Name" placeholder="Your Name" autocomplete="name" oninput="suNameToggle()" onkeydown="if(event.key==='Enter')suNameContinue()"/>
     </div>
     <button class="auth-btn auth-continue is-empty" id="suNameBtn" style="margin-top:auto;" onclick="suNameContinue()">Continue</button>
   </div>
@@ -9076,7 +9084,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   <div class="auth-step hidden" id="suPassStep" role="dialog" aria-label="Choose a password">
     <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('pass')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
     <div class="auth-pw" style="margin-top:18px;">
-      <input class="auth-pw-input" type="password" id="suPass" placeholder="Password" autocomplete="new-password" oninput="suPassToggle()" onkeydown="if(event.key==='Enter')suPassContinue()"/>
+      <input class="auth-pw-input" type="password" id="suPass" aria-label="Password" placeholder="Password" autocomplete="new-password" oninput="suPassToggle()" onkeydown="if(event.key==='Enter')suPassContinue()"/>
       <button type="button" class="auth-eye pwd-eye" onclick="togglePwd(this)" aria-label="Show password">
         <svg class="eye-open" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
         <svg class="eye-off" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -9096,7 +9104,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('user')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
     <div class="auth-handle" style="margin-top:18px;">
       <span class="auth-at">@</span>
-      <input class="auth-handle-input" type="text" id="suUser" placeholder="username" maxlength="40" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="suUserInput()" onkeydown="if(event.key==='Enter')suFinish()"/>
+      <input class="auth-handle-input" type="text" id="suUser" aria-label="Username" placeholder="username" maxlength="40" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="suUserInput()" onkeydown="if(event.key==='Enter')suFinish()"/>
     </div>
     <div class="su-suggest" id="suUserSuggest"></div>
     <div class="auth-error" id="suUserError"></div>
@@ -11274,7 +11282,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Create event">
     <button class="sheet-close" onclick="closeOverlay('eventCreate')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title" id="evCreateTitle">Create an event</div>
-    <input class="jp-in" id="evTitle" type="text" placeholder="Event title" maxlength="140"/>
+    <input class="jp-in" id="evFormTitle" type="text" placeholder="Event title" maxlength="140" aria-label="Event title"/>
     <div class="ev-seg" id="evMode">
       <button class="ev-seg-btn on" data-mode="online" onclick="acEventMode('online')">Online</button>
       <button class="ev-seg-btn" data-mode="inperson" onclick="acEventMode('inperson')">In person</button>
@@ -11840,8 +11848,8 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <div class="jp-title">Send money</div>
     <div id="sendMoneyTo"></div>
     <input class="jp-in" id="sendMoneyUser" type="text" placeholder="@username" autocomplete="off" autocapitalize="none" spellcheck="false" style="margin-bottom:8px;"/>
-    <div class="send-amt-big">$<input id="sendMoneyAmt" type="number" min="1" max="2000" step="0.01" placeholder="0" inputmode="decimal"/></div>
-    <input class="jp-in" id="sendMoneyNote" type="text" placeholder="What's it for? (optional)" maxlength="200" style="margin-top:8px;"/>
+    <div class="send-amt-big">$<input id="sendMoneyAmt" aria-label="Amount" type="number" min="1" max="2000" step="0.01" placeholder="0" inputmode="decimal"/></div>
+    <input class="jp-in" id="sendMoneyNote" aria-label="Note (optional)" type="text" placeholder="What's it for? (optional)" maxlength="200" style="margin-top:8px;"/>
     <button class="ac-pill-btn accent jp-submit" id="sendMoneyBtn" onclick="acSendMoney()">Send</button>
     <div class="send-hint" id="sendMoneyHint"></div>
   </div>
@@ -11854,7 +11862,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <div class="jp-title">Request money</div>
     <div id="reqMoneyTo"></div>
     <input class="jp-in" id="reqMoneyUser" type="text" placeholder="@username to request from" autocomplete="off" autocapitalize="none" spellcheck="false" style="margin-bottom:8px;"/>
-    <div class="send-amt-big">$<input id="reqMoneyAmt" type="number" min="1" max="2000" step="0.01" placeholder="0" inputmode="decimal"/></div>
+    <div class="send-amt-big">$<input id="reqMoneyAmt" aria-label="Amount" type="number" min="1" max="2000" step="0.01" placeholder="0" inputmode="decimal"/></div>
     <input class="jp-in" id="reqMoneyNote" type="text" placeholder="What's it for? (optional)" maxlength="200" style="margin-top:8px;"/>
     <button class="ac-pill-btn accent jp-submit" id="reqMoneyBtn" onclick="acSendMoneyRequest()">Send request</button>
     <div class="send-hint" id="reqMoneyHint">They’ll get a request they can pay from their wallet.</div>
@@ -11880,7 +11888,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <button class="sheet-close" onclick="closeOverlay('addMoneyView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title">Add money</div>
     <div class="tip-amts" id="addMoneyAmts"></div>
-    <div class="send-amt-big">$<input id="addMoneyAmt" type="number" min="1" max="2000" step="0.01" placeholder="0" inputmode="decimal"/></div>
+    <div class="send-amt-big">$<input id="addMoneyAmt" aria-label="Amount" type="number" min="1" max="2000" step="0.01" placeholder="0" inputmode="decimal"/></div>
     <button class="ac-pill-btn accent jp-submit" onclick="acAddMoney()">Add money</button>
   </div>
 </div>
@@ -11891,7 +11899,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <button class="sheet-close" onclick="closeOverlay('cashoutView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title">Cash out</div>
     <div class="ac-disc-sub" id="cashoutSub" style="margin:2px 0 10px;">Move money from your wallet to your bank.</div>
-    <div class="send-amt-big">$<input id="cashoutAmt" type="number" min="1" max="10000" step="0.01" placeholder="0" inputmode="decimal"/></div>
+    <div class="send-amt-big">$<input id="cashoutAmt" aria-label="Amount" type="number" min="1" max="10000" step="0.01" placeholder="0" inputmode="decimal"/></div>
     <div id="cashoutBank"></div>
     <button class="ac-pill-btn accent jp-submit" id="cashoutBtn" onclick="acDoCashout()">Cash out</button>
     <div class="send-hint" id="cashoutHint"></div>
@@ -20751,7 +20759,7 @@ async function acLoadRail() {
       ${acAvatarHtml(u.name, u.avatar)}
       <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</span></div>
         <div class="ac-item-last">@${escHtml(u.username)}${u.followers ? ' · ' + u.followers + ' follower' + (u.followers === 1 ? '' : 's') : ''}</div></div>
-      <button class="ac-follow-btn ac-suggest-follow" onclick="event.stopPropagation();acToggleFollow(${u.id}, this)"></button>
+      <button class="ac-follow-btn ac-suggest-follow" aria-label="${acIsFollowing(u.id) ? 'Following' : 'Follow'}" onclick="event.stopPropagation();acToggleFollow(${u.id}, this)"></button>
     </div>`).join('');
     card.style.display = '';
   } catch { card.style.display = 'none'; }
@@ -21574,7 +21582,7 @@ function acEventNew() {
   AC._evEditId = null;
   document.getElementById('evCreateTitle').textContent = 'Create an event';
   document.getElementById('evSaveBtn').textContent = 'Create event';
-  document.getElementById('evTitle').value = '';
+  document.getElementById('evFormTitle').value = '';
   document.getElementById('evDesc').value = '';
   document.getElementById('evLocation').value = '';
   document.getElementById('evStart').value = '';
@@ -21591,7 +21599,7 @@ function acEventMode(mode) {
   loc.placeholder = mode === 'online' ? 'Join link (e.g. video call URL)' : 'Venue / address';
 }
 async function acEventSave() {
-  const title = document.getElementById('evTitle').value.trim();
+  const title = document.getElementById('evFormTitle').value.trim();
   if (!title) { showNotif('Add an event title.'); return; }
   const startVal = document.getElementById('evStart').value;
   if (!startVal) { showNotif('Pick a start date and time.'); return; }
@@ -21681,7 +21689,7 @@ function acEventEdit() {
   AC._evEditId = e.id;
   document.getElementById('evCreateTitle').textContent = 'Edit event';
   document.getElementById('evSaveBtn').textContent = 'Save changes';
-  document.getElementById('evTitle').value = e.title || '';
+  document.getElementById('evFormTitle').value = e.title || '';
   document.getElementById('evDesc').value = e.description || '';
   document.getElementById('evLocation').value = e.location || '';
   const toLocal = (iso) => { if (!iso) return ''; const d = new Date(iso); const off = d.getTimezoneOffset(); return new Date(d.getTime() - off * 60000).toISOString().slice(0, 16); };
@@ -25642,15 +25650,20 @@ function acHideChatSearch() {
   clearTimeout(AC._msgSearchT); acHideMsgResults();
 }
 function acGoProfile(username) {
+  // Robustness: opening your OWN profile requires a signed-in account. If the
+  // session is missing (transient auth blip / not signed in), gate instead of
+  // throwing on S.user.username.
+  const myUsername = (S.user && S.user.username) || '';
+  if (!username && !myUsername) { if (typeof openLogin === 'function') openLogin(); return; }
   // Remember where we came from so Back/Esc returns there (feed, thread, group info…).
   const cur = AC_SCREENS.find(id => !document.getElementById(id).classList.contains('hidden'));
   if (cur && cur !== 'acProfileScreen') AC._profFrom = cur;
-  const mine = !username || username.toLowerCase() === (S.user.username || '').toLowerCase();
+  const mine = !username || username.toLowerCase() === myUsername.toLowerCase();
   acStopMic();
   acShow('acProfileScreen', mine ? 'profile' : null);
-  const handle = (username || S.user.username || '').replace(/^@/, '');
+  const handle = (username || myUsername).replace(/^@/, '');
   if (handle) acSetPath('/' + handle);
-  acLoadProfile(username || S.user.username, mine);
+  acLoadProfile(username || myUsername, mine);
 }
 // Route back from another user's profile to wherever it was opened from.
 function acProfileBack() {
@@ -26194,7 +26207,7 @@ async function acFeedSuggestModule() {
           <div class="ac-sgc-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</div>
           <div class="ac-sgc-handle">@${escHtml(u.username)}</div>
         </div>
-        <button class="ac-follow-btn ac-sgc-follow ${acIsFollowing(u.id) ? 'following' : ''}" onclick="event.stopPropagation();acToggleFollow(${u.id}, this)"></button>
+        <button class="ac-follow-btn ac-sgc-follow ${acIsFollowing(u.id) ? 'following' : ''}" aria-label="${acIsFollowing(u.id) ? 'Following' : 'Follow'}" onclick="event.stopPropagation();acToggleFollow(${u.id}, this)"></button>
       </div>
       <div class="ac-sgc-bio">${bio}</div>
     </div>`;
@@ -26426,7 +26439,7 @@ async function acOpenForYou() {
         ${acAvatarHtml(u.name, u.avatar, 'user-avatar', acIsBiz(u))}
         <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</span></div>
           <div class="ac-item-last">${u.headline ? escHtml(u.headline) : '@' + escHtml(u.username)}</div>${acFollowedByLine(u)}</div>
-        <button class="ac-follow-btn ac-suggest-follow" onclick="event.stopPropagation();acToggleFollow(${u.id}, this)"></button>
+        <button class="ac-follow-btn ac-suggest-follow" aria-label="${acIsFollowing(u.id) ? 'Following' : 'Follow'}" onclick="event.stopPropagation();acToggleFollow(${u.id}, this)"></button>
       </div>`).join('');
     }
     if (d.jobs && d.jobs.length) html += `<div class="ac-prof-head">Open roles for you</div>` + d.jobs.map((j) => `<div class="ac-item" onclick="closeOverlay('forYouView');acOpenJob(${j.id})">
@@ -26451,7 +26464,7 @@ async function acLoadSuggestions(containerId) {
         ${acAvatarHtml(u.name, u.avatar)}
         <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</span></div>
           <div class="ac-item-last">${u.headline ? escHtml(u.headline) : '@' + escHtml(u.username) + (u.followers ? ' · ' + u.followers + ' follower' + (u.followers === 1 ? '' : 's') : '')}</div>${acFollowedByLine(u)}</div>
-        <button class="ac-follow-btn ac-suggest-follow" onclick="event.stopPropagation();acToggleFollow(${u.id}, this)"></button>
+        <button class="ac-follow-btn ac-suggest-follow" aria-label="${acIsFollowing(u.id) ? 'Following' : 'Follow'}" onclick="event.stopPropagation();acToggleFollow(${u.id}, this)"></button>
       </div>`).join('');
   } catch { c.innerHTML = ''; }
 }
@@ -34048,12 +34061,12 @@ async function acToggleFollow(id, btn) {
     const a = (AC._authors || {})[id] || {};
     const ok = await appConfirm({ title: 'Unfollow @' + (a.username || '') + '?', message: 'Their posts will no longer show up in your Following feed.', confirmText: 'Unfollow', danger: true });
     if (!ok) return;
-    btn.classList.remove('following'); acSetFollowing(id, false);
+    btn.classList.remove('following'); btn.setAttribute('aria-label', 'Follow'); acSetFollowing(id, false);
     if (bell) { bell.classList.add('hidden'); bell.classList.remove('on'); acSetNotify(id, false); } // bell hides when not following
     try { await API.req('DELETE', '/api/social/follow/' + id); API.req('DELETE', '/api/social/notify/' + id).catch(() => {}); }
     catch (e) { btn.classList.add('following'); acSetFollowing(id, true); if (bell) bell.classList.remove('hidden'); showNotif(e.message || 'Could not update.'); }
   } else {
-    btn.classList.add('following'); acSetFollowing(id, true);
+    btn.classList.add('following'); btn.setAttribute('aria-label', 'Following'); acSetFollowing(id, true);
     if (bell) bell.classList.remove('hidden'); // bell appears once following
     try { await API.req('POST', '/api/social/follow/' + id); }
     catch (e) { btn.classList.remove('following'); acSetFollowing(id, false); if (bell) bell.classList.add('hidden'); showNotif(e.message || 'Could not update.'); }
