@@ -8744,10 +8744,19 @@ body.light #signupDob{color-scheme:light;}
    The pool is a soft deep-blue radial (--pool ramp) that follows the pointer at
    ~12% peak over a 420px radius; on touch it appears under the finger during a
    drag only. Black theme only. */
-#page-glow{position:fixed;inset:0;pointer-events:none;z-index:1100;overflow:hidden;}
+/* The blend lives on the STAGE (container), not the orb: #page-glow is a fixed
+   stacking context, so a blend on the orb would only blend against the empty
+   stage, never the page. On the container it blends with the real page behind
+   it. color-dodge makes the pool GLOW ON COLOUR but VANISH ON PURE BLACK
+   (dodge(#000, x) = #000) — so it never lights the true-black feed/background,
+   and it adds no blue/white wash to media (dodge can only lift a colour that's
+   already there; a pure-red photo pixel stays pure red). Requested by Yiddi:
+   keep the effect everywhere it reads as light, kill it on #000000 + files. */
+#page-glow{position:fixed;inset:0;pointer-events:none;z-index:1100;overflow:hidden;
+  mix-blend-mode:color-dodge;}
 .pool-orb{position:absolute;left:0;top:0;width:840px;height:840px;border-radius:50%;
   background:radial-gradient(closest-side, rgb(24,32,175) 0%, rgb(12,14,120) 42%, transparent 72%);
-  mix-blend-mode:screen;opacity:0;will-change:transform,opacity;
+  mix-blend-mode:normal;opacity:0;will-change:transform,opacity;
   transition:opacity .5s ease-out;}
 #page-glow.pool-on .pool-orb{opacity:.12;}
 body.light #page-glow .pool-orb{display:none;}
