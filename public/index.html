@@ -3215,16 +3215,29 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
   }
 }
 
-/* Tablet: slightly narrower sidebar */
-@media(min-width:769px) and (max-width:1024px){
-  :root{--sidebar-w:210px;}
-}
-/* Wide desktop: widen the left nav toward the Desktop Design Spec (~275px) so the
-   centred 3-column container (nav 275 · center 600 · rail 350) reads roomier, with
-   clean pure-black gutters on ultra-wide monitors. Mobile/tablet are untouched. */
-@media(min-width:1100px){
+/* X.com nav widths: 275px labelled by default on desktop; collapses to a 68px
+   icon rail (body.nav-mini, set by acUpdateRail between 768 and 1281px). */
+@media(min-width:768px){
   :root{--sidebar-w:275px;}
 }
+body.nav-mini{--sidebar-w:68px;}
+/* Icon-rail: centre every glyph, hide all text; Post → round FAB, account → avatar.
+   Nav icons scale up a touch (they're 15px when labelled) so they read in the rail. */
+body.nav-mini .sidebar{padding-left:0;padding-right:0;}
+body.nav-mini .sb-nav{align-items:center;}
+body.nav-mini .sb-navbtn{position:relative;justify-content:center;gap:0;padding:11px 0;width:50px;margin:0 auto;}
+body.nav-mini .sb-navbtn > span:not(.sb-navic):not(.sb-navlogo){display:none;}
+body.nav-mini .sb-navbtn .sb-navic,body.nav-mini .sb-navbtn svg,body.nav-mini .sb-navbtn .sb-navlogo{width:21px!important;height:21px!important;}
+body.nav-mini .sb-navbtn .ac-badge{position:absolute;top:5px;right:7px;margin:0;}
+body.nav-mini .sb-btn,body.nav-mini .sb-settings{justify-content:center;gap:0;padding:10px 0;font-size:0;width:50px;margin:0 auto;}
+body.nav-mini .sb-btn svg,body.nav-mini .sb-settings svg,body.nav-mini .sb-btn .sb-atwe-ic{margin:0;}
+body.nav-mini .sb-label,body.nav-mini .sb-copy,body.nav-mini #projList,body.nav-mini #histList,
+body.nav-mini .sb-prof-id,body.nav-mini .sb-profile-counts,body.nav-mini #sbProfile .sb-profile-label{display:none;}
+body.nav-mini .sb-logo{justify-content:center;}
+body.nav-mini .sb-profilebtn,body.nav-mini #sbProfile{justify-content:center;padding:6px 0;}
+body.nav-mini .sb-post{width:48px;height:48px;padding:0;border-radius:50%;margin:10px auto 6px;gap:0;}
+body.nav-mini .sb-post span{display:none;}
+body.nav-mini .sb-divider{width:38px;margin-left:auto;margin-right:auto;}
 
 /* ─────────────────────────────────────────────
    UTILITIES
@@ -8064,27 +8077,33 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
 
 /* ── Right rail (X-style third column): only on wide desktop, Home/Search ── */
 .right-rail{display:none;flex-direction:column;flex-shrink:0;width:0;}
-/* The full 3-column (275+600+350 = 1225) only appears when it fits without
-   clipping — 1250px gives ~12px gutters and still catches common 1280 laptops.
-   Below this the rail drops to a stable 2-column (nav + feed), like X does. */
-@media(min-width:1250px){
-  /* Center column + rail sit together as one centred group (no dead gap). The
-     center column gets a fixed 600px, the rail 350px, and the pair is centred
-     in the space after the nav via auto margins. */
-  body.rail-on .sidebar{margin-left:auto;}          /* centre sidebar+feed+rail as one group */
-  /* Column lines match the sidebar's divider exactly (--b2). The left line is
-     the sidebar's own border-right, so the column only needs a right border +
-     the divider under the tabs (no doubled line on the left). */
-  /* X.com desktop proportions: nav 275 + feed 600 + rail 350 = 1225 content.
-     The Beam two-pane matches this exactly (600+350 = 950 panes, see body.beam2),
-     so the nav sits at the same x on every world and never jumps between pages. */
-  body.rail-on .main{flex:0 0 600px;min-width:0;border-right:1px solid var(--b2);}
-  body.rail-on .social-wrap .ac-win{border-left:none;border-right:none;max-width:none;} /* borders live on the column now */
-  body.rail-on .topbar{border-bottom:1px solid var(--b2);}
+/* X.com desktop responsive matrix — gated by JS body classes set in acUpdateRail
+   (feed-col / rail-on / rail-mid / nav-mini / beam2) so the columns switch exactly
+   at X's widths: nav 275→68, feed locked 600, rail 350→290→hidden.
+     >=1282  nav 275 + feed 600 + rail 350   (1225)
+     1095+   nav 68  + feed 600 + rail 350   (1018)
+     1005+   nav 68  + feed 600 + rail 290   (958)
+     768+    nav 68  + feed 600              (668, rail hidden) */
+@media(min-width:768px){
+  /* Feed/social/AI screens: a locked 600 centre column, centred with the nav.
+     The centre column carries the right hairline (its left line is the sidebar's
+     own border-right); the pair is centred via auto margins. */
+  body.feed-col .sidebar{margin-left:auto;}
+  body.feed-col .main{flex:0 0 600px;min-width:0;border-right:1px solid var(--b2);}
+  body.feed-col .social-wrap .ac-win{border-left:none;border-right:none;max-width:none;}
+  body.feed-col .topbar{border-bottom:1px solid var(--b2);}
+  body.feed-col:not(.rail-on) .main{margin-right:auto;} /* centre nav+feed when the rail is hidden */
+  /* Right rail: 350 by default, 290 in the shrink band; margin-right:auto balances
+     the sidebar's margin-left:auto so the whole group stays centred. */
   body.rail-on .right-rail{
     display:flex;width:350px;height:100vh;height:100dvh;overflow-y:auto;overscroll-behavior:contain;
     background:var(--bg);margin-right:auto;scrollbar-width:thin;
   }
+  body.mid-band .right-rail{width:290px;}
+  /* Beam two-pane tracks the feed+rail width so the nav stays put: 890 in the
+     shrink band (=600+290), 950 otherwise (=600+350). */
+  body.beam2.mid-band .social-wrap .ac-win{max-width:890px;}
+  body.beam2.mid-band .main{flex-basis:890px;}
 }
 .rr-inner{display:flex;flex-direction:column;gap:16px;padding:12px 20px 48px;}
 .rr-search{display:flex;align-items:center;gap:11px;width:100%;background:var(--s2);border:1px solid var(--b2);
@@ -8131,7 +8150,7 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
 .be-title{font-size:22px;font-weight:800;letter-spacing:-.02em;color:var(--t1);}
 .be-sub{font-size:14px;color:var(--t3);max-width:280px;line-height:1.45;}
 .be-new{flex:0 0 auto;align-self:center;width:auto;margin-top:12px;height:44px;padding:0 22px;font-size:15px;font-weight:700;}
-@media(min-width:1250px){
+@media(min-width:768px){
   body.beam2 .social-wrap{align-items:stretch;}
   body.beam2 .social-wrap .ac-win{max-width:950px;width:100%;display:flex;flex-direction:row;border-left:1px solid var(--b2);border-right:1px solid var(--b2);}
   body.beam2 #acListScreen{display:flex!important;flex:0 0 clamp(300px,37%,360px);min-width:0;border-right:1px solid var(--b2);order:1;}
@@ -8148,7 +8167,7 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
    margin-right:auto splits the free space evenly on both sides. Matches the app's
    own centring breakpoint (≥1100px); 1000–1099px keeps the panes full-width like the
    feed does at that width. */
-@media(min-width:1250px){
+@media(min-width:768px){
   body.beam2 .sidebar{margin-left:auto;}
   body.beam2 .main{flex:0 1 950px;margin-right:auto;}
 }
@@ -20742,13 +20761,29 @@ function acUpdateRail() {
   // persistent desktop nav action across the social worlds — not feed-only. Hidden
   // on the Atwe AI tab (that world has its own tools) and on mobile (compose FAB there).
   if (sbPost) sbPost.style.display = (w >= 769 && acct && !isAI) ? 'flex' : 'none';
-  // Desktop 3-column / Beam two-pane appear at >=1250px, where the 275+600+350
-  // = 1225 footprint fits without clipping. Below that both fall back to the
-  // stable nav + single-column layout (matches the CSS breakpoints above).
-  const beam2 = acct && ['acListScreen', 'acThreadScreen'].includes(cur) && w >= 1250;
+  // X.com desktop responsive matrix:
+  //   >=1282        nav 275 (labelled) + feed 600 + rail 350
+  //   1095-1281     nav 68 (icons)     + feed 600 + rail 350
+  //   1005-1094     nav 68 (icons)     + feed 600 + rail 290 (shrinks)
+  //   768-1004      nav 68 (icons)     + feed 600 (rail hidden)
+  //   <768          mobile
+  const beamScreen = ['acListScreen', 'acThreadScreen'].includes(cur);
+  // Left nav collapses to a 68px icon rail between 768 and 1281 (full labels >=1282).
+  document.body.classList.toggle('nav-mini', acct && w >= 768 && w < 1282);
+  // Beam two-pane spans EXACTLY the feed+rail width so the nav never jumps between
+  // Home and Beam: 950 (=600+350) normally, 890 (=600+290) in the shrink band, and
+  // it drops to a single 600 column (feed-col) below 1005 where Home has no rail.
+  const beam2 = acct && beamScreen && w >= 1005;
   document.body.classList.toggle('beam2', beam2);
-  const on = w >= 1250 && railable && !beam2;
+  // Feed/social/AI screens — and Beam when it's below the two-pane threshold — lock
+  // the centre column at 600, centred. So every world shares one footprint.
+  const feedCol = acct && w >= 768 && railable && !beam2;
+  document.body.classList.toggle('feed-col', feedCol);
+  // Right rail: only on non-Beam feed pages, >=1005. mid-band (1005-1094) shrinks
+  // the rail to 290 AND the Beam two-pane to 890 in lockstep.
+  const on = feedCol && !beamScreen && w >= 1005;
   document.body.classList.toggle('rail-on', on);
+  document.body.classList.toggle('mid-band', acct && w >= 1005 && w < 1095);
   if (!on) return;
   const sb = document.getElementById('rrSearch'); if (sb) sb.style.display = (cur === 'acSearchScreen') ? 'none' : '';
   if (!_railLoaded) { _railLoaded = true; acLoadRail(); }
