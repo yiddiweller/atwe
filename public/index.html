@@ -8027,6 +8027,10 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
   .sb-navbtn svg{width:15px;height:15px;}
   .sb-navbtn .sb-navlogo{width:15px;height:15px;}
   .sb-navbtn .sb-navic{width:15px;height:15px;}
+  /* Profile is an inline SVG whose person glyph has viewBox padding, so at the same
+     box size it reads smaller than the masked PNG nav icons (which fill edge-to-edge).
+     Size its box up so the glyph's visual weight matches the others. */
+  #snav-profile svg{width:19px;height:19px;}
 }
 /* The old AtChat entry is replaced by the nav */
 #sbAtChat{display:none!important;}
