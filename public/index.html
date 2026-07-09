@@ -42808,6 +42808,37 @@ function navInit() {
   stage.appendChild(poolOrb);
   document.body.appendChild(stage);
 
+  // ═══ Media shield ═══ So a photo/video the pointer is over stays CLEAN while
+  // the pool keeps glowing around it: instead of hiding the whole pool over media
+  // (which killed the effect everywhere), we lay an exact clean COPY of the hovered
+  // image on top of the glow (z above #page-glow), so the copy is never tinted and
+  // the real surface still glows behind/around it. The clone tracks the original's
+  // rect each frame (survives scroll) and is removed the moment the pointer leaves.
+  var mediaShield = null, shieldedMedia = null;
+  function positionShield(clone, media) {
+    var r = media.getBoundingClientRect();
+    clone.style.left = r.left + 'px'; clone.style.top = r.top + 'px';
+    clone.style.width = r.width + 'px'; clone.style.height = r.height + 'px';
+  }
+  function clearMediaShield() { if (mediaShield) { mediaShield.remove(); mediaShield = null; } shieldedMedia = null; }
+  function setMediaShield(media) {
+    if (media === shieldedMedia) return;
+    clearMediaShield();
+    shieldedMedia = media || null;
+    if (!media) return;
+    try {
+      var cs = getComputedStyle(media);
+      var clone = media.cloneNode(false);
+      clone.id = ''; clone.className = ''; clone.removeAttribute('loading');
+      if (clone.tagName === 'VIDEO') { clone.removeAttribute('autoplay'); clone.muted = true; }
+      clone.style.cssText = 'position:fixed;margin:0;pointer-events:none;z-index:1101;object-fit:' +
+        cs.objectFit + ';object-position:' + cs.objectPosition + ';border-radius:' + cs.borderRadius + ';';
+      positionShield(clone, media);
+      document.body.appendChild(clone);
+      mediaShield = clone;
+    } catch (e) { clearMediaShield(); }
+  }
+
   // ═══ Layer E — AI comets: ONLY while Atwe AI is actually working. ═══
   // aiComets.start(host) rigs 3 comets orbiting the host's perimeter at
   // ~160px/s; aiComets.stop(host) lets them run ONE final lap, then removes
@@ -42922,18 +42953,16 @@ function navInit() {
     var mag = Math.hypot(e.movementX || 0, e.movementY || 0);
     bump(mag * .004);
     rim = Math.min(1, rim + mag * .004);
-    // Layer A: the pool lights while the pointer moves on the stage — for touch
-    // that means "under the finger during a drag only" (a stationary tap never
-    // shows it; pointerup below puts it out). But NEVER over media: no CSS can
-    // pull an <img>/<video> out from under a full-screen blend overlay, so we
-    // gate it here — when the pointer is over a photo/video the pool fades out,
-    // and restores the moment it moves back onto normal UI.
-    if (e.target && e.target.closest && e.target.closest('img,video')) stage.classList.remove('pool-on');
-    else stage.classList.add('pool-on');
+    // Layer A: the pool lights while the pointer moves on the stage. It stays lit
+    // over media too (so the background keeps glowing) — the clean media SHIELD
+    // above keeps the hovered photo/video itself untinted instead of killing the
+    // whole pool.
+    stage.classList.add('pool-on');
+    setMediaShield(e.target && e.target.closest ? e.target.closest('img,video') : null);
   }, { passive: true });
-  addEventListener('pointerup', function (e) { if (e.pointerType === 'touch') stage.classList.remove('pool-on'); }, { passive: true });
-  addEventListener('pointercancel', function () { stage.classList.remove('pool-on'); }, { passive: true });
-  document.documentElement.addEventListener('pointerleave', function () { stage.classList.remove('pool-on'); });
+  addEventListener('pointerup', function (e) { if (e.pointerType === 'touch') { stage.classList.remove('pool-on'); clearMediaShield(); } }, { passive: true });
+  addEventListener('pointercancel', function () { stage.classList.remove('pool-on'); clearMediaShield(); }, { passive: true });
+  document.documentElement.addEventListener('pointerleave', function () { stage.classList.remove('pool-on'); clearMediaShield(); });
   addEventListener('touchmove', function (e) {
     var t = e.touches && e.touches[0];
     if (t) { px = t.clientX; py = t.clientY; if (!rafB) rafB = requestAnimationFrame(paintB); }
@@ -42971,6 +43000,12 @@ function navInit() {
       var s = spins[j], r = s.getBoundingClientRect();
       s.style.setProperty('--gx', (gx - r.left) + 'px');
       s.style.setProperty('--gy', (gy - r.top) + 'px');
+    }
+    // Keep the media shield glued to its image (tracks scroll/reflow); drop it if
+    // the image left the DOM.
+    if (mediaShield && shieldedMedia) {
+      if (!shieldedMedia.isConnected) clearMediaShield();
+      else positionShield(mediaShield, shieldedMedia);
     }
     requestAnimationFrame(loop);
   })();
