@@ -8064,7 +8064,10 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
 
 /* ── Right rail (X-style third column): only on wide desktop, Home/Search ── */
 .right-rail{display:none;flex-direction:column;flex-shrink:0;width:0;}
-@media(min-width:1100px){
+/* The full 3-column (275+600+350 = 1225) only appears when it fits without
+   clipping — 1250px gives ~12px gutters and still catches common 1280 laptops.
+   Below this the rail drops to a stable 2-column (nav + feed), like X does. */
+@media(min-width:1250px){
   /* Center column + rail sit together as one centred group (no dead gap). The
      center column gets a fixed 600px, the rail 350px, and the pair is centred
      in the space after the nav via auto margins. */
@@ -8072,14 +8075,14 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
   /* Column lines match the sidebar's divider exactly (--b2). The left line is
      the sidebar's own border-right, so the column only needs a right border +
      the divider under the tabs (no doubled line on the left). */
-  /* Center column 680 + rail 440 = 1120 content, matching the Beam two-pane's own
-     content width exactly — so every desktop world sits at the same footprint
-     (sidebar + 1120) and has the same, tighter side gutters. */
-  body.rail-on .main{flex:0 0 680px;min-width:0;border-right:1px solid var(--b2);}
-  body.rail-on .social-wrap .ac-win{border-left:none;border-right:none;max-width:none;} /* borders live on the column now; fill the wider column */
+  /* X.com desktop proportions: nav 275 + feed 600 + rail 350 = 1225 content.
+     The Beam two-pane matches this exactly (600+350 = 950 panes, see body.beam2),
+     so the nav sits at the same x on every world and never jumps between pages. */
+  body.rail-on .main{flex:0 0 600px;min-width:0;border-right:1px solid var(--b2);}
+  body.rail-on .social-wrap .ac-win{border-left:none;border-right:none;max-width:none;} /* borders live on the column now */
   body.rail-on .topbar{border-bottom:1px solid var(--b2);}
   body.rail-on .right-rail{
-    display:flex;width:440px;height:100vh;height:100dvh;overflow-y:auto;overscroll-behavior:contain;
+    display:flex;width:350px;height:100vh;height:100dvh;overflow-y:auto;overscroll-behavior:contain;
     background:var(--bg);margin-right:auto;scrollbar-width:thin;
   }
 }
@@ -8128,10 +8131,10 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
 .be-title{font-size:22px;font-weight:800;letter-spacing:-.02em;color:var(--t1);}
 .be-sub{font-size:14px;color:var(--t3);max-width:280px;line-height:1.45;}
 .be-new{flex:0 0 auto;align-self:center;width:auto;margin-top:12px;height:44px;padding:0 22px;font-size:15px;font-weight:700;}
-@media(min-width:1000px){
+@media(min-width:1250px){
   body.beam2 .social-wrap{align-items:stretch;}
-  body.beam2 .social-wrap .ac-win{max-width:1120px;width:100%;display:flex;flex-direction:row;border-left:1px solid var(--b2);border-right:1px solid var(--b2);}
-  body.beam2 #acListScreen{display:flex!important;flex:0 0 clamp(320px,36%,400px);min-width:0;border-right:1px solid var(--b2);order:1;}
+  body.beam2 .social-wrap .ac-win{max-width:950px;width:100%;display:flex;flex-direction:row;border-left:1px solid var(--b2);border-right:1px solid var(--b2);}
+  body.beam2 #acListScreen{display:flex!important;flex:0 0 clamp(300px,37%,360px);min-width:0;border-right:1px solid var(--b2);order:1;}
   body.beam2.beam-has-chat #acThreadScreen{display:flex!important;flex:1;min-width:0;order:2;}
   body.beam2:not(.beam-has-chat) #beamEmptyPane{display:flex;flex:1;min-width:0;order:2;}
   /* keep the shared Beam top bar (All/Chats/Calls tabs) above the panes even when a
@@ -8145,9 +8148,9 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
    margin-right:auto splits the free space evenly on both sides. Matches the app's
    own centring breakpoint (≥1100px); 1000–1099px keeps the panes full-width like the
    feed does at that width. */
-@media(min-width:1100px){
+@media(min-width:1250px){
   body.beam2 .sidebar{margin-left:auto;}
-  body.beam2 .main{flex:0 1 1120px;margin-right:auto;}
+  body.beam2 .main{flex:0 1 950px;margin-right:auto;}
 }
 #acTabs{display:none!important;} /* replaced by the app nav */
 /* On social tabs, hide the AI chat surface (keep the topbar for the menu) */
@@ -20739,12 +20742,12 @@ function acUpdateRail() {
   // persistent desktop nav action across the social worlds — not feed-only. Hidden
   // on the Atwe AI tab (that world has its own tools) and on mobile (compose FAB there).
   if (sbPost) sbPost.style.display = (w >= 769 && acct && !isAI) ? 'flex' : 'none';
-  // Desktop Beam two-pane (Desktop Design Spec): on the Beam list/thread at >=1000px,
-  // lay the conversation list + open conversation side by side (CSS in body.beam2),
-  // and drop the right rail so the width goes to the two panes.
-  const beam2 = acct && ['acListScreen', 'acThreadScreen'].includes(cur) && w >= 1000;
+  // Desktop 3-column / Beam two-pane appear at >=1250px, where the 275+600+350
+  // = 1225 footprint fits without clipping. Below that both fall back to the
+  // stable nav + single-column layout (matches the CSS breakpoints above).
+  const beam2 = acct && ['acListScreen', 'acThreadScreen'].includes(cur) && w >= 1250;
   document.body.classList.toggle('beam2', beam2);
-  const on = w >= 1100 && railable && !beam2;
+  const on = w >= 1250 && railable && !beam2;
   document.body.classList.toggle('rail-on', on);
   if (!on) return;
   const sb = document.getElementById('rrSearch'); if (sb) sb.style.display = (cur === 'acSearchScreen') ? 'none' : '';
