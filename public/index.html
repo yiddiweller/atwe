@@ -8758,7 +8758,12 @@ body.light #signupDob{color-scheme:light;}
   background:radial-gradient(closest-side, rgb(24,32,175) 0%, rgb(12,14,120) 42%, transparent 72%);
   mix-blend-mode:normal;opacity:0;will-change:transform,opacity;
   transition:opacity .5s ease-out;}
-#page-glow.pool-on .pool-orb{opacity:.12;}
+/* Opacity is high because the blend is color-dodge on true black: dodge lifts
+   a surface in proportion to how non-black it already is, so on the app's near-
+   black content (a hovered post #060606, hairlines, avatars, text) a strong orb
+   is what makes the gloss read at all, while genuine #000000 stays perfectly
+   black regardless of opacity. (At .12 the pool was effectively invisible.) */
+#page-glow.pool-on .pool-orb{opacity:.7;}
 body.light #page-glow .pool-orb{display:none;}
 
 /* Layer B — bulb rim. A 2.5px ring hugging the surface's rounded edge at
