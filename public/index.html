@@ -8739,30 +8739,20 @@ body.light #signupDob{color-scheme:light;}
      a time, matching the pre-existing .spin recipe).
 ════════════════════════════════════════════════════════════════ */
 
-/* Layer A — cursor pool. ONE fixed, pointer-events:none stage (#page-glow)
-   hosts the pool orb, the opening-lap orb, and (blueprint) page-scope comets.
-   The pool is a soft deep-blue radial (--pool ramp) that follows the pointer at
-   ~12% peak over a 420px radius; on touch it appears under the finger during a
-   drag only. Black theme only. */
-/* A soft AZURE radial (--accent family #0A84FF, matching the login-panel glow +
-   the shop-icon blue) that follows the pointer, composited with SOFT-LIGHT on the
-   stage. Soft-light satisfies all four asks at once: it's INVISIBLE on true
-   #000000 (soft-light(#000,x)=#000, so the black void never lights), it lifts any
-   non-black surface (a hovered post, avatars, cards, text) SMOOTHLY — being a
-   low-contrast blend it never bands into the concentric rings color-dodge did,
-   nor skews the blue toward purple (dodge over-amplified the blue channel) — and
-   it reads soft. Blurred + faded to alpha-0 of its own colour for an extra-smooth
-   falloff. Black theme only; the pointer handler fades it out over <img>/<video>
-   so media never tints. */
-#page-glow{position:fixed;inset:0;pointer-events:none;z-index:1100;overflow:hidden;
-  mix-blend-mode:soft-light;}
-.pool-orb{position:absolute;left:0;top:0;width:840px;height:840px;border-radius:50%;
-  background:radial-gradient(closest-side, rgba(40,130,255,1) 0%, rgba(24,116,252,.5) 40%, rgba(10,110,255,0) 76%);
-  mix-blend-mode:normal;opacity:0;will-change:transform,opacity;filter:blur(16px);
-  transition:opacity .5s ease-out;}
-/* Full opacity — soft-light is inherently gentle, so this still reads soft. */
-#page-glow.pool-on .pool-orb{opacity:1;}
-body.light #page-glow .pool-orb{display:none;}
+/* Layer A — cursor pool. Painted as the scroll SURFACE's OWN background: a soft
+   azure radial at --glx/--gly (the smoothed cursor position, set by the pointer
+   loop), NOT a blend overlay. Because an element's background always sits behind
+   its content, the surface lights up while the text, media and icons ON it stay
+   perfectly clean — no tint, no z-index tricks. It's a plain normal-blend gradient
+   so it fades buttery-smooth (no rings), reads as the --accent azure (no purple),
+   and never lights the true-black void outside a surface. The old fixed overlay
+   orb (#page-glow) is retired. Black theme + fine pointer only. */
+#page-glow{display:none;}
+.ac-list{
+  background-image:radial-gradient(460px circle at var(--glx,-9999px) var(--gly,-9999px),
+    rgba(40,130,255,.18), rgba(30,120,252,.055) 34%, rgba(20,110,255,0) 68%);}
+body.light .ac-list{background-image:none;}
+@media(prefers-reduced-motion:reduce){.ac-list{background-image:none;}}
 
 /* Layer B — bulb rim. A 2.5px ring hugging the surface's rounded edge at
    --gx/--gy, twin geometry in one element: the sharp core (white→icy) is the
@@ -42807,6 +42797,10 @@ function navInit() {
   var poolOrb = document.createElement('span'); poolOrb.className = 'pool-orb';
   stage.appendChild(poolOrb);
   document.body.appendChild(stage);
+  // Layer A now paints the pool as the hovered scroll surface's OWN background
+  // (a radial at --glx/--gly), so content stays clean. poolHost = that surface.
+  var poolHost = null;
+  function clearPoolHost() { if (poolHost) { poolHost.style.removeProperty('--glx'); poolHost.style.removeProperty('--gly'); poolHost = null; } }
 
   // ═══ Layer E — AI comets: ONLY while Atwe AI is actually working. ═══
   // aiComets.start(host) rigs 3 comets orbiting the host's perimeter at
@@ -42922,18 +42916,15 @@ function navInit() {
     var mag = Math.hypot(e.movementX || 0, e.movementY || 0);
     bump(mag * .004);
     rim = Math.min(1, rim + mag * .004);
-    // Layer A: the pool lights while the pointer moves on the stage — for touch
-    // that means "under the finger during a drag only" (a stationary tap never
-    // shows it; pointerup below puts it out). But NEVER over media: no CSS can
-    // pull an <img>/<video> out from under a full-screen blend overlay, so we
-    // gate it here — when the pointer is over a photo/video the pool fades out,
-    // and restores the moment it moves back onto normal UI.
-    if (e.target && e.target.closest && e.target.closest('img,video')) stage.classList.remove('pool-on');
-    else stage.classList.add('pool-on');
+    // Layer A: the pool glow hosts on the scroll SURFACE under the pointer (its
+    // own background), so text/media/icons on that surface are never tinted. Off
+    // any surface → no glow. The loop below positions it on the smoothed track.
+    var ph = e.target && e.target.closest ? e.target.closest('.ac-list') : null;
+    if (ph !== poolHost) { clearPoolHost(); poolHost = ph; }
   }, { passive: true });
-  addEventListener('pointerup', function (e) { if (e.pointerType === 'touch') stage.classList.remove('pool-on'); }, { passive: true });
-  addEventListener('pointercancel', function () { stage.classList.remove('pool-on'); }, { passive: true });
-  document.documentElement.addEventListener('pointerleave', function () { stage.classList.remove('pool-on'); });
+  addEventListener('pointerup', function (e) { if (e.pointerType === 'touch') clearPoolHost(); }, { passive: true });
+  addEventListener('pointercancel', clearPoolHost, { passive: true });
+  document.documentElement.addEventListener('pointerleave', clearPoolHost);
   addEventListener('touchmove', function (e) {
     var t = e.touches && e.touches[0];
     if (t) { px = t.clientX; py = t.clientY; if (!rafB) rafB = requestAnimationFrame(paintB); }
@@ -42964,9 +42955,14 @@ function navInit() {
     root.style.setProperty('--boost', boost.toFixed(3));
     root.style.setProperty('--rim', rim.toFixed(3));
     gx += (px - gx) * .18; gy += (py - gy) * .18;
-    // Layer A: the pool orb trails the pointer on the same smoothed track
-    // (~120ms ease-out follow), pure GPU transform.
-    poolOrb.style.transform = 'translate3d(' + (gx - 420) + 'px,' + (gy - 420) + 'px,0)';
+    // Layer A: paint the pool on the hovered surface's background at the smoothed
+    // cursor position (~120ms ease-out follow). Content stays clean; the glow
+    // stays put while the surface scrolls under it.
+    if (poolHost) {
+      var pr = poolHost.getBoundingClientRect();
+      poolHost.style.setProperty('--glx', (gx - pr.left) + 'px');
+      poolHost.style.setProperty('--gly', (gy - pr.top) + 'px');
+    }
     for (var j = 0; j < spins.length; j++) {
       var s = spins[j], r = s.getBoundingClientRect();
       s.style.setProperty('--gx', (gx - r.left) + 'px');
