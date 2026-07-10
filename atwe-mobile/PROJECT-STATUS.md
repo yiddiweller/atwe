@@ -2,6 +2,10 @@
 
 _A living checkpoint so work can resume seamlessly. Update it as phases land._
 
+> **Resume trigger:** when the founder says **"continue with the app"**, read this
+> file top-to-bottom and continue from **Next up** — same phased, hand-held,
+> one-step-at-a-time style. (Also registered in the repo's `CLAUDE.md`.)
+
 ## Where we are (current)
 
 - **App:** `atwe-mobile/` — native iOS (and Android) client, **Expo SDK 54 +

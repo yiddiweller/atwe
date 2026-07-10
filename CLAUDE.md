@@ -2,6 +2,26 @@
 
 Guidance for AI assistants (and humans) working in this repository.
 
+## 📱 iOS / mobile app — resume protocol ("continue with the app")
+
+A **native iOS app** (Expo + TypeScript, currently Expo **SDK 54**) lives in
+`atwe-mobile/` — a client of this same backend, **no backend changes**. It is
+being built **true-native, phase by phase**, for a non-technical founder.
+
+**Trigger — when the user says "continue with the app"** (or otherwise asks to
+resume the iOS / mobile work): FIRST read **`atwe-mobile/PROJECT-STATUS.md`** —
+the living resume point (current state · what's built · next steps · how to run ·
+Apple / TestFlight status · locked decisions · gotchas) — then continue the build
+from exactly there. **Keep `PROJECT-STATUS.md` updated** as each phase lands so it
+always reflects the true state, and commit + push every change to the working
+branch (`claude/claude-md-docs-cajkf9`).
+
+**Working style (match it exactly):** the founder is non-technical. Explain in
+plain language, **one action at a time**, verify each step (they share
+screenshots), stay patient and warm, never assume tooling familiarity, and give
+honest trade-offs. This is the same hand-held approach that first got the app
+live on their phone — preserve it. (Full context also lives in `PROJECT-STATUS.md`.)
+
 ## What this is
 
 **Atwe AI** — a single-page web chat application: an "intelligent assistant for
