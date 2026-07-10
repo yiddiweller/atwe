@@ -6,6 +6,16 @@ export function compact(n: number | null | undefined): string {
   return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
 }
 
+/** "Joined March 2024" style month + year from an ISO date. */
+export function monthYear(iso: string | null | undefined): string {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  } catch {
+    return '';
+  }
+}
+
 /** X-style relative time: 45s · 12m · 3h · 5d, then "Mon D". */
 export function timeAgo(iso: string | null | undefined): string {
   if (!iso) return '';

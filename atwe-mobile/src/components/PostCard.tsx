@@ -31,6 +31,11 @@ export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDeta
     if (linkToDetail) router.push(`/post/${post.id}`);
   };
 
+  const goProfile = () => {
+    const u = post.author?.username;
+    if (u) router.push(`/user/${u}`);
+  };
+
   const toggleLike = async () => {
     const next = !liked;
     setLiked(next);
@@ -55,7 +60,9 @@ export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDeta
         pressed && linkToDetail ? { backgroundColor: c.s1 } : null,
       ]}
     >
-      <Avatar name={post.author?.name} avatar={post.author?.avatar} biz={biz} size={44} />
+      <Pressable onPress={goProfile} hitSlop={6}>
+        <Avatar name={post.author?.name} avatar={post.author?.avatar} biz={biz} size={44} />
+      </Pressable>
       <View style={styles.main}>
         {post.promoted && (
           <Text variant="micro" tone="t3" style={{ marginBottom: 2 }}>
@@ -63,7 +70,12 @@ export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDeta
           </Text>
         )}
         <View style={styles.nameline}>
-          <Text variant="headline" numberOfLines={1} style={styles.name}>
+          <Text
+            variant="headline"
+            numberOfLines={1}
+            style={styles.name}
+            onPress={goProfile}
+          >
             {post.author?.name || 'Someone'}
           </Text>
           {post.author?.verified && <VerifiedBadge />}

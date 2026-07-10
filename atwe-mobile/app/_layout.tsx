@@ -52,6 +52,7 @@ function RootNavigator() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
         <Stack.Screen name="post/[id]" />
+        <Stack.Screen name="user/[username]" />
         <Stack.Screen name="compose" options={{ presentation: 'modal' }} />
       </Stack>
     </>

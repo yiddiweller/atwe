@@ -88,3 +88,48 @@ export async function createPost(input: {
     ...(input.parentId != null ? { parentId: input.parentId } : {}),
   });
 }
+
+/**
+ * A user's public profile — mirrors `GET /api/social/profile/:username`
+ * (see server.js line ~8079). Only the fields the native profile screen needs
+ * are typed; the payload carries more (skills, experience, recommendations, …)
+ * for later phases.
+ */
+export interface ProfileUser {
+  id: number;
+  name: string;
+  username: string | null;
+  avatar: string | null;
+  banner: string | null;
+  bio: string | null;
+  location: string | null;
+  website: string | null;
+  headline: string | null;
+  verified: boolean;
+  accountType: 'personal' | 'business';
+  joinedAt: string | null;
+}
+export interface Profile {
+  user: ProfileUser;
+  counts: { followers: number; following: number; posts: number; connections: number | null };
+  connectionState: 'self' | 'connected' | 'pending_out' | 'pending_in' | 'none';
+  isFollowing: boolean;
+  isMe: boolean;
+  posts: Post[];
+  replies: Post[];
+}
+
+/** Load a user's profile by @handle (React Query cached; keyed by username). */
+export function useProfile(username: string | undefined) {
+  return useQuery({
+    queryKey: ['profile', username],
+    queryFn: () => api.get<Profile>(`/api/social/profile/${encodeURIComponent(username!)}`),
+    enabled: !!username,
+  });
+}
+
+/** Follow / unfollow a user by id (mirrors POST/DELETE /api/social/follow/:id). */
+export async function followUser(id: number, on: boolean): Promise<void> {
+  if (on) await api.post(`/api/social/follow/${id}`);
+  else await api.del(`/api/social/follow/${id}`);
+}

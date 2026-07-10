@@ -32,12 +32,27 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
   a **composer** modal (`app/compose.tsx`, `POST /api/social/posts`) with the
   white Post pill; the **compose FAB** on Home. `usePost`/`createPost` in
   `src/api/social.ts`; routes registered in `app/_layout.tsx`.
+- **Phase 1 — tap-into-profiles:** tapping a person's avatar or name anywhere in
+  the feed (or post detail) opens their **X-style profile** (`app/user/[username].tsx`,
+  `GET /api/social/profile/:username`): banner, overlapping avatar, verified seal,
+  @handle, headline/bio, location · Joined, Following/Followers/Posts counts, an
+  optimistic **Follow** button, and their post timeline (reuses `PostCard`).
+  `useProfile`/`followUser` + `Profile` type in `src/api/social.ts`; `monthYear`
+  in `src/lib/format.ts`; route registered in `app/_layout.tsx`; `PostCard` avatar
+  + name are now `goProfile` pressables. (Ships in the next TestFlight build.)
 
 ## Next up (Phase 1 continued → then phases 2–7)
-1. Profile navigation from feed/detail (tap avatar → profile); stories tray + circles on Home.
+1. ~~Profile navigation from feed/detail~~ ✅ done (`app/user/[username].tsx`).
+   Next: **stories tray + Circles/Following tabs on Home** to fill it out.
 2. Onboarding / signup polish; Settings surfaces (theme, privacy, account).
 3. Then per the Architecture & Build Plan: Beam · Engine · Atwe AI · Profile/
    money · App Store polish.
+
+**Delivery note:** new native code reaches the founder's phone only via a rebuild
+(`eas build -p ios --profile production` → `eas submit`). Before the next build,
+**sync the repo `package.json` to the founder's working SDK-54 set + worklets**
+(see the divergence note below) so the repo builds cleanly — ideally set up the
+GitHub → Expo online build so updates don't need the Mac.
 
 ## How to run (fresh machine)
 ```bash
