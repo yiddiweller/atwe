@@ -46,6 +46,17 @@ npx expo start --tunnel                    # scan QR with Expo Go
 ```
 **Future updates:** `git pull` in `atwe-app`, then `npx expo start --tunnel`.
 
+## Company documents (durable, in `docs/`)
+
+- **`docs/ATWE-Complete-Product-Book.pdf`** — THE master reference (Final
+  Edition, 73 pp): vision, design system, five worlds, complete built
+  inventory, 1–2-yr roadmap (+§5.8 verification sweep), advisor brainstorm,
+  Part 7 Running the Company. Served admin-only via the dashboard's
+  **📘 Product Book** button (`GET /api/admin/product-book`).
+- `docs/ATWE-Complete-Feature-Audit.pdf` (41 pp) and
+  `docs/ATWE-iOS-Architecture-Build-Plan.pdf` (10 pp) — the companion audits
+  the book absorbs. Treat the book as the single source of truth.
+
 ## Apple / distribution status
 - **Apple ID:** business email (ceo@atwe.com), 2FA on.
 - **Apple Developer Program:** enrolled as **Individual** — **payment confirmed,
