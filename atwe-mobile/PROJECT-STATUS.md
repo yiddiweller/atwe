@@ -41,7 +41,8 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
 
 ## How to run (fresh machine)
 ```bash
-git clone https://github.com/yiddiweller/atwe.git atwe-app
+# the app lives on the working BRANCH — clone it, not default main:
+git clone -b claude/claude-md-docs-cajkf9 https://github.com/yiddiweller/atwe.git atwe-app
 cd atwe-app/atwe-mobile
 npm install --legacy-peer-deps
 npx expo install --fix
