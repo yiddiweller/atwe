@@ -86,4 +86,25 @@ npx expo start --tunnel                    # scan QR with Expo Go
 - SDK 54 Reanimated 4 moved its babel plugin → **no manual plugin** in
   `babel.config.js` (babel-preset-expo auto-includes it); needs
   `react-native-worklets` installed.
+- **`react-native-worklets` MUST be a listed dependency in package.json** —
+  Reanimated 4.1.x refuses to build without it (`pod install` fails: "install a
+  version between 0.5.0 and 0.8"). Add via `npx expo install react-native-worklets`.
+  It got dropped once during a `git checkout -- package.json`; keep it committed.
 - `--tunnel` needs an Expo login (EXPO_TOKEN or `npx expo login`).
+- **EAS cloud build needs `atwe-mobile/.npmrc` with `legacy-peer-deps=true`** —
+  the global npm config isn't present in the cloud, so without this file the
+  "Install dependencies" build phase fails on the @types/react peer conflict.
+
+## EAS / TestFlight (first production build SUCCEEDED — 10 Jul 2026)
+- **EAS project:** `@yiddiweller/atwe` (owner org `yiddiweller`), projectId
+  `e7cc019c-b415-4fa0-9f63-283aaf8d1ad6` (app.json `extra.eas.projectId`).
+- **Bundle id:** `com.atwe.app`. Apple Team: YEHUDA WELLER (Individual, TH3FQ8FMKB).
+  Distribution cert + provisioning profile + APNs push key auto-created & stored on
+  EAS servers, so rebuilds skip the Apple login/2FA.
+- **Next:** `eas submit -p ios --latest` → TestFlight → install on the real iPhone.
+- **Later:** connect the GitHub repo to Expo so builds trigger online (Mac-free);
+  upgrade Apple Individual → Organization (ATWE INC) before public App Store launch.
+- **Repo/local divergence:** committed `package.json` still lists SDK-53 versions;
+  the founder's LOCAL copy was aligned to SDK 54 (`expo install --fix` +
+  `react-native-worklets`). Sync the repo package.json to the working SDK-54 set on
+  the next pass so a fresh clone builds clean.
