@@ -15,7 +15,7 @@
     "doctor": "npx expo-doctor"
   },
   "dependencies": {
-    "expo": "^53.0.0",
+    "expo": "~54.0.0",
     "expo-router": "~5.0.0",
     "expo-constants": "~17.0.0",
     "expo-linking": "~7.0.0",
@@ -41,10 +41,10 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
-    "@types/react": "~19.0.0",
-    "typescript": "~5.7.0",
+    "@types/react": "~19.1.10",
+    "typescript": "~5.9.2",
     "eslint": "^9.0.0",
-    "eslint-config-expo": "~8.0.0",
+    "eslint-config-expo": "~10.0.0",
     "prettier": "^3.3.0"
   }
 }

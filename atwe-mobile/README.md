@@ -21,11 +21,14 @@ its REST API and SSE realtime stream. **No backend changes are required.**
 ## Run it (fastest path — on your own iPhone)
 
 ```bash
-npm install
-cp .env.example .env          # points at https://atwe.com by default
-npx expo install --fix        # reconcile native dep versions to the installed SDK
-npm start                     # opens the Expo dev tools + a QR code
+npm install --legacy-peer-deps           # lenient peer-dep resolution (SDK 54)
+npx expo install --fix                    # align native deps to the installed SDK
+npx expo install react-native-worklets    # Reanimated 4 companion (SDK 54)
+npx expo start --tunnel                    # QR code; --tunnel works on any network
 ```
+
+> Targets **Expo SDK 54** (matches the current App Store Expo Go). `--tunnel`
+> needs a free Expo account (`npx expo login`, or set `EXPO_TOKEN`).
 
 Scan the QR with the **Expo Go** app (iOS) → the app boots against production
 Atwe. Log in with a real account; the Profile tab shows your live account.
