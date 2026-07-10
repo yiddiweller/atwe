@@ -40,10 +40,20 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
   `useProfile`/`followUser` + `Profile` type in `src/api/social.ts`; `monthYear`
   in `src/lib/format.ts`; route registered in `app/_layout.tsx`; `PostCard` avatar
   + name are now `goProfile` pressables. (Ships in the next TestFlight build.)
+- **Phase 1 — stories:** a horizontal **stories tray** across the top of Home
+  (`src/components/StoriesTray.tsx`, `GET /api/stories` → accent ring = unseen,
+  muted ring = seen) + a full-screen **story viewer** (`app/story/[userId].tsx`,
+  `GET /api/stories/:userId`): segmented progress bars, 5s auto-advance, tap-right/
+  left to skip, marks each seen (`POST /api/stories/:id/view`). Image + text render
+  fully; **video shows a placeholder** until a native player (expo-video) is wired
+  — the one deliberate gap. Hooks in `src/api/stories.ts`; tray is the Home
+  FlatList `ListHeaderComponent`; route registered. (Ships in the next build.)
 
 ## Next up (Phase 1 continued → then phases 2–7)
 1. ~~Profile navigation from feed/detail~~ ✅ done (`app/user/[username].tsx`).
-   Next: **stories tray + Circles/Following tabs on Home** to fill it out.
+   ~~Stories tray + viewer~~ ✅ done (`StoriesTray` + `app/story/[userId].tsx`).
+   Next: **Circles/Following full feed tabs on Home**; native **video** story
+   playback (add `expo-video`); a "Your story" add affordance on the tray.
 2. Onboarding / signup polish; Settings surfaces (theme, privacy, account).
 3. Then per the Architecture & Build Plan: Beam · Engine · Atwe AI · Profile/
    money · App Store polish.

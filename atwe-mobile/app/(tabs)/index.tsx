@@ -7,6 +7,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { PostCard } from '@/components/PostCard';
+import { StoriesTray } from '@/components/StoriesTray';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useFeed, type FeedScope } from '@/api/social';
 
@@ -61,6 +62,7 @@ export default function Home() {
           data={posts}
           keyExtractor={(p) => String(p.id)}
           renderItem={({ item }) => <PostCard post={item} />}
+          ListHeaderComponent={<StoriesTray />}
           contentContainerStyle={posts.length ? { paddingBottom: 120 } : styles.emptyWrap}
           showsVerticalScrollIndicator={false}
           refreshControl={
