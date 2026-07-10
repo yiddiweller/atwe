@@ -46,5 +46,8 @@
     "eslint": "^9.0.0",
     "eslint-config-expo": "~10.0.0",
     "prettier": "^3.3.0"
+  },
+  "overrides": {
+    "ajv": "^8.17.1"
   }
 }
