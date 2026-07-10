@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { View, FlatList, RefreshControl, ActivityIndicator, Pressable, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
@@ -19,6 +22,7 @@ const TABS: { key: FeedScope; label: string }[] = [
  */
 export default function Home() {
   const { c } = useTheme();
+  const router = useRouter();
   const [scope, setScope] = useState<FeedScope>('foryou');
   const { data, isLoading, isError, refetch, isRefetching } = useFeed(scope);
   const posts = data?.posts ?? [];
@@ -74,6 +78,23 @@ export default function Home() {
           }
         />
       )}
+
+      {/* Compose FAB — the one white action (blueprint §10): 56px white disc, dark +. */}
+      <Pressable
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+          router.push('/compose');
+        }}
+        style={({ pressed }) => [
+          styles.fab,
+          { backgroundColor: c.primary },
+          pressed && { transform: [{ scale: 0.94 }] },
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel="Create a post"
+      >
+        <Ionicons name="add" size={30} color={c.onPrimary} />
+      </Pressable>
     </Screen>
   );
 }
@@ -95,4 +116,19 @@ const styles = StyleSheet.create({
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyWrap: { flexGrow: 1 },
+  fab: {
+    position: 'absolute',
+    right: 18,
+    bottom: 96,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 6,
+  },
 });

@@ -2,6 +2,7 @@ import { useState, type ComponentProps } from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Text } from './Text';
 import { Avatar } from './Avatar';
@@ -18,12 +19,17 @@ type IconName = ComponentProps<typeof Ionicons>['name'];
  * reply · repost · like · views · bookmark engagement row. Like is interactive
  * (optimistic, reverts on error); the rest are display for now.
  */
-export function PostCard({ post }: { post: Post }) {
+export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDetail?: boolean }) {
   const { c } = useTheme();
+  const router = useRouter();
   const [liked, setLiked] = useState(!!post.liked);
   const [likes, setLikes] = useState(post.likes || 0);
   const biz = post.author?.accountType === 'business';
   const img = post.images?.[0] || post.image || null;
+
+  const openDetail = () => {
+    if (linkToDetail) router.push(`/post/${post.id}`);
+  };
 
   const toggleLike = async () => {
     const next = !liked;
@@ -39,7 +45,16 @@ export function PostCard({ post }: { post: Post }) {
   };
 
   return (
-    <View style={[styles.card, { borderBottomColor: c.border }]}>
+    <Pressable
+      onPress={openDetail}
+      disabled={!linkToDetail}
+      android_ripple={undefined}
+      style={({ pressed }) => [
+        styles.card,
+        { borderBottomColor: c.border },
+        pressed && linkToDetail ? { backgroundColor: c.s1 } : null,
+      ]}
+    >
       <Avatar name={post.author?.name} avatar={post.author?.avatar} biz={biz} size={44} />
       <View style={styles.main}>
         {post.promoted && (
@@ -101,7 +116,7 @@ export function PostCard({ post }: { post: Post }) {
           />
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

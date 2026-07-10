@@ -23,13 +23,18 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
   Keychain auth + 2FA challenge (`src/auth/*`); five-world tab bar
   (Home · Beam · Engine · Atwe AI · Profile) with blur + haptics; real login;
   real Profile screen (live account).
-- **Phase 1 (in progress) — real Home feed:** `app/(tabs)/index.tsx` +
+- **Phase 1 — real Home feed:** `app/(tabs)/index.tsx` +
   `src/components/PostCard.tsx` over `GET /api/social/feed` (For You / Following),
   X-style cards (avatar/verified/business shape, media, interactive like,
   locked/promoted states), pull-to-refresh, loading/empty/error states.
+- **Phase 1 — interactive Home:** tappable cards → **post detail** with replies
+  (`app/post/[id].tsx`, `GET /api/social/posts/:id`) + a docked **reply bar**;
+  a **composer** modal (`app/compose.tsx`, `POST /api/social/posts`) with the
+  white Post pill; the **compose FAB** on Home. `usePost`/`createPost` in
+  `src/api/social.ts`; routes registered in `app/_layout.tsx`.
 
 ## Next up (Phase 1 continued → then phases 2–7)
-1. Post detail + reply; compose screen; profile navigation from feed.
+1. Profile navigation from feed/detail (tap avatar → profile); stories tray + circles on Home.
 2. Onboarding / signup polish; Settings surfaces (theme, privacy, account).
 3. Then per the Architecture & Build Plan: Beam · Engine · Atwe AI · Profile/
    money · App Store polish.

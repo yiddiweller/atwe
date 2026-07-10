@@ -58,3 +58,33 @@ export async function likePost(id: number, on: boolean): Promise<void> {
   if (on) await api.post(`/api/social/posts/${id}/like`);
   else await api.del(`/api/social/posts/${id}/like`);
 }
+
+/** A post plus its replies — `GET /api/social/posts/:id`. */
+export interface PostWithMeta extends Post {
+  canReply?: boolean;
+  replyScope?: string;
+}
+export interface PostDetail {
+  post: PostWithMeta;
+  replies: Post[];
+}
+
+/** Load one post + its replies (React Query cached; keyed by id). */
+export function usePost(id: string | number) {
+  return useQuery({
+    queryKey: ['post', String(id)],
+    queryFn: () => api.get<PostDetail>(`/api/social/posts/${id}`),
+    enabled: id != null && id !== '',
+  });
+}
+
+/** Create a post, or a reply when `parentId` is given. Returns the new post. */
+export async function createPost(input: {
+  body: string;
+  parentId?: number;
+}): Promise<{ post: Post }> {
+  return api.post<{ post: Post }>('/api/social/posts', {
+    body: input.body,
+    ...(input.parentId != null ? { parentId: input.parentId } : {}),
+  });
+}
