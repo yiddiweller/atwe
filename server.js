@@ -21183,6 +21183,22 @@ app.get('/api/admin/growth', auth.requirePerm('growth'), async (_req, res) => {
   }
 });
 
+/* ─── Admin: the Complete Product Book (confidential PDF) ───
+   Served ONLY to authenticated admins — the book is internal, so it must never
+   live under public/ where anyone with the URL could fetch it. The file ships
+   in the repo at docs/, which deploys with the app. */
+app.get('/api/admin/product-book', auth.requireAdmin, (_req, res) => {
+  const file = path.join(__dirname, 'docs', 'ATWE-Complete-Product-Book.pdf');
+  res.sendFile(file, {
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="ATWE-Complete-Product-Book.pdf"',
+    },
+  }, (err) => {
+    if (err && !res.headersSent) res.status(404).json({ error: 'The Product Book is not on this deploy.' });
+  });
+});
+
 /* ─── Admin: platform overview metrics ─── */
 app.get('/api/admin/stats', auth.requireAdmin, async (_req, res) => {
   const c = (sql) => db.query(sql).then(r => parseInt(r.rows[0].c, 10) || 0).catch(() => 0);
