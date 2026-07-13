@@ -1925,15 +1925,27 @@ body.feeds-immersive #statusScrim{display:none;} /* immersive shorts manage thei
 
 /* Topbar */
 .topbar{
-  height:calc(var(--topbar-h) + env(safe-area-inset-top, 0px) + 2px);
   border-bottom:none;
-  display:flex;align-items:center;justify-content:space-between;
-  padding:calc(env(safe-area-inset-top, 0px) + 2px) 20px 0;
+  display:flex;flex-direction:column;align-items:stretch;
+  padding:calc(env(safe-area-inset-top, 0px) + 2px) 0 0;
   flex-shrink:0;
   backdrop-filter:blur(24px) saturate(1.5);
   -webkit-backdrop-filter:blur(24px) saturate(1.5);
   background:rgba(0,0,0,.5);
 }
+/* Row 1: ≡ + page label + the single compose "+" action. Collapses on scroll
+   (home/chat) so only the tabs row (row 2) stays stuck at the top. */
+.tb-mainrow{
+  display:flex;align-items:center;justify-content:space-between;
+  height:var(--topbar-h);max-height:var(--topbar-h);padding:0 20px;flex-shrink:0;overflow:hidden;
+  transition:max-height .34s var(--ease), opacity .26s var(--ease);
+}
+body.tb-collapsed .tb-mainrow{max-height:0;opacity:0;}
+/* Row 2: the feed / chat tabs. Shown only on home + chat (syncTopbar). */
+.tb-tabrow{display:flex;align-items:center;padding:0 16px 2px;flex-shrink:0;min-width:0;}
+.tb-tabrow.hidden{display:none;}
+/* Only the compose "+" on the right of home/chat — no AI logo button there. */
+.topbar.tb-home #tbAiBtn,.topbar.tb-chat #tbAiBtn{display:none;}
 .topbar-actions{display:flex;align-items:center;gap:6px;}
 /* Home top-bar bell + compose (blueprint §Home). Outline icons, 40px round tap area. */
 .tb-home-act{width:40px;height:40px;border-radius:50%;border:none;background:none;color:var(--t1);cursor:pointer;
@@ -1962,7 +1974,9 @@ body.light .tb-home-dot{border-color:#fff;}
 /* X-style home header: a compact 36px avatar, centered on the post-avatar column
    (a 42px box so the 36px avatar's centre lines up with the 42px post avatars),
    tabs beginning at the post-name x. */
-.topbar.tb-home{padding-inline-start:24px;}
+/* Two-row layout owns its own horizontal padding via .tb-mainrow / .tb-tabrow,
+   so neutralize the old single-row start padding. */
+.topbar.tb-home{padding-inline-start:0;}
 .tb-homeava{width:26px;height:26px;border-radius:50%;padding:0;border:none;background:none;cursor:pointer;flex-shrink:0;
   -webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;transition:transform var(--t-fast) var(--ease);}
 .tb-homeava .user-avatar{width:26px;height:26px;font-size:11px;}
@@ -1971,16 +1985,16 @@ body.light .tb-home-dot{border-color:#fff;}
    feed tabs line up with the post display names; the smaller 26px avatar is
    centered within it (centered with the post avatars). */
 .topbar.tb-home .tb-homeava{width:42px;}
-.topbar.tb-home .tb-left{flex:0 0 auto;gap:0;}
-.topbar.tb-home .tb-feedtabs{flex:1;justify-content:flex-start;gap:3px;margin-inline-start:12px;padding-inline-end:8px;}
+.topbar.tb-home .tb-left{flex:0 0 auto;gap:7px;}
+.topbar.tb-home .tb-feedtabs{flex:1;justify-content:flex-start;gap:3px;margin-inline-start:0;padding-inline-end:8px;}
 .topbar.tb-home .topbar-actions{flex:0 0 auto;}
 .topbar.tb-home .tb-feedtab{padding:6px 4px;}
 .topbar.tb-home .tb-feedtab:first-child{padding-inline-start:0;}
 .topbar.tb-home .tb-feedtab:last-child{padding-inline-end:2px;}
 /* Chat tab: All/Chats/Calls/Contacts sit in the topbar like home, but keep the
    hamburger (no avatar swap). */
-.topbar.tb-chat .tb-left{flex:0 0 auto;gap:0;}
-.topbar.tb-chat .tb-feedtabs{flex:1;justify-content:space-between;gap:0;margin-inline-start:10px;}
+.topbar.tb-chat .tb-left{flex:0 0 auto;gap:7px;}
+.topbar.tb-chat .tb-feedtabs{flex:1;justify-content:space-between;gap:0;margin-inline-start:0;}
 .topbar.tb-chat .topbar-actions{flex:0 0 auto;}
 .topbar.tb-chat .tb-feedtab{padding:6px 4px;}
 @media(min-width:769px){
@@ -8347,10 +8361,9 @@ body.nav-morph.nav-ball .bn-indicator{opacity:0;pointer-events:none;}
 body.nav-morph.nav-ball .bn-plus{opacity:1;pointer-events:auto;}
 /* the floating compose FAB steps aside while the ball IS the compose */
 body.nav-morph.nav-ball .ac-fab{opacity:0;pointer-events:none;transition:opacity .2s ease;}
-/* Home: hide the floating "+" FAB entirely — compose is the top-bar pencil at
-   rest and the scroll-ball when scrolling, so the extra FAB is redundant.
-   (Beam keeps its new-chat FAB at rest; it only fades out during the ball.) */
-body.nav-morph #acHomeFab{display:none;}
+/* Home + Beam: hide the floating "+" FAB entirely — compose is the top-bar "+"
+   at rest and the scroll-ball when scrolling, so the extra FAB is redundant. */
+body.nav-morph #acHomeFab,body.nav-morph #acChatsFab{display:none;}
 
 
 /* Responsive: bottom bar on mobile, sidebar nav on desktop */
@@ -10007,6 +10020,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
 
     <!-- Topbar -->
     <div class="topbar">
+     <div class="tb-mainrow">
       <div class="tb-left">
         <button class="sb-toggle" id="sbToggle" onclick="toggleSidebar()" aria-label="Menu">
           <svg viewBox="0 0 24 24"><line x1="5" y1="9" x2="15" y2="9"/><line x1="5" y1="15" x2="15" y2="15"/></svg>
@@ -10021,6 +10035,16 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
           <input id="tbSearchInput" type="text" placeholder="Search everything on Atwe" aria-label="Search everything on Atwe" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="acDoSearch(this.value)"/>
         </div>
       </div>
+      <div class="topbar-actions">
+        <button class="tb-home-act hidden" id="tbHomeCompose" onclick="acOpenPost()" aria-label="New post">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+        <button class="tb-iconbtn tb-ai-btn" id="tbAiBtn" onclick="acOpenAiHub()" aria-label="Atwe AI" title="Atwe AI"><img src="/logo-mark.png" alt=""/></button>
+        <button class="ac-post-btn hidden" id="tbSave" onclick="acSaveContact(AC._contactOpen)">Save</button>
+        <button class="tb-login" id="loginPill" onclick="openLogin()">Log in</button>
+      </div>
+     </div>
+     <div class="tb-tabrow hidden" id="tbTabRow">
       <div class="tb-feedtabs hidden" id="tbFeedTabs">
         <button class="tb-feedtab" id="acFeedTab-foryou" onclick="acSetFeed('foryou')">For You</button>
         <button class="tb-feedtab" id="acFeedTab-following" onclick="acSetFeed('following')">Following</button>
@@ -10035,18 +10059,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <button class="tb-feedtab" id="acseg-contacts" onclick="acChatsTab('contacts')">Contacts</button>
         <button class="tb-feedtab tb-feedtab-ai hidden" id="acChatMoreBtn" onclick="acOpenChatMenu(event)" aria-label="More" title="More"><svg class="tb-aidots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
       </div>
-      <div class="topbar-actions">
-        <button class="tb-home-act hidden" id="tbHomeBell" onclick="openNotifications()" aria-label="Notifications">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-          <span class="tb-home-dot hidden" id="tbHomeBellDot" aria-hidden="true"></span>
-        </button>
-        <button class="tb-home-act hidden" id="tbHomeCompose" onclick="acOpenPost()" aria-label="New post">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
-        </button>
-        <button class="tb-iconbtn tb-ai-btn" id="tbAiBtn" onclick="acOpenAiHub()" aria-label="Atwe AI" title="Atwe AI"><img src="/logo-mark.png" alt=""/></button>
-        <button class="ac-post-btn hidden" id="tbSave" onclick="acSaveContact(AC._contactOpen)">Save</button>
-        <button class="tb-login" id="loginPill" onclick="openLogin()">Log in</button>
-      </div>
+     </div>
     </div>
 
     <!-- Chat / Empty state -->
@@ -23308,7 +23321,7 @@ function syncTopbar(tab) {
   const feedTabs = document.getElementById('tbFeedTabs');
   const chatTabs = document.getElementById('tbChatTabs');
   if (!label || !search) return;
-  const labels = { home: 'Home', chat: 'Beam', call: 'Atwe Call', contacts: 'Contacts', ai: 'Atwe AI', search: '', profile: 'Profile' };
+  const labels = { home: 'Atwe', chat: 'Beam', call: 'Atwe Call', contacts: 'Contacts', ai: 'Atwe AI', search: '', profile: 'Profile' };
   // Top-level navigation always shows the main bar (a drill-in via acShow may re-hide it).
   document.querySelector('.topbar')?.classList.remove('hidden');
   const isSearch = tab === 'search';
@@ -23320,28 +23333,22 @@ function syncTopbar(tab) {
   if (feedTabs) feedTabs.classList.toggle('hidden', !isHome);
   if (chatTabs) chatTabs.classList.toggle('hidden', !isChat);
   if (!isChat) { document.getElementById('acChatMoreBtn')?.classList.add('hidden'); if (typeof acCloseChatMenu === 'function') acCloseChatMenu(); if (typeof acHideChatSearch === 'function') acHideChatSearch(); } // chat-only controls
-  // Home now shows a real "Home" title (Search/Chat hide the label for their tab rows).
-  label.classList.toggle('hidden', isSearch || isChat);
+  // The page label shows everywhere except Search: "Atwe" on Home, "Beam" on Beam,
+  // and the tab name elsewhere. Home + Beam are the two-row layout (label + "+"
+  // on row 1, tabs on row 2); the tab row shows only there.
+  label.classList.toggle('hidden', isSearch);
   label.textContent = labels[tab] || 'Atwe';
   document.querySelector('.topbar')?.classList.toggle('tb-home', isHome);
   document.querySelector('.topbar')?.classList.toggle('tb-chat', isChat);
-  // Search + AI also lead with the ≡ — put it at the SAME gutter position as Home/Chat.
   document.querySelector('.topbar')?.classList.toggle('tb-plain', isSearch || tab === 'ai');
-  // Home leads with the account avatar (→ Profile), a "Home" title, and bell + compose
-  // on the right (blueprint §Home). The avatar replaces the ≡ hamburger on Home.
-  const showAva = isHome && isAccount();
+  document.getElementById('tbTabRow')?.classList.toggle('hidden', !(isHome || isChat));
+  // Home + Beam lead with the ≡ hamburger + the label, and a single compose "+"
+  // on the right (no avatar, no bell — the extra affordances were removed).
   const homeAva = document.getElementById('tbHomeAva');
-  if (homeAva) {
-    homeAva.classList.toggle('hidden', !showAva);
-    if (showAva) { homeAva.innerHTML = acAvatarHtml(S.user?.name, S.user?.avatar, '', acIsBiz(S.user)); homeAva.onclick = () => appTab('profile'); homeAva.setAttribute('aria-label', 'Your profile'); }
-  }
-  // Bell + compose live in the top bar on Home only.
-  document.getElementById('tbHomeBell')?.classList.toggle('hidden', !showAva);
-  document.getElementById('tbHomeCompose')?.classList.toggle('hidden', !showAva);
-  if (showAva && typeof acSyncBellDot === 'function') acSyncBellDot();
-  // Reset the hamburger to its CSS default (mobile-only) unless the avatar takes its place.
+  if (homeAva) homeAva.classList.add('hidden');
+  document.getElementById('tbHomeCompose')?.classList.toggle('hidden', !(isHome || isChat));
   const ham = document.getElementById('sbToggle');
-  if (ham) ham.style.display = showAva ? 'none' : '';
+  if (ham) ham.style.display = '';
 }
 // Show the blue "new" dot on the Home bell when there are unread notifications.
 function acSyncBellDot() {
@@ -43002,8 +43009,12 @@ const NAV_MORPH = true;
 // Toggle the ball state (CSS transitions do the morph). No-op when unchanged.
 function _setNavBall(on) {
   if (!NAV_MORPH) return;
-  if (document.body.classList.contains('nav-ball') === !!on) return;
-  document.body.classList.toggle('nav-ball', !!on);
+  on = !!on;
+  // Scroll down (on home/Beam) does two things together: the bottom nav morphs
+  // into the "+" ball, and the top row (≡ / label / +) collapses so only the
+  // tabs row stays stuck at the top. Scroll up reverses both.
+  document.body.classList.toggle('nav-ball', on);
+  document.body.classList.toggle('tb-collapsed', on);
 }
 // The morph ball's compose action is context-aware: a new post on Home, a new
 // chat on Beam.
