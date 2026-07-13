@@ -78,15 +78,30 @@ export default function Home() {
             );
           })}
         </View>
-        <Pressable
-          onPress={() => router.push('/notifications')}
-          hitSlop={8}
-          style={styles.bell}
-          accessibilityLabel="Notifications"
-        >
-          <Ionicons name="notifications-outline" size={24} color={c.text} />
-          {unread > 0 && <View style={[styles.bellDot, { backgroundColor: c.accent, borderColor: c.bg }]} />}
-        </Pressable>
+        {/* Right actions: notifications bell + top-right compose "+" (replaces the
+            old floating FAB; a clean plus, X/web-style). */}
+        <View style={styles.headActions}>
+          <Pressable
+            onPress={() => router.push('/notifications')}
+            hitSlop={8}
+            style={styles.headBtn}
+            accessibilityLabel="Notifications"
+          >
+            <Ionicons name="notifications-outline" size={24} color={c.text} />
+            {unread > 0 && <View style={[styles.bellDot, { backgroundColor: c.accent, borderColor: c.bg }]} />}
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              router.push('/compose');
+            }}
+            hitSlop={8}
+            style={styles.headBtn}
+            accessibilityLabel="Create a post"
+          >
+            <Ionicons name="add" size={30} color={c.text} />
+          </Pressable>
+        </View>
       </View>
 
       {isLoading ? (
@@ -135,23 +150,6 @@ export default function Home() {
           }
         />
       )}
-
-      {/* Compose FAB — the one white action (blueprint §10): 56px white disc, dark +. */}
-      <Pressable
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-          router.push('/compose');
-        }}
-        style={({ pressed }) => [
-          styles.fab,
-          { backgroundColor: c.primary },
-          pressed && { transform: [{ scale: 0.94 }] },
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel="Create a post"
-      >
-        <Ionicons name="add" size={30} color={c.onPrimary} />
-      </Pressable>
     </Screen>
   );
 }
@@ -167,7 +165,8 @@ const styles = StyleSheet.create({
   },
   tabs: { flexDirection: 'row', gap: 28 },
   tab: { alignItems: 'center' },
-  bell: { padding: 2 },
+  headActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headBtn: { padding: 2 },
   bellDot: {
     position: 'absolute',
     top: 0,
@@ -185,19 +184,4 @@ const styles = StyleSheet.create({
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyWrap: { flexGrow: 1 },
-  fab: {
-    position: 'absolute',
-    right: 18,
-    bottom: 96,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 6,
-  },
 });
