@@ -920,6 +920,10 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS posts_user_idx ON posts(user_id, created_at DESC);`);
+  // Global feed ordering: makes the For You recent-fallback + any created_at DESC
+  // scan over top-level main-feed posts an index scan (stop at LIMIT) instead of a
+  // full table sort — a key part of the Home-load speed fix.
+  await query(`CREATE INDEX IF NOT EXISTS posts_feed_created_idx ON posts(created_at DESC) WHERE parent_id IS NULL AND to_main = true;`);
   await query(`
     CREATE TABLE IF NOT EXISTS post_likes (
       post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,

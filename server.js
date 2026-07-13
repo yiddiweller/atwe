@@ -9164,14 +9164,16 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
       POSTS_SELECT + where + orderBy,
       params
     );
-    // Refresh freshness (For You, first page): when the ranked + already-seen-
-    // suppressed query comes back sparse/empty because the viewer has recently seen
-    // everything, return a FRESH RANDOM mix of the full pool instead — so a
-    // pull-to-refresh always fills the screen AND changes every time (like a real
-    // feed), never a stale repeat and never an empty "Nothing here yet".
+    // Refresh fallback (For You, first page): when the ranked + already-seen-
+    // suppressed query comes back sparse because the viewer recently saw everything,
+    // fill the screen from the RECENT pool (bypassing the seen-filter) so it's never
+    // an empty "Nothing here yet". Ordered by created_at DESC (index-backed) — NOT
+    // `ORDER BY random()`, which forced a full-table scan + sort of every post and
+    // was the cause of multi-second Home loads on every reopen. `diversifyFeed`
+    // below still shuffles authors/topics so it doesn't read as a static list.
     if (!following && firstPage && rows.length < 10 && seenSuppressClause) {
       ({ rows } = await db.query(
-        POSTS_SELECT + where.replace(seenSuppressClause, '') + ' ORDER BY random() LIMIT 60',
+        POSTS_SELECT + where.replace(seenSuppressClause, '') + ' ORDER BY p.created_at DESC LIMIT 60',
         [req.user.id]
       ));
     }
