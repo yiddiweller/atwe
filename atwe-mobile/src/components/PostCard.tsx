@@ -14,10 +14,14 @@ import { likePost, repostPost, bookmarkPost, type Post } from '@/api/social';
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
 /**
- * X-style post card, matching the web `acPostCard` layout: avatar + name +
- * verified seal + @handle · time, full-width body & media, and the
- * reply · repost · like · views · bookmark engagement row. Like, repost and
- * bookmark are interactive (optimistic, revert on error); reply opens the detail.
+ * Post card — matches the web `acPostCard` layout exactly:
+ *   [avatar]  Name ✓ ················· time
+ *             @handle
+ *   body (full width, from the left edge — NOT indented under the name)
+ *   reply · repost · like · views · bookmark
+ * i.e. the header is a two-line id-column beside the avatar, and the body +
+ * actions sit full-width below the whole header (web `.ac-post-top` +
+ * `.ac-post-body`). Like/repost/bookmark are optimistic (revert on error).
  */
 export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDetail?: boolean }) {
   const { c } = useTheme();
@@ -87,30 +91,37 @@ export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDeta
         pressed && linkToDetail ? { backgroundColor: c.s1 } : null,
       ]}
     >
-      <Pressable onPress={goProfile} hitSlop={6}>
-        <Avatar name={post.author?.name} avatar={post.author?.avatar} biz={biz} size={44} />
-      </Pressable>
-      <View style={styles.main}>
-        {post.promoted && (
-          <Text variant="micro" tone="t3" style={{ marginBottom: 2 }}>
-            Ad
-          </Text>
-        )}
-        <View style={styles.nameline}>
-          <Text
-            variant="headline"
-            numberOfLines={1}
-            style={styles.name}
-            onPress={goProfile}
-          >
-            {post.author?.name || 'Someone'}
-          </Text>
-          {post.author?.verified && <VerifiedBadge />}
-          <Text variant="callout" tone="t3" numberOfLines={1} style={styles.meta}>
-            {post.author?.username ? ` @${post.author.username}` : ''} · {timeAgo(post.created_at)}
-          </Text>
-        </View>
+      {post.promoted && (
+        <Text variant="micro" tone="t3" style={{ marginBottom: 4 }}>
+          Ad
+        </Text>
+      )}
 
+      {/* Header: avatar + id-column (name line, then @handle underneath) */}
+      <View style={styles.top}>
+        <Pressable onPress={goProfile} hitSlop={6}>
+          <Avatar name={post.author?.name} avatar={post.author?.avatar} biz={biz} size={44} />
+        </Pressable>
+        <View style={styles.idcol}>
+          <View style={styles.headLine}>
+            <Text numberOfLines={1} style={styles.name} onPress={goProfile}>
+              {post.author?.name || 'Someone'}
+            </Text>
+            {post.author?.verified && <VerifiedBadge />}
+            <Text tone="t3" numberOfLines={1} style={styles.time}>
+              {timeAgo(post.created_at)}
+            </Text>
+          </View>
+          {!!post.author?.username && (
+            <Text tone="t3" numberOfLines={1} style={styles.handle} onPress={goProfile}>
+              @{post.author.username}
+            </Text>
+          )}
+        </View>
+      </View>
+
+      {/* Body — full width below the header (not indented under the name) */}
+      <View style={styles.body}>
         {post.locked ? (
           <View style={[styles.locked, { backgroundColor: c.s2 }]}>
             <Ionicons name="lock-closed" size={15} color={c.t3} />
@@ -120,11 +131,7 @@ export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDeta
           </View>
         ) : (
           <>
-            {!!post.body && (
-              <Text variant="body" style={{ marginTop: 2 }}>
-                {post.body}
-              </Text>
-            )}
+            {!!post.body && <Text variant="body">{post.body}</Text>}
             {img && (
               <Image
                 source={{ uri: img }}
@@ -183,16 +190,18 @@ function Stat({ icon, n, color }: { icon: IconName; n: number; color: string }) 
 
 const styles = StyleSheet.create({
   card: {
-    flexDirection: 'row',
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  main: { flex: 1, marginLeft: 10 },
-  nameline: { flexDirection: 'row', alignItems: 'center' },
-  name: { flexShrink: 1 },
-  meta: { flexShrink: 1 },
+  top: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  idcol: { flex: 1 },
+  headLine: { flexDirection: 'row', alignItems: 'center' },
+  name: { fontSize: 15, fontWeight: '700', flexShrink: 1 },
+  time: { marginLeft: 'auto', paddingLeft: 8, fontSize: 13, flexShrink: 0 },
+  handle: { fontSize: 13.5, marginTop: 1 },
+  body: { marginTop: 9 },
   media: {
     marginTop: 10,
     width: '100%',
