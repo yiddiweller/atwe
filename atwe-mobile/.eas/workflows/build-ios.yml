@@ -1,13 +1,14 @@
 # Atwe iOS — build in the cloud and ship to TestFlight, no Mac required.
-# Run it from the Expo dashboard: Workflows → Run workflow → pick this file
-# against the working branch. (No auto-trigger: `on` targets `main`, which we
-# don't push to, so it only runs when you press "Run workflow".)
+# Auto-ships: every push to the working branch builds + submits automatically,
+# so the founder just taps "Update" in TestFlight. (Also runnable manually from
+# the Expo dashboard: Workflows → Run workflow.) To avoid burning build minutes,
+# pushes are batched — one push per shippable chunk.
 name: Build and submit iOS
 
 on:
   push:
     branches:
-      - main
+      - claude/claude-md-docs-cajkf9
 
 jobs:
   build:
