@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, FlatList, RefreshControl, ActivityIndicator, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import { StoriesTray } from '@/components/StoriesTray';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useInfiniteFeed, type FeedScope, type Post } from '@/api/social';
 import { useNotifCount } from '@/api/notifications';
+import { useAppReady } from '@/lib/appReady';
 
 const TABS: { key: FeedScope; label: string }[] = [
   { key: 'foryou', label: 'For You' },
@@ -52,6 +53,13 @@ export default function Home() {
   }, [data]);
   const { data: nc } = useNotifCount();
   const unread = nc?.unread ?? 0;
+
+  // Tell the opening splash the feed is ready the moment the first page settles
+  // (success or error), so it zoom-reveals straight into the posts.
+  const { markFeedReady } = useAppReady();
+  useEffect(() => {
+    if (!isLoading) markFeedReady();
+  }, [isLoading, markFeedReady]);
 
   return (
     <Screen edges={['top']}>

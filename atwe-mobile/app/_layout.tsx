@@ -10,6 +10,7 @@ import { queryClient } from '@/lib/queryClient';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { AuthProvider, useAuth } from '@/auth/AuthProvider';
 import { AnimatedSplash } from '@/components/AnimatedSplash';
+import { AppReadyProvider, useAppReady } from '@/lib/appReady';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -31,19 +32,22 @@ function useProtectedRoute(signedIn: boolean, loading: boolean) {
 function RootNavigator() {
   const { loading, signedIn } = useAuth();
   const { c, name } = useTheme();
+  const { feedReady } = useAppReady();
   const [splashDone, setSplashDone] = useState(false);
   useProtectedRoute(signedIn, loading);
 
   // Hand off from the native splash to our animated one immediately on mount:
   // both are the same white logo on pure black, so the swap is invisible and the
-  // ChatGPT-style breathing reveal takes over while auth bootstraps underneath.
+  // animated mark takes over while auth + the feed bootstrap underneath.
   useEffect(() => {
     SplashScreen.hideAsync().catch(() => {});
   }, []);
 
-  // The animated splash covers the screen until BOTH its reveal has finished and
-  // auth has resolved — so the app is never seen half-rendered behind it.
-  const showSplash = !splashDone || loading;
+  // The mark holds on black until the app is truly ready — auth resolved AND, for
+  // a signed-in user, the Home feed's first page has settled — then it zoom-reveals
+  // straight into the posts. Signed-out users reveal to login as soon as auth resolves.
+  const appReady = !loading && (!signedIn || feedReady);
+  const showSplash = !splashDone;
 
   return (
     <>
@@ -72,7 +76,7 @@ function RootNavigator() {
           <Stack.Screen name="compose" options={{ presentation: 'modal' }} />
         </Stack>
       )}
-      {showSplash && <AnimatedSplash onDone={() => setSplashDone(true)} />}
+      {showSplash && <AnimatedSplash appReady={appReady} onDone={() => setSplashDone(true)} />}
     </>
   );
 }
@@ -84,7 +88,9 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <ThemeProvider>
             <AuthProvider>
-              <RootNavigator />
+              <AppReadyProvider>
+                <RootNavigator />
+              </AppReadyProvider>
             </AuthProvider>
           </ThemeProvider>
         </QueryClientProvider>
