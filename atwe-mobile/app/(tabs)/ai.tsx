@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { GlassComposer } from '@/components/GlassComposer';
 import { useTheme } from '@/theme/ThemeProvider';
 import { sendChat, type ChatMessage } from '@/api/ai';
 
@@ -123,29 +124,14 @@ export default function AI() {
           </Text>
         )}
 
-        {/* Composer */}
-        <View style={[styles.composer, { borderTopColor: c.border, paddingBottom: spacing.md }]}>
-          <TextInput
-            style={[styles.input, { backgroundColor: c.s2, color: c.text }]}
-            placeholder="Message Atwe AI"
-            placeholderTextColor={c.t3}
-            value={text}
-            onChangeText={setText}
-            multiline
-            accessibilityLabel="Message Atwe AI"
-          />
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-              ask();
-            }}
-            disabled={!text.trim() || busy}
-            style={[styles.sendBtn, { backgroundColor: text.trim() ? c.accent : c.s2 }]}
-            accessibilityLabel="Send"
-          >
-            <Ionicons name="arrow-up" size={20} color={text.trim() ? '#fff' : c.t3} />
-          </Pressable>
-        </View>
+        {/* Composer — floating Liquid Glass pill (ChatGPT-style, Atwe design) */}
+        <GlassComposer
+          value={text}
+          onChangeText={setText}
+          onSend={() => ask()}
+          placeholder="Message Atwe AI"
+          sending={busy}
+        />
       </KeyboardAvoidingView>
     </Screen>
   );

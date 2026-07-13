@@ -17,6 +17,7 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Avatar } from '@/components/Avatar';
+import { GlassComposer } from '@/components/GlassComposer';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useThread, sendDm, type DmMessage, type DmThreadData } from '@/api/beam';
 
@@ -124,37 +125,15 @@ export default function ChatThread() {
             }
           />
 
-          {/* Composer */}
-          <View style={[styles.composer, { borderTopColor: c.border, paddingBottom: spacing.md }]}>
-            <TextInput
-              style={[styles.input, { backgroundColor: c.s2, color: c.text }]}
-              placeholder={canMessage ? 'Message' : "You can't message this account"}
-              placeholderTextColor={c.t3}
-              value={text}
-              onChangeText={setText}
-              editable={canMessage}
-              multiline
-              accessibilityLabel="Message text"
-            />
-            <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                send();
-              }}
-              disabled={!text.trim() || sending || !canMessage}
-              style={[
-                styles.sendBtn,
-                { backgroundColor: text.trim() && canMessage ? c.accent : c.s2 },
-              ]}
-              accessibilityLabel="Send"
-            >
-              <Ionicons
-                name="arrow-up"
-                size={20}
-                color={text.trim() && canMessage ? '#fff' : c.t3}
-              />
-            </Pressable>
-          </View>
+          {/* Composer — floating Liquid Glass pill (ChatGPT-style, Atwe design) */}
+          <GlassComposer
+            value={text}
+            onChangeText={setText}
+            onSend={send}
+            placeholder={canMessage ? 'Message' : "You can't message this account"}
+            sending={sending}
+            editable={canMessage}
+          />
         </KeyboardAvoidingView>
       )}
     </Screen>
