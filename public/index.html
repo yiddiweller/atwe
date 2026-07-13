@@ -25822,14 +25822,22 @@ async function acSyncChatPrefs() {
     const sPins = new Set(Array.isArray(pins) ? pins : []);
     const sArch = new Set(Array.isArray(archived) ? archived : []);
     const sMute = new Set(Array.isArray(muted) ? muted : []);
-    const mPins = new Set([...sPins, ...acPins()]);
-    const mArch = new Set([...sArch, ...acArchived()]);
-    const mMute = new Set([...sMute, ...acMutedDms()]);
-    // Merge mute-expiry maps: keep the *later* expiry per key (local vs server).
     const sUntil = (muteUntil && typeof muteUntil === 'object' && !Array.isArray(muteUntil)) ? muteUntil : {};
-    const mUntil = Object.assign({}, sUntil);
-    const localUntil = acMuteUntil();
-    for (const k of Object.keys(localUntil)) if (!mUntil[k] || localUntil[k] > mUntil[k]) mUntil[k] = localUntil[k];
+    // The SERVER is the source of truth on boot — every mutation writes through, so
+    // hydration REPLACES local state. (The old server∪local UNION made removals
+    // impossible: anything ever pinned/archived/muted got resurrected on the next
+    // boot — un-archiving could literally never stick across a refresh.)
+    // One exception: a legacy device whose prefs only ever lived locally (server
+    // completely empty, local has data) seeds the server ONCE instead of being wiped.
+    const serverEmpty = !sPins.size && !sArch.size && !sMute.size && !Object.keys(sUntil).length;
+    const localAny = acPins().size || acArchived().size || acMutedDms().size || Object.keys(acMuteUntil()).length;
+    let mPins, mArch, mMute, mUntil;
+    if (serverEmpty && localAny) {
+      mPins = acPins(); mArch = acArchived(); mMute = acMutedDms(); mUntil = acMuteUntil();
+      setTimeout(() => acSaveChatPrefs(), 50); // first sync: push local up
+    } else {
+      mPins = sPins; mArch = sArch; mMute = sMute; mUntil = sUntil;
+    }
     AC._pins = mPins; AC._archived = mArch; AC._mutedDms = mMute; AC._muteUntil = mUntil; AC._unreadOnly = !!unreadOnly;
     try {
       localStorage.setItem('ac_pins', JSON.stringify([...mPins]));
@@ -25847,7 +25855,14 @@ async function acSyncChatPrefs() {
 }
 function acSaveChatPrefs() {
   if (!isAccount()) return Promise.resolve();
-  return API.req('PUT', '/api/atchat/prefs', { pins: [...acPins()], archived: [...acArchived()], muted: [...acMutedDms()], muteUntil: acMuteUntil(), unreadOnly: !!acUnreadOnly() }).catch(() => {});
+  const body = { pins: [...acPins()], archived: [...acArchived()], muted: [...acMutedDms()], muteUntil: acMuteUntil(), unreadOnly: !!acUnreadOnly() };
+  // Never swallow a failed save silently: the server is the boot-time source of
+  // truth, so a lost save means the change resurrects on the next refresh (the
+  // "I unarchived but it came back" bug). Retry once, then tell the user.
+  return API.req('PUT', '/api/atchat/prefs', body).catch(() =>
+    new Promise(r => setTimeout(r, 1200)).then(() => API.req('PUT', '/api/atchat/prefs', body))
+      .catch(() => { showNotif('Couldn’t sync your chat settings — check your connection.'); })
+  );
 }
 const AC_PIN_IC = '<span class="ac-pin-ic" title="Pinned"><svg viewBox="0 0 24 24"><line x1="12" y1="17" x2="12" y2="22"/><path d="M7 4h10l-1.4 6.2 2.4 2.3H6l2.4-2.3z"/></svg></span>';
 function acUnreadOnly() {

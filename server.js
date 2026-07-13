@@ -4332,7 +4332,11 @@ app.get('/api/atchat/unread', auth.requireAuth, async (req, res) => {
 // Chat-list prefs (pinned conversations + the unread-only filter), synced across
 // a user's devices. Pins are conversation keys like "d<userId>" / "g<groupId>".
 const cleanKeys = (a) => Array.isArray(a)
-  ? [...new Set(a.filter((k) => typeof k === 'string' && /^[dg]\d{1,18}$/.test(k)))].slice(0, 500)
+  // Thread-scoped DM keys ("d5:t12" — an extra conversation with the same person)
+  // are valid too; the old pattern silently DROPPED them on save, so pinning/
+  // archiving/muting an extra thread never survived a refresh (same resurrection
+  // class as the union-merge bug).
+  ? [...new Set(a.filter((k) => typeof k === 'string' && /^[dg]\d{1,18}(:t\d{1,18})?$/.test(k)))].slice(0, 500)
   : [];
 // Mute-expiry map: { "d2": <epoch ms> }, keyed like a muted DM, value a positive
 // future timestamp. Drops junk keys/values and caps the size.
