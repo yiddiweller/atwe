@@ -148,6 +148,7 @@ function PersonRow({ user }: { user: SearchUser }) {
 
 function Explore({ spacing }: { spacing: ReturnType<typeof useTheme>['spacing'] }) {
   const { c } = useTheme();
+  const router = useRouter();
   const trending = useTrending();
   const suggestions = useSuggestions();
   const loading = trending.isLoading || suggestions.isLoading;
@@ -179,8 +180,23 @@ function Explore({ spacing }: { spacing: ReturnType<typeof useTheme>['spacing'] 
         />
       }
     >
+      {/* Discover tiles */}
+      <View style={{ paddingTop: spacing.sm }}>
+        <Text variant="headline" style={styles.sectionTitle}>
+          Discover
+        </Text>
+        <View style={styles.tileRow}>
+          <DiscoverTile
+            icon="storefront-outline"
+            label="Marketplace"
+            sub="Shop goods & services"
+            onPress={() => router.push('/marketplace')}
+          />
+        </View>
+      </View>
+
       {trends.length > 0 && (
-        <View style={{ paddingTop: spacing.sm }}>
+        <View style={{ paddingTop: spacing.xl }}>
           <Text variant="headline" style={styles.sectionTitle}>
             Trending
           </Text>
@@ -289,8 +305,41 @@ function SuggestRow({ user }: { user: SuggestUser }) {
   );
 }
 
+function DiscoverTile({
+  icon,
+  label,
+  sub,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  sub: string;
+  onPress: () => void;
+}) {
+  const { c, radius } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.tile,
+        { backgroundColor: c.s1, borderRadius: radius.lg },
+        pressed && { opacity: 0.85 },
+      ]}
+    >
+      <View style={[styles.tileIcon, { backgroundColor: c.accentDim }]}>
+        <Ionicons name={icon} size={22} color={c.accent} />
+      </View>
+      <Text variant="headline" style={{ marginTop: 10 }}>{label}</Text>
+      <Text variant="caption" tone="t3" style={{ marginTop: 2 }}>{sub}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   searchWrap: { paddingHorizontal: 12, paddingBottom: 10 },
+  tileRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 12 },
+  tile: { flex: 1, padding: 14 },
+  tileIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   search: {
     flexDirection: 'row',
     alignItems: 'center',

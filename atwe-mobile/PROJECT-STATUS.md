@@ -89,7 +89,33 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
   — the one deliberate gap. Hooks in `src/api/stories.ts`; tray is the Home
   FlatList `ListHeaderComponent`; route registered. (Ships in the next build.)
 
-## Recently added (native, this run)
+## Recently added (native, latest run)
+- **Real Liquid Glass tab bar** via Expo Router native tabs
+  (`expo-router/unstable-native-tabs` → real iOS `UITabBar`) — the authentic
+  Apple material, not a BlurView fake. Nav icons ship as @1x/@2x/@3x density
+  variants (26/52/78px white templates) so they render crisp at ~26pt.
+- **Pure `#000000`** background across theme + splash + adaptive icon.
+- **Animated opening splash** (`src/components/AnimatedSplash.tsx`): a small
+  centered Atwe mark that fades in, gently "breathes", then dissolves to the app —
+  handed off seamlessly from the native splash. Wired in `app/_layout.tsx`.
+- **Me hub (Profile tab):** rebuilt from the foundation stub into the web
+  `acGoProfileHub` — an account hero card (→ own profile) + grouped rounded rows
+  with blue-tint icon discs (Account · Money [Wallet w/ live balance · Send money]
+  · App [Notifications · Settings]).
+- **Settings screen** (`app/settings.tsx`): iOS-Settings-style — Appearance theme
+  picker (Black/Light/System, live), account facts, Sign out.
+- **Marketplace (Engine):** `app/marketplace.tsx` (`GET /api/marketplace`) — search
+  + kind tabs (All/Goods/Digital/Services/Rentals) + post-style `ListingCard`s;
+  `app/listing/[id].tsx` detail (gallery, price, rating, seller, save-to-wishlist,
+  Message-seller CTA, Visit-store, more-from-seller). `src/api/marketplace.ts`
+  (`useMarketplace`/`useListing`/`saveListing` + `listingPrice`). A **Discover →
+  Marketplace** tile now leads the Engine Explore surface. Full in-app checkout
+  (address + wallet/escrow) is a later slice.
+- **Auto-ship pipeline:** pushes to the working branch now trigger an EAS Workflow
+  build + TestFlight submit automatically — the founder just taps **Update** (no
+  Mac, no manual `eas build`).
+
+## Recently added (native, prior run)
 - **Post actions complete:** repost + bookmark are now interactive on every card
   (optimistic, revert-on-error) alongside like (`repostPost`/`bookmarkPost`).
 - **Infinite Home feed:** `useInfiniteFeed` (seen-based paging) + `onEndReached`
