@@ -1,10 +1,12 @@
-import { View, ScrollView, StyleSheet } from 'react-native';
+import { View, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { Text } from '@/components/Text';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useAuth } from '@/auth/AuthProvider';
+import { money } from '@/api/wallet';
 
 /**
  * Profile — the "Me" world. In this foundation it proves the full loop:
@@ -14,6 +16,7 @@ import { useAuth } from '@/auth/AuthProvider';
 export default function Profile() {
   const { c, radius, spacing, pref, setPref, name } = useTheme();
   const { user, logout } = useAuth();
+  const router = useRouter();
 
   if (!user) return null;
 
@@ -61,10 +64,25 @@ export default function Profile() {
         {/* Quick facts */}
         <View style={[styles.card, { backgroundColor: c.s1, borderRadius: radius.lg }]}>
           <Row label="Account" value={isBiz ? 'Business' : 'Personal'} c={c} />
-          <Row label="Plan" value={user.plan === 'pro' ? 'Atwe Pro' : 'Free'} c={c} />
-          {typeof user.balanceCents === 'number' && (
-            <Row label="Wallet" value={`$${(user.balanceCents / 100).toFixed(2)}`} c={c} last />
-          )}
+          <Row label="Plan" value={user.plan === 'pro' ? 'Atwe Pro' : 'Free'} c={c} last />
+        </View>
+
+        {/* Quick links */}
+        <View style={[styles.card, { backgroundColor: c.s1, borderRadius: radius.lg, marginTop: 12 }]}>
+          <NavRow
+            icon="wallet-outline"
+            label="Wallet"
+            value={typeof user.balanceCents === 'number' ? money(user.balanceCents) : undefined}
+            onPress={() => router.push('/wallet')}
+            c={c}
+          />
+          <NavRow
+            icon="notifications-outline"
+            label="Notifications"
+            onPress={() => router.push('/notifications')}
+            c={c}
+            last
+          />
         </View>
 
         {/* Appearance — proves live theming */}
@@ -108,6 +126,46 @@ export default function Profile() {
   );
 }
 
+function NavRow({
+  icon,
+  label,
+  value,
+  onPress,
+  c,
+  last,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  value?: string;
+  onPress: () => void;
+  c: ReturnType<typeof useTheme>['c'];
+  last?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.navRow,
+        { borderBottomColor: c.bg, borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth },
+        pressed && { opacity: 0.6 },
+      ]}
+    >
+      <View style={[styles.navIcon, { backgroundColor: c.accentDim }]}>
+        <Ionicons name={icon} size={18} color={c.accent} />
+      </View>
+      <Text variant="body" style={{ flex: 1 }}>
+        {label}
+      </Text>
+      {!!value && (
+        <Text variant="body" tone="t3" style={{ marginRight: 6 }}>
+          {value}
+        </Text>
+      )}
+      <Ionicons name="chevron-forward" size={18} color={c.t3} />
+    </Pressable>
+  );
+}
+
 function Row({
   label,
   value,
@@ -143,6 +201,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: 14,
+  },
+  navRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
+  navIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
   segment: { flexDirection: 'row', padding: 4 },
   segItem: { flex: 1, textAlign: 'center', paddingVertical: 9, overflow: 'hidden' },

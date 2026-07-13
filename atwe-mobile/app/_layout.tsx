@@ -55,6 +55,8 @@ function RootNavigator() {
         <Stack.Screen name="user/[username]" />
         <Stack.Screen name="chat/[peer]" />
         <Stack.Screen name="notifications" />
+        <Stack.Screen name="wallet" />
+        <Stack.Screen name="wallet-send" options={{ presentation: 'modal' }} />
         <Stack.Screen name="story/[userId]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
         <Stack.Screen name="compose" options={{ presentation: 'modal' }} />
       </Stack>

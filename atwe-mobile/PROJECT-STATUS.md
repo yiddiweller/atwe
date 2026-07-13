@@ -40,6 +40,14 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
   `useProfile`/`followUser` + `Profile` type in `src/api/social.ts`; `monthYear`
   in `src/lib/format.ts`; route registered in `app/_layout.tsx`; `PostCard` avatar
   + name are now `goProfile` pressables. (Ships in the next TestFlight build.)
+- **Phase 6 (started) — Wallet / money + Me hub:** `app/wallet.tsx`
+  (`GET /api/wallet`) — an accent balance card + peer-to-peer transaction history
+  (signed amounts, peer avatars, green for incoming), with **Send money**
+  (`app/wallet-send.tsx` → `POST /api/wallet/send`, clientId-idempotent, server-side
+  $1–2k / velocity / block enforcement, green-tick success). `src/api/wallet.ts`
+  (`useWallet`/`sendMoney` + `money`/`txLabel`). The **Profile** tab now has a
+  quick-links group (Wallet w/ live balance + Notifications) → the start of the
+  Me hub. Add-money / cash-out / pots / requests / the full Me-hub grid come next.
 - **Phase 2 — Notifications:** `app/notifications.tsx` (`GET /api/notifications`) —
   X-style rows (actor avatar + verified seal + human sentence + time), unread rows
   accent-tinted, marks-all-read on open, taps deep-link to the post / profile /
