@@ -123,8 +123,8 @@ export default function AI() {
           </Text>
         )}
 
-        {/* Composer — extra bottom pad clears the floating glass tab bar */}
-        <View style={[styles.composer, { borderTopColor: c.border, paddingBottom: 74 }]}>
+        {/* Composer */}
+        <View style={[styles.composer, { borderTopColor: c.border, paddingBottom: spacing.md }]}>
           <TextInput
             style={[styles.input, { backgroundColor: c.s2, color: c.text }]}
             placeholder="Message Atwe AI"
