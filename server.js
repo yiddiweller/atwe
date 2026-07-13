@@ -4519,15 +4519,26 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
       [req.user.id, other, thread]
     );
     // Only mark the messages we actually returned as read — avoids clearing the
-    // unread badge for a message that arrived after this SELECT.
-    const lastId = rows.length ? rows[rows.length - 1].id : 0;
+    // unread badge for a message that arrived after this SELECT. Mark EXACTLY the
+    // returned ids: the old `id <= last id` cap assumed ids follow created_at
+    // order, and any divergence (rows are ORDERED BY created_at) left messages
+    // permanently unread — a stuck badge no amount of reopening could clear.
+    const unreadIds = rows.filter((m) => m.sender_id === other && !m.read_at).map((m) => m.id);
     // Reciprocal read receipts: the "seen" signal flows only when both opted in.
     const showReceipts = await bothReceiptsOn(req.user.id, other);
-    db.query(
+    if (unreadIds.length) db.query(
       `UPDATE at_messages SET read_at = now()
-       WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL AND id <= $3 AND thread_id IS NOT DISTINCT FROM $4`,
-      [req.user.id, other, lastId, thread]
-    ).then((r) => { if (r.rowCount && showReceipts) rtPush(other, 'read', { peerId: req.user.id }); }).catch(() => {});
+       WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL AND id = ANY($3)`,
+      [req.user.id, other, unreadIds]
+    ).then((r) => {
+      if (!r.rowCount) return;
+      if (showReceipts) rtPush(other, 'read', { peerId: req.user.id });
+      rtPush(req.user.id, 'read-self', { peerId: other });   // other devices clear this thread's unread
+      // Opening the thread also clears this sender's message notifications (same
+      // as the explicit read route) — the dot never survives an actually-read chat.
+      db.query(`UPDATE notifications SET read = true WHERE user_id = $1 AND actor_id = $2 AND type = 'message' AND read = false`, [req.user.id, other])
+        .then((n) => { if (n.rowCount) rtPush(req.user.id, 'notif', {}); }).catch(() => {});
+    }).catch(() => {});
     // Chat-permission state for the composer: can I message them, did I send a
     // request, and do they have a pending request to me (→ Allow/Decline bar).
     const canMessage = await dmAllowed(req.user.id, other);

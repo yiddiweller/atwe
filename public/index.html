@@ -1261,6 +1261,13 @@ body.light .tb-iconbtn.on{color:#fff;}
 .ac-arch-head{display:flex;align-items:center;gap:8px;padding:11px 12px;cursor:pointer;font-size:16px;font-weight:700;
   color:var(--t1);letter-spacing:-.01em;border-bottom:1px solid var(--b1);-webkit-tap-highlight-color:transparent;}
 .ac-arch-head svg{width:20px;height:20px;stroke:currentColor;stroke-width:2;fill:none;}
+/* Archived-view bulk actions (right side of the header) */
+.ac-arch-actions{margin-inline-start:auto;display:flex;gap:8px;}
+.ac-arch-act{border:none;background:var(--s2);color:var(--t1);border-radius:999px;padding:7px 13px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;}
+.ac-arch-act:active{transform:scale(.96);}
+.ac-arch-act.danger{color:var(--rose);}
+/* Count on the ⋯ menu's Archived row */
+.aimp-count{margin-inline-start:auto;color:var(--t3);font-size:13px;font-weight:600;}
 /* Message-content search results ("Messages" section under the matching chats).
    During a message search the whole screen scrolls as one list so the results sit
    directly under the matching chats (instead of the list growing to fill height
@@ -13277,6 +13284,8 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   <button class="aimp-item" role="menuitem" onclick="acChatMenuPick('search')"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><span>Search chats</span></button>
   <div class="aimp-sep"></div>
   <button class="aimp-item" role="menuitem" onclick="acChatMenuPick('starred')"><svg viewBox="0 0 24 24"><polygon points="12 2.5 14.7 8.6 21.5 9.3 16.5 13.9 17.9 20.6 12 17.1 6.1 20.6 7.5 13.9 2.5 9.3 9.3 8.6"/></svg><span>Starred messages</span></button>
+  <div class="aimp-sep"></div>
+  <button class="aimp-item" role="menuitem" id="chatMenuArchived" onclick="acChatMenuPick('archived')"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg><span>Archived</span><span class="aimp-count" id="chatMenuArchivedN"></span></button>
   <div class="aimp-sep"></div>
   <button class="aimp-item" role="menuitem" id="chatMenuUnread" onclick="acChatMenuPick('unread')"><svg viewBox="0 0 24 24"><polygon points="3 4 21 4 14 12.5 14 19 10 21 10 12.5"/></svg><span>Unread only</span><span class="aimp-check" id="chatMenuUnreadChk" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span></button>
   <div class="aimp-sep"></div>
@@ -25707,6 +25716,37 @@ function acToggleArchive(kind, id, threadId) {
 }
 function acEnterArchived() { AC._showArchived = true; acHideChatSearch(); acRenderChats(); }
 function acExitArchived() { AC._showArchived = false; acRenderChats(); }
+// Bulk actions on the archived view (typical messaging-app affordances).
+async function acUnarchiveAll() {
+  const a = acArchived();
+  if (!a.size) { acExitArchived(); return; }
+  if (!(await appConfirm({ title: 'Unarchive all?', message: 'Every archived chat returns to your main list.', confirmText: 'Unarchive all' }))) return;
+  a.clear();
+  try { localStorage.setItem('ac_archived', JSON.stringify([])); } catch {}
+  AC._showArchived = false;
+  acRenderChats();
+  showNotif('All chats unarchived.');
+  acSaveChatPrefs().then(() => acRefreshUnread());
+}
+async function acDeleteAllArchived() {
+  const keys = [...acArchived()];
+  if (!keys.length) { acExitArchived(); return; }
+  if (!(await appConfirm({ title: 'Delete all archived chats?', message: 'Chats are deleted for you (groups are left). This can’t be undone.', confirmText: 'Delete all', danger: true }))) return;
+  for (const k of keys) {
+    const id = parseInt(k.slice(1), 10);
+    if (!Number.isInteger(id)) continue;
+    try {
+      if (k[0] === 'd') await API.req('DELETE', '/api/atchat/with/' + id);
+      else if (k[0] === 'g') await API.req('DELETE', '/api/atchat/groups/' + id + '/members/me');
+    } catch { /* keep going — best effort per chat */ }
+  }
+  const a = acArchived(); a.clear();
+  try { localStorage.setItem('ac_archived', JSON.stringify([])); } catch {}
+  AC._showArchived = false;
+  showNotif('Archived chats deleted.');
+  acSaveChatPrefs().then(() => acRefreshUnread());
+  acLoadChats();
+}
 // Muting a DM (per account, synced): it stays in the list but stops adding to the
 // unread badge. Groups mute via their own server endpoint; this is the DM path.
 function acMutedDms() {
@@ -26652,6 +26692,8 @@ function acOpenChatMenu(e) {
   if (!pop.classList.contains('hidden')) { acCloseChatMenu(); return; } // toggle
   document.getElementById('chatMenuUnread')?.classList.toggle('on', acUnreadOnly()); // reflect filter state
   document.getElementById('chatMenuLastSeen')?.classList.toggle('on', !acPresenceHidden()); // ✓ = last seen shown
+  const archN = document.getElementById('chatMenuArchivedN'); // live archived count
+  if (archN) { const n = acArchived().size; archN.textContent = n ? String(n) : ''; }
   const isBiz = acIsBiz(S.user);
   document.getElementById('chatMenuAutoMsg')?.classList.toggle('hidden', !isBiz);
   document.getElementById('chatMenuAutoMsgSep')?.classList.toggle('hidden', !isBiz);
@@ -26667,6 +26709,7 @@ function acChatMenuPick(which) {
   acCloseChatMenu();
   if (which === 'search') acToggleChatSearch();
   else if (which === 'starred') acOpenStarred();
+  else if (which === 'archived') acEnterArchived();
   else if (which === 'lastseen') acToggleLastSeen();
   else if (which === 'automsg') acOpenAutoMessages();
   else acToggleUnreadFilter();
@@ -35922,11 +35965,12 @@ function acRenderChats() {
   const calls = (withCalls && !unreadOnly && !q) ? (AC.calls || []).map(c => ({ kind: 'call', ts: ts(c.created_at), c, pin: false })) : [];
   // Pinned conversations float to the top; within each group, newest activity first.
   const all = dms.concat(grps, calls).sort((a, b) => (b.pin ? 1 : 0) - (a.pin ? 1 : 0) || b.ts - a.ts);
-  // Header row when browsing the archived view; "Archived (N)" entry row otherwise.
-  const archHeader = archivedView ? { key: '__arch_head', html: '<div class="ac-arch-head" onclick="acExitArchived()"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Archived</div>' } : null;
+  // Header row when browsing the archived view (with Unarchive-all / Delete-all
+  // actions, like a typical messaging app). The old "Archived (N)" entry row above
+  // the chats is GONE — Archived now lives in the ⋯ tools menu (top right).
+  const archHeader = archivedView ? { key: '__arch_head', html: `<div class="ac-arch-head" onclick="acExitArchived()"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Archived<span class="ac-arch-actions"><button class="ac-arch-act" onclick="event.stopPropagation();acUnarchiveAll()">Unarchive all</button><button class="ac-arch-act danger" onclick="event.stopPropagation();acDeleteAllArchived()">Delete all</button></span></div>` } : null;
   const lockHeader = lockedView ? { key: '__lock_head', html: '<div class="ac-arch-head" onclick="acExitLocked()"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Locked chats</div>' } : null;
-  const showArchEntry = !archivedView && !lockedView && archivedCount > 0 && !q && !unreadOnly && !selMode;
-  const archEntry = showArchEntry ? { key: '__arch_row', html: `<div class="ac-arch-row" onclick="acEnterArchived()"><span class="ac-arch-ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg></span><span class="ac-arch-lbl">Archived</span><span class="ac-arch-n">${archivedCount}</span></div>` } : null;
+  const archEntry = null;
   const showLockEntry = !archivedView && !lockedView && lockedCount > 0 && !q && !unreadOnly && !selMode;
   const lockEntry = showLockEntry ? { key: '__lock_row', html: `<div class="ac-arch-row" onclick="acEnterLocked()"><span class="ac-arch-ic"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span><span class="ac-arch-lbl">Locked chats</span><span class="ac-arch-n">${lockedCount}</span></div>` } : null;
   if (!all.length) {
@@ -36312,7 +36356,14 @@ function acSeedThreadHeader(kind, id) {
 // ── Multiple conversations with the same person (Gmail-thread style) ──
 // Tapping a chat-list row: one conversation → open it; several → show the picker.
 // Email-style rows each open their own thread directly (threadId null = main chat).
-function acDmRowTap(id, threadId) { acOpenChat(id, threadId == null ? null : threadId); }
+function acDmRowTap(id, threadId) {
+  // Optimistic: zero this row's unread the instant it's tapped (WhatsApp behaviour —
+  // the badge never outlives entering the chat); the server confirms on refresh.
+  const tid = threadId == null ? null : threadId;
+  const c = (AC.conversations || []).find(x => x.id === id && ((x.thread_id == null ? null : x.thread_id) === tid));
+  if (c && c.unread) { c.unread = 0; try { acRenderChats(); } catch {} }
+  acOpenChat(id, tid);
+}
 // Picking a person in New Chat: if you already have history, ask continue-vs-new.
 async function acComposePickPerson(id) {
   if (id === S.user?.id) { acOpenChat(id, null); return; } // self-chat
@@ -36395,6 +36446,11 @@ async function acOpenChat(id, threadId) {
     if (AC.canMessage && AC.messages.length === 0) setTimeout(() => { if (AC._loadSeq === _seq) document.getElementById('acInput').focus(); }, 200);
   } catch (e) {
     if (AC._loadSeq === _seq && !cached) acErr(_thread, '');
+    // Belt-and-braces: even if the thread GET failed, still mark the chat read —
+    // the unread badge must NEVER stay stuck because one load hiccuped (the read
+    // used to be sequenced strictly after a successful GET, so a failing thread
+    // load left its badge lit forever).
+    API.req('POST', '/api/atchat/with/' + id + '/read' + tq).then(() => acRefreshUnread()).catch(() => {});
   }
 }
 // Render a DM thread (header + messages + perms) from a /with/:id payload — used for
@@ -36810,9 +36866,16 @@ function rtOnDmDeleted(d) {
     acRenderThread();
   }
 }
-// The peer read our messages → mark our sent bubbles "Seen" if the thread is open.
+// The peer read our messages → mark our sent bubbles "Seen" (open thread) AND flip
+// the chat-list row's ticks to ✓✓ live — no refresh needed to see a message was read.
 function rtOnRead(d) {
-  if (!d || !rtThreadOpen('dm', d.peerId)) return;
+  if (!d) return;
+  const rows = (AC.conversations || []).filter(c => c.id === d.peerId && c.last_mine && !c.last_read);
+  if (rows.length) {
+    rows.forEach(c => { c.last_read = true; });
+    if (!document.getElementById('acListScreen')?.classList.contains('hidden')) { try { acRenderChats(); } catch {} }
+  }
+  if (!rtThreadOpen('dm', d.peerId)) return;
   let changed = false;
   const now = new Date().toISOString();
   AC.messages.forEach(m => { if (m.mine && !m.read_at && !m.pending) { m.read_at = now; m._seenFade = true; changed = true; } });
@@ -39887,6 +39950,10 @@ async function acLoadLiveStrip() {
 }
 
 async function acOpenGroup(id) {
+  // Optimistic: zero the group row's unread the instant it's opened (the badge
+  // never outlives entering the chat); the server confirms on refresh.
+  const _gRow = (AC.groupsList || []).find(g => g.id === id);
+  if (_gRow && _gRow.unread) { _gRow.unread = 0; try { acRenderChats(); } catch {} }
   acThreadSearchClose(); // never carry an open in-chat search across conversations
   AC.mode = 'group'; AC.peer = null; AC.group = null; AC.groupId = id; AC.messages = []; AC._unreadDivId = null; acClearImage(); acStopMic();
   acClearTyping(); // drop any lingering "X is typing" from the previous thread
@@ -39924,6 +39991,8 @@ async function acOpenGroup(id) {
     if (AC.messages.length === 0) setTimeout(() => { if (AC._loadSeq === _seq) document.getElementById('acInput').focus(); }, 200);
   } catch (e) {
     if (AC._loadSeq === _seq && !cached) acErr(_thread, '');
+    // Belt-and-braces (same as DMs): a failed group load must still clear its unread.
+    API.req('POST', '/api/atchat/groups/' + id + '/read').then(() => acRefreshUnread()).catch(() => {});
   }
 }
 // Render a group thread (header + messages + banners) from a /groups/:id payload —
