@@ -9,21 +9,24 @@ import { Avatar } from './Avatar';
 import { VerifiedBadge } from './VerifiedBadge';
 import { useTheme } from '@/theme/ThemeProvider';
 import { compact, timeAgo } from '@/lib/format';
-import { likePost, type Post } from '@/api/social';
+import { likePost, repostPost, bookmarkPost, type Post } from '@/api/social';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
 /**
  * X-style post card, matching the web `acPostCard` layout: avatar + name +
  * verified seal + @handle · time, full-width body & media, and the
- * reply · repost · like · views · bookmark engagement row. Like is interactive
- * (optimistic, reverts on error); the rest are display for now.
+ * reply · repost · like · views · bookmark engagement row. Like, repost and
+ * bookmark are interactive (optimistic, revert on error); reply opens the detail.
  */
 export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDetail?: boolean }) {
   const { c } = useTheme();
   const router = useRouter();
   const [liked, setLiked] = useState(!!post.liked);
   const [likes, setLikes] = useState(post.likes || 0);
+  const [reposted, setReposted] = useState(!!post.reposted);
+  const [reposts, setReposts] = useState(post.reposts || 0);
+  const [bookmarked, setBookmarked] = useState(!!post.bookmarked);
   const biz = post.author?.accountType === 'business';
   const img = post.images?.[0] || post.image || null;
 
@@ -46,6 +49,30 @@ export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDeta
     } catch {
       setLiked(!next);
       setLikes((n) => Math.max(0, n + (next ? -1 : 1)));
+    }
+  };
+
+  const toggleRepost = async () => {
+    const next = !reposted;
+    setReposted(next);
+    setReposts((n) => Math.max(0, n + (next ? 1 : -1)));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    try {
+      await repostPost(post.id, next);
+    } catch {
+      setReposted(!next);
+      setReposts((n) => Math.max(0, n + (next ? -1 : 1)));
+    }
+  };
+
+  const toggleBookmark = async () => {
+    const next = !bookmarked;
+    setBookmarked(next);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    try {
+      await bookmarkPost(post.id, next);
+    } catch {
+      setBookmarked(!next);
     }
   };
 
@@ -111,7 +138,14 @@ export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDeta
 
         <View style={styles.actions}>
           <Stat icon="chatbubble-outline" n={post.replies} color={c.t3} />
-          <Stat icon="repeat" n={post.reposts} color={post.reposted ? c.repost : c.t3} />
+          <Pressable onPress={toggleRepost} style={styles.stat} hitSlop={8}>
+            <Ionicons name="repeat" size={18} color={reposted ? c.repost : c.t3} />
+            {reposts > 0 && (
+              <Text variant="caption" style={{ marginLeft: 5, color: reposted ? c.repost : c.t3 }}>
+                {compact(reposts)}
+              </Text>
+            )}
+          </Pressable>
           <Pressable onPress={toggleLike} style={styles.stat} hitSlop={8}>
             <Ionicons name={liked ? 'heart' : 'heart-outline'} size={17} color={liked ? c.like : c.t3} />
             {likes > 0 && (
@@ -121,11 +155,13 @@ export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDeta
             )}
           </Pressable>
           <Stat icon="eye-outline" n={post.views} color={c.t3} />
-          <Ionicons
-            name={post.bookmarked ? 'bookmark' : 'bookmark-outline'}
-            size={16}
-            color={post.bookmarked ? c.accent : c.t3}
-          />
+          <Pressable onPress={toggleBookmark} hitSlop={8}>
+            <Ionicons
+              name={bookmarked ? 'bookmark' : 'bookmark-outline'}
+              size={16}
+              color={bookmarked ? c.accent : c.t3}
+            />
+          </Pressable>
         </View>
       </View>
     </Pressable>

@@ -59,6 +59,18 @@ export async function likePost(id: number, on: boolean): Promise<void> {
   else await api.del(`/api/social/posts/${id}/like`);
 }
 
+/** Repost / undo (mirrors POST/DELETE /api/social/posts/:id/repost). */
+export async function repostPost(id: number, on: boolean): Promise<void> {
+  if (on) await api.post(`/api/social/posts/${id}/repost`);
+  else await api.del(`/api/social/posts/${id}/repost`);
+}
+
+/** Bookmark / un-bookmark (mirrors POST/DELETE /api/social/posts/:id/bookmark). */
+export async function bookmarkPost(id: number, on: boolean): Promise<void> {
+  if (on) await api.post(`/api/social/posts/${id}/bookmark`);
+  else await api.del(`/api/social/posts/${id}/bookmark`);
+}
+
 /** A post plus its replies — `GET /api/social/posts/:id`. */
 export interface PostWithMeta extends Post {
   canReply?: boolean;
