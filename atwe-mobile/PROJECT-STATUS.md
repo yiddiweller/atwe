@@ -40,6 +40,12 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
   `useProfile`/`followUser` + `Profile` type in `src/api/social.ts`; `monthYear`
   in `src/lib/format.ts`; route registered in `app/_layout.tsx`; `PostCard` avatar
   + name are now `goProfile` pressables. (Ships in the next TestFlight build.)
+- **Phase 5 (started) — Atwe AI:** `app/(tabs)/ai.tsx` is real (was a placeholder) —
+  a working assistant chat over `POST /api/chat`: an intro hero with example
+  prompts, user/assistant bubbles, a "thinking…" indicator, and a composer that
+  sends the running conversation and renders the reply. `src/api/ai.ts`
+  (`sendChat` + `ChatMessage`). In-memory for now; saved chat history, the agentic
+  action-cards (`/api/ai/agent`) and streaming come in later slices.
 - **Phase 3 (started) — Beam / messaging:** `app/(tabs)/beam.tsx` is real (was a
   placeholder) — the live **conversation list** (`GET /api/atchat/conversations`:
   avatar, name, last-message preview, time, unread badge). Tapping a row opens
