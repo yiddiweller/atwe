@@ -1,0 +1,26 @@
+# Atwe iOS — build in the cloud and ship to TestFlight, no Mac required.
+# Run it from the Expo dashboard: Workflows → Run workflow → pick this file
+# against the working branch. (No auto-trigger: `on` targets `main`, which we
+# don't push to, so it only runs when you press "Run workflow".)
+name: Build and submit iOS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build iOS (production)
+    type: build
+    params:
+      platform: ios
+      profile: production
+  submit:
+    name: Submit to TestFlight
+    needs: [build]
+    type: submit
+    params:
+      platform: ios
+      profile: production
+      build_id: ${{ needs.build.outputs.build_id }}
