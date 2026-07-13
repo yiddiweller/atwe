@@ -10,6 +10,7 @@ import { PostCard } from '@/components/PostCard';
 import { StoriesTray } from '@/components/StoriesTray';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useFeed, type FeedScope } from '@/api/social';
+import { useNotifCount } from '@/api/notifications';
 
 const TABS: { key: FeedScope; label: string }[] = [
   { key: 'foryou', label: 'For You' },
@@ -27,22 +28,35 @@ export default function Home() {
   const [scope, setScope] = useState<FeedScope>('foryou');
   const { data, isLoading, isError, refetch, isRefetching } = useFeed(scope);
   const posts = data?.posts ?? [];
+  const { data: nc } = useNotifCount();
+  const unread = nc?.unread ?? 0;
 
   return (
     <Screen edges={['top']}>
-      {/* Feed tabs */}
-      <View style={[styles.tabs, { borderBottomColor: c.border }]}>
-        {TABS.map((t) => {
-          const active = scope === t.key;
-          return (
-            <Pressable key={t.key} onPress={() => setScope(t.key)} style={styles.tab} hitSlop={8}>
-              <Text variant="headline" style={{ color: active ? c.text : c.t3 }}>
-                {t.label}
-              </Text>
-              {active && <View style={[styles.underline, { backgroundColor: c.accent }]} />}
-            </Pressable>
-          );
-        })}
+      {/* Header: feed tabs + notifications bell */}
+      <View style={[styles.headerRow, { borderBottomColor: c.border }]}>
+        <View style={styles.tabs}>
+          {TABS.map((t) => {
+            const active = scope === t.key;
+            return (
+              <Pressable key={t.key} onPress={() => setScope(t.key)} style={styles.tab} hitSlop={8}>
+                <Text variant="headline" style={{ color: active ? c.text : c.t3 }}>
+                  {t.label}
+                </Text>
+                {active && <View style={[styles.underline, { backgroundColor: c.accent }]} />}
+              </Pressable>
+            );
+          })}
+        </View>
+        <Pressable
+          onPress={() => router.push('/notifications')}
+          hitSlop={8}
+          style={styles.bell}
+          accessibilityLabel="Notifications"
+        >
+          <Ionicons name="notifications-outline" size={24} color={c.text} />
+          {unread > 0 && <View style={[styles.bellDot, { backgroundColor: c.accent, borderColor: c.bg }]} />}
+        </Pressable>
       </View>
 
       {isLoading ? (
@@ -102,14 +116,26 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  tabs: {
+  headerRow: {
     flexDirection: 'row',
-    gap: 28,
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  tabs: { flexDirection: 'row', gap: 28 },
   tab: { alignItems: 'center' },
+  bell: { padding: 2 },
+  bellDot: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 1.5,
+  },
   underline: {
     height: 3,
     borderRadius: 2,

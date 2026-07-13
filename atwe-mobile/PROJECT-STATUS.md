@@ -40,6 +40,13 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
   `useProfile`/`followUser` + `Profile` type in `src/api/social.ts`; `monthYear`
   in `src/lib/format.ts`; route registered in `app/_layout.tsx`; `PostCard` avatar
   + name are now `goProfile` pressables. (Ships in the next TestFlight build.)
+- **Phase 2 — Notifications:** `app/notifications.tsx` (`GET /api/notifications`) —
+  X-style rows (actor avatar + verified seal + human sentence + time), unread rows
+  accent-tinted, marks-all-read on open, taps deep-link to the post / profile /
+  chat; the `login` security row shows a shield. Reached via a **bell** in the Home
+  header with a live **unread badge** (`GET /api/notifications/count`, `useNotifCount`,
+  30s poll). `src/api/notifications.ts` (`useNotifications`/`useNotifCount`/
+  `markAllNotificationsRead` + `notifText` verb map); route registered.
 - **Phase 5 (started) — Atwe AI:** `app/(tabs)/ai.tsx` is real (was a placeholder) —
   a working assistant chat over `POST /api/chat`: an intro hero with example
   prompts, user/assistant bubbles, a "thinking…" indicator, and a composer that
