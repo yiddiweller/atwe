@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { View, FlatList, RefreshControl, ActivityIndicator, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,7 +9,7 @@ import { Button } from '@/components/Button';
 import { PostCard } from '@/components/PostCard';
 import { StoriesTray } from '@/components/StoriesTray';
 import { useTheme } from '@/theme/ThemeProvider';
-import { useFeed, type FeedScope } from '@/api/social';
+import { useInfiniteFeed, type FeedScope, type Post } from '@/api/social';
 import { useNotifCount } from '@/api/notifications';
 
 const TABS: { key: FeedScope; label: string }[] = [
@@ -26,8 +26,30 @@ export default function Home() {
   const { c } = useTheme();
   const router = useRouter();
   const [scope, setScope] = useState<FeedScope>('foryou');
-  const { data, isLoading, isError, refetch, isRefetching } = useFeed(scope);
-  const posts = data?.posts ?? [];
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+    isRefetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteFeed(scope);
+  // Flatten pages, de-duping ids in case the same post appears across batches.
+  const posts = useMemo(() => {
+    const seen = new Set<number>();
+    const out: Post[] = [];
+    for (const page of data?.pages ?? []) {
+      for (const p of page.posts) {
+        if (!seen.has(p.id)) {
+          seen.add(p.id);
+          out.push(p);
+        }
+      }
+    }
+    return out;
+  }, [data]);
   const { data: nc } = useNotifCount();
   const unread = nc?.unread ?? 0;
 
@@ -79,6 +101,17 @@ export default function Home() {
           ListHeaderComponent={<StoriesTray />}
           contentContainerStyle={posts.length ? { paddingBottom: 120 } : styles.emptyWrap}
           showsVerticalScrollIndicator={false}
+          onEndReachedThreshold={0.6}
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+          }}
+          ListFooterComponent={
+            isFetchingNextPage ? (
+              <View style={{ paddingVertical: 20 }}>
+                <ActivityIndicator color={c.t3} />
+              </View>
+            ) : null
+          }
           refreshControl={
             <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.t3} />
           }

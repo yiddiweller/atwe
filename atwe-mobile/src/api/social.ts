@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { api } from './client';
 
 /**
@@ -50,6 +50,27 @@ export function useFeed(scope: FeedScope) {
   return useQuery({
     queryKey: ['feed', scope],
     queryFn: () => api.get<FeedResponse>(`/api/social/feed?scope=${scope}`),
+  });
+}
+
+/**
+ * Infinite feed — each "load more" sends the ids we already have (`seen`) so the
+ * server returns the NEXT unseen batch (mirrors the web's infinite scroll).
+ */
+export function useInfiniteFeed(scope: FeedScope) {
+  return useInfiniteQuery({
+    queryKey: ['feed-inf', scope],
+    queryFn: ({ pageParam }) => {
+      const seen = (pageParam as number[]) ?? [];
+      const q = seen.length ? `&seen=${seen.join(',')}` : '';
+      return api.get<FeedResponse>(`/api/social/feed?scope=${scope}${q}`);
+    },
+    initialPageParam: [] as number[],
+    getNextPageParam: (lastPage, allPages) => {
+      if (!lastPage.hasMore || !lastPage.posts.length) return undefined;
+      // The full set of ids seen so far becomes the next page's exclude list.
+      return allPages.flatMap((p) => p.posts.map((x) => x.id)).slice(-200);
+    },
   });
 }
 

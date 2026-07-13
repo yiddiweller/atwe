@@ -89,6 +89,16 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
   — the one deliberate gap. Hooks in `src/api/stories.ts`; tray is the Home
   FlatList `ListHeaderComponent`; route registered. (Ships in the next build.)
 
+## Recently added (native, this run)
+- **Post actions complete:** repost + bookmark are now interactive on every card
+  (optimistic, revert-on-error) alongside like (`repostPost`/`bookmarkPost`).
+- **Infinite Home feed:** `useInfiniteFeed` (seen-based paging) + `onEndReached`
+  load-more with a footer spinner, de-duped across batches.
+- **Liquid Glass tab bar:** floating frosted pill (`GlassTabBar`) with active accent
+  chip + the exact web nav glyphs. **Real Atwe app icon** from brand assets.
+- **Perf (backend, deployed to prod main):** gzip the JSON API (was skipping all
+  `/api/*`) except the SSE stream — cuts feed transfer ~30-60% on web + native.
+
 ## Next up (Phase 1 continued → then phases 2–7)
 1. ~~Profile navigation from feed/detail~~ ✅ done (`app/user/[username].tsx`).
    ~~Stories tray + viewer~~ ✅ done (`StoriesTray` + `app/story/[userId].tsx`).
