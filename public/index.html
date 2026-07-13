@@ -8314,6 +8314,37 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
 .bn-dot{position:absolute;top:5px;right:9px;width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid rgba(64,64,68,.95);z-index:2;}
 .bn-dot.hidden{display:none;}
 
+/* ─── Scroll-morph: bottom nav → white "+" ball (feature-flagged: body.nav-morph) ───
+   On the home feed, scrolling DOWN morphs the glass pill into a small white
+   liquid-glass ball with a + at the right edge; scrolling UP morphs it back into
+   the full nav. Fully revertible: with NAV_MORPH=false the body.nav-morph class is
+   never added, so every rule below is inert and the nav keeps its original
+   slide-away behaviour (the .bn-plus stays display:none). */
+.bn-plus{display:none;}
+body.nav-morph .bottom-nav{overflow:hidden;
+  transition:left .46s cubic-bezier(.34,1.26,.5,1), background .4s ease,
+    -webkit-backdrop-filter .4s ease, backdrop-filter .4s ease, box-shadow .4s ease, border-color .4s ease;}
+/* Keep the programmatic reveal's transform-ease (other tabs) — finger-tracked
+   scroll still removes .bar-anim, so tracking stays crisp with no transform lag. */
+body.nav-morph .bottom-nav.bar-anim{
+  transition:left .46s cubic-bezier(.34,1.26,.5,1), transform .34s cubic-bezier(.33,0,.2,1),
+    background .4s ease, box-shadow .4s ease, border-color .4s ease;}
+body.nav-morph .bn-plus{display:flex;position:absolute;inset:0;z-index:5;align-items:center;justify-content:center;
+  background:none;border:none;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .24s ease .12s;}
+body.nav-morph .bn-plus svg{width:26px;height:26px;fill:none;stroke:#111;stroke-width:2.4;stroke-linecap:round;}
+/* Ball state (added on scroll-down, removed on scroll-up / at the top) */
+body.nav-morph.nav-ball .bottom-nav{left:calc(100% - 58px - var(--feed-gutter));
+  background:rgba(255,255,255,.9);
+  -webkit-backdrop-filter:blur(20px) saturate(150%);backdrop-filter:blur(20px) saturate(150%);
+  border-color:rgba(255,255,255,.5);box-shadow:0 12px 34px rgba(0,0,0,.42);}
+body.nav-morph .bn-tab,
+body.nav-morph .bn-indicator{transition:opacity .2s ease;}
+body.nav-morph.nav-ball .bn-tab,
+body.nav-morph.nav-ball .bn-indicator{opacity:0;pointer-events:none;}
+body.nav-morph.nav-ball .bn-plus{opacity:1;pointer-events:auto;}
+/* the floating compose FAB steps aside while the ball IS the compose */
+body.nav-morph.nav-ball .ac-fab{opacity:0;pointer-events:none;transition:opacity .2s ease;}
+
 
 /* Responsive: bottom bar on mobile, sidebar nav on desktop */
 @media(max-width:768px){
@@ -10109,6 +10140,10 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <button class="bn-tab" id="bnav-profile" onclick="appTab('profile')" aria-label="Profile">
         <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-4 0-7 2.2-7 5 0 .6.4 1 1 1h12c.6 0 1-.4 1-1 0-2.8-3-5-7-5z"/></svg>
         <span class="bn-label" data-i18n="Profile">Profile</span>
+      </button>
+      <!-- Compose "+" revealed only when the nav morphs into a ball on scroll (feature: body.nav-morph) -->
+      <button class="bn-plus" id="bnPlus" onclick="acOpenPost()" aria-label="New post">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
     </nav>
 
@@ -42950,6 +42985,19 @@ function ptrInit() {
    scroll stops (a half-scroll leaves them half-hidden), and pin fully open at the top.
    No easing during active scroll so they track exactly; `.bar-anim` adds a brief ease
    only for programmatic reveals (navigation / tab change). */
+// ── Scroll-morph feature flag ──────────────────────────────────────────────
+// true  → on the home feed, scrolling down morphs the bottom nav into a white
+//         "+" ball at the right; scrolling up morphs it back.
+// false → ONE-CLICK REVERT: the nav keeps its original slide-away behaviour and
+//         every .nav-morph CSS rule + the .bn-plus ball go inert. Nothing else
+//         to change — just this line.
+const NAV_MORPH = true;
+// Toggle the ball state (CSS transitions do the morph). No-op when unchanged.
+function _setNavBall(on) {
+  if (!NAV_MORPH) return;
+  if (document.body.classList.contains('nav-ball') === !!on) return;
+  document.body.classList.toggle('nav-ball', !!on);
+}
 let _barHide = 0;          // px the top bar is currently retracted (0.._barMax)
 let _barMax = 0;           // the top bar's full height (its hide distance)
 let _barRAF = 0, _barAnimT = 0;
@@ -42970,9 +43018,16 @@ function _applyBars() {
   tb.style.opacity = '';
   tb.style.pointerEvents = '';
   if (nav) {
-    const shift = (nav.offsetHeight || 60) + 40;      // enough to clear the bottom edge
-    nav.style.transform = 'translateY(' + (p * shift) + 'px)';
-    nav.style.pointerEvents = p > 0.9 ? 'none' : '';
+    if (NAV_MORPH && _appTab === 'home') {
+      // On the home feed the scroll-morph (left-based, in _onListScroll) owns the
+      // nav's motion — clear any translateY so the two never fight.
+      nav.style.transform = '';
+      nav.style.pointerEvents = '';
+    } else {
+      const shift = (nav.offsetHeight || 60) + 40;      // enough to clear the bottom edge
+      nav.style.transform = 'translateY(' + (p * shift) + 'px)';
+      nav.style.pointerEvents = p > 0.9 ? 'none' : '';
+    }
   }
   if (fab) {
     // The FAB does NOT hide with the nav — it rides above the nav when it's shown, and
@@ -42989,6 +43044,7 @@ function _setBarAnim(on) {
 }
 // Programmatic full show/hide (animated) — used on navigation / tab change.
 function acSetBarsHidden(hidden) {
+  _setNavBall(false);                                  // navigation always restores the full nav
   const { tb } = _barEls();
   if (tb && !tb.classList.contains('hidden')) _barMax = tb.offsetHeight || _barMax || 100;
   _barHide = hidden ? _barMax : 0;
@@ -43016,9 +43072,18 @@ function _onListScroll(e) {
   if (sc.id === 'acFeed') {
     const scrim = document.getElementById('acTopScrim');
     if (scrim) scrim.style.opacity = 0;
+    // Home-feed scroll-morph: down → ball, up → full nav, top → always full.
+    if (NAV_MORPH && _appTab === 'home') {
+      const st = sc.scrollTop, dy = st - (sc._nbLast || 0);
+      sc._nbLast = st;
+      if (st <= 40) _setNavBall(false);
+      else if (dy > 3) _setNavBall(true);
+      else if (dy < -3) _setNavBall(false);
+    }
   }
 }
 function scrollHideInit() {
+  if (NAV_MORPH) document.body.classList.add('nav-morph');
   document.querySelectorAll('.ac-list').forEach(el => el.addEventListener('scroll', _onListScroll, { passive: true }));
 }
 // Make non-native clickable menu rows keyboard-operable (focusable + Enter/Space).
