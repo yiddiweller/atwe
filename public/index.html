@@ -8294,13 +8294,15 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
   transition:transform .3s cubic-bezier(.3,1.2,.4,1), width .26s var(--ease), height .26s var(--ease), opacity .18s var(--ease);}
 .bn-tab{flex:1;height:50px;background:none;border:none;cursor:pointer;position:relative;z-index:1;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#fff;-webkit-tap-highlight-color:transparent;}
-.bn-tab .bn-label{position:relative;z-index:1;font-size:9.5px;font-weight:600;letter-spacing:.01em;line-height:1;
-  opacity:.62;transition:opacity .22s var(--ease);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.bn-tab.active .bn-label{opacity:1;}
+/* Icon-only nav: labels removed (matches the native app). The single icon
+   centers in the same 50px tab, and the glyphs are nudged a touch larger so they
+   read balanced in the space the label used to share — the bar keeps its exact
+   footprint + the sliding pill (JS-sized to the whole tab) is unchanged. */
+.bn-tab .bn-label{display:none;}
 .bn-tab svg,.bn-tab .bn-logo{position:relative;z-index:1;transition:transform .32s cubic-bezier(.34,1.56,.64,1);}
-.bn-tab svg{width:25px;height:25px;fill:currentColor;}
-.bn-tab .bn-logo{width:21px;height:21px;object-fit:contain;}
-.bn-tab .bn-icon{width:17px;height:17px;display:block;background:currentColor;-webkit-mask:var(--ic) center/contain no-repeat;mask:var(--ic) center/contain no-repeat;position:relative;z-index:1;transition:transform .28s cubic-bezier(.34,1.56,.64,1);}
+.bn-tab svg{width:26px;height:26px;fill:currentColor;}
+.bn-tab .bn-logo{width:24px;height:24px;object-fit:contain;}
+.bn-tab .bn-icon{width:23px;height:23px;display:block;background:currentColor;-webkit-mask:var(--ic) center/contain no-repeat;mask:var(--ic) center/contain no-repeat;position:relative;z-index:1;transition:transform .28s cubic-bezier(.34,1.56,.64,1);}
 /* Active tab is marked by the highlight pill only — the icon stays its normal size.
    Tapping pops it bigger for the moment of the press, then it springs back. */
 .bn-tab.active svg,.bn-tab.active .bn-logo{transform:scale(1.18);}
