@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform } from 'react-native';
+import { Platform, Image } from 'react-native';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -49,9 +49,16 @@ export default function TabsLayout() {
           name={w.route}
           options={{
             title: w.label,
-            tabBarIcon: ({ focused, color, size }) => (
-              <Ionicons name={focused ? w.iconActive : w.icon} size={size} color={color} />
-            ),
+            tabBarIcon: ({ focused, color, size }) =>
+              w.image ? (
+                <Image
+                  source={w.image}
+                  style={{ width: size, height: size, tintColor: color }}
+                  resizeMode="contain"
+                />
+              ) : (
+                <Ionicons name={focused ? w.iconActive : w.icon} size={size} color={color} />
+              ),
           }}
         />
       ))}
