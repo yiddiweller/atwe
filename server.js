@@ -9086,7 +9086,7 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
       // the client's seen-set drops the boundary post so it never duplicates.
       if (before && !isNaN(before.getTime())) { params.push(before.toISOString()); where += ` AND p.created_at <= $${params.length}`; }
       if (seenIds.length) { params.push(seenIds); where += ` AND p.id <> ALL($${params.length}::int[])`; }
-      orderBy = ` ORDER BY GREATEST(p.created_at, COALESCE((SELECT MAX(rp.created_at) FROM post_reposts rp WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))), p.created_at)) DESC LIMIT 60`;
+      orderBy = ` ORDER BY GREATEST(p.created_at, COALESCE((SELECT MAX(rp.created_at) FROM post_reposts rp WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))), p.created_at)) DESC LIMIT 24`;
     } else {
       // For You = engagement + recency, now PERSONALIZED to the viewer: a post is
       // boosted when it carries a hashtag they follow ($3), its author shares one of
@@ -9158,7 +9158,7 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
            + (CASE WHEN array_length($5::text[], 1) IS NOT NULL AND EXISTS(SELECT 1 FROM post_hashtags ph WHERE ph.post_id = p.id AND ph.tag = ANY($5::text[])) THEN $13::float ELSE 0 END)
            + (CASE WHEN array_length($7::int[], 1) IS NOT NULL AND p.user_id = ANY($7::int[]) THEN $12::float ELSE 0 END)
            - (CASE WHEN p.user_id IN (SELECT author_id FROM post_hides WHERE user_id = $1) THEN $14::float ELSE 0 END)
-         ) DESC, p.created_at DESC LIMIT 60`;
+         ) DESC, p.created_at DESC LIMIT 24`;
     }
     let { rows } = await db.query(
       POSTS_SELECT + where + orderBy,
@@ -9173,12 +9173,14 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     // below still shuffles authors/topics so it doesn't read as a static list.
     if (!following && firstPage && rows.length < 10 && seenSuppressClause) {
       ({ rows } = await db.query(
-        POSTS_SELECT + where.replace(seenSuppressClause, '') + ' ORDER BY p.created_at DESC LIMIT 60',
+        POSTS_SELECT + where.replace(seenSuppressClause, '') + ' ORDER BY p.created_at DESC LIMIT 24',
         [req.user.id]
       ));
     }
     // A near-full page means there's almost certainly another page behind it.
-    const hasMore = rows.length >= 55;
+    // Smaller first page (24) = far less base64/per-row work → faster first paint;
+    // infinite scroll loads the rest on demand.
+    const hasMore = rows.length >= 22;
     let posts = rows.map(mapPost);
     // For You only: spread topics/authors out (diversity rerank) so one prolific
     // author or one hot hashtag can't dominate the feed, then hoist promoted posts.
