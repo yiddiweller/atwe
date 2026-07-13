@@ -25211,7 +25211,15 @@ function acChatsTab(tab, dir) {
   const fab = document.getElementById('acChatsFab'), cfg = AC_CHATS_FAB[tab];
   if (fab && cfg) { document.getElementById('acChatsFabIc')?.remove(); fab.innerHTML = cfg.ic; fab.setAttribute('aria-label', cfg.label); }
   // Load the active pane's data.
-  if (tab === 'chats' || tab === 'groups') { AC._chatsFilter = tab; AC._showArchived = false; acLoadChats(); }
+  if (tab === 'chats' || tab === 'groups') {
+    AC._chatsFilter = tab; AC._showArchived = false;
+    // INSTANT tab swap: re-filter the in-memory conversations/groups in the same
+    // frame as the tap — never wait on the network to switch panes (the old flow
+    // fetched FIRST, so Groups kept showing the Chats rows for ~a second on
+    // mobile data). The fetch still runs, silently, to refresh in the background.
+    acRenderChats();
+    acLoadChats({ silent: true });
+  }
   else if (tab === 'calls') { try { localStorage.setItem('ac_calls_seen', Date.now()); } catch {} acLoadCalls('acCallList2'); }
   else if (tab === 'contacts') {
     AC._cScope = 'chats'; AC._contactSelect = false;
