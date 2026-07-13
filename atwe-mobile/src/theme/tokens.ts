@@ -42,9 +42,10 @@ export interface Palette {
   statusBar: 'light' | 'dark';
 }
 
-// Black — the default "Lights out" theme (:root on web).
+// Black — the default "Lights out" theme (:root on web). True #000000 page bg
+// (per founder), with slightly-raised surfaces above it for cards/inputs.
 export const black: Palette = {
-  bg: '#07080A',
+  bg: '#000000',
   s1: '#121417',
   s2: '#1C1F24',
   text: '#E7E9EA',

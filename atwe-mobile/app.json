@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#07080A"
+      "backgroundColor": "#000000"
     },
     "assetBundlePatterns": ["**/*"],
     "ios": {
@@ -33,7 +33,7 @@
       "package": "com.atwe.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#07080A"
+        "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true
     },
@@ -44,7 +44,7 @@
       "expo-notifications",
       [
         "expo-splash-screen",
-        { "backgroundColor": "#07080A", "image": "./assets/splash.png", "imageWidth": 180 }
+        { "backgroundColor": "#000000", "image": "./assets/splash.png", "imageWidth": 104 }
       ]
     ],
     "experiments": { "typedRoutes": true },
