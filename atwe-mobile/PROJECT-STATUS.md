@@ -40,6 +40,16 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
   `useProfile`/`followUser` + `Profile` type in `src/api/social.ts`; `monthYear`
   in `src/lib/format.ts`; route registered in `app/_layout.tsx`; `PostCard` avatar
   + name are now `goProfile` pressables. (Ships in the next TestFlight build.)
+- **Phase 3 (started) — Beam / messaging:** `app/(tabs)/beam.tsx` is real (was a
+  placeholder) — the live **conversation list** (`GET /api/atchat/conversations`:
+  avatar, name, last-message preview, time, unread badge). Tapping a row opens
+  **`app/chat/[peer].tsx`** — a working 1:1 DM thread (`GET /api/atchat/with/:id`
+  polled every 5s; iMessage-style bubbles, mine=accent/right, theirs=grey/left)
+  with an optimistic **send** (`POST /api/atchat/with/:id`, clientId-idempotent).
+  Profiles now have a **Message** button (→ `/chat/:id`) so you can start a chat.
+  `src/api/beam.ts` (`useConversations`/`useThread`/`sendDm` + `conversationPreview`);
+  route registered. Later slices: realtime SSE, groups, calls, media/voice, the rich
+  composer, chat requests, typing/read receipts.
 - **Phase 4 (started) — Engine / Explore:** `app/(tabs)/engine.tsx` is now real
   (was a placeholder) — a live **Explore** surface mirroring the web
   `acSearchDiscover`: **Trending** hashtags (`GET /api/social/trending`) + a

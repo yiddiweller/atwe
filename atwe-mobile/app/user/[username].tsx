@@ -71,6 +71,7 @@ export default function UserProfile() {
 
 function ProfileHeader({ data }: { data: Profile }) {
   const { c, spacing } = useTheme();
+  const router = useRouter();
   const { user, counts, isMe } = data;
   const biz = user.accountType === 'business';
 
@@ -109,6 +110,13 @@ function ProfileHeader({ data }: { data: Profile }) {
         </View>
         {!isMe && (
           <View style={styles.followWrap}>
+            <Pressable
+              onPress={() => router.push(`/chat/${user.id}`)}
+              style={[styles.msgBtn, { borderColor: c.border }]}
+              accessibilityLabel="Message"
+            >
+              <Ionicons name="mail-outline" size={20} color={c.text} />
+            </Pressable>
             <Button
               title={following ? 'Following' : 'Follow'}
               kind={following ? 'secondary' : 'primary'}
@@ -216,8 +224,16 @@ const styles = StyleSheet.create({
     marginTop: -40,
   },
   avatarRing: { borderRadius: 48, borderWidth: 4, padding: 0 },
-  followWrap: { paddingBottom: 6 },
+  followWrap: { paddingBottom: 6, flexDirection: 'row', alignItems: 'center', gap: 8 },
   followBtn: { minHeight: 38, paddingHorizontal: 22 },
+  msgBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   nameLine: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10, gap: 14 },
   metaItem: { flexDirection: 'row', alignItems: 'center' },
