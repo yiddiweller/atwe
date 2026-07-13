@@ -68,8 +68,10 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
   `acSearchDiscover`: **Trending** hashtags (`GET /api/social/trending`) + a
   **Who to follow** list (`GET /api/social/suggestions`) with optimistic Follow
   pills and tap-through to profiles. `useTrending`/`useSuggestions` + `Trend`/
-  `SuggestUser` types in `src/api/social.ts`. Next Engine slice: the actual search
-  field + results (people / shop / jobs / posts scopes over `/api/search`).
+  `SuggestUser` types in `src/api/social.ts`. Now has a **search field** →
+  `GET /api/search?scope=people` (debounced, `useSearchPeople`/`SearchUser`),
+  showing tap-through people results; empty query falls back to Explore. Next
+  Engine slices: more search scopes (shop / jobs / posts) + the marketplace.
 - **Phase 1 — stories:** a horizontal **stories tray** across the top of Home
   (`src/components/StoriesTray.tsx`, `GET /api/stories` → accent ring = unseen,
   muted ring = seen) + a full-screen **story viewer** (`app/story/[userId].tsx`,

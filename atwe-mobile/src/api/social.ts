@@ -166,3 +166,24 @@ export function useSuggestions() {
     staleTime: 60_000,
   });
 }
+
+/** A person search result — `GET /api/search?scope=people&q=` (mapSearchUser). */
+export interface SearchUser {
+  id: number;
+  name: string;
+  username: string | null;
+  avatar: string | null;
+  verified: boolean;
+  accountType: 'personal' | 'business';
+  headline: string | null;
+}
+export function useSearchPeople(q: string) {
+  const query = q.trim();
+  return useQuery({
+    queryKey: ['search-people', query],
+    queryFn: () =>
+      api.get<{ users: SearchUser[] }>(`/api/search?scope=people&q=${encodeURIComponent(query)}`),
+    enabled: query.length >= 1,
+    staleTime: 30_000,
+  });
+}
