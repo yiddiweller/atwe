@@ -8334,6 +8334,9 @@ body.nav-morph .bn-plus{display:flex;position:absolute;inset:0;z-index:5;align-i
 body.nav-morph .bn-plus svg{width:26px;height:26px;fill:none;stroke:#111;stroke-width:2.4;stroke-linecap:round;}
 /* Ball state (added on scroll-down, removed on scroll-up / at the top) */
 body.nav-morph.nav-ball .bottom-nav{left:calc(100% - 58px - var(--feed-gutter));
+  /* Force a true 58×58 square so border-radius:999px renders a PERFECT circle
+     (the auto height was ~60px with padding, making it a slight vertical "drop"). */
+  box-sizing:border-box;height:58px;
   background:rgba(255,255,255,.9);
   -webkit-backdrop-filter:blur(20px) saturate(150%);backdrop-filter:blur(20px) saturate(150%);
   border-color:rgba(255,255,255,.5);box-shadow:0 12px 34px rgba(0,0,0,.42);}
@@ -8344,6 +8347,10 @@ body.nav-morph.nav-ball .bn-indicator{opacity:0;pointer-events:none;}
 body.nav-morph.nav-ball .bn-plus{opacity:1;pointer-events:auto;}
 /* the floating compose FAB steps aside while the ball IS the compose */
 body.nav-morph.nav-ball .ac-fab{opacity:0;pointer-events:none;transition:opacity .2s ease;}
+/* Home: hide the floating "+" FAB entirely — compose is the top-bar pencil at
+   rest and the scroll-ball when scrolling, so the extra FAB is redundant.
+   (Beam keeps its new-chat FAB at rest; it only fades out during the ball.) */
+body.nav-morph #acHomeFab{display:none;}
 
 
 /* Responsive: bottom bar on mobile, sidebar nav on desktop */
@@ -10142,7 +10149,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <span class="bn-label" data-i18n="Profile">Profile</span>
       </button>
       <!-- Compose "+" revealed only when the nav morphs into a ball on scroll (feature: body.nav-morph) -->
-      <button class="bn-plus" id="bnPlus" onclick="acOpenPost()" aria-label="New post">
+      <button class="bn-plus" id="bnPlus" onclick="acNavBallTap()" aria-label="New">
         <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
     </nav>
@@ -42998,6 +43005,12 @@ function _setNavBall(on) {
   if (document.body.classList.contains('nav-ball') === !!on) return;
   document.body.classList.toggle('nav-ball', !!on);
 }
+// The morph ball's compose action is context-aware: a new post on Home, a new
+// chat on Beam.
+function acNavBallTap() {
+  if (_appTab === 'chat' && typeof acChatsFab === 'function') { acChatsFab(); return; }
+  acOpenPost();
+}
 let _barHide = 0;          // px the top bar is currently retracted (0.._barMax)
 let _barMax = 0;           // the top bar's full height (its hide distance)
 let _barRAF = 0, _barAnimT = 0;
@@ -43018,9 +43031,9 @@ function _applyBars() {
   tb.style.opacity = '';
   tb.style.pointerEvents = '';
   if (nav) {
-    if (NAV_MORPH && _appTab === 'home') {
-      // On the home feed the scroll-morph (left-based, in _onListScroll) owns the
-      // nav's motion — clear any translateY so the two never fight.
+    if (NAV_MORPH && (_appTab === 'home' || _appTab === 'chat')) {
+      // On the home feed + Beam the scroll-morph (left-based, in _onListScroll)
+      // owns the nav's motion — clear any translateY so the two never fight.
       nav.style.transform = '';
       nav.style.pointerEvents = '';
     } else {
@@ -43072,14 +43085,14 @@ function _onListScroll(e) {
   if (sc.id === 'acFeed') {
     const scrim = document.getElementById('acTopScrim');
     if (scrim) scrim.style.opacity = 0;
-    // Home-feed scroll-morph: down → ball, up → full nav, top → always full.
-    if (NAV_MORPH && _appTab === 'home') {
-      const st = sc.scrollTop, dy = st - (sc._nbLast || 0);
-      sc._nbLast = st;
-      if (st <= 40) _setNavBall(false);
-      else if (dy > 3) _setNavBall(true);
-      else if (dy < -3) _setNavBall(false);
-    }
+  }
+  // Scroll-morph (home feed + Beam): down → ball, up → full nav, top → always full.
+  if (NAV_MORPH && ((_appTab === 'home' && sc.id === 'acFeed') || _appTab === 'chat')) {
+    const st = sc.scrollTop, dy = st - (sc._nbLast || 0);
+    sc._nbLast = st;
+    if (st <= 40) _setNavBall(false);
+    else if (dy > 3) _setNavBall(true);
+    else if (dy < -3) _setNavBall(false);
   }
 }
 function scrollHideInit() {
