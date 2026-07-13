@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { View, FlatList, RefreshControl, ActivityIndicator, Pressable, StyleSheet } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { View, FlatList, RefreshControl, ActivityIndicator, Pressable, StyleSheet, type NativeSyntheticEvent, type NativeScrollEvent } from 'react-native';
+import { withTiming } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -12,6 +13,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { useInfiniteFeed, type FeedScope, type Post } from '@/api/social';
 import { useNotifCount } from '@/api/notifications';
 import { useAppReady } from '@/lib/appReady';
+import { useNavMorph } from '@/lib/navMorph';
 
 const TABS: { key: FeedScope; label: string }[] = [
   { key: 'foryou', label: 'For You' },
@@ -60,6 +62,26 @@ export default function Home() {
   useEffect(() => {
     if (!isLoading) markFeedReady();
   }, [isLoading, markFeedReady]);
+
+  // Scroll-morph: drive the bottom tab bar (bar ⇄ "+" ball) by scroll direction.
+  const morph = useNavMorph();
+  const lastY = useRef(0);
+  const ballRef = useRef(false);
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (!morph) return;
+    const y = e.nativeEvent.contentOffset.y;
+    const dy = y - lastY.current;
+    lastY.current = y;
+    let next = ballRef.current;
+    if (y <= 40) next = false;
+    else if (dy > 4) next = true;
+    else if (dy < -4) next = false;
+    if (next !== ballRef.current) {
+      ballRef.current = next;
+      morph.setBall(next);
+      morph.collapsed.value = withTiming(next ? 1 : 0, { duration: next ? 340 : 300 });
+    }
+  };
 
   return (
     <Screen edges={['top']}>
@@ -124,6 +146,8 @@ export default function Home() {
           ListHeaderComponent={<StoriesTray />}
           contentContainerStyle={posts.length ? { paddingBottom: 120 } : styles.emptyWrap}
           showsVerticalScrollIndicator={false}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
           onEndReachedThreshold={0.6}
           onEndReached={() => {
             if (hasNextPage && !isFetchingNextPage) fetchNextPage();
