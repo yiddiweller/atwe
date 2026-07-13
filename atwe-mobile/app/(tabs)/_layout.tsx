@@ -8,30 +8,32 @@ import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs';
  * Uses the exact web nav glyphs (narch/equals/ring/knot) as tab images; Profile
  * uses the native person SF Symbol.
  *
- * Icon-only: `labelVisibilityMode="unlabeled"` hides the text and iOS centers the
- * glyphs in the same native bar. The <Label>s stay for VoiceOver (accessible name).
+ * Icon-only: each <Label hidden> hides the text on iOS (the per-label `hidden`
+ * prop is cross-platform; `labelVisibilityMode` is Android-only, which is why the
+ * bar still showed text). The <Label>s stay for VoiceOver (accessible name), and
+ * iOS centers the glyphs in the same native bar.
  */
 export default function TabsLayout() {
   return (
     <NativeTabs labelVisibilityMode="unlabeled">
       <NativeTabs.Trigger name="index">
-        <Label>Home</Label>
+        <Label hidden>Home</Label>
         <Icon src={require('../../assets/nav/home.png')} />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="beam">
-        <Label>Beam</Label>
+        <Label hidden>Beam</Label>
         <Icon src={require('../../assets/nav/beam.png')} />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="engine">
-        <Label>Engine</Label>
+        <Label hidden>Engine</Label>
         <Icon src={require('../../assets/nav/engine.png')} />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="ai">
-        <Label>Atwe AI</Label>
+        <Label hidden>Atwe AI</Label>
         <Icon src={require('../../assets/nav/ai.png')} />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
-        <Label>Profile</Label>
+        <Label hidden>Profile</Label>
         <Icon sf="person.fill" />
       </NativeTabs.Trigger>
     </NativeTabs>
