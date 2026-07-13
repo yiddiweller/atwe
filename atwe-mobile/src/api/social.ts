@@ -133,3 +133,36 @@ export async function followUser(id: number, on: boolean): Promise<void> {
   if (on) await api.post(`/api/social/follow/${id}`);
   else await api.del(`/api/social/follow/${id}`);
 }
+
+/** A trending hashtag — `GET /api/social/trending` → `{ trends: [{tag,count}] }`. */
+export interface Trend {
+  tag: string;
+  count: number;
+}
+export function useTrending() {
+  return useQuery({
+    queryKey: ['trending'],
+    queryFn: () => api.get<{ trends: Trend[] }>('/api/social/trending'),
+    staleTime: 60_000,
+  });
+}
+
+/** A "who to follow" suggestion — `GET /api/social/suggestions` (mapSuggestUser). */
+export interface SuggestUser {
+  id: number;
+  name: string;
+  username: string | null;
+  avatar: string | null;
+  verified: boolean;
+  headline: string | null;
+  accountType: 'personal' | 'business';
+  followers: number;
+  mutuals: number;
+}
+export function useSuggestions() {
+  return useQuery({
+    queryKey: ['suggestions'],
+    queryFn: () => api.get<{ users: SuggestUser[] }>('/api/social/suggestions'),
+    staleTime: 60_000,
+  });
+}

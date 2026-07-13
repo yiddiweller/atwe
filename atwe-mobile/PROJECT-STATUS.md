@@ -40,6 +40,13 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
   `useProfile`/`followUser` + `Profile` type in `src/api/social.ts`; `monthYear`
   in `src/lib/format.ts`; route registered in `app/_layout.tsx`; `PostCard` avatar
   + name are now `goProfile` pressables. (Ships in the next TestFlight build.)
+- **Phase 4 (started) — Engine / Explore:** `app/(tabs)/engine.tsx` is now real
+  (was a placeholder) — a live **Explore** surface mirroring the web
+  `acSearchDiscover`: **Trending** hashtags (`GET /api/social/trending`) + a
+  **Who to follow** list (`GET /api/social/suggestions`) with optimistic Follow
+  pills and tap-through to profiles. `useTrending`/`useSuggestions` + `Trend`/
+  `SuggestUser` types in `src/api/social.ts`. Next Engine slice: the actual search
+  field + results (people / shop / jobs / posts scopes over `/api/search`).
 - **Phase 1 — stories:** a horizontal **stories tray** across the top of Home
   (`src/components/StoriesTray.tsx`, `GET /api/stories` → accent ring = unseen,
   muted ring = seen) + a full-screen **story viewer** (`app/story/[userId].tsx`,
