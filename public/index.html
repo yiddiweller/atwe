@@ -6946,6 +6946,12 @@ body.light #acListScreen .ac-item-inner::before{background:rgba(0,0,0,.07);}
 .ac-item.unread .ac-item-name{font-weight:800;}
 .ac-item.unread .ac-item-last{color:var(--t1);font-weight:600;}
 .ac-draft{color:var(--rose);font-weight:600;}
+/* Read ticks on your own last message in the chat list (WhatsApp-style):
+   single grey ✓ = sent, double accent ✓✓ = seen. */
+.ac-ticks{display:inline-flex;align-items:center;vertical-align:-2px;margin-right:4px;color:var(--t3);flex-shrink:0;}
+.ac-ticks svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;}
+.ac-ticks svg+svg{margin-left:-9px;}
+.ac-ticks.seen{color:var(--accent);}
 .ac-item-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;}
 .ac-item-time{font-size:12.5px;color:var(--t3);}
 .ac-item.unread .ac-item-time{color:var(--accent);font-weight:700;}
@@ -35885,9 +35891,10 @@ function acRenderChats() {
   const q = archivedView ? '' : (AC._chatQuery || '').trim().toLowerCase();
   let dms = (AC.conversations || []).map(c => ({ kind: 'dm', ts: ts(c.last_at), c, unread: c.id === S.user?.id ? 0 : (c.unread || 0), pin: acIsPinned('dm', c.id, c.thread_id) }));
   let grps = (AC.groupsList || []).map(g => ({ kind: 'group', ts: ts(g.last_at || g.created_at), g, unread: g.unread || 0, pin: acIsPinned('group', g.id) }));
-  // Beam split: Chats = direct messages only, Groups = group chats only.
-  if (AC._chatsFilter === 'chats') grps = [];
-  else if (AC._chatsFilter === 'groups') dms = [];
+  // Beam split (WhatsApp model): Chats = EVERYTHING (DMs + groups in one list, so
+  // a new group appears right where you are — never "invisible" on another tab);
+  // Groups = a groups/channels-only filter view.
+  if (AC._chatsFilter === 'groups') dms = [];
   // Split off archived conversations: the archived view shows only those; every
   // other view hides them (and surfaces an "Archived" entry row instead).
   const isArch = (x) => acIsArchived(x.kind, x.kind === 'dm' ? x.c.id : x.g.id, x.kind === 'dm' ? x.c.thread_id : null);
@@ -36037,7 +36044,12 @@ function acChatRowDM(c) {
   const threadTag = tid == null ? '' : `<span class="ac-thread-tag">${escHtml(c.thread_title || 'New conversation')}</span>`;
   // A half-typed message replaces the last-message preview (WhatsApp-style) — per thread.
   const draft = Drafts.get('d:' + c.id + (tid != null ? ':t' + tid : ''));
-  const lastHtml = draft ? `<span class="ac-draft">Draft:</span> ${escHtml(draft)}` : escHtml(last);
+  // Your own last message carries read ticks in the list (WhatsApp-style):
+  // single grey ✓ = sent, double accent ✓✓ = seen by the other side.
+  const TICK = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
+  const ticks = (!draft && c.last_mine && !c.last_deleted && !isSelf && c.last_at)
+    ? `<span class="ac-ticks${c.last_read ? ' seen' : ''}" aria-label="${c.last_read ? 'Seen' : 'Sent'}">${c.last_read ? TICK + TICK : TICK}</span>` : '';
+  const lastHtml = draft ? `<span class="ac-draft">Draft:</span> ${escHtml(draft)}` : ticks + escHtml(last);
   const lastPlain = draft ? ('Draft: ' + draft) : last;
   return `<div class="ac-item ${on ? 'online' : ''} ${unread && !muted ? 'unread' : ''} ${pinned ? 'ac-pinned' : ''}" data-uid="${c.id}" data-tid="${tid == null ? '' : tid}" onclick="acDmRowTap(${c.id},${tk})">
     <div class="ac-item-inner">
@@ -36558,6 +36570,13 @@ async function rtConnect() {
   rtSource.addEventListener('group-call', e => { try { groupCallOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('call-link', e => { try { callLinkOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('group-removed', e => { try { onGroupRemoved(JSON.parse(e.data)); } catch {} });
+  // Added to a group → the list + badges update instantly (no reload needed).
+  rtSource.addEventListener('group-added', () => {
+    try {
+      acRefreshUnread(); refreshNotifCount();
+      if (!document.getElementById('acListScreen')?.classList.contains('hidden')) acLoadChats({ silent: true });
+    } catch {}
+  });
   rtSource.addEventListener('liveloc', e => { try { acOnLiveLoc(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('live', e => { try { liveOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('cloud', e => { try { cloudOnSignal(JSON.parse(e.data)); } catch {} });
@@ -36808,6 +36827,7 @@ function rtOnReadSelf(d) {
     AC._unreadDivId = null; acRenderThread();
   }
   acRefreshUnread();
+  try { refreshNotifCount(); } catch {} // read also cleared message notifs server-side
   if (!document.getElementById('acListScreen')?.classList.contains('hidden')) acLoadChats();
 }
 // Typing indicator. Each typer is tracked with its OWN expiry so concurrent typers
@@ -42247,9 +42267,10 @@ async function acRefreshUnread() {
     if (dot) dot.classList.toggle('hidden', !unread);
     document.getElementById('acTabDot')?.classList.toggle('hidden', !dmUnread);
     document.getElementById('acTabDotG')?.classList.toggle('hidden', !groupUnread);
-    // Beam tab badges: Chats carries DM unread, Groups carries group unread.
+    // Beam tab badges: Chats shows every conversation (DMs + groups) so it carries
+    // the TOTAL unread; Groups carries group unread only.
     const fmt = (n) => (n > 99 ? '99+' : String(n));
-    [['chats', dmUnread || 0], ['groups', groupUnread || 0]].forEach(([t, n]) => {
+    [['chats', unread || 0], ['groups', groupUnread || 0]].forEach(([t, n]) => {
       const el = document.getElementById('acsegBadge-' + t);
       if (el) { el.textContent = fmt(n); el.classList.toggle('hidden', !n); }
     });

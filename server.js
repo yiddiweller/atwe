@@ -4192,13 +4192,14 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
               lm.meta->>'t' AS last_meta,
               lm.deleted_all AS last_deleted, lm.hidden AS last_hidden,
               lm.created_at AS last_at, (lm.sender_id = $1) AS last_mine,
+              (lm.read_at IS NOT NULL) AS last_read,
               COALESCE(uc.unread, 0)::int AS unread
        FROM pairs t
        JOIN users partner ON partner.id = t.peer_id AND partner.username IS NOT NULL
        LEFT JOIN dm_threads dt ON dt.id = t.thread_id
        LEFT JOIN at_cleared cl ON cl.user_id = $1 AND cl.other_id = t.peer_id
        LEFT JOIN LATERAL (
-         SELECT body, image, media_kind, meta, deleted_all, ($1 = ANY(hidden_for)) AS hidden, created_at, sender_id FROM at_messages m
+         SELECT body, image, media_kind, meta, deleted_all, ($1 = ANY(hidden_for)) AS hidden, created_at, sender_id, read_at FROM at_messages m
          WHERE ((m.sender_id = $1 AND m.recipient_id = t.peer_id)
             OR (m.sender_id = t.peer_id AND m.recipient_id = $1))
            AND m.thread_id IS NOT DISTINCT FROM t.thread_id
@@ -4437,6 +4438,12 @@ app.post('/api/atchat/with/:id/read', auth.requireAuth, async (req, res) => {
     if (r.rowCount) {
       if (await bothReceiptsOn(req.user.id, other)) rtPush(other, 'read', { peerId: req.user.id }); // tell the sender their messages were seen
       rtPush(req.user.id, 'read-self', { peerId: other });     // tell MY other devices to clear this thread's unread
+      // Reading the chat also clears this sender's "sent you a message" bell
+      // notifications — a regular messaging app never leaves the dot lit for a
+      // message you've already seen. Fire-and-forget; the 'notif' push refreshes
+      // the bell count on every open device.
+      db.query(`UPDATE notifications SET read = true WHERE user_id = $1 AND actor_id = $2 AND type = 'message' AND read = false`, [req.user.id, other])
+        .then((n) => { if (n.rowCount) rtPush(req.user.id, 'notif', {}); }).catch(() => {});
     }
     res.json({ ok: true });
   } catch (err) { res.json({ ok: false }); }
@@ -4463,6 +4470,10 @@ app.post('/api/atchat/groups/:id/read', auth.requireAuth, async (req, res) => {
   try {
     await db.query('UPDATE at_group_members SET last_read_at = now() WHERE group_id = $1 AND user_id = $2', [gid, req.user.id]);
     rtPush(req.user.id, 'read-self', { groupId: gid }); // tell MY other devices to clear this group's unread
+    // Opening the group also clears its bell notifications (mentions + "added you
+    // to their group") — the dot never stays lit for something you've now seen.
+    db.query(`UPDATE notifications SET read = true WHERE user_id = $1 AND group_id = $2 AND type IN ('mention','group_approved') AND read = false`, [req.user.id, gid])
+      .then((n) => { if (n.rowCount) rtPush(req.user.id, 'notif', {}); }).catch(() => {});
     res.json({ ok: true });
   } catch (err) { res.json({ ok: false }); }
 });
@@ -6014,6 +6025,14 @@ app.post('/api/atchat/groups', auth.requireAuth, rateLimit(20, 60000, 'group-cre
     const all = [req.user.id, ...valid.rows.map((r) => r.id)];
     const valuesSql = all.map((_, i) => `($1, $${i + 2})`).join(', ');
     await db.query(`INSERT INTO at_group_members (group_id, user_id) VALUES ${valuesSql} ON CONFLICT DO NOTHING`, [gid, ...all]);
+    // Tell each added member LIVE: a bell notification ("added you to their group",
+    // taps through to the group) + an SSE nudge so their chat list and unread badge
+    // update instantly. Without this a new member only discovered the group on a
+    // full reload — the "I got a badge but nothing appears" bug.
+    for (const r of valid.rows) {
+      notify(r.id, req.user.id, 'group_approved', null, null, gid);
+      rtPush(r.id, 'group-added', { groupId: gid });
+    }
     res.json({ group: { id: gid, name, username, avatar: avatar || null, members: all.length, broadcast, description } });
   } catch (err) {
     console.error(err);
@@ -6078,7 +6097,7 @@ app.patch('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
 app.get('/api/atchat/groups', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT g.id, g.name, g.username, g.avatar, g.broadcast,
+      `SELECT g.id, g.name, g.username, g.avatar, g.broadcast, g.created_at,
               (me.muted AND (me.muted_until IS NULL OR me.muted_until > now())) AS muted,
               EXTRACT(EPOCH FROM me.muted_until) * 1000 AS muted_until,
               (SELECT COUNT(*)::int FROM at_group_members m WHERE m.group_id = g.id) AS members,
@@ -6855,6 +6874,12 @@ app.post('/api/atchat/groups/:id/members', auth.requireAuth, async (req, res) =>
       const allowed = r.already || pref === 'everyone' || (pref === 'connections' && r.connected);
       if (!allowed) continue;
       await db.query('INSERT INTO at_group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [gid, r.id]);
+      // A NEWLY added member hears about it live: bell notification + SSE nudge
+      // (list + badge refresh instantly — mirrors the group-create route).
+      if (!r.already) {
+        notify(r.id, req.user.id, 'group_approved', null, null, gid);
+        rtPush(r.id, 'group-added', { groupId: gid });
+      }
       added++;
     }
     res.json({ ok: true, added, blocked: valid.rows.length - added });
