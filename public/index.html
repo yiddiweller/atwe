@@ -1951,6 +1951,36 @@ body.tb-collapsed .tb-mainrow{max-height:0;opacity:0;}
 /* Row 2: the feed / chat tabs. Shown only on home + chat (syncTopbar). */
 .tb-tabrow{display:flex;align-items:center;padding:0 16px 2px;flex-shrink:0;min-width:0;}
 .tb-tabrow.hidden{display:none;}
+/* ── Single-row world header (.tb-solo, founder's design) ──
+   Home + Beam drop the label row entirely: one slim row of ≡ · ＋ · ◯(Engine)
+   icons, then the world's tabs inline. */
+.topbar.tb-solo .tb-mainrow{display:none;}
+/* Exact spacing (founder's mock): the ≡ GLYPH starts on the same x as the post
+   avatars (the feed gutter) — the 38px round button is inset by its own ~8px of
+   internal padding — and the tab strip runs to the true screen edge, scrolling
+   right-to-left for more options. */
+.topbar.tb-solo .tb-tabrow{padding:7px 0 8px;}
+.topbar.tb-solo .tb-feedtabs{padding-inline-end:18px;}
+/* The topbar's own home/chat inline padding would shift the row — the solo row
+   owns its geometry (tabs scroll to the TRUE screen edge, per the mock). */
+.topbar.tb-solo.tb-home,.topbar.tb-solo.tb-chat{padding-inline:0;}
+.tb-icoset{display:none;align-items:center;gap:6px;flex-shrink:0;
+  /* ≡ GLYPH lands exactly on the gutter: button inset = (38px − 17px svg)/2 = 10.5px */
+  margin-inline-start:calc(var(--feed-gutter, 18px) - 10.5px);margin-inline-end:12px;}
+.topbar.tb-solo .tb-icoset{display:flex;}
+.tb-ico{width:38px;height:38px;border-radius:50%;border:none;background:none;color:var(--t1);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;padding:0;-webkit-tap-highlight-color:transparent;
+  transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
+/* Glyphs sized to the tabs' capital-letter height (founder's mock: the ＋ matches
+   the "F" of "For You") — small marks, full 38px tap target. */
+.tb-ico svg{width:17px;height:17px;stroke:currentColor;stroke-width:2.5;fill:none;stroke-linecap:round;}
+.tb-ico svg circle{stroke-width:3;} /* the Engine ring reads thicker, like the nav glyph */
+@media(hover:hover){.tb-ico:hover{background:var(--s2);}}
+.tb-ico:active{transform:scale(.9);}
+@media(min-width:769px){.tb-ico.tb-ico-menu{display:none;}} /* desktop has the sidebar */
+/* Beam tabs match the home row's scrollable rhythm in solo mode (they were
+   space-between across the full width, which fights the icon cluster). */
+.topbar.tb-solo.tb-chat .tb-feedtabs{justify-content:flex-start;gap:20px;margin-inline-start:0;}
 /* Only the compose "+" on the right of home/chat — no AI logo button there. */
 .topbar.tb-home #tbAiBtn,.topbar.tb-chat #tbAiBtn{display:none;}
 .topbar-actions{display:flex;align-items:center;gap:6px;}
@@ -10058,6 +10088,13 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       </div>
      </div>
      <div class="tb-tabrow hidden" id="tbTabRow">
+      <!-- Single-row world header (founder's design): ≡ menu · ＋ create · ◯ Engine,
+           then the world's tabs inline. Shown on Home + Beam via .tb-solo. -->
+      <div class="tb-icoset" id="tbIcoset">
+        <button class="tb-ico tb-ico-menu" onclick="toggleSidebar()" aria-label="Menu"><svg viewBox="0 0 24 24"><line x1="4" y1="9" x2="15" y2="9"/><line x1="4" y1="15" x2="15" y2="15"/></svg></button>
+        <button class="tb-ico" id="tbIcoPlus" onclick="tbSoloPlus()" aria-label="New"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+        <button class="tb-ico" onclick="appTab('search')" aria-label="Engine — search"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/></svg></button>
+      </div>
       <div class="tb-feedtabs hidden" id="tbFeedTabs">
         <button class="tb-feedtab" id="acFeedTab-foryou" onclick="acSetFeed('foryou')">For You</button>
         <button class="tb-feedtab" id="acFeedTab-following" onclick="acSetFeed('following')">Following</button>
@@ -23356,6 +23393,8 @@ function syncTopbar(tab) {
   document.querySelector('.topbar')?.classList.toggle('tb-home', isHome);
   document.querySelector('.topbar')?.classList.toggle('tb-chat', isChat);
   document.querySelector('.topbar')?.classList.toggle('tb-plain', isSearch || tab === 'ai');
+  // Home + Beam use the single-row world header (≡ · ＋ · ◯ + tabs, no label row).
+  document.querySelector('.topbar')?.classList.toggle('tb-solo', isHome || isChat);
   document.getElementById('tbTabRow')?.classList.toggle('hidden', !(isHome || isChat));
   // Home + Beam lead with the ≡ hamburger + the label, and a single compose "+"
   // on the right (no avatar, no bell — the extra affordances were removed).
@@ -23364,6 +23403,12 @@ function syncTopbar(tab) {
   document.getElementById('tbHomeCompose')?.classList.toggle('hidden', !(isHome || isChat));
   const ham = document.getElementById('sbToggle');
   if (ham) ham.style.display = '';
+}
+// The world header's ＋ is context-aware: a new post on Home, a new chat/group
+// (the Beam tab's primary action) on Beam.
+function tbSoloPlus() {
+  if (_appTab === 'chat') { if (typeof acChatsFab === 'function') acChatsFab(); return; }
+  acOpenPost();
 }
 // Show the blue "new" dot on the Home bell when there are unread notifications.
 function acSyncBellDot() {
