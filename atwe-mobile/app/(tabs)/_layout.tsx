@@ -7,10 +7,13 @@ import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs';
  * and handles the active tint, minimize-on-scroll and safe-area insets natively.
  * Uses the exact web nav glyphs (narch/equals/ring/knot) as tab images; Profile
  * uses the native person SF Symbol.
+ *
+ * Icon-only: `labelVisibilityMode="unlabeled"` hides the text and iOS centers the
+ * glyphs in the same native bar. The <Label>s stay for VoiceOver (accessible name).
  */
 export default function TabsLayout() {
   return (
-    <NativeTabs>
+    <NativeTabs labelVisibilityMode="unlabeled">
       <NativeTabs.Trigger name="index">
         <Label>Home</Label>
         <Icon src={require('../../assets/nav/home.png')} />
