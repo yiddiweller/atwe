@@ -1,14 +1,18 @@
 # Atwe iOS — build in the cloud and ship to TestFlight, no Mac required.
-# Auto-ships: every push to the working branch builds + submits automatically,
-# so the founder just taps "Update" in TestFlight. (Also runnable manually from
-# the Expo dashboard: Workflows → Run workflow.) To avoid burning build minutes,
-# pushes are batched — one push per shippable chunk.
+# Auto-ships when the APP changes: a push that touches atwe-mobile/** builds +
+# submits automatically, so the founder just taps "Update" in TestFlight.
+# Web-only pushes (public/**, server.js, …) no longer trigger an iOS build, so
+# the app isn't rebuilt for website changes — saving build minutes + avoiding a
+# queue that delays real app updates. (Also runnable manually from the Expo
+# dashboard: Workflows → Run workflow.)
 name: Build and submit iOS
 
 on:
   push:
     branches:
       - claude/claude-md-docs-cajkf9
+    paths:
+      - atwe-mobile/**
 
 jobs:
   build:
