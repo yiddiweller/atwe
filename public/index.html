@@ -8302,7 +8302,10 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
 .bn-tab svg,.bn-tab .bn-logo{position:relative;z-index:1;transition:transform .32s cubic-bezier(.34,1.56,.64,1);}
 .bn-tab svg{width:26px;height:26px;fill:currentColor;}
 .bn-tab .bn-logo{width:24px;height:24px;object-fit:contain;}
-.bn-tab .bn-icon{width:23px;height:23px;display:block;background:currentColor;-webkit-mask:var(--ic) center/contain no-repeat;mask:var(--ic) center/contain no-repeat;position:relative;z-index:1;transition:transform .28s cubic-bezier(.34,1.56,.64,1);}
+/* The four masked glyphs are full-bleed (fill their whole PNG), so a 23px box
+   rendered ~23px visually — bigger than the person SVG (26px box, but ~17px of
+   actual glyph). Drop to 18px so all four match the profile icon's visual size. */
+.bn-tab .bn-icon{width:18px;height:18px;display:block;background:currentColor;-webkit-mask:var(--ic) center/contain no-repeat;mask:var(--ic) center/contain no-repeat;position:relative;z-index:1;transition:transform .28s cubic-bezier(.34,1.56,.64,1);}
 /* Active tab is marked by the highlight pill only — the icon stays its normal size.
    Tapping pops it bigger for the moment of the press, then it springs back. */
 .bn-tab.active svg,.bn-tab.active .bn-logo{transform:scale(1.18);}
