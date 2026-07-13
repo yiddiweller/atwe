@@ -28,8 +28,10 @@ export default function TabsLayout() {
         tabBarBackground: () =>
           Platform.OS === 'ios' ? (
             <BlurView
-              tint={name === 'light' ? 'light' : 'dark'}
-              intensity={80}
+              // Authentic Apple "Liquid Glass" chrome material — content scrolls
+              // through it. System chrome material adapts to the wallpaper/content.
+              tint={name === 'light' ? 'systemChromeMaterialLight' : 'systemChromeMaterialDark'}
+              intensity={100}
               style={{ flex: 1 }}
             />
           ) : null,
