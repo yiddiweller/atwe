@@ -38,7 +38,7 @@ export default function Beam() {
           data={convos}
           keyExtractor={(c) => `${c.id}:${c.thread_id ?? 'main'}`}
           renderItem={({ item }) => <ConvoRow convo={item} />}
-          contentContainerStyle={convos.length ? undefined : styles.emptyWrap}
+          contentContainerStyle={convos.length ? { paddingBottom: 110 } : styles.emptyWrap}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.t3} />

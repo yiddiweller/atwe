@@ -533,14 +533,19 @@ app.use((req, res, next) => {
   return res.sendFile(path.join(__dirname, 'public', 'locked.html'));
 });
 
-// gzip/deflate the static shell + assets. The app is one ~2.9MB inline-everything
-// index.html, so compression cuts first-load transfer ~85-90%. Scoped to skip
-// /api/* — the SSE stream (text/event-stream) must never be buffered/compressed,
-// and the Stripe webhook needs its raw body — leaving realtime + billing untouched.
-// (compression.filter already skips already-compressed images/video by content-type.)
+// gzip/deflate the static shell AND the JSON API. The app is one ~2.9MB inline
+// index.html (compression cuts first-load ~85-90%), and the API responses are
+// large too — the feed/profile/chat payloads carry base64-image data URLs, so
+// gzipping them cuts transfer ~30-60% and noticeably speeds up BOTH the web app
+// and the native client (which hit the same endpoints). The ONE thing we must
+// never compress is the SSE stream (`/api/rt/stream`, text/event-stream): buffering
+// it would break realtime, so it's explicitly excluded. The Stripe webhook only
+// cares about its raw *request* body (handled by express.raw ordering); compressing
+// its tiny *response* is harmless. (compression.filter already skips already-
+// compressed images/video by content-type.)
 app.use(compression({
   filter(req, res) {
-    if (req.path.startsWith('/api/')) return false;
+    if (req.path === '/api/rt/stream') return false; // never buffer the SSE stream
     return compression.filter(req, res);
   },
 }));
