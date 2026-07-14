@@ -2027,6 +2027,12 @@ body.light .topbar.tb-solo.tb-home .tb-feedtab.active,body.light .topbar.tb-solo
      where the FINAL rest lands. */
 .topbar.tb-solo.tb-home .tb-feedtabs,.topbar.tb-solo.tb-chat .tb-feedtabs{
   margin-inline-start:0;
+  /* Constrain the row to the space beside the icons so its content overflows
+     INTERNALLY (a real, scrollable strip) instead of the container running off the
+     right edge. Home was flex:0 0 auto → the container extended ~105px past the
+     screen, so it could only scroll a useless ~4px and rubber-banded back ("jumps
+     back"). flex:1 + min-width:0 makes it scroll properly, like Beam. */
+  flex:1;min-width:0;
   /* Small start-pad so the resting first tab sits RIGHT beside the icons (no wide
      black gap), and a short fade so a tab dissolves against the icons — not in an
      empty box further out. */
@@ -14687,7 +14693,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1077'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1078'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
