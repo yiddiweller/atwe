@@ -312,7 +312,7 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-lm{width:66px;height:66px;background:#fff;-webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
 .auth-actions,.auth-form{display:flex;flex-direction:column;gap:14px;}
 /* Landing buttons sit a drop closer together (founder). */
-#authLandingView .auth-actions{gap:11px;}
+#authLandingView .auth-actions{gap:12.5px;}
 /* Secondary (grey glass): translucent fill + a 0.5px inset hairline + blur, per
    the color law's button recipe — never a plain outline-only button. */
 .auth-btn{display:flex;align-items:center;justify-content:center;gap:11px;width:100%;height:56px;border-radius:30px;
@@ -5745,9 +5745,7 @@ body.light .ac-home-stories{border-bottom-color:rgba(0,0,0,.08);}
   margin:26px 0 34px;}
 .qr-frame .qr-code{display:block;width:min(240px,62vw);height:min(240px,62vw);border-radius:12px;}
 .qr-status{display:inline-flex;align-items:center;gap:9px;font-size:14px;font-weight:600;color:var(--t2);margin-bottom:26px;}
-.qr-pulse{width:9px;height:9px;border-radius:50%;background:var(--accent);flex:0 0 auto;
-  animation:qrPulse 1.7s ease-out infinite;}
-@keyframes qrPulse{0%{box-shadow:0 0 0 0 rgba(var(--accent-rgb),.45);}70%{box-shadow:0 0 0 9px rgba(var(--accent-rgb),0);}100%{box-shadow:0 0 0 0 rgba(var(--accent-rgb),0);}}
+.qr-pulse{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:0 0 auto;}
 .qr-steps{list-style:none;margin:0;padding:0;width:100%;max-width:340px;text-align:start;}
 .qr-steps li{display:flex;align-items:flex-start;gap:13px;font-size:14px;line-height:1.45;color:var(--t2);padding:11px 2px;border-bottom:1px solid var(--b1);}
 .qr-steps li:last-child{border-bottom:none;}
@@ -14767,7 +14765,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1092'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1093'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
