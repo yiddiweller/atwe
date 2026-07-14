@@ -3560,6 +3560,12 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .msg-enc{align-self:stretch;max-width:none;display:flex;align-items:center;justify-content:center;gap:7px;margin:8px 0 12px;padding:7px 13px;border:none;cursor:pointer;
   background:var(--accent-dim);color:var(--accent);border-radius:12px;font-size:11.5px;line-height:1.35;text-align:center;font-family:inherit;}
 .msg-enc svg{flex-shrink:0;width:14px;height:14px;fill:none;stroke:var(--accent);stroke-width:1.8;}
+/* "Show earlier messages" pill — tops a long thread's rendered window (iOS memory:
+   only the recent window paints on open; this renders the previous chunk in place). */
+.msg-earlier-row{display:flex;justify-content:center;margin:10px 0 12px;}
+.msg-earlier{border:none;cursor:pointer;background:var(--s2);color:var(--t2);font-family:inherit;
+  font-size:12px;font-weight:700;padding:8px 16px;border-radius:999px;-webkit-tap-highlight-color:transparent;}
+.msg-earlier:active{filter:brightness(.85);}
 .cp-lock{display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:50%;background:var(--accent-dim);}
 .cp-lock svg{width:26px;height:26px;fill:none;stroke:var(--accent);stroke-width:1.8;}
 .cp-body{margin:12px 0 4px;}
@@ -20391,6 +20397,7 @@ async function acLoadPins() {
 }
 // Scroll to the pinned message if it's in view; otherwise just flash it.
 function acJumpToPinned(id) {
+  if (typeof acEnsureMsgRendered === 'function') acEnsureMsgRendered(id);
   const el = document.querySelector('#acThread [data-mid="' + id + '"]');
   if (el && el.scrollIntoView) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('msg-flash'); setTimeout(() => el.classList.remove('msg-flash'), 1400); }
 }
@@ -20515,6 +20522,7 @@ function acMsgPreview(m) {
 }
 // Tap a quoted reply to jump to the original and flash it.
 function acScrollToMsg(id) {
+  acEnsureMsgRendered(id); // may live above the rendered window — extend first
   const el = document.querySelector(`#acThread .msg-bubble[data-mid="${id}"]`);
   if (!el) { showNotif('Original message isn’t loaded.'); return; }
   el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -37582,6 +37590,7 @@ function _acSearchShow() {
   if (cnt) cnt.textContent = (_acSearchIdx + 1) + '/' + _acSearchMatches.length;
   const id = _acSearchMatches[_acSearchIdx];
   _acSearchClearHit();
+  acEnsureMsgRendered(id); // a hit above the rendered window renders in first
   const el = document.querySelector(`#acThread .msg-bubble[data-mid="${id}"]`);
   if (el) {
     el.classList.add('acsb-hit');
@@ -40825,6 +40834,25 @@ function acChatPrivacyNotice() {
 function acShowChatPrivacy() {
   showOverlay('chatPrivacyView');
 }
+// iOS memory: the thread render window (see acRenderThread). 80 recent messages
+// paint on open; older chunks render on demand — identical DOM once rendered.
+const THREAD_WINDOW = 80;
+function acThreadEarlier() {
+  if (!AC._winStart) return;
+  const el = document.getElementById('acThread'); if (!el) return;
+  const prevH = el.offsetHeight; // anchor by height delta: prepended content grows the top
+  AC._winStart = Math.max(0, AC._winStart - THREAD_WINDOW);
+  acRenderThread();
+  SC.measure();
+  SC.jumpTo(SC.y + (el.offsetHeight - prevH)); // stay visually exactly where you were
+}
+// A jump into history (reply-quote tap / pinned banner / in-chat search) may target
+// a message older than the rendered window — extend the window to include it first.
+function acEnsureMsgRendered(id) {
+  if (!AC._winStart) return;
+  const idx = AC.messages.findIndex((x) => String(x.id) === String(id));
+  if (idx !== -1 && idx < AC._winStart) { AC._winStart = Math.max(0, idx - 6); acRenderThread(); }
+}
 function acRenderThread() {
   const el = document.getElementById('acThread');
   acApplyWallpaper(); // per-conversation wallpaper
@@ -40845,20 +40873,39 @@ function acRenderThread() {
   // everything already loaded (opening a chat shouldn't animate the whole history).
   const convKey = isGroup ? 'g' + AC.groupId : 'p' + (AC.peer && AC.peer.id);
   if (AC._seenKey !== convKey) { AC._seenKey = convKey; AC._seen = new Set(AC.messages.map(m => m.id)); }
-  let html = acChatPrivacyNotice(), lastT = 0, lastDay = '';
-  AC.messages.forEach((m, i) => {
+  // iOS memory: render only a recent WINDOW of a long thread. Opening a chat used
+  // to paint EVERY historical bubble + its media at once — a single-action memory
+  // spike that crashed iOS Safari on tap ("open a chat → blank"). Older messages
+  // render on demand ("Show earlier messages" / any jump into history) — once
+  // rendered they're byte-identical to before, so nothing changes visually.
+  if (AC._winKey !== convKey) { AC._winKey = convKey; AC._winStart = null; }
+  if (AC._winStart == null || AC._winStart >= AC.messages.length) {
+    let ws = Math.max(0, AC.messages.length - THREAD_WINDOW);
+    if (AC._unreadDivId != null) { // never hide the unread divider above the fold
+      const ui = AC.messages.findIndex(x => String(x.id) === String(AC._unreadDivId));
+      if (ui !== -1 && ui < ws) ws = Math.max(0, ui - 6);
+    }
+    AC._winStart = ws;
+  }
+  const winStart = AC._winStart;
+  const msgs = winStart > 0 ? AC.messages.slice(winStart) : AC.messages;
+  let html = winStart > 0
+    ? '<div class="msg-earlier-row"><button class="msg-earlier" onclick="acThreadEarlier()">Show earlier messages</button></div>'
+    : acChatPrivacyNotice();
+  let lastT = 0, lastDay = '';
+  msgs.forEach((m, i) => {
    try {
     const t = new Date(m.created_at).getTime();
     const day = dayOf(m.created_at);
     if (day !== lastDay) {
       // If the message above carries a reaction (which overhangs below its
       // bubble), tighten the date's top margin so it stays centred.
-      const pr = i > 0 ? AC.messages[i - 1] : null;
+      const pr = i > 0 ? msgs[i - 1] : null;
       const prevReax = pr && !pr.deleted && pr.reactions && Object.values(pr.reactions).filter(Boolean).length;
       html += `<div class="msg-day${prevReax ? ' mday-tight' : ''}">${escHtml(day)}</div>`;
       lastDay = day;
     }
-    const prev = AC.messages[i - 1], next = AC.messages[i + 1];
+    const prev = msgs[i - 1], next = msgs[i + 1];
     const sameSender = prev && prev.mine === m.mine && (!isGroup || prev.sender?.id === m.sender?.id);
     const grouped = sameSender && (t - lastT) < SIX;
     const nextSame = next && next.mine === m.mine && (!isGroup || next.sender?.id === m.sender?.id);
@@ -40941,7 +40988,7 @@ function acRenderThread() {
     // The Sent/Seen/Sending text is gone — the per-message tick conveys it now.
     // Only a failed send keeps a line (so it stays tap-to-retry).
     let status = '';
-    if (i === lastMineIdx && m.failed) status = `<div class="msg-status failed" onclick="acRetrySend('${m.id}')">Failed — tap to retry</div>`;
+    if (winStart + i === lastMineIdx && m.failed) status = `<div class="msg-status failed" onclick="acRetrySend('${m.id}')">Failed — tap to retry</div>`;
     // Secret (self-destruct) indicator: a flame + (once seen) a live countdown.
     const secretHtml = (!isDeleted && !concealed && m.secret)
       ? `<span class="msg-secret"${m.expiresAt ? ` data-exp="${escHtml(m.expiresAt)}"` : ''}><svg viewBox="0 0 24 24"><path d="M12 2c1 4 4 5 4 9a4 4 0 0 1-8 0c0-1.5 .7-2.5 .7-2.5S9 11 10 11s1-3 2-9z"/></svg>${m.expiresAt ? '<span class="ms-cd">' + acSecretLeft(m.expiresAt) + '</span>' : 'Secret'}</span>`

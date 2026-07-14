@@ -1202,6 +1202,121 @@ function cleanReviewMedia(arr) {
   return out;
 }
 
+// ── Media by URL (iOS memory — the crash fix) ───────────────────────────────
+// Media is STORED as base64 data URLs in the DB (write path unchanged), but the
+// heavy READ paths no longer inline those multi-MB strings into JSON. Instead
+// each is replaced by a small signed URL (`/api/media/<kind>/<id>/<idx>/<sig>`)
+// that streams the decoded bytes with long-lived cache headers. Why this is the
+// fix: a base64 <img>/<video> pins its bytes in JSON + JS + DOM + decode memory
+// and can never be evicted; a URL image is fetched, cached, EVICTED under
+// pressure and re-fetched by the browser — which is exactly what iOS Safari
+// needs to not jettison the page (the "black blink → reload" crash). Opening a
+// chat used to download the ENTIRE history's media inline (a single message can
+// carry ~16MB); now the payload is text-sized and media loads lazily per bubble.
+// The signature (HMAC over kind:id:idx) stops enumeration; possession of a URL
+// grants that one blob only — the same model as any signed-CDN link.
+const MEDIA_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
+const MEDIA_KINDS = {
+  'post-img':   { table: 'posts',             col: 'image'  },
+  'post-imgs':  { table: 'posts',             col: 'images', array: true },
+  'post-media': { table: 'posts',             col: 'media'  },
+  'feed-media': { table: 'feed_posts',        col: 'media'  },
+  'story':      { table: 'stories',           col: 'media'  },
+  'dm-img':     { table: 'at_messages',       col: 'image'  },
+  'dm-imgs':    { table: 'at_messages',       col: 'images', array: true },
+  'dm-media':   { table: 'at_messages',       col: 'media'  },
+  'dm-meta-media': { table: 'at_messages',    col: 'meta', jsonKey: 'media' },
+  'dm-meta-img':   { table: 'at_messages',    col: 'meta', jsonKey: 'image' },
+  'grp-img':    { table: 'at_group_messages', col: 'image'  },
+  'grp-imgs':   { table: 'at_group_messages', col: 'images', array: true },
+  'grp-media':  { table: 'at_group_messages', col: 'media'  },
+  'grp-meta-media': { table: 'at_group_messages', col: 'meta', jsonKey: 'media' },
+  'grp-meta-img':   { table: 'at_group_messages', col: 'meta', jsonKey: 'image' },
+  'avatar':     { table: 'users',             col: 'avatar' },
+  'banner':     { table: 'users',             col: 'banner' },
+};
+function mediaSig(kind, id, idx) {
+  return _vcrypto.createHmac('sha256', MEDIA_SECRET).update(kind + ':' + id + ':' + (idx || 0)).digest('hex').slice(0, 20);
+}
+const MEDIA_URL_RE = /^\/api\/media\/([a-z-]+)\/(\d+)\/(\d+)\/([a-f0-9]{20})(?:\?.*)?$/;
+// Replace a stored data URL with its streaming URL. Small blobs (< 2 KB) stay
+// inline (fewer requests); non-data strings (external URLs, null) pass through.
+function mediaRef(val, kind, id, idx = 0) {
+  if (typeof val !== 'string' || !val.startsWith('data:') || val.length < 2048) return val == null ? null : val;
+  // v= busts caches when the content changes (avatar swaps); sig excludes it.
+  return `/api/media/${kind}/${id}/${idx}/${mediaSig(kind, id, idx)}?v=${val.length % 100000}`;
+}
+// The reverse direction: a client action (forward a photo, share an image from
+// the viewer) may echo one of our media URLs back into a WRITE body where the
+// validators expect a data URL. Resolve any such URL back to the stored data
+// URL server-side (signature-checked) so every existing echo path keeps working.
+async function resolveOneMediaRef(v) {
+  if (typeof v !== 'string') return v;
+  const m = MEDIA_URL_RE.exec(v);
+  if (!m) return v;
+  const def = MEDIA_KINDS[m[1]]; const id = Number(m[2]); const idx = Number(m[3]);
+  if (!def || !Number.isInteger(id) || m[4] !== mediaSig(m[1], id, idx)) return v;
+  try {
+    const { rows } = await db.query(`SELECT ${def.col} AS v FROM ${def.table} WHERE id = $1`, [id]);
+    let val = rows[0] ? rows[0].v : null;
+    if (def.jsonKey) val = val && typeof val === 'object' ? val[def.jsonKey] : null;
+    if (def.array) val = Array.isArray(val) ? val[idx] : null;
+    return (typeof val === 'string' && val.startsWith('data:')) ? val : v;
+  } catch { return v; }
+}
+async function resolveMediaRefs(body) {
+  if (!body || typeof body !== 'object') return;
+  if (typeof body.image === 'string') body.image = await resolveOneMediaRef(body.image);
+  if (typeof body.media === 'string') body.media = await resolveOneMediaRef(body.media);
+  if (Array.isArray(body.images)) for (let i = 0; i < body.images.length; i++) body.images[i] = await resolveOneMediaRef(body.images[i]);
+}
+// Transform a thread message's media fields in place (DM: pfx 'dm', group: 'grp').
+// NB: images[] must be mapped BEFORE image, against the RAW value — a single-image
+// message stores only the `image` column (payload images = [image]), so that entry
+// must resolve via the '-img' kind (the '-imgs' column is NULL and would 404).
+function mediaRefMsg(m, pfx) {
+  const rawImage = m.image;
+  if (Array.isArray(m.images)) m.images = m.images.map((x, i) => (x === rawImage) ? mediaRef(x, pfx + '-img', m.id) : mediaRef(x, pfx + '-imgs', m.id, i));
+  m.image = mediaRef(rawImage, pfx + '-img', m.id);
+  m.media = mediaRef(m.media, pfx + '-media', m.id);
+  if (m.meta && typeof m.meta === 'object') {
+    if (typeof m.meta.media === 'string' && m.meta.media.startsWith('data:')) m.meta = { ...m.meta, media: mediaRef(m.meta.media, pfx + '-meta-media', m.id) };
+    if (typeof m.meta.image === 'string' && m.meta.image.startsWith('data:')) m.meta = { ...m.meta, image: mediaRef(m.meta.image, pfx + '-meta-img', m.id) };
+  }
+  return m;
+}
+app.get('/api/media/:kind/:id/:idx/:sig', async (req, res) => {
+  try {
+    const def = MEDIA_KINDS[req.params.kind];
+    const id = Number(req.params.id), idx = Number(req.params.idx) || 0;
+    if (!def || !Number.isInteger(id) || id < 1) return res.status(404).end();
+    if (req.params.sig !== mediaSig(req.params.kind, id, idx)) return res.status(403).end();
+    const { rows } = await db.query(`SELECT ${def.col} AS v FROM ${def.table} WHERE id = $1`, [id]);
+    let val = rows[0] ? rows[0].v : null;
+    if (def.jsonKey) val = val && typeof val === 'object' ? val[def.jsonKey] : null;
+    if (def.array) val = Array.isArray(val) ? val[idx] : null;
+    if (typeof val !== 'string' || !val.startsWith('data:')) return res.status(404).end();
+    const sep = val.indexOf(';base64,');
+    if (sep === -1) return res.status(404).end();
+    const mime = val.slice(5, sep).split(';')[0].trim() || 'application/octet-stream';
+    const buf = Buffer.from(val.slice(sep + 8), 'base64');
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('Accept-Ranges', 'bytes');
+    // Range support — iOS <video>/<audio> requires it to stream playback.
+    const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || ''));
+    if (range && (range[1] !== '' || range[2] !== '')) {
+      let start = range[1] === '' ? Math.max(0, buf.length - Number(range[2])) : Number(range[1]);
+      let end = (range[1] !== '' && range[2] !== '') ? Math.min(Number(range[2]), buf.length - 1) : buf.length - 1;
+      if (!(start >= 0) || start > end || start >= buf.length) { res.setHeader('Content-Range', `bytes */${buf.length}`); return res.status(416).end(); }
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${buf.length}`);
+      return res.end(buf.subarray(start, end + 1));
+    }
+    res.end(buf);
+  } catch (e) { res.status(500).end(); }
+});
+
 // Structured rich-message payload (poll / event / location / contact).
 // Returns: null = none, object = sanitized payload, undefined = invalid.
 // Interactive types start with empty live state (votes / RSVPs) that later
@@ -4284,7 +4399,7 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
        ORDER BY COALESCE(lm.created_at, dt.created_at) DESC NULLS LAST`,
       [req.user.id]
     );
-    res.json({ conversations: rows });
+    res.json({ conversations: rows.map((r) => ({ ...r, avatar: mediaRef(r.avatar, 'avatar', r.id) })) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -4625,14 +4740,14 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
       }
     } catch (e) { /* permission extras are best-effort */ }
     res.json({
-      peer: { id: peer.id, name: peer.name, username: peer.username, avatar: peer.avatar || null },
+      peer: { id: peer.id, name: peer.name, username: peer.username, avatar: mediaRef(peer.avatar, 'avatar', peer.id) },
       canMessage, request, incomingRequest, connectGated, thread,
       disappearing: await dmDisappearSeconds(req.user.id, other),
       messages: rows.map((m) => {
         // View-once: never ship the bytes in the thread payload. The recipient
         // opens it via the view endpoint (once); afterwards it reads as "opened".
         const vo = !!m.view_once;
-        return {
+        return mediaRefMsg({
         id: m.id, body: m.body, image: vo ? null : (m.image || null),
         images: vo ? [] : ((Array.isArray(m.images) && m.images.length) ? m.images : (m.image ? [m.image] : [])),
         media: vo ? null : (m.media || null), media_kind: m.media_kind || null, media_name: m.media_name || null,
@@ -4641,7 +4756,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
         deleted: !!m.deleted_all, hidden: !!m.hidden, starred: !!m.starred, pinned: !!m.pinned, reactions: m.reactions || {},
         reply_to: m.reply_to || null, edited: !!m.edited, forwarded: !!m.forwarded, meta: m.meta || null,
         secret: !!m.secret, expiresAt: m.expires_at || null,
-        };
+        }, 'dm');
       }),
     });
   } catch (err) {
@@ -4861,6 +4976,7 @@ app.get('/api/cart-recovery/mute/:businessId', auth.requireAuth, async (req, res
 app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-send'), async (req, res) => {
   const other = routeId(req.params.id);
   if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user id.' });
+  await resolveMediaRefs(req.body); // a forwarded photo arrives as its /api/media URL — resolve to the stored bytes
   const body = (req.body.body || '').trim();
   const imgs = cleanImages(req.body.images);
   if (imgs === undefined) return res.status(400).json({ error: 'Those images could not be attached.' });
@@ -4922,7 +5038,7 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
       r = ex.rows[0];
       if (!r) return res.status(500).json({ error: 'Something went wrong. Please try again.' });
     }
-    const msg = { id: r.id, body: r.body, image: r.image || null, images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []), media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, created_at: r.created_at, reply_to: r.reply_to || null, forwarded: !!r.forwarded, meta: r.meta || null, viewOnce: !!r.view_once, threadId: r.thread_id || null, secret: !!r.secret };
+    const msg = mediaRefMsg({ id: r.id, body: r.body, image: r.image || null, images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []), media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, created_at: r.created_at, reply_to: r.reply_to || null, forwarded: !!r.forwarded, meta: r.meta || null, viewOnce: !!r.view_once, threadId: r.thread_id || null, secret: !!r.secret }, 'dm');
     if (isNew) {
       // For a view-once message the recipient's live copy carries no media — they
       // must open it via the view endpoint (which records the one view).
@@ -5178,7 +5294,7 @@ async function deliverDM(senderId, recipientId, body, images) {
     [senderId, recipientId, body, image, imgs.length > 1 ? imgs : null]
   );
   const r = ins.rows[0];
-  const msg = { id: r.id, body: r.body, image: r.image || null, images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []), media: null, media_kind: null, media_name: null, created_at: r.created_at, reply_to: null, forwarded: false, meta: null };
+  const msg = mediaRefMsg({ id: r.id, body: r.body, image: r.image || null, images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []), media: null, media_kind: null, media_name: null, created_at: r.created_at, reply_to: null, forwarded: false, meta: null }, 'dm');
   rtPush(recipientId, 'msg', { kind: 'dm', peerId: senderId, message: { ...msg, mine: false } });
   rtPush(senderId, 'msg', { kind: 'dm', peerId: recipientId, message: { ...msg, mine: true } });
   notify(recipientId, senderId, 'message', null);
@@ -5196,7 +5312,7 @@ async function pushMetaCard(fromId, toId, meta) {
      VALUES ($1,$2,'',$3,${dsec ? `now() + interval '${dsec} seconds'` : 'NULL'}) RETURNING id, created_at`,
     [fromId, toId, JSON.stringify(meta)]
   );
-  const msg = { id: ins.rows[0].id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null, created_at: ins.rows[0].created_at, reply_to: null, forwarded: false, meta };
+  const msg = mediaRefMsg({ id: ins.rows[0].id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null, created_at: ins.rows[0].created_at, reply_to: null, forwarded: false, meta }, 'dm');
   rtPush(toId, 'msg', { kind: 'dm', peerId: fromId, message: { ...msg, mine: false } });
   rtPush(fromId, 'msg', { kind: 'dm', peerId: toId, message: { ...msg, mine: true } });
   return ins.rows[0].id;
@@ -6334,14 +6450,14 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       lastRead,
       live: ls ? liveStreamPublic(ls) : null,
       members: members.rows.map((m) => ({ id: m.id, name: m.name, username: m.username, avatar: m.avatar || null, verified: !!m.verified, isOwner: m.id === g.rows[0].created_by, isAdmin: m.id === g.rows[0].created_by || m.role === 'admin' })),
-      messages: msgs.rows.map((m) => ({
+      messages: msgs.rows.map((m) => mediaRefMsg({
         id: m.id, body: m.body, image: m.image || null,
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
         created_at: m.created_at, mine: m.sender_id === req.user.id, forwarded: !!m.forwarded, meta: m.meta || null, clientId: m.client_id || null,
         starred: !!m.starred, pinned: !!m.pinned, images: (Array.isArray(m.images) && m.images.length) ? m.images : (m.image ? [m.image] : []),
         reply_to: m.reply_to || null, deleted: !!m.deleted_all, hidden: !!m.hidden, edited: !!m.edited, reactions: m.reactions || {},
-        sender: { id: m.sender_id, name: m.sender_name, username: m.sender_username, avatar: m.sender_avatar || null, verified: !!m.sender_verified },
-      })),
+        sender: { id: m.sender_id, name: m.sender_name, username: m.sender_username, avatar: mediaRef(m.sender_avatar, 'avatar', m.sender_id), verified: !!m.sender_verified },
+      }, 'grp')),
     });
   } catch (err) {
     console.error(err);
@@ -6353,6 +6469,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
 app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 60000, 'group-send'), async (req, res) => {
   const gid = routeId(req.params.id);
   if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  await resolveMediaRefs(req.body); // a forwarded photo arrives as its /api/media URL — resolve to the stored bytes
   const body = (req.body.body || '').trim();
   const imgs = cleanImages(req.body.images);
   if (imgs === undefined) return res.status(400).json({ error: 'Those images could not be attached.' });
@@ -6400,14 +6517,14 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
       r = ex.rows[0];
       if (!r) return res.status(500).json({ error: 'Something went wrong. Please try again.' });
     }
-    const base = {
+    const base = mediaRefMsg({
       id: r.id, body: r.body, image: r.image || null,
       images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []),
       media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null,
       created_at: r.created_at, forwarded: !!r.forwarded, meta: r.meta || null, reply_to: r.reply_to || null,
       reactions: {}, edited: false,
-      sender: { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null },
-    };
+      sender: { id: me.id, name: me.name, username: me.username, avatar: mediaRef(me.avatar, 'avatar', me.id) },
+    }, 'grp');
     // Live-deliver to the other group members (only the first time — not on a resend).
     if (isNew) {
       const out = { kind: 'group', groupId: gid, message: { ...base, mine: false } };
@@ -7356,7 +7473,7 @@ const STORY_KINDS = ['image', 'video', 'text']; // photo, video (with audio), or
 const STORY_VIDEO_MAX_CHARS = 5_200_000; // ~3.8 MB binary once base64-decoded
 function mapStory(s, me) {
   return {
-    id: s.id, kind: s.kind, media: s.media || null, caption: s.caption || null, bg: s.bg || null,
+    id: s.id, kind: s.kind, media: mediaRef(s.media, 'story', s.id), caption: s.caption || null, bg: s.bg || null,
     createdAt: s.created_at, expiresAt: s.expires_at,
     mine: s.user_id === me, seen: !!s.seen, viewCount: s.view_count != null ? Number(s.view_count) : undefined,
     audience: s.audience === 'close' ? 'close' : 'all',
@@ -7366,6 +7483,7 @@ function mapStory(s, me) {
 // Post a story (photo or text). Visible for 24h to your followers.
 app.post('/api/stories', auth.requireAuth, rateLimit(30, 60000, 'story-post'), requireFeature('stories'), async (req, res) => {
   if (!(await requireHandle(req, res))) return;
+  await resolveMediaRefs(req.body);
   const kind = STORY_KINDS.includes(req.body.kind) ? req.body.kind : 'image';
   const caption = (req.body.caption || '').toString().trim().slice(0, 300) || null;
   const bg = (req.body.bg || '').toString().slice(0, 24) || null;
@@ -7845,10 +7963,17 @@ function mapPost(r) {
       author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified, accountType: r.author_type === 'business' ? 'business' : 'personal', affiliation: r.author_affiliation || null },
     };
   }
+  // iOS memory: post media + author avatars leave as small streaming URLs, never
+  // inline multi-MB base64 (see the /api/media block). Single-image posts store
+  // only `image`, so the images[] fallback entry maps via 'post-img' idx 0.
+  const rawImage = r.image || null;
+  const imgsRaw = (Array.isArray(r.images) && r.images.length) ? r.images : (rawImage ? [rawImage] : []);
+  const quote = r.quote && typeof r.quote === 'object' && typeof r.quote.image === 'string' && r.quote.image.startsWith('data:') && r.quote.id
+    ? { ...r.quote, image: mediaRef(r.quote.image, 'post-img', r.quote.id) } : (r.quote || null);
   return {
-    id: r.id, body: r.body, image: r.image || null,
-    images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []),
-    media: r.media || null, mediaKind: r.media_kind || null, created_at: r.created_at,
+    id: r.id, body: r.body, image: mediaRef(rawImage, 'post-img', r.id),
+    images: imgsRaw.map((x, i) => (x === rawImage) ? mediaRef(x, 'post-img', r.id) : mediaRef(x, 'post-imgs', r.id, i)),
+    media: mediaRef(r.media, 'post-media', r.id), mediaKind: r.media_kind || null, created_at: r.created_at,
     subscribersOnly: !!r.subscribers_only, locked: false, minTierLevel: r.min_tier_level || 0, imageAlt: r.image_alt || null,
     ppvCents: r.ppv_cents > 0 ? r.ppv_cents : undefined,
     tagged: Array.isArray(r.tags) ? r.tags.filter((t) => t.kind === 'tag').map(({ kind, ...u }) => u) : [],
@@ -7858,10 +7983,10 @@ function mapPost(r) {
     parentId: r.parent_id || null, location: r.location || null,
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
     reposts: r.reposts || 0, reposted: !!r.reposted, repostedBy: r.reposted_by || null,
-    views: r.views || 0, bookmarked: !!r.bookmarked, quote: r.quote || null,
+    views: r.views || 0, bookmarked: !!r.bookmarked, quote,
     replyScope: r.reply_scope || 'everyone',
     circles: r.circles || [], feeds: r.feeds || [], poll,
-    author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified, accountType: r.author_type === 'business' ? 'business' : 'personal', affiliation: r.author_affiliation || null },
+    author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: mediaRef(r.author_avatar, 'avatar', r.author_id), verified: !!r.author_verified, accountType: r.author_type === 'business' ? 'business' : 'personal', affiliation: r.author_affiliation || null },
   };
 }
 // Topic-cluster diversity (the "don't let the feed collapse into one subject /
@@ -9371,11 +9496,11 @@ const FEEDPOST_SELECT = `
 function mapFeedPost(r) {
   return {
     id: r.id, kind: r.kind, text: r.text || null, bg: r.bg || null,
-    media: r.media || null, created_at: r.created_at, expiresAt: r.expires_at || null,
+    media: mediaRef(r.media, 'feed-media', r.id), created_at: r.created_at, expiresAt: r.expires_at || null,
     mine: !!r.mine, products: tagProductsFrom(r),
     likes: r.likes || 0, dislikes: r.dislikes || 0, comments: r.comment_count || 0,
     myVote: r.my_vote || 0, saved: !!r.my_saved, iFollow: !!r.i_follow,
-    author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified, accountType: r.author_type === 'business' ? 'business' : 'personal' },
+    author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: mediaRef(r.author_avatar, 'avatar', r.author_id), verified: !!r.author_verified, accountType: r.author_type === 'business' ? 'business' : 'personal' },
   };
 }
 const FEED_TEXT_MAX = 280;
@@ -9385,6 +9510,7 @@ const FEED_BG_RE = /^#[0-9a-fA-F]{6}$/;
 app.post('/api/feedposts', auth.requireAuth, rateLimit(30, 60000, 'feedpost'), async (req, res) => {
   try {
     const me = await requireHandle(req, res); if (!me) return;
+    await resolveMediaRefs(req.body);
     const kind = String(req.body.kind || '').trim();
     const text = (req.body.text || '').toString().slice(0, FEED_TEXT_MAX);
     const bg = (req.body.bg || '').toString();
@@ -9643,6 +9769,7 @@ app.get('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
 
 // Create a post — or a reply when `parentId` is given.
 app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), requireFeature('posting'), async (req, res) => {
+  await resolveMediaRefs(req.body); // a shared/forwarded photo may arrive as its /api/media URL
   const body = (req.body.body || '').trim();
   // Multiple images (carousel) or a single one (back-compat). `image` stays the
   // first image for list previews / older clients.
