@@ -1987,7 +1987,7 @@ body.tb-collapsed .tb-mainrow{max-height:0;opacity:0;}
 /* The topbar's own home/chat inline padding would shift the row — the solo row
    owns its geometry (tabs scroll to the TRUE screen edge, per the mock). */
 .topbar.tb-solo.tb-home,.topbar.tb-solo.tb-chat{padding-inline:0;}
-.tb-icoset{display:none;align-items:center;gap:4px;flex-shrink:0;
+.tb-icoset{display:none;align-items:center;gap:0;flex-shrink:0;
   /* ≡ GLYPH lands exactly on the gutter: button inset = (38px − 17px svg)/2 = 10.5px */
   margin-inline-start:calc(var(--feed-gutter, 18px) - 10.5px);margin-inline-end:0;}
 /* Founder's design: NO active underline — the active tab is simply full white
@@ -2033,13 +2033,20 @@ body.light .topbar.tb-solo.tb-home .tb-feedtab.active,body.light .topbar.tb-solo
      screen, so it could only scroll a useless ~4px and rubber-banded back ("jumps
      back"). flex:1 + min-width:0 makes it scroll properly, like Beam. */
   flex:1;min-width:0;
-  /* Small start-pad so the resting first tab sits RIGHT beside the icons (no wide
-     black gap), and a short fade so a tab dissolves against the icons — not in an
-     empty box further out. */
-  padding-inline-start:8px;padding-inline-end:var(--feed-gutter);
-  scroll-padding-inline:8px var(--feed-gutter);
-  -webkit-mask-image:linear-gradient(to right,transparent 0,#000 9px);
-  mask-image:linear-gradient(to right,transparent 0,#000 9px);}
+  padding-inline-end:var(--feed-gutter);}
+/* Consistent rhythm (founder): the ＋→first-word gap EQUALS the word↔word gap
+   (Home 26px, Beam 20px), and a WIDE fade fills that gap — a tab dissolves fully
+   invisible a few px before the ＋ (a little breathing space), then eases up to
+   solid right where the resting first tab sits. Per-world because the two rows use
+   different word spacing. */
+.topbar.tb-solo.tb-home .tb-feedtabs{
+  padding-inline-start:26px;scroll-padding-inline:26px var(--feed-gutter);
+  -webkit-mask-image:linear-gradient(to right,transparent 0,transparent 6px,#000 25px);
+  mask-image:linear-gradient(to right,transparent 0,transparent 6px,#000 25px);}
+.topbar.tb-solo.tb-chat .tb-feedtabs{
+  padding-inline-start:20px;scroll-padding-inline:20px var(--feed-gutter);
+  -webkit-mask-image:linear-gradient(to right,transparent 0,transparent 5px,#000 19px);
+  mask-image:linear-gradient(to right,transparent 0,transparent 5px,#000 19px);}
 /* Only the compose "+" on the right of home/chat — no AI logo button there. */
 .topbar.tb-home #tbAiBtn,.topbar.tb-chat #tbAiBtn{display:none;}
 .topbar-actions{display:flex;align-items:center;gap:6px;}
@@ -14693,7 +14700,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1078'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1079'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
