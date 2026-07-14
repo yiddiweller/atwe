@@ -8418,11 +8418,15 @@ body.nav-morph.nav-ball .bottom-nav{left:calc(100% - 58px - var(--nav-inset));
   /* Force a true 58×58 square so border-radius:999px renders a PERFECT circle
      (the auto height was ~60px with padding, making it a slight vertical "drop"). */
   box-sizing:border-box;height:58px;
-  /* A drop see-through + frosted (owner request): content ghosts through the
-     white just a touch — lower alpha is what makes the blur visible at all. */
-  background:rgba(255,255,255,.7);
-  -webkit-backdrop-filter:blur(14px) saturate(160%);backdrop-filter:blur(14px) saturate(160%);
-  border-color:rgba(255,255,255,.5);box-shadow:0 12px 34px rgba(0,0,0,.42);}
+  /* A clean, fully-white circle that's just a LITTLE see-through + frosted —
+     the same heavy blur(30px) wash the regular nav bar uses, in white
+     (owner request). No border rim: the 1px rgba-white border read as a thin
+     grey "fake shadow" line on the white disc. Heavy blur (not 14px) matters:
+     a light blur preserves content edges, which ghost through as smudges
+     that also read as shadows; 30px smears them into a soft uniform wash. */
+  background:rgba(255,255,255,.82);
+  -webkit-backdrop-filter:blur(30px) saturate(150%);backdrop-filter:blur(30px) saturate(150%);
+  border-color:transparent;box-shadow:0 12px 34px rgba(0,0,0,.42);}
 body.nav-morph .bn-tab,
 body.nav-morph .bn-indicator{transition:opacity var(--t-base) ease;}
 body.nav-morph.nav-ball .bn-tab,
