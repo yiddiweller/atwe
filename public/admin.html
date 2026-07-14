@@ -1353,12 +1353,15 @@ function renderView(){
 function renderFeaturesView(){
   const stats = document.getElementById('stats'); if (stats) stats.style.display = 'none';
   const c = document.getElementById('content');
-  c.innerHTML = '<iframe class="feat-frame" src="/features.html?embed=1&theme=dark" title="Feature checklist"></iframe>';
-  // Hand the dashboard's own (known-good) session token to the embedded page —
-  // the iframe must never depend on reading localStorage itself, which some
-  // browsers restrict inside frames. Pushed on load + re-sent on request below.
+  // Hand the dashboard's own (known-good) session token to the embedded page in
+  // THREE ways so it can never falsely lock: (1) in the frame's URL hash — the
+  // most reliable, needs no cross-frame scripting and is never sent to the server;
+  // (2) a postMessage on load; (3) a postMessage on request. iOS Safari restricts
+  // localStorage inside iframes, which caused the false "sign in" lock.
+  const src = '/features.html?embed=1&theme=dark#t=' + encodeURIComponent(token || '');
+  c.innerHTML = '<iframe class="feat-frame" title="Feature checklist"></iframe>';
   const f = c.querySelector('.feat-frame');
-  if (f) f.addEventListener('load', () => { try { f.contentWindow.postMessage({ type: 'atwe-admin-token', token }, location.origin); } catch (e) {} });
+  if (f) { f.addEventListener('load', () => { try { f.contentWindow.postMessage({ type: 'atwe-admin-token', token }, location.origin); } catch (e) {} }); f.src = src; }
 }
 window.addEventListener('message', (e) => {
   if (e.origin !== location.origin) return;
