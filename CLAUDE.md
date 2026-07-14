@@ -1275,6 +1275,36 @@ standalone). The chrome respects the safe-area insets:
 >   visually identical). `will-change` was also dropped from `.msg-scroll` and
 >   `.pool-orb` (permanent GPU layers on large elements). When adding feed media or
 >   any repeated-per-item blur/filter, keep these invariants.
+> - **Media is served by URL, never inlined as base64 in READ payloads (the
+>   definitive iOS crash fix).** Media is still STORED as data URLs in the DB
+>   (write path unchanged, no migration), but the heavy read paths replace each
+>   with a small signed URL — `GET /api/media/:kind/:id/:idx/:sig` (server.js
+>   `MEDIA_KINDS`/`mediaSig`/`mediaRef`/`mediaRefMsg`) streams the decoded bytes
+>   with `immutable` cache headers and **Range support** (iOS `<video>`/`<audio>`
+>   require 206s). Why: a base64 `<img>` pins its bytes in JSON + JS + DOM +
+>   decode memory and can never be evicted; a URL image is fetched, cached,
+>   evicted under pressure and re-fetched — opening one chat used to download the
+>   ENTIRE history's media inline (a single message can carry ~16MB via
+>   `MAX_MEDIA_CHARS`), which crashed iOS on tap ("open a chat → blank"). A real
+>   heavy thread's payload measured 23MB → 49KB after this. Transformed sites: DM
+>   + group thread reads and live `msg` pushes (`mediaRefMsg`), `deliverDM`,
+>   `pushMetaCard` (meta.media/meta.image, e.g. story-reply snapshots), `mapPost`
+>   (image/images/media/quote/author avatar), `mapFeedPost`, `mapStory`, the
+>   conversations-list avatars. **`publicUser` (own account) deliberately stays
+>   base64** so profile-editor round-trips can't clear fields. **Echo-back rule:**
+>   any WRITE route whose body may re-send previously-served media (forward a
+>   photo, share from the image viewer, repost media into a composer) must call
+>   `await resolveMediaRefs(req.body)` first — it resolves our media URLs back to
+>   the stored data URLs (sig-checked) before `cleanImage`/`cleanMedia` validation
+>   (wired into DM send, group send, create post, feedpost create, story create).
+>   When adding a NEW read surface that ships stored media, use `mediaRef`; when
+>   adding a new media-accepting write route, add `resolveMediaRefs`.
+> - **Open-thread windowing:** `acRenderThread` paints only the last
+>   `THREAD_WINDOW`=80 messages; a muted "Show earlier messages" pill
+>   (`acThreadEarlier`, height-delta scroll anchoring via `SC.jumpTo`) renders
+>   older chunks in place, and any jump into history (reply-quote tap, pinned
+>   jump, in-chat search) auto-extends via `acEnsureMsgRendered(id)`. A long
+>   thread no longer renders every historical bubble + media on open.
 
 > **Accessibility baseline:** the app ships global `:focus-visible` outlines
 > (`button`/`a`/`[role=button]`/`[tabindex]` → 2px accent ring), a full
