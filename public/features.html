@@ -238,6 +238,8 @@
   .lock-card .btn{display:inline-block;text-decoration:none}
   body.is-locked .cmd,body.is-locked .intro,body.is-locked .toolbar,body.is-locked main,
   body.is-locked #emptyState,body.is-locked .ideas,body.is-locked .foot{display:none !important}
+  .restore-bar{max-width:1080px;margin:6px auto 0;padding:6px clamp(14px,3vw,28px);font-size:13px;color:var(--mut)}
+  .restore-bar .linklike{background:none;border:none;color:var(--accent);font:inherit;cursor:pointer;padding:0;text-decoration:underline}
   .hidden{display:none !important}
   :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
   @media (prefers-reduced-motion:reduce){*{transition:none !important;scroll-behavior:auto}}
@@ -298,6 +300,7 @@
 
 <main id="content"></main>
 <div class="empty" id="emptyState">No features match your search or filters.</div>
+<div class="restore-bar" id="restoreBar" hidden></div>
 
 <section class="ideas">
   <div class="ideas-card addfeat-card">
@@ -374,11 +377,12 @@ const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=nu
 let store={dec:{},ideas:"",custom:[]};
 try{const raw=localStorage.getItem(KEY);if(raw)store=Object.assign(store,JSON.parse(raw));}catch(e){}
 if(!store.custom)store.custom=[];
+if(!store.deleted)store.deleted=[];
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(store));}catch(e){}};
 
 // live feature set = the built-in catalog + any features the founder added
 let FEATURES=[];
-function rebuildFeatures(){FEATURES=BASE_FEATURES.concat(store.custom||[]);}
+function rebuildFeatures(){const del=new Set(store.deleted||[]);FEATURES=BASE_FEATURES.concat(store.custom||[]).filter(f=>!del.has(f.id));}
 rebuildFeatures();
 
 // effective keep: true / false / null(undecided). default: built=true, excluded=false, added=keep
@@ -432,7 +436,7 @@ function renderAll(){
         row.dataset.search=(f.name+" "+f.desc+" "+f.cat).toLowerCase();
         const hor=f.hor?`<span class="hchip">${f.hor}</span>`:"";
         const sz=f.sz?`<span class="szchip">${({S:"Small",M:"Medium",L:"Large"})[f.sz]||f.sz}</span>`:"";
-        const del=f.custom?`<button class="notebtn delbtn" title="Remove this feature" aria-label="Remove this feature"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>`:"";
+        const del=`<button class="notebtn delbtn" title="Delete this feature" aria-label="Delete this feature"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>`;
         row.innerHTML=
           `<div class="rmain">
              <div class="rhead"><span class="rname">${esc(f.name)}</span>${hor}${sz}</div>
@@ -461,7 +465,7 @@ function renderAll(){
         ta.value=noteOf(f);if(ta.value){row.classList.add("has-note");}
         ta.oninput=()=>{setNote(f,ta.value.trim());row.classList.toggle("has-note",!!ta.value.trim());};
         const db=row.querySelector(".delbtn");
-        if(db)db.onclick=()=>{if(confirm('Remove "'+f.name+'" from your list?'))delCustom(f.id);};
+        if(db)db.onclick=()=>{if(confirm('Delete "'+f.name+'" from the list? You can restore removed features later.'))deleteFeature(f);};
         applyState();
       });
       det.appendChild(body);sec.appendChild(det);
@@ -471,6 +475,7 @@ function renderAll(){
   $("#cBuilt").textContent=FEATURES.filter(f=>f.phase==="inv").length;
   $("#cRoad").textContent=FEATURES.filter(f=>f.phase==="roadmap").length;
   $("#cExcl").textContent=FEATURES.filter(f=>f.phase==="excluded").length;
+  const rb=$("#restoreBar");if(rb){const n=(store.deleted||[]).length;if(n){rb.hidden=false;rb.innerHTML=n+" feature"+(n>1?"s":"")+" deleted · <button class=\"linklike\" id=\"restoreBtn\">Restore them</button>";const rbtn=$("#restoreBtn");if(rbtn)rbtn.onclick=restoreAll;}else{rb.hidden=true;rb.innerHTML="";}}
   refreshTallies();applyFilter();
 }
 
@@ -484,7 +489,8 @@ function addCustom(name,desc){
   const row=rowEls[id];if(row){row.scrollIntoView({behavior:"smooth",block:"center"});}
   toast("Feature added");return true;
 }
-function delCustom(id){store.custom=(store.custom||[]).filter(c=>c.id!==id);delete store.dec[id];save();renderAll();toast("Feature removed");}
+function deleteFeature(f){if(f.custom){store.custom=(store.custom||[]).filter(c=>c.id!==f.id);}else{store.deleted=store.deleted||[];if(!store.deleted.includes(f.id))store.deleted.push(f.id);}delete store.dec[f.id];save();renderAll();toast("Feature deleted");}
+function restoreAll(){store.deleted=[];save();renderAll();toast("Removed features restored");}
 
 // ── tallies ──
 function refreshTallies(){
@@ -557,7 +563,7 @@ ideasTa.oninput=()=>{store.ideas=ideasTa.value;save();};
 // reset
 $("#resetBtn").onclick=()=>{
   if(!confirm("Reset every choice back to the start? Your notes, ideas, and added features will be cleared too."))return;
-  store={dec:{},ideas:"",custom:[]};save();location.reload();
+  store={dec:{},ideas:"",custom:[],deleted:[]};save();location.reload();
 };
 
 // ── import (load a file exported from the checklist) ──
@@ -596,14 +602,15 @@ function buildExport(){
     return {id:f.id,phase:f.phase,category:f.cat,name:f.name,
       decision:v===true?"keep":v===false?"skip":"undecided",note:n||undefined,
       horizon:f.hor,size:f.sz};});
+  const removed=(store.deleted||[]).map(id=>{const bf=BASE_FEATURES.find(x=>x.id===id);return bf?{id:bf.id,name:bf.name,category:bf.cat}:{id};});
   return {tool:"atwe-feature-checklist",version:1,exportedAt:new Date().toISOString(),
-    summary:{total:FEATURES.length,keep,skip,undecided:und,notes},
-    ownIdeas:store.ideas||"",features:feats};
+    summary:{total:FEATURES.length,keep,skip,undecided:und,notes,removed:removed.length},
+    ownIdeas:store.ideas||"",features:feats,removed};
 }
 function openExport(){
   const data=buildExport();
   $("#exportText").value=JSON.stringify(data,null,1);
-  $("#modalSummary").innerHTML=`You’re keeping <b style="color:var(--keep)">${data.summary.keep}</b> features, skipping <b style="color:var(--skip)">${data.summary.skip}</b>, with <b>${data.summary.undecided}</b> still undecided and <b>${data.summary.notes}</b> notes.`;
+  $("#modalSummary").innerHTML=`This is your complete list. Keeping <b style="color:var(--keep)">${data.summary.keep}</b>, skipping <b style="color:var(--skip)">${data.summary.skip}</b>, <b>${data.summary.undecided}</b> undecided, <b>${data.summary.notes}</b> notes`+(data.summary.removed?`, <b>${data.summary.removed}</b> deleted`:``)+`.`;
   $("#modal").classList.add("on");
 }
 $("#exportBtn").onclick=openExport;$("#exportBtn2").onclick=openExport;
