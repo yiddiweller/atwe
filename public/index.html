@@ -9228,7 +9228,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <button class="auth-btn" onclick="googleLogin()"><span class="auth-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.24 10.27v3.93h5.5c-.24 1.42-1.66 4.16-5.5 4.16-3.31 0-6.01-2.74-6.01-6.12s2.7-6.12 6.01-6.12c1.88 0 3.14.8 3.86 1.49l2.63-2.53C17.06 3.4 14.86 2.4 12.24 2.4 6.86 2.4 2.52 6.74 2.52 12.24s4.34 9.84 9.72 9.84c5.61 0 9.33-3.95 9.33-9.51 0-.64-.07-1.13-.16-1.62h-9.17z"/></svg></span> Continue with Google</button>
         <button class="auth-btn" id="appleAuthBtn" onclick="appleLogin()"><span class="auth-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 12.04c-.03-2.5 2.04-3.7 2.13-3.76-1.16-1.7-2.97-1.93-3.61-1.96-1.54-.16-3 .9-3.78.9-.78 0-1.97-.88-3.24-.86-1.67.02-3.21.97-4.07 2.47-1.73 3-.44 7.45 1.24 9.89.82 1.19 1.8 2.53 3.08 2.48 1.24-.05 1.71-.8 3.21-.8 1.49 0 1.92.8 3.23.77 1.33-.02 2.18-1.21 3-2.41.94-1.38 1.33-2.72 1.35-2.79-.03-.01-2.59-.99-2.62-3.94zM14.6 4.84c.68-.83 1.14-1.98 1.01-3.13-.98.04-2.16.65-2.86 1.48-.62.73-1.17 1.9-1.02 3.02 1.09.08 2.2-.55 2.87-1.37z"/></svg></span> Continue with Apple</button>
         <button class="auth-btn" onclick="authShowLogin()"><span class="auth-ic">@</span> Login with username</button>
-        <button class="auth-btn" onclick="acOpenQrLogin()"><span class="auth-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="2.2"/><rect x="14" y="3" width="7" height="7" rx="2.2"/><rect x="3" y="14" width="7" height="7" rx="2.2"/><path d="M14 14.5v.01M14 18v3M17.5 14h.01M21 14v.01M17.5 17.5h.01M21 17.5v3.5M17.5 21h.01"/></svg></span> Login with QR code</button>
+        <button class="auth-btn auth-btn-text" onclick="acOpenQrLogin()">Login with QR code</button>
       </div>
     </div>
     <div class="auth-terms">By continuing, you agree to our <a href="/terms.html">Terms</a>, <a href="/privacy.html">Privacy Policy</a> and <a href="/privacy.html">Cookie Use</a>.</div>
@@ -14727,7 +14727,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1088'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1089'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
