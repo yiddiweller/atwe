@@ -383,10 +383,11 @@ body.light .splash-mark{background-color:#d2d2d8;}
 #loginBackToAi{position:absolute;top:calc(env(safe-area-inset-top) + 12px);left:14px;margin:0;z-index:6;}
 @media(hover:hover){.auth-backarrow:hover{background:rgba(255,255,255,.08);}}
 .auth-backarrow svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
-/* QR-login shortcut top-right of the username step (mirrors the back arrow). Its
-   icon is a touch smaller + a shade dimmer so it reads as a secondary shortcut. */
-.auth-qr-corner svg{width:23px;height:23px;}
-.auth-qr-corner{color:var(--t2);}
+/* ⋯ menu top-right of the username step (mirrors the back arrow). Opens a small
+   frosted popover (reusing .ai-menu-pop) with the QR-login option. Dimmer so it
+   reads as a secondary control. */
+.auth-more-corner{color:var(--t2);}
+.auth-more-corner svg{width:22px;height:22px;fill:currentColor;stroke:none;}
 .auth-stepalt{background:none;border:none;color:#fff;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;
   padding:8px 10px;margin-inline-end:-10px;border-radius:14px;-webkit-tap-highlight-color:transparent;transition:opacity var(--t-fast) var(--ease);}
 .auth-stepalt:active{opacity:.6;}
@@ -9242,7 +9243,11 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   <div class="auth-step hidden" id="authStep1">
     <div class="auth-stepbar">
       <button class="auth-backarrow" onclick="authLandingBack()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
-      <button class="auth-backarrow auth-qr-corner" onclick="acOpenQrLogin()" aria-label="Log in with QR code" title="Log in with QR code"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><path d="M14 14.5v.01M14 18v3M17.5 14h.01M21 14v.01M17.5 17.5h.01M21 17.5v3.5M17.5 21h.01"/></svg></button>
+      <button class="auth-backarrow auth-more-corner" id="authMoreBtn" onclick="authOpenQrMenu(event)" aria-label="More options" aria-haspopup="menu"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
+    </div>
+    <div class="ai-menu-scrim hidden" id="authQrScrim" onclick="authCloseQrMenu()"></div>
+    <div class="ai-menu-pop hidden" id="authQrMenu" role="menu" style="min-width:210px;">
+      <button class="aimp-item" role="menuitem" onclick="authQrFromMenu()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><path d="M14 14.5v.01M14 18v3M17.5 14h.01M21 14v.01M17.5 17.5h.01M21 17.5v3.5M17.5 21h.01"/></svg> Log in with QR code</button>
     </div>
     <div class="auth-handle">
       <span class="auth-at">@</span>
@@ -14732,7 +14737,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1090'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1091'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -16431,7 +16436,28 @@ function authLandingBack() {
   emailResetButtons();
   authToggleContinue();
   authBrandFor('authLandingView');
+  authCloseQrMenu();
 }
+// ⋯ menu on the username step → a small popover with "Log in with QR code".
+function authOpenQrMenu(e) {
+  if (e) e.stopPropagation();
+  const btn = document.getElementById('authMoreBtn');
+  const pop = document.getElementById('authQrMenu');
+  const scrim = document.getElementById('authQrScrim');
+  if (!btn || !pop || !scrim) return;
+  if (!pop.classList.contains('hidden')) { authCloseQrMenu(); return; } // tap again = close
+  scrim.classList.remove('hidden');
+  pop.classList.remove('hidden');
+  const r = btn.getBoundingClientRect();
+  pop.style.top = (r.bottom + 6) + 'px';
+  pop.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
+  pop.style.left = 'auto';
+}
+function authCloseQrMenu() {
+  document.getElementById('authQrMenu')?.classList.add('hidden');
+  document.getElementById('authQrScrim')?.classList.add('hidden');
+}
+function authQrFromMenu() { authCloseQrMenu(); acOpenQrLogin(); }
 // Flip the username step's button between "Continue" and "Create an account".
 function setUsernameCreateMode(on) {
   const btn = document.getElementById('authStep1Btn');
