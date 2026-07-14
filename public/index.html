@@ -140,6 +140,9 @@ a{text-decoration:none;color:inherit;}
   /* One shared left/right gutter for the home feed column + the floating nav, so
      every row's start line and the nav edges sit on the same vertical line. */
   --feed-gutter: 16px;
+  /* The floating bottom-nav pill is inset MORE than the content gutter (matching
+     the native iOS app): posts peek out ~17px on both sides of the pill. */
+  --nav-inset: calc(var(--feed-gutter) + 26px);
 
   /* Radius — a soft, consistent Apple-like scale */
   --r-xs: 7px;
@@ -8334,7 +8337,7 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
 /* Custom design: a see-through grey floating pill with white filled icons; a
    single Liquid-Glass pill slides between tabs to mark the active one. */
 .bottom-nav{display:none;position:fixed;z-index:120;
-  left:var(--feed-gutter);right:var(--feed-gutter);width:auto;
+  left:var(--nav-inset);right:var(--nav-inset);width:auto;
   /* Evenly-inset floating pill: the gap below equals the gap on both sides
      (--feed-gutter) so it reads as a symmetric iOS-style bar sitting at the bottom.
      The home-indicator inset already reserves the very bottom, so a gutter-sized gap
@@ -8403,7 +8406,7 @@ body.nav-morph .bn-plus{display:flex;position:absolute;inset:0;z-index:5;align-i
   background:none;border:none;cursor:pointer;opacity:0;pointer-events:none;transition:opacity var(--t-base) ease var(--t-fast);}
 body.nav-morph .bn-plus svg{width:26px;height:26px;fill:none;stroke:#111;stroke-width:2.4;stroke-linecap:round;}
 /* Ball state (added on scroll-down, removed on scroll-up / at the top) */
-body.nav-morph.nav-ball .bottom-nav{left:calc(100% - 58px - var(--feed-gutter));
+body.nav-morph.nav-ball .bottom-nav{left:calc(100% - 58px - var(--nav-inset));
   /* Force a true 58×58 square so border-radius:999px renders a PERFECT circle
      (the auto height was ~60px with padding, making it a slight vertical "drop"). */
   box-sizing:border-box;height:58px;
