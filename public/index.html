@@ -8983,6 +8983,14 @@ body.light #signupDob{color-scheme:light;}
 /* Full opacity — soft-light is inherently gentle, so this still reads soft. */
 #page-glow.pool-on .pool-orb{opacity:1;}
 body.light #page-glow .pool-orb{display:none;}
+/* Touch devices: kill the whole cursor-pool stage. It's a MOUSE-cursor glow —
+   meaningless without a pointer — but a fixed full-screen mix-blend-mode layer
+   is one of the most expensive things to composite, and pinch-zoom re-rasterizes
+   the entire blended viewport at zoom scale, which jettisons the page on
+   memory-tight iPhones (the black-blink → reload-to-home crash). display:none
+   removes the layer entirely; the JS shield-cloning + idle drift are gated off
+   to match. Zero visual change on touch. */
+@media (hover: none), (pointer: coarse){ #page-glow{display:none!important;} }
 
 /* Layer B — bulb rim. A 2.5px ring hugging the surface's rounded edge at
    --gx/--gy, twin geometry in one element: the sharp core (white→icy) is the
@@ -14659,7 +14667,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1074'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1075'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -43717,6 +43725,11 @@ function navInit() {
    this. */
 (function lightEngine() {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Touch devices (all phones/tablets): the cursor-pool + media-shield cloning
+  // is a mouse effect with no purpose here, and its full-screen blend layer
+  // (hidden via CSS above) crashes memory-tight iPhones under pinch-zoom. Gate
+  // the matching JS off so nothing clones feed media or idle-repaints per frame.
+  const coarse = matchMedia('(hover: none), (pointer: coarse)').matches;
   const root = document.documentElement;
   let glows = [], spins = [];
   let px = innerWidth / 2, py = 0, rafB = null;
@@ -43794,6 +43807,7 @@ function navInit() {
   // Rebuild the shield set from media within POOL_REACH of the cursor (px,py).
   // Cheap: skips off-screen media and tiny icons/logos (< 44px).
   function syncShields() {
+    if (coarse) { if (shields.size) clearAllShields(); return; } // no cursor-pool on touch → nothing to shield
     if (!stage.classList.contains('pool-on')) { if (shields.size) clearAllShields(); return; }
     var want = null, list = document.querySelectorAll('img,video');
     for (var i = 0; i < list.length; i++) {
@@ -43938,17 +43952,9 @@ function navInit() {
   }, { passive: true });
   // Scroll intentionally does NOTHING to the light — no listener here.
 
-  // Idle drift on touch devices so surfaces stay alive without a cursor.
-  if (matchMedia('(hover: none)').matches) {
-    var t = 0;
-    (function idle() {
-      t += .006;
-      px = innerWidth * (.5 + Math.cos(t * 1.2) * .35);
-      py = innerHeight * (.45 + Math.sin(t) * .3);
-      if (!rafB) rafB = requestAnimationFrame(paintB);
-      requestAnimationFrame(idle);
-    })();
-  }
+  // (Removed: the idle-drift loop that kept the cursor-pool alive on touch. The
+  // pool is display:none on touch now, so drifting it was pure per-frame waste
+  // — a forever-running rAF that helped push memory-tight iPhones over the edge.)
 
   // NOTE: the opening lap (Layer C — the light that ran laps around a screen on
   // boot / first tab open) was REMOVED entirely at Yiddi's request (2026-07-08).
