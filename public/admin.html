@@ -682,6 +682,10 @@
   @media (max-width:380px){
     .u-pills .pill.free{display:none;}
   }
+  /* Features tab: the checklist page embedded full-height. */
+  .feat-frame{width:100%;height:calc(100vh - 108px);min-height:520px;border:none;border-radius:14px;
+    background:#0b0c0e;display:block;}
+  @media (max-width:900px){ .feat-frame{height:calc(100vh - 96px);} }
 </style>
 </head>
 <body>
@@ -727,6 +731,9 @@
       <button class="tab" data-v="traffic" onclick="switchTab('traffic')">Traffic</button>
       <button class="tab" data-v="growth" onclick="switchTab('growth')">Growth</button>
       <button class="tab" data-v="audit" onclick="switchTab('audit')">Audit log</button>
+
+      <div class="nav-label" data-group="product">Product</div>
+      <button class="tab" data-v="features" onclick="switchTab('features')">Features</button>
 
       <div class="nav-label" data-group="system">System</div>
       <button class="tab" data-v="site" onclick="switchTab('site')">Site</button>
@@ -1169,7 +1176,7 @@ const TAB_PERM = {
   reports: 'moderation', disputes: 'refunds', circles: 'moderation', feed: 'super',
   finance: 'revenue', growth: 'growth', audit: 'super', staff: 'super',
   refunds: 'refunds', appeals: 'users', datareq: 'users', activity: 'super', investigate: 'moderation', moderate: 'moderation',
-  cards: 'revenue',
+  cards: 'revenue', features: 'super',
 };
 function canSee(tab){ const p = TAB_PERM[tab]; if (ME.superadmin) return true; return p !== 'super' && ME.perms.includes(p); }
 
@@ -1240,7 +1247,7 @@ const NAV_TITLES = {
   refunds:'Refunds', users:'Users', staff:'Staff', usernames:'Usernames', reports:'Reports',
   investigate:'Investigate', moderate:'AI content scan', disputes:'Disputes', appeals:'Appeals', support:'Support', datareq:'Data requests',
   posts:'Posts', circles:'Circles', feed:'Feed', activity:'Activity', traffic:'Traffic', growth:'Growth',
-  audit:'Audit log', site:'Site', cards:'Cards',
+  audit:'Audit log', site:'Site', cards:'Cards', features:'Features',
 };
 // Mobile: slide the sidebar in/out.
 function toggleNav(open){
@@ -1255,6 +1262,7 @@ function renderView(){
   document.body.classList.add('authed');
   tabs.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.v === VIEW));
   const title = document.getElementById('viewTitle'); if (title) title.textContent = NAV_TITLES[VIEW] || 'Admin';
+  const statRow = document.getElementById('stats'); if (statRow) statRow.style.display = (VIEW === 'features') ? 'none' : '';
   const inner = document.querySelector('.main-inner'); if (inner) inner.scrollTop = 0;
   window.scrollTo(0, 0);
   if (VIEW === 'users') renderUsersView();
@@ -1281,7 +1289,15 @@ function renderView(){
   else if (VIEW === 'activity') renderActivityView();
   else if (VIEW === 'investigate') renderInvestigateView();
   else if (VIEW === 'moderate') renderModerateView();
+  else if (VIEW === 'features') renderFeaturesView();
   else renderOverviewView();
+}
+
+/* ─── Features (product feature checklist, embedded) ─── */
+function renderFeaturesView(){
+  const stats = document.getElementById('stats'); if (stats) stats.style.display = 'none';
+  const c = document.getElementById('content');
+  c.innerHTML = '<iframe class="feat-frame" src="/features.html?embed=1&theme=dark" title="Feature checklist"></iframe>';
 }
 
 /* ─── Overview ─── */
