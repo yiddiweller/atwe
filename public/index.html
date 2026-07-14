@@ -1989,7 +1989,7 @@ body.tb-collapsed .tb-mainrow{max-height:0;opacity:0;}
 .topbar.tb-solo.tb-home,.topbar.tb-solo.tb-chat{padding-inline:0;}
 .tb-icoset{display:none;align-items:center;gap:6px;flex-shrink:0;
   /* ≡ GLYPH lands exactly on the gutter: button inset = (38px − 17px svg)/2 = 10.5px */
-  margin-inline-start:calc(var(--feed-gutter, 18px) - 10.5px);margin-inline-end:12px;}
+  margin-inline-start:calc(var(--feed-gutter, 18px) - 10.5px);margin-inline-end:2px;}
 /* Founder's design: NO active underline — the active tab is simply full white
    (inactive grey). And the icons sit on the EXACT same line as the tab text:
    the old tabs reserved extra bottom padding for the underline (7px top / 12px
@@ -2017,6 +2017,20 @@ body.light .topbar.tb-solo.tb-home .tb-feedtab.active,body.light .topbar.tb-solo
 /* Beam tabs match the home row's scrollable rhythm in solo mode (they were
    space-between across the full width, which fights the icon cluster). */
 .topbar.tb-solo.tb-chat .tb-feedtabs{justify-content:flex-start;gap:20px;margin-inline-start:0;}
+/* Unified Home + Beam tab-row geometry (founder polish, single source of truth —
+   (0,4,0) so it beats the per-world mobile rules):
+   • text sits CLOSE to the ≡/＋ icons (small start padding + tiny icoset gap above);
+   • a soft left-edge fade so a tab dissolves smoothly UNDER the icons as it scrolls;
+   • padding-inline-end = the feed gutter so, scrolled fully, the ⋯ rests exactly at
+     the bottom-hairline's right inset (it no longer sticks past it to the screen edge).
+     Mid-scroll the row still travels to the true edge — the end-padding only sets
+     where the FINAL rest lands. */
+.topbar.tb-solo.tb-home .tb-feedtabs,.topbar.tb-solo.tb-chat .tb-feedtabs{
+  margin-inline-start:0;
+  padding-inline-start:13px;padding-inline-end:var(--feed-gutter);
+  scroll-padding-inline:13px var(--feed-gutter);
+  -webkit-mask-image:linear-gradient(to right,transparent 0,rgba(0,0,0,.45) 6px,#000 13px);
+  mask-image:linear-gradient(to right,transparent 0,rgba(0,0,0,.45) 6px,#000 13px);}
 /* Only the compose "+" on the right of home/chat — no AI logo button there. */
 .topbar.tb-home #tbAiBtn,.topbar.tb-chat #tbAiBtn{display:none;}
 .topbar-actions{display:flex;align-items:center;gap:6px;}
@@ -4702,10 +4716,11 @@ body.reduce-motion .ac-newposts{animation:none;}
   vertical-align:middle;}
 .ac-chattab-dot{min-width:8px;width:8px;height:8px;padding:0;border-radius:50%;background:var(--red);}
 /* Pane slides in from the swipe direction when switching tabs by swipe. */
-@keyframes acPaneInL{from{opacity:.3;transform:translateX(20px);}to{opacity:1;transform:none;}}
-@keyframes acPaneInR{from{opacity:.3;transform:translateX(-20px);}to{opacity:1;transform:none;}}
-.ac-pane-in-l{animation:acPaneInL .24s var(--ease);}
-.ac-pane-in-r{animation:acPaneInR .24s var(--ease);}
+/* Beam tab change = a clean cross-fade (no horizontal slide), matching Home. */
+@keyframes acPaneInL{from{opacity:0;}to{opacity:1;}}
+@keyframes acPaneInR{from{opacity:0;}to{opacity:1;}}
+.ac-pane-in-l{animation:acPaneInL .2s ease-out;}
+.ac-pane-in-r{animation:acPaneInR .2s ease-out;}
 
 /* For you / Following segmented tabs (X-style) */
 .ac-feedtabs{display:flex;border-bottom:1px solid var(--b1);flex-shrink:0;}
@@ -4968,9 +4983,11 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.08);}
 .psh-actions{display:flex;gap:8px;margin-top:14px;flex-shrink:0;}
 .psh-actions .ac-pill-btn{flex:1;justify-content:center;padding:9px 6px;font-size:14px;}
 .psh-hint{text-align:center;font-size:12.5px;color:var(--t3);margin-top:9px;flex-shrink:0;}
-/* Horizontal page-slide when changing feed tabs (tap OR swipe) — X-style pager feel:
-   the new feed slides in from the side it came from. */
-@keyframes feedSwipeIn{from{opacity:.15;transform:translateX(calc(var(--swipe-dir,1) * 30%));}to{opacity:1;transform:translateX(0);}}
+/* Tab change = a clean, quick cross-fade — NOT a horizontal page-slide. The old
+   translateX(30%) slid the whole feed halfway across the screen (owner: "it moves
+   the screen left so you have a halfway screen"). A pure opacity fade reads as the
+   page simply changing, no sideways movement. */
+@keyframes feedSwipeIn{from{opacity:0;}to{opacity:1;}}
 body.reduce-motion #acFeed{animation:none!important;}
 /* Double-tap-to-like heart burst (Instagram-style pop + particle bloom). */
 .heart-burst{position:fixed;z-index:6000;pointer-events:none;transform:translate(-50%,-50%);width:0;height:0;}
@@ -10156,7 +10173,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <div class="tb-icoset" id="tbIcoset">
         <button class="tb-ico tb-ico-menu" onclick="toggleSidebar()" aria-label="Menu"><svg viewBox="0 0 24 24"><line x1="4" y1="8" x2="19" y2="8"/><line x1="4" y1="16" x2="19" y2="16"/></svg></button>
         <button class="tb-ico" id="tbIcoPlus" onclick="tbSoloPlus()" aria-label="New"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
-        <button class="tb-ico" onclick="appTab('search')" aria-label="Engine — search"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/></svg></button>
+        <!-- (Removed the ◯ Engine/search icon — search lives on the bottom nav.) -->
       </div>
       <div class="tb-feedtabs hidden" id="tbFeedTabs">
         <button class="tb-feedtab" id="acFeedTab-foryou" onclick="acSetFeed('foryou')">For You</button>
@@ -14667,7 +14684,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1075'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1076'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24259,8 +24276,7 @@ function acSetFeed(scope) {
   const _slideEl = document.getElementById('acFeed');
   if (_slideEl && _oi >= 0 && _ni >= 0 && _oi !== _ni && !document.body.classList.contains('reduce-motion')) {
     _slideEl.style.animation = 'none'; void _slideEl.offsetWidth;
-    _slideEl.style.setProperty('--swipe-dir', _ni > _oi ? 1 : -1);
-    _slideEl.style.animation = 'feedSwipeIn .36s cubic-bezier(.22,.61,.36,1)';
+    _slideEl.style.animation = 'feedSwipeIn .22s ease-out';
   }
   // Keep the active tab fully visible when the row is wider than the screen.
   try { document.getElementById('acFeedTab-' + scope)?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); } catch (_) {}
