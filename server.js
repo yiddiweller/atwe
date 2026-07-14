@@ -635,6 +635,15 @@ app.post('/api/site/unlock', rateLimit(12, 60000), (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Product feature catalog (admin Features tab). The data is served ONLY to
+// authenticated admins, so the roadmap is never exposed to the public. The
+// served public/features.html is just a shell + a locked screen until this
+// admin-only fetch succeeds. ──
+const FEATURES_DATA = require('./features-data');
+app.get('/api/admin/features-data', auth.requireAdmin, (_req, res) => {
+  res.json({ features: FEATURES_DATA });
+});
+
 app.get('/api/admin/site', auth.requireAdmin, async (_req, res) => {
   await loadSiteLock();
   if (!_siteLock.code) { _siteLock.code = genCode(_siteLock.codeLength); }
