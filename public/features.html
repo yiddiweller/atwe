@@ -226,8 +226,12 @@
   .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 
   /* Locked screen (shown to anyone who isn't a signed-in admin). */
-  .lock-screen{position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;
+  /* Visibility is driven by the body.is-locked class (NOT the [hidden] attribute,
+     which a display rule would override) so the overlay reliably disappears once
+     the checklist loads. */
+  .lock-screen{position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;
     padding:24px;background:var(--bg)}
+  body.is-locked .lock-screen{display:flex}
   .lock-card{max-width:420px;text-align:center;background:var(--panel);border:1px solid var(--hair);
     border-radius:20px;padding:34px 28px;box-shadow:var(--shadow)}
   .lock-ic{width:66px;height:66px;margin:0 auto 16px;border-radius:18px;display:flex;align-items:center;justify-content:center;
@@ -651,10 +655,18 @@ window.addEventListener("message",(e)=>{
   }
 });
 function requestParentToken(){try{if(EMBEDDED)window.parent.postMessage({type:"atwe-admin-token-request"},location.origin);}catch(e){}}
+function embedTokenFromHash(){try{const m=/[#&]t=([^&]+)/.exec(location.hash||"");if(m&&m[1])return decodeURIComponent(m[1]);}catch(e){}return null;}
+function anyToken(){
+  // Try every channel: postMessage → URL hash (from the admin dashboard) → own
+  // localStorage → the same-origin parent's localStorage. First non-empty wins.
+  let t=ADMIN_TOK||embedTokenFromHash();
+  if(!t){try{t=localStorage.getItem("atwe_token");}catch(e){}}
+  if(!t){try{if(EMBEDDED&&window.parent&&window.parent.localStorage)t=window.parent.localStorage.getItem("atwe_token");}catch(e){}}
+  return t||null;
+}
 async function initFeatures(){
   if(_featLoaded)return;
-  let tok=ADMIN_TOK;
-  if(!tok){try{tok=localStorage.getItem("atwe_token");}catch(e){}}
+  const tok=anyToken();
   if(!tok){requestParentToken();showLocked();return;}
   try{
     const r=await fetch("/api/admin/features-data",{headers:{Authorization:"Bearer "+tok}});
