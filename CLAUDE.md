@@ -1249,7 +1249,10 @@ standalone). The chrome respects the safe-area insets:
 >   and **reloaded the PWA** (the "white flash → back to homepage, sometimes logged
 >   out" bug — a real document reload, not a code path; boot then restores the last
 >   tab, or the login screen if the session 401s). **`acTrimFeed()`** (called after
->   each appended page) keeps a sliding window of `FEED_DOM_CAP`=90 post cards: once
+>   each appended page) keeps a sliding window of `FEED_DOM_CAP`=**45** post cards
+>   (was 90 — still over the iOS jetsam budget once cards carry photos/videos; the
+>   crash recurred as a "black blink → back to home every 10-30s, worse when
+>   pinch-zooming" in July 2026): once
 >   past the cap it removes the oldest (far above the viewport), unobserves them from
 >   the `Dwell` IntersectionObserver, and — capturing `scrollTop` **before** removal
 >   (the browser clamps it to the now-shorter content as nodes go, so reading it after
@@ -1257,6 +1260,21 @@ standalone). The chrome respects the safe-area insets:
 >   viewport stays put. `#acFeed` sets `overflow-anchor:none` so the browser's own
 >   scroll-anchoring doesn't double-correct. Removed ids stay in `AC._feedSeen` (never
 >   re-fetched); the sentinel/end-cap are never removed. Small feeds (≤cap) early-return.
+>   The same trim call now also **bounds the session-long JS mirrors** (`AC._feedPosts`
+>   ≤200, `AC._feedSeen` ≤900→450, `AC._postCache` ≤400, `AC._authors` ≤600) — the DOM
+>   was capped but these grew forever. Three more iOS-memory layers on the feed:
+>   **`#acFeed .ac-post` has `content-visibility:auto` + `contain-intrinsic-size:auto
+>   480px`** (off-screen cards aren't rendered/composited and Safari can drop their
+>   decoded images; placeholder sizing keeps scrolling stable — zero visual change);
+>   **`acVidParkScan()`** (called with `Dwell.scan()` on render + append) parks feed
+>   `<video>` srcs once ~1800px off-screen and restores them on approach (iOS gives
+>   media decoders very little headroom; a parked video frees its decoder+buffers);
+>   and the per-video-post `.ac-vid-dur` chip (+ `.bundle-tag`) lost their
+>   `backdrop-filter:blur(4px)` (one composited blur layer PER post multiplied under
+>   pinch-zoom re-rasterization — replaced with a hair-more-opaque solid fill,
+>   visually identical). `will-change` was also dropped from `.msg-scroll` and
+>   `.pool-orb` (permanent GPU layers on large elements). When adding feed media or
+>   any repeated-per-item blur/filter, keep these invariants.
 
 > **Accessibility baseline:** the app ships global `:focus-visible` outlines
 > (`button`/`a`/`[role=button]`/`[tabindex]` → 2px accent ring), a full

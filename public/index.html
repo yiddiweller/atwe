@@ -3551,7 +3551,7 @@ body.light .tb-login,body.light .btn-white{background:var(--primary);color:var(-
   opacity:.9;transition:opacity var(--t-slow) var(--ease,ease);}
 #acThreadScreen.sc-scrolling .msg-scroll-vp::after{opacity:1;}
 body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,255,.88) 0%,rgba(255,255,255,.68) 16%,rgba(255,255,255,.36) 44%,rgba(255,255,255,.12) 70%,rgba(255,255,255,0) 100%);}
-.msg-scroll{position:absolute;top:0;left:0;right:0;will-change:transform;
+.msg-scroll{position:absolute;top:0;left:0;right:0;
   display:flex;flex-direction:column;gap:3px;padding:18px 14px;}
 /* Top margin is larger to offset the gap the first message of the day carries
    (.msg-row.gap, +11px below), so the date sits visually centred between them. */
@@ -4723,7 +4723,12 @@ body.light .ac-post{border-bottom-color:rgba(0,0,0,.07);}
 #acFeed{padding-inline-start:0;padding-inline-end:0;overflow-anchor:none;}
 /* The hairline divider between posts is INSET to the same gutter the content (and
    the floating nav) use, so it starts/ends exactly where the posts do. */
-#acFeed .ac-post{--post-indent:52px;margin:0;padding:12px var(--feed-gutter);border-bottom:none;position:relative;}
+#acFeed .ac-post{--post-indent:52px;margin:0;padding:12px var(--feed-gutter);border-bottom:none;position:relative;
+  /* iOS memory: skip rendering/compositing of off-screen cards entirely (and let
+     Safari discard their decoded images). contain-intrinsic-size keeps a real-size
+     placeholder so scroll position/velocity are unaffected. Zero visual change —
+     only cards outside the viewport are skipped. */
+  content-visibility:auto;contain-intrinsic-size:auto 480px;}
 /* 0.5px hairline between posts (blueprint), inset to the content gutter. */
 #acFeed .ac-post::after{content:"";position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:0.5px;background:var(--b2);}
 body.light #acFeed .ac-post::after{background:rgba(0,0,0,.08);}
@@ -4752,8 +4757,11 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.08);}
 /* Video duration chip (blueprint §Home). */
 .ac-vid-wrap{position:relative;display:block;margin-top:10px;}
 .ac-vid-wrap .ac-post-vid{margin-top:0;display:block;border-radius:16px;}
-.ac-vid-dur{position:absolute;right:10px;bottom:12px;background:rgba(0,0,0,.72);color:#fff;font-size:12px;font-weight:700;
-  padding:2px 7px;border-radius:6px;pointer-events:none;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);}
+/* No backdrop-filter here: one blurred chip PER VIDEO POST in the scrolling feed
+   multiplied into many composited layers on iOS (crash pressure); a slightly more
+   opaque solid fill is visually identical over video. */
+.ac-vid-dur{position:absolute;right:10px;bottom:12px;background:rgba(0,0,0,.8);color:#fff;font-size:12px;font-weight:700;
+  padding:2px 7px;border-radius:6px;pointer-events:none;}
 .ac-vid-dur:empty{display:none;}
 /* Product-tag price chip over tagged media (blueprint §Home). Blue = it's a
    commerce affordance that opens the listing. */
@@ -5520,7 +5528,7 @@ body.light .ac-home-stories{border-bottom-color:rgba(0,0,0,.08);}
 .ac-cart-badge{position:absolute;top:4px;right:10px;min-width:16px;height:16px;border-radius:8px;background:var(--accent);color:var(--accent-tint);font-size:10px;font-weight:800;display:grid;place-items:center;padding:0 4px;}
 /* Product bundles */
 .shop-card{position:relative;}
-.bundle-tag{position:absolute;top:8px;left:8px;background:rgba(0,0,0,.6);color:#fff;font-size:10px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;border-radius:var(--r-pill);padding:2px 8px;backdrop-filter:blur(4px);}
+.bundle-tag{position:absolute;top:8px;left:8px;background:rgba(0,0,0,.72);color:#fff;font-size:10px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;border-radius:var(--r-pill);padding:2px 8px;}
 .bundle-tag.inline{position:static;display:inline-block;vertical-align:middle;background:var(--accent);margin-inline-start:6px;}
 .bundle-save{font-size:11px;font-weight:700;color:var(--accent-tint);background:var(--accent);border-radius:var(--r-pill);padding:1px 8px;}
 .bundle-comp{display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid var(--b1);cursor:pointer;}
@@ -8965,7 +8973,7 @@ body.light #signupDob{color-scheme:light;}
   mix-blend-mode:soft-light;}
 .pool-orb{position:absolute;left:0;top:0;width:840px;height:840px;border-radius:50%;
   background:radial-gradient(closest-side, rgba(40,130,255,1) 0%, rgba(24,116,252,.5) 40%, rgba(10,110,255,0) 76%);
-  mix-blend-mode:normal;opacity:0;will-change:transform,opacity;filter:blur(16px);
+  mix-blend-mode:normal;opacity:0;filter:blur(16px);
   transition:opacity var(--t-slow) ease-out;}
 /* Full opacity — soft-light is inherently gentle, so this still reads soft. */
 #page-glow.pool-on .pool-orb{opacity:1;}
@@ -26692,8 +26700,21 @@ function acFeedEndCap() {
 // scroll position so nothing visibly jumps. `#acFeed` has overflow-anchor:none so
 // the browser's own scroll-anchoring doesn't double-correct. Removed ids stay in
 // AC._feedSeen (never re-fetched); AC._feedPosts keeps the data if we ever need it.
-const FEED_DOM_CAP = 90;
+const FEED_DOM_CAP = 45; // 90 was over iOS Safari's budget: ~90 cards' decoded photos
+                         // + <video> pipelines resident at once tripped jetsam (the
+                         // black-blink → reload / "A problem repeatedly occurred").
+                         // 45 is still ~5 screens of runway above + below the viewport.
 function acTrimFeed() {
+  // Bound the session-long JS mirrors too — the DOM window is capped below, but
+  // these maps otherwise grow forever as you scroll (slow upward baseline that
+  // makes the media spike cross the iOS memory limit sooner).
+  try {
+    if (AC._feedPosts && AC._feedPosts.length > 200) AC._feedPosts = AC._feedPosts.slice(-200);
+    if (AC._feedSeen && AC._feedSeen.size > 900) AC._feedSeen = new Set([...AC._feedSeen].slice(-450));
+    const capMap = (obj, max) => { const k = Object.keys(obj); for (let i = 0; i < k.length - max; i++) delete obj[k[i]]; };
+    if (AC._postCache) capMap(AC._postCache, 400);
+    if (AC._authors) capMap(AC._authors, 600);
+  } catch (_) {}
   const feed = document.getElementById('acFeed');
   if (!feed) return;
   const postCount = feed.querySelectorAll('.ac-post').length;
@@ -26712,6 +26733,33 @@ function acTrimFeed() {
     node = next;
   }
   if (removedH > 0) feed.scrollTop = Math.max(0, startScroll - removedH); // keep the viewport steady
+}
+// ── Feed video parking (iOS memory) ──────────────────────────────────────────
+// iOS Safari gives <video> decoders/buffers very little headroom and jettisons the
+// page when several are resident. A card far off-screen doesn't need a live media
+// element: park (unload) its src once it's well outside the viewport and restore it
+// just before it scrolls back in. Invisible — parking happens ~2 screens away, and
+// the 1800px restore margin re-attaches the src long before the user reaches it.
+// (IntersectionObserver holds targets weakly, so removed cards still GC.)
+let _vidParkIO = null;
+function acVidParkScan() {
+  const feed = document.getElementById('acFeed');
+  if (!feed || !('IntersectionObserver' in window)) return;
+  if (!_vidParkIO) _vidParkIO = new IntersectionObserver((ents) => {
+    for (const en of ents) {
+      const v = en.target;
+      try {
+        if (en.isIntersecting) {
+          if (!v.getAttribute('src') && v.dataset.psrc) { v.setAttribute('src', v.dataset.psrc); v.preload = 'metadata'; }
+        } else if (v.getAttribute('src')) {
+          v.dataset.psrc = v.getAttribute('src');
+          try { v.pause(); } catch (_) {}
+          v.removeAttribute('src'); v.load(); // releases the decoder + buffered media
+        }
+      } catch (_) {}
+    }
+  }, { rootMargin: '1800px 0px 1800px 0px' });
+  feed.querySelectorAll('video.ac-post-vid:not([data-parkobs])').forEach((v) => { v.dataset.parkobs = '1'; _vidParkIO.observe(v); });
 }
 async function acLoadFeedMore() {
   const scope = _acFeedScope;
@@ -26738,6 +26786,7 @@ async function acLoadFeedMore() {
       if (sentinel) sentinel.insertAdjacentHTML('beforebegin', html);
       else document.getElementById('acFeed').insertAdjacentHTML('beforeend', html);
       Dwell.scan(); // measure time-on-post for the newly appended cards too
+      acVidParkScan(); // park/restore feed videos as they leave/approach the viewport (iOS memory)
       acAdObserve(document.getElementById('acFeed')); // track impressions on newly woven ads
       acTrimFeed(); // keep the DOM bounded (iOS memory) — drop the oldest off-screen cards
     }
@@ -26808,7 +26857,7 @@ async function acLoadFeed() {
       // away like Instagram. acLoadStoryTray() fills every .js-story-tray (this one too).
       const railHtml = (scope === 'foryou' || scope === 'following') ? '<div class="story-tray js-story-tray ac-home-stories hidden" id="acHomeStories"></div>' : '';
       el.innerHTML = railHtml + bar + list.join('');
-      if (scope === 'foryou' || scope === 'following') { acLoadStoryTray(); Dwell.scan(); acFeedSetupSentinel(); acAdObserve(el); } // stories + measure dwell + arm infinite scroll + track ad impressions
+      if (scope === 'foryou' || scope === 'following') { acLoadStoryTray(); Dwell.scan(); acVidParkScan(); acFeedSetupSentinel(); acAdObserve(el); } // stories + measure dwell + park videos + arm infinite scroll + track ad impressions
     } else if (scope === 'bookmarks') {
       el.innerHTML = bar + `<div class="ac-empty">${AC._bmkFolder ? 'No bookmarks in this folder yet.' : 'No bookmarks yet.<br/>Tap the bookmark on a post to save it here — only you can see them.'}</div>`;
     } else {
