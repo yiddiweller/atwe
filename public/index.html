@@ -142,7 +142,7 @@ a{text-decoration:none;color:inherit;}
   --feed-gutter: 16px;
   /* The floating bottom-nav pill is inset MORE than the content gutter (matching
      the native iOS app): posts peek out ~17px on both sides of the pill. */
-  --nav-inset: calc(var(--feed-gutter) + 26px);
+  --nav-inset: calc(var(--feed-gutter) + 10px);
 
   /* Radius — a soft, consistent Apple-like scale */
   --r-xs: 7px;
@@ -8347,10 +8347,11 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
 .bottom-nav{display:none;position:fixed;z-index:120;
   left:var(--nav-inset);right:var(--nav-inset);width:auto;
   /* Evenly-inset floating pill: the gap below equals the gap on both sides
-     (--feed-gutter) so it reads as a symmetric iOS-style bar sitting at the bottom.
-     The home-indicator inset already reserves the very bottom, so a gutter-sized gap
-     sits it snug and clear. max() keeps a small floor if a device reports no inset. */
-  bottom:max(var(--feed-gutter), env(safe-area-inset-bottom, 0px) - 16px);
+     (--nav-inset) so the bar is framed by the SAME space left/right/bottom —
+     matching the native iOS app (owner request). The nav-inset gap already
+     clears the iPhone home indicator; max() only kicks in on a device that
+     reports an unusually large bottom inset. */
+  bottom:max(var(--nav-inset), env(safe-area-inset-bottom, 0px) - 6px);
   gap:2px;padding:4px;border-radius:999px;
   background:rgba(32,32,36,.50);
   -webkit-backdrop-filter:blur(30px) saturate(150%);backdrop-filter:blur(30px) saturate(150%);
@@ -8443,10 +8444,10 @@ body.nav-morph #acHomeFab,body.nav-morph #acChatsFab{display:none;}
   .ac-list{padding-bottom:96px;}
   .messages{padding-bottom:90px;}
   .input-wrap{margin-bottom:74px;}
-  /* FAB right edge aligns with the nav's right edge (same gutter); it rides just
-     above the nav at the same bottom offset + the nav's height. The scroll
+  /* FAB right edge aligns with the nav's right edge (same --nav-inset); it rides
+     just above the nav at the same bottom offset + the nav's height. The scroll
      choreography (JS) slides it down together with the nav via a transform. */
-  .ac-fab{bottom:calc(max(var(--feed-gutter), env(safe-area-inset-bottom, 0px) - 16px) + 68px);right:var(--feed-gutter);}
+  .ac-fab{bottom:calc(max(var(--nav-inset), env(safe-area-inset-bottom, 0px) - 6px) + 68px);right:var(--nav-inset);}
   /* The post-detail list has its own reply bar (nav hidden) — no nav clearance */
   #acPostView{padding-bottom:12px;}
 }
