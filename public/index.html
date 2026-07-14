@@ -10682,6 +10682,17 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Feature kill switch: shown when a user opens a feature an admin has deactivated. -->
+<div class="overlay hidden" id="featUnavailOverlay" onclick="if(event.target===this)closeOverlay('featUnavailOverlay')">
+  <div class="cf-card" role="dialog" aria-modal="true" id="featUnavailCard">
+    <div class="cf-title">Unavailable</div>
+    <div class="cf-msg" id="featUnavailMsg">This feature is currently unavailable.</div>
+    <div class="cf-btns">
+      <button class="cf-ok" onclick="closeOverlay('featUnavailOverlay')">OK</button>
+    </div>
+  </div>
+</div>
+
 <!-- Feature-intro sheet (Phase 4) — one-time welcome card per world -->
 <div class="overlay intro-overlay hidden" id="introSheet" role="dialog" aria-modal="true" aria-labelledby="introTitle" onclick="if(event.target===this)introDismiss()">
   <div class="intro-card spin" id="introCard">
@@ -14791,11 +14802,109 @@ function closeAddAccount() { document.getElementById('addAcctMenu')?.classList.a
 async function loadConfig() {
   try { S.config = await API.req('GET', '/api/config'); }
   catch { S.config = { billingEnabled: false, emailEnabled: false }; }
+  // Feature kill switches (admin "Feature Controls"). Fail-open: if config didn't
+  // load, the set is empty → every feature stays available (a flag system must
+  // never be able to break the app).
+  S.featOff = new Set((S.config && S.config.disabledFeatures) || []);
   // Apple sign-in button only shows once a Services ID is configured (otherwise
   // it's hidden — we'll bring it back for the App Store phase).
   const appleBtn = document.getElementById('appleAuthBtn');
   if (appleBtn) appleBtn.classList.toggle('hidden', !S.config?.appleClientId);
   acRenderDemoBanner();
+}
+// ── Feature kill switches ─────────────────────────────────────────────────────
+// An admin can deactivate a feature from the dashboard (Feature Controls). When a
+// user then opens it, we show an "Unavailable" sheet instead. Enforcement is a thin
+// wrapper installed over the feature's global open-function (acInstallFeatureGates),
+// so it catches both taps and internal calls without touching any function body.
+// FEATURE_GATE maps a server feature key → the open-functions that reach it.
+const FEATURE_GATE = {
+  wallet:{label:'Wallet',fns:['acOpenWallet']},
+  send_money:{label:'Send money',fns:['acOpenSendMoney','acOpenSendMoneyByUsername']},
+  money_requests:{label:'Money requests',fns:['acOpenMoneyRequests','acOpenRequestMoney']},
+  cashout:{label:'Cash out',fns:['acOpenCashout']},
+  split_bills:{label:'Split a bill',fns:['acOpenSplits']},
+  money_pools:{label:'Money pools',fns:['acOpenPools']},
+  scheduled_payments:{label:'Scheduled payments',fns:['acOpenSchedPays']},
+  payment_links:{label:'Payment links',fns:['acOpenPayLinks']},
+  gift_cards:{label:'Gift cards',fns:['acOpenGiftCards']},
+  invoices:{label:'Invoices',fns:['acOpenInvoices']},
+  quotes:{label:'Quotes',fns:['acOpenQuotes']},
+  tips:{label:'Tips',fns:['acOpenTip']},
+  loyalty:{label:'Loyalty & rewards',fns:['acOpenLoyalty']},
+  referrals:{label:'Referrals',fns:['acOpenReferrals']},
+  atwe_card:{label:'Atwe Card',fns:['acOpenDebitCard']},
+  marketplace:{label:'Marketplace',fns:['acOpenMarketplace']},
+  cart_checkout:{label:'Cart & checkout',fns:['acOpenCart','acOpenCheckout']},
+  orders:{label:'Orders',fns:['acOpenOrders']},
+  product_reviews:{label:'Reviews',fns:['acOpenReviews']},
+  coupons:{label:'Coupons',fns:['acOpenCoupons']},
+  bundles:{label:'Bundles',fns:['acOpenBundles']},
+  subscribe_save:{label:'Subscriptions',fns:['acOpenSubs']},
+  wishlist:{label:'Wishlist',fns:['acOpenSaved']},
+  storefronts:{label:'Storefront',fns:['acOpenStorefront','acOpenMyStorefront','acOpenStoreManage']},
+  sell:{label:'Selling',fns:['acOpenSell']},
+  seller_analytics:{label:'Sales & analytics',fns:['acOpenShopAnalytics']},
+  jobs:{label:'Jobs',fns:['acOpenJobsView']},
+  applicants:{label:'Applicants',fns:['acOpenApplicants']},
+  open_to_work:{label:'Open to work',fns:['acOpenWorkerPost']},
+  saved_candidates:{label:'Saved candidates',fns:['acOpenSavedCandidates']},
+  ai_matchmaker:{label:'AI matchmaker',fns:['acOpenAiMatch']},
+  resumes:{label:'Resumes',fns:['acOpenResumes']},
+  services:{label:'Services',fns:['acOpenServices','acOpenMyServices']},
+  appointments:{label:'Appointments',fns:['acOpenAppointments']},
+  events:{label:'Events',fns:['acOpenEvents']},
+  courses:{label:'Courses',fns:['acOpenCourses']},
+  newsletters:{label:'Newsletters',fns:['acOpenNewsletters']},
+  agenda:{label:'Agenda',fns:['acOpenAgenda']},
+  team:{label:'Team',fns:['acOpenTeam']},
+  dashboard:{label:'Dashboard',fns:['acOpenDashboard']},
+  communities:{label:'Communities',fns:['acOpenCommunities']},
+  broadcast_lists:{label:'Broadcast lists',fns:['acOpenBroadcasts']},
+  disappearing:{label:'Disappearing messages',fns:['acOpenDisappearing']},
+  scheduled_messages:{label:'Scheduled messages',fns:['acOpenScheduled']},
+  group_cloud:{label:'Group Cloud',fns:['acOpenCloud']},
+  auto_messages:{label:'Auto-messages',fns:['acOpenAutoMessages']},
+  call_links:{label:'Call links',fns:['acOpenCallLinks']},
+  go_live:{label:'Go Live',fns:['acOpenGoLive']},
+  bookmarks:{label:'Collections',fns:['acOpenCollections']},
+  scheduled_posts:{label:'Scheduled posts',fns:['acOpenScheduledPosts']},
+  lists:{label:'Lists',fns:['acOpenLists']},
+  cashtags:{label:'Cashtags',fns:['acOpenCashtag']},
+  stories:{label:'Stories',fns:['acOpenStoryComposer']},
+  close_friends:{label:'Close Friends',fns:['acOpenCloseFriends']},
+  highlights:{label:'Highlights',fns:['acOpenHighlightManage']},
+  connections:{label:'Connections',fns:['acOpenConnections']},
+  recommendations:{label:'Recommendations',fns:['acOpenPendingRecs']},
+  profile_views:{label:'Profile views',fns:['acOpenProfileViewers']},
+  showcase:{label:'Showcase',fns:['acOpenShowcase','acOpenShowcaseDiscover']},
+  business_directory:{label:'Business directory',fns:['acOpenDirectory']},
+  creator_subs:{label:'Creator subscriptions',fns:['acOpenCreatorSettings']},
+  atwe_ads:{label:'Atwe Ads',fns:['acOpenAdCreate']},
+  ads_manager:{label:'Ads Manager',fns:['acOpenAds']},
+  affiliate:{label:'Affiliate program',fns:['acOpenAffiliate']},
+  ai_shopping:{label:'AI shopping',fns:['acOpenAiShop']},
+  ai_agent:{label:'AI agent',fns:['acOpenAgent']},
+  reporting:{label:'Reporting',fns:['acOpenReport']},
+};
+function acFeatureBlocked(key){ return !!(key && S.featOff && S.featOff.has(key)); }
+function acFeatureUnavailable(label){
+  const box = document.getElementById('featUnavailCard'); if (!box) return;
+  document.getElementById('featUnavailMsg').textContent = (label ? label + ' is' : 'This feature is') + ' currently unavailable.';
+  showOverlay('featUnavailOverlay');
+}
+let _featGatesInstalled = false;
+function acInstallFeatureGates(){
+  if (_featGatesInstalled) return; _featGatesInstalled = true;
+  Object.keys(FEATURE_GATE).forEach(key => {
+    const g = FEATURE_GATE[key];
+    (g.fns || []).forEach(fn => {
+      const orig = window[fn];
+      if (typeof orig !== 'function' || orig._gated) return;
+      const wrapped = function(){ if (acFeatureBlocked(key)) { acFeatureUnavailable(g.label); return; } return orig.apply(this, arguments); };
+      wrapped._gated = true; window[fn] = wrapped;
+    });
+  });
 }
 // The "Demo mode" pill is a transient reminder, not a permanent fixture: it shows
 // once when the app first opens (and whenever a demo action is blocked, e.g. trying
@@ -43720,6 +43829,7 @@ const _bootDone = (async function boot() {
   a11yInit();
   navInit();
   await loadConfig();
+  acInstallFeatureGates(); // install the kill-switch wrappers once config (disabledFeatures) is known
 
   // Admin "view as user": adopt the short-lived impersonation token from the URL,
   // flag the session, and show a persistent banner so it's never invisible.

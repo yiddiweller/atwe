@@ -18,6 +18,7 @@ const finance = require('./finance');
 const apple = require('./apple');
 const demo = require('./demo');
 const reservedSeed = require('./reserved-seed');
+const FEATURE_CONTROLS = require('./feature-controls-data');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -107,7 +108,11 @@ const FEATURE_FLAGS = [
 ];
 const FEATURE_KEYS = FEATURE_FLAGS.map((f) => f.key);
 let _featureFlags = {}; // { key: false } means OFF; anything absent/true means ON
-function featureEnabled(key) { return _featureFlags[key] !== false; }
+// A feature is enabled only when it's OFF in NEITHER store: the small ops-flag set
+// above, AND the larger module-level "Feature Controls" catalog below (same key
+// space). So any route already gated by requireFeature(key) also respects a
+// Feature-Controls switch of the same key.
+function featureEnabled(key) { return _featureFlags[key] !== false && _featureControls[key] !== false; }
 function normalizeFeatureFlags(v) {
   const out = {};
   const src = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
@@ -120,6 +125,29 @@ function requireFeature(key) {
     if (!featureEnabled(key)) return res.status(503).json({ error: 'This feature is temporarily unavailable. Please try again later.', featureOff: key });
     next();
   };
+}
+
+// ── Feature Controls: the admin "Feature Controls" page (module-level kill
+// switches). Same model as FEATURE_FLAGS (default ON; off only when explicitly
+// false; fail-open) but its own app_settings store so the two don't collide.
+// The catalog is curated in feature-controls-data.js.
+const CONTROLS_KEY = 'feature_controls';
+const CONTROL_KEYS = FEATURE_CONTROLS.map((f) => f.key);
+let _featureControls = {}; // { key: false } = OFF
+function controlEnabled(key) { return _featureControls[key] !== false; }
+function normalizeControls(v) {
+  const out = {};
+  const src = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+  for (const k of CONTROL_KEYS) out[k] = src[k] !== false; // default ON
+  return out;
+}
+// Keys that are OFF in EITHER store — sent to the client so it can show
+// "Unavailable" when a user opens a deactivated feature.
+function disabledFeatureKeys() {
+  const off = new Set();
+  for (const k of Object.keys(_featureFlags)) if (_featureFlags[k] === false) off.add(k);
+  for (const k of Object.keys(_featureControls)) if (_featureControls[k] === false) off.add(k);
+  return [...off];
 }
 
 // Guard for the irreversible actions a support agent must NOT be able to do while
@@ -769,6 +797,7 @@ app.get('/api/config', (_req, res) => {
     appleClientId: apple.clientId(),          // public — Services ID used to start Apple sign-in
     demoMode: _demoMode,                       // admin "demo mode" is populating the platform
     features: normalizeFeatureFlags(_featureFlags), // kill switches — client hides disabled UI
+    disabledFeatures: disabledFeatureKeys(), // module-level Feature Controls that are OFF → client shows "Unavailable"
     requireAdmin2fa: process.env.REQUIRE_ADMIN_2FA === 'true', // staff must have 2FA to use the dashboard
   });
 });
@@ -11980,6 +12009,22 @@ app.put('/api/admin/feature-flags', auth.requireAdmin, async (req, res) => {
     res.json({ flags: next });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save feature flags.' }); }
 });
+// Feature Controls — the module-level kill-switch page. GET returns current state +
+// the catalog (key/label/cat); PUT merges a partial {controls:{key:bool}} over the
+// cache, persists, swaps the cache (next request sees it), and audit-logs it.
+app.get('/api/admin/feature-controls', auth.requireAdmin, (_req, res) => {
+  res.json({ controls: normalizeControls(_featureControls), meta: FEATURE_CONTROLS });
+});
+app.put('/api/admin/feature-controls', auth.requireAdmin, async (req, res) => {
+  try {
+    const incoming = (req.body && req.body.controls && typeof req.body.controls === 'object') ? req.body.controls : {};
+    const next = normalizeControls({ ..._featureControls, ...incoming });
+    if (db.isConfigured()) await db.setSetting(CONTROLS_KEY, next);
+    _featureControls = next;
+    adminAudit(req, 'feature.controls', 'settings', 'feature_controls', { changed: Object.keys(incoming) });
+    res.json({ controls: next });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save feature controls.' }); }
+});
 // Background-job health — is each scheduled flusher alive? A job is `stale` if it
 // hasn't run within ~2.5× its interval, `error` if its last run threw. Superadmin only.
 app.get('/api/admin/jobs', auth.requireAdmin, (_req, res) => {
@@ -22359,5 +22404,6 @@ db.init()
   .then(() => { if (db.isConfigured()) return db.getSetting(DEMO_KEY).then((v) => { _demoMode = !!v; }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(RANKING_KEY).then((v) => { _rankingWeights = normalizeRankingWeights(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(FLAGS_KEY).then((v) => { _featureFlags = normalizeFeatureFlags(v); }).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return db.getSetting(CONTROLS_KEY).then((v) => { _featureControls = normalizeControls(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) console.log('🗄️   Schema + settings ready.'); })
   .catch((err) => console.error('Post-init setup failed:', err.message));
