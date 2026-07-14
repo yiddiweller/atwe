@@ -311,6 +311,8 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-logo{display:flex;justify-content:center;margin-bottom:84px;}
 .auth-lm{width:66px;height:66px;background:#fff;-webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
 .auth-actions,.auth-form{display:flex;flex-direction:column;gap:14px;}
+/* Landing buttons sit a drop closer together (founder). */
+#authLandingView .auth-actions{gap:11px;}
 /* Secondary (grey glass): translucent fill + a 0.5px inset hairline + blur, per
    the color law's button recipe — never a plain outline-only button. */
 .auth-btn{display:flex;align-items:center;justify-content:center;gap:11px;width:100%;height:56px;border-radius:30px;
@@ -5726,6 +5728,34 @@ body.light .ac-home-stories{border-bottom-color:rgba(0,0,0,.08);}
 /* QR connect */
 .qr-card{display:flex;flex-direction:column;align-items:center;}
 .qr-img{width:240px;height:240px;border-radius:14px;background:#fff;padding:10px;box-sizing:border-box;}
+/* WhatsApp-style QR login page: a clean centred code, generous space, then steps.
+   Full-screen so it covers cleanly (no underlying back-arrow bleed-through) and the
+   code sits in the middle of the screen. */
+#qrLoginView{padding:0!important;}
+.qr-modal{position:relative;width:100%;max-width:100%;min-height:100%;max-height:none;border-radius:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:calc(env(safe-area-inset-top,0px) + 56px) 22px calc(env(safe-area-inset-bottom,0px) + 34px);
+  text-align:center;overflow-y:auto;}
+/* The close reuses the app's standard sheet back-arrow (‹, top-left) — just nudge it
+   below the status strip on a full-screen page. */
+.qr-modal .sheet-close{top:max(10px,env(safe-area-inset-top,0px));}
+.qr-head{font-size:21px;font-weight:800;letter-spacing:-.01em;color:var(--t1);text-align:center;margin:0;flex:0 0 auto;}
+.qr-page{display:flex;flex-direction:column;align-items:center;padding:6px 0 8px;}
+.qr-frame{background:#fff;padding:16px;border-radius:26px;box-shadow:0 10px 34px rgba(0,0,0,.22);
+  margin:26px 0 34px;}
+.qr-frame .qr-code{display:block;width:min(240px,62vw);height:min(240px,62vw);border-radius:12px;}
+.qr-status{display:inline-flex;align-items:center;gap:9px;font-size:14px;font-weight:600;color:var(--t2);margin-bottom:26px;}
+.qr-pulse{width:9px;height:9px;border-radius:50%;background:var(--accent);flex:0 0 auto;
+  animation:qrPulse 1.7s ease-out infinite;}
+@keyframes qrPulse{0%{box-shadow:0 0 0 0 rgba(var(--accent-rgb),.45);}70%{box-shadow:0 0 0 9px rgba(var(--accent-rgb),0);}100%{box-shadow:0 0 0 0 rgba(var(--accent-rgb),0);}}
+.qr-steps{list-style:none;margin:0;padding:0;width:100%;max-width:340px;text-align:start;}
+.qr-steps li{display:flex;align-items:flex-start;gap:13px;font-size:14px;line-height:1.45;color:var(--t2);padding:11px 2px;border-bottom:1px solid var(--b1);}
+.qr-steps li:last-child{border-bottom:none;}
+.qr-steps li b{color:var(--t1);font-weight:600;}
+.qr-step-n{flex:0 0 auto;width:25px;height:25px;border-radius:50%;background:var(--accent-dim);color:var(--accent);
+  font-weight:700;font-size:13px;display:grid;place-items:center;margin-top:-1px;}
+.qr-expired{display:flex;flex-direction:column;align-items:center;gap:12px;padding:34px 0 6px;color:var(--t2);font-size:15px;}
+.qr-expired svg{width:44px;height:44px;color:var(--t3);}
 .qr-name{font-size:16px;font-weight:700;color:var(--t1);margin:10px 0 2px;}
 .qr-scan-wrap{position:relative;border-radius:16px;overflow:hidden;background:#000;aspect-ratio:1/1;display:grid;place-items:center;}
 .qr-scan-video{width:100%;height:100%;object-fit:cover;}
@@ -13287,9 +13317,9 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
 
 <!-- QR connect: log in with a QR (logged-out device) -->
 <div class="overlay hidden" id="qrLoginView" onclick="if(event.target===this){acStopQrLogin();closeOverlay('qrLoginView');}">
-  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Log in with QR code">
+  <div class="job-card-modal qr-modal" role="dialog" aria-modal="true" aria-label="Log in with QR code">
     <button class="sheet-close" onclick="acStopQrLogin();closeOverlay('qrLoginView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-    <div class="jp-title" style="margin:0 0 12px;">Log in with QR code</div>
+    <div class="qr-head">Log in with QR code</div>
     <div id="qrLoginBody"></div>
   </div>
 </div>
@@ -33164,10 +33194,14 @@ async function acOpenQrLogin() {
   try {
     const d = await API.req('POST', '/api/auth/link/start', {});
     AC._qrLoginCode = d.code;
-    b.innerHTML = `<div class="qr-card">
-      <img class="qr-img" src="${d.dataUrl}" alt="Login QR code" width="240" height="240"/>
-      <div class="ac-disc-sub" id="qrLoginStatus" style="text-align:center;margin:10px 0 4px;">Waiting for approval…</div>
-      <div class="ac-disc-sub" style="text-align:center;font-size:12px;">On a device you’re already signed in on, open <b>Settings → Security &amp; access → Link a device</b> and scan this code.</div>
+    b.innerHTML = `<div class="qr-page">
+      <div class="qr-frame"><img class="qr-code" src="${d.dataUrl}" alt="Login QR code"/></div>
+      <div class="qr-status" id="qrLoginStatus"><span class="qr-pulse"></span>Waiting for you to scan…</div>
+      <ol class="qr-steps">
+        <li><span class="qr-step-n">1</span><span>Open <b>Atwe</b> on a phone you’re already signed in on</span></li>
+        <li><span class="qr-step-n">2</span><span>Go to <b>Settings → Security &amp; access → Link a device</b></span></li>
+        <li><span class="qr-step-n">3</span><span>Point it at this screen to scan the code</span></li>
+      </ol>
     </div>`;
     let elapsed = 0;
     _qrLoginPoll = setInterval(() => acPollQrLogin(), 2000);
@@ -33191,7 +33225,7 @@ async function acPollQrLogin() {
 function acExpireQrLogin() {
   acStopQrLogin();
   const b = document.getElementById('qrLoginBody'); if (!b) return;
-  b.innerHTML = `<div class="ac-empty" style="padding:24px;">This code expired.</div><button class="ac-pill-btn accent" style="width:100%;" onclick="acOpenQrLogin()">Show a new code</button>`;
+  b.innerHTML = `<div class="qr-page"><div class="qr-expired"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><div>This code expired.</div></div><button class="ac-pill-btn accent" style="width:100%;max-width:300px;margin-top:20px;" onclick="acOpenQrLogin()">Show a new code</button></div>`;
 }
 function acStopQrLogin() { if (_qrLoginPoll) { clearInterval(_qrLoginPoll); _qrLoginPoll = null; } if (_qrLoginTimeout) { clearTimeout(_qrLoginTimeout); _qrLoginTimeout = null; } AC._qrLoginCode = null; }
 
