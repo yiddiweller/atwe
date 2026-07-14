@@ -1,4 +1,4 @@
-const CACHE = 'atwe-v1056';
+const CACHE = 'atwe-v1057';
 // The app shell ('/', '/index.html') is cached at runtime by the network-first
 // navigation handler, not precached — precaching '/' on install would request a
 // gated navigation and could consume a one-time site-lock pass.
@@ -53,6 +53,14 @@ self.addEventListener('fetch', e => {
   // path can never serve a stale page — every navigation is a cache miss that
   // hits the origin fresh. Fall back to the cached shell only offline.
   if (e.request.mode === 'navigate') {
+    // Real FILES (features.html, admin.html, locked.html, …) must be served as
+    // themselves — only extension-less SPA routes get the app shell. Serving the
+    // shell for every navigation hijacked iframe embeds and the admin page.
+    const navPath = new URL(e.request.url).pathname;
+    if (/\.[a-z0-9]+$/i.test(navPath)) {
+      e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+      return;
+    }
     e.respondWith(
       fetch('/__shell/' + Date.now(), { cache: 'reload', credentials: 'same-origin' })
         .then(res => {
