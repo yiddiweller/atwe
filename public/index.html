@@ -2177,10 +2177,24 @@ body.light .tb-feedtab.active{color:var(--t1);}
     background:var(--bg);-webkit-backdrop-filter:none;backdrop-filter:none;border-bottom:none;position:relative;}
   /* No hairline under the Beam tabs (founder) — matches Home. */
   body.light .topbar.tb-chat{background:var(--bg);}
-  /* Scroll-away top bar (founder, X-style): on scroll the whole bar slides UP and
-     retracts (JS negative margin-top, position-based) so the feed fills to the top —
-     just the black status strip stays. The tab row fades as it goes. Reveals again as
-     you return to the top. Driven in _applyBars/_onListScroll. */
+  /* Scroll-collapse top bar (founder, X-style — TWO PHASES, driven in _applyBars):
+     PHASE 1 (first ~34px of scroll): the bar stays in place but DIMS + BLURS
+     (body.top-frosted) and its tab row fades — a small scroll that stops just
+     darkens/blurs it, it does NOT slide away.
+     PHASE 2 (scrolling further): the bar then slides UP and retracts (negative
+     margin-top) so the feed fills to the top — just the black status strip stays.
+     Reveals again as you return to the top. */
+  body.top-frosted .topbar.tb-home,body.top-frosted .topbar.tb-chat{
+    background:rgba(0,0,0,.42);
+    -webkit-backdrop-filter:blur(16px) saturate(1.2);backdrop-filter:blur(16px) saturate(1.2);}
+  body.light.top-frosted .topbar.tb-home,body.light.top-frosted .topbar.tb-chat{
+    background:rgba(255,255,255,.6);}
+  /* Buttery-smooth collapse: iOS scroll events fire coarsely, so a short ease-out
+     transition bridges the gaps between them into fluid motion (the slide, the dim
+     and the frost all glide instead of stepping). */
+  .topbar.tb-home,.topbar.tb-chat{transition:margin-top .09s ease-out,
+    background .2s ease,-webkit-backdrop-filter .2s ease,backdrop-filter .2s ease;}
+  #tbTabRow{transition:opacity .12s ease-out;}
   .topbar.tb-chat .sb-toggle{justify-content:flex-start;width:auto;}
   .topbar.tb-chat .sb-toggle svg{width:26px;height:26px;stroke-width:2.1;}
   /* Search + AI: put the ≡ at the exact same gutter position as Home/Chat. */
@@ -14705,7 +14719,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1081'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1082'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24289,10 +24303,11 @@ function acSetFeed(scope) {
   _acFeedScope = scope;
   if (typeof acFeedResetPaging === 'function') acFeedResetPaging(); // drop the infinite-scroll observer/state from the previous scope (incl. circles/feeds)
   const scrim = document.getElementById('acTopScrim'); if (scrim) scrim.style.opacity = '0'; // reset on reload (scroll resets to top)
-  // The feed reloads + scrolls to top, so restore the retracted bar + faded tab row.
+  // The feed reloads + scrolls to top, so restore the collapsed bar.
   const _tb = document.querySelector('.topbar'); if (_tb) _tb.style.marginTop = '';
   const _tr = document.getElementById('tbTabRow'); if (_tr) { _tr.style.opacity = ''; _tr.style.pointerEvents = ''; }
-  if (typeof _barHide !== 'undefined') _barHide = 0;
+  document.body.classList.remove('top-frosted');
+  if (typeof _barHide !== 'undefined') { _barHide = 0; _barScroll = 0; }
   [...AC_FEED_TABS, 'feeds', 'pinned'].forEach(s => document.getElementById('acFeedTab-' + s)?.classList.toggle('active', s === scope));
   // Horizontal page-slide between feeds (X-style pager) — works for a tab TAP and a
   // swipe alike: the new feed slides in from the side it came from. Animating the
@@ -43541,9 +43556,11 @@ function acNavBallTap() {
   if (_appTab === 'chat' && typeof acChatsFab === 'function') { acChatsFab(); return; }
   acOpenPost();
 }
-let _barHide = 0;          // px the top bar is currently retracted (0.._barMax)
+let _barHide = 0;          // px the top bar is currently retracted (0.._barMax) — drives nav/fab
+let _barScroll = 0;        // raw scrollTop of the active feed/beam list — drives the 2-phase top bar
 let _barMax = 0;           // the top bar's full height (its hide distance)
 let _barRAF = 0, _barAnimT = 0;
+const TB_DIM_PX = 34;      // phase-1: px of scroll over which the bar dims+blurs (before it slides up)
 function _barEls() {
   return { tb: document.querySelector('.topbar'), nav: document.getElementById('bottomNav'), fab: document.querySelector('.ac-fab') };
 }
@@ -43553,20 +43570,27 @@ function _applyBars() {
   if (!tb) return;
   const max = _barMax || tb.offsetHeight || 100;
   const p = max ? Math.min(1, Math.max(0, _barHide / max)) : 0;
-  // Home + Beam: the top bar SLIDES UP and retracts on scroll (negative margin-top
-  // pulls the feed up to fill), so content rises to just under the black status
-  // strip — X-style. The tab row fades as it goes. Elsewhere the bar stays pinned.
+  // Home + Beam: two-phase collapse (X-style). PHASE 1 (first TB_DIM_PX of scroll):
+  // the bar stays put but DIMS + BLURS (frosted) and the tabs fade — a small scroll
+  // that stops just darkens it. PHASE 2 (further): the bar slides UP and retracts so
+  // the feed fills to the top. Elsewhere the bar stays pinned.
   const retractable = (_appTab === 'home' || _appTab === 'chat');
   const row = document.getElementById('tbTabRow');
   if (retractable) {
-    tb.style.marginTop = _barHide ? (-_barHide + 'px') : '';
+    const barH = max;
+    const dimP = Math.min(1, Math.max(0, _barScroll / TB_DIM_PX));            // 0→1 over phase 1
+    const retractP = Math.min(1, Math.max(0, (_barScroll - TB_DIM_PX) / barH)); // 0→1 over phase 2
+    const mt = -(retractP * barH);
+    tb.style.marginTop = retractP > 0 ? (mt.toFixed(1) + 'px') : '';
     if (row && !row.classList.contains('hidden')) {
-      row.style.opacity = String(Math.max(0, 1 - p * 1.4)); // fade out a touch faster than the slide
-      row.style.pointerEvents = p > 0.7 ? 'none' : '';
+      row.style.opacity = String(1 - dimP);                 // dim/fade the tabs in phase 1
+      row.style.pointerEvents = dimP > 0.6 ? 'none' : '';
     }
+    document.body.classList.toggle('top-frosted', dimP > 0.03); // darken+blur while scrolled
   } else {
     tb.style.marginTop = '';
     if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
+    document.body.classList.remove('top-frosted');
   }
   tb.style.opacity = '';
   tb.style.pointerEvents = '';
@@ -43608,10 +43632,12 @@ function acSetBarsHidden(hidden) {
 }
 function acRevealBars() {
   acSetBarsHidden(false);
-  // Restore the scroll-retracted tab row on any navigation (acSetBarsHidden(false)
-  // resets the margin-top; clear the fade too).
+  // Restore the collapsed top bar on any navigation.
+  _barScroll = 0;
   const row = document.getElementById('tbTabRow');
   if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
+  document.body.classList.remove('top-frosted');
+  const _tb = document.querySelector('.topbar'); if (_tb) _tb.style.marginTop = '';
 }
 function _onListScroll(e) {
   const sc = e.target;
@@ -43622,10 +43648,10 @@ function _onListScroll(e) {
     const st = sc.scrollTop;
     sc._shLast = st;
     _setBarAnim(false);                                // track the scroll with no easing
-    // POSITION-BASED (not finger-delta): the retract is a direct function of the
-    // scroll position, so it never jitters or accumulates — the bar slides up
-    // linearly over its own height, then stays hidden; scroll back near the top and
-    // it slides back in. (The old finger-delta version read as jittery/nauseating.)
+    // POSITION-BASED (not finger-delta) so it never jitters or accumulates. _barScroll
+    // is the raw scroll the 2-phase top bar reads (dim then retract); _barHide drives
+    // the nav/fab hide.
+    _barScroll = st;
     _barHide = Math.min(_barMax, Math.max(0, st));
     if (!_barRAF) _barRAF = requestAnimationFrame(_applyBars);
   }
