@@ -736,6 +736,138 @@
   .vt-modal-h{font-size:16px;font-weight:800;margin-bottom:12px;}
   .vt-secret-val{width:100%;box-sizing:border-box;min-height:96px;resize:vertical;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:var(--t1);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px;}
   .vt-modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;}
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     ATWE APP DESIGN LANGUAGE — the admin re-skinned to read as the same
+     product as the app. Same tokens, same laws:
+       · "White acts, blue identifies" — the ONE primary CTA per surface is a
+         WHITE pill (near-black label); blue is identity only (links, active,
+         selected, toggles-on, the AI entry point).
+       · Cards are borderless fills (s1) with a soft 20px radius; separation
+         comes from space + hairlines, never outlines.
+       · Rows are iOS-grouped: full-width page-bg hairlines, blue-tint icon
+         discs, chevrons.
+       · Pills for buttons/inputs; s3+white for a selected segment.
+     This layer overrides the component styles above — the view logic and all
+     class names are untouched, so every tool keeps working.
+     ═══════════════════════════════════════════════════════════════════════ */
+  :root{
+    /* app tokens the admin was missing */
+    --primary:#FFFFFF; --on-primary:#1D1D1F;
+    --r-xl:24px; --card-r:20px; --feed-gutter:16px;
+    --t-fast:120ms; --t-base:200ms;
+    --accent-rgb:10,132,255;
+    /* aliases used by the Feature Controls + Vault views (were undefined) */
+    --card:var(--s1); --card2:var(--s2); --line:var(--b2); --danger:var(--red);
+  }
+  /* ── Buttons: white acts ── */
+  .btn{border-radius:var(--r-pill);}
+  .btn.primary,.send-btn,.ad-acts button.ok{
+    background:var(--primary);color:var(--on-primary);border:none;box-shadow:none;
+    border-radius:var(--r-pill);font-weight:700;}
+  .btn.primary:hover,.send-btn:hover,.ad-acts button.ok:hover{background:var(--primary);filter:brightness(.94);}
+  .btn.primary:active,.send-btn:active,.ad-acts button.ok:active{filter:brightness(.88);transform:scale(.98);}
+  .btn.danger{border-radius:var(--r-pill);}
+  /* Secondary chips (user actions etc.): grey glass, pill — blue is not a button color */
+  .act{background:var(--s2);color:var(--t1);border:none;box-shadow:0 0 0 .5px var(--b2) inset;border-radius:var(--r-pill);}
+  .act:hover{background:var(--s3);}
+  .act.danger{background:rgba(255,69,58,.10);color:var(--red);box-shadow:0 0 0 .5px rgba(255,69,58,.3) inset;}
+  .act.danger:hover{background:rgba(255,69,58,.18);}
+  .act.ghost{background:transparent;box-shadow:none;color:var(--t2);}
+  .mod-act,.ad-acts button,.fc-catbtn,.vt-tbtn,.refresh,.copy{border-radius:var(--r-pill);}
+  .copy{background:var(--s2);color:var(--t1);border:none;box-shadow:0 0 0 .5px var(--b2) inset;}
+  .copy:hover{background:var(--s3);}
+  /* Segmented ranges: selected = s3 fill + white bold (app tab law), not blue */
+  .tf-r.on{background:var(--s3);color:var(--t1);font-weight:700;}
+  /* AI scan stays the app's AI-gradient identity, just rounder */
+  .mod-scan-btn{border-radius:16px;}
+
+  /* ── Switches: the app's iOS switch ── */
+  .switch{background:var(--s4);border:none;}
+  .switch span{width:24px;height:24px;top:3px;left:3px;box-shadow:0 2px 6px rgba(0,0,0,.35);}
+  .switch.on span{transform:translateX(20px);}
+  .switch.flag.on{background:var(--accent);}
+  .switch.on{border:none;}
+
+  /* ── Cards: one soft 20px radius family, borderless fills ── */
+  .stat,.ov-card,.tf-card,.u-card,.panel,.sup-item,.mod-flag,.turn-box,.ac-stat-card,
+  .site-status,.code-show,.lock-item,.ac-apost,.mod-prog,.rep-bulk,
+  .fc-cat,.vt-list,.vt-note,.gc-issue-panel{border-radius:var(--card-r);}
+  .fc-cat,.vt-list,.vt-note{border:none;background:var(--s1);}
+  .fc-cat-head{background:var(--s2);border-bottom:1px solid var(--bg);}
+  .fc-row,.vt-row{border-bottom:1px solid var(--bg);}
+  .fc-search{border-radius:var(--r-pill);border:1px solid var(--b2);background:var(--s1);padding:11px 16px;}
+  .vt-tbtn,.fc-catbtn{background:var(--s2);border:none;box-shadow:0 0 0 .5px var(--b2) inset;color:var(--t1);}
+  .vt-tbtn:hover,.fc-catbtn:hover{background:var(--s3);color:var(--t1);}
+  .vt-ic{background:var(--accent-dim);}
+  .vt-ic svg{stroke:var(--accent);}
+  .vt-secret svg{stroke:var(--amber);}
+  .rev-hero{border-radius:var(--card-r);}
+  .feat-frame{border-radius:var(--card-r);}
+
+  /* ── Icon discs: blue-tint identity (app .me-ic recipe) ── */
+  .act-ic,.inv-ic,.rev-pay-ic{background:var(--accent-dim);}
+  .act-ic svg,.inv-ic svg,.rev-pay-ic svg{stroke:var(--accent);}
+
+  /* ── Inputs: s2 fill + hairline, app radius ── */
+  .in{background:var(--s2);border:1px solid var(--b2);border-radius:12px;}
+  .in:focus{border-color:var(--b3);outline:none;}
+  .bc-box textarea,.bc-box input{border-radius:12px;}
+
+  /* ── Sidebar → app nav: active is WHITE + s2 pill (blue bar removed;
+        an active nav item reads via weight/fill like the app's tabs) ── */
+  .tab{border-radius:11px;font-size:14px;padding:10px 12px;}
+  .tab.active{background:var(--s2);color:var(--t1);font-weight:700;}
+  .tab.active::before{display:none;}
+  .nav-label{font-size:11px;color:var(--t3);letter-spacing:.06em;}
+  .sidebar{background:var(--bg);border-right:1px solid var(--b1);}
+  .side-logout{border-radius:var(--r-pill);}
+  .back,.side-lock{border-radius:var(--r-pill);}
+
+  /* ── Top bar: app chrome — borderless ≡, 21/800 title ── */
+  .nav-toggle{background:none;border-radius:50%;}
+  .nav-toggle:active{transform:scale(.92);}
+  @media(hover:hover){.nav-toggle:hover{background:var(--s2);}}
+  .nav-toggle svg{width:22px;height:22px;stroke-width:2.1;stroke-linecap:round;}
+  #viewTitle{letter-spacing:-.02em;}
+
+  /* ── Modals: flat app sheet (scrim separates; no border, soft 24px) ── */
+  .modal{background:var(--bg-1);border-radius:var(--r-xl);box-shadow:none;}
+  .vt-modal-card{background:var(--bg-1);border:none;border-radius:var(--r-xl);}
+  .meta-grid{border-radius:16px;}
+  .close-x{background:var(--s2);}
+
+  /* ── Mobile: app-grade drawer + spacing ── */
+  @media (max-width:900px){
+    .sidebar{border-right:none;border-radius:0 var(--r-xl) var(--r-xl) 0;
+      padding-left:max(14px,env(safe-area-inset-left));background:var(--bg-1);}
+    .main-top{position:sticky;top:0;z-index:30;background:var(--bg);
+      margin:0 calc(-1 * max(16px,env(safe-area-inset-right))) 16px calc(-1 * max(16px,env(safe-area-inset-left)));
+      padding:max(10px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 10px max(16px,env(safe-area-inset-left));}
+    .stat .n{font-size:22px;}
+    .tf-cv{font-size:26px;}
+    .rev-hero .rv{font-size:34px;}
+    .toolbar{flex-wrap:wrap;}
+    .acts .act{padding:11px 16px;}
+  }
+  @media (max-width:760px){
+    .stat-row,.ov-grid,.ac-stats{grid-template-columns:repeat(2,1fr);}
+    .gc-issue{flex-direction:column;align-items:stretch;}
+    .gc-issue .fld{width:100%;}
+    .staff-perms{grid-template-columns:1fr;}
+    .tf-locs{grid-template-columns:1fr;}
+  }
+  /* Sign in = the ONE primary CTA on its screen → white acts (app law). */
+  .login button{background:var(--primary);color:var(--on-primary);}
+  .login button:hover{filter:brightness(.94);}
+  /* Sign-in sits DIRECTLY on the black stage like the app's auth screens —
+     no containing grey card; only the input fields are boxed. */
+  .login{background:none;border-radius:0;padding:0 28px;}
+  /* Wide content scrolls inside its own box (app law) — never the page sideways. */
+  .tf-ranges{max-width:100%;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+  .tf-ranges::-webkit-scrollbar{display:none;}
+  .tf-r{flex:0 0 auto;white-space:nowrap;}
+  #content table{display:block;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;border-collapse:collapse;}
 </style>
 </head>
 <body>
@@ -807,7 +939,7 @@
     <div class="main-inner">
       <div class="main-top">
         <button class="nav-toggle" onclick="toggleNav(true)" aria-label="Open menu">
-          <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          <svg viewBox="0 0 24 24"><line x1="4" y1="8" x2="19" y2="8"/><line x1="4" y1="16" x2="19" y2="16"/></svg>
         </button>
         <h1 id="viewTitle">Overview</h1>
       </div>
