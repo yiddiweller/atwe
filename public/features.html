@@ -83,6 +83,7 @@
 
   /* ── Intro ── */
   .intro{max-width:1080px;margin:0 auto;padding:26px clamp(14px,3vw,28px) 6px}
+  :root[data-embed="1"] .intro{display:none}  /* in the admin embed, jump straight to the list */
   .intro h1{font-family:var(--serif);font-weight:600;font-size:clamp(26px,4.5vw,38px);
     line-height:1.1;margin:0 0 10px;letter-spacing:-.015em;text-wrap:balance;max-width:20ch}
   .intro p{margin:0 0 6px;color:var(--ink2);max-width:64ch;font-size:15.5px}
@@ -297,6 +298,8 @@
       <span class="chip" data-p="inv">Built today</span>
       <span class="chip" data-p="roadmap">Road ahead</span>
       <span class="chip" data-p="excluded">Left out</span>
+      <span class="chip" data-p="admin_have">Admin: have</span>
+      <span class="chip" data-p="admin_idea">Admin: ideas</span>
     </div>
     <button class="btn" id="collapseBtn" style="margin-left:auto">Collapse all</button>
   </div>
@@ -394,7 +397,7 @@ rebuildFeatures();
 
 // effective keep: true / false / null(undecided). default: built=true, excluded=false, added=keep
 function eff(f){const d=store.dec[f.id];if(d&&d.k!==undefined&&d.k!==null)return d.k;if(d&&d.k===null)return null;
-  if(f.phase==="inv"||f.phase==="custom")return true;
+  if(f.phase==="inv"||f.phase==="custom"||f.phase==="admin_have")return true;
   if(f.phase==="excluded")return false;
   return null;}
 function setK(f,v){const d=store.dec[f.id]||(store.dec[f.id]={});d.k=v;save();}
@@ -408,7 +411,9 @@ const phases=[
   {id:"inv",k:"Section 1",title:"Built Today",sub:"Already live in Atwe — decide what to keep"},
   {id:"roadmap",k:"Section 2",title:"The Road Ahead",sub:"Planned & wanted — choose what to add"},
   {id:"excluded",k:"Section 3",title:"Deliberately Left Out",sub:"Considered but skipped on purpose — tap Keep if you actually want one"},
-  {id:"custom",k:"Section 4",title:"Your Added Features",sub:"Features you added yourself"}
+  {id:"admin_have",k:"Section 4",title:"Admin Dashboard — What You Have",sub:"The 36 tools already in your admin dashboard"},
+  {id:"admin_idea",k:"Section 5",title:"Admin Dashboard — Ideas to Add",sub:"Researched against X, Meta, Stripe, Shopify, Zendesk… — choose what to build"},
+  {id:"custom",k:"Section 6",title:"Your Added Features",sub:"Features you added yourself"}
 ];
 
 // ── render (rebuildable so added features slot in identically) ──
