@@ -2166,7 +2166,8 @@ body.light .tb-feedtab.active{color:var(--t1);}
      scrolls up and disappears CLEANLY beneath it (no blur/darken fade), X-style.
      The hairline is INSET to the same gutter as the posts + nav below it. */
   .topbar.tb-home{background:var(--bg);-webkit-backdrop-filter:none;backdrop-filter:none;border-bottom:none;position:relative;padding-inline-end:var(--feed-gutter);}
-  .topbar.tb-home::after{content:"";position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:1px;background:var(--b2);}
+  /* No hairline under the Home tabs (founder) — the tab row fades up on scroll
+     into a clean black top bar instead. */
   body.light .topbar.tb-home{background:var(--bg);}
 
   /* Chat top bar mirrors home: word-only tabs (All · Chats · Calls · Contacts) with
@@ -2174,8 +2175,20 @@ body.light .tb-feedtab.active{color:var(--t1);}
      a solid bar + grey hairline, all gutter-aligned. (No top-bar icons.) */
   .topbar.tb-chat{padding-inline-start:var(--feed-gutter);padding-inline-end:var(--feed-gutter);
     background:var(--bg);-webkit-backdrop-filter:none;backdrop-filter:none;border-bottom:none;position:relative;}
-  .topbar.tb-chat::after{content:"";position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:1px;background:var(--b2);}
+  /* No hairline under the Beam tabs (founder) — matches Home. */
   body.light .topbar.tb-chat{background:var(--bg);}
+  /* Scroll-fade top bar (founder, X-style): the tab row dissolves UP as you scroll
+     (opacity driven from JS, position-based), and once scrolled the bar turns into a
+     frosted-dark top so content darkens + blurs under it — ending as a clean black
+     top strip that stays. At the very top it's the plain solid bar with the tabs.
+     The frost only exists while scrolled (toggled by JS), so there's no permanent
+     extra blur layer at rest. */
+  #tbTabRow{transition:opacity .12s linear;}
+  body.top-frosted .topbar.tb-home,body.top-frosted .topbar.tb-chat{
+    background:rgba(0,0,0,.86);
+    -webkit-backdrop-filter:blur(16px) saturate(1.2);backdrop-filter:blur(16px) saturate(1.2);}
+  body.light.top-frosted .topbar.tb-home,body.light.top-frosted .topbar.tb-chat{
+    background:rgba(255,255,255,.86);}
   .topbar.tb-chat .sb-toggle{justify-content:flex-start;width:auto;}
   .topbar.tb-chat .sb-toggle svg{width:26px;height:26px;stroke-width:2.1;}
   /* Search + AI: put the ≡ at the exact same gutter position as Home/Chat. */
@@ -14700,7 +14713,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1079'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1080'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24284,6 +24297,8 @@ function acSetFeed(scope) {
   _acFeedScope = scope;
   if (typeof acFeedResetPaging === 'function') acFeedResetPaging(); // drop the infinite-scroll observer/state from the previous scope (incl. circles/feeds)
   const scrim = document.getElementById('acTopScrim'); if (scrim) scrim.style.opacity = '0'; // reset on reload (scroll resets to top)
+  // The feed reloads + scrolls to top, so restore the scroll-faded tab row + drop the frosted-top.
+  const _tr = document.getElementById('tbTabRow'); if (_tr) { _tr.style.opacity = ''; _tr.style.pointerEvents = ''; } document.body.classList.remove('top-frosted');
   [...AC_FEED_TABS, 'feeds', 'pinned'].forEach(s => document.getElementById('acFeedTab-' + s)?.classList.toggle('active', s === scope));
   // Horizontal page-slide between feeds (X-style pager) — works for a tab TAP and a
   // swipe alike: the new feed slides in from the side it came from. Animating the
@@ -43587,7 +43602,13 @@ function acSetBarsHidden(hidden) {
   clearTimeout(_barAnimT);
   _barAnimT = setTimeout(() => _setBarAnim(false), 380);
 }
-function acRevealBars() { acSetBarsHidden(false); }
+function acRevealBars() {
+  acSetBarsHidden(false);
+  // Restore the scroll-faded tab row + drop the frosted-top state on any navigation.
+  const row = document.getElementById('tbTabRow');
+  if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
+  document.body.classList.remove('top-frosted');
+}
 function _onListScroll(e) {
   const sc = e.target;
   if (!sc || !sc.classList || !sc.classList.contains('ac-list')) return;
@@ -43601,11 +43622,23 @@ function _onListScroll(e) {
     else _barHide = Math.min(_barMax, Math.max(0, _barHide + dy)); // 1:1 with the scroll
     if (!_barRAF) _barRAF = requestAnimationFrame(_applyBars);
   }
-  // Home feed: no darken/blur scrim — the solid top bar (with its grey hairline)
-  // clips the content cleanly as it scrolls under, X-style.
+  // Home feed: no darken/blur scrim — the solid top bar clips content cleanly.
   if (sc.id === 'acFeed') {
     const scrim = document.getElementById('acTopScrim');
     if (scrim) scrim.style.opacity = 0;
+  }
+  // Home feed + Beam: fade the tab row UP on scroll so it dissolves into a clean
+  // black top bar that stays (founder, X-style). Position-based (smooth, no jitter),
+  // and it fades back in as you return to the top. `top-frosted` turns the bar into a
+  // frosted-dark strip while scrolled so content darkens/blurs under it.
+  if (sc.id === 'acFeed' || (_appTab === 'chat' && sc.classList && sc.classList.contains('ac-list'))) {
+    const row = document.getElementById('tbTabRow');
+    if (row && !row.classList.contains('hidden')) {
+      const p = Math.min(1, Math.max(0, (sc.scrollTop - 4) / 52)); // 0 at top → 1 by ~56px
+      row.style.opacity = String(1 - p);
+      row.style.pointerEvents = p > 0.9 ? 'none' : '';
+      document.body.classList.toggle('top-frosted', sc.scrollTop > 10);
+    }
   }
   // Scroll-morph (home feed + Beam): down → ball, up → full nav, top → always full.
   if (NAV_MORPH && ((_appTab === 'home' && sc.id === 'acFeed') || _appTab === 'chat')) {
