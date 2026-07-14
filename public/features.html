@@ -4,6 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <meta name="theme-color" content="#0b0c0e"/>
+<meta name="robots" content="noindex, nofollow"/>
 <title>Atwe · Feature Selection</title>
 <link rel="icon" href="/icon.png"/>
 <style>
@@ -398,7 +399,7 @@ function renderAll(){
       const p=catParts(g.cat);
       const sum=el("summary");
       sum.innerHTML=`<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>`
-        +`<span class="cat-name">${p.world?`<span class="world">${p.world} · </span>`:""}${p.rest}</span>`
+        +`<span class="cat-name">${p.world?`<span class="world">${esc(p.world)} · </span>`:""}${esc(p.rest)}</span>`
         +`<span class="cat-tally" data-tally></span>`;
       det.appendChild(sum);
       const body=el("div","cat-body");
