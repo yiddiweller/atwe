@@ -388,7 +388,10 @@ body.light .splash-mark{background-color:#d2d2d8;}
 /* ⋯ menu top-right of the username step (mirrors the back arrow). Opens a small
    frosted popover (reusing .ai-menu-pop) with the QR-login option. Dimmer so it
    reads as a secondary control. */
-.auth-more-corner{color:var(--t2);}
+/* Nudge the dots out so the icon's right edge lines up with the page content
+   margin (the input / Continue button end at 28px) — the 22px icon centred in a
+   48px button otherwise floats ~13px inside the edge, reading as "too far left". */
+.auth-more-corner{color:var(--t2);margin-right:-13px;}
 .auth-more-corner svg{width:22px;height:22px;fill:currentColor;stroke:none;}
 .auth-stepalt{background:none;border:none;color:#fff;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;
   padding:8px 10px;margin-inline-end:-10px;border-radius:14px;-webkit-tap-highlight-color:transparent;transition:opacity var(--t-fast) var(--ease);}
@@ -14765,7 +14768,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1093'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1094'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
