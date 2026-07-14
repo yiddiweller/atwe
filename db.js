@@ -760,6 +760,26 @@ async function initSchema() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS page_views_created_idx ON page_views(created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS page_views_ip_idx ON page_views(ip);`);
+  // Client crash telemetry: the app beacons a report when a previous session died
+  // WHILE VISIBLE without a clean pagehide (iOS jetsam / WebContent crash). Gives
+  // us the device (ua = exact iOS version), surface and session lifetime for
+  // crashes we can't reproduce locally. Read via GET /api/admin/client-crashes.
+  await query(`
+    CREATE TABLE IF NOT EXISTS client_crashes (
+      id         BIGSERIAL PRIMARY KEY,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      ua         TEXT,
+      surface    TEXT,
+      alive_sec  INTEGER,
+      standalone BOOLEAN,
+      vw         INTEGER,
+      vh         INTEGER,
+      dpr        REAL,
+      build      TEXT,
+      ip         TEXT
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS client_crashes_created_idx ON client_crashes(created_at DESC);`);
   // Per-ip geo cache (resolved best-effort via geoip.js, once per ip). JOINed to
   // page_views for the "top locations" breakdown.
   await query(`

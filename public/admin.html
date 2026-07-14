@@ -1782,6 +1782,7 @@ function renderUsernamesView(){
 let SITE = null;
 let DEMO = { on:false, count:0 };
 let FLAGS = { flags:{}, meta:[] };
+let CRASHES = { crashes: [] };
 let JOBS = { jobs:[] };
 async function renderSiteView(){
   document.getElementById('stats').innerHTML = '';
@@ -1794,6 +1795,7 @@ async function loadSite(){
     try { DEMO = await api('GET', '/api/admin/demo'); } catch { DEMO = { on:false, count:0 }; }
     try { FLAGS = await api('GET', '/api/admin/feature-flags'); } catch { FLAGS = { flags:{}, meta:[] }; }
     try { JOBS = await api('GET', '/api/admin/jobs'); } catch { JOBS = { jobs:[] }; }
+    try { CRASHES = await api('GET', '/api/admin/client-crashes'); } catch { CRASHES = { crashes: [] }; }
     renderSite();
   }
   catch (e){ document.getElementById('content').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
@@ -1824,7 +1826,16 @@ function renderSite(){
     const sub = j.status==='error' ? esc(j.lastError||'last run failed') : (j.status==='stale' ? ('overdue — last ran '+last) : ('ran '+last+' · every '+jobEvery(j.intervalMs)));
     return `<div class="site-row" style="border-top:1px solid var(--b1);"><div style="display:flex;align-items:center;gap:11px;min-width:0;"><span class="jdot ${cls}"></span><div><div class="srt">${esc(j.label)}</div><div class="srs">${sub}${j.lastProcessed!=null?' · '+j.lastProcessed+' handled':''}</div></div></div><span class="pill ${j.status==='ok'?'pro':(j.status==='error'?'ban':(j.status==='stale'?'susp':''))}">${esc(j.status)}</span></div>`;
   }).join('');
-  document.getElementById('content').innerHTML = `
+  const crashes = (typeof CRASHES !== 'undefined' && CRASHES.crashes) || [];
+  const iosVer = (ua) => { const m = /OS (\d+)[._](\d+)/.exec(ua||''); const m2 = /Version\/(\d+\.\d+)/.exec(ua||''); return m ? ('iOS ' + m[1] + '.' + m[2]) : (m2 ? ('Safari ' + m2[1]) : ''); };
+  const crashRows = crashes.slice(0, 30).map(c => `<div class="site-row" style="border-top:1px solid var(--b1);"><div style="min-width:0;"><div class="srt">${esc(c.surface || '?')} · alive ${c.alive_sec == null ? '?' : c.alive_sec + 's'} · build ${esc(c.build || '?')}${c.standalone ? ' · installed app' : ''}</div><div class="srs">${esc(iosVer(c.ua))} · ${esc(fmtDateTime(c.created_at))} · ${esc((c.ua||'').slice(0, 110))}</div></div></div>`).join('');
+  const crashPanel = `
+    <div class="panel">
+      <h3>Crash reports <span class="muted">· device telemetry</span></h3>
+      <div class="sub">Each row = a phone's browser was killed mid-session (the "black blink → reload" bug) and reported itself on the next boot: which screen, how long the session lived, the device's exact OS version and which app build it was running.</div>
+      ${crashRows || '<div class="empty" style="padding:14px 0;">No crash reports yet.</div>'}
+    </div>`;
+  document.getElementById('content').innerHTML = crashPanel + `
     <div class="panel">
       <h3>Background jobs <span class="muted">· system health</span></h3>
       <div class="sub">The scheduled workers that release escrow, run subscriptions + standing payments, deliver scheduled messages and sweep stale orders. If one goes <b>stale</b> or <b>error</b>, money-related work may be stuck.</div>

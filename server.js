@@ -808,6 +808,38 @@ app.get('/api/health', (_req, res) => {
 
 const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').trim();
 
+// ── Client crash telemetry ───────────────────────────────────────────────────
+// The app beacons here when it detects the PREVIOUS session died while visible
+// without a clean pagehide — i.e. iOS jettisoned/crashed the page (the black
+// blink → reload bug). navigator.sendBeacon posts text/plain, so this parses
+// its own body (the JSON body-parser skips non-JSON content types). Public but
+// rate-limited + size-capped; stores no PII beyond ua/ip (same as page_views).
+app.post('/api/client-crash', rateLimit(10, 60000, 'client-crash'), express.text({ type: '*/*', limit: '4kb' }), async (req, res) => {
+  res.json({ ok: true }); // always 200 fast — telemetry must never block the app
+  try {
+    const d = JSON.parse(String(req.body || '{}'));
+    const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+    const row = {
+      ua: String(d.ua || '').slice(0, 400), surface: String(d.surface || '').slice(0, 60),
+      alive: Number.isFinite(d.aliveSec) ? Math.round(d.aliveSec) : null,
+      standalone: !!d.standalone, vw: Number(d.vw) || null, vh: Number(d.vh) || null,
+      dpr: Number(d.dpr) || null, build: String(d.build || '').slice(0, 20),
+    };
+    console.error('[client-crash]', JSON.stringify({ ...row, ip }));
+    await db.query(
+      `INSERT INTO client_crashes (ua, surface, alive_sec, standalone, vw, vh, dpr, build, ip)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [row.ua, row.surface, row.alive, row.standalone, row.vw, row.vh, row.dpr, row.build, ip]
+    );
+  } catch (e) { /* best-effort */ }
+});
+app.get('/api/admin/client-crashes', auth.requireAdmin, async (_req, res) => {
+  try {
+    const { rows } = await db.query('SELECT * FROM client_crashes ORDER BY id DESC LIMIT 200');
+    res.json({ crashes: rows, count: rows.length });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load crash reports.' }); }
+});
+
 // Public feature flags so the frontend can adapt its UI.
 app.get('/api/config', (_req, res) => {
   res.json({
