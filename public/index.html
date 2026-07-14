@@ -4876,9 +4876,8 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.08);}
    name-to-checkmark gap. The two direct-flex-child sites it can appear in
    (`.ac-post-nameline`, `.ac-prof-name`) each get their own calibrated
    compensating transform below, same reasoning as the `.vbadge` flex sites above. */
-.ac-affbadge{width:16px;height:16px;border-radius:5px;object-fit:cover;margin-inline-start:6px;vertical-align:baseline;flex-shrink:0;align-self:baseline;cursor:pointer;box-shadow:0 0 0 1px rgba(128,128,128,.18);background:var(--s2);}
+.ac-affbadge{width:16px;height:16px;border-radius:5px;object-fit:cover;margin-inline-start:6px;vertical-align:-.08em;flex-shrink:0;align-self:baseline;cursor:pointer;box-shadow:0 0 0 1px rgba(128,128,128,.18);background:var(--s2);}
 .ac-prof-name .ac-affbadge{width:22px;height:22px;border-radius:7px;margin-inline-start:6px;}
-.ac-post-nameline>.ac-affbadge{transform:translateY(-.25em);}
 .ac-prof-name>.ac-affbadge{transform:translateY(.24em);}
 .ac-post-name:hover{text-decoration:underline;}
 .ac-post-time{font-size:13px;color:var(--t3);white-space:nowrap;margin-inline-start:auto;flex-shrink:0;}

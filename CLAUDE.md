@@ -4851,16 +4851,20 @@ untouched (functional). New transitions must use the tokens.
 
   **Affiliation badge (`.ac-affbadge`, the small rounded-square org-logo image
   an admin approves) reads as part of the SAME seal group as the checkmark, not
-  a separate floating element** — `align-self`/`vertical-align` both `baseline`
-  (matching `.vbadge`'s own approach) land its bottom EXACTLY flush with
-  `.vbadge`'s own bottom in every plain inline context (`.notif-text`,
-  `.ac-post-name`), verified by measuring the affiliation badge's bottom
-  against the checkmark's bottom directly (not against the text), since the
-  goal is specifically "these two badges sit together." `margin-left` matches
-  `.vbadge`'s own `6px` so the checkmark→logo gap reads the same as the
-  name→checkmark gap. Its two flex-direct-child sites (`.ac-post-nameline`,
-  `.ac-prof-name`) each carry their own calibrated compensating transform
-  (`-.25em`, `.24em`) — again measured against `.vbadge`'s actual position in
+  a separate floating element** — `align-self:baseline` +
+  `vertical-align:-.08em` (tracking `.vbadge`'s own `-.08em` hair-lower nudge,
+  which the badge must follow whenever that value changes) land its bottom
+  EXACTLY flush with `.vbadge`'s own INK bottom in every plain inline context
+  (`.notif-text`, `.ac-post-name`), verified by real-pixel scan of the badge's
+  bottom against the checkmark's rendered disc bottom directly (not against
+  the text, and not via DOMRect), since the goal is specifically "these two
+  badges sit together." `margin-left` matches `.vbadge`'s own `6px` so the
+  checkmark→logo gap reads the same as the name→checkmark gap. Flex-direct-
+  child sites: `.ac-post-nameline` needs **NO compensating transform** (an
+  `<img>` has a real baseline, unlike the SVG — a leftover `-.25em` lift here
+  was a real shipped bug that floated the badge ~4px above the check on every
+  feed card, July 2026), while `.ac-prof-name` carries a calibrated
+  `translateY(.24em)` — measured against `.vbadge`'s actual ink position in
   the same row, not the text.
 - **Brand safety.** Keep user-facing strings under the "Atwe" brand; don't expose
   "Claude"/"Anthropic" in UI copy, labels, or the system prompt.
