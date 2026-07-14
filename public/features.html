@@ -357,7 +357,10 @@
     </div>
     <h2>This page is private</h2>
     <p>The Atwe feature list is only visible to you. Open it from your <b>admin dashboard</b> — Admin → Features — or sign in there first.</p>
-    <a class="btn primary" href="/admin.html">Go to admin sign-in</a>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <button class="btn primary" onclick="retryUnlock()">Try again</button>
+      <a class="btn" href="/admin.html">Go to admin sign-in</a>
+    </div>
   </div>
 </div>
 
@@ -633,19 +636,38 @@ $("#copyBtn").onclick=async()=>{
 };
 
 function showLocked(){document.body.classList.add("is-locked");const ls=$("#lockScreen");if(ls)ls.hidden=false;}
+function hideLocked(){document.body.classList.remove("is-locked");const ls=$("#lockScreen");if(ls)ls.hidden=true;}
+// When embedded in the admin dashboard, the PARENT pushes its known-good session
+// token via postMessage — this page never depends on reading localStorage inside
+// an iframe (restricted in some browsers), which showed a false "sign in" lock.
+const EMBEDDED=(()=>{try{return window.parent&&window.parent!==window;}catch(e){return false;}})();
+let ADMIN_TOK=null,_featLoaded=false;
+window.addEventListener("message",(e)=>{
+  if(e.origin!==location.origin)return;
+  const d=e.data;
+  if(d&&d.type==="atwe-admin-token"&&typeof d.token==="string"&&d.token){
+    ADMIN_TOK=d.token;
+    if(!_featLoaded)initFeatures();
+  }
+});
+function requestParentToken(){try{if(EMBEDDED)window.parent.postMessage({type:"atwe-admin-token-request"},location.origin);}catch(e){}}
 async function initFeatures(){
-  let tok=null;try{tok=localStorage.getItem("atwe_token");}catch(e){}
-  if(!tok){showLocked();return;}
+  if(_featLoaded)return;
+  let tok=ADMIN_TOK;
+  if(!tok){try{tok=localStorage.getItem("atwe_token");}catch(e){}}
+  if(!tok){requestParentToken();showLocked();return;}
   try{
     const r=await fetch("/api/admin/features-data",{headers:{Authorization:"Bearer "+tok}});
-    if(!r.ok){showLocked();return;}
+    if(!r.ok){requestParentToken();showLocked();return;}
     const d=await r.json();
     if(!d||!Array.isArray(d.features)||!d.features.length){showLocked();return;}
-    BASE_FEATURES=d.features;
-    document.body.classList.remove("is-locked");
-    renderAll();
-  }catch(e){showLocked();}
+    if(_featLoaded)return;
+    BASE_FEATURES=d.features;_featLoaded=true;
+    hideLocked();renderAll();
+  }catch(e){requestParentToken();showLocked();}
 }
+function retryUnlock(){requestParentToken();setTimeout(initFeatures,200);}
+requestParentToken();
 initFeatures();
 </script>
 

@@ -1354,7 +1354,19 @@ function renderFeaturesView(){
   const stats = document.getElementById('stats'); if (stats) stats.style.display = 'none';
   const c = document.getElementById('content');
   c.innerHTML = '<iframe class="feat-frame" src="/features.html?embed=1&theme=dark" title="Feature checklist"></iframe>';
+  // Hand the dashboard's own (known-good) session token to the embedded page —
+  // the iframe must never depend on reading localStorage itself, which some
+  // browsers restrict inside frames. Pushed on load + re-sent on request below.
+  const f = c.querySelector('.feat-frame');
+  if (f) f.addEventListener('load', () => { try { f.contentWindow.postMessage({ type: 'atwe-admin-token', token }, location.origin); } catch (e) {} });
 }
+window.addEventListener('message', (e) => {
+  if (e.origin !== location.origin) return;
+  if (e.data && e.data.type === 'atwe-admin-token-request' && token) {
+    const f = document.querySelector('.feat-frame');
+    if (f && f.contentWindow) { try { f.contentWindow.postMessage({ type: 'atwe-admin-token', token }, location.origin); } catch (err) {} }
+  }
+});
 
 /* ─── Feature Controls (module-level kill switches) ─── */
 let CONTROLS = { controls: {}, meta: [] };
