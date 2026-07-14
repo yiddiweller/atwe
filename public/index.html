@@ -1987,9 +1987,9 @@ body.tb-collapsed .tb-mainrow{max-height:0;opacity:0;}
 /* The topbar's own home/chat inline padding would shift the row — the solo row
    owns its geometry (tabs scroll to the TRUE screen edge, per the mock). */
 .topbar.tb-solo.tb-home,.topbar.tb-solo.tb-chat{padding-inline:0;}
-.tb-icoset{display:none;align-items:center;gap:6px;flex-shrink:0;
+.tb-icoset{display:none;align-items:center;gap:4px;flex-shrink:0;
   /* ≡ GLYPH lands exactly on the gutter: button inset = (38px − 17px svg)/2 = 10.5px */
-  margin-inline-start:calc(var(--feed-gutter, 18px) - 10.5px);margin-inline-end:2px;}
+  margin-inline-start:calc(var(--feed-gutter, 18px) - 10.5px);margin-inline-end:0;}
 /* Founder's design: NO active underline — the active tab is simply full white
    (inactive grey). And the icons sit on the EXACT same line as the tab text:
    the old tabs reserved extra bottom padding for the underline (7px top / 12px
@@ -2027,10 +2027,13 @@ body.light .topbar.tb-solo.tb-home .tb-feedtab.active,body.light .topbar.tb-solo
      where the FINAL rest lands. */
 .topbar.tb-solo.tb-home .tb-feedtabs,.topbar.tb-solo.tb-chat .tb-feedtabs{
   margin-inline-start:0;
-  padding-inline-start:13px;padding-inline-end:var(--feed-gutter);
-  scroll-padding-inline:13px var(--feed-gutter);
-  -webkit-mask-image:linear-gradient(to right,transparent 0,rgba(0,0,0,.45) 6px,#000 13px);
-  mask-image:linear-gradient(to right,transparent 0,rgba(0,0,0,.45) 6px,#000 13px);}
+  /* Small start-pad so the resting first tab sits RIGHT beside the icons (no wide
+     black gap), and a short fade so a tab dissolves against the icons — not in an
+     empty box further out. */
+  padding-inline-start:8px;padding-inline-end:var(--feed-gutter);
+  scroll-padding-inline:8px var(--feed-gutter);
+  -webkit-mask-image:linear-gradient(to right,transparent 0,#000 9px);
+  mask-image:linear-gradient(to right,transparent 0,#000 9px);}
 /* Only the compose "+" on the right of home/chat — no AI logo button there. */
 .topbar.tb-home #tbAiBtn,.topbar.tb-chat #tbAiBtn{display:none;}
 .topbar-actions{display:flex;align-items:center;gap:6px;}
@@ -14684,7 +14687,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1076'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1077'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
