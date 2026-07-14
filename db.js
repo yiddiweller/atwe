@@ -543,6 +543,31 @@ async function initSchema() {
     );
   `);
 
+  // Admin Vault — a private, admin-only "drive" for sensitive files, folders and
+  // secrets (PDFs, passwords, API keys). `kind` ∈ folder|file|secret; folders nest
+  // via `parent_id` (adjacency list, root = NULL). File bytes and secret values are
+  // stored ENCRYPTED AT REST (AES-256-GCM: enc_iv + enc_tag + enc_data, all base64);
+  // folder rows and `name`/`note` metadata are plaintext. Never served publicly —
+  // only through requireAdmin routes over HTTPS.
+  await query(`
+    CREATE TABLE IF NOT EXISTS admin_drive (
+      id         TEXT PRIMARY KEY,
+      parent_id  TEXT REFERENCES admin_drive(id) ON DELETE CASCADE,
+      kind       TEXT NOT NULL,
+      name       TEXT NOT NULL,
+      mime       TEXT,
+      size_bytes BIGINT DEFAULT 0,
+      enc_iv     TEXT,
+      enc_tag    TEXT,
+      enc_data   TEXT,
+      note       TEXT,
+      created_by INTEGER,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS admin_drive_parent_idx ON admin_drive(parent_id);`);
+
   // Direct messages between an admin and a user (a per-user thread).
   // `sender` is 'admin' or 'user'; the read_by_* flags drive the unread
   // badges shown to each side. Deleting a user removes their thread.
