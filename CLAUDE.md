@@ -3715,9 +3715,12 @@ in the product form's physical-only Subscribe & Save section (`acProdSubToggle`)
 > The white primary carries no blue glow (neutral press-flare + `brightness(.92)` +
 > `scale(.97)` on press). The `.wallet-actions .ac-pill-btn.accent` white-on-gradient
 > rule is more specific and still wins on the (blue-gradient) balance card, keeping its
-> Send pill white with a blue label. **Not yet flipped (deliberately, noted for a
-> later pass):** `.ac-conn-btn` (Connect) stays blue, and a scattering of inline
-> `background:var(--accent)` CTAs that don't use the shared classes.
+> Send pill white with a blue label. **All primary CTAs are now flipped** (July 2026): `.ac-conn-btn` (Connect), the
+> round composer sends (`.msg-send`/`.ax-send`/`.fwd-sendbtn`/`.story-reply-send`/
+> `.fcmt-send`), `.mk-submit`, `.sp-send`/`.sp-reqbtn`, `.nd-action`, `.ac-rec-send`,
+> and the checklist/form add buttons all use `var(--primary)`/`var(--on-primary)`;
+> the light-theme `.tb-login`/`.btn-white`/`.ac-join-btn` blue overrides became
+> primary tokens too (near-black in Light). Selected/`.on` states stay blue (identity).
 
 ### Sales tax + carrier-rate shipping (`shiptax.js`)
 
@@ -4760,7 +4763,10 @@ popover surfaces (switched several hardcoded-dark components onto the shared
 `aria-label`s), and a typography/spacing convergence pass (unified font-size/
 weight drift across popup-menu rows, section headers, contact-row names, and
 empty-state text; unified bottom-sheet corner radius and non-pill CTA buttons onto
-the existing `--r-xl`/`--r-pill` tokens). Remaining: a full motion-token audit.
+the existing `--r-xl`/`--r-pill` tokens). The motion-token audit is DONE (July 2026): all 173 raw durations inside
+`transition:` declarations were snapped to the three tokens (≤150ms → `--t-fast`,
+≤270ms → `--t-base`, else `--t-slow`); keyframe `animation` timings were left
+untouched (functional). New transitions must use the tokens.
 
 ## Conventions
 
