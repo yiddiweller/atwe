@@ -150,6 +150,33 @@ function disabledFeatureKeys() {
   return [...off];
 }
 
+// ── Admin Vault — encryption at rest (AES-256-GCM), per OWASP / HashiCorp Vault ──
+// File bytes and secret values are encrypted with a 256-bit master key before they
+// touch the database, so a DB dump never exposes plaintext. Set DRIVE_KEY for a
+// dedicated key; otherwise one is derived from JWT_SECRET (works out of the box).
+const _vcrypto = require('crypto');
+let _driveKey = null;
+function driveKey() {
+  if (_driveKey) return _driveKey;
+  const raw = process.env.DRIVE_KEY;
+  if (raw && raw.length >= 16) _driveKey = _vcrypto.createHash('sha256').update(raw).digest();
+  else _driveKey = _vcrypto.scryptSync(process.env.JWT_SECRET || 'atwe-dev-secret', 'atwe-admin-vault-v1', 32);
+  return _driveKey;
+}
+function driveEnc(buf) {
+  const iv = _vcrypto.randomBytes(12);
+  const c = _vcrypto.createCipheriv('aes-256-gcm', driveKey(), iv);
+  const data = Buffer.concat([c.update(buf), c.final()]);
+  return { iv: iv.toString('base64'), tag: c.getAuthTag().toString('base64'), data: data.toString('base64') };
+}
+function driveDec(iv, tag, data) {
+  const d = _vcrypto.createDecipheriv('aes-256-gcm', driveKey(), Buffer.from(iv, 'base64'));
+  d.setAuthTag(Buffer.from(tag, 'base64'));
+  return Buffer.concat([d.update(Buffer.from(data, 'base64')), d.final()]);
+}
+const DRIVE_MAX_BYTES = 18 * 1024 * 1024; // ~18 MB/file (fits the 25 MB base64 JSON limit)
+function driveId() { return 'dv_' + _vcrypto.randomBytes(12).toString('hex'); }
+
 // Guard for the irreversible actions a support agent must NOT be able to do while
 // "viewing as" a member (money out, password/email change, account deletion). The
 // impersonation token carries an `imp` claim; this 403s those routes. Runs after
@@ -12028,6 +12055,124 @@ app.put('/api/admin/feature-controls', auth.requireAdmin, async (req, res) => {
     adminAudit(req, 'feature.controls', 'settings', 'feature_controls', { changed: Object.keys(incoming) });
     res.json({ controls: next });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save feature controls.' }); }
+});
+
+// ── Admin Vault (secure drive) — superadmin only, encrypted at rest, audit-logged.
+// List a folder's contents (metadata only — never ships enc_data) + a breadcrumb.
+app.get('/api/admin/drive', auth.requireAdmin, async (req, res) => {
+  try {
+    const parent = req.query.parent || null;
+    const { rows } = await db.query(
+      `SELECT id, parent_id, kind, name, mime, size_bytes, note, updated_at
+         FROM admin_drive WHERE parent_id IS NOT DISTINCT FROM $1
+         ORDER BY (kind = 'folder') DESC, lower(name)`, [parent]);
+    const path = []; let pid = parent, guard = 0;
+    while (pid && guard++ < 60) {
+      const r = await db.query(`SELECT id, parent_id, name FROM admin_drive WHERE id = $1 AND kind = 'folder'`, [pid]);
+      if (!r.rows[0]) break;
+      path.unshift({ id: r.rows[0].id, name: r.rows[0].name });
+      pid = r.rows[0].parent_id;
+    }
+    res.json({ items: rows, path, encryptedKey: !!process.env.DRIVE_KEY });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not load the vault.' }); }
+});
+// Create a folder.
+app.post('/api/admin/drive/folder', auth.requireAdmin, async (req, res) => {
+  try {
+    const name = (req.body.name || '').trim().slice(0, 200);
+    if (!name) return res.status(400).json({ error: 'Folder name required.' });
+    const id = driveId();
+    await db.query(`INSERT INTO admin_drive (id, parent_id, kind, name, created_by) VALUES ($1, $2, 'folder', $3, $4)`,
+      [id, req.body.parentId || null, name, req.user.id]);
+    adminAudit(req, 'vault.folder', 'admin_drive', id, { name });
+    res.json({ id });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not create folder.' }); }
+});
+// Upload a file (base64 or data URL). `path` lets a folder-upload auto-create subfolders.
+app.post('/api/admin/drive/upload', auth.requireAdmin, async (req, res) => {
+  try {
+    let { name, parentId, mime, data, path } = req.body;
+    name = (name || 'file').trim().slice(0, 300);
+    let b64 = data || '';
+    const m = /^data:([^;]+);base64,(.*)$/s.exec(b64);
+    if (m) { mime = mime || m[1]; b64 = m[2]; }
+    const buf = Buffer.from(b64, 'base64');
+    if (!buf.length) return res.status(400).json({ error: 'The file was empty.' });
+    if (buf.length > DRIVE_MAX_BYTES) return res.status(413).json({ error: 'File too large (max 18 MB).' });
+    let parent = parentId || null;
+    if (path && typeof path === 'string' && path.includes('/')) {
+      const parts = path.split('/').filter(Boolean); parts.pop();
+      for (const seg of parts) {
+        const ex = await db.query(`SELECT id FROM admin_drive WHERE parent_id IS NOT DISTINCT FROM $1 AND kind = 'folder' AND name = $2`, [parent, seg]);
+        if (ex.rows[0]) parent = ex.rows[0].id;
+        else { const fid = driveId(); await db.query(`INSERT INTO admin_drive (id, parent_id, kind, name, created_by) VALUES ($1, $2, 'folder', $3, $4)`, [fid, parent, seg, req.user.id]); parent = fid; }
+      }
+    }
+    const enc = driveEnc(buf); const id = driveId();
+    await db.query(`INSERT INTO admin_drive (id, parent_id, kind, name, mime, size_bytes, enc_iv, enc_tag, enc_data, created_by)
+      VALUES ($1, $2, 'file', $3, $4, $5, $6, $7, $8, $9)`,
+      [id, parent, name, mime || 'application/octet-stream', buf.length, enc.iv, enc.tag, enc.data, req.user.id]);
+    adminAudit(req, 'vault.upload', 'admin_drive', id, { name, size: buf.length });
+    res.json({ id });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Upload failed.' }); }
+});
+// Download a file (decrypts on the way out).
+app.get('/api/admin/drive/file/:id', auth.requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await db.query(`SELECT name, mime, enc_iv, enc_tag, enc_data FROM admin_drive WHERE id = $1 AND kind = 'file'`, [req.params.id]);
+    const f = rows[0]; if (!f) return res.status(404).json({ error: 'Not found.' });
+    const buf = driveDec(f.enc_iv, f.enc_tag, f.enc_data);
+    adminAudit(req, 'vault.download', 'admin_drive', req.params.id, { name: f.name });
+    res.setHeader('Content-Type', f.mime || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(f.name)}`);
+    res.send(buf);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Download failed.' }); }
+});
+// Store a secret (password / API key) — value encrypted at rest.
+app.post('/api/admin/drive/secret', auth.requireAdmin, async (req, res) => {
+  try {
+    const name = (req.body.name || '').trim().slice(0, 200);
+    const value = String(req.body.value || '');
+    if (!name || !value) return res.status(400).json({ error: 'Name and value are required.' });
+    const enc = driveEnc(Buffer.from(value, 'utf8')); const id = driveId();
+    await db.query(`INSERT INTO admin_drive (id, parent_id, kind, name, note, size_bytes, enc_iv, enc_tag, enc_data, created_by)
+      VALUES ($1, $2, 'secret', $3, $4, $5, $6, $7, $8, $9)`,
+      [id, req.body.parentId || null, name, (req.body.note || '').slice(0, 500), value.length, enc.iv, enc.tag, enc.data, req.user.id]);
+    adminAudit(req, 'vault.secret_add', 'admin_drive', id, { name });
+    res.json({ id });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not save the secret.' }); }
+});
+// Reveal a secret (decrypts on demand).
+app.get('/api/admin/drive/secret/:id', auth.requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await db.query(`SELECT name, enc_iv, enc_tag, enc_data FROM admin_drive WHERE id = $1 AND kind = 'secret'`, [req.params.id]);
+    const s = rows[0]; if (!s) return res.status(404).json({ error: 'Not found.' });
+    const value = driveDec(s.enc_iv, s.enc_tag, s.enc_data).toString('utf8');
+    adminAudit(req, 'vault.secret_reveal', 'admin_drive', req.params.id, { name: s.name });
+    res.json({ value });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not reveal the secret.' }); }
+});
+// Rename / move / edit note.
+app.patch('/api/admin/drive/:id', auth.requireAdmin, async (req, res) => {
+  try {
+    const sets = [], vals = []; let i = 1;
+    if (typeof req.body.name === 'string') { sets.push('name = $' + (i++)); vals.push(req.body.name.trim().slice(0, 300)); }
+    if ('parentId' in req.body) { sets.push('parent_id = $' + (i++)); vals.push(req.body.parentId || null); }
+    if (typeof req.body.note === 'string') { sets.push('note = $' + (i++)); vals.push(req.body.note.slice(0, 500)); }
+    if (!sets.length) return res.json({ ok: true });
+    sets.push('updated_at = now()'); vals.push(req.params.id);
+    await db.query('UPDATE admin_drive SET ' + sets.join(', ') + ' WHERE id = $' + i, vals);
+    adminAudit(req, 'vault.update', 'admin_drive', req.params.id, {});
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Update failed.' }); }
+});
+// Delete (folders cascade to their contents via the FK).
+app.delete('/api/admin/drive/:id', auth.requireAdmin, async (req, res) => {
+  try {
+    await db.query('DELETE FROM admin_drive WHERE id = $1', [req.params.id]);
+    adminAudit(req, 'vault.delete', 'admin_drive', req.params.id, {});
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Delete failed.' }); }
 });
 // Background-job health — is each scheduled flusher alive? A job is `stale` if it
 // hasn't run within ~2.5× its interval, `error` if its last run threw. Superadmin only.

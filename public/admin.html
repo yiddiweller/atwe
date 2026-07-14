@@ -704,6 +704,38 @@
   .fc-catbtn:hover{border-color:var(--accent);color:var(--t1);}
   .fc-row{padding:11px 16px;border-bottom:1px solid var(--line);}
   .fc-row:last-child{border-bottom:none;}
+  /* Vault */
+  .vt-note{font-size:12.5px;color:var(--t2);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 13px;margin-bottom:14px;line-height:1.5;}
+  .vt-note code{background:rgba(255,255,255,.08);padding:1px 5px;border-radius:5px;font-size:11.5px;}
+  .vt-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+  .vt-crumbs{font-size:14px;color:var(--t2);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .vt-crumb{cursor:pointer;color:var(--t1);font-weight:600;}
+  .vt-crumb:hover{color:var(--accent);}
+  .vt-sep{color:var(--t4);}
+  .vt-tools{display:flex;gap:7px;flex-wrap:wrap;}
+  .vt-tbtn{background:var(--card);border:1px solid var(--line);border-radius:9px;color:var(--t1);font-size:12.5px;font-weight:600;padding:7px 12px;cursor:pointer;font-family:inherit;white-space:nowrap;}
+  .vt-tbtn:hover{border-color:var(--accent);}
+  .vt-progress{font-size:12.5px;color:var(--t2);padding:8px 4px;}
+  .vt-list{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--card);}
+  .vt-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);cursor:pointer;}
+  .vt-row:last-child{border-bottom:none;}
+  .vt-row:hover{background:rgba(255,255,255,.03);}
+  .vt-ic{width:34px;height:34px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:9px;background:rgba(255,255,255,.05);}
+  .vt-ic svg{width:19px;height:19px;fill:none;stroke:var(--t2);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+  .vt-folder svg{fill:var(--accent);stroke:var(--accent);}
+  .vt-secret svg{stroke:#e0a33e;}
+  .vt-main{flex:1;min-width:0;}
+  .vt-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .vt-sub{font-size:11.5px;color:var(--t3);margin-top:1px;}
+  .vt-act{background:none;border:none;color:var(--t3);cursor:pointer;font-size:14px;padding:5px 7px;border-radius:7px;flex:none;}
+  .vt-act svg{width:16px;height:16px;}
+  .vt-act:hover{color:var(--t1);background:rgba(255,255,255,.06);}
+  .vt-del:hover{color:var(--danger);}
+  .vt-modal{position:fixed;inset:0;z-index:200;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.6);}
+  .vt-modal-card{background:var(--card2,#16181d);border:1px solid var(--line);border-radius:16px;padding:20px;width:min(520px,100%);}
+  .vt-modal-h{font-size:16px;font-weight:800;margin-bottom:12px;}
+  .vt-secret-val{width:100%;box-sizing:border-box;min-height:96px;resize:vertical;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:var(--t1);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px;}
+  .vt-modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;}
 </style>
 </head>
 <body>
@@ -753,6 +785,9 @@
       <div class="nav-label" data-group="product">Product</div>
       <button class="tab" data-v="features" onclick="switchTab('features')">Features</button>
       <button class="tab" data-v="featurecontrols" onclick="switchTab('featurecontrols')">Feature Controls</button>
+
+      <div class="nav-label" data-group="vault">Private</div>
+      <button class="tab" data-v="vault" onclick="switchTab('vault')">Vault</button>
 
       <div class="nav-label" data-group="system">System</div>
       <button class="tab" data-v="site" onclick="switchTab('site')">Site</button>
@@ -1179,7 +1214,7 @@ const TAB_PERM = {
   reports: 'moderation', disputes: 'refunds', circles: 'moderation', feed: 'super',
   finance: 'revenue', growth: 'growth', audit: 'super', staff: 'super',
   refunds: 'refunds', appeals: 'users', datareq: 'users', activity: 'super', investigate: 'moderation', moderate: 'moderation',
-  cards: 'revenue', features: 'super', featurecontrols: 'super',
+  cards: 'revenue', features: 'super', featurecontrols: 'super', vault: 'super',
 };
 function canSee(tab){ const p = TAB_PERM[tab]; if (ME.superadmin) return true; return p !== 'super' && ME.perms.includes(p); }
 
@@ -1250,7 +1285,7 @@ const NAV_TITLES = {
   refunds:'Refunds', users:'Users', staff:'Staff', usernames:'Usernames', reports:'Reports',
   investigate:'Investigate', moderate:'AI content scan', disputes:'Disputes', appeals:'Appeals', support:'Support', datareq:'Data requests',
   posts:'Posts', circles:'Circles', feed:'Feed', activity:'Activity', traffic:'Traffic', growth:'Growth',
-  audit:'Audit log', site:'Site', cards:'Cards', features:'Features', featurecontrols:'Feature Controls',
+  audit:'Audit log', site:'Site', cards:'Cards', features:'Features', featurecontrols:'Feature Controls', vault:'Vault',
 };
 // Mobile: slide the sidebar in/out.
 function toggleNav(open){
@@ -1294,6 +1329,7 @@ function renderView(){
   else if (VIEW === 'moderate') renderModerateView();
   else if (VIEW === 'features') renderFeaturesView();
   else if (VIEW === 'featurecontrols') renderFeatureControlsView();
+  else if (VIEW === 'vault') renderVaultView();
   else renderOverviewView();
 }
 
@@ -1369,6 +1405,109 @@ async function toggleControlCategory(cat, want){
     notify(want ? 'Category turned on.' : 'Category turned off.');
   } catch (e) { notify(e.message); }
 }
+
+/* ─── Vault (private admin drive: encrypted files, folders, secrets) ─── */
+let VAULT = { parent: null, items: [], path: [], encKey: false };
+const VT_IC = {
+  folder: '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+  file: '<svg viewBox="0 0 24 24"><path d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><path d="M14 2v6h6"/></svg>',
+  secret: '<svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+};
+function renderVaultView(){ document.getElementById('stats').innerHTML=''; document.getElementById('content').innerHTML='<div class="empty">Loading…</div>'; loadVault(null); }
+async function loadVault(parent){
+  VAULT.parent = parent || null;
+  try {
+    const d = await api('GET', '/api/admin/drive' + (parent ? ('?parent=' + encodeURIComponent(parent)) : ''));
+    VAULT.items = d.items || []; VAULT.path = d.path || []; VAULT.encKey = !!d.encryptedKey; renderVault();
+  } catch (e) { document.getElementById('content').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function vtSize(n){ n = +n || 0; if (n < 1024) return n + ' B'; if (n < 1048576) return (n/1024).toFixed(1) + ' KB'; return (n/1048576).toFixed(1) + ' MB'; }
+function renderVault(){
+  const crumbs = ['<span class="vt-crumb" onclick="loadVault(null)">Vault</span>']
+    .concat(VAULT.path.map(p => `<span class="vt-sep">›</span><span class="vt-crumb" onclick="loadVault('${p.id}')">${esc(p.name)}</span>`)).join('');
+  const folders = VAULT.items.filter(i => i.kind === 'folder');
+  const files = VAULT.items.filter(i => i.kind === 'file');
+  const secrets = VAULT.items.filter(i => i.kind === 'secret');
+  const row = (it) => {
+    const click = it.kind === 'folder' ? `loadVault('${it.id}')` : (it.kind === 'file' ? `vaultDownload('${it.id}')` : `vaultReveal('${it.id}')`);
+    const sub = it.kind === 'file' ? vtSize(it.size_bytes) : (it.kind === 'secret' ? 'Secret · tap to reveal' : 'Folder');
+    return `<div class="vt-row" onclick="${click}">
+      <span class="vt-ic vt-${it.kind}">${VT_IC[it.kind]}</span>
+      <div class="vt-main"><div class="vt-name">${esc(it.name)}</div><div class="vt-sub">${sub}${it.note ? ' · ' + esc(it.note) : ''}</div></div>
+      <button class="vt-act" onclick="event.stopPropagation();vaultRename('${it.id}')" aria-label="Rename" title="Rename">✎</button>
+      <button class="vt-act vt-del" onclick="event.stopPropagation();vaultDelete('${it.id}')" aria-label="Delete" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+    </div>`;
+  };
+  const empty = !VAULT.items.length ? '<div class="empty" style="padding:34px 0">This folder is empty. Upload files, create a folder, or add a secret.</div>' : '';
+  document.getElementById('content').innerHTML = `
+    <div class="vt-note">🔒 Private to you (admin only). Files and secrets are <b>encrypted at rest</b> (AES-256-GCM) and only ever sent over HTTPS. ${VAULT.encKey ? '' : 'Set a <code>DRIVE_KEY</code> env var for a dedicated encryption key.'}</div>
+    <div class="vt-bar">
+      <div class="vt-crumbs">${crumbs}</div>
+      <div class="vt-tools">
+        <button class="vt-tbtn" onclick="vaultNewFolder()">＋ Folder</button>
+        <button class="vt-tbtn" onclick="document.getElementById('vtFiles').click()">⤒ Upload files</button>
+        <button class="vt-tbtn" onclick="document.getElementById('vtFolder').click()">⤒ Upload folder</button>
+        <button class="vt-tbtn" onclick="vaultAddSecret()">🔑 Add secret</button>
+      </div>
+    </div>
+    <div id="vtProgress" class="vt-progress" style="display:none"></div>
+    <div class="vt-list">${folders.map(row).join('')}${files.map(row).join('')}${secrets.map(row).join('')}${empty}</div>
+    <input type="file" id="vtFiles" multiple style="display:none" onchange="vaultUploadFiles(this.files)"/>
+    <input type="file" id="vtFolder" webkitdirectory style="display:none" onchange="vaultUploadFiles(this.files)"/>`;
+}
+function vaultNewFolder(){ const name = prompt('New folder name:'); if (!name) return; api('POST','/api/admin/drive/folder',{ name, parentId: VAULT.parent }).then(()=>loadVault(VAULT.parent)).catch(e=>notify(e.message)); }
+function vaultAddSecret(){
+  const name = prompt('Secret name (e.g. "Stripe API key"):'); if (!name) return;
+  const value = prompt('Value (password / API key). It will be encrypted:'); if (!value) return;
+  const note = prompt('Optional note (not secret):') || '';
+  api('POST','/api/admin/drive/secret',{ name, value, note, parentId: VAULT.parent }).then(()=>{ notify('Secret saved (encrypted).'); loadVault(VAULT.parent); }).catch(e=>notify(e.message));
+}
+function readAsDataURL(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); }); }
+async function vaultUploadFiles(files){
+  files = [...files]; if (!files.length) return;
+  const prog = document.getElementById('vtProgress'); if (prog) prog.style.display = 'block';
+  let done = 0, failed = 0;
+  for (const f of files) {
+    if (prog) prog.textContent = `Uploading ${done + 1} of ${files.length}: ${f.name}…`;
+    try {
+      if (f.size > 18 * 1024 * 1024) { failed++; done++; continue; }
+      const dataUrl = await readAsDataURL(f);
+      await api('POST','/api/admin/drive/upload',{ name: f.name, parentId: VAULT.parent, mime: f.type, data: dataUrl, path: f.webkitRelativePath || '' });
+    } catch (e) { failed++; }
+    done++;
+  }
+  if (prog) prog.style.display = 'none';
+  notify(failed ? (`Uploaded ${files.length - failed}, ${failed} failed (over 18 MB?).`) : `Uploaded ${files.length} file${files.length>1?'s':''}.`);
+  loadVault(VAULT.parent);
+}
+async function vaultDownload(id){
+  try {
+    const res = await fetch('/api/admin/drive/file/' + id, { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) throw new Error('Download failed.');
+    const it = VAULT.items.find(x => x.id === id);
+    const blob = await res.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a');
+    a.href = url; a.download = (it && it.name) || 'file'; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 800);
+  } catch (e) { notify(e.message); }
+}
+async function vaultReveal(id){
+  try { const d = await api('GET','/api/admin/drive/secret/' + id); const it = VAULT.items.find(x => x.id === id); vaultShowSecret((it && it.name) || 'Secret', d.value); }
+  catch (e) { notify(e.message); }
+}
+function vaultShowSecret(name, value){
+  let m = document.getElementById('vtSecretModal');
+  if (!m) { m = document.createElement('div'); m.id = 'vtSecretModal'; m.className = 'vt-modal'; document.body.appendChild(m); }
+  m.innerHTML = `<div class="vt-modal-card">
+    <div class="vt-modal-h">${esc(name)}</div>
+    <textarea class="vt-secret-val" readonly>${esc(value)}</textarea>
+    <div class="vt-modal-btns"><button class="vt-tbtn" onclick="vaultCopySecret()">Copy</button><button class="vt-tbtn" onclick="document.getElementById('vtSecretModal').remove()">Close</button></div>
+  </div>`;
+  m.style.display = 'flex';
+  m.onclick = (e) => { if (e.target === m) m.remove(); };
+}
+function vaultCopySecret(){ const t = document.querySelector('#vtSecretModal .vt-secret-val'); if (!t) return; t.select(); try { navigator.clipboard.writeText(t.value); } catch(e){ document.execCommand('copy'); } notify('Copied to clipboard.'); }
+function vaultRename(id){ const it = VAULT.items.find(x => x.id === id); const name = prompt('Rename:', it ? it.name : ''); if (!name) return; api('PATCH','/api/admin/drive/' + id, { name }).then(()=>loadVault(VAULT.parent)).catch(e=>notify(e.message)); }
+function vaultDelete(id){ const it = VAULT.items.find(x => x.id === id); const what = it ? (it.kind === 'folder' ? 'the folder “' + it.name + '” and everything in it' : '“' + it.name + '”') : 'this item'; if (!confirm('Delete ' + what + '? This cannot be undone.')) return; api('DELETE','/api/admin/drive/' + id).then(()=>loadVault(VAULT.parent)).catch(e=>notify(e.message)); }
 
 /* ─── Overview ─── */
 const OV_IC = {
