@@ -14659,7 +14659,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1073'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1074'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -20423,11 +20423,17 @@ async function acLoadPins() {
     else if (AC.peer) pins = (await API.req('GET', '/api/atchat/with/' + AC.peer.id + '/pins')).pins;
     else { bar.classList.add('hidden'); return; }
   } catch { bar.classList.add('hidden'); return; }
-  AC._pins = pins || [];
-  if (!AC._pins.length) { bar.classList.add('hidden'); bar.innerHTML = ''; return; }
-  const p = AC._pins[0];
+  // NB: this is the pinned-MESSAGES banner state. It must NOT be stored in
+  // AC._pins — that slot belongs to acPins(), the pinned-CONVERSATIONS Set for
+  // the chat list. A previous version wrote the array here, so the FIRST chat
+  // open corrupted the Set and every later list render / chat open threw
+  // "acPins(...).has is not a function" mid-transition — the cross-platform
+  // "open a chat a second time → whole screen goes blank" bug.
+  AC._msgPins = pins || [];
+  if (!AC._msgPins.length) { bar.classList.add('hidden'); bar.innerHTML = ''; return; }
+  const p = AC._msgPins[0];
   bar.innerHTML = `<svg class="pin-ic" viewBox="0 0 24 24"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14l-1.5-3V7a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7z"/></svg>
-    <div class="pin-txt" onclick="acJumpToPinned(${p.id})"><div class="pin-h">Pinned${AC._pins.length > 1 ? ' · ' + AC._pins.length : ''}</div><div class="pin-b">${escHtml(_pinPreview(p).slice(0, 90))}</div></div>
+    <div class="pin-txt" onclick="acJumpToPinned(${p.id})"><div class="pin-h">Pinned${AC._msgPins.length > 1 ? ' · ' + AC._msgPins.length : ''}</div><div class="pin-b">${escHtml(_pinPreview(p).slice(0, 90))}</div></div>
     <button class="pin-x" onclick="acUnpin(${p.id})" aria-label="Unpin"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
   bar.classList.remove('hidden');
 }
