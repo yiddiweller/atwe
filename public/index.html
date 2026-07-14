@@ -142,7 +142,7 @@ a{text-decoration:none;color:inherit;}
   --feed-gutter: 16px;
   /* The floating bottom-nav pill is inset MORE than the content gutter (matching
      the native iOS app): posts peek out ~17px on both sides of the pill. */
-  --nav-inset: calc(var(--feed-gutter) + 10px);
+  --nav-inset: calc(var(--feed-gutter) + 5px);
 
   /* Radius — a soft, consistent Apple-like scale */
   --r-xs: 7px;
@@ -8351,7 +8351,7 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
      matching the native iOS app (owner request). The nav-inset gap already
      clears the iPhone home indicator; max() only kicks in on a device that
      reports an unusually large bottom inset. */
-  bottom:max(var(--nav-inset), env(safe-area-inset-bottom, 0px) - 6px);
+  bottom:max(var(--nav-inset), env(safe-area-inset-bottom, 0px) - 11px);
   gap:2px;padding:4px;border-radius:999px;
   background:rgba(32,32,36,.50);
   -webkit-backdrop-filter:blur(30px) saturate(150%);backdrop-filter:blur(30px) saturate(150%);
@@ -8447,7 +8447,7 @@ body.nav-morph #acHomeFab,body.nav-morph #acChatsFab{display:none;}
   /* FAB right edge aligns with the nav's right edge (same --nav-inset); it rides
      just above the nav at the same bottom offset + the nav's height. The scroll
      choreography (JS) slides it down together with the nav via a transform. */
-  .ac-fab{bottom:calc(max(var(--nav-inset), env(safe-area-inset-bottom, 0px) - 6px) + 68px);right:var(--nav-inset);}
+  .ac-fab{bottom:calc(max(var(--nav-inset), env(safe-area-inset-bottom, 0px) - 11px) + 68px);right:var(--nav-inset);}
   /* The post-detail list has its own reply bar (nav hidden) — no nav clearance */
   #acPostView{padding-bottom:12px;}
 }
