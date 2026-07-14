@@ -4729,12 +4729,11 @@ body.light .ac-post{border-bottom-color:rgba(0,0,0,.07);}
 #acFeed{padding-inline-start:0;padding-inline-end:0;overflow-anchor:none;}
 /* The hairline divider between posts is INSET to the same gutter the content (and
    the floating nav) use, so it starts/ends exactly where the posts do. */
-#acFeed .ac-post{--post-indent:52px;margin:0;padding:12px var(--feed-gutter);border-bottom:none;position:relative;
-  /* iOS memory: skip rendering/compositing of off-screen cards entirely (and let
-     Safari discard their decoded images). contain-intrinsic-size keeps a real-size
-     placeholder so scroll position/velocity are unaffected. Zero visual change —
-     only cards outside the viewport are skipped. */
-  content-visibility:auto;contain-intrinsic-size:auto 480px;}
+#acFeed .ac-post{--post-indent:52px;margin:0;padding:12px var(--feed-gutter);border-bottom:none;position:relative;}
+/* NB: content-visibility:auto was tried here and REMOVED — some iOS 18.x WebKit
+   builds have real crash bugs with c-v in scrolling containers, and after the
+   media-by-URL fix its memory benefit is redundant. Don't re-add without testing
+   on a physical iPhone. */
 /* 0.5px hairline between posts (blueprint), inset to the content gutter. */
 #acFeed .ac-post::after{content:"";position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:0.5px;background:var(--b2);}
 body.light #acFeed .ac-post::after{background:rgba(0,0,0,.08);}
@@ -14651,6 +14650,43 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
 
 <script>
 /* ═══════════════════════════════════════════════
+   CRASH TELEMETRY — must run FIRST (before anything that could throw).
+   Detects that the PREVIOUS session died while the page was VISIBLE without a
+   clean pagehide — i.e. iOS jettisoned/crashed the WebContent process (the
+   "black blink → reload to home" bug) — and beacons the device (exact iOS
+   version), surface, session lifetime and BUILD to /api/client-crash so
+   un-reproducible device-side crashes leave hard evidence.
+   Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
+   or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
+═══════════════════════════════════════════════ */
+const ATWE_BUILD = '1073'; // keep in step with sw.js CACHE — tells us which build a device runs
+(function crashBeacon() {
+  try {
+    let prev = null;
+    try { prev = JSON.parse(localStorage.getItem('atwe_sess') || 'null'); } catch (_) {}
+    if (prev && prev.dirty) {
+      const report = JSON.stringify({
+        ua: navigator.userAgent, surface: prev.tab || 'boot',
+        aliveSec: prev.beat && prev.start ? Math.round((prev.beat - prev.start) / 1000) : null,
+        standalone: !!(navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches)),
+        vw: window.innerWidth, vh: window.innerHeight, dpr: window.devicePixelRatio || 1,
+        build: prev.build || '?',
+      });
+      try { if (navigator.sendBeacon) navigator.sendBeacon('/api/client-crash', report); else fetch('/api/client-crash', { method: 'POST', body: report, keepalive: true }); } catch (_) {}
+    }
+    const sess = { start: Date.now(), beat: Date.now(), tab: null, dirty: true, build: ATWE_BUILD };
+    const save = () => { try { localStorage.setItem('atwe_sess', JSON.stringify(sess)); } catch (_) {} };
+    save();
+    setInterval(() => { if (document.visibilityState === 'visible') { sess.beat = Date.now(); sess.dirty = true; save(); } }, 3000);
+    // Backgrounding / navigating away is NOT a crash — stamp clean. Coming back
+    // to the foreground re-arms the dirty heartbeat.
+    const clean = () => { sess.dirty = false; save(); };
+    window.addEventListener('pagehide', clean);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') clean(); else { sess.dirty = true; sess.beat = Date.now(); save(); } });
+    window._crashTab = (t) => { sess.tab = String(t || ''); save(); };
+  } catch (_) { /* telemetry must never break boot */ }
+})();
+/* ═══════════════════════════════════════════════
    STATE
 ═══════════════════════════════════════════════ */
 const S = {
@@ -21135,6 +21171,7 @@ function appTab(tab, opts) {
   // which un-hides the previously-visible screen itself and must not let a
   // loader re-render it (that would destroy the preserved scroll position).
   const _silent = !!(opts && opts.silent);
+  if (window._crashTab) _crashTab(tab); // crash telemetry: record the active surface
   // Everyone must be signed in to use ANY part of the app, including Atwe AI.
   // (Guest mode was removed — nothing is usable without an account.)
   if (!isAccount()) { openLogin(); return; }
@@ -36698,6 +36735,7 @@ async function acStartNewThread(peerId) {
   } catch (e) { showNotif(e.message || 'Could not start a new conversation.'); }
 }
 async function acOpenChat(id, threadId) {
+  if (window._crashTab) _crashTab('chat-thread');
   AC.threadId = threadId || null; // which conversation (null = main)
   acThreadSearchClose(); // never carry an open in-chat search across conversations
   AC._secret = false; acRenderSecretBar && acRenderSecretBar(); // secret mode doesn't carry between chats
@@ -40247,6 +40285,7 @@ async function acLoadLiveStrip() {
 }
 
 async function acOpenGroup(id) {
+  if (window._crashTab) _crashTab('group-thread');
   // Optimistic: zero the group row's unread the instant it's opened (the badge
   // never outlives entering the chat); the server confirms on refresh.
   const _gRow = (AC.groupsList || []).find(g => g.id === id);
