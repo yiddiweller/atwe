@@ -686,6 +686,24 @@
   .feat-frame{width:100%;height:calc(100vh - 108px);min-height:520px;border:none;border-radius:14px;
     background:#0b0c0e;display:block;}
   @media (max-width:900px){ .feat-frame{height:calc(100vh - 96px);} }
+  /* Feature Controls */
+  .fc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:14px;}
+  .fc-intro{font-size:13.5px;color:var(--t2);line-height:1.5;max-width:60ch;}
+  .fc-stat{font-size:13px;color:var(--t3);white-space:nowrap;}
+  .fc-num{font-size:16px;font-weight:800;color:var(--t1);}
+  .fc-search{width:100%;box-sizing:border-box;background:var(--card);border:1px solid var(--line);border-radius:10px;
+    color:var(--t1);font-size:14px;padding:10px 13px;outline:none;margin-bottom:16px;font-family:inherit;}
+  .fc-search:focus{border-color:var(--accent);}
+  .fc-cat{border:1px solid var(--line);border-radius:14px;margin-bottom:14px;overflow:hidden;background:var(--card);}
+  .fc-cat-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;
+    border-bottom:1px solid var(--line);background:var(--card2,rgba(255,255,255,.02));}
+  .fc-cat-name{font-size:14.5px;font-weight:800;}
+  .fc-cat-count{font-size:11.5px;font-weight:600;color:var(--t3);margin-left:6px;}
+  .fc-catbtn{background:none;border:1px solid var(--line);border-radius:8px;color:var(--t2);font-size:12px;
+    font-weight:600;padding:5px 11px;cursor:pointer;font-family:inherit;white-space:nowrap;}
+  .fc-catbtn:hover{border-color:var(--accent);color:var(--t1);}
+  .fc-row{padding:11px 16px;border-bottom:1px solid var(--line);}
+  .fc-row:last-child{border-bottom:none;}
 </style>
 </head>
 <body>
@@ -734,6 +752,7 @@
 
       <div class="nav-label" data-group="product">Product</div>
       <button class="tab" data-v="features" onclick="switchTab('features')">Features</button>
+      <button class="tab" data-v="featurecontrols" onclick="switchTab('featurecontrols')">Feature Controls</button>
 
       <div class="nav-label" data-group="system">System</div>
       <button class="tab" data-v="site" onclick="switchTab('site')">Site</button>
@@ -1160,7 +1179,7 @@ const TAB_PERM = {
   reports: 'moderation', disputes: 'refunds', circles: 'moderation', feed: 'super',
   finance: 'revenue', growth: 'growth', audit: 'super', staff: 'super',
   refunds: 'refunds', appeals: 'users', datareq: 'users', activity: 'super', investigate: 'moderation', moderate: 'moderation',
-  cards: 'revenue', features: 'super',
+  cards: 'revenue', features: 'super', featurecontrols: 'super',
 };
 function canSee(tab){ const p = TAB_PERM[tab]; if (ME.superadmin) return true; return p !== 'super' && ME.perms.includes(p); }
 
@@ -1231,7 +1250,7 @@ const NAV_TITLES = {
   refunds:'Refunds', users:'Users', staff:'Staff', usernames:'Usernames', reports:'Reports',
   investigate:'Investigate', moderate:'AI content scan', disputes:'Disputes', appeals:'Appeals', support:'Support', datareq:'Data requests',
   posts:'Posts', circles:'Circles', feed:'Feed', activity:'Activity', traffic:'Traffic', growth:'Growth',
-  audit:'Audit log', site:'Site', cards:'Cards', features:'Features',
+  audit:'Audit log', site:'Site', cards:'Cards', features:'Features', featurecontrols:'Feature Controls',
 };
 // Mobile: slide the sidebar in/out.
 function toggleNav(open){
@@ -1274,6 +1293,7 @@ function renderView(){
   else if (VIEW === 'investigate') renderInvestigateView();
   else if (VIEW === 'moderate') renderModerateView();
   else if (VIEW === 'features') renderFeaturesView();
+  else if (VIEW === 'featurecontrols') renderFeatureControlsView();
   else renderOverviewView();
 }
 
@@ -1282,6 +1302,72 @@ function renderFeaturesView(){
   const stats = document.getElementById('stats'); if (stats) stats.style.display = 'none';
   const c = document.getElementById('content');
   c.innerHTML = '<iframe class="feat-frame" src="/features.html?embed=1&theme=dark" title="Feature checklist"></iframe>';
+}
+
+/* ─── Feature Controls (module-level kill switches) ─── */
+let CONTROLS = { controls: {}, meta: [] };
+let _fcSearch = '';
+function renderFeatureControlsView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="empty">Loading…</div>';
+  loadControls();
+}
+async function loadControls(){
+  try { CONTROLS = await api('GET', '/api/admin/feature-controls'); renderControls(); }
+  catch (e) { document.getElementById('content').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function fcIsOn(key){ return (CONTROLS.controls || {})[key] !== false; }
+function renderControls(){
+  const meta = CONTROLS.meta || [];
+  const total = meta.length;
+  const off = meta.filter(f => !fcIsOn(f.key)).length;
+  const q = _fcSearch.trim().toLowerCase();
+  // group by category, preserving first-seen order
+  const cats = []; const byCat = {};
+  meta.forEach(f => { if (!byCat[f.cat]) { byCat[f.cat] = []; cats.push(f.cat); } byCat[f.cat].push(f); });
+  let html = ''
+    + '<div class="fc-head">'
+    +   '<div class="fc-intro"><b>Feature Controls.</b> Turn any of your live features off across the whole app — the moment you do, anyone who opens it sees <b>“Unavailable.”</b> Everything defaults to <span style="color:var(--accent)">Active</span>. Money features are also blocked on the server when off.</div>'
+    +   '<div class="fc-stat"><span class="fc-num">' + (total - off) + '</span> active · <span class="fc-num" style="color:var(--danger)">' + off + '</span> off · ' + total + ' total</div>'
+    + '</div>'
+    + '<input class="fc-search" id="fcSearch" placeholder="Search features…" value="' + esc(_fcSearch) + '" oninput="fcOnSearch(this.value)"/>';
+  cats.forEach(cat => {
+    const items = byCat[cat].filter(f => !q || (f.label + ' ' + f.cat).toLowerCase().includes(q));
+    if (!items.length) return;
+    const onCount = items.filter(f => fcIsOn(f.key)).length;
+    const allOff = onCount === 0;
+    html += '<div class="fc-cat">'
+      + '<div class="fc-cat-head"><div class="fc-cat-name">' + esc(cat) + ' <span class="fc-cat-count">' + onCount + '/' + items.length + ' on</span></div>'
+      + '<button class="fc-catbtn" onclick="toggleControlCategory(' + JSON.stringify(cat).replace(/"/g,'&quot;') + ',' + (allOff ? 'true' : 'false') + ')">' + (allOff ? 'Turn all on' : 'Turn all off') + '</button></div>';
+    items.forEach(f => {
+      const on = fcIsOn(f.key);
+      html += '<div class="site-row fc-row">'
+        + '<div><div class="srt">' + esc(f.label) + (on ? '' : ' <span class="pill ban">off</span>') + '</div><div class="srs">' + esc(f.key) + '</div></div>'
+        + '<button class="switch flag ' + (on ? 'on' : '') + '" onclick="toggleControl(' + JSON.stringify(f.key).replace(/"/g,'&quot;') + ')" aria-label="' + esc(f.label) + '"><span></span></button></div>';
+    });
+    html += '</div>';
+  });
+  document.getElementById('content').innerHTML = html;
+}
+function fcOnSearch(v){ _fcSearch = v; const el = document.activeElement; renderControls(); const s = document.getElementById('fcSearch'); if (s) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); } }
+async function toggleControl(key){
+  const cur = fcIsOn(key); const want = !cur;
+  if (!want && !confirm('Turn OFF "' + key + '"? Anyone who opens it will see “Unavailable” until you turn it back on.')) return;
+  try {
+    const r = await api('PUT', '/api/admin/feature-controls', { controls: { [key]: want } });
+    CONTROLS.controls = r.controls; renderControls();
+    notify(want ? 'Feature turned on.' : 'Feature turned off.');
+  } catch (e) { notify(e.message); }
+}
+async function toggleControlCategory(cat, want){
+  const keys = (CONTROLS.meta || []).filter(f => f.cat === cat).map(f => f.key);
+  if (!want && !confirm('Turn OFF every feature in "' + cat + '"? Users will see “Unavailable” for all of them.')) return;
+  const patch = {}; keys.forEach(k => patch[k] = want);
+  try {
+    const r = await api('PUT', '/api/admin/feature-controls', { controls: patch });
+    CONTROLS.controls = r.controls; renderControls();
+    notify(want ? 'Category turned on.' : 'Category turned off.');
+  } catch (e) { notify(e.message); }
 }
 
 /* ─── Overview ─── */
