@@ -5739,10 +5739,12 @@ body.light .ac-home-stories{border-bottom-color:rgba(0,0,0,.08);}
    and smears them as a faint sheen at the page edges. A full-screen QR page has
    nothing to show through anyway, so make it a clean solid surface with no blur. */
 #qrLoginView{padding:0!important;background:var(--bg);backdrop-filter:none;-webkit-backdrop-filter:none;}
-/* Belt-and-suspenders: never let a focus ring / tap highlight / shadow draw a
-   glowing frame around the full-screen card (the "blue border" some cached iOS
-   shells showed). The back button keeps its own focus style. */
-#qrLoginView>.qr-modal{outline:none!important;box-shadow:none!important;border:none!important;-webkit-tap-highlight-color:transparent;}
+/* Nuclear: the QR page is a plain full-screen surface — never let ANY focus ring,
+   tap highlight, box-shadow or border draw a glowing (blue) frame around the page
+   or the card on iOS, in any state. */
+#qrLoginView,#qrLoginView *{-webkit-tap-highlight-color:transparent;}
+#qrLoginView,#qrLoginView>.qr-modal{outline:none!important;box-shadow:none!important;border:none!important;}
+#qrLoginView *:focus,#qrLoginView *:focus-visible{outline:none!important;box-shadow:none!important;}
 .qr-modal{position:relative;width:100%;max-width:100%;min-height:100%;max-height:none;border-radius:0;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   padding:calc(env(safe-area-inset-top,0px) + 56px) 22px calc(env(safe-area-inset-bottom,0px) + 34px);
@@ -5751,22 +5753,38 @@ body.light .ac-home-stories{border-bottom-color:rgba(0,0,0,.08);}
    below the status strip on a full-screen page. */
 .qr-modal .sheet-close{top:max(10px,env(safe-area-inset-top,0px));}
 .qr-head{font-size:21px;font-weight:800;letter-spacing:-.01em;color:var(--t1);text-align:center;margin:0;flex:0 0 auto;}
+/* While loading (and during the success animation) show ONLY the centred icon —
+   hide the page title so it doesn't sit above a lone spinner. */
+.qr-modal.is-loading .qr-head{display:none;}
 .qr-page{display:flex;flex-direction:column;align-items:center;padding:6px 0 8px;}
 .qr-frame{background:#fff;padding:16px;border-radius:26px;box-shadow:0 10px 34px rgba(0,0,0,.22);
   margin:26px 0 34px;}
 .qr-frame .qr-code{display:block;width:min(240px,62vw);height:min(240px,62vw);border-radius:12px;}
 .qr-status{display:inline-flex;align-items:center;gap:9px;font-size:14px;font-weight:600;color:var(--t2);margin-bottom:26px;}
 .qr-pulse{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:0 0 auto;}
-.qr-steps{list-style:none;margin:0;padding:0;width:100%;max-width:340px;text-align:start;}
-.qr-steps li{display:flex;align-items:flex-start;gap:13px;font-size:14px;line-height:1.45;color:var(--t2);padding:11px 2px;border-bottom:1px solid var(--b1);}
+.qr-steps{list-style:none;margin:0;padding:0;width:100%;max-width:330px;text-align:start;}
+.qr-steps li{display:flex;align-items:flex-start;gap:9px;font-size:12.5px;line-height:1.4;color:var(--t2);padding:10px 2px;border-bottom:1px solid var(--b1);}
 .qr-steps li:last-child{border-bottom:none;}
 .qr-steps li b{color:var(--t1);font-weight:600;}
-.qr-step-n{flex:0 0 auto;width:25px;height:25px;border-radius:50%;background:var(--accent-dim);color:var(--accent);
-  font-weight:700;font-size:13px;display:grid;place-items:center;margin-top:-1px;}
+/* Plain white "1." "2." "3." — cleaner + more modern than blue circle badges. */
+.qr-step-n{flex:0 0 auto;color:var(--t1);font-weight:600;font-size:13px;line-height:1.4;min-width:15px;}
 /* Loading state: a small, quiet grey spinner centred on the page. */
 .qr-loading{display:flex;justify-content:center;align-items:center;padding:30px 0;}
 .qr-loading span{width:26px;height:26px;border-radius:50%;border:2.5px solid var(--s3);
   border-top-color:var(--t3);animation:spin .7s linear infinite;}
+/* Success (device linked): a clean WhatsApp-style check that pops + draws in,
+   then the whole page eases away. */
+.qr-success{display:flex;flex-direction:column;align-items:center;gap:16px;padding:24px 0;}
+.qr-check{width:78px;height:78px;border-radius:50%;background:var(--accent);display:grid;place-items:center;
+  animation:qrCheckPop .5s cubic-bezier(.2,.7,.3,1.45) both;}
+.qr-check svg{width:38px;height:38px;fill:none;stroke:#fff;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;
+  stroke-dasharray:26;stroke-dashoffset:26;animation:qrCheckDraw .42s .2s ease forwards;}
+.qr-success-txt{font-size:18px;font-weight:700;color:var(--t1);animation:fadeIn .4s .28s both;}
+@keyframes qrCheckPop{0%{transform:scale(.4);opacity:0;}60%{opacity:1;}100%{transform:scale(1);opacity:1;}}
+@keyframes qrCheckDraw{to{stroke-dashoffset:0;}}
+#qrLoginView.qr-fadeout{animation:qrFadeOut .4s var(--ease) forwards;}
+@keyframes qrFadeOut{to{opacity:0;transform:scale(.985);}}
+@media(prefers-reduced-motion:reduce){.qr-check,.qr-check svg,.qr-success-txt,#qrLoginView.qr-fadeout{animation:none;}.qr-check svg{stroke-dashoffset:0;}}
 .qr-expired{display:flex;flex-direction:column;align-items:center;gap:12px;padding:34px 0 6px;color:var(--t2);font-size:15px;}
 .qr-expired svg{width:44px;height:44px;color:var(--t3);}
 .qr-name{font-size:16px;font-weight:700;color:var(--t1);margin:10px 0 2px;}
@@ -14780,7 +14798,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1096'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1097'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -33204,23 +33222,25 @@ async function acOpenQrLogin() {
   showOverlay('qrLoginView');
   acStopQrLogin();
   const b = document.getElementById('qrLoginBody'); if (!b) return;
+  const modal = b.closest('.qr-modal');
+  if (modal) modal.classList.add('is-loading'); // hide the title → just a centred spinner
   b.innerHTML = acQrSkel();
   try {
     const d = await API.req('POST', '/api/auth/link/start', {});
     AC._qrLoginCode = d.code;
+    if (modal) modal.classList.remove('is-loading');
     b.innerHTML = `<div class="qr-page">
       <div class="qr-frame"><img class="qr-code" src="${d.dataUrl}" alt="Login QR code"/></div>
       <div class="qr-status" id="qrLoginStatus"><span class="qr-pulse"></span>Waiting for you to scan…</div>
       <ol class="qr-steps">
-        <li><span class="qr-step-n">1</span><span>Open <b>Atwe</b> on a phone you’re already signed in on</span></li>
-        <li><span class="qr-step-n">2</span><span>Go to <b>Settings → Security &amp; access → Link a device</b></span></li>
-        <li><span class="qr-step-n">3</span><span>Point it at this screen to scan the code</span></li>
+        <li><span class="qr-step-n">1.</span><span>Open <b>Atwe</b> on a phone you’re already signed in on</span></li>
+        <li><span class="qr-step-n">2.</span><span>Go to <b>Settings → Security &amp; access → Link a device</b></span></li>
+        <li><span class="qr-step-n">3.</span><span>Point it at this screen to scan the code</span></li>
       </ol>
     </div>`;
-    let elapsed = 0;
     _qrLoginPoll = setInterval(() => acPollQrLogin(), 2000);
     _qrLoginTimeout = setTimeout(() => acExpireQrLogin(), d.expiresInMs || 90000);
-  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not start QR login.') + `</div><button class="ac-pill-btn" style="width:100%;margin-top:10px;" onclick="acOpenQrLogin()">Try again</button>`; }
+  } catch (e) { if (modal) modal.classList.remove('is-loading'); b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not start QR login.') + `</div><button class="ac-pill-btn" style="width:100%;margin-top:10px;" onclick="acOpenQrLogin()">Try again</button>`; }
 }
 async function acPollQrLogin() {
   if (!AC._qrLoginCode) return;
@@ -33228,9 +33248,7 @@ async function acPollQrLogin() {
     const r = await API.req('GET', '/api/auth/link/status?code=' + encodeURIComponent(AC._qrLoginCode));
     if (r.status === 'approved' && r.token) {
       acStopQrLogin();
-      closeOverlay('qrLoginView');
-      onAuthSuccess(r.token, r.user); // log in exactly like a normal sign-in
-      showNotif('Signed in!');
+      acQrLoginSuccess(r.token, r.user); // classy check-in animation, then sign in
     } else if (r.status === 'expired') {
       acExpireQrLogin();
     }
@@ -33239,7 +33257,27 @@ async function acPollQrLogin() {
 function acExpireQrLogin() {
   acStopQrLogin();
   const b = document.getElementById('qrLoginBody'); if (!b) return;
+  const modal = b.closest('.qr-modal'); if (modal) modal.classList.remove('is-loading');
   b.innerHTML = `<div class="qr-page"><div class="qr-expired"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><div>This code expired.</div></div><button class="ac-pill-btn accent" style="width:100%;max-width:300px;margin-top:20px;" onclick="acOpenQrLogin()">Show a new code</button></div>`;
+}
+/* Device linked on the other phone: show a clean check-in animation, then ease the
+   page away (WhatsApp-style) and complete the sign-in. */
+function acQrLoginSuccess(token, user) {
+  const b = document.getElementById('qrLoginBody');
+  const modal = b && b.closest('.qr-modal');
+  const ov = document.getElementById('qrLoginView');
+  if (modal) modal.classList.add('is-loading'); // hide the title → just the check, centred
+  if (b) b.innerHTML = `<div class="qr-success"><div class="qr-check"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></div><div class="qr-success-txt">Signed in</div></div>`;
+  try { announce && announce('Signed in'); } catch (e) {}
+  setTimeout(() => {
+    if (ov) ov.classList.add('qr-fadeout');
+    setTimeout(() => {
+      if (ov) ov.classList.remove('qr-fadeout');
+      if (modal) modal.classList.remove('is-loading');
+      closeOverlay('qrLoginView');
+      onAuthSuccess(token, user); // log in exactly like a normal sign-in
+    }, 400);
+  }, 1050);
 }
 function acStopQrLogin() { if (_qrLoginPoll) { clearInterval(_qrLoginPoll); _qrLoginPoll = null; } if (_qrLoginTimeout) { clearTimeout(_qrLoginTimeout); _qrLoginTimeout = null; } AC._qrLoginCode = null; }
 
