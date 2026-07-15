@@ -2333,12 +2333,15 @@ body.light .tb-feedtab.active{color:var(--t1);}
      method the nav uses — no layer-swap), so it can't freeze the scroll. The id selector
      wins over the mirrored .topbar classes for position/z/transform; everything else
      (bg, padding, tab layout) is inherited from those classes so it looks identical. */
+  /* No CSS transition — the bar's transform is driven directly by the scroll delta in
+     JS (_revealTrack), so it rides the finger 1:1 and stays wherever the scroll stops. */
   #tbRevealBar{position:fixed;top:0;left:0;right:0;z-index:11;margin:0;
-    transform:translateY(-100%);transition:transform .7s var(--ease);
+    transform:translateY(-100%);
     will-change:transform;backface-visibility:hidden;pointer-events:none;display:none;
     border-bottom:1px solid var(--b2);background:var(--bg);}
-  #tbRevealBar.shown{transform:translateY(0);pointer-events:auto;}
-  body.reduce-motion #tbRevealBar{transition:none;}
+  /* While the reveal menu is on screen, hide the feed's sticky cover-hairline so the two
+     1px lines never stack into a "doubled"/frizzy line. */
+  body.feed-cover #acFeed.rv-eng::before, body.feed-cover #acList.rv-eng::before{opacity:0;}
 }
 .tb-word{height:15px;width:auto;display:block;}
 .tb-profile{display:flex;align-items:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
@@ -14925,7 +14928,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1128'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1129'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -43926,7 +43929,10 @@ function acTabTouchSync() {
 // nav returning) and slides away when you scroll down or reach the top. Transform-slide
 // only (never a layer-swap) so it can't freeze the scroll; purely additive so the base
 // menu/look/scroll are untouched.
-let _revealShown = false;
+// FINGER-TRACKED: the bar rides the scroll 1:1 — scroll up and it comes down with your
+// finger, stop and it stays, scroll down and it moves up until it's gone. Driven by the
+// accumulated scroll delta (transform only, never a layer-swap → can't freeze the scroll).
+let _revealHide = 1e9, _revealMax = 100, _rvLast = 0, _revealVis = false, _revealEng = false;
 function acRevealActive() {
   return (window.innerWidth || 999) <= 768
     && document.body.classList.contains('feed-cover')
@@ -43938,13 +43944,13 @@ function acRevealBuild() {
   if (!bar || !tb || !row) return;
   bar.className = tb.className;                    // mirror the topbar look exactly
   bar.classList.remove('hidden', 'tabs-live');
-  if (_revealShown) bar.classList.add('shown');
   const clone = row.cloneNode(true);              // a de-id'd copy of the tab row
   clone.removeAttribute('id'); clone.classList.remove('hidden');
   clone.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));   // no duplicate ids
   const dk = clone.querySelector('.tb-darken'); if (dk) dk.remove();          // reveal shows tabs, never darkened
   bar.innerHTML = ''; bar.appendChild(clone);
   bar.style.display = 'block';
+  _revealMax = bar.offsetHeight || 100;
   acRevealSyncActive();
 }
 function acRevealSyncActive() {                    // mirror which tab is active (ids were stripped → match by onclick)
@@ -43953,20 +43959,32 @@ function acRevealSyncActive() {                    // mirror which tab is active
   const oc = active ? active.getAttribute('onclick') : null;
   bar.querySelectorAll('.tb-feedtab').forEach((b) => b.classList.toggle('active', !!oc && b.getAttribute('onclick') === oc));
 }
-function acRevealShow() {
+// Move the bar 1:1 with the scroll. dy>0 (down) pushes it up/away; dy<0 (up) brings it
+// down. Clamped between fully shown (0) and fully hidden (its own height). Near the top
+// it snaps hidden so the real menu shows.
+function _revealTrack(st) {
+  const dy = st - _rvLast; _rvLast = st;
   if (!acRevealActive()) return;
   const bar = document.getElementById('tbRevealBar'); if (!bar) return;
-  if (bar.style.display === 'none' || !bar.firstChild) acRevealBuild();
-  if (!_revealShown) { _revealShown = true; bar.classList.add('shown'); }
+  const REVEAL_AT = (_tabRowHCache || 46) + 40;
+  const past = st > REVEAL_AT;
+  if (past && (bar.style.display === 'none' || !bar.firstChild)) acRevealBuild();
+  if (!past) _revealHide = _revealMax;              // near top: hidden, real menu shows
+  else _revealHide = Math.max(0, Math.min(_revealMax, _revealHide + dy));  // finger-track
+  bar.style.transform = 'translateY(' + (-Math.round(_revealHide)) + 'px)';
+  const vis = _revealHide < _revealMax - 1;         // meaningfully on-screen?
+  if (vis !== _revealVis) { _revealVis = vis; bar.style.pointerEvents = vis ? 'auto' : 'none'; }
+  // Hide the feed's sticky cover-hairline while the reveal shows, so the two 1px lines
+  // never stack into the "doubled"/frizzy line.
+  const feed = document.getElementById(_appTab === 'chat' ? 'acList' : 'acFeed');
+  if (feed && vis !== _revealEng) { _revealEng = vis; feed.classList.toggle('rv-eng', vis); }
 }
-function acRevealHide() {
-  const bar = document.getElementById('tbRevealBar'); if (!bar) return;
-  if (_revealShown) { _revealShown = false; bar.classList.remove('shown'); }
-}
-function acRevealReset() {                          // on navigation: fully hide + clear
-  _revealShown = false;
+function acRevealReset() {                          // on navigation / tab switch: hide instantly
+  _revealHide = _revealMax; _revealVis = false; _revealEng = false; _rvLast = 0;
   const bar = document.getElementById('tbRevealBar');
-  if (bar) { bar.classList.remove('shown'); if (!acRevealActive()) bar.style.display = 'none'; }
+  if (bar) { bar.style.transform = 'translateY(-100%)'; bar.style.pointerEvents = 'none'; if (!acRevealActive()) bar.style.display = 'none'; }
+  document.getElementById('acFeed')?.classList.remove('rv-eng');
+  document.getElementById('acList')?.classList.remove('rv-eng');
 }
 // The tab-row height drives the scroll-cover: the content wrapper is shifted up by
 // this much (constant) and the feed re-pads by it, so the content rises exactly
@@ -44073,7 +44091,7 @@ function _darkLoop() {
   const sc = _darkEl;
   if (!sc || sc.classList.contains('hidden') || !(_appTab === 'home' || _appTab === 'chat')) { _darkRAF = 0; return; }
   const st = sc.scrollTop;
-  if (st !== _darkLastY) { _darkLastY = st; _darkStill = 0; _setCov(st); }
+  if (st !== _darkLastY) { _darkLastY = st; _darkStill = 0; _setCov(st); if (typeof _revealTrack === 'function') _revealTrack(st); }
   else if (++_darkStill > 8) { _darkRAF = 0; return; }
   _darkRAF = requestAnimationFrame(_darkLoop);
 }
@@ -44114,16 +44132,11 @@ function _onListScroll(e) {
     else if (dy > 3) _setNavBall(true);
     else if (dy < -3) _setNavBall(false);
   }
-  // Scroll-UP reveal of the top menu (Home/Beam), the direction-based mirror of the nav:
-  // scroll up once you're past the covered zone → the floating menu slides in; scroll
-  // down or return to the top → it slides away. Same idea/threshold as the nav morph.
-  if (((_appTab === 'home' && sc.id === 'acFeed') || _appTab === 'chat') && typeof acRevealShow === 'function') {
-    const st = sc.scrollTop, dy = st - (sc._rvLast || 0);
-    sc._rvLast = st;
-    const REVEAL_AT = (_tabRowHCache || 46) + 40;  // only once the real menu is fully covered
-    if (st <= REVEAL_AT) acRevealHide();            // near the top: the real menu shows
-    else if (dy < -4) acRevealShow();               // scrolling up → bring the menu back
-    else if (dy > 4) acRevealHide();                // scrolling down → tuck it away
+  // Scroll-tracked reveal of the top menu (Home/Beam): the floating menu rides the scroll
+  // 1:1 (see _revealTrack). Called here for immediacy AND in _darkLoop so it keeps
+  // tracking through iOS momentum after the finger lifts.
+  if (((_appTab === 'home' && sc.id === 'acFeed') || _appTab === 'chat') && typeof _revealTrack === 'function') {
+    _revealTrack(sc.scrollTop);
   }
 }
 function scrollHideInit() {
