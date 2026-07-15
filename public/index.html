@@ -2195,24 +2195,8 @@ body.light .tb-feedtab.active{color:var(--t1);}
     background:var(--bg);-webkit-backdrop-filter:none;backdrop-filter:none;border-bottom:none;position:relative;}
   /* No hairline under the Beam tabs (founder) — matches Home. */
   body.light .topbar.tb-chat{background:var(--bg);}
-  /* Scroll-collapse top bar (founder, X-style — TWO PHASES, driven in _applyBars):
-     PHASE 1 (first ~34px of scroll): the bar stays in place but DIMS + BLURS
-     (body.top-frosted) and its tab row fades — a small scroll that stops just
-     darkens/blurs it, it does NOT slide away.
-     PHASE 2 (scrolling further): the bar then slides UP and retracts (negative
-     margin-top) so the feed fills to the top — just the black status strip stays.
-     Reveals again as you return to the top. */
-  body.top-frosted .topbar.tb-home,body.top-frosted .topbar.tb-chat{
-    background:rgba(0,0,0,.42);
-    -webkit-backdrop-filter:blur(16px) saturate(1.2);backdrop-filter:blur(16px) saturate(1.2);}
-  body.light.top-frosted .topbar.tb-home,body.light.top-frosted .topbar.tb-chat{
-    background:rgba(255,255,255,.6);}
-  /* Buttery-smooth collapse: iOS scroll events fire coarsely, so a short ease-out
-     transition bridges the gaps between them into fluid motion (the slide, the dim
-     and the frost all glide instead of stepping). */
-  .topbar.tb-home,.topbar.tb-chat{transition:margin-top .09s ease-out,
-    background .2s ease,-webkit-backdrop-filter .2s ease,backdrop-filter .2s ease;}
-  #tbTabRow{transition:opacity .12s ease-out;}
+  /* (Scroll-cover choreography CSS is GLOBAL — defined right after this media
+     block — so desktop gets the same hairline/cover as mobile.) */
   .topbar.tb-chat .sb-toggle{justify-content:flex-start;width:auto;}
   .topbar.tb-chat .sb-toggle svg{width:26px;height:26px;stroke-width:2.1;}
   /* Search + AI: put the ≡ at the exact same gutter position as Home/Chat. */
@@ -2248,6 +2232,18 @@ body.light .tb-feedtab.active{color:var(--t1);}
   .topbar.tb-home .tb-feedtab.active::after{content:"";position:absolute;left:50%;transform:translateX(-50%);
     bottom:0;width:22px;height:3px;border-radius:3px;background:var(--accent);}
 }
+/* Scroll choreography (founder's design — the COVER, X-style end state): the top
+   bar itself NEVER moves. As you scroll, the CONTENT SURFACE (the screen below,
+   carrying a full-width edge-to-edge hairline as its own top border) rides UP
+   over the bar 1:1 with the scroll — the homepage literally covers it — while
+   the tabs dim in place, scroll-linked (stop scrolling and the darkening stops).
+   Fully covered, what remains is the stiff black status strip + the full-width
+   hairline, with posts clipping cleanly beneath it — exactly X. Driven in
+   _applyBars (margin-top on the screen, opacity on the tab row); scrolling back
+   up un-covers it the same way. Global (mobile + desktop). */
+#acHomeScreen,#acListScreen{background:var(--bg);border-top:1px solid var(--b2);
+  will-change:margin-top;transition:margin-top .09s ease-out;}
+#tbTabRow{transition:opacity .12s ease-out;}
 .tb-word{height:15px;width:auto;display:block;}
 .tb-profile{display:flex;align-items:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
 .tb-profile .user-avatar{width:24px;height:24px;font-size:11px;}
@@ -14798,7 +14794,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1097'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1098'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24403,10 +24399,10 @@ function acSetFeed(scope) {
   _acFeedScope = scope;
   if (typeof acFeedResetPaging === 'function') acFeedResetPaging(); // drop the infinite-scroll observer/state from the previous scope (incl. circles/feeds)
   const scrim = document.getElementById('acTopScrim'); if (scrim) scrim.style.opacity = '0'; // reset on reload (scroll resets to top)
-  // The feed reloads + scrolls to top, so restore the collapsed bar.
+  // The feed reloads + scrolls to top, so restore the covered bar.
   const _tb = document.querySelector('.topbar'); if (_tb) _tb.style.marginTop = '';
   const _tr = document.getElementById('tbTabRow'); if (_tr) { _tr.style.opacity = ''; _tr.style.pointerEvents = ''; }
-  document.body.classList.remove('top-frosted');
+  const _hs = document.getElementById('acHomeScreen'); if (_hs) _hs.style.marginTop = '';
   if (typeof _barHide !== 'undefined') { _barHide = 0; _barScroll = 0; }
   [...AC_FEED_TABS, 'feeds', 'pinned'].forEach(s => document.getElementById('acFeedTab-' + s)?.classList.toggle('active', s === scope));
   // Horizontal page-slide between feeds (X-style pager) — works for a tab TAP and a
@@ -43681,11 +43677,10 @@ function acNavBallTap() {
   if (_appTab === 'chat' && typeof acChatsFab === 'function') { acChatsFab(); return; }
   acOpenPost();
 }
-let _barHide = 0;          // px the top bar is currently retracted (0.._barMax) — drives nav/fab
-let _barScroll = 0;        // raw scrollTop of the active feed/beam list — drives the 2-phase top bar
-let _barMax = 0;           // the top bar's full height (its hide distance)
+let _barHide = 0;          // px of scroll progress (0.._barMax) — drives nav/fab
+let _barScroll = 0;        // raw scrollTop of the active feed/beam list — drives the top-bar cover
+let _barMax = 0;           // the top bar's full height
 let _barRAF = 0, _barAnimT = 0;
-const TB_DIM_PX = 34;      // phase-1: px of scroll over which the bar dims+blurs (before it slides up)
 function _barEls() {
   return { tb: document.querySelector('.topbar'), nav: document.getElementById('bottomNav'), fab: document.querySelector('.ac-fab') };
 }
@@ -43695,27 +43690,34 @@ function _applyBars() {
   if (!tb) return;
   const max = _barMax || tb.offsetHeight || 100;
   const p = max ? Math.min(1, Math.max(0, _barHide / max)) : 0;
-  // Home + Beam: two-phase collapse (X-style). PHASE 1 (first TB_DIM_PX of scroll):
-  // the bar stays put but DIMS + BLURS (frosted) and the tabs fade — a small scroll
-  // that stops just darkens it. PHASE 2 (further): the bar slides UP and retracts so
-  // the feed fills to the top. Elsewhere the bar stays pinned.
+  // Home + Beam: the COVER (founder's design, X-style end state). The bar itself
+  // NEVER moves — the content screen (with its full-width top hairline) rides UP
+  // over it 1:1 with the scroll, covering it, while the tabs dim in place
+  // (scroll-linked — stop scrolling and the darkening stops). Fully covered:
+  // stiff black status strip + hairline, posts clipping cleanly beneath it.
   const retractable = (_appTab === 'home' || _appTab === 'chat');
   const row = document.getElementById('tbTabRow');
+  const coverScreen = document.getElementById(_appTab === 'home' ? 'acHomeScreen' : 'acListScreen');
   if (retractable) {
-    const barH = max;
-    const dimP = Math.min(1, Math.max(0, _barScroll / TB_DIM_PX));            // 0→1 over phase 1
-    const retractP = Math.min(1, Math.max(0, (_barScroll - TB_DIM_PX) / barH)); // 0→1 over phase 2
-    const mt = -(retractP * barH);
-    tb.style.marginTop = retractP > 0 ? (mt.toFixed(1) + 'px') : '';
+    const scrim = document.getElementById('statusScrim');
+    const scrimH = scrim ? scrim.offsetHeight : 0;
+    // The cover travels the bar's height minus the status strip, so the screen's
+    // top edge (the hairline) comes to rest exactly at the strip's bottom edge.
+    const travel = Math.max(24, max - scrimH);
+    const h = Math.min(travel, Math.max(0, _barScroll));
+    const p2 = travel ? h / travel : 0;
+    tb.style.marginTop = '';                                 // the bar stays put — never slides
+    if (coverScreen) coverScreen.style.marginTop = h > 0.5 ? (-h).toFixed(1) + 'px' : '';
     if (row && !row.classList.contains('hidden')) {
-      row.style.opacity = String(1 - dimP);                 // dim/fade the tabs in phase 1
-      row.style.pointerEvents = dimP > 0.6 ? 'none' : '';
+      // Darker 1:1 with the scroll; fully dark just before the cover passes the
+      // glyphs, so text is never seen half-occluded at full brightness.
+      row.style.opacity = String(Math.max(0, 1 - p2 * 1.25));
+      row.style.pointerEvents = p2 > 0.5 ? 'none' : '';
     }
-    document.body.classList.toggle('top-frosted', dimP > 0.03); // darken+blur while scrolled
   } else {
     tb.style.marginTop = '';
+    ['acHomeScreen', 'acListScreen'].forEach(id => { const s = document.getElementById(id); if (s) s.style.marginTop = ''; });
     if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
-    document.body.classList.remove('top-frosted');
   }
   tb.style.opacity = '';
   tb.style.pointerEvents = '';
@@ -43757,11 +43759,11 @@ function acSetBarsHidden(hidden) {
 }
 function acRevealBars() {
   acSetBarsHidden(false);
-  // Restore the collapsed top bar on any navigation.
+  // Restore the covered top bar on any navigation.
   _barScroll = 0;
   const row = document.getElementById('tbTabRow');
   if (row) { row.style.opacity = ''; row.style.pointerEvents = ''; }
-  document.body.classList.remove('top-frosted');
+  ['acHomeScreen', 'acListScreen'].forEach(id => { const s = document.getElementById(id); if (s) s.style.marginTop = ''; });
   const _tb = document.querySelector('.topbar'); if (_tb) _tb.style.marginTop = '';
 }
 function _onListScroll(e) {
