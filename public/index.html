@@ -2058,14 +2058,18 @@ body.light .topbar.tb-solo.tb-home .tb-feedtab.active,body.light .topbar.tb-solo
    invisible a few px before the ＋ (a little breathing space), then eases up to
    solid right where the resting first tab sits. Per-world because the two rows use
    different word spacing. */
+/* The left-edge fade is a STATIC gradient overlay on the ≡/＋ block (below), NOT a
+   mask-image on the scrolling tab row — a mask on a scrolling element forces a full
+   re-render every frame (choppy ~20fps horizontal scroll); a static overlay never
+   repaints as the tabs scroll behind it → buttery 60fps. */
 .topbar.tb-solo.tb-home .tb-feedtabs{
-  padding-inline-start:26px;scroll-padding-inline:26px var(--feed-gutter);
-  -webkit-mask-image:linear-gradient(to right,transparent 0,transparent 6px,#000 25px);
-  mask-image:linear-gradient(to right,transparent 0,transparent 6px,#000 25px);}
+  padding-inline-start:26px;scroll-padding-inline:26px var(--feed-gutter);}
 .topbar.tb-solo.tb-chat .tb-feedtabs{
-  padding-inline-start:20px;scroll-padding-inline:20px var(--feed-gutter);
-  -webkit-mask-image:linear-gradient(to right,transparent 0,transparent 5px,#000 19px);
-  mask-image:linear-gradient(to right,transparent 0,transparent 5px,#000 19px);}
+  padding-inline-start:20px;scroll-padding-inline:20px var(--feed-gutter);}
+.topbar.tb-solo .tb-icoset{position:relative;z-index:1;}
+.topbar.tb-solo .tb-icoset::after{content:'';position:absolute;left:100%;top:0;bottom:0;width:26px;
+  background:linear-gradient(to right,var(--bg) 6px,transparent);pointer-events:none;}
+.topbar.tb-solo.tb-chat .tb-icoset::after{width:20px;}
 /* Only the compose "+" on the right of home/chat — no AI logo button there. */
 .topbar.tb-home #tbAiBtn,.topbar.tb-chat #tbAiBtn{display:none;}
 .topbar-actions{display:flex;align-items:center;gap:6px;}
@@ -2168,11 +2172,9 @@ body.light .tb-feedtab.active{color:var(--t1);}
        edge ends exactly where the grey hairline below ends (--feed-gutter inset),
        matching the post ⋯ menus. The topbar's right padding is set to the gutter
        too (below) so the row reaches that edge. */
-    padding-inline-start:16px;padding-inline-end:0;
-    /* Fade ONLY the left edge — tabs dissolve under the ≡ as the row scrolls; the
-       right edge stays fully sharp (no darkening of Circles). */
-    -webkit-mask-image:linear-gradient(to right,transparent 0,#000 16px);
-    mask-image:linear-gradient(to right,transparent 0,#000 16px);}
+    padding-inline-start:16px;padding-inline-end:0;}
+    /* (Left-edge fade is a static overlay on .tb-solo .tb-icoset — see above; no
+       mask-image on the scrolling row, so horizontal tab scroll stays 60fps.) */
   /* All tabs the SAME size — active is just bold white, it never grows. */
   .topbar.tb-home .tb-feedtab{padding:6px 0;font-size:15px;font-weight:600;color:var(--t2);}
   .topbar.tb-home .tb-feedtab.active{font-weight:700;color:#fff;}
@@ -2203,9 +2205,9 @@ body.light .tb-feedtab.active{color:var(--t1);}
   /* Search + AI: put the ≡ at the exact same gutter position as Home/Chat. */
   .topbar.tb-plain{padding-inline-start:var(--feed-gutter);}
   .topbar.tb-plain .sb-toggle{justify-content:flex-start;width:auto;}
-  .topbar.tb-chat .tb-feedtabs{flex:1;justify-content:flex-start;gap:34px;margin-inline-start:8px;padding-inline-start:16px;padding-inline-end:0;
-    -webkit-mask-image:linear-gradient(to right,transparent 0,#000 16px);
-    mask-image:linear-gradient(to right,transparent 0,#000 16px);}
+  .topbar.tb-chat .tb-feedtabs{flex:1;justify-content:flex-start;gap:34px;margin-inline-start:8px;padding-inline-start:16px;padding-inline-end:0;}
+    /* (Left-edge fade is a static overlay on .tb-solo .tb-icoset — no mask on the
+       scrolling row, so the Beam tab scroll stays 60fps too.) */
   /* Beam tabs bottom-align to the hairline so the active tab carries a short BLUE
      underline sitting on it (blueprint §Beam) — mirrors the Home feed tabs. */
   .topbar.tb-chat .tb-feedtabs{align-self:stretch;align-items:flex-end;}
@@ -14933,7 +14935,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1132'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1133'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
