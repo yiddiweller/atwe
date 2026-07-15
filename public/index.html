@@ -136,6 +136,7 @@ a{text-decoration:none;color:inherit;}
   /* Layout */
   --sidebar-w: 244px;
   --topbar-h:  48px;
+  --tabrow-h:  46px;   /* Home/Beam scroll-cover: content-shift + feed-pad; live-measured in JS */
   --msg-max:   780px;
   /* One shared left/right gutter for the home feed column + the floating nav, so
      every row's start line and the nav edges sit on the same vertical line. */
@@ -2249,9 +2250,37 @@ body.light .tb-feedtab.active{color:var(--t1);}
    strip, so the solid black bar "blocks" the menu, leaving a clean black top
    with a full-width hairline. Driven in _applyBars (transform+opacity on
    #tbTabRow only — nothing touches the feed). */
-#tbTabRow{transition:transform .1s ease-out, opacity .1s ease-out;will-change:transform,opacity;}
-/* Full-width hairline under the bar (right-to-left, edge to edge) — back by request. */
-.topbar.tb-home,.topbar.tb-chat{border-bottom:1px solid var(--b2);}
+/* ── Home + Beam scroll-cover (founder's design, final) ──────────────────────
+   The feed scrolls 100% NATIVELY (1:1, nothing clipped — the grip the founder
+   likes). The content wrapper is shifted up behind the menu by the tab-row height
+   (a CONSTANT offset — NOT scroll-driven, so it never double-moves the content)
+   and the feed re-pads by the same amount, so at rest nothing looks different;
+   but as you scroll natively the content RISES up into the menu region, behind
+   the bar. The menu itself stays perfectly still and just darkens + blurs
+   (frosted) as you scroll — its tabs fade in place — and a full-width hairline
+   rides the content's top edge up to the TOP of the menu and pins there.
+   Everything is driven by ONE scroll-linked variable --cov (0..1) set in
+   _applyBars, so it reverses exactly on the way back up. */
+#tbTabRow{transition:opacity .08s linear;}
+.tb-hairline{display:none;}
+@media(max-width:768px){
+  body.feed-cover #socialWrap{margin-top:calc(-1 * var(--tabrow-h));}
+  body.feed-cover #acFeed, body.feed-cover #acList{padding-top:var(--tabrow-h);}
+  /* the menu sits ABOVE the rising content; frosted glass that darkens with --cov */
+  body.feed-cover .topbar.tb-home, body.feed-cover .topbar.tb-chat{
+    position:relative;z-index:6;border-bottom:none;
+    background:rgba(0,0,0,calc(0.55 + 0.45*var(--cov,0)));
+    -webkit-backdrop-filter:blur(calc(5px + 17px*var(--cov,0))) saturate(1.3);
+    backdrop-filter:blur(calc(5px + 17px*var(--cov,0))) saturate(1.3);}
+  body.light.feed-cover .topbar.tb-home, body.light.feed-cover .topbar.tb-chat{
+    background:rgba(255,255,255,calc(0.55 + 0.45*var(--cov,0)));}
+  /* tabs fade in place (stiff — never slide) */
+  body.feed-cover #tbTabRow{opacity:calc(1 - var(--cov,0));}
+  /* full-width hairline rides the content's top up to the top of the menu + pins */
+  body.feed-cover .tb-hairline{display:block;position:absolute;left:0;right:0;bottom:0;height:1px;
+    background:var(--b2);z-index:7;pointer-events:none;
+    transform:translateY(calc(-1 * var(--tabrow-h) * var(--cov,0)));}
+}
 .tb-word{height:15px;width:auto;display:block;}
 .tb-profile{display:flex;align-items:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
 .tb-profile .user-avatar{width:24px;height:24px;font-size:11px;}
@@ -10312,6 +10341,8 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <button class="tb-feedtab tb-feedtab-ai hidden" id="acChatMoreBtn" onclick="acOpenChatMenu(event)" aria-label="More" title="More"><svg class="tb-aidots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
       </div>
      </div>
+     <!-- Full-width hairline that rides the content's top up to the top of the menu (Home/Beam scroll-cover). -->
+     <div class="tb-hairline" id="tbHairline" aria-hidden="true"></div>
     </div>
 
     <!-- Chat / Empty state -->
@@ -14806,7 +14837,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1101'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1102'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24350,6 +24381,12 @@ function acShow(screenId, tab) {
   if (!['acProfileScreen', 'acCircleScreen', 'acThreadScreen', 'acPostViewScreen'].includes(screenId)) acSetPath('/');
   if (typeof acRevealBars === 'function') acRevealBars(); // navigation always restores the bars
   AC_SCREENS.forEach(id => document.getElementById(id).classList.toggle('hidden', id !== screenId));
+  // Home + Beam get the scroll-cover (content rises behind a fixed, darkening menu).
+  // Measure the tab-row height FIRST so the constant offset/padding match before the
+  // class applies (else the content would jump on toggle).
+  const _cover = (screenId === 'acHomeScreen' || screenId === 'acListScreen');
+  if (_cover) { if (typeof _tabRowH === 'function') _tabRowH(); document.body.style.setProperty('--cov', '0'); }
+  document.body.classList.toggle('feed-cover', _cover);
   // Desktop Beam two-pane: track whether a conversation is open so the thread pane
   // shows the chat (has-chat) or the "Start a conversation" empty pane (no chat).
   document.body.classList.toggle('beam-has-chat', screenId === 'acThreadScreen');
@@ -24414,6 +24451,7 @@ function acSetFeed(scope) {
   // The feed reloads + scrolls to top, so restore the covered bar.
   const _tb = document.querySelector('.topbar'); if (_tb) _tb.style.marginTop = '';
   const _tr = document.getElementById('tbTabRow'); if (_tr) { _tr.style.opacity = ''; _tr.style.transform = ''; _tr.style.pointerEvents = ''; }
+  document.body.style.setProperty('--cov', '0');
   if (typeof _barHide !== 'undefined') { _barHide = 0; _barScroll = 0; }
   [...AC_FEED_TABS, 'feeds', 'pinned'].forEach(s => document.getElementById('acFeedTab-' + s)?.classList.toggle('active', s === scope));
   // Horizontal page-slide between feeds (X-style pager) — works for a tab TAP and a
@@ -43695,29 +43733,37 @@ let _barRAF = 0, _barAnimT = 0;
 function _barEls() {
   return { tb: document.querySelector('.topbar'), nav: document.getElementById('bottomNav'), fab: document.querySelector('.ac-fab') };
 }
+// The tab-row height drives the scroll-cover: the content wrapper is shifted up by
+// this much (constant) and the feed re-pads by it, so the content rises exactly
+// into the menu region as you scroll. Measured live (falls back to 46) and mirrored
+// to --tabrow-h so the CSS offset/padding always match the real bar.
+let _tabRowHCache = 46;
+function _tabRowH() {
+  const row = document.getElementById('tbTabRow');
+  if (row && !row.classList.contains('hidden') && row.offsetHeight) {
+    _tabRowHCache = row.offsetHeight;
+    document.documentElement.style.setProperty('--tabrow-h', _tabRowHCache + 'px');
+  }
+  return _tabRowHCache;
+}
 function _applyBars() {
   _barRAF = 0;
   const { tb, nav, fab } = _barEls();
   if (!tb) return;
   const max = _barMax || tb.offsetHeight || 100;
   const p = max ? Math.min(1, Math.max(0, _barHide / max)) : 0;
-  // Home + Beam: the feed scrolls 100% NATIVELY — we never move the content, so it
-  // stays glued to the finger (1:1) and nothing in it is ever clipped. Only the
-  // MENU BAR responds: its tab row fades + slides up behind the status strip, so
-  // the solid black bar covers the menu, leaving a clean black top + hairline.
+  // Home + Beam: the feed scrolls 100% NATIVELY — we never move the content in JS,
+  // so it stays glued to the finger (1:1) and nothing in it is ever clipped. The
+  // whole cover effect is ONE scroll-linked variable --cov (0..1): the menu bar
+  // (fixed) darkens+blurs and its tabs fade in place, and the hairline rides the
+  // content's top up to the top of the menu — all in CSS. The content itself
+  // rises into the menu region purely via native scroll (see the CSS: #socialWrap
+  // is shifted up a constant amount and the feed re-pads to match).
   const retractable = (_appTab === 'home' || _appTab === 'chat');
-  const row = document.getElementById('tbTabRow');
   tb.style.marginTop = '';                                   // the bar never moves
-  if (retractable && row && !row.classList.contains('hidden')) {
-    const T = row.offsetHeight || 46;
-    const COVER = 66;                                        // px of scroll over which the menu fully covers
-    const p = Math.min(1, Math.max(0, _barScroll / COVER));
-    row.style.opacity = Math.max(0, 1 - p * 1.15).toFixed(3);  // fade a touch ahead of the slide
-    row.style.transform = 'translateY(' + (-(p * T * 0.85)).toFixed(1) + 'px)';
-    row.style.pointerEvents = p > 0.5 ? 'none' : '';
-  } else if (row) {
-    row.style.opacity = ''; row.style.transform = ''; row.style.pointerEvents = '';
-  }
+  const T = _tabRowH();
+  const cov = retractable ? Math.min(1, Math.max(0, _barScroll / T)) : 0;
+  document.body.style.setProperty('--cov', cov.toFixed(4));
   tb.style.opacity = '';
   tb.style.pointerEvents = '';
   if (nav) {
@@ -43760,6 +43806,7 @@ function acRevealBars() {
   acSetBarsHidden(false);
   // Restore the covered top bar on any navigation.
   _barScroll = 0;
+  document.body.style.setProperty('--cov', '0');            // un-cover: reset the scroll-linked variable
   const row = document.getElementById('tbTabRow');
   if (row) { row.style.opacity = ''; row.style.transform = ''; row.style.pointerEvents = ''; }
   const _tb = document.querySelector('.topbar'); if (_tb) _tb.style.marginTop = '';
