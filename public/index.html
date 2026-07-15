@@ -14864,7 +14864,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1114'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1115'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24412,7 +24412,7 @@ function acShow(screenId, tab) {
   // Measure the tab-row height FIRST so the constant offset/padding match before the
   // class applies (else the content would jump on toggle).
   const _cover = (screenId === 'acHomeScreen' || screenId === 'acListScreen');
-  if (_cover) { if (typeof _tabRowH === 'function') _tabRowH(); document.body.style.setProperty('--cov', '0'); }
+  if (_cover) { if (typeof _tabRowH === 'function') _tabRowH(); _covSet(0); }
   document.body.classList.toggle('feed-cover', _cover);
   // Toggle tabs-live on the small top-bar element (NOT <body>) so lifting the bar
   // above the content restyles only that tiny node, not the whole document — a
@@ -24483,7 +24483,7 @@ function acSetFeed(scope) {
   // The feed reloads + scrolls to top, so restore the covered bar.
   const _tb = document.querySelector('.topbar'); if (_tb) _tb.style.marginTop = '';
   const _tr = document.getElementById('tbTabRow'); if (_tr) { _tr.style.opacity = ''; _tr.style.transform = ''; _tr.style.pointerEvents = ''; }
-  document.body.style.setProperty('--cov', '0');
+  _covSet(0);
   if (typeof _barHide !== 'undefined') { _barHide = 0; _barScroll = 0; }
   [...AC_FEED_TABS, 'feeds', 'pinned'].forEach(s => document.getElementById('acFeedTab-' + s)?.classList.toggle('active', s === scope));
   // Horizontal page-slide between feeds (X-style pager) — works for a tab TAP and a
@@ -43834,7 +43834,7 @@ function acRevealBars() {
   acSetBarsHidden(false);
   // Restore the covered top bar on any navigation.
   _barScroll = 0;
-  document.body.style.setProperty('--cov', '0');            // un-cover: reset the scroll-linked variable
+  _covSet(0);            // un-cover: reset the scroll-linked variable
   const row = document.getElementById('tbTabRow');
   if (row) { row.style.opacity = ''; row.style.transform = ''; row.style.pointerEvents = ''; }
   const _tb = document.querySelector('.topbar'); if (_tb) _tb.style.marginTop = '';
@@ -43845,16 +43845,26 @@ function acRevealBars() {
 // loop keeps it smooth during iOS MOMENTUM (opacity repaints fine, unlike a moved
 // background), so the tabs un-darken smoothly on the way back too. Stops when settled.
 let _darkRAF = 0, _darkEl = null, _darkLastY = -1, _darkStill = 0;
+let _tbCovEl = null, _covRowEl = null, _covLast = -1;
+function _covSet(v) {
+  // Write --cov on the tiny #tbTabRow node (its ::after reads it), NOT on <body>.
+  // A custom property set on <body> invalidates that property's inheritance across
+  // the ENTIRE document on every scroll frame — a whole-page recompute that showed
+  // up as a mid-scroll stall. Scoping it to the tab row keeps the invalidation to
+  // that one tiny subtree. Also skip redundant writes (esp. once clamped at 0/1).
+  if (Math.abs(v - _covLast) < 0.002) return;
+  _covLast = v;
+  (_covRowEl || (_covRowEl = document.getElementById('tbTabRow')))?.style.setProperty('--cov', v.toFixed(3));
+}
 function _setCov(st) {
   const T = (_tabRowHCache || 46) * 0.55;   // fade the tabs to black over the FIRST ~55% of the cover (darker sooner)
-  document.body.style.setProperty('--cov', Math.min(1, Math.max(0, st / T)).toFixed(3));
+  _covSet(Math.min(1, Math.max(0, st / T)));
   // At the very top the bar is lifted above the content so the tabs take taps +
   // horizontal swipes; the instant you scroll it drops back behind the content.
   // Toggle on the tiny top-bar node, NOT <body> — a body class toggle forces a
   // full-document style recalc (the first-scroll "stuck for a second" hitch).
   (_tbCovEl || (_tbCovEl = document.querySelector('.topbar')))?.classList.toggle('tabs-live', st <= 4);
 }
-let _tbCovEl = null;
 function _darkLoop() {
   const sc = _darkEl;
   if (!sc || sc.classList.contains('hidden') || !(_appTab === 'home' || _appTab === 'chat')) { _darkRAF = 0; return; }
