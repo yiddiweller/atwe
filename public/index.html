@@ -14880,7 +14880,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1118'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1119'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -43732,10 +43732,17 @@ function ptrInit() {
   // overscroll/rubber-band at the top edge, so a downward drag at scrollTop 0 does
   // nothing natively and our transform is free to drive the pull. When not at the top,
   // native scrolling proceeds untouched — the compositor never has to consult JS.
+  // Disarm the pull WITHOUT touching the scroller — used when the gesture turns out
+  // to be a normal scroll, or was never a pull. Critically it does NOT call reset()
+  // (which writes a transform onto #acFeed): writing a transform to the element you're
+  // actively touch-scrolling CANCELS the scroll on iOS — you'd have to lift your finger
+  // and touch again to continue. This was the "starts scrolling from the top, sticks,
+  // must re-touch" bug. The scroller's style is only ever touched during a REAL pull.
+  const disarm = () => { pulling = false; if (dist > 0) reset(); else list = null; };
   const onMove = (e) => {
     if (!pulling || refreshing || !list) return;
     const dy = e.touches[0].clientY - startY;
-    if (dy <= 0 || list.scrollTop > 0) { pulling = false; reset(); return; } // a normal scroll — leave it alone
+    if (dy <= 0 || list.scrollTop > 0) { disarm(); return; } // a normal scroll — never touch the scroller
     dist = Math.min(dy * 0.5, 110);
     place(dist, true);
     // Grow the mark toward full size as you pull (no rotation — the refresh itself
@@ -43749,11 +43756,11 @@ function ptrInit() {
     else pulling = false;
   }, { passive: true });
   win.addEventListener('touchmove', onMove, { passive: true });
-  win.addEventListener('touchcancel', () => { if (!refreshing) { pulling = false; reset(); } }, { passive: true });
+  win.addEventListener('touchcancel', () => { if (!refreshing) disarm(); }, { passive: true });
   win.addEventListener('touchend', async () => {
     if (!pulling || refreshing) return;
     pulling = false;
-    if (dist < TH) { reset(); return; }
+    if (dist < TH) { if (dist > 0) reset(); else list = null; return; } // never transform the scroller unless we actually pulled
     refreshing = true;
     place(HOLD, false);
     ind.classList.add('sweeping');
