@@ -2273,14 +2273,13 @@ body.light .tb-feedtab.active{color:var(--t1);}
      reveals the menu behind at rest (only the feed's opaque fill covers it) */
   body.feed-cover #socialWrap, body.feed-cover #socialWrap .ac-win,
   body.feed-cover #acHomeScreen, body.feed-cover #acListScreen{background:transparent;}
-  /* The feed fill is OPAQUE where the content is (so it covers the menu as it rises)
-     but TRANSPARENT for the top spacer (so the menu shows at rest). background-
-     attachment:local scrolls the fill WITH the content, so the opaque part rises
-     over the menu exactly with the posts. */
-  body.feed-cover #acFeed, body.feed-cover #acList{
-    padding-top:var(--tabrow-h);
-    background-image:linear-gradient(to bottom, transparent 0, transparent var(--tabrow-h), var(--bg) var(--tabrow-h));
-    background-attachment:local;background-repeat:no-repeat;}
+  /* Transparent top spacer (so the menu shows at rest) + OPAQUE children (so they
+     cover the menu as they rise into it). iOS-SAFE: no background-attachment:local
+     — iOS won't repaint that on scroll-up, which left the cover 'stuck' and made it
+     look like it never reversed. Opaque real elements repaint normally, so scrolling
+     back reveals the menu again. */
+  body.feed-cover #acFeed, body.feed-cover #acList{padding-top:var(--tabrow-h);background:transparent;}
+  body.feed-cover #acFeed > *, body.feed-cover #acList > *{background-color:var(--bg);}
   /* menu sits BEHIND the content; solid; tabs fade in place as the content covers it */
   body.feed-cover .topbar.tb-home, body.feed-cover .topbar.tb-chat{
     position:relative;z-index:4;border-bottom:none;background:var(--bg);}
@@ -14852,7 +14851,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1103'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1104'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
