@@ -2318,6 +2318,16 @@ body.light .tb-feedtab.active{color:var(--t1);}
   body.feed-cover #acFeed::before, body.feed-cover #acList::before{
     content:'';display:block;position:sticky;top:calc(-1 * var(--tabrow-h));z-index:10;
     height:1px;margin-bottom:-1px;background:var(--b2);pointer-events:none;}
+  /* ADDITIVE tab-row touch strip (see the matching HTML/JS). Transparent, sits over the
+     tab row, forwards taps + horizontal drags to the real tabs. z-index 8 = above the
+     covering content (z5) so it actually receives the touches; pointer-events default
+     none (JS turns it on only while at the very top). overflow-x makes it a horizontal
+     scroller; touch-action:pan-x lets vertical drags fall through as normal page intent. */
+  #tbTabTouch{position:fixed;z-index:8;overflow-x:auto;overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;touch-action:pan-x;background:transparent;
+    pointer-events:none;display:none;scrollbar-width:none;}
+  #tbTabTouch::-webkit-scrollbar{display:none;}
+  #tbTabTouchInner{height:1px;}
 }
 .tb-word{height:15px;width:auto;display:block;}
 .tb-profile{display:flex;align-items:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
@@ -10394,6 +10404,15 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <!-- Full-width hairline that rides the content's top up to the top of the menu
          (Home/Beam scroll-cover). On .main + above the content so it's never covered. -->
     <div class="tb-hairline" id="tbHairline" aria-hidden="true"></div>
+    <!-- ADDITIVE see-through touch layer for the Home/Beam tab row. In the loved cover
+         look the menu sits BEHIND the content (z4), so the covering feed steals taps +
+         horizontal swipes meant for the tabs. This transparent strip sits OVER the tab
+         row only while at the top, and forwards taps (via elementFromPoint) + horizontal
+         drags (synced to the real tab scroller) to the real tabs. It NEVER changes the
+         look or the scroll — purely additive, so it can't reintroduce the stutter/black
+         bar. It's pointer-events:none the instant you scroll, so it never blocks the feed.
+         Positioned/sized to the real #tbTabRow in acTabTouchSync(). -->
+    <div id="tbTabTouch" aria-hidden="true"><div id="tbTabTouchInner"></div></div>
 
     <!-- Chat / Empty state -->
     <div class="chat-wrap" id="chatWrap">
@@ -14887,7 +14906,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1123'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1124'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24446,6 +24465,13 @@ function acShow(screenId, tab) {
   // body-level class toggle forced a full-page style recalc on every first scroll
   // (the "stuck for a second, then smooth" hitch).
   document.querySelector('.topbar')?.classList.toggle('tabs-live', _cover); // landing at the top → tabs interactive
+  // Re-place the additive tab touch-strip over the (now-current) tab row, or hide it.
+  // rAF so the topbar has laid out (tb-home/tb-chat classes, tab visibility) before we
+  // measure; a second pass ~300ms later catches iOS safe-area insets settling a frame late.
+  if (typeof acTabTouchSync === 'function') {
+    requestAnimationFrame(() => { try { acTabTouchSync(); } catch (_) {} });
+    setTimeout(() => { try { acTabTouchSync(); } catch (_) {} }, 300);
+  }
   // Desktop Beam two-pane: track whether a conversation is open so the thread pane
   // shows the chat (has-chat) or the "Start a conversation" empty pane (no chat).
   document.body.classList.toggle('beam-has-chat', screenId === 'acThreadScreen');
@@ -43819,6 +43845,61 @@ let _barRAF = 0, _barAnimT = 0;
 function _barEls() {
   return { tb: document.querySelector('.topbar'), nav: document.getElementById('bottomNav'), fab: document.querySelector('.ac-fab') };
 }
+// ── Additive tab-row touch layer (Home/Beam cover) ───────────────────────────
+// In the loved cover look the menu is BEHIND the content (z4), so the covering feed
+// steals taps + horizontal swipes meant for the tabs. #tbTabTouch is a transparent
+// strip laid OVER the tab row that forwards them to the real tabs. Purely additive —
+// it never changes the look or the scroll code, so it cannot bring back the stutter or
+// the black bar. It goes inert (pointer-events:none) the instant you scroll.
+let _tabTouchBound = false;
+function acTabTouchTabsEl() {                    // the visible tab scroller for this world
+  const f = document.getElementById('tbFeedTabs'), c = document.getElementById('tbChatTabs');
+  if (c && !c.classList.contains('hidden')) return c;
+  if (f && !f.classList.contains('hidden')) return f;
+  return null;
+}
+function acTabTouchActive() {
+  const row = document.getElementById('tbTabRow');
+  return document.body.classList.contains('feed-cover') && row && !row.classList.contains('hidden')
+    && (_appTab === 'home' || _appTab === 'chat');
+}
+function acTabTouchPE() {                        // active only at the very top; inert once scrolled
+  const strip = document.getElementById('tbTabTouch'); if (!strip || strip.style.display === 'none') return;
+  const sc = document.getElementById(_appTab === 'chat' ? 'acList' : 'acFeed');
+  strip.style.pointerEvents = (!sc || sc.scrollTop <= 6) ? 'auto' : 'none';
+}
+function acTabTouchSync() {
+  const strip = document.getElementById('tbTabTouch'); if (!strip) return;
+  if (!acTabTouchActive()) { strip.style.display = 'none'; return; }
+  const row = document.getElementById('tbTabRow'); const tabs = acTabTouchTabsEl();
+  const r = row.getBoundingClientRect();
+  if (!r.width || !r.height) { strip.style.display = 'none'; return; }
+  strip.style.display = 'block';
+  strip.style.left = r.left + 'px'; strip.style.top = r.top + 'px';
+  strip.style.width = r.width + 'px'; strip.style.height = r.height + 'px';
+  const inner = document.getElementById('tbTabTouchInner');
+  const extra = tabs ? Math.max(0, tabs.scrollWidth - tabs.clientWidth) : 0; // match the tabs' scroll range 1:1
+  if (inner) inner.style.width = (r.width + extra) + 'px';
+  if (tabs) strip.scrollLeft = tabs.scrollLeft;
+  acTabTouchPE();
+  if (!_tabTouchBound) {
+    _tabTouchBound = true;
+    strip.addEventListener('scroll', () => { const t = acTabTouchTabsEl(); if (t) t.scrollLeft = strip.scrollLeft; }, { passive: true });
+    strip.addEventListener('click', (e) => {    // forward the tap to the real ≡ / ＋ / tab / AI button
+      // Map the tap to the button whose on-screen rect contains it — NOT elementFromPoint,
+      // which returns the covering content (z5) that sits above the menu (z4), never the
+      // tab. Geometry mapping works regardless of layer order.
+      const row2 = document.getElementById('tbTabRow'); if (!row2) return;
+      const x = e.clientX, y = e.clientY;
+      const btns = row2.querySelectorAll('button, a');
+      for (let i = 0; i < btns.length; i++) {
+        const b = btns[i].getBoundingClientRect();
+        if (b.width && x >= b.left && x <= b.right && y >= b.top && y <= b.bottom) { btns[i].click(); return; }
+      }
+    });
+    window.addEventListener('resize', () => { try { acTabTouchSync(); } catch (_) {} }, { passive: true });
+  }
+}
 // The tab-row height drives the scroll-cover: the content wrapper is shifted up by
 // this much (constant) and the feed re-pads by it, so the content rises exactly
 // into the menu region as you scroll. Measured live (falls back to 46) and mirrored
@@ -43948,6 +44029,7 @@ function _onListScroll(e) {
       _setCov(st);
       _darkEl = sc; _darkLastY = -1; _darkStill = 0;
       if (!_darkRAF) _darkRAF = requestAnimationFrame(_darkLoop);
+      if (typeof acTabTouchPE === 'function') acTabTouchPE(); // tab touch-strip inert once scrolled
     }
   }
   // Home feed: keep the darken/blur scrim off — the retracting bar + status strip
