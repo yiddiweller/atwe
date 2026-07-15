@@ -14854,7 +14854,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1109'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1110'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -43831,7 +43831,7 @@ function acRevealBars() {
 // background), so the tabs un-darken smoothly on the way back too. Stops when settled.
 let _darkRAF = 0, _darkEl = null, _darkLastY = -1, _darkStill = 0;
 function _setCov(st) {
-  const T = _tabRowHCache || 46;
+  const T = (_tabRowHCache || 46) * 0.55;   // fade the tabs to black over the FIRST ~55% of the cover (darker sooner)
   document.body.style.setProperty('--cov', Math.min(1, Math.max(0, st / T)).toFixed(3));
 }
 function _darkLoop() {
