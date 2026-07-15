@@ -2334,7 +2334,7 @@ body.light .tb-feedtab.active{color:var(--t1);}
      wins over the mirrored .topbar classes for position/z/transform; everything else
      (bg, padding, tab layout) is inherited from those classes so it looks identical. */
   #tbRevealBar{position:fixed;top:0;left:0;right:0;z-index:9;margin:0;
-    transform:translateY(-100%);transition:transform .28s var(--ease);
+    transform:translateY(-100%);transition:transform .5s var(--ease);
     will-change:transform;pointer-events:none;display:none;
     border-bottom:1px solid var(--b2);background:var(--bg);}
   #tbRevealBar.shown{transform:translateY(0);pointer-events:auto;}
@@ -14925,7 +14925,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1125'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1126'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
