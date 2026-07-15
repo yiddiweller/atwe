@@ -2261,39 +2261,38 @@ body.light .tb-feedtab.active{color:var(--t1);}
    rides the content's top edge up to the TOP of the menu and pins there.
    Everything is driven by ONE scroll-linked variable --cov (0..1) set in
    _applyBars, so it reverses exactly on the way back up. */
-#tbTabRow{transition:opacity .08s linear;}
+   FULLY NATIVE (no JS reads the scroll): the content covers the fixed menu as it
+   rises, and the hairline is a sticky pseudo-element WELDED to the content's top
+   edge. The browser moves both — so there is ZERO lag (the hairline never "jumps"
+   apart from the content) and it reverses PERFECTLY even during an iOS momentum
+   flick (JS could never keep up with that). */
 .tb-hairline{display:none;}
 @media(max-width:768px){
-  /* The content wrapper rides ABOVE the menu (z:5 > the bar's z:4) so as it rises
-     it COVERS the menu — solid, fully visible, never chopped, never see-through.
-     A constant upward offset (not scroll-driven) keeps the scroll perfectly 1:1;
-     the feed re-pads so rest looks unchanged. */
+  /* The content wrapper rides ABOVE the menu (z:5 > the bar's z:4) so as it rises it
+     COVERS the menu — solid, fully visible, never chopped, never see-through. A
+     constant upward offset (NOT scroll-driven) keeps the scroll perfectly 1:1; the
+     feed re-pads so rest looks unchanged. */
   body.feed-cover #socialWrap{margin-top:calc(-1 * var(--tabrow-h));position:relative;z-index:5;}
-  /* the wrappers must be transparent so the feed's transparent top spacer actually
-     reveals the menu behind at rest (only the feed's opaque fill covers it) */
+  /* wrappers transparent so the feed's transparent top spacer reveals the menu at rest */
   body.feed-cover #socialWrap, body.feed-cover #socialWrap .ac-win,
   body.feed-cover #acHomeScreen, body.feed-cover #acListScreen{background:transparent;}
-  /* Transparent top spacer (so the menu shows at rest) + OPAQUE children (so they
-     cover the menu as they rise into it). iOS-SAFE: no background-attachment:local
-     — iOS won't repaint that on scroll-up, which left the cover 'stuck' and made it
-     look like it never reversed. Opaque real elements repaint normally, so scrolling
-     back reveals the menu again. */
+  /* transparent top spacer (menu shows at rest) + OPAQUE children (cover the menu as
+     they rise). No background-attachment:local — real elements repaint on every frame,
+     including during momentum, so the cover reverses smoothly. */
   body.feed-cover #acFeed, body.feed-cover #acList{padding-top:var(--tabrow-h);background:transparent;}
   body.feed-cover #acFeed > *, body.feed-cover #acList > *{background-color:var(--bg);}
-  /* menu sits BEHIND the content; solid; tabs fade in place as the content covers it */
+  /* menu sits BEHIND the content; solid; it's simply covered by the rising content */
   body.feed-cover .topbar.tb-home, body.feed-cover .topbar.tb-chat{
     position:relative;z-index:4;border-bottom:none;background:var(--bg);}
-  body.feed-cover #tbTabRow{opacity:calc(1 - var(--cov,0));}
-  /* full-width hairline rides ABOVE the content, at its top edge, up to the menu top + pins */
-  body.feed-cover .tb-hairline{display:block;}
+  /* THE HAIRLINE — a sticky pseudo-element, so it's a native part of the scroll:
+     welded to the content's top edge (zero lag), rides up with it, and STICKS at the
+     top of the menu. top:calc(-1*tabrow-h) offsets the feed's own top padding so it
+     pins exactly at the menu's top edge (just under the status bar). z-index:10 keeps
+     it above the posts + the menu. */
+  body.feed-cover #acFeed::before, body.feed-cover #acList::before{
+    content:'';display:block;position:sticky;top:calc(-1 * var(--tabrow-h));z-index:10;
+    height:1px;margin-bottom:-1px;background:var(--b2);pointer-events:none;}
 }
-/* The hairline lives on .main (ABOVE the content) so the rising content can't cover
-   it. It positions against .app (the fixed viewport shell) at the bar's bottom edge
-   and rides up by --cov, pinning at the menu top. */
-.tb-hairline{display:none;position:absolute;left:0;right:0;height:1px;background:var(--b2);
-  z-index:8;pointer-events:none;
-  top:var(--bar-h, 96px);   /* the bar's true (measured) bottom edge */
-  transform:translateY(calc(-1 * var(--tabrow-h) * var(--cov,0)));}
 .tb-word{height:15px;width:auto;display:block;}
 .tb-profile{display:flex;align-items:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
 .tb-profile .user-avatar{width:24px;height:24px;font-size:11px;}
@@ -14851,7 +14850,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1105'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1106'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -43770,18 +43769,10 @@ function _applyBars() {
   if (!tb) return;
   const max = _barMax || tb.offsetHeight || 100;
   const p = max ? Math.min(1, Math.max(0, _barHide / max)) : 0;
-  // Home + Beam: the feed scrolls 100% NATIVELY — we never move the content in JS,
-  // so it stays glued to the finger (1:1) and nothing in it is ever clipped. The
-  // whole cover effect is ONE scroll-linked variable --cov (0..1): the menu bar
-  // (fixed) darkens+blurs and its tabs fade in place, and the hairline rides the
-  // content's top up to the top of the menu — all in CSS. The content itself
-  // rises into the menu region purely via native scroll (see the CSS: #socialWrap
-  // is shifted up a constant amount and the feed re-pads to match).
-  const retractable = (_appTab === 'home' || _appTab === 'chat');
+  // Home + Beam scroll-cover is now 100% CSS/native (the content covers the fixed
+  // menu via native scroll; the hairline is a sticky pseudo-element). Nothing here
+  // reads or drives the cover — this function only handles the nav/FAB hide.
   tb.style.marginTop = '';                                   // the bar never moves
-  const T = _tabRowHCache || 46;                             // cached (measured on nav/resize) — no per-frame layout
-  const cov = retractable ? Math.min(1, Math.max(0, _barScroll / T)) : 0;
-  document.body.style.setProperty('--cov', cov.toFixed(4));
   tb.style.opacity = '';
   tb.style.pointerEvents = '';
   if (nav) {
@@ -43829,27 +43820,6 @@ function acRevealBars() {
   if (row) { row.style.opacity = ''; row.style.transform = ''; row.style.pointerEvents = ''; }
   const _tb = document.querySelector('.topbar'); if (_tb) _tb.style.marginTop = '';
 }
-// Continuous frame loop that reads the active list's scrollTop every frame while it
-// is moving — CRUCIAL on iOS, where during MOMENTUM (a flick) scroll events STOP
-// firing, so an event-only cover would freeze and only "catch up" (snap) when the
-// scroll settled. scrollTop itself keeps updating during momentum, so reading it on
-// rAF keeps the cover tracking smoothly and reversing gradually. Stops when settled.
-let _covLoopRAF = 0, _covLoopEl = null, _covLoopLastY = -1, _covLoopStill = 0;
-function _covLoop() {
-  const sc = _covLoopEl;
-  if (!sc || sc.classList.contains('hidden')) { _covLoopRAF = 0; return; }
-  const tb = document.querySelector('.topbar');
-  if (!tb || tb.classList.contains('hidden')) { _covLoopRAF = 0; return; }
-  const st = sc.scrollTop;
-  if (st !== _covLoopLastY) {
-    _covLoopLastY = st; _covLoopStill = 0;
-    _barMax = tb.offsetHeight || _barMax || 100;
-    _barScroll = st;
-    _barHide = Math.min(_barMax, Math.max(0, st));
-    _applyBars();
-  } else if (++_covLoopStill > 10) { _covLoopRAF = 0; return; } // settled → stop the loop
-  _covLoopRAF = requestAnimationFrame(_covLoop);
-}
 function _onListScroll(e) {
   const sc = e.target;
   if (!sc || !sc.classList || !sc.classList.contains('ac-list')) return;
@@ -43861,11 +43831,7 @@ function _onListScroll(e) {
     _setBarAnim(false);                                // track the scroll with no easing
     _barScroll = st;
     _barHide = Math.min(_barMax, Math.max(0, st));
-    _applyBars();
-    // Kick off (or keep alive) the rAF loop so momentum frames — where iOS fires no
-    // scroll events — still update the cover, so it reverses smoothly, not just at top.
-    _covLoopEl = sc; _covLoopLastY = -1; _covLoopStill = 0;
-    if (!_covLoopRAF) _covLoopRAF = requestAnimationFrame(_covLoop);
+    if (!_barRAF) _barRAF = requestAnimationFrame(_applyBars);  // nav/FAB hide only (cover is pure CSS)
   }
   // Home feed: keep the darken/blur scrim off — the retracting bar + status strip
   // handle the top cleanly.
