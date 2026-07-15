@@ -14851,7 +14851,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1104'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1105'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -43779,7 +43779,7 @@ function _applyBars() {
   // is shifted up a constant amount and the feed re-pads to match).
   const retractable = (_appTab === 'home' || _appTab === 'chat');
   tb.style.marginTop = '';                                   // the bar never moves
-  const T = _tabRowH();
+  const T = _tabRowHCache || 46;                             // cached (measured on nav/resize) — no per-frame layout
   const cov = retractable ? Math.min(1, Math.max(0, _barScroll / T)) : 0;
   document.body.style.setProperty('--cov', cov.toFixed(4));
   tb.style.opacity = '';
@@ -43829,6 +43829,27 @@ function acRevealBars() {
   if (row) { row.style.opacity = ''; row.style.transform = ''; row.style.pointerEvents = ''; }
   const _tb = document.querySelector('.topbar'); if (_tb) _tb.style.marginTop = '';
 }
+// Continuous frame loop that reads the active list's scrollTop every frame while it
+// is moving — CRUCIAL on iOS, where during MOMENTUM (a flick) scroll events STOP
+// firing, so an event-only cover would freeze and only "catch up" (snap) when the
+// scroll settled. scrollTop itself keeps updating during momentum, so reading it on
+// rAF keeps the cover tracking smoothly and reversing gradually. Stops when settled.
+let _covLoopRAF = 0, _covLoopEl = null, _covLoopLastY = -1, _covLoopStill = 0;
+function _covLoop() {
+  const sc = _covLoopEl;
+  if (!sc || sc.classList.contains('hidden')) { _covLoopRAF = 0; return; }
+  const tb = document.querySelector('.topbar');
+  if (!tb || tb.classList.contains('hidden')) { _covLoopRAF = 0; return; }
+  const st = sc.scrollTop;
+  if (st !== _covLoopLastY) {
+    _covLoopLastY = st; _covLoopStill = 0;
+    _barMax = tb.offsetHeight || _barMax || 100;
+    _barScroll = st;
+    _barHide = Math.min(_barMax, Math.max(0, st));
+    _applyBars();
+  } else if (++_covLoopStill > 10) { _covLoopRAF = 0; return; } // settled → stop the loop
+  _covLoopRAF = requestAnimationFrame(_covLoop);
+}
 function _onListScroll(e) {
   const sc = e.target;
   if (!sc || !sc.classList || !sc.classList.contains('ac-list')) return;
@@ -43838,12 +43859,13 @@ function _onListScroll(e) {
     const st = sc.scrollTop;
     sc._shLast = st;
     _setBarAnim(false);                                // track the scroll with no easing
-    // POSITION-BASED (not finger-delta) so it never jitters or accumulates. _barScroll
-    // is the raw scroll the 2-phase top bar reads (dim then retract); _barHide drives
-    // the nav/fab hide.
     _barScroll = st;
     _barHide = Math.min(_barMax, Math.max(0, st));
-    if (!_barRAF) _barRAF = requestAnimationFrame(_applyBars);
+    _applyBars();
+    // Kick off (or keep alive) the rAF loop so momentum frames — where iOS fires no
+    // scroll events — still update the cover, so it reverses smoothly, not just at top.
+    _covLoopEl = sc; _covLoopLastY = -1; _covLoopStill = 0;
+    if (!_covLoopRAF) _covLoopRAF = requestAnimationFrame(_covLoop);
   }
   // Home feed: keep the darken/blur scrim off — the retracting bar + status strip
   // handle the top cleanly.
