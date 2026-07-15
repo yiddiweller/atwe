@@ -2296,8 +2296,13 @@ body.light .tb-feedtab.active{color:var(--t1);}
      re-paints the glyphs every scroll frame, which is what made scrolling feel
      stuck/janky. This only dims the tabs; it never touches the cover or hairline. */
   body.feed-cover #tbTabRow{position:relative;}
-  body.feed-cover #tbTabRow::after{content:'';position:absolute;inset:0;background:var(--bg);
-    opacity:var(--cov,0);pointer-events:none;will-change:opacity;z-index:1;}
+  /* Darken overlay — a real EMPTY element (not a --cov custom prop on #tbTabRow, which
+     recalced every tab button per frame). Its opacity is set directly in JS: pure GPU
+     compositor work, so scrolling stays on iOS's compositor thread and never stalls at
+     the menu bar. Shown only under the cover; hidden (and inert) otherwise. */
+  #tbDarken{position:absolute;inset:0;background:var(--bg);opacity:0;pointer-events:none;
+    will-change:opacity;z-index:1;display:none;}
+  body.feed-cover #tbDarken{display:block;}
   /* THE HAIRLINE — a sticky pseudo-element, so it's a native part of the scroll:
      welded to the content's top edge (zero lag), rides up with it, and STICKS at the
      top of the menu. top:calc(-1*tabrow-h) offsets the feed's own top padding so it
@@ -10371,6 +10376,12 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <button class="tb-feedtab" id="acseg-contacts" onclick="acChatsTab('contacts')">Contacts</button>
         <button class="tb-feedtab tb-feedtab-ai hidden" id="acChatMoreBtn" onclick="acOpenChatMenu(event)" aria-label="More" title="More"><svg class="tb-aidots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
       </div>
+      <!-- Scroll-darken overlay (Home/Beam cover). A single EMPTY element whose opacity
+           is driven directly in JS — so darkening never recalcs the tab buttons; it's a
+           pure GPU compositor opacity change, which keeps iOS scrolling on its own
+           thread. (Replaced a `--cov` custom property set on #tbTabRow, which recalced
+           the whole tab row every scroll frame and stalled the scroll at the menu bar.) -->
+      <div class="tb-darken" id="tbDarken" aria-hidden="true"></div>
      </div>
     </div>
     <!-- Full-width hairline that rides the content's top up to the top of the menu
@@ -14869,7 +14880,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1117'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1118'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -43838,7 +43849,6 @@ function _applyBars() {
     // and STAYS there, still tappable. Never fades.
     fab.style.transform = 'translateY(' + (p * 68) + 'px)';
   }
-  document.body.classList.toggle('bars-hidden', p > 0.5);
 }
 function _setBarAnim(on) {
   const { tb, nav, fab } = _barEls();
@@ -43872,14 +43882,16 @@ function acRevealBars() {
 let _darkRAF = 0, _darkEl = null, _darkLastY = -1, _darkStill = 0;
 let _tbCovEl = null, _covRowEl = null, _covLast = -1;
 function _covSet(v) {
-  // Write --cov on the tiny #tbTabRow node (its ::after reads it), NOT on <body>.
-  // A custom property set on <body> invalidates that property's inheritance across
-  // the ENTIRE document on every scroll frame — a whole-page recompute that showed
-  // up as a mid-scroll stall. Scoping it to the tab row keeps the invalidation to
-  // that one tiny subtree. Also skip redundant writes (esp. once clamped at 0/1).
+  // Drive the darken overlay's opacity DIRECTLY on a dedicated empty element (#tbDarken)
+  // — never a custom property on #tbTabRow, which would recalc every tab button each
+  // scroll frame. A bare opacity change on a childless will-change:opacity element is
+  // pure GPU compositor work: no style recalc of the tabs, no layout, so iOS keeps the
+  // scroll on its compositor thread and it no longer stalls crossing the menu bar.
+  // Skip redundant writes (esp. once clamped at 0/1).
   if (Math.abs(v - _covLast) < 0.002) return;
   _covLast = v;
-  (_covRowEl || (_covRowEl = document.getElementById('tbTabRow')))?.style.setProperty('--cov', v.toFixed(3));
+  const el = _covRowEl || (_covRowEl = document.getElementById('tbDarken'));
+  if (el) el.style.opacity = v.toFixed(3);
 }
 function _setCov(st) {
   const T = (_tabRowHCache || 46) * 0.55;   // fade the tabs to black over the FIRST ~55% of the cover (darker sooner)
@@ -43903,7 +43915,11 @@ function _onListScroll(e) {
   if (!sc || !sc.classList || !sc.classList.contains('ac-list')) return;
   const tb = document.querySelector('.topbar');
   if (tb && !tb.classList.contains('hidden')) {        // drill-in screens own their header
-    _barMax = tb.offsetHeight || _barMax || 100;
+    // Use the cached bar height — do NOT read tb.offsetHeight here. Reading layout
+    // inside the scroll handler forces a synchronous reflow on every frame (worst on
+    // iOS), which is exactly the kind of per-frame main-thread work that stalls the
+    // scroll. Navigation (acSetBarsHidden) already measures it when the bar is shown.
+    if (!_barMax) _barMax = tb.offsetHeight || 100;
     const st = sc.scrollTop;
     sc._shLast = st;
     _setBarAnim(false);                                // track the scroll with no easing
