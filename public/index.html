@@ -2281,6 +2281,18 @@ body.light .tb-feedtab.active{color:var(--t1);}
      including during momentum, so the cover reverses smoothly. */
   body.feed-cover #acFeed, body.feed-cover #acList{padding-top:var(--tabrow-h);background:transparent;}
   body.feed-cover #acFeed > *, body.feed-cover #acList > *{background-color:var(--bg);}
+  /* The whole content STACK sits OVER the menu (so content can rise + cover it),
+     which was swallowing taps/swipes on the tab bar. Make the stack click-through so
+     the EMPTY top strip passes touches to the menu behind; the actual interactive
+     bits (posts, list rows, FAB, new-posts pill, beam panes) get pointer-events back.
+     Scrolling still works because the touch lands on an interactive child. */
+  body.feed-cover #socialWrap, body.feed-cover #socialWrap .ac-win,
+  body.feed-cover #acHomeScreen, body.feed-cover #acListScreen,
+  body.feed-cover #acFeed, body.feed-cover #acList{pointer-events:none;}
+  body.feed-cover #acFeed > *, body.feed-cover #acList > *,
+  body.feed-cover #acCallList2 > *, body.feed-cover #acContactsList2 > *,
+  body.feed-cover .ac-fab, body.feed-cover #acNewPosts,
+  body.feed-cover #acLiveStrip, body.feed-cover #acChatSearchBar{pointer-events:auto;}
   /* menu sits BEHIND the content; solid; it's simply covered by the rising content */
   body.feed-cover .topbar.tb-home, body.feed-cover .topbar.tb-chat{
     position:relative;z-index:4;border-bottom:none;background:var(--bg);}
@@ -14854,7 +14866,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1110'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1111'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
