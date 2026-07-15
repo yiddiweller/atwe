@@ -14864,7 +14864,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1115'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1116'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -27149,7 +27149,16 @@ async function acLoadFeed() {
       // away like Instagram. acLoadStoryTray() fills every .js-story-tray (this one too).
       const railHtml = (scope === 'foryou' || scope === 'following') ? '<div class="story-tray js-story-tray ac-home-stories hidden" id="acHomeStories"></div>' : '';
       el.innerHTML = railHtml + bar + list.join('');
-      if (scope === 'foryou' || scope === 'following') { acLoadStoryTray(); Dwell.scan(); acVidParkScan(); acFeedSetupSentinel(); acAdObserve(el); } // stories + measure dwell + park videos + arm infinite scroll + track ad impressions
+      if (scope === 'foryou' || scope === 'following') {
+        acLoadStoryTray(); acFeedSetupSentinel(); // stories + arm infinite scroll (cheap)
+        // Defer the iterate-every-card observer setup (dwell / video-park / ad
+        // impressions) to the NEXT frame. Running them synchronously right after the
+        // feed paints kept the main thread busy through the first ~second — and the
+        // pull-to-refresh touchmove is non-passive, so the browser must wait for the
+        // main thread before the FIRST scroll can start (the "hitches once at the
+        // start, then smooth" stall). One frame later has no functional effect.
+        requestAnimationFrame(() => { if (scope !== _acFeedScope) return; try { Dwell.scan(); acVidParkScan(); acAdObserve(el); } catch (_) {} });
+      }
     } else if (scope === 'bookmarks') {
       el.innerHTML = bar + `<div class="ac-empty">${AC._bmkFolder ? 'No bookmarks in this folder yet.' : 'No bookmarks yet.<br/>Tap the bookmark on a post to save it here — only you can see them.'}</div>`;
     } else {
@@ -43697,24 +43706,36 @@ function ptrInit() {
     if (logo) logo.style.transform = '';
     list = null;
   };
-  win.addEventListener('touchstart', (e) => {
-    if (refreshing || e.touches.length !== 1) { pulling = false; return; }
-    list = ptrActiveList();
-    if (list && list.scrollTop <= 0) { startY = e.touches[0].clientY; dist = 0; pulling = true; }
-    else pulling = false;
-  }, { passive: true });
-  win.addEventListener('touchmove', (e) => {
-    if (!pulling || refreshing || !list) return;
+  // The pull-to-refresh touchmove MUST be non-passive (it preventDefaults to hold the
+  // native scroll while driving the pull) — but a non-passive touchmove on the scroll
+  // container makes the browser wait for the main thread before EVERY scroll can start.
+  // So attach it ONLY while a pull is actually armed (finger down at the very top), and
+  // detach it the instant the gesture proves to be a normal scroll or ends. When you're
+  // scrolled into the feed there's no non-passive listener at all, so scrolling is never
+  // gated by the main thread. (Fixes the first-scroll "stuck for a second" stall.)
+  const onMove = (e) => {
+    if (!pulling || refreshing || !list) { detachMove(); return; }
     const dy = e.touches[0].clientY - startY;
-    if (dy <= 0 || list.scrollTop > 0) { pulling = false; reset(); return; }
+    if (dy <= 0 || list.scrollTop > 0) { pulling = false; reset(); detachMove(); return; } // a normal scroll — stop gating it
     dist = Math.min(dy * 0.5, 110);
     e.preventDefault(); // hold the native scroll while we drive the pull
     place(dist, true);
     // Grow the mark toward full size as you pull (no rotation — the refresh itself
     // is acknowledged by the light sweep, not a spin).
     if (logo) logo.style.transform = 'scale(' + (0.6 + Math.min(dist / TH, 1) * 0.4).toFixed(2) + ')';
-  }, { passive: false });
+  };
+  let _moveOn = false;
+  const attachMove = () => { if (!_moveOn) { win.addEventListener('touchmove', onMove, { passive: false }); _moveOn = true; } };
+  const detachMove = () => { if (_moveOn) { win.removeEventListener('touchmove', onMove, { passive: false }); _moveOn = false; } };
+  win.addEventListener('touchstart', (e) => {
+    if (refreshing || e.touches.length !== 1) { pulling = false; detachMove(); return; }
+    list = ptrActiveList();
+    if (list && list.scrollTop <= 0) { startY = e.touches[0].clientY; dist = 0; pulling = true; attachMove(); }
+    else { pulling = false; detachMove(); }
+  }, { passive: true });
+  win.addEventListener('touchcancel', () => { detachMove(); if (!refreshing) { pulling = false; reset(); } }, { passive: true });
   win.addEventListener('touchend', async () => {
+    detachMove();
     if (!pulling || refreshing) return;
     pulling = false;
     if (dist < TH) { reset(); return; }
