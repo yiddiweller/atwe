@@ -2284,6 +2284,10 @@ body.light .tb-feedtab.active{color:var(--t1);}
   /* menu sits BEHIND the content; solid; it's simply covered by the rising content */
   body.feed-cover .topbar.tb-home, body.feed-cover .topbar.tb-chat{
     position:relative;z-index:4;border-bottom:none;background:var(--bg);}
+  /* The tabs get DARKER as you scroll (founder): --cov (0..1, set from scroll
+     position in JS) fades them toward black as the content rises to cover them.
+     This ONLY dims the tabs — it never touches the (native) cover or hairline. */
+  body.feed-cover #tbTabRow{opacity:calc(1 - var(--cov,0));}
   /* THE HAIRLINE — a sticky pseudo-element, so it's a native part of the scroll:
      welded to the content's top edge (zero lag), rides up with it, and STICKS at the
      top of the menu. top:calc(-1*tabrow-h) offsets the feed's own top padding so it
@@ -14850,7 +14854,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1108'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1109'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -43820,6 +43824,24 @@ function acRevealBars() {
   if (row) { row.style.opacity = ''; row.style.transform = ''; row.style.pointerEvents = ''; }
   const _tb = document.querySelector('.topbar'); if (_tb) _tb.style.marginTop = '';
 }
+// Tab-darkening only: fade the menu tabs toward black as the content covers them.
+// This is ISOLATED from the (native) content-cover + sticky hairline — it just sets
+// --cov (0..1 from scroll position), which CSS maps to the tab opacity. A short rAF
+// loop keeps it smooth during iOS MOMENTUM (opacity repaints fine, unlike a moved
+// background), so the tabs un-darken smoothly on the way back too. Stops when settled.
+let _darkRAF = 0, _darkEl = null, _darkLastY = -1, _darkStill = 0;
+function _setCov(st) {
+  const T = _tabRowHCache || 46;
+  document.body.style.setProperty('--cov', Math.min(1, Math.max(0, st / T)).toFixed(3));
+}
+function _darkLoop() {
+  const sc = _darkEl;
+  if (!sc || sc.classList.contains('hidden') || !(_appTab === 'home' || _appTab === 'chat')) { _darkRAF = 0; return; }
+  const st = sc.scrollTop;
+  if (st !== _darkLastY) { _darkLastY = st; _darkStill = 0; _setCov(st); }
+  else if (++_darkStill > 8) { _darkRAF = 0; return; }
+  _darkRAF = requestAnimationFrame(_darkLoop);
+}
 function _onListScroll(e) {
   const sc = e.target;
   if (!sc || !sc.classList || !sc.classList.contains('ac-list')) return;
@@ -43832,6 +43854,11 @@ function _onListScroll(e) {
     _barScroll = st;
     _barHide = Math.min(_barMax, Math.max(0, st));
     if (!_barRAF) _barRAF = requestAnimationFrame(_applyBars);  // nav/FAB hide only (cover is pure CSS)
+    if (_appTab === 'home' || _appTab === 'chat') {    // tab-darkening (+ momentum-smooth loop)
+      _setCov(st);
+      _darkEl = sc; _darkLastY = -1; _darkStill = 0;
+      if (!_darkRAF) _darkRAF = requestAnimationFrame(_darkLoop);
+    }
   }
   // Home feed: keep the darken/blur scrim off — the retracting bar + status strip
   // handle the top cleanly.
