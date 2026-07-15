@@ -14928,7 +14928,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1129'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1130'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -43932,7 +43932,7 @@ function acTabTouchSync() {
 // FINGER-TRACKED: the bar rides the scroll 1:1 — scroll up and it comes down with your
 // finger, stop and it stays, scroll down and it moves up until it's gone. Driven by the
 // accumulated scroll delta (transform only, never a layer-swap → can't freeze the scroll).
-let _revealHide = 1e9, _revealMax = 100, _rvLast = 0, _revealVis = false, _revealEng = false;
+let _revealHide = 1e9, _revealMax = 100, _rvLast = 0, _revealVis = false, _revealEng = false, _revealArmed = false, _revealLast = -1;
 function acRevealActive() {
   return (window.innerWidth || 999) <= 768
     && document.body.classList.contains('feed-cover')
@@ -43960,19 +43960,28 @@ function acRevealSyncActive() {                    // mirror which tab is active
   bar.querySelectorAll('.tb-feedtab').forEach((b) => b.classList.toggle('active', !!oc && b.getAttribute('onclick') === oc));
 }
 // Move the bar 1:1 with the scroll. dy>0 (down) pushes it up/away; dy<0 (up) brings it
-// down. Clamped between fully shown (0) and fully hidden (its own height). Near the top
-// it snaps hidden so the real menu shows.
+// down. Clamped between fully shown (0) and fully hidden (its own height).
+//   ARMING avoids the "double menu" + the abrupt vanish near the top: the reveal is armed
+//   once you've scrolled well into the feed (past REVEAL_AT) and disarmed only at the very
+//   top (<= HANDOFF). While armed it finger-tracks; scrolling all the way up leaves it
+//   fully shown, opaquely COVERING the real menu (so you never see two menus). At the very
+//   top it disarms and hides in one step, handing off to the real menu — which by then is
+//   aligned underneath, so it's seamless — and the original cover effect is ready again.
+//   Scrolling down from the top keeps it hidden (dy>0 holds it at fully-hidden).
 function _revealTrack(st) {
   const dy = st - _rvLast; _rvLast = st;
   if (!acRevealActive()) return;
   const bar = document.getElementById('tbRevealBar'); if (!bar) return;
-  const REVEAL_AT = (_tabRowHCache || 46) + 40;
-  const past = st > REVEAL_AT;
-  if (past && (bar.style.display === 'none' || !bar.firstChild)) acRevealBuild();
-  if (!past) _revealHide = _revealMax;              // near top: hidden, real menu shows
-  else _revealHide = Math.max(0, Math.min(_revealMax, _revealHide + dy));  // finger-track
-  bar.style.transform = 'translateY(' + (-Math.round(_revealHide)) + 'px)';
-  const vis = _revealHide < _revealMax - 1;         // meaningfully on-screen?
+  const REVEAL_AT = (_tabRowHCache || 46) + 40;   // "well into the feed" — real menu fully covered
+  const HANDOFF = 4;                              // the very top — hand off to the real menu
+  if (st <= HANDOFF) { _revealArmed = false; _revealHide = _revealMax; }
+  else if (st > REVEAL_AT) { _revealArmed = true; if (bar.style.display === 'none' || !bar.firstChild) acRevealBuild(); }
+  if (_revealArmed) _revealHide = Math.max(0, Math.min(_revealMax, _revealHide + dy)); // finger-track
+  else _revealHide = _revealMax;                  // disarmed → hidden
+  if (_revealHide === _revealLast) return;        // no change → no write
+  _revealLast = _revealHide;
+  bar.style.transform = 'translate3d(0,' + (-_revealHide) + 'px,0)'; // GPU + sub-pixel (no rounding) = smoother
+  const vis = _revealHide < _revealMax - 1;       // meaningfully on-screen?
   if (vis !== _revealVis) { _revealVis = vis; bar.style.pointerEvents = vis ? 'auto' : 'none'; }
   // Hide the feed's sticky cover-hairline while the reveal shows, so the two 1px lines
   // never stack into the "doubled"/frizzy line.
@@ -43980,9 +43989,9 @@ function _revealTrack(st) {
   if (feed && vis !== _revealEng) { _revealEng = vis; feed.classList.toggle('rv-eng', vis); }
 }
 function acRevealReset() {                          // on navigation / tab switch: hide instantly
-  _revealHide = _revealMax; _revealVis = false; _revealEng = false; _rvLast = 0;
+  _revealHide = _revealMax; _revealVis = false; _revealEng = false; _rvLast = 0; _revealArmed = false; _revealLast = -1;
   const bar = document.getElementById('tbRevealBar');
-  if (bar) { bar.style.transform = 'translateY(-100%)'; bar.style.pointerEvents = 'none'; if (!acRevealActive()) bar.style.display = 'none'; }
+  if (bar) { bar.style.transform = 'translate3d(0,-100%,0)'; bar.style.pointerEvents = 'none'; if (!acRevealActive()) bar.style.display = 'none'; }
   document.getElementById('acFeed')?.classList.remove('rv-eng');
   document.getElementById('acList')?.classList.remove('rv-eng');
 }
