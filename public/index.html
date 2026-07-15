@@ -14933,7 +14933,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1131'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1132'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -43881,6 +43881,20 @@ function _barEls() {
 // it never changes the look or the scroll code, so it cannot bring back the stutter or
 // the black bar. It goes inert (pointer-events:none) the instant you scroll.
 let _tabTouchBound = false;
+// Sync the visible tabs to the touch strip via requestAnimationFrame (every frame,
+// including iOS momentum) rather than the strip's 'scroll' event — iOS stops firing
+// scroll events during a flick, which froze the tabs mid-glide and made the horizontal
+// tab swipe feel choppy (~20fps). rAF keeps them locked to the strip at 60fps.
+let _ttRAF = 0, _ttLast = -1, _ttStill = 0;
+function _ttSyncLoop() {
+  const strip = document.getElementById('tbTabTouch'), t = acTabTouchTabsEl();
+  if (!strip || !t || strip.style.display === 'none') { _ttRAF = 0; return; }
+  const sl = strip.scrollLeft;
+  if (sl !== _ttLast) { _ttLast = sl; _ttStill = 0; t.scrollLeft = sl; }
+  else if (++_ttStill > 6) { _ttRAF = 0; return; }
+  _ttRAF = requestAnimationFrame(_ttSyncLoop);
+}
+function _ttSyncStart() { if (!_ttRAF) { _ttLast = -1; _ttStill = 0; _ttRAF = requestAnimationFrame(_ttSyncLoop); } }
 function acTabTouchTabsEl() {                    // the visible tab scroller for this world
   const f = document.getElementById('tbFeedTabs'), c = document.getElementById('tbChatTabs');
   if (c && !c.classList.contains('hidden')) return c;
@@ -43913,7 +43927,8 @@ function acTabTouchSync() {
   acTabTouchPE();
   if (!_tabTouchBound) {
     _tabTouchBound = true;
-    strip.addEventListener('scroll', () => { const t = acTabTouchTabsEl(); if (t) t.scrollLeft = strip.scrollLeft; }, { passive: true });
+    strip.addEventListener('scroll', _ttSyncStart, { passive: true });      // rAF-sync the tabs (smooth through momentum)
+    strip.addEventListener('touchstart', _ttSyncStart, { passive: true });
     strip.addEventListener('click', (e) => {    // forward the tap to the real ≡ / ＋ / tab / AI button
       // Map the tap to the button whose on-screen rect contains it — NOT elementFromPoint,
       // which returns the covering content (z5) that sits above the menu (z4), never the
