@@ -2342,6 +2342,11 @@ body.light .tb-feedtab.active{color:var(--t1);}
   /* While the reveal menu is on screen, hide the feed's sticky cover-hairline so the two
      1px lines never stack into a "doubled"/frizzy line. */
   body.feed-cover #acFeed.rv-eng::before, body.feed-cover #acList.rv-eng::before{opacity:0;}
+  /* Darken overlay on the reveal menu: its opacity is driven in JS by how far the bar has
+     moved up (0 = fully shown/normal, 1 = fully up/black), so the tab text darkens as it
+     retracts — mirroring the original menu's cover-darkening. GPU opacity only. */
+  #tbRevealBar .rv-darken{position:absolute;inset:0;background:var(--bg);opacity:0;
+    pointer-events:none;z-index:2;will-change:opacity;}
 }
 .tb-word{height:15px;width:auto;display:block;}
 .tb-profile{display:flex;align-items:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
@@ -14928,7 +14933,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1130'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1131'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -43932,7 +43937,7 @@ function acTabTouchSync() {
 // FINGER-TRACKED: the bar rides the scroll 1:1 — scroll up and it comes down with your
 // finger, stop and it stays, scroll down and it moves up until it's gone. Driven by the
 // accumulated scroll delta (transform only, never a layer-swap → can't freeze the scroll).
-let _revealHide = 1e9, _revealMax = 100, _rvLast = 0, _revealVis = false, _revealEng = false, _revealArmed = false, _revealLast = -1;
+let _revealHide = 1e9, _revealMax = 100, _rvLast = 0, _revealVis = false, _revealEng = false, _revealArmed = false, _revealLast = -1, _rvDarkenEl = null;
 function acRevealActive() {
   return (window.innerWidth || 999) <= 768
     && document.body.classList.contains('feed-cover')
@@ -43947,8 +43952,10 @@ function acRevealBuild() {
   const clone = row.cloneNode(true);              // a de-id'd copy of the tab row
   clone.removeAttribute('id'); clone.classList.remove('hidden');
   clone.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));   // no duplicate ids
-  const dk = clone.querySelector('.tb-darken'); if (dk) dk.remove();          // reveal shows tabs, never darkened
+  const dk = clone.querySelector('.tb-darken'); if (dk) dk.remove();          // drop the cloned overlay; we add our own below
   bar.innerHTML = ''; bar.appendChild(clone);
+  const dk2 = document.createElement('div'); dk2.className = 'rv-darken'; dk2.setAttribute('aria-hidden', 'true');
+  bar.appendChild(dk2); _rvDarkenEl = dk2;                                     // darkens the text as the bar moves up
   bar.style.display = 'block';
   _revealMax = bar.offsetHeight || 100;
   acRevealSyncActive();
@@ -43981,6 +43988,7 @@ function _revealTrack(st) {
   if (_revealHide === _revealLast) return;        // no change → no write
   _revealLast = _revealHide;
   bar.style.transform = 'translate3d(0,' + (-_revealHide) + 'px,0)'; // GPU + sub-pixel (no rounding) = smoother
+  if (_rvDarkenEl) _rvDarkenEl.style.opacity = (_revealHide / (_revealMax || 100)).toFixed(3); // text darkens as it moves up
   const vis = _revealHide < _revealMax - 1;       // meaningfully on-screen?
   if (vis !== _revealVis) { _revealVis = vis; bar.style.pointerEvents = vis ? 'auto' : 'none'; }
   // Hide the feed's sticky cover-hairline while the reveal shows, so the two 1px lines
