@@ -2291,9 +2291,13 @@ body.light .tb-feedtab.active{color:var(--t1);}
     position:relative;z-index:4;border-bottom:none;background:var(--bg);}
   body.feed-cover.tabs-live .topbar.tb-home, body.feed-cover.tabs-live .topbar.tb-chat{z-index:7;}
   /* The tabs get DARKER as you scroll (founder): --cov (0..1, set from scroll
-     position in JS) fades them toward black as the content rises to cover them.
-     This ONLY dims the tabs — it never touches the (native) cover or hairline. */
-  body.feed-cover #tbTabRow{opacity:calc(1 - var(--cov,0));}
+     position in JS). We darken with a COMPOSITED black overlay that just changes
+     opacity (GPU-cheap) instead of fading the tab TEXT's opacity — fading text
+     re-paints the glyphs every scroll frame, which is what made scrolling feel
+     stuck/janky. This only dims the tabs; it never touches the cover or hairline. */
+  body.feed-cover #tbTabRow{position:relative;}
+  body.feed-cover #tbTabRow::after{content:'';position:absolute;inset:0;background:var(--bg);
+    opacity:var(--cov,0);pointer-events:none;will-change:opacity;z-index:1;}
   /* THE HAIRLINE — a sticky pseudo-element, so it's a native part of the scroll:
      welded to the content's top edge (zero lag), rides up with it, and STICKS at the
      top of the menu. top:calc(-1*tabrow-h) offsets the feed's own top padding so it
@@ -14860,7 +14864,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1112'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1113'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
