@@ -14794,7 +14794,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1098'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1099'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -43690,29 +43690,37 @@ function _applyBars() {
   if (!tb) return;
   const max = _barMax || tb.offsetHeight || 100;
   const p = max ? Math.min(1, Math.max(0, _barHide / max)) : 0;
-  // Home + Beam: the COVER (founder's design, X-style end state). The bar itself
-  // NEVER moves — the content screen (with its full-width top hairline) rides UP
-  // over it 1:1 with the scroll, covering it, while the tabs dim in place
-  // (scroll-linked — stop scrolling and the darkening stops). Fully covered:
-  // stiff black status strip + hairline, posts clipping cleanly beneath it.
+  // Home + Beam: the COVER, in the founder's explicit THREE-STAGE choreography.
+  // The top bar NEVER moves; the content screen (with its full-width top hairline)
+  // rides up over it. Driven by scrollTop so it's a slow, perceptible reveal:
+  //   A) rise to HALFWAY  — the hairline lifts to the tab baseline while the tabs
+  //      begin to darken (they're mostly dim by the time it gets there, so the
+  //      cover never cuts through bright text).
+  //   B) HOLD at halfway  — the hairline pauses at the tab baseline while the tabs
+  //      finish going fully dark ("blocks halfway till it gets darker").
+  //   C) rise the REST     — once dark, the hairline climbs over the now-invisible
+  //      tabs to the status strip and LOCKS there ("goes up higher and stays").
+  // Scrolling back to the top plays it in reverse.
   const retractable = (_appTab === 'home' || _appTab === 'chat');
   const row = document.getElementById('tbTabRow');
   const coverScreen = document.getElementById(_appTab === 'home' ? 'acHomeScreen' : 'acListScreen');
   if (retractable) {
     const scrim = document.getElementById('statusScrim');
     const scrimH = scrim ? scrim.offsetHeight : 0;
-    // The cover travels the bar's height minus the status strip, so the screen's
-    // top edge (the hairline) comes to rest exactly at the strip's bottom edge.
-    const travel = Math.max(24, max - scrimH);
-    const h = Math.min(travel, Math.max(0, _barScroll));
-    const p2 = travel ? h / travel : 0;
+    const H = Math.max(24, max - scrimH);   // px the content rises to fully cover the tab row
+    const half = H * 0.5;
+    const s = Math.max(0, _barScroll);
+    // Stage thresholds in scrollTop px — generous so the motion is clearly visible.
+    const A = 48, B = 104, C = 168;
+    let cover, op;
+    if (s <= A)      { const t = s / A;             cover = t * half;               op = 1 - 0.62 * t; }  // rise to half, darken to ~0.38
+    else if (s <= B) { const t = (s - A) / (B - A); cover = half;                    op = 0.38 * (1 - t); } // hold, finish darkening to 0
+    else             { const t = Math.min(1, (s - B) / (C - B)); cover = half + t * half; op = 0; }        // rise the rest, stay dark
     tb.style.marginTop = '';                                 // the bar stays put — never slides
-    if (coverScreen) coverScreen.style.marginTop = h > 0.5 ? (-h).toFixed(1) + 'px' : '';
+    if (coverScreen) coverScreen.style.marginTop = cover > 0.5 ? (-cover).toFixed(1) + 'px' : '';
     if (row && !row.classList.contains('hidden')) {
-      // Darker 1:1 with the scroll; fully dark just before the cover passes the
-      // glyphs, so text is never seen half-occluded at full brightness.
-      row.style.opacity = String(Math.max(0, 1 - p2 * 1.25));
-      row.style.pointerEvents = p2 > 0.5 ? 'none' : '';
+      row.style.opacity = op.toFixed(3);
+      row.style.pointerEvents = op < 0.5 ? 'none' : '';
     }
   } else {
     tb.style.marginTop = '';
