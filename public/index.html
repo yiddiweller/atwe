@@ -2281,21 +2281,15 @@ body.light .tb-feedtab.active{color:var(--t1);}
      including during momentum, so the cover reverses smoothly. */
   body.feed-cover #acFeed, body.feed-cover #acList{padding-top:var(--tabrow-h);background:transparent;}
   body.feed-cover #acFeed > *, body.feed-cover #acList > *{background-color:var(--bg);}
-  /* The whole content STACK sits OVER the menu (so content can rise + cover it),
-     which was swallowing taps/swipes on the tab bar. Make the stack click-through so
-     the EMPTY top strip passes touches to the menu behind; the actual interactive
-     bits (posts, list rows, FAB, new-posts pill, beam panes) get pointer-events back.
-     Scrolling still works because the touch lands on an interactive child. */
-  body.feed-cover #socialWrap, body.feed-cover #socialWrap .ac-win,
-  body.feed-cover #acHomeScreen, body.feed-cover #acListScreen,
-  body.feed-cover #acFeed, body.feed-cover #acList{pointer-events:none;}
-  body.feed-cover #acFeed > *, body.feed-cover #acList > *,
-  body.feed-cover #acCallList2 > *, body.feed-cover #acContactsList2 > *,
-  body.feed-cover .ac-fab, body.feed-cover #acNewPosts,
-  body.feed-cover #acLiveStrip, body.feed-cover #acChatSearchBar{pointer-events:auto;}
-  /* menu sits BEHIND the content; solid; it's simply covered by the rising content */
+  /* menu sits BEHIND the content; solid; it's simply covered by the rising content.
+     BUT at the very top (body.tabs-live, scrollTop≈0 — where you actually use the
+     tabs) the bar is lifted ABOVE the content so it receives taps + horizontal
+     swipes; the moment you scroll, it drops back behind so the content covers it.
+     The feed itself stays fully interactive (never pointer-events:none), so touch
+     scrolling always works. */
   body.feed-cover .topbar.tb-home, body.feed-cover .topbar.tb-chat{
     position:relative;z-index:4;border-bottom:none;background:var(--bg);}
+  body.feed-cover.tabs-live .topbar.tb-home, body.feed-cover.tabs-live .topbar.tb-chat{z-index:7;}
   /* The tabs get DARKER as you scroll (founder): --cov (0..1, set from scroll
      position in JS) fades them toward black as the content rises to cover them.
      This ONLY dims the tabs — it never touches the (native) cover or hairline. */
@@ -14866,7 +14860,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1111'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1112'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24416,6 +24410,7 @@ function acShow(screenId, tab) {
   const _cover = (screenId === 'acHomeScreen' || screenId === 'acListScreen');
   if (_cover) { if (typeof _tabRowH === 'function') _tabRowH(); document.body.style.setProperty('--cov', '0'); }
   document.body.classList.toggle('feed-cover', _cover);
+  document.body.classList.toggle('tabs-live', _cover);   // landing at the top → tabs interactive
   // Desktop Beam two-pane: track whether a conversation is open so the thread pane
   // shows the chat (has-chat) or the "Start a conversation" empty pane (no chat).
   document.body.classList.toggle('beam-has-chat', screenId === 'acThreadScreen');
@@ -43845,6 +43840,9 @@ let _darkRAF = 0, _darkEl = null, _darkLastY = -1, _darkStill = 0;
 function _setCov(st) {
   const T = (_tabRowHCache || 46) * 0.55;   // fade the tabs to black over the FIRST ~55% of the cover (darker sooner)
   document.body.style.setProperty('--cov', Math.min(1, Math.max(0, st / T)).toFixed(3));
+  // At the very top the bar is lifted above the content so the tabs take taps +
+  // horizontal swipes; the instant you scroll it drops back behind the content.
+  document.body.classList.toggle('tabs-live', st <= 4);
 }
 function _darkLoop() {
   const sc = _darkEl;
