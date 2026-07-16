@@ -8639,7 +8639,7 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
    page. Using just a light translucent veil lets the bar's own glass — and the
    blurred content behind it — show straight through, so the pill reads as glass. */
 .bn-indicator{position:absolute;left:0;top:0;border-radius:999px;background:rgba(255,255,255,.14);pointer-events:none;z-index:0;opacity:0;
-  transition:transform var(--t-slow) cubic-bezier(.3,1.2,.4,1), width var(--t-base) var(--ease), height var(--t-base) var(--ease), opacity var(--t-base) var(--ease);}
+  transition:transform var(--t-slow) ease-in-out, width var(--t-base) var(--ease), height var(--t-base) var(--ease), opacity var(--t-base) var(--ease);}
 .bn-tab{flex:1;height:50px;background:none;border:none;cursor:pointer;position:relative;z-index:1;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#fff;-webkit-tap-highlight-color:transparent;}
 /* Icon-only nav: labels removed (matches the native app). The single icon
@@ -8697,10 +8697,10 @@ body.nav-morph.nav-ball .bottom-nav{left:calc(100% - 58px - var(--nav-inset));
   -webkit-backdrop-filter:blur(30px) saturate(150%);backdrop-filter:blur(30px) saturate(150%);
   border-color:transparent;box-shadow:0 12px 34px rgba(0,0,0,.42);}
 body.nav-morph .bn-tab{transition:opacity var(--t-base) ease;}
-/* The grey pill GLIDES from the old tab to the new one on a tab switch — fast, smooth,
-   with a tiny spring settle — instead of a stiff jump. (Opacity still transitions so it
-   fades cleanly during the scroll-collapse morph.) */
-body.nav-morph .bn-indicator{transition:transform var(--t-base) cubic-bezier(.3,1.2,.4,1), width var(--t-base) var(--ease), height var(--t-base) var(--ease), opacity var(--t-base) ease;}
+/* The grey pill TRAVELS smoothly from the old tab to the new one — a clean ease-in-out
+   glide (accelerate gently, cruise, decelerate gently) with NO spring/bounce at the end.
+   (Opacity still transitions so it fades cleanly during the scroll-collapse morph.) */
+body.nav-morph .bn-indicator{transition:transform var(--t-slow) ease-in-out, width var(--t-base) var(--ease), height var(--t-base) var(--ease), opacity var(--t-base) ease;}
 body.nav-morph.nav-ball .bn-tab,
 body.nav-morph.nav-ball .bn-indicator{opacity:0;pointer-events:none;}
 body.nav-morph.nav-ball .bn-plus{opacity:1;pointer-events:auto;}
@@ -15003,7 +15003,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1149'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1150'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
