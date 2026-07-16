@@ -2320,16 +2320,16 @@ body.light .tb-feedtab.active{color:var(--t1);}
   body.feed-cover #acFeed::before, body.feed-cover #acList::before{
     content:'';display:block;position:sticky;top:calc(-1 * var(--tabrow-h));z-index:10;
     height:1px;margin-bottom:-1px;background:var(--b2);pointer-events:none;}
-  /* ADDITIVE tab-row layer (see the matching HTML/JS). An OPAQUE copy of the real tab row
-     laid exactly over it at the very top. z-index 8 = above the covering content (z5). The
-     user scrolls THIS copy's own tab scroller directly (native, 60fps) — the real tabs
-     underneath aren't puppeted, so the horizontal swipe is smooth. It FADES OUT the instant
-     you scroll down (opacity → 0, JS-driven, mirroring the cover-darken), so the loved
-     content-covers-the-menu effect shows through underneath; pointer-events only while at
-     the very top. Purely additive: the base menu (z4) and the cover are untouched. */
-  #tbTabTouch{position:fixed;z-index:8;overflow:hidden;background:var(--bg);
-    pointer-events:none;display:none;opacity:1;will-change:opacity;}
-  #tbTabTouch > *{margin:0;}
+  /* ADDITIVE tab-row touch strip (see the matching HTML/JS). Transparent, sits over the
+     tab row, forwards taps + horizontal drags to the real tabs. z-index 8 = above the
+     covering content (z5) so it actually receives the touches; pointer-events default
+     none (JS turns it on only while at the very top). overflow-x makes it a horizontal
+     scroller; touch-action:pan-x lets vertical drags fall through as normal page intent. */
+  #tbTabTouch{position:fixed;z-index:8;overflow-x:auto;overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;touch-action:pan-x;background:transparent;
+    pointer-events:none;display:none;scrollbar-width:none;}
+  #tbTabTouch::-webkit-scrollbar{display:none;}
+  #tbTabTouchInner{height:1px;}
   /* Scroll-up reveal bar — a floating copy of the menu parked off the top. Slides in on
      scroll-up (adds .shown), out on scroll-down/at-top. Transform-only slide (the safe
      method the nav uses — no layer-swap), so it can't freeze the scroll. The id selector
@@ -2349,15 +2349,6 @@ body.light .tb-feedtab.active{color:var(--t1);}
      retracts — mirroring the original menu's cover-darkening. GPU opacity only. */
   #tbRevealBar .rv-darken{position:absolute;inset:0;background:var(--bg);opacity:0;
     pointer-events:none;z-index:2;will-change:opacity;}
-}
-/* The tab copy's buttons are now DIRECTLY tapped (native scroll), and iOS latches a sticky
-   :hover on the last-tapped element (no pointer to move away), so a tapped tab stayed lit
-   white after release — e.g. "Circles" glowing when "For You" is active. Neutralize the tab
-   hover on touch devices only (desktop keeps its hover feedback); never the active tab,
-   which must stay white. The #id gives this higher specificity than the base :hover rules. */
-@media (hover: none) {
-  #tbTabTouch .tb-feedtab:not(.active):hover{background:none;color:var(--t2);}
-  #tbTabTouch .tb-feedtab-ai:hover .tb-aidots{fill:var(--t2);}
 }
 .tb-word{height:15px;width:auto;display:block;}
 .tb-profile{display:flex;align-items:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
@@ -10442,7 +10433,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
          look or the scroll — purely additive, so it can't reintroduce the stutter/black
          bar. It's pointer-events:none the instant you scroll, so it never blocks the feed.
          Positioned/sized to the real #tbTabRow in acTabTouchSync(). -->
-    <div id="tbTabTouch" aria-hidden="true"></div>
+    <div id="tbTabTouch" aria-hidden="true"><div id="tbTabTouchInner"></div></div>
 
     <!-- ADDITIVE scroll-up reveal bar (Home/Beam). A floating COPY of the menu, parked
          just off the top of the screen. Scroll UP mid-feed → it SLIDES down into view
@@ -14944,7 +14935,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1135'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1133'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -43886,14 +43877,26 @@ function _barEls() {
   return { tb: document.querySelector('.topbar'), nav: document.getElementById('bottomNav'), fab: document.querySelector('.ac-fab') };
 }
 // ── Additive tab-row touch layer (Home/Beam cover) ───────────────────────────
-// In the loved cover look the real menu is BEHIND the content (z4), so the covering feed
-// would steal taps + horizontal swipes meant for the tabs. #tbTabTouch is an OPAQUE COPY
-// of the tab row laid exactly over it (z8, above the content) at the very top. The user
-// scrolls THIS copy's own tab scroller directly — native, 60fps, no puppet-sync of a
-// separate visible element (that main-thread↔compositor puppeting was the ~20fps choppy
-// horizontal swipe). It FADES OUT the instant you scroll down so the loved cover effect
-// shows through underneath. Purely additive — the base menu/look/scroll are untouched.
-let _tabTouchBound = false, _ttCloneTabs = null, _ttCloneWorld = null;
+// In the loved cover look the menu is BEHIND the content (z4), so the covering feed
+// steals taps + horizontal swipes meant for the tabs. #tbTabTouch is a transparent
+// strip laid OVER the tab row that forwards them to the real tabs. Purely additive —
+// it never changes the look or the scroll code, so it cannot bring back the stutter or
+// the black bar. It goes inert (pointer-events:none) the instant you scroll.
+let _tabTouchBound = false;
+// Sync the visible tabs to the touch strip via requestAnimationFrame (every frame,
+// including iOS momentum) rather than the strip's 'scroll' event — iOS stops firing
+// scroll events during a flick, which froze the tabs mid-glide and made the horizontal
+// tab swipe feel choppy (~20fps). rAF keeps them locked to the strip at 60fps.
+let _ttRAF = 0, _ttLast = -1, _ttStill = 0;
+function _ttSyncLoop() {
+  const strip = document.getElementById('tbTabTouch'), t = acTabTouchTabsEl();
+  if (!strip || !t || strip.style.display === 'none') { _ttRAF = 0; return; }
+  const sl = strip.scrollLeft;
+  if (sl !== _ttLast) { _ttLast = sl; _ttStill = 0; t.scrollLeft = sl; }
+  else if (++_ttStill > 6) { _ttRAF = 0; return; }
+  _ttRAF = requestAnimationFrame(_ttSyncLoop);
+}
+function _ttSyncStart() { if (!_ttRAF) { _ttLast = -1; _ttStill = 0; _ttRAF = requestAnimationFrame(_ttSyncLoop); } }
 function acTabTouchTabsEl() {                    // the visible tab scroller for this world
   const f = document.getElementById('tbFeedTabs'), c = document.getElementById('tbChatTabs');
   if (c && !c.classList.contains('hidden')) return c;
@@ -43905,73 +43908,41 @@ function acTabTouchActive() {
   return document.body.classList.contains('feed-cover') && row && !row.classList.contains('hidden')
     && (_appTab === 'home' || _appTab === 'chat');
 }
-// Build (or rebuild) the opaque tab-row copy inside #tbTabTouch. The clone's own tab
-// scroller (the de-id'd #tbFeedTabs / #tbChatTabs) is what the finger scrolls natively;
-// its buttons keep their real inline onclick, so taps switch tab/open menu directly.
-function acTabTouchBuild() {
-  const strip = document.getElementById('tbTabTouch'), row = document.getElementById('tbTabRow'), tb = document.querySelector('.topbar');
-  if (!strip || !row || !tb) return;
-  const clone = row.cloneNode(true);
-  clone.removeAttribute('id'); clone.classList.remove('hidden');
-  const dk = clone.querySelector('.tb-darken'); if (dk) dk.remove();      // no cover-darken on the copy
-  clone.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id')); // no duplicate ids
-  // mirror the topbar padding so the copy lines up glyph-for-glyph with the real row
-  const cs = getComputedStyle(tb);
-  clone.style.paddingLeft = cs.paddingLeft; clone.style.paddingRight = cs.paddingRight;
-  clone.style.width = '100%'; clone.style.boxSizing = 'border-box';
-  strip.innerHTML = ''; strip.appendChild(clone);
-  _ttCloneWorld = _appTab;
-  // the copy's own scroller for THIS world (the clone carries both worlds' tab sets, one
-  // hidden) — pick the visible one so a Beam swipe scrolls the chat tabs, not the feed's.
-  const scrollers = [...clone.querySelectorAll('.tb-feedtabs')];
-  _ttCloneTabs = scrollers.find((el) => !el.classList.contains('hidden')) || scrollers[0] || clone;
-  // Hand-off: as the copy is scrolled, keep the REAL tab scroller aligned so that when the
-  // copy fades out the underlying menu (and the scroll-up reveal bar) is at the same spot.
-  _ttCloneTabs.addEventListener('scroll', () => {
-    const real = acTabTouchTabsEl(); if (real) real.scrollLeft = _ttCloneTabs.scrollLeft;
-  }, { passive: true });
-  acTabTouchSyncActive();
-}
-function acTabTouchSyncActive() {                // mirror the active tab + h-scroll position
-  const strip = document.getElementById('tbTabTouch'); if (!strip || !_ttCloneTabs) return;
-  const real = acTabTouchTabsEl(); if (!real) return;
-  const active = real.querySelector('.tb-feedtab.active');
-  const oc = active ? active.getAttribute('onclick') : null;
-  strip.querySelectorAll('.tb-feedtab').forEach((b) => b.classList.toggle('active', !!oc && b.getAttribute('onclick') === oc));
-  _ttCloneTabs.scrollLeft = real.scrollLeft;
-}
-// Opacity + tappability by scroll position: opaque + tappable at the very top, fading out
-// (mirroring the cover-darken) as content rises to cover the menu, gone once scrolled in.
-function acTabTouchPE() {
+function acTabTouchPE() {                        // active only at the very top; inert once scrolled
   const strip = document.getElementById('tbTabTouch'); if (!strip || strip.style.display === 'none') return;
   const sc = document.getElementById(_appTab === 'chat' ? 'acList' : 'acFeed');
-  const st = sc ? sc.scrollTop : 0;
-  // HARD binary hand-off (no blend): at rest (st≤1) the copy is pixel-identical to and
-  // aligned with the real menu, so showing it is invisible; the instant you scroll it's
-  // fully gone and the real menu's own cover-morph takes over. A partial-opacity fade can't
-  // be used here — the real menu scroll-MORPHS to a different layout (≡/＋ slide in) the
-  // moment you move, so any half-faded copy would double-image against it. Binary = never a
-  // ghost, and the loved cover effect shows through cleanly.
-  strip.style.opacity = (st <= 1) ? '1' : '0';
-  strip.style.pointerEvents = (st <= 2) ? 'auto' : 'none';
+  strip.style.pointerEvents = (!sc || sc.scrollTop <= 6) ? 'auto' : 'none';
 }
 function acTabTouchSync() {
   const strip = document.getElementById('tbTabTouch'); if (!strip) return;
   if (!acTabTouchActive()) { strip.style.display = 'none'; return; }
-  const row = document.getElementById('tbTabRow');
+  const row = document.getElementById('tbTabRow'); const tabs = acTabTouchTabsEl();
   const r = row.getBoundingClientRect();
   if (!r.width || !r.height) { strip.style.display = 'none'; return; }
-  if (!strip.firstChild || _ttCloneWorld !== _appTab) acTabTouchBuild(); // (re)build when the world's tab row differs
-  else acTabTouchSyncActive();
   strip.style.display = 'block';
   strip.style.left = r.left + 'px'; strip.style.top = r.top + 'px';
   strip.style.width = r.width + 'px'; strip.style.height = r.height + 'px';
+  const inner = document.getElementById('tbTabTouchInner');
+  const extra = tabs ? Math.max(0, tabs.scrollWidth - tabs.clientWidth) : 0; // match the tabs' scroll range 1:1
+  if (inner) inner.style.width = (r.width + extra) + 'px';
+  if (tabs) strip.scrollLeft = tabs.scrollLeft;
   acTabTouchPE();
   if (!_tabTouchBound) {
     _tabTouchBound = true;
-    // After a tab tap, re-mirror which tab is active (the copy's own onclick ran first).
-    // Bound once on the persistent container — the innerHTML is what gets rebuilt.
-    strip.addEventListener('click', () => { setTimeout(acTabTouchSyncActive, 0); });
+    strip.addEventListener('scroll', _ttSyncStart, { passive: true });      // rAF-sync the tabs (smooth through momentum)
+    strip.addEventListener('touchstart', _ttSyncStart, { passive: true });
+    strip.addEventListener('click', (e) => {    // forward the tap to the real ≡ / ＋ / tab / AI button
+      // Map the tap to the button whose on-screen rect contains it — NOT elementFromPoint,
+      // which returns the covering content (z5) that sits above the menu (z4), never the
+      // tab. Geometry mapping works regardless of layer order.
+      const row2 = document.getElementById('tbTabRow'); if (!row2) return;
+      const x = e.clientX, y = e.clientY;
+      const btns = row2.querySelectorAll('button, a');
+      for (let i = 0; i < btns.length; i++) {
+        const b = btns[i].getBoundingClientRect();
+        if (b.width && x >= b.left && x <= b.right && y >= b.top && y <= b.bottom) { btns[i].click(); return; }
+      }
+    });
     window.addEventListener('resize', () => { try { acTabTouchSync(); } catch (_) {} }, { passive: true });
   }
 }
