@@ -8691,6 +8691,9 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
    transition eases it smoothly back to 1. A quick tap never reaches this — it just plays
    the full pop above. */
 .bottom-nav.bn-hold{scale:1.03;}
+/* While the pill is being finger-dragged along the bar it glows a touch brighter for a
+   tactile "liquid" feel (and the bar isn't zoomed during a drag — it's a distinct gesture). */
+.bottom-nav.bn-dragging .bn-indicator{background:rgba(255,255,255,.2);}
 .bn-dot{position:absolute;top:5px;right:9px;width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid rgba(64,64,68,.95);z-index:2;}
 .bn-dot.hidden{display:none;}
 
@@ -15036,7 +15039,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1170'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1171'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -21538,10 +21541,12 @@ function mountSocial() {
 
 // The app's primary navigation: home / chat / call / contacts / ai.
 // Slide the Liquid-Glass pill to the active bottom-nav tab.
+let _navDragging = false; // true while the grey pill is being finger-dragged along the bar
 function syncNavPill() {
   const nav = document.getElementById('bottomNav');
   const ind = document.getElementById('bnIndicator');
   if (!nav || !ind) return;
+  if (_navDragging) return; // don't fight the live finger-drag position
   const active = nav.querySelector('.bn-tab.active');
   // NB: a position:fixed nav always reports offsetParent === null, so check
   // actual layout size instead (0 on desktop where the bar is display:none).
@@ -44541,14 +44546,73 @@ function bindNavBubble() {
   const clearHold = () => { if (_holdTimer) { clearTimeout(_holdTimer); _holdTimer = null; } };
   const barPop = () => { nav.classList.remove('bn-hold', 'bn-barpop'); void nav.offsetWidth; nav.classList.add('bn-barpop'); };
   const barRelease = () => { clearHold(); nav.classList.remove('bn-hold'); }; // held → settles via transition
+
+  // --- Drag the grey pill along the bar (Apple liquid-glass) ---------------------------
+  // A tap/hold is unchanged (below). Once the finger clearly moves SIDEWAYS (>10px, and
+  // more horizontal than vertical), we switch into a drag: the pill follows the finger in
+  // real time, and on release it snaps to (and opens) whichever tab the finger is over.
+  // Vertical gestures and plain taps never enter this path, so nothing else is affected.
+  let press = null;              // {id, x0, y0, dragging, target}
+  let suppressClick = false;     // eat the click that would otherwise fire after a drag
+  const ind = () => document.getElementById('bnIndicator');
+  const tabName = (t) => (t && t.id || '').replace('bnav-', '');
+  const dragMoveTo = (clientX) => {
+    const el = ind(); if (!el || !press) return;
+    const tabs = [...nav.querySelectorAll('.bn-tab')]; if (!tabs.length) return;
+    const centers = tabs.map(t => { const r = t.getBoundingClientRect(); return r.left + r.width / 2; });
+    const offs = tabs.map(t => t.offsetLeft);
+    let left;
+    if (clientX <= centers[0]) left = offs[0];
+    else if (clientX >= centers[centers.length - 1]) left = offs[offs.length - 1];
+    else { for (let i = 0; i < centers.length - 1; i++) { if (clientX >= centers[i] && clientX <= centers[i + 1]) { const t = (clientX - centers[i]) / (centers[i + 1] - centers[i]); left = offs[i] + t * (offs[i + 1] - offs[i]); break; } } }
+    // nearest tab = snap target on release
+    let best = Infinity, ni = 0; centers.forEach((c, i) => { const d = Math.abs(clientX - c); if (d < best) { best = d; ni = i; } });
+    press.target = tabs[ni];
+    const active = nav.querySelector('.bn-tab.active') || tabs[0];
+    el.style.transition = 'none';
+    el.style.width = active.offsetWidth + 'px';
+    el.style.height = active.offsetHeight + 'px';
+    el.style.transform = 'translate(' + left + 'px,' + active.offsetTop + 'px)';
+    el.style.opacity = '1';
+  };
+  const endPress = (navigate) => {
+    barRelease();
+    if (press && press.dragging) {
+      nav.classList.remove('bn-dragging');
+      _navDragging = false;
+      suppressClick = true;
+      const el = ind(); if (el) el.style.transition = '';
+      if (navigate && press.target) { try { appTab(tabName(press.target)); } catch (err) {} }
+      requestAnimationFrame(syncNavPill); // snap the pill to the (now active) tab
+      setTimeout(() => { suppressClick = false; }, 400);
+    }
+    press = null;
+  };
+
   nav.addEventListener('pointerdown', (e) => {
     const btn = e.target.closest('.bn-tab'); if (!btn) return;
+    suppressClick = false;
+    press = { id: e.pointerId, x0: e.clientX, y0: e.clientY, dragging: false, target: null };
     pop(btn); barPop(); clearHold();
     _holdTimer = setTimeout(() => { _holdTimer = null; nav.classList.add('bn-hold'); nav.classList.remove('bn-barpop'); }, 160);
   }, { passive: true });
-  nav.addEventListener('pointerup', barRelease, { passive: true });
-  nav.addEventListener('pointercancel', barRelease, { passive: true });
-  nav.addEventListener('pointerleave', barRelease, { passive: true });
+  nav.addEventListener('pointermove', (e) => {
+    if (!press || e.pointerId !== press.id) return;
+    if (!press.dragging) {
+      const dx = e.clientX - press.x0, dy = e.clientY - press.y0;
+      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+        press.dragging = true; _navDragging = true;
+        clearHold(); nav.classList.remove('bn-hold', 'bn-barpop'); nav.classList.add('bn-dragging');
+        try { nav.setPointerCapture(e.pointerId); } catch (err) {}
+      } else return;
+    }
+    dragMoveTo(e.clientX);
+  }, { passive: true });
+  nav.addEventListener('pointerup', () => endPress(true), { passive: true });
+  nav.addEventListener('pointercancel', () => endPress(false), { passive: true });
+  nav.addEventListener('pointerleave', () => { if (press && !press.dragging) { barRelease(); press = null; } }, { passive: true });
+  // Capture-phase: swallow the post-drag click so it can't re-navigate to the start tab.
+  nav.addEventListener('click', (e) => { if (suppressClick) { e.preventDefault(); e.stopPropagation(); suppressClick = false; } }, true);
   nav.addEventListener('animationend', (e) => {
     if (e.animationName === 'bnPop' && e.target.classList) e.target.classList.remove('bn-pop');
     else if (e.animationName === 'bnBarPop' && e.target === nav) nav.classList.remove('bn-barpop');
