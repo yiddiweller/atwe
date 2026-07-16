@@ -8681,6 +8681,13 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
    scroll-hide) instead of overwriting it, so pill travel + scroll choreography are
    untouched. Kept small (1.03) because the bar is wide. */
 .bottom-nav.bn-hold{scale:1.03;transition:scale var(--t-fast) var(--ease);}
+/* On RELEASE, always play the full zoom-back as a fixed-length eased animation —
+   NOT just a transition from wherever the hold happened to be. On a quick tap the
+   hold barely grew, so a plain transition had almost no distance to cover and read
+   as a blink; forcing the animation to start at the full 1.03 guarantees the same
+   smooth, complete settle every time, fast tap or long hold alike. */
+@keyframes bnBarRelease{0%{scale:1.03;}100%{scale:1;}}
+.bottom-nav.bn-release{animation:bnBarRelease .44s var(--ease);}
 .bn-dot{position:absolute;top:5px;right:9px;width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid rgba(64,64,68,.95);z-index:2;}
 .bn-dot.hidden{display:none;}
 
@@ -15023,7 +15030,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1157'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1158'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -44519,15 +44526,24 @@ function bindNavBubble() {
     const ic = btn.querySelector('.bn-icon, svg, .bn-logo'); if (!ic) return;
     ic.classList.remove('bn-pop'); void ic.offsetWidth; ic.classList.add('bn-pop');
   };
-  // The whole bar (grey pill included) tracks the finger: it zooms up while held and
-  // eases back down on release over a slower, softer curve (see .bn-hold / the base
-  // scale transition). Unlike the fixed-length icon pop, holding longer holds the zoom.
-  const barRelease = () => nav.classList.remove('bn-hold');
-  nav.addEventListener('pointerdown', (e) => { const btn = e.target.closest('.bn-tab'); if (btn) { pop(btn); nav.classList.add('bn-hold'); } }, { passive: true });
+  // The whole bar (grey pill included) tracks the finger: it zooms up while held
+  // (.bn-hold), and on release plays a full, fixed-length eased zoom-back (.bn-release)
+  // so even the quickest tap gets the same smooth settle instead of a blink. Unlike the
+  // fixed-length icon pop, holding longer holds the zoom.
+  let _barHeld = false;
+  const barRelease = () => {
+    if (!_barHeld) return; _barHeld = false;
+    nav.classList.remove('bn-hold');
+    nav.classList.remove('bn-release'); void nav.offsetWidth; nav.classList.add('bn-release');
+  };
+  nav.addEventListener('pointerdown', (e) => { const btn = e.target.closest('.bn-tab'); if (btn) { pop(btn); _barHeld = true; nav.classList.remove('bn-release'); nav.classList.add('bn-hold'); } }, { passive: true });
   nav.addEventListener('pointerup', barRelease, { passive: true });
   nav.addEventListener('pointercancel', barRelease, { passive: true });
   nav.addEventListener('pointerleave', barRelease, { passive: true });
-  nav.addEventListener('animationend', (e) => { if (e.animationName === 'bnPop' && e.target.classList) e.target.classList.remove('bn-pop'); });
+  nav.addEventListener('animationend', (e) => {
+    if (e.animationName === 'bnPop' && e.target.classList) e.target.classList.remove('bn-pop');
+    else if (e.animationName === 'bnBarRelease' && e.target === nav) nav.classList.remove('bn-release');
+  });
 }
 // Make non-native clickable menu rows keyboard-operable (focusable + Enter/Space).
 function a11yInit() {
