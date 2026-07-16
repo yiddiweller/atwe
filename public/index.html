@@ -15039,7 +15039,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1172'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1173'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -44555,7 +44555,8 @@ function bindNavBubble() {
   // Once grabbed, the pill follows the finger; on release it snaps to + opens the tab
   // under your finger. Vertical gestures and quick taps never enter this path.
   let press = null;              // {id, x0, y0, dragging, pickedUp, tab, target}
-  let suppressClick = false;     // eat the click that would otherwise fire after a drag
+  let suppressTab = null;        // after a drag, eat ONLY the stray click on the START tab
+                                 // (never a deliberate tap on another icon)
   const ind = () => document.getElementById('bnIndicator');
   const tabName = (t) => (t && t.id || '').replace('bnav-', '');
   // Move the pill onto a whole tab (the "pickup"), optionally with a quick glide.
@@ -44591,21 +44592,23 @@ function bindNavBubble() {
     if (press && (press.dragging || press.pickedUp)) {
       nav.classList.remove('bn-dragging');
       _navDragging = false;
-      suppressClick = true;
       const el = ind(); if (el) el.style.transition = '';
       // Dragged → the tab under the finger; only picked-up (held, no slide) → the pressed tab.
       const tgt = press.target || press.tab;
       const curActive = nav.querySelector('.bn-tab.active');
       if (navigate && tgt && tgt !== curActive) { try { appTab(tabName(tgt)); } catch (err) {} }
       requestAnimationFrame(syncNavPill); // snap the pill to the (now active) tab
-      setTimeout(() => { suppressClick = false; }, 400);
+      // Swallow ONLY the stray click on the gesture's START tab (a drag can fire a click
+      // on it that would wrongly navigate back). A tap on any OTHER icon is never eaten,
+      // so a fresh tap right after a drag responds instantly.
+      const st = press.tab; suppressTab = st;
+      setTimeout(() => { if (suppressTab === st) suppressTab = null; }, 350);
     }
     press = null;
   };
 
   nav.addEventListener('pointerdown', (e) => {
     const btn = e.target.closest('.bn-tab'); if (!btn) return;
-    suppressClick = false;
     press = { id: e.pointerId, x0: e.clientX, y0: e.clientY, dragging: false, pickedUp: false, tab: btn, target: btn };
     pop(btn); barPop(); clearHold();
     _holdTimer = setTimeout(() => {
@@ -44642,8 +44645,11 @@ function bindNavBubble() {
     if (press.pickedUp) endPress(false);  // picked-up-but-not-slid: clean up, don't navigate
     else { barRelease(); press = null; }  // plain press that left the bar
   }, { passive: true });
-  // Capture-phase: swallow the post-drag click so it can't re-navigate to the start tab.
-  nav.addEventListener('click', (e) => { if (suppressClick) { e.preventDefault(); e.stopPropagation(); suppressClick = false; } }, true);
+  // Capture-phase: swallow ONLY the stray post-drag click on the gesture's start tab, so
+  // it can't re-navigate there. A tap on any other icon passes straight through (instant).
+  nav.addEventListener('click', (e) => {
+    if (suppressTab && e.target.closest('.bn-tab') === suppressTab) { e.preventDefault(); e.stopPropagation(); suppressTab = null; }
+  }, true);
   nav.addEventListener('animationend', (e) => {
     if (e.animationName === 'bnPop' && e.target.classList) e.target.classList.remove('bn-pop');
     else if (e.animationName === 'bnBarPop' && e.target === nav) nav.classList.remove('bn-barpop');
