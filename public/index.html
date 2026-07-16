@@ -8624,7 +8624,7 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
   /* Release ease for the tap zoom-bounce (bn-hold below): slower + soft, so a quick
      tap settles back beautifully rather than snapping. Only the `scale` property is
      transitioned here — `transform` (scroll-hide) is untouched. */
-  transition:scale .6s cubic-bezier(.4,.02,.28,1);
+  transition:scale .42s cubic-bezier(.4,.02,.28,1);
   /* Press-and-hold on the bar must NOT trigger iOS's long-press text-selection caret
      / callout menu (the blue handle that popped up). Mark the whole bar unselectable
      and kill the callout. */
@@ -8642,7 +8642,7 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
    only the tabs appeared to dim. Removed so the bar stays a plain in-flow layer
    below the content (which sits at a higher z-index). */
 .bottom-nav,.ac-fab{will-change:transform,opacity;}
-.topbar.bar-anim,.bottom-nav.bar-anim,.ac-fab.bar-anim{transition:margin-top var(--t-slow) cubic-bezier(.33,0,.2,1), transform var(--t-slow) cubic-bezier(.33,0,.2,1), opacity var(--t-slow) ease, scale .6s cubic-bezier(.4,.02,.28,1);}
+.topbar.bar-anim,.bottom-nav.bar-anim,.ac-fab.bar-anim{transition:margin-top var(--t-slow) cubic-bezier(.33,0,.2,1), transform var(--t-slow) cubic-bezier(.33,0,.2,1), opacity var(--t-slow) ease, scale .42s cubic-bezier(.4,.02,.28,1);}
 /* The single sliding Liquid-Glass pill (positioned by JS) */
 /* No backdrop-filter here on purpose: a backdrop-filter nested inside the bar
    (which already has one) renders as an opaque grey instead of re-blurring the
@@ -8686,7 +8686,7 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
    scroll-hide) instead of overwriting it, so pill travel + scroll choreography are
    untouched. Kept small (1.03) because the bar is wide. */
 /* Grow-in on touch is deliberately GRADUAL, not a snap: no transition override here,
-   so it inherits the base bar's smooth `transition:scale .6s cubic-bezier(.4,.02,.28,1)`
+   so it inherits the base bar's smooth `transition:scale .42s cubic-bezier(.4,.02,.28,1)`
    (a slow ease) — a fast press-in read as a blink. Release then eases out over a
    matching curve (below), so the zoom-in and zoom-out feel even and smooth. */
 .bottom-nav.bn-hold{scale:1.03;}
@@ -8700,7 +8700,7 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
    than the fast-start ease-out — the old curve dumped most of the motion in the first
    ~100ms so it read as "snaps back fast." This eases out of the zoom gently the whole
    way, like Apple's liquid-glass bar. */
-.bottom-nav.bn-release{animation:bnBarRelease .6s cubic-bezier(.4,.02,.28,1);}
+.bottom-nav.bn-release{animation:bnBarRelease .42s cubic-bezier(.4,.02,.28,1);}
 .bn-dot{position:absolute;top:5px;right:9px;width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid rgba(64,64,68,.95);z-index:2;}
 .bn-dot.hidden{display:none;}
 
@@ -8713,7 +8713,7 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
 .bn-plus{display:none;}
 body.nav-morph .bottom-nav{overflow:hidden;
   transition:left var(--t-slow) cubic-bezier(.34,1.26,.5,1), background var(--t-slow) ease,
-    -webkit-backdrop-filter var(--t-slow) ease, backdrop-filter var(--t-slow) ease, box-shadow var(--t-slow) ease, border-color var(--t-slow) ease, scale .6s cubic-bezier(.4,.02,.28,1);}
+    -webkit-backdrop-filter var(--t-slow) ease, backdrop-filter var(--t-slow) ease, box-shadow var(--t-slow) ease, border-color var(--t-slow) ease, scale .42s cubic-bezier(.4,.02,.28,1);}
 /* Keep the programmatic reveal's transform-ease (other tabs) — finger-tracked
    scroll still removes .bar-anim, so tracking stays crisp with no transform lag. */
 /* NB: `scale` is included in BOTH nav-morph transition lists — this rule is more
@@ -8721,7 +8721,7 @@ body.nav-morph .bottom-nav{overflow:hidden;
    INSTANTLY (a blink) instead of easing. */
 body.nav-morph .bottom-nav.bar-anim{
   transition:left var(--t-slow) cubic-bezier(.34,1.26,.5,1), transform var(--t-slow) cubic-bezier(.33,0,.2,1),
-    background var(--t-slow) ease, box-shadow var(--t-slow) ease, border-color var(--t-slow) ease, scale .6s cubic-bezier(.4,.02,.28,1);}
+    background var(--t-slow) ease, box-shadow var(--t-slow) ease, border-color var(--t-slow) ease, scale .42s cubic-bezier(.4,.02,.28,1);}
 body.nav-morph .bn-plus{display:flex;position:absolute;inset:0;z-index:5;align-items:center;justify-content:center;
   background:none;border:none;cursor:pointer;opacity:0;pointer-events:none;transition:opacity var(--t-base) ease var(--t-fast);}
 body.nav-morph .bn-plus svg{width:26px;height:26px;fill:none;stroke:#111;stroke-width:2.4;stroke-linecap:round;}
@@ -15046,7 +15046,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1166'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1167'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
