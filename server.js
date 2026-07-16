@@ -11155,12 +11155,57 @@ app.get('/api/circles', auth.requireAuth, async (req, res) => {
        LIMIT 200`,
       [req.user.id]
     );
+    const gf = await db.query('SELECT circle_group_follows FROM users WHERE id = $1', [req.user.id]);
     res.json({
       circles: rows.map((c) => ({
         id: c.id, username: c.username, name: c.name, bio: c.bio || null, avatar: c.avatar || null,
         members: c.members, isMember: c.is_member, isAdmin: c.created_by === req.user.id, official: !!c.official,
       })),
+      groupFollows: Array.isArray(gf.rows[0]?.circle_group_follows) ? gf.rows[0].circle_group_follows : [],
     });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Follow / unfollow a whole SECTOR (the "get the entire Construction industry in one
+// place" feature). A targeted add/remove on circle_group_follows — never a full-blob
+// overwrite — so it's cross-device safe (same pattern as chat archive). `key` is the
+// client-side sector key (slug); the sector's combined feed is fetched via …/group/feed.
+app.post('/api/circles/group/:key/follow', auth.requireAuth, rateLimit(60, 60000, 'sector-follow'), async (req, res) => {
+  const key = String(req.params.key || '');
+  if (!/^[a-z0-9-]{1,32}$/.test(key)) return res.status(400).json({ error: 'Invalid sector.' });
+  const on = req.body.on !== false; // default follow
+  try {
+    const sql = on
+      ? `UPDATE users SET circle_group_follows = (COALESCE(circle_group_follows,'[]'::jsonb) - $2) || to_jsonb($2::text) WHERE id = $1 RETURNING circle_group_follows`
+      : `UPDATE users SET circle_group_follows = COALESCE(circle_group_follows,'[]'::jsonb) - $2 WHERE id = $1 RETURNING circle_group_follows`;
+    const { rows } = await db.query(sql, [req.user.id, key]);
+    res.json({ ok: true, on, groupFollows: Array.isArray(rows[0]?.circle_group_follows) ? rows[0].circle_group_follows : [] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not update follow.' });
+  }
+});
+
+// Combined SECTOR feed: the posts from every official circle in a sector, merged into
+// one stream (deduped — a post in two of the sector's circles shows once). The client
+// passes the sector's circle IDs (it already knows the grouping); we honour only
+// OFFICIAL circles so arbitrary ids can't be scraped. Cursor-paginated by created_at.
+app.post('/api/circles/group/feed', auth.requireAuth, async (req, res) => {
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const ids = Array.isArray(req.body.circleIds) ? req.body.circleIds.map(Number).filter(Number.isInteger).slice(0, 60) : [];
+    if (!ids.length) return res.json({ posts: [], hasMore: false });
+    const before = req.body.before && !isNaN(Date.parse(req.body.before)) ? new Date(req.body.before) : null;
+    const params = [req.user.id, ids];
+    let where = `WHERE p.parent_id IS NULL AND p.created_at <= now()
+      AND p.id IN (SELECT pc.post_id FROM post_circles pc JOIN circles c ON c.id = pc.circle_id WHERE pc.circle_id = ANY($2::int[]) AND c.official = true)`;
+    if (before) { params.push(before); where += ` AND p.created_at < $3`; }
+    const q = await db.query(POSTS_SELECT + ` ${where} ORDER BY p.created_at DESC LIMIT 41`, params);
+    const posts = q.rows.slice(0, 40).map(mapPost);
+    res.json({ posts, hasMore: q.rows.length > 40 });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });

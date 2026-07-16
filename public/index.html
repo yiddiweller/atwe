@@ -8804,6 +8804,26 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
   transition:transform var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
 .circ2-join:active{transform:scale(.95);background:var(--s1);}
 .circ2-join.joined{border-color:var(--b2);color:var(--t2);}
+/* Sector header (whole-industry): tappable row + a "Follow all" pill (accent = the special
+   one-tap whole-industry follow, distinct from a row's calm grey Join). */
+.circ2-ghead{cursor:pointer;padding-right:calc(var(--feed-gutter) - 2px);-webkit-tap-highlight-color:transparent;}
+@media(hover:hover){.circ2-ghead:hover{background:var(--s1);}}
+.circ2-gname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.circ2-ghead .circ2-secn{margin-left:0;padding:0 8px 0 4px;}
+.circ2-gjoin{flex:0 0 auto;background:transparent;border:1.5px solid var(--accent);color:var(--accent);font-weight:750;
+  font-size:12.5px;letter-spacing:0;text-transform:none;border-radius:var(--r-pill);padding:5px 13px;cursor:pointer;
+  white-space:nowrap;-webkit-tap-highlight-color:transparent;transition:transform var(--t-fast) var(--ease);}
+.circ2-gjoin:active{transform:scale(.94);}
+.circ2-gjoin.joined{border-color:var(--b2);color:var(--t2);background:var(--s2);}
+.circ2-gicon{flex:0 0 auto;width:38px;height:38px;border-radius:12px;background:var(--s2);display:flex;align-items:center;justify-content:center;}
+.circ2-gicon .circ2-secic{width:19px;height:19px;color:var(--t1);}
+/* Sector page — a horizontal chip row of the sub-industries you can still drill into. */
+.sect-chiprow{display:flex;gap:8px;overflow-x:auto;overflow-y:hidden;padding:4px var(--feed-gutter) 14px;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x;}
+.sect-chiprow::-webkit-scrollbar{display:none;}
+.sect-chip{flex:0 0 auto;font-size:13px;font-weight:650;color:var(--t1);background:var(--s2);border:none;
+  border-radius:var(--r-pill);padding:8px 14px;white-space:nowrap;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.sect-chip:active{background:var(--s3);}
 /* Clean category detail header (replaces the account-style avatar card). */
 .cir2-head{padding:16px var(--feed-gutter) 4px;}
 .cir2-over{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:800;letter-spacing:.05em;
@@ -14977,7 +14997,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1141'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1142'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25264,8 +25284,9 @@ async function acLoadCircles() {
   const el = document.getElementById('acFeed');
   el.innerHTML = acSkelRows(4);
   try {
-    const { circles } = await API.req('GET', '/api/circles');
+    const { circles, groupFollows } = await API.req('GET', '/api/circles');
     AC._circles = circles || [];
+    AC._groupFollows = new Set(Array.isArray(groupFollows) ? groupFollows : []);
     acRenderCircles();
   } catch (e) { acErr(el, 'acLoadCircles()'); }
 }
@@ -25296,6 +25317,18 @@ function acRenderCircles() {
     `<div class="circ2-sec${sticky ? ' sticky' : ''}"${id ? ` id="acCircSec-${id}"` : ''}>` +
     (glyph ? `<svg viewBox="0 0 24 24" class="circ2-secic">${glyph}</svg>` : '') +
     `<span>${escHtml(label)}</span>${count != null ? `<span class="circ2-secn">${count}</span>` : ''}</div>`;
+  const follows = AC._groupFollows || new Set();
+  // A SECTOR header: tap it to open the whole-industry combined feed; the pill follows
+  // the entire sector at once (one membership → all its trades in one place).
+  const groupHead = (g, count) => {
+    const followed = follows.has(g.key);
+    return `<div class="circ2-sec sticky circ2-ghead" id="acCircSec-${g.key}" onclick="acOpenSector('${g.key}')" role="button" tabindex="0">
+      <svg viewBox="0 0 24 24" class="circ2-secic">${_CIRC_GLYPH[g.g] || ''}</svg>
+      <span class="circ2-gname">${escHtml(g.name)}</span>
+      <span class="circ2-secn">${count}</span>
+      <button class="circ2-gjoin ${followed ? 'joined' : ''}" onclick="event.stopPropagation();acToggleSectorFollow('${g.key}',this)" aria-pressed="${followed}" title="${followed ? 'Following the whole industry' : 'Follow the whole industry'}">${followed ? 'Following' : 'Follow all'}</button>
+    </div>`;
+  };
 
   let html = `<div class="ac-circ-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`
     + `<input id="acCircleSearch" type="search" autocomplete="off" placeholder="Find your industry — ${list.length || 205} categories" aria-label="Find your industry" oninput="acCircleSearchInput(this.value)" value="${escHtml(AC._circleQuery || '')}"/></div>`;
@@ -25306,6 +25339,23 @@ function acRenderCircles() {
     html += res.length ? secHead('', 'Results', res.length) + res.map(row).join('')
       : `<div class="ac-empty">No categories match “${escHtml(q)}”.</div>`;
     el.innerHTML = html; return;
+  }
+
+  // MY INDUSTRIES — whole sectors the viewer follows (one-tap access to each combined feed).
+  if (follows.size) {
+    const mineG = AC_CIRCLE_GROUPS.filter(g => follows.has(g.key));
+    if (mineG.length) {
+      html += secHead(_CIRC_GLYPH.check, 'My industries', mineG.length);
+      html += mineG.map(g => {
+        const n = (AC._circles || []).filter(c => _circleGroupOf(c.name).key === g.key).length;
+        return `<div class="circ2-row" onclick="acOpenSector('${g.key}')">
+          <div class="circ2-gicon"><svg viewBox="0 0 24 24" class="circ2-secic">${_CIRC_GLYPH[g.g] || ''}</svg></div>
+          <div class="circ2-main"><div class="circ2-name">${escHtml(g.name)}</div>
+            <div class="circ2-sub">Whole industry · ${n} categor${n === 1 ? 'y' : 'ies'}</div></div>
+          <button class="circ2-join joined" onclick="event.stopPropagation();acToggleSectorFollow('${g.key}',this)" aria-pressed="true">Following</button>
+        </div>`;
+      }).join('');
+    }
   }
 
   // SUGGESTED — the viewer's own industries they haven't joined yet (LinkedIn-style).
@@ -25328,7 +25378,7 @@ function acRenderCircles() {
   }
   active.forEach(g => {
     const items = (buckets.get(g.key) || []).sort((a, b) => (b.members - a.members) || a.name.localeCompare(b.name));
-    html += secHead(_CIRC_GLYPH[g.g], g.name, items.length, g.key, true) + items.map(row).join('');
+    html += groupHead(g, items.length) + items.map(row).join('');
   });
   if (other.length) html += secHead(_CIRC_GLYPH.users, AC_CIRCLE_OTHER.name, other.length, 'other', true) + other.map(row).join('');
   if (!list.length) html += `<div class="ac-empty">Industries will appear here.</div>`;
@@ -25391,6 +25441,62 @@ async function acLoadPinnedFeed() {
     const posts = (d.posts && d.posts.length) ? d.posts.map(acPostCard).join('') : `<div class="ac-empty">No posts in ${escHtml(p.name)} yet.<br/>Be the first to post in this circle.</div>`;
     el.innerHTML = posts;
   } catch (e) { acErr(el, 'acLoadPinnedFeed()'); }
+}
+// Follow / unfollow a WHOLE sector (one tap = the entire industry's combined feed).
+// Optimistic + persisted server-side (cross-device, targeted add/remove). Works from
+// both the section-header pill and the sector page's Follow button.
+async function acToggleSectorFollow(key, btn) {
+  if (!AC._groupFollows) AC._groupFollows = new Set();
+  const now = !AC._groupFollows.has(key);
+  if (now) AC._groupFollows.add(key); else AC._groupFollows.delete(key);
+  if (btn) {
+    btn.classList.toggle('joined', now); btn.classList.toggle('unjoin', now);
+    btn.textContent = now ? 'Following' : 'Follow all'; btn.setAttribute('aria-pressed', now);
+  }
+  try {
+    const r = await API.req('POST', '/api/circles/group/' + encodeURIComponent(key) + '/follow', { on: now });
+    if (Array.isArray(r.groupFollows)) AC._groupFollows = new Set(r.groupFollows);
+  } catch (e) {
+    if (now) AC._groupFollows.delete(key); else AC._groupFollows.add(key); // revert
+    if (btn) { btn.classList.toggle('joined', !now); btn.classList.toggle('unjoin', !now); btn.textContent = !now ? 'Following' : 'Follow all'; }
+    showNotif(e.message || 'Could not update. Check your connection.');
+  }
+  // Keep the browse list's "My industries" + header pills in sync (only when it's showing).
+  if (document.getElementById('acCircChips')) acRenderCircles();
+}
+// The WHOLE-INDUSTRY page: one combined feed across every sub-circle in the sector,
+// plus a chip row to still drill into a single trade. Reuses the circle screen.
+async function acOpenSector(key) {
+  const g = AC_CIRCLE_GROUPS.find(x => x.key === key); if (!g) return;
+  if (typeof acStopMic === 'function') acStopMic();
+  AC._sectorKey = key;
+  acShow('acCircleScreen', null);
+  document.getElementById('acCircleTop').innerHTML =
+    `<button class="msg-back" onclick="acGoHome();acSetFeed('circles')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+     <div class="ac-headtitle"><div class="ac-title">Industry</div></div><span class="msg-spacer"></span>`;
+  const body = document.getElementById('acCircleBody');
+  const kids = (AC._circles || []).filter(c => _circleGroupOf(c.name).key === key).sort((a, b) => (b.members || 0) - (a.members || 0));
+  const totalMembers = kids.reduce((s, c) => s + (c.members || 0), 0);
+  const followed = (AC._groupFollows || new Set()).has(key);
+  const chips = kids.map(c => `<button class="sect-chip" onclick="acOpenCircle(${c.id})">${escHtml(c.name)}</button>`).join('');
+  body.innerHTML = `
+    <div class="cir2-head">
+      <div class="cir2-over"><svg viewBox="0 0 24 24" class="circ2-secic">${_CIRC_GLYPH[g.g] || _CIRC_GLYPH.users}</svg>Whole industry</div>
+      <div class="cir2-title">${escHtml(g.name)}</div>
+      <div class="cir2-meta">${kids.length} categor${kids.length === 1 ? 'y' : 'ies'} · ${acCompact(totalMembers)} member${totalMembers === 1 ? '' : 's'}</div>
+      <div class="cir2-actions">
+        <button class="ac-join-btn ${followed ? 'joined unjoin' : ''}" onclick="acToggleSectorFollow('${key}',this)">${followed ? 'Following' : 'Follow all'}</button>
+      </div>
+    </div>
+    ${chips ? `<div class="sect-chiprow">${chips}</div>` : ''}
+    <div class="ac-prof-head">Latest across ${escHtml(g.name)}</div>
+    <div id="sectFeed">${acSkelRows(3)}</div>`;
+  try {
+    const { posts } = await API.req('POST', '/api/circles/group/feed', { circleIds: kids.map(c => c.id) });
+    const feed = document.getElementById('sectFeed'); if (!feed) return;
+    feed.innerHTML = (posts && posts.length) ? posts.map(acPostCard).join('')
+      : '<div class="ac-empty">No posts across this industry yet.<br/>Follow it to catch new ones here.</div>';
+  } catch (e) { const feed = document.getElementById('sectFeed'); if (feed) acErr(feed, "acOpenSector('" + key + "')"); }
 }
 async function acOpenCircle(id) {
   AC._circleId = id; acStopMic();
