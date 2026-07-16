@@ -8776,6 +8776,43 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 @media(hover:hover){.ac-circ-pin:hover{background:var(--s2);color:var(--t1);}}
 .ac-circ-pin.on{color:var(--accent);}
 .ac-circ-pin.on svg{fill:var(--accent);}
+/* ── Circles-as-categories: jump chips · sticky sector headers · clean rows ── */
+.circ2-chips{display:flex;gap:8px;overflow-x:auto;overflow-y:hidden;padding:2px var(--feed-gutter) 12px;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x;overscroll-behavior:contain;}
+.circ2-chips::-webkit-scrollbar{display:none;}
+.circ2-chip{flex:0 0 auto;font-size:13.5px;font-weight:650;color:var(--t2);background:var(--s2);border:none;
+  border-radius:var(--r-pill);padding:7px 15px;white-space:nowrap;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
+.circ2-chip:active{background:var(--s3);color:var(--t1);}
+@media(hover:hover){.circ2-chip:hover{background:var(--s3);color:var(--t1);}}
+.circ2-sec{display:flex;align-items:center;gap:9px;padding:20px var(--feed-gutter) 8px;font-size:13px;font-weight:800;
+  letter-spacing:.05em;text-transform:uppercase;color:var(--t2);background:var(--bg);}
+/* Section headers are in-flow (NOT sticky): the home feed's cover effect lifts content
+   over the tab row, which would let a section's own rows float above its sticky header.
+   In-flow headers avoid that entirely and still give the "new header every so often" feel. */
+.circ2-secic{width:16px;height:16px;stroke:currentColor;stroke-width:1.9;fill:none;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;}
+.circ2-secn{margin-left:auto;font-weight:700;color:var(--t3);letter-spacing:0;}
+.circ2-row{display:flex;align-items:center;gap:10px;padding:13px var(--feed-gutter);position:relative;cursor:pointer;
+  background:var(--bg);-webkit-tap-highlight-color:transparent;}
+.circ2-row::after{content:'';position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:1px;background:var(--b2);}
+@media(hover:hover){.circ2-row:hover{background:var(--s1);}}
+.circ2-main{flex:1;min-width:0;}
+.circ2-name{font-size:16px;font-weight:750;letter-spacing:-.01em;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.circ2-sub{font-size:13px;color:var(--t2);margin-top:2px;}
+.circ2-join{flex:0 0 auto;background:transparent;border:1.5px solid var(--b3);color:var(--t1);font-weight:750;font-size:14px;
+  border-radius:var(--r-pill);padding:7px 20px;cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;
+  transition:transform var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
+.circ2-join:active{transform:scale(.95);background:var(--s1);}
+.circ2-join.joined{border-color:var(--b2);color:var(--t2);}
+/* Clean category detail header (replaces the account-style avatar card). */
+.cir2-head{padding:16px var(--feed-gutter) 4px;}
+.cir2-over{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:800;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--t2);margin-bottom:9px;}
+.cir2-over .circ2-secic{width:15px;height:15px;}
+.cir2-title{font-size:25px;font-weight:850;letter-spacing:-.02em;color:var(--t1);line-height:1.15;}
+.cir2-meta{font-size:14px;color:var(--t2);margin-top:6px;}
+.cir2-bio{font-size:15px;color:var(--t1);margin-top:11px;line-height:1.42;}
+.cir2-actions{display:flex;gap:10px;margin-top:15px;}
 .ac-post-circle{font-size:12.5px;color:var(--accent);font-weight:600;cursor:pointer;margin-top:1px;}
 .ac-post-circle:hover{text-decoration:underline;}
 
@@ -14940,7 +14977,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1140'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1141'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -22921,7 +22958,6 @@ async function acCircleSearch(q) {
   const list = AC._industries.filter(c => c.name.toLowerCase().includes(q)).slice(0, 40);
   cur.innerHTML = list.length
     ? list.map(c => `<button class="ac-ind-card ${c.isMember ? 'joined' : ''}" onclick="acOpenCircle(${c.id})">
-        ${acCircleAvatarHtml(c, 'ac-ind-ava')}
         <span class="ac-ind-name">${escHtml(c.name)}</span>
         <span class="ac-ind-sub">${c.members} member${c.members === 1 ? '' : 's'}${c.isMember ? ' · Joined' : ''}</span>
       </button>`).join('')
@@ -22938,7 +22974,6 @@ async function acLoadDiscoverIndustries() {
     const list = AC._industries;
     cur.innerHTML = list.length
       ? list.map(c => `<button class="ac-ind-card ${c.isMember ? 'joined' : ''}" onclick="acOpenCircle(${c.id})">
-          ${acCircleAvatarHtml(c, 'ac-ind-ava')}
           <span class="ac-ind-name">${escHtml(c.name)}</span>
           <span class="ac-ind-sub">${c.members} member${c.members === 1 ? '' : 's'}${c.isMember ? ' · Joined' : ''}</span>
         </button>`).join('')
@@ -23881,9 +23916,9 @@ function acSearchInsert(op) {
   acDoSearch(inp.value);
 }
 function acSearchCircleRow(c) {
-  return `<div class="ac-item" onclick="acOpenCircle(${c.id})">${acCircleAvatarHtml(c)}
-    <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span></div>
-    <div class="ac-item-last">${c.members} member${c.members === 1 ? '' : 's'}</div></div></div>`;
+  return `<div class="circ2-row" onclick="acOpenCircle(${c.id})">
+    <div class="circ2-main"><div class="circ2-name">${escHtml(c.name)}</div>
+    <div class="circ2-sub">${acCompact(c.members)} member${c.members === 1 ? '' : 's'}</div></div></div>`;
 }
 function acSearchFeedRow(f) {
   return `<div class="ac-item" onclick="acOpenFeed(${f.id})">${acFeedAvatarHtml(f)}
@@ -25157,6 +25192,74 @@ function acCircleAvatarHtml(c, extra) {
   if (c && c.avatar) return `<div class="user-avatar${extra} has-img" style="--avatar:url('${c.avatar}')"></div>`;
   return `<div class="user-avatar ac-circ-ic${extra}" style="background:${_circleGrad(c)}">${_circleIcon(c && c.name)}</div>`;
 }
+// ── Circles as grouped CATEGORIES (not accounts) ────────────────────────────
+// The 205 official industry circles are grouped into ~22 sectors (the way LinkedIn
+// groups ~400 industries into ~20 NAICS sectors). The Circles tab renders one long
+// scroll with a sticky section header per sector + a jump-chip bar — no per-circle
+// avatars, so a circle reads as a category, never an account.
+const _CIRC_GLYPH = {
+  hammer:'<path d="M14 6l4 4M6 20l7-7M13 5l6 6-2 2-6-6z"/>',
+  home:'<path d="M4 11l8-6 8 6M6 10v9h12v-9"/>',
+  car:'<path d="M5 16l1.4-5h11.2L19 16M7 16v2M17 16v2M4 16h16"/>',
+  cup:'<path d="M6 8h11v5a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4zM17 9h2a2 2 0 0 1 0 4h-2"/>',
+  spark:'<path d="M12 4l1.6 4.4L18 10l-4.4 1.6L12 16l-1.6-4.4L6 10z"/>',
+  cross:'<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
+  pulse:'<path d="M3 12h4l2 5 4-10 2 5h6"/>',
+  bag:'<path d="M6 8h12l-1 12H7zM9 8V6a3 3 0 0 1 6 0v2"/>',
+  building:'<path d="M5 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M15 21V9h3a1 1 0 0 1 1 1v11M8 7h3M8 11h3M8 15h3"/>',
+  chart:'<path d="M4 20h16M7 16v-4M12 16V8M17 16v-7"/>',
+  briefcase:'<path d="M4 8h16v11H4zM9 8V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>',
+  code:'<path d="M9 8l-5 4 5 4M15 8l5 4-5 4"/>',
+  pen:'<path d="M4 20l4-1 10-10-3-3L5 16zM14 6l3 3"/>',
+  play:'<path d="M7 5l12 7-12 7z"/>',
+  mega:'<path d="M4 10v4h4l7 4V6L8 10zM18 9a3 3 0 0 1 0 6"/>',
+  factory:'<path d="M4 20V10l5 3V10l5 3V10l5 3v7zM4 20h16"/>',
+  truck:'<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7M6.5 19a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3M17.5 19a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/>',
+  leaf:'<path d="M5 19c0-8 6-13 14-13 0 8-6 13-14 13zM5 19c3-4 6-6 9-7"/>',
+  bolt:'<path d="M13 3L5 13h6l-1 8 8-10h-6z"/>',
+  book:'<path d="M5 5a2 2 0 0 1 2-2h12v14H7a2 2 0 0 0-2 2zM19 3v16"/>',
+  calendar:'<path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4"/>',
+  users:'<path d="M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6M3 20a6 6 0 0 1 12 0M16 11a3 3 0 0 0 0-6M21 20a6 6 0 0 0-5-5.9"/>',
+  check:'<path d="M4 12l5 5L20 6"/>',
+};
+const AC_CIRCLE_GROUPS = [
+  { key:'trades', g:'hammer', name:'Construction & Trades', items:['Architecture','Building Materials','Cabinetry','Carpentry','Concrete','Construction','Demolition','Drywall','Electrician','Engineering','Excavation','Fencing','Flooring','Glazing','HVAC','Masonry','Mechanical','Painting','Plumbing','Roofing','Surveying','Tiling','Welding','Woodworking'] },
+  { key:'home', g:'home', name:'Home & Property', items:['Appliance Repair','Cleaning Services','Handyman','Home Care','Home Security','Home Staging','Horticulture','Janitorial','Landscaping','Locksmith','Maintenance','Moving Services','Pest Control','Pool Services'] },
+  { key:'auto', g:'car', name:'Auto & Transport', items:['Aerospace','Auto Dealership','Auto Detailing','Auto Repair','Auto Parts','Aviation','Car Wash','Marine & Maritime','Ride-share','Towing','Transportation'] },
+  { key:'food', g:'cup', name:'Food & Drink', items:['Bakery','Bar & Nightlife','Brewery & Winery','Butcher','Cafe & Coffee','Catering','Food Truck','Grocery','Restaurant'] },
+  { key:'beauty', g:'spark', name:'Beauty & Personal Care', items:['Barber','Beauty & Cosmetics','Massage Therapy','Nail Salon','Salon & Spa','Skincare','Tattoo'] },
+  { key:'health', g:'cross', name:'Health & Medical', items:['Chiropractic','Dental','Dermatology','Healthcare','Medical','Mental Health & Therapy','Nursing','Nutrition & Dietetics','Optometry','Pharmacy','Physical Therapy','Veterinary'] },
+  { key:'wellness', g:'pulse', name:'Sports & Wellness', items:['Fitness & Personal Training','Outdoor & Recreation','Sports & Athletics','Yoga & Wellness'] },
+  { key:'retail', g:'bag', name:'Retail & Shopping', items:['Apparel & Fashion','Cannabis','E-commerce','Electronics','Furniture','Hardware','Jewelry','Retail','Sporting Goods','Wholesale'] },
+  { key:'realestate', g:'building', name:'Real Estate', items:['Commercial Real Estate','Property Management','Real Estate','Real Estate Development'] },
+  { key:'finance', g:'chart', name:'Finance & Insurance', items:['Accounting','Banking','Blockchain & Crypto','Bookkeeping','Financial Advisory','Fintech','Insurance','Investment','Lending & Mortgage','Payroll','Private Equity','Tax Services','Venture Capital'] },
+  { key:'professional', g:'briefcase', name:'Professional Services', items:['Consulting','HR & Recruiting','Law & Legal','Notary','Paralegal','Private Investigation','Security Services','Staffing','Translation','Virtual Assistant'] },
+  { key:'tech', g:'code', name:'Tech & Software', items:['AI & Machine Learning','Biotech','Cybersecurity','Data & Analytics','DevOps','Game Development','IT Services','Networking & Telecom','Software Development','Startups','Telecommunications','Web Development'] },
+  { key:'creative', g:'pen', name:'Creative & Design', items:['Animation','Branding','Design (Graphic)','Design (Industrial)','Design (Interior)','Design (UX/UI)','Illustration','Interior Design','Photography','Videography','Web Design'] },
+  { key:'media', g:'play', name:'Media & Content', items:['Content Creation','Copywriting','Esports','Film & TV','Influencer & Creator','Journalism','Media','Music','Podcasting','Publishing','Streaming'] },
+  { key:'marketing', g:'mega', name:'Marketing & Sales', items:['Advertising','Marketing','Public Relations','Sales','Social Media Management'] },
+  { key:'manufacturing', g:'factory', name:'Manufacturing & Industrial', items:['Chemicals','Fabrication','Food Manufacturing','Machining','Manufacturing','Mining','Packaging','Plastics','Printing','Textiles'] },
+  { key:'logistics', g:'truck', name:'Logistics & Delivery', items:['Courier & Delivery','Distribution','Export & Import','Food Distribution','Freight','Import & Export','Logistics','Shipping','Supply Chain','Trucking','Warehousing'] },
+  { key:'agriculture', g:'leaf', name:'Agriculture & Environment', items:['Agriculture','Dairy','Environmental Services','Farming','Fishing','Forestry','Recycling','Waste Management'] },
+  { key:'energy', g:'bolt', name:'Energy & Utilities', items:['Energy','Oil & Gas','Renewable Energy','Solar','Utilities'] },
+  { key:'education', g:'book', name:'Education & Coaching', items:['Childcare & Daycare','Coaching','Education','Tutoring'] },
+  { key:'hospitality', g:'calendar', name:'Hospitality & Events', items:['Event Planning','Hospitality','Hotel & Lodging','Tourism','Wedding Planning'] },
+  { key:'community', g:'users', name:'Community & Public', items:['Charity & Nonprofit','Government & Public Sector','Religious Organization','Trade Union','Union & Labor'] },
+];
+const AC_CIRCLE_OTHER = { key:'other', g:'users', name:'More industries', items:[] };
+function _circleGroupMap() {
+  if (AC._circGroupMap) return AC._circGroupMap;
+  const m = {}; AC_CIRCLE_GROUPS.forEach(gr => gr.items.forEach(n => { m[n.toLowerCase()] = gr; }));
+  AC._circGroupMap = m; return m;
+}
+function _circleGroupOf(name) { return _circleGroupMap()[(name || '').toLowerCase()] || AC_CIRCLE_OTHER; }
+// Jump the Circles scroll to a sector header when its chip is tapped.
+function acCircleJump(key) {
+  const sec = document.getElementById('acCircSec-' + key), feed = document.getElementById('acFeed');
+  if (!sec || !feed) return;
+  const off = (_tabRowHCache || 46) + 6;
+  feed.scrollTo({ top: Math.max(0, sec.offsetTop - off), behavior: document.body.classList.contains('reduce-motion') ? 'auto' : 'smooth' });
+}
 async function acLoadCircles() {
   const el = document.getElementById('acFeed');
   el.innerHTML = acSkelRows(4);
@@ -25174,28 +25277,61 @@ function acRenderCircles() {
   const el = document.getElementById('acFeed');
   const list = AC._circles || [];
   const q = (AC._circleQuery || '').trim().toLowerCase();
-  const match = c => !q || (c.name || '').toLowerCase().includes(q);
-  const mine = list.filter(c => c.isMember && match(c));
-  const disc = list.filter(c => !c.isMember && match(c));
+  const norm = s => (s || '').toLowerCase();
   const pinnedId = AC._pinnedCircle && AC._pinnedCircle.id;
+  // A clean category row — no avatar. Name + member count + Join (calm outline) + pin (joined).
   const row = (c) => {
     const pinned = c.id === pinnedId;
     const pinBtn = c.isMember
       ? `<button class="ac-circ-pin ${pinned ? 'on' : ''}" onclick="event.stopPropagation();acTogglePinCircle(${c.id})" aria-pressed="${pinned}" aria-label="${pinned ? 'Unpin' : 'Pin'} ${escHtml(c.name)} as a feed tab" title="${pinned ? 'Unpin from tabs' : 'Pin as a feed tab'}">${_PIN_ICON}</button>`
       : '';
-    return `<div class="ac-item ac-circ-item" onclick="acOpenCircle(${c.id})">
-      ${acCircleAvatarHtml(c)}
-      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span></div>
-        <div class="ac-item-last">${acCompact(c.members)} member${c.members === 1 ? '' : 's'}</div></div>
+    return `<div class="circ2-row" onclick="acOpenCircle(${c.id})">
+      <div class="circ2-main"><div class="circ2-name">${escHtml(c.name)}</div>
+        <div class="circ2-sub">${acCompact(c.members)} member${c.members === 1 ? '' : 's'}</div></div>
       ${pinBtn}
-      <button class="ac-circ-join ${c.isMember ? 'joined' : ''}" onclick="event.stopPropagation();acToggleJoin(${c.id},this)" aria-pressed="${c.isMember}">${c.isMember ? 'Joined' : 'Join'}</button>
+      <button class="circ2-join ${c.isMember ? 'joined' : ''}" onclick="event.stopPropagation();acToggleJoin(${c.id},this)" aria-pressed="${c.isMember}">${c.isMember ? 'Joined' : 'Join'}</button>
     </div>`;
   };
+  const secHead = (glyph, label, count, id, sticky) =>
+    `<div class="circ2-sec${sticky ? ' sticky' : ''}"${id ? ` id="acCircSec-${id}"` : ''}>` +
+    (glyph ? `<svg viewBox="0 0 24 24" class="circ2-secic">${glyph}</svg>` : '') +
+    `<span>${escHtml(label)}</span>${count != null ? `<span class="circ2-secn">${count}</span>` : ''}</div>`;
+
   let html = `<div class="ac-circ-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`
-    + `<input id="acCircleSearch" type="search" autocomplete="off" placeholder="Find your industry — 200+ circles" aria-label="Find your industry" oninput="acCircleSearchInput(this.value)" value="${escHtml(AC._circleQuery || '')}"/></div>`;
-  if (mine.length) html += `<div class="ac-prof-head">My circles</div>` + mine.map(row).join('');
-  if (disc.length) html += `<div class="ac-prof-head">Browse</div>` + disc.map(row).join('');
-  if (!mine.length && !disc.length) html += `<div class="ac-empty">${q ? 'No circles match “' + escHtml(q) + '”.' : 'Industries will appear here.'}</div>`;
+    + `<input id="acCircleSearch" type="search" autocomplete="off" placeholder="Find your industry — ${list.length || 205} categories" aria-label="Find your industry" oninput="acCircleSearchInput(this.value)" value="${escHtml(AC._circleQuery || '')}"/></div>`;
+
+  // SEARCH MODE — a flat, ungrouped result list.
+  if (q) {
+    const res = list.filter(c => norm(c.name).includes(q)).sort((a, b) => a.name.localeCompare(b.name));
+    html += res.length ? secHead('', 'Results', res.length) + res.map(row).join('')
+      : `<div class="ac-empty">No categories match “${escHtml(q)}”.</div>`;
+    el.innerHTML = html; return;
+  }
+
+  // SUGGESTED — the viewer's own industries they haven't joined yet (LinkedIn-style).
+  const cats = (S.user && Array.isArray(S.user.categories) ? S.user.categories : []).map(norm);
+  if (cats.length) {
+    const sugg = list.filter(c => !c.isMember && cats.includes(norm(c.name))).slice(0, 6);
+    if (sugg.length) html += secHead(_CIRC_GLYPH.spark, 'Suggested for you', null) + sugg.map(row).join('');
+  }
+
+  // GROUPED BROWSE — bucket every circle into its sector, ordered by AC_CIRCLE_GROUPS.
+  const buckets = new Map(); AC_CIRCLE_GROUPS.forEach(g => buckets.set(g.key, []));
+  const other = [];
+  list.forEach(c => { const g = _circleGroupOf(c.name); const b = buckets.get(g.key); (b || other).push(c); });
+  const active = AC_CIRCLE_GROUPS.filter(g => (buckets.get(g.key) || []).length);
+  // Jump-chip bar — tap a sector to scroll straight to it.
+  if (active.length) {
+    html += `<div class="circ2-chips" id="acCircChips">`
+      + active.map(g => `<button class="circ2-chip" onclick="acCircleJump('${g.key}')">${escHtml(g.name)}</button>`).join('')
+      + `</div>`;
+  }
+  active.forEach(g => {
+    const items = (buckets.get(g.key) || []).sort((a, b) => (b.members - a.members) || a.name.localeCompare(b.name));
+    html += secHead(_CIRC_GLYPH[g.g], g.name, items.length, g.key, true) + items.map(row).join('');
+  });
+  if (other.length) html += secHead(_CIRC_GLYPH.users, AC_CIRCLE_OTHER.name, other.length, 'other', true) + other.map(row).join('');
+  if (!list.length) html += `<div class="ac-empty">Industries will appear here.</div>`;
   el.innerHTML = html;
 }
 function acCircleSearchInput(v) {
@@ -25272,22 +25408,19 @@ async function acOpenCircle(id) {
 }
 function acRenderCircle(d) {
   const c = d.circle;
-  const joinBtn = `<button class="ac-join-btn ${c.isMember ? 'joined unjoin' : ''}" onclick="acToggleJoinCircle(this)">${c.isMember ? 'Unjoin' : 'Join'}</button>`;
-  const shareBtn = `<button class="ac-icon-btn" onclick="shareCircle('${c.username}')" title="Share circle" aria-label="Share circle">${SHARE_ICON}</button>`;
+  const grp = _circleGroupOf(c.name);
   const posts = d.posts.length ? d.posts.map(acPostCard).join('') : '<div class="ac-empty">No posts yet.<br/>Be the first to post in this circle.</div>';
-  // Centered, clean header — mirrors the contact detail card (.ac-cd-*).
+  // Clean CATEGORY header — a sector overline + big title + meta, NOT an account card.
   document.getElementById('acCircleBody').innerHTML = `
-    <div class="ac-cd-prof cir-head" style="cursor:default;">
-      ${acCircleAvatarHtml(c, 'ac-cd-ava')}
-      <div class="ac-cd-nameblock">
-        <div class="ac-cd-name">${escHtml(c.name)}</div>
-        <div class="ac-cd-user">Industry circle · ${c.members} member${c.members === 1 ? '' : 's'}</div>
+    <div class="cir2-head">
+      <div class="cir2-over"><svg viewBox="0 0 24 24" class="circ2-secic">${_CIRC_GLYPH[grp.g] || _CIRC_GLYPH.users}</svg>${escHtml(grp.name)}</div>
+      <div class="cir2-title">${escHtml(c.name)}</div>
+      <div class="cir2-meta">Industry circle · ${c.members} member${c.members === 1 ? '' : 's'}</div>
+      ${c.bio ? `<div class="cir2-bio">${escHtml(c.bio)}</div>` : ''}
+      <div class="cir2-actions">
+        <button class="ac-join-btn ${c.isMember ? 'joined unjoin' : ''}" onclick="acToggleJoinCircle(this)">${c.isMember ? 'Joined' : 'Join'}</button>
+        <button class="ac-icon-btn" onclick="shareCircle('${c.username}')" title="Share circle" aria-label="Share circle">${SHARE_ICON}</button>
       </div>
-    </div>
-    ${c.bio ? `<div class="cir-bio">${escHtml(c.bio)}</div>` : ''}
-    <div class="cir-actions">
-      <button class="ac-join-btn cir-join ${c.isMember ? 'joined unjoin' : ''}" onclick="acToggleJoinCircle(this)">${c.isMember ? 'Joined' : 'Join'}</button>
-      <button class="ac-icon-btn cir-share" onclick="shareCircle('${c.username}')" title="Share circle" aria-label="Share circle">${SHARE_ICON}</button>
     </div>
     <div class="ac-prof-head">Posts</div>
     ${posts}`;
