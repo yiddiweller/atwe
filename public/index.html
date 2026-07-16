@@ -15011,7 +15011,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1154'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1155'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -21526,14 +21526,32 @@ function syncNavPill() {
   // concentric with the bar's rounded end, that 5px gap is identical all the way
   // around — including where it nests inside the bar's rounded corner.
   const padX = 0, padY = 0;
-  const apply = () => {
+  const newX = active.offsetLeft + padX, newY = active.offsetTop + padY;
+  const apply = (animate) => {
+    const m = /translate\(\s*(-?[\d.]+)px/.exec(ind.style.transform || '');
+    const prevX = m ? parseFloat(m[1]) : null;
+    const dist = prevX == null ? 999 : Math.abs(newX - prevX);
+    // A redundant sync (dist ≈ 0 — the pill is already targeting this tab) must NOT reset
+    // the transition, or it clobbers a proportional duration mid-travel and everything
+    // falls back to the same fixed time. Just keep it visible and bail.
+    if (animate && dist < 1) { ind.style.opacity = '1'; return; }
+    if (animate) {
+      // Distance-proportional duration → the pill TRAVELS at a consistent speed. A short
+      // adjacent hop keeps its smooth ~350ms; a long skip (e.g. Home → Profile) takes a
+      // bit longer instead of racing across and flickering under the middle icons. Same
+      // ease-in-out, so short hops are unchanged.
+      const dur = Math.round(Math.min(560, Math.max(350, 250 + dist * 0.72)));
+      ind.style.transition = 'transform ' + dur + 'ms ease-in-out, width var(--t-base) var(--ease), height var(--t-base) var(--ease), opacity var(--t-base) ease';
+    } else {
+      ind.style.transition = 'none';
+    }
     ind.style.width = (active.offsetWidth - padX * 2) + 'px';
     ind.style.height = (active.offsetHeight - padY * 2) + 'px';
-    ind.style.transform = 'translate(' + (active.offsetLeft + padX) + 'px,' + (active.offsetTop + padY) + 'px)';
+    ind.style.transform = 'translate(' + newX + 'px,' + newY + 'px)';
     ind.style.opacity = '1';
   };
-  if (!AC._navPillInit) { ind.style.transition = 'none'; apply(); void ind.offsetWidth; ind.style.transition = ''; AC._navPillInit = true; }
-  else apply();
+  if (!AC._navPillInit) { apply(false); void ind.offsetWidth; AC._navPillInit = true; }
+  else apply(true);
 }
 window.addEventListener('resize', () => { AC._navPillInit = false; requestAnimationFrame(syncNavPill); acUpdateRail(); });
 
