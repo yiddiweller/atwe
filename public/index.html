@@ -8625,6 +8625,10 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
      tap settles back beautifully rather than snapping. Only the `scale` property is
      transitioned here — `transform` (scroll-hide) is untouched. */
   transition:scale var(--t-slow) var(--ease);
+  /* Press-and-hold on the bar must NOT trigger iOS's long-press text-selection caret
+     / callout menu (the blue handle that popped up). Mark the whole bar unselectable
+     and kill the callout. */
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
   box-shadow:0 10px 34px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.3);}
 .bottom-nav.nav-off{display:none!important;}
 /* Scroll choreography (finger-tracking, iOS-style): the bars are driven directly by
@@ -8647,7 +8651,8 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
 .bn-indicator{position:absolute;left:0;top:0;border-radius:999px;background:rgba(255,255,255,.14);pointer-events:none;z-index:0;opacity:0;
   transition:transform var(--t-slow) ease-in-out, width var(--t-base) var(--ease), height var(--t-base) var(--ease), opacity var(--t-base) var(--ease);}
 .bn-tab{flex:1;height:50px;background:none;border:none;cursor:pointer;position:relative;z-index:1;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#fff;-webkit-tap-highlight-color:transparent;}
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#fff;-webkit-tap-highlight-color:transparent;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
 /* Icon-only nav: labels removed (matches the native app). The single icon
    centers in the same 50px tab, and the glyphs are nudged a touch larger so they
    read balanced in the space the label used to share — the bar keeps its exact
@@ -8680,7 +8685,11 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
    `scale` property, which COMPOSES with the bar's existing `transform` (translateY
    scroll-hide) instead of overwriting it, so pill travel + scroll choreography are
    untouched. Kept small (1.03) because the bar is wide. */
-.bottom-nav.bn-hold{scale:1.03;transition:scale var(--t-fast) var(--ease);}
+/* Grow-in on touch is deliberately GRADUAL, not a snap: no transition override here,
+   so it inherits the base bar's smooth `transition:scale var(--t-slow) var(--ease)`
+   (a slow ease) — a fast press-in read as a blink. Release then eases out over a
+   matching curve (below), so the zoom-in and zoom-out feel even and smooth. */
+.bottom-nav.bn-hold{scale:1.03;}
 /* On RELEASE, always play the full zoom-back as a fixed-length eased animation —
    NOT just a transition from wherever the hold happened to be. On a quick tap the
    hold barely grew, so a plain transition had almost no distance to cover and read
@@ -8700,12 +8709,15 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
 .bn-plus{display:none;}
 body.nav-morph .bottom-nav{overflow:hidden;
   transition:left var(--t-slow) cubic-bezier(.34,1.26,.5,1), background var(--t-slow) ease,
-    -webkit-backdrop-filter var(--t-slow) ease, backdrop-filter var(--t-slow) ease, box-shadow var(--t-slow) ease, border-color var(--t-slow) ease;}
+    -webkit-backdrop-filter var(--t-slow) ease, backdrop-filter var(--t-slow) ease, box-shadow var(--t-slow) ease, border-color var(--t-slow) ease, scale var(--t-slow) var(--ease);}
 /* Keep the programmatic reveal's transform-ease (other tabs) — finger-tracked
    scroll still removes .bar-anim, so tracking stays crisp with no transform lag. */
+/* NB: `scale` is included in BOTH nav-morph transition lists — this rule is more
+   specific than the base .bottom-nav, so without it the tap grow-in would apply
+   INSTANTLY (a blink) instead of easing. */
 body.nav-morph .bottom-nav.bar-anim{
   transition:left var(--t-slow) cubic-bezier(.34,1.26,.5,1), transform var(--t-slow) cubic-bezier(.33,0,.2,1),
-    background var(--t-slow) ease, box-shadow var(--t-slow) ease, border-color var(--t-slow) ease;}
+    background var(--t-slow) ease, box-shadow var(--t-slow) ease, border-color var(--t-slow) ease, scale var(--t-slow) var(--ease);}
 body.nav-morph .bn-plus{display:flex;position:absolute;inset:0;z-index:5;align-items:center;justify-content:center;
   background:none;border:none;cursor:pointer;opacity:0;pointer-events:none;transition:opacity var(--t-base) ease var(--t-fast);}
 body.nav-morph .bn-plus svg{width:26px;height:26px;fill:none;stroke:#111;stroke-width:2.4;stroke-linecap:round;}
@@ -15030,7 +15042,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1158'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1160'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
