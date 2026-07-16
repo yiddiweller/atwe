@@ -15039,7 +15039,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1171'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1172'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -44548,14 +44548,25 @@ function bindNavBubble() {
   const barRelease = () => { clearHold(); nav.classList.remove('bn-hold'); }; // held → settles via transition
 
   // --- Drag the grey pill along the bar (Apple liquid-glass) ---------------------------
-  // A tap/hold is unchanged (below). Once the finger clearly moves SIDEWAYS (>10px, and
-  // more horizontal than vertical), we switch into a drag: the pill follows the finger in
-  // real time, and on release it snaps to (and opens) whichever tab the finger is over.
-  // Vertical gestures and plain taps never enter this path, so nothing else is affected.
-  let press = null;              // {id, x0, y0, dragging, target}
+  // A quick tap is unchanged (glides + navigates as before). Two ways to grab the pill:
+  //   • Press-and-HOLD (~160ms) on any tab → the pill "picks up" and glides straight to
+  //     your finger's tab (even if the bubble was elsewhere), ready to slide from there.
+  //   • Or just move sideways (>10px) → same drag, entered immediately.
+  // Once grabbed, the pill follows the finger; on release it snaps to + opens the tab
+  // under your finger. Vertical gestures and quick taps never enter this path.
+  let press = null;              // {id, x0, y0, dragging, pickedUp, tab, target}
   let suppressClick = false;     // eat the click that would otherwise fire after a drag
   const ind = () => document.getElementById('bnIndicator');
   const tabName = (t) => (t && t.id || '').replace('bnav-', '');
+  // Move the pill onto a whole tab (the "pickup"), optionally with a quick glide.
+  const pillTo = (tab, glide) => {
+    const el = ind(); if (!el || !tab) return;
+    el.style.transition = glide ? 'transform .2s var(--ease), width .2s var(--ease)' : 'none';
+    el.style.width = tab.offsetWidth + 'px';
+    el.style.height = tab.offsetHeight + 'px';
+    el.style.transform = 'translate(' + tab.offsetLeft + 'px,' + tab.offsetTop + 'px)';
+    el.style.opacity = '1';
+  };
   const dragMoveTo = (clientX) => {
     const el = ind(); if (!el || !press) return;
     const tabs = [...nav.querySelectorAll('.bn-tab')]; if (!tabs.length) return;
@@ -44577,12 +44588,15 @@ function bindNavBubble() {
   };
   const endPress = (navigate) => {
     barRelease();
-    if (press && press.dragging) {
+    if (press && (press.dragging || press.pickedUp)) {
       nav.classList.remove('bn-dragging');
       _navDragging = false;
       suppressClick = true;
       const el = ind(); if (el) el.style.transition = '';
-      if (navigate && press.target) { try { appTab(tabName(press.target)); } catch (err) {} }
+      // Dragged → the tab under the finger; only picked-up (held, no slide) → the pressed tab.
+      const tgt = press.target || press.tab;
+      const curActive = nav.querySelector('.bn-tab.active');
+      if (navigate && tgt && tgt !== curActive) { try { appTab(tabName(tgt)); } catch (err) {} }
       requestAnimationFrame(syncNavPill); // snap the pill to the (now active) tab
       setTimeout(() => { suppressClick = false; }, 400);
     }
@@ -44592,15 +44606,28 @@ function bindNavBubble() {
   nav.addEventListener('pointerdown', (e) => {
     const btn = e.target.closest('.bn-tab'); if (!btn) return;
     suppressClick = false;
-    press = { id: e.pointerId, x0: e.clientX, y0: e.clientY, dragging: false, target: null };
+    press = { id: e.pointerId, x0: e.clientX, y0: e.clientY, dragging: false, pickedUp: false, tab: btn, target: btn };
     pop(btn); barPop(); clearHold();
-    _holdTimer = setTimeout(() => { _holdTimer = null; nav.classList.add('bn-hold'); nav.classList.remove('bn-barpop'); }, 160);
+    _holdTimer = setTimeout(() => {
+      _holdTimer = null;
+      if (!press) return;
+      nav.classList.add('bn-hold');          // keep the loved zoom-hold
+      nav.classList.remove('bn-barpop');
+      // PICK UP: bring the pill to the pressed tab so a slide starts right at the finger.
+      press.pickedUp = true; _navDragging = true;
+      nav.classList.add('bn-dragging');
+      pillTo(press.tab, true);
+    }, 160);
   }, { passive: true });
   nav.addEventListener('pointermove', (e) => {
     if (!press || e.pointerId !== press.id) return;
     if (!press.dragging) {
       const dx = e.clientX - press.x0, dy = e.clientY - press.y0;
-      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+      // Enter a full follow-the-finger drag on a real sideways move, OR the moment the
+      // finger moves at all once the pill is already picked up (from a hold).
+      const sideways = Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.2;
+      const nudgeAfterPickup = press.pickedUp && (Math.abs(dx) > 4 || Math.abs(dy) > 4);
+      if (sideways || nudgeAfterPickup) {
         press.dragging = true; _navDragging = true;
         clearHold(); nav.classList.remove('bn-hold', 'bn-barpop'); nav.classList.add('bn-dragging');
         try { nav.setPointerCapture(e.pointerId); } catch (err) {}
@@ -44610,7 +44637,11 @@ function bindNavBubble() {
   }, { passive: true });
   nav.addEventListener('pointerup', () => endPress(true), { passive: true });
   nav.addEventListener('pointercancel', () => endPress(false), { passive: true });
-  nav.addEventListener('pointerleave', () => { if (press && !press.dragging) { barRelease(); press = null; } }, { passive: true });
+  nav.addEventListener('pointerleave', () => {
+    if (!press || press.dragging) return; // active drags use pointer capture
+    if (press.pickedUp) endPress(false);  // picked-up-but-not-slid: clean up, don't navigate
+    else { barRelease(); press = null; }  // plain press that left the bar
+  }, { passive: true });
   // Capture-phase: swallow the post-drag click so it can't re-navigate to the start tab.
   nav.addEventListener('click', (e) => { if (suppressClick) { e.preventDefault(); e.stopPropagation(); suppressClick = false; } }, true);
   nav.addEventListener('animationend', (e) => {
