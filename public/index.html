@@ -8696,7 +8696,11 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
    as a blink; forcing the animation to start at the full 1.03 guarantees the same
    smooth, complete settle every time, fast tap or long hold alike. */
 @keyframes bnBarRelease{0%{scale:1.03;}100%{scale:1;}}
-.bottom-nav.bn-release{animation:bnBarRelease .44s var(--ease);}
+/* Liquid-glass settle: a longer, SYMMETRIC ease-in-out (gentle at BOTH ends) rather
+   than the fast-start ease-out — the old curve dumped most of the motion in the first
+   ~100ms so it read as "snaps back fast." This eases out of the zoom gently the whole
+   way, like Apple's liquid-glass bar. */
+.bottom-nav.bn-release{animation:bnBarRelease .6s cubic-bezier(.4,.02,.28,1);}
 .bn-dot{position:absolute;top:5px;right:9px;width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid rgba(64,64,68,.95);z-index:2;}
 .bn-dot.hidden{display:none;}
 
@@ -15042,7 +15046,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1160'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1161'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
