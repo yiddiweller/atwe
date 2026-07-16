@@ -2350,6 +2350,15 @@ body.light .tb-feedtab.active{color:var(--t1);}
   #tbRevealBar .rv-darken{position:absolute;inset:0;background:var(--bg);opacity:0;
     pointer-events:none;z-index:2;will-change:opacity;}
 }
+/* The tab copy's buttons are now DIRECTLY tapped (native scroll), and iOS latches a sticky
+   :hover on the last-tapped element (no pointer to move away), so a tapped tab stayed lit
+   white after release — e.g. "Circles" glowing when "For You" is active. Neutralize the tab
+   hover on touch devices only (desktop keeps its hover feedback); never the active tab,
+   which must stay white. The #id gives this higher specificity than the base :hover rules. */
+@media (hover: none) {
+  #tbTabTouch .tb-feedtab:not(.active):hover{background:none;color:var(--t2);}
+  #tbTabTouch .tb-feedtab-ai:hover .tb-aidots{fill:var(--t2);}
+}
 .tb-word{height:15px;width:auto;display:block;}
 .tb-profile{display:flex;align-items:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
 .tb-profile .user-avatar{width:24px;height:24px;font-size:11px;}
@@ -14935,7 +14944,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1134'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1135'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
