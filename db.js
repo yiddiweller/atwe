@@ -351,6 +351,9 @@ async function initSchema() {
   // keys (["d2","g10"]) and the "unread only" filter toggle.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_pins JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_archived JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  // Circle SECTOR follows: an array of sector keys (["trades","food"]) a member follows
+  // to get the whole industry's combined feed in one place (vs joining each sub-circle).
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS circle_group_follows JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_muted JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   // Per-category notification preferences: { "likes": false, ... } — a category
   // absent here defaults ON. Only the muteable social categories are gated; money,
