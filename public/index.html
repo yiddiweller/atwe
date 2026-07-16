@@ -2281,8 +2281,13 @@ body.light .tb-feedtab.active{color:var(--t1);}
   /* transparent top spacer (menu shows at rest) + OPAQUE children (cover the menu as
      they rise). No background-attachment:local — real elements repaint on every frame,
      including during momentum, so the cover reverses smoothly. */
-  body.feed-cover #acFeed, body.feed-cover #acList{padding-top:var(--tabrow-h);background:transparent;}
+  body.feed-cover #acFeed, body.feed-cover #acList, body.feed-cover #acCallList2{padding-top:var(--tabrow-h);background:transparent;}
   body.feed-cover #acFeed > *, body.feed-cover #acList > *{background-color:var(--bg);}
+  /* The Beam Calls/Contacts panes are NOT the scrolling feed, so without the same
+     top offset the negative-margin cover pulled their header UP OVER the tab row —
+     the search bar covered the tabs and you couldn't switch tabs. Push them below the
+     bar too (the Contacts head keeps its own 8px breathing gap). */
+  body.feed-cover #acContactsHead2{padding-top:calc(var(--tabrow-h) + 8px);}
   /* menu sits BEHIND the content; solid; it's simply covered by the rising content.
      BUT at the very top (body.tabs-live, scrollTop≈0 — where you actually use the
      tabs) the bar is lifted ABOVE the content so it receives taps + horizontal
@@ -14935,7 +14940,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1136'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1137'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
