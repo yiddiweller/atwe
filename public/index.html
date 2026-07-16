@@ -8686,6 +8686,11 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
    scroll-hide) so pill travel + scroll choreography are untouched. */
 @keyframes bnBarPop{0%{scale:1;}42%{scale:1.03;}100%{scale:1;}}
 .bottom-nav.bn-barpop{animation:bnBarPop .42s ease-in-out;}
+/* Held state: if the finger stays down past the pop's peak, the bar HOLDS at the zoomed
+   size (1.03) until release; letting go drops this class and the bar's own scale
+   transition eases it smoothly back to 1. A quick tap never reaches this — it just plays
+   the full pop above. */
+.bottom-nav.bn-hold{scale:1.03;}
 .bn-dot{position:absolute;top:5px;right:9px;width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid rgba(64,64,68,.95);z-index:2;}
 .bn-dot.hidden{display:none;}
 
@@ -15031,7 +15036,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1169'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1170'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -44527,11 +44532,23 @@ function bindNavBubble() {
     const ic = btn.querySelector('.bn-icon, svg, .bn-logo'); if (!ic) return;
     ic.classList.remove('bn-pop'); void ic.offsetWidth; ic.classList.add('bn-pop');
   };
-  // The whole bar (grey pill included) plays one full, smooth zoom-in-and-out on every
-  // tap — the same fixed pop as the icon, so a quick tap and a long press get the SAME
-  // full zoom (no tiny/partial zoom, no finger-tracking, no double-bounce).
-  const barPop = () => { nav.classList.remove('bn-barpop'); void nav.offsetWidth; nav.classList.add('bn-barpop'); };
-  nav.addEventListener('pointerdown', (e) => { const btn = e.target.closest('.bn-tab'); if (btn) { pop(btn); barPop(); } }, { passive: true });
+  // Every tap starts a full smooth pop (perfect for quick taps). If the finger is STILL
+  // down ~160ms in (right at the pop's zoomed peak), we hand off to a HELD state that
+  // stays zoomed at 1.03 until release — the handoff happens at the peak so there's no
+  // jump. Releasing drops .bn-hold and the bar's scale transition eases it back to 1.
+  // A quick tap (released before the handoff) just lets the pop finish — unchanged.
+  let _holdTimer = null;
+  const clearHold = () => { if (_holdTimer) { clearTimeout(_holdTimer); _holdTimer = null; } };
+  const barPop = () => { nav.classList.remove('bn-hold', 'bn-barpop'); void nav.offsetWidth; nav.classList.add('bn-barpop'); };
+  const barRelease = () => { clearHold(); nav.classList.remove('bn-hold'); }; // held → settles via transition
+  nav.addEventListener('pointerdown', (e) => {
+    const btn = e.target.closest('.bn-tab'); if (!btn) return;
+    pop(btn); barPop(); clearHold();
+    _holdTimer = setTimeout(() => { _holdTimer = null; nav.classList.add('bn-hold'); nav.classList.remove('bn-barpop'); }, 160);
+  }, { passive: true });
+  nav.addEventListener('pointerup', barRelease, { passive: true });
+  nav.addEventListener('pointercancel', barRelease, { passive: true });
+  nav.addEventListener('pointerleave', barRelease, { passive: true });
   nav.addEventListener('animationend', (e) => {
     if (e.animationName === 'bnPop' && e.target.classList) e.target.classList.remove('bn-pop');
     else if (e.animationName === 'bnBarPop' && e.target === nav) nav.classList.remove('bn-barpop');
