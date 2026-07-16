@@ -14940,7 +14940,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1138'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1139'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25887,6 +25887,18 @@ const ROW_SWIPE_COMMIT_FRAC = 0.58; // fraction of the row's width that's a full
 const ROW_SWIPE_COMMIT_MIN = ROW_SWIPE_REVEAL + 70; // commit distance never sits close to the reveal point, even on a narrow row
 const ROW_SNAP_EASE = 'transform .28s var(--ease)';
 const ROW_SNAP_EASE_BUBBLE = 'width .28s var(--ease)'; // same duration+curve as ROW_SNAP_EASE so the bubble's edge and the sliding row never drift apart mid-snap
+// The icon GROWS CONTINUOUSLY with the bubble instead of popping in at a threshold:
+// ~invisible at a thin sliver, scaling + fading up 1:1 with the drag until it reaches
+// full size at the resting width — and shrinking back to nothing on cancel. `smooth`
+// restores the CSS ease for a snap (open/close/commit); a live finger drag passes
+// false so the icon tracks the finger exactly (no lag).
+function acRowSwipeIcon(bub, bw, smooth) {
+  const svg = bub && bub.querySelector('svg'); if (!svg) return;
+  const t = Math.max(0, Math.min(1, bw / ROW_SWIPE_MAX)); // 0 closed → 1 at the resting width
+  svg.style.transition = smooth ? '' : 'none';            // '' falls back to the CSS ease
+  svg.style.opacity = t.toFixed(3);
+  svg.style.transform = 'scale(' + (0.3 + 0.7 * t).toFixed(3) + ')';
+}
 function acRowSwipeClose(el, opts) {
   if (!el) return;
   const inner = el.querySelector('.ac-item-inner'); if (!inner) return;
@@ -25894,7 +25906,7 @@ function acRowSwipeClose(el, opts) {
   inner.style.transform = '';
   el.classList.remove('swipe-l', 'swipe-r', 'swipe-commit');
   const bub = el.querySelector('.ac-row-swipe-bubble');
-  if (bub) { bub.style.transition = (opts && opts.instant) ? 'none' : ROW_SNAP_EASE_BUBBLE; bub.style.width = '0px'; bub.classList.remove('show-ic', 'armed'); }
+  if (bub) { bub.style.transition = (opts && opts.instant) ? 'none' : ROW_SNAP_EASE_BUBBLE; bub.style.width = '0px'; acRowSwipeIcon(bub, 0, !(opts && opts.instant)); bub.classList.remove('armed'); }
   if (AC._openSwipeRow === el) AC._openSwipeRow = null;
 }
 function acRowSwipeOpen(el, dir) {
@@ -25905,7 +25917,7 @@ function acRowSwipeOpen(el, dir) {
   el.classList.toggle('swipe-r', dir > 0);
   el.classList.remove('swipe-commit');
   const bub = el.querySelector('.ac-row-swipe-bubble');
-  if (bub) { bub.style.transition = ROW_SNAP_EASE_BUBBLE; bub.style.width = ROW_SWIPE_MAX + 'px'; bub.classList.add('show-ic'); bub.classList.remove('armed'); }
+  if (bub) { bub.style.transition = ROW_SNAP_EASE_BUBBLE; bub.style.width = ROW_SWIPE_MAX + 'px'; acRowSwipeIcon(bub, ROW_SWIPE_MAX, true); bub.classList.remove('armed'); }
   if (AC._openSwipeRow && AC._openSwipeRow !== el) acRowSwipeClose(AC._openSwipeRow);
   AC._openSwipeRow = el;
 }
@@ -25922,7 +25934,7 @@ function acRowSwipeCommit(el, dir) {
   const bub = el.querySelector('.ac-row-swipe-bubble');
   const w = el.getBoundingClientRect().width || ROW_SWIPE_COMMIT_MIN;
   if (inner) { inner.style.transition = 'transform .22s var(--ease)'; inner.style.transform = 'translateX(' + (dir < 0 ? -w : w) + 'px)'; }
-  if (bub) { bub.style.transition = 'width .22s var(--ease)'; bub.style.width = Math.max(0, w - ROW_SWIPE_SUB) + 'px'; }
+  if (bub) { bub.style.transition = 'width .22s var(--ease)'; bub.style.width = Math.max(0, w - ROW_SWIPE_SUB) + 'px'; acRowSwipeIcon(bub, w, true); }
   el.style.transition = 'max-height .22s var(--ease) .05s,opacity .22s var(--ease) .05s';
   el.style.overflow = 'hidden';
   el.style.maxHeight = el.getBoundingClientRect().height + 'px';
@@ -26024,7 +26036,7 @@ function acBindRowSwipeActions() {
     bub.style.transition = 'none';
     const bw = Math.max(0, Math.abs(dx) - ROW_SWIPE_SUB); // uncapped — keeps growing on a long drag, not clamped to ROW_SWIPE_MAX
     bub.style.width = bw + 'px';
-    bub.classList.toggle('show-ic', bw >= ROW_ICON_MIN);
+    acRowSwipeIcon(bub, bw, false); // icon scales up 1:1 with the drag (no threshold pop)
     row.classList.toggle('swipe-l', dir < 0);
     row.classList.toggle('swipe-r', dir > 0);
     if (!committed && Math.abs(dx) >= commitDist - 1) {
