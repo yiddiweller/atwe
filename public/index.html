@@ -8619,7 +8619,9 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
      opacity — so it reads as a dark bar that's still a little see-through + frosted,
      not a solid light-grey slab (owner request: darker, see-through but not too much). */
   background:rgba(18,18,21,.82);
-  -webkit-backdrop-filter:blur(30px) saturate(150%);backdrop-filter:blur(30px) saturate(150%);
+  /* Lighter blur (was 30px) — same dark tint + see-through level, just less frosted so
+     content behind reads a bit more clearly (owner request). */
+  -webkit-backdrop-filter:blur(16px) saturate(150%);backdrop-filter:blur(16px) saturate(150%);
   border:1px solid rgba(255,255,255,.05);
   /* Release ease for the tap zoom-bounce (bn-hold below): slower + soft, so a quick
      tap settles back beautifully rather than snapping. Only the `scale` property is
@@ -15039,7 +15041,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1174'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1175'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
