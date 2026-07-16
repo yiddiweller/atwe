@@ -8650,7 +8650,7 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
    blurred content behind it — show straight through, so the pill reads as glass. */
 .bn-indicator{position:absolute;left:0;top:0;border-radius:999px;background:rgba(255,255,255,.14);pointer-events:none;z-index:0;opacity:0;
   transition:transform var(--t-slow) ease-in-out, width var(--t-base) var(--ease), height var(--t-base) var(--ease), opacity var(--t-base) var(--ease);}
-.bn-tab{flex:1;height:56px;background:none;border:none;cursor:pointer;position:relative;z-index:1;
+.bn-tab{flex:1;height:50px;background:none;border:none;cursor:pointer;position:relative;z-index:1;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#fff;-webkit-tap-highlight-color:transparent;
   -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
 /* Icon-only nav: labels removed (matches the native app). The single icon
@@ -15046,7 +15046,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1162'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1163'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
