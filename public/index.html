@@ -8621,7 +8621,10 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
   background:rgba(18,18,21,.82);
   -webkit-backdrop-filter:blur(30px) saturate(150%);backdrop-filter:blur(30px) saturate(150%);
   border:1px solid rgba(255,255,255,.05);
-  
+  /* Release ease for the tap zoom-bounce (bn-hold below): slower + soft, so a quick
+     tap settles back beautifully rather than snapping. Only the `scale` property is
+     transitioned here — `transform` (scroll-hide) is untouched. */
+  transition:scale var(--t-slow) var(--ease);
   box-shadow:0 10px 34px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.3);}
 .bottom-nav.nav-off{display:none!important;}
 /* Scroll choreography (finger-tracking, iOS-style): the bars are driven directly by
@@ -8635,7 +8638,7 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
    only the tabs appeared to dim. Removed so the bar stays a plain in-flow layer
    below the content (which sits at a higher z-index). */
 .bottom-nav,.ac-fab{will-change:transform,opacity;}
-.topbar.bar-anim,.bottom-nav.bar-anim,.ac-fab.bar-anim{transition:margin-top var(--t-slow) cubic-bezier(.33,0,.2,1), transform var(--t-slow) cubic-bezier(.33,0,.2,1), opacity var(--t-slow) ease;}
+.topbar.bar-anim,.bottom-nav.bar-anim,.ac-fab.bar-anim{transition:margin-top var(--t-slow) cubic-bezier(.33,0,.2,1), transform var(--t-slow) cubic-bezier(.33,0,.2,1), opacity var(--t-slow) ease, scale var(--t-slow) var(--ease);}
 /* The single sliding Liquid-Glass pill (positioned by JS) */
 /* No backdrop-filter here on purpose: a backdrop-filter nested inside the bar
    (which already has one) renders as an opaque grey instead of re-blurring the
@@ -8669,14 +8672,15 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
    half-pop). Every icon uses the exact same keyframe + timing. */
 @keyframes bnPop{0%{transform:scale(1);}42%{transform:scale(1.3);}100%{transform:scale(1);}}
 .bn-tab svg.bn-pop,.bn-tab .bn-logo.bn-pop,.bn-tab .bn-icon.bn-pop{animation:bnPop .42s ease-in-out;}
-/* On any nav tap the WHOLE bar (grey pill included, since it's a child) does one subtle
-   synced zoom-in-and-out — an Apple-liquid-glass "one solid piece" bounce. It uses the
-   standalone `scale` property, which COMPOSES with the bar's existing `transform`
-   (translateY scroll-hide / .bar-anim reveal) instead of overwriting it, so the pill
-   travel, icon pop and scroll choreography are all untouched. Same 0.42s / 42%-peak
-   timing as the icon pop so they move together. Kept small (1.03) because the bar is wide.*/
-@keyframes bnBarPress{0%{scale:1;}42%{scale:1.03;}100%{scale:1;}}
-.bottom-nav.bn-press{animation:bnBarPress .42s ease-in-out;}
+/* On a nav tap the WHOLE bar (grey pill included, since it's a child) gently zooms —
+   an Apple-liquid-glass "one solid piece" flex. Unlike the icon pop (a fixed-length
+   pop that ignores how long you hold), the BAR tracks the finger: it scales up while
+   held (.bn-hold, quick ease-in) and eases back down on release over a slower, softer
+   curve — so a quick tap still gets a smooth, unhurried settle. Uses the standalone
+   `scale` property, which COMPOSES with the bar's existing `transform` (translateY
+   scroll-hide) instead of overwriting it, so pill travel + scroll choreography are
+   untouched. Kept small (1.03) because the bar is wide. */
+.bottom-nav.bn-hold{scale:1.03;transition:scale var(--t-fast) var(--ease);}
 .bn-dot{position:absolute;top:5px;right:9px;width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid rgba(64,64,68,.95);z-index:2;}
 .bn-dot.hidden{display:none;}
 
@@ -15019,7 +15023,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1156'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1157'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -44515,13 +44519,15 @@ function bindNavBubble() {
     const ic = btn.querySelector('.bn-icon, svg, .bn-logo'); if (!ic) return;
     ic.classList.remove('bn-pop'); void ic.offsetWidth; ic.classList.add('bn-pop');
   };
-  // The whole bar (grey pill included) does one subtle synced zoom-bounce on the same tap.
-  const barPress = () => { nav.classList.remove('bn-press'); void nav.offsetWidth; nav.classList.add('bn-press'); };
-  nav.addEventListener('pointerdown', (e) => { const btn = e.target.closest('.bn-tab'); if (btn) { pop(btn); barPress(); } }, { passive: true });
-  nav.addEventListener('animationend', (e) => {
-    if (e.animationName === 'bnPop' && e.target.classList) e.target.classList.remove('bn-pop');
-    else if (e.animationName === 'bnBarPress' && e.target === nav) nav.classList.remove('bn-press');
-  });
+  // The whole bar (grey pill included) tracks the finger: it zooms up while held and
+  // eases back down on release over a slower, softer curve (see .bn-hold / the base
+  // scale transition). Unlike the fixed-length icon pop, holding longer holds the zoom.
+  const barRelease = () => nav.classList.remove('bn-hold');
+  nav.addEventListener('pointerdown', (e) => { const btn = e.target.closest('.bn-tab'); if (btn) { pop(btn); nav.classList.add('bn-hold'); } }, { passive: true });
+  nav.addEventListener('pointerup', barRelease, { passive: true });
+  nav.addEventListener('pointercancel', barRelease, { passive: true });
+  nav.addEventListener('pointerleave', barRelease, { passive: true });
+  nav.addEventListener('animationend', (e) => { if (e.animationName === 'bnPop' && e.target.classList) e.target.classList.remove('bn-pop'); });
 }
 // Make non-native clickable menu rows keyboard-operable (focusable + Enter/Space).
 function a11yInit() {
