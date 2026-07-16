@@ -8677,24 +8677,15 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
    half-pop). Every icon uses the exact same keyframe + timing. */
 @keyframes bnPop{0%{transform:scale(1);}42%{transform:scale(1.3);}100%{transform:scale(1);}}
 .bn-tab svg.bn-pop,.bn-tab .bn-logo.bn-pop,.bn-tab .bn-icon.bn-pop{animation:bnPop .42s ease-in-out;}
-/* On a nav tap the WHOLE bar (grey pill included, since it's a child) gently zooms —
-   an Apple-liquid-glass "one solid piece" flex. Unlike the icon pop (a fixed-length
-   pop that ignores how long you hold), the BAR tracks the finger: it scales up while
-   held (.bn-hold, quick ease-in) and eases back down on release over a slower, softer
-   curve — so a quick tap still gets a smooth, unhurried settle. Uses the standalone
-   `scale` property, which COMPOSES with the bar's existing `transform` (translateY
-   scroll-hide) instead of overwriting it, so pill travel + scroll choreography are
-   untouched. Kept small (1.03) because the bar is wide. */
-/* Grow-in on touch is deliberately GRADUAL, not a snap: no transition override here,
-   so it inherits the base bar's smooth `transition:scale .42s cubic-bezier(.4,.02,.28,1)`
-   (a slow ease) — a fast press-in read as a blink. Release then eases out over a
-   matching curve (below), so the zoom-in and zoom-out feel even and smooth. */
-.bottom-nav.bn-hold{scale:1.03;}
-/* On RELEASE we just drop .bn-hold and the bar's own `transition:scale` (base + the
-   nav-morph rules) eases scale back to 1 FROM its current value — a clean reverse of
-   the same smooth curve, gentle at both ends like Apple's liquid-glass bar. (An earlier
-   forced-from-1.03 release animation snapped a quick tap UP to full size first, which
-   looked like a "double zoom"; easing from the current scale removes that jump.) */
+/* On a nav tap the WHOLE bar (grey pill included, since it's a child) plays ONE full,
+   smooth zoom-in-and-out — the exact same motion as the icon pop above, just subtler
+   (1.03), so the bar + grey pill flex together as one Apple-liquid-glass piece. It's a
+   FIXED pop (not tied to how long you hold), so a quick tap gets the SAME full zoom as a
+   long press — no tiny/partial zoom on a fast tap, and no double-bounce on release. Uses
+   the standalone `scale` property, which COMPOSES with the bar's `transform` (translateY
+   scroll-hide) so pill travel + scroll choreography are untouched. */
+@keyframes bnBarPop{0%{scale:1;}42%{scale:1.03;}100%{scale:1;}}
+.bottom-nav.bn-barpop{animation:bnBarPop .42s ease-in-out;}
 .bn-dot{position:absolute;top:5px;right:9px;width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid rgba(64,64,68,.95);z-index:2;}
 .bn-dot.hidden{display:none;}
 
@@ -15040,7 +15031,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1168'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1169'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -44536,18 +44527,15 @@ function bindNavBubble() {
     const ic = btn.querySelector('.bn-icon, svg, .bn-logo'); if (!ic) return;
     ic.classList.remove('bn-pop'); void ic.offsetWidth; ic.classList.add('bn-pop');
   };
-  // The whole bar (grey pill included) tracks the finger: it zooms up while held
-  // (.bn-hold) and, on release, simply eases back to 1 FROM ITS CURRENT scale via the
-  // bar's own scale transition. No forced-from-1.03 release animation — that made a
-  // quick tap (released before the zoom finished growing) snap UP to full size first,
-  // which read as a "double zoom". A plain reverse of the same smooth curve has no jump.
-  let _barHeld = false;
-  const barRelease = () => { if (!_barHeld) return; _barHeld = false; nav.classList.remove('bn-hold'); };
-  nav.addEventListener('pointerdown', (e) => { const btn = e.target.closest('.bn-tab'); if (btn) { pop(btn); _barHeld = true; nav.classList.add('bn-hold'); } }, { passive: true });
-  nav.addEventListener('pointerup', barRelease, { passive: true });
-  nav.addEventListener('pointercancel', barRelease, { passive: true });
-  nav.addEventListener('pointerleave', barRelease, { passive: true });
-  nav.addEventListener('animationend', (e) => { if (e.animationName === 'bnPop' && e.target.classList) e.target.classList.remove('bn-pop'); });
+  // The whole bar (grey pill included) plays one full, smooth zoom-in-and-out on every
+  // tap — the same fixed pop as the icon, so a quick tap and a long press get the SAME
+  // full zoom (no tiny/partial zoom, no finger-tracking, no double-bounce).
+  const barPop = () => { nav.classList.remove('bn-barpop'); void nav.offsetWidth; nav.classList.add('bn-barpop'); };
+  nav.addEventListener('pointerdown', (e) => { const btn = e.target.closest('.bn-tab'); if (btn) { pop(btn); barPop(); } }, { passive: true });
+  nav.addEventListener('animationend', (e) => {
+    if (e.animationName === 'bnPop' && e.target.classList) e.target.classList.remove('bn-pop');
+    else if (e.animationName === 'bnBarPop' && e.target === nav) nav.classList.remove('bn-barpop');
+  });
 }
 // Make non-native clickable menu rows keyboard-operable (focusable + Enter/Space).
 function a11yInit() {
