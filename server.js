@@ -4601,17 +4601,61 @@ app.post('/api/atchat/theme', auth.requireAuth, async (req, res) => {
 });
 app.put('/api/atchat/prefs', auth.requireAuth, async (req, res) => {
   const pins = cleanKeys(req.body.pins);
-  const archived = cleanKeys(req.body.archived);
   const muted = cleanKeys(req.body.muted);
   const muteUntil = cleanMuteUntil(req.body.muteUntil);
   const unreadOnly = req.body.unreadOnly === true;
   try {
-    await db.query('UPDATE users SET chat_pins = $1::jsonb, chat_archived = $2::jsonb, chat_muted = $3::jsonb, chat_mute_until = $5::jsonb, chat_unread_only = $4 WHERE id = $6',
-      [JSON.stringify(pins), JSON.stringify(archived), JSON.stringify(muted), unreadOnly, JSON.stringify(muteUntil), req.user.id]);
+    // chat_archived is DELIBERATELY not written here — archive/unarchive go through the
+    // targeted POST /api/atchat/archive below (an atomic add/remove of one key). If the
+    // full blob wrote archived too, a stale push from a backgrounded PWA or a second
+    // device could overwrite the array and resurrect a chat the user just unarchived
+    // (the "unarchive doesn't stick across devices" bug). We RETURN the current archived
+    // (unchanged) so the response shape stays stable for older callers.
+    const { rows } = await db.query('UPDATE users SET chat_pins = $1::jsonb, chat_muted = $2::jsonb, chat_mute_until = $4::jsonb, chat_unread_only = $3 WHERE id = $5 RETURNING chat_archived',
+      [JSON.stringify(pins), JSON.stringify(muted), unreadOnly, JSON.stringify(muteUntil), req.user.id]);
+    const archived = Array.isArray(rows[0]?.chat_archived) ? rows[0].chat_archived : [];
     res.json({ ok: true, pins, archived, muted, muteUntil, unreadOnly });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not save preferences.' });
+  }
+});
+
+// Targeted archive/unarchive (WhatsApp-style, cross-device safe). Adds or removes ONE
+// key (or clears all) on chat_archived atomically — never a full-blob overwrite — so
+// unarchiving on one device can't be resurrected by a stale push from another. Archiving
+// also unpins the chat (mirrors the client). Fans a live 'prefsync' event to the user's
+// OTHER devices so they update instantly, like a real messaging app.
+app.post('/api/atchat/archive', auth.requireAuth, async (req, res) => {
+  const clearAll = req.body.clearAll === true;
+  const on = req.body.on === true;
+  const keys = clearAll ? []
+    : cleanKeys(Array.isArray(req.body.keys) ? req.body.keys : (req.body.key != null ? [req.body.key] : []));
+  if (!clearAll && !keys.length) return res.status(400).json({ error: 'Missing chat key.' });
+  try {
+    let sql, params;
+    if (clearAll) {
+      sql = `UPDATE users SET chat_archived = '[]'::jsonb WHERE id = $1 RETURNING chat_archived`;
+      params = [req.user.id];
+    } else if (on) {
+      // remove any existing copies then append (dedup), and drop them from pins
+      sql = `UPDATE users SET
+               chat_archived = (COALESCE(chat_archived, '[]'::jsonb) - $2::text[]) || $3::jsonb,
+               chat_pins = COALESCE(chat_pins, '[]'::jsonb) - $2::text[]
+             WHERE id = $1 RETURNING chat_archived`;
+      params = [req.user.id, keys, JSON.stringify(keys)];
+    } else {
+      sql = `UPDATE users SET chat_archived = COALESCE(chat_archived, '[]'::jsonb) - $2::text[]
+             WHERE id = $1 RETURNING chat_archived`;
+      params = [req.user.id, keys];
+    }
+    const { rows } = await db.query(sql, params);
+    const archived = Array.isArray(rows[0]?.chat_archived) ? rows[0].chat_archived : [];
+    rtPush(req.user.id, 'prefsync', { archived });   // live-sync the user's other devices
+    res.json({ ok: true, archived });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not update archive.' });
   }
 });
 

@@ -14935,7 +14935,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1133'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1136'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -26320,7 +26320,7 @@ function acToggleArchive(kind, id, threadId) {
   if (!a.size) AC._showArchived = false; // nothing left to show
   acRenderChats();
   showNotif(archiving ? 'Archived.' : 'Unarchived.');
-  acSaveChatPrefs().then(() => acRefreshUnread()); // archived chats drop out of the badge
+  acPushArchive({ key: k, on: archiving }).then(() => acRefreshUnread()); // targeted server op → cross-device safe
 }
 function acEnterArchived() { AC._showArchived = true; acHideChatSearch(); acRenderChats(); }
 function acExitArchived() { AC._showArchived = false; acRenderChats(); }
@@ -26334,7 +26334,7 @@ async function acUnarchiveAll() {
   AC._showArchived = false;
   acRenderChats();
   showNotif('All chats unarchived.');
-  acSaveChatPrefs().then(() => acRefreshUnread());
+  acPushArchive({ clearAll: true }).then(() => acRefreshUnread());
 }
 async function acDeleteAllArchived() {
   const keys = [...acArchived()];
@@ -26352,7 +26352,7 @@ async function acDeleteAllArchived() {
   try { localStorage.setItem('ac_archived', JSON.stringify([])); } catch {}
   AC._showArchived = false;
   showNotif('Archived chats deleted.');
-  acSaveChatPrefs().then(() => acRefreshUnread());
+  acPushArchive({ clearAll: true }).then(() => acRefreshUnread());
   acLoadChats();
 }
 // Muting a DM (per account, synced): it stays in the list but stops adding to the
@@ -26439,13 +26439,18 @@ async function acSyncChatPrefs() {
     // completely empty, local has data) seeds the server ONCE instead of being wiped.
     const serverEmpty = !sPins.size && !sArch.size && !sMute.size && !Object.keys(sUntil).length;
     const localAny = acPins().size || acArchived().size || acMutedDms().size || Object.keys(acMuteUntil()).length;
-    let mPins, mArch, mMute, mUntil;
+    let mPins, mMute, mUntil;
     if (serverEmpty && localAny) {
-      mPins = acPins(); mArch = acArchived(); mMute = acMutedDms(); mUntil = acMuteUntil();
-      setTimeout(() => acSaveChatPrefs(), 50); // first sync: push local up
+      mPins = acPins(); mMute = acMutedDms(); mUntil = acMuteUntil();
+      setTimeout(() => acSaveChatPrefs(), 50); // first sync: push local pins/mutes up
     } else {
-      mPins = sPins; mArch = sArch; mMute = sMute; mUntil = sUntil;
+      mPins = sPins; mMute = sMute; mUntil = sUntil;
     }
+    // Archived is ALWAYS taken from the server — never re-seeded from local. Archive is a
+    // targeted server op (POST /api/atchat/archive) that writes through immediately, so the
+    // server is authoritative; seeding stale local archived here would resurrect a chat the
+    // user unarchived on another device (the exact bug we're fixing).
+    const mArch = sArch;
     AC._pins = mPins; AC._archived = mArch; AC._mutedDms = mMute; AC._muteUntil = mUntil; AC._unreadOnly = !!unreadOnly;
     try {
       localStorage.setItem('ac_pins', JSON.stringify([...mPins]));
@@ -26463,14 +26468,37 @@ async function acSyncChatPrefs() {
 }
 function acSaveChatPrefs() {
   if (!isAccount()) return Promise.resolve();
-  const body = { pins: [...acPins()], archived: [...acArchived()], muted: [...acMutedDms()], muteUntil: acMuteUntil(), unreadOnly: !!acUnreadOnly() };
+  // NOTE: archived is intentionally NOT sent here — it's owned by acPushArchive (a
+  // targeted add/remove) so a stale blob can't clobber it. Pins/mutes/unreadOnly only.
+  const body = { pins: [...acPins()], muted: [...acMutedDms()], muteUntil: acMuteUntil(), unreadOnly: !!acUnreadOnly() };
   // Never swallow a failed save silently: the server is the boot-time source of
-  // truth, so a lost save means the change resurrects on the next refresh (the
-  // "I unarchived but it came back" bug). Retry once, then tell the user.
+  // truth, so a lost save means the change resurrects on the next refresh. Retry
+  // once, then tell the user.
   return API.req('PUT', '/api/atchat/prefs', body).catch(() =>
     new Promise(r => setTimeout(r, 1200)).then(() => API.req('PUT', '/api/atchat/prefs', body))
       .catch(() => { showNotif('Couldn’t sync your chat settings — check your connection.'); })
   );
+}
+// Archive/unarchive as a TARGETED server op — never part of the full prefs blob, so a
+// stale push from another device or a backgrounded PWA can't resurrect a chat you just
+// unarchived. body: { key, on } | { keys, on } | { clearAll:true }. Retries once, then warns.
+function acPushArchive(body) {
+  if (!isAccount()) return Promise.resolve();
+  return API.req('POST', '/api/atchat/archive', body).catch(() =>
+    new Promise(r => setTimeout(r, 1200)).then(() => API.req('POST', '/api/atchat/archive', body))
+      .catch(() => { showNotif('Couldn’t sync your archived chats — check your connection.'); })
+  );
+}
+// Apply a live 'prefsync' event (archive changed on another of the user's devices): replace
+// the local archived set with the server's authoritative one and re-render — so all devices
+// stay in lock-step, WhatsApp-style.
+function acApplyPrefSync(d) {
+  if (!d || !Array.isArray(d.archived)) return;
+  AC._archived = new Set(d.archived);
+  try { localStorage.setItem('ac_archived', JSON.stringify(d.archived)); } catch {}
+  if (!AC._archived.size) AC._showArchived = false;
+  if (AC._chatsTab === 'chats' || AC._chatsTab === 'groups' || AC._showArchived) acRenderChats();
+  acRefreshUnread();
 }
 const AC_PIN_IC = '<span class="ac-pin-ic" title="Pinned"><svg viewBox="0 0 24 24"><line x1="12" y1="17" x2="12" y2="22"/><path d="M7 4h10l-1.4 6.2 2.4 2.3H6l2.4-2.3z"/></svg></span>';
 function acUnreadOnly() {
@@ -36906,7 +36934,7 @@ async function acBulkChat(action) {
     const ok = await appConfirm({ title: 'Delete ' + keys.length + ' chat' + (keys.length > 1 ? 's' : '') + '?', message: 'This clears them from your list. Groups you’re in, you’ll leave.', confirmText: 'Delete' });
     if (!ok) return;
   }
-  let done = 0;
+  let done = 0; const archivedKeys = [];
   for (const k of keys) {
     const { kind, id } = _parseSelKey(k);
     try {
@@ -36916,7 +36944,7 @@ async function acBulkChat(action) {
       } else if (action === 'pin') {
         if (!acIsArchived(kind, id)) acPins().add(acPinKey(kind, id)); // archived chats can't be pinned
       } else if (action === 'archive') {
-        const pk = acPinKey(kind, id); acArchived().add(pk); acPins().delete(pk);
+        const pk = acPinKey(kind, id); acArchived().add(pk); acPins().delete(pk); archivedKeys.push(pk);
       } else if (action === 'delete') {
         if (kind === 'dm') { await API.req('DELETE', '/api/atchat/with/' + id); AC.conversations = (AC.conversations || []).filter(x => x.id !== id); if (AC._dmCache) delete AC._dmCache[id]; }
         else { await API.req('DELETE', '/api/atchat/groups/' + id + '/members/me'); AC.groupsList = (AC.groupsList || []).filter(x => x.id !== id); if (AC._grpCache) delete AC._grpCache[id]; }
@@ -36926,7 +36954,8 @@ async function acBulkChat(action) {
   }
   if (action === 'pin' || action === 'archive') {
     try { localStorage.setItem('ac_pins', JSON.stringify([...acPins()])); localStorage.setItem('ac_archived', JSON.stringify([...acArchived()])); } catch {}
-    acSaveChatPrefs();
+    acSaveChatPrefs(); // persists pins (archive dropped them) via the blob
+    if (archivedKeys.length) acPushArchive({ keys: archivedKeys, on: true }); // archive itself via the targeted, cross-device-safe endpoint
   }
   const noun = done + ' chat' + (done === 1 ? '' : 's');
   const msg = action === 'read' ? noun + ' marked read' : action === 'pin' ? noun + ' pinned' : action === 'archive' ? noun + ' archived' : noun + ' deleted';
@@ -37306,6 +37335,7 @@ async function rtConnect() {
   rtSource.addEventListener('metaupd', e => { try { rtOnMetaUpd(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('pin', e => { try { rtOnPin(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('disappearing', e => { try { rtOnDisappearing(JSON.parse(e.data)); } catch {} });
+  rtSource.addEventListener('prefsync', e => { try { acApplyPrefSync(JSON.parse(e.data)); } catch {} }); // archive changed on another device → live-sync
   rtSource.addEventListener('typing', e => { try { rtOnTyping(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('presence', e => { try { rtOnPresence(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('presence-init', e => {
