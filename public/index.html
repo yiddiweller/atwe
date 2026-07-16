@@ -8669,6 +8669,14 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
    half-pop). Every icon uses the exact same keyframe + timing. */
 @keyframes bnPop{0%{transform:scale(1);}42%{transform:scale(1.3);}100%{transform:scale(1);}}
 .bn-tab svg.bn-pop,.bn-tab .bn-logo.bn-pop,.bn-tab .bn-icon.bn-pop{animation:bnPop .42s ease-in-out;}
+/* On any nav tap the WHOLE bar (grey pill included, since it's a child) does one subtle
+   synced zoom-in-and-out — an Apple-liquid-glass "one solid piece" bounce. It uses the
+   standalone `scale` property, which COMPOSES with the bar's existing `transform`
+   (translateY scroll-hide / .bar-anim reveal) instead of overwriting it, so the pill
+   travel, icon pop and scroll choreography are all untouched. Same 0.42s / 42%-peak
+   timing as the icon pop so they move together. Kept small (1.03) because the bar is wide.*/
+@keyframes bnBarPress{0%{scale:1;}42%{scale:1.03;}100%{scale:1;}}
+.bottom-nav.bn-press{animation:bnBarPress .42s ease-in-out;}
 .bn-dot{position:absolute;top:5px;right:9px;width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid rgba(64,64,68,.95);z-index:2;}
 .bn-dot.hidden{display:none;}
 
@@ -15011,7 +15019,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1155'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1156'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -44507,8 +44515,13 @@ function bindNavBubble() {
     const ic = btn.querySelector('.bn-icon, svg, .bn-logo'); if (!ic) return;
     ic.classList.remove('bn-pop'); void ic.offsetWidth; ic.classList.add('bn-pop');
   };
-  nav.addEventListener('pointerdown', (e) => { const btn = e.target.closest('.bn-tab'); if (btn) pop(btn); }, { passive: true });
-  nav.addEventListener('animationend', (e) => { if (e.animationName === 'bnPop' && e.target.classList) e.target.classList.remove('bn-pop'); });
+  // The whole bar (grey pill included) does one subtle synced zoom-bounce on the same tap.
+  const barPress = () => { nav.classList.remove('bn-press'); void nav.offsetWidth; nav.classList.add('bn-press'); };
+  nav.addEventListener('pointerdown', (e) => { const btn = e.target.closest('.bn-tab'); if (btn) { pop(btn); barPress(); } }, { passive: true });
+  nav.addEventListener('animationend', (e) => {
+    if (e.animationName === 'bnPop' && e.target.classList) e.target.classList.remove('bn-pop');
+    else if (e.animationName === 'bnBarPress' && e.target === nav) nav.classList.remove('bn-press');
+  });
 }
 // Make non-native clickable menu rows keyboard-operable (focusable + Enter/Space).
 function a11yInit() {
