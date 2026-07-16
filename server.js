@@ -9885,10 +9885,10 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), re
     feedId = parseInt(req.body.feedId, 10);
     if (!Number.isInteger(feedId)) return res.status(400).json({ error: 'Invalid feed.' });
   }
-  // Default: a normal post goes to the main feed. A circle-only post sets toMain false.
-  let toMain = req.body.toMain === undefined ? true : !!req.body.toMain;
-  if (!circleIds.length) toMain = true; // a post with no circles must live somewhere
-  if (feedId != null) toMain = false; // feed broadcasts stay inside the feed
+  // Every post is ALWAYS a public/regular post — adding it to a circle is purely
+  // additive (the post also appears in that circle), never circle-only. The only
+  // exception is a feed broadcast, which stays inside its channel.
+  let toMain = feedId == null;
   try {
     if (!(await requireHandle(req, res))) return;
     let parentOwner = null;

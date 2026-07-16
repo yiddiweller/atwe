@@ -8873,7 +8873,8 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 /* Post targeting chips */
 .ac-targets{display:flex;flex-wrap:wrap;gap:8px;padding:11px 16px;border-top:1px solid var(--b1);flex-shrink:0;align-items:center;}
 .ac-targets:empty{display:none;}
-.ac-tg-label{font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);width:100%;margin-bottom:1px;}
+.ac-tg-label{font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);width:100%;margin-bottom:1px;display:flex;align-items:center;gap:7px;}
+.ac-tg-opt{font-weight:600;letter-spacing:.02em;text-transform:none;color:var(--t3);opacity:.7;font-size:11px;}
 .ac-target{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--r-pill);border:none;
   background:none;color:var(--t2);font-size:13.5px;font-weight:600;cursor:pointer;transition:all var(--t-fast) var(--ease);}
 .ac-target svg{width:14px;height:14px;stroke:currentColor;stroke-width:2.6;fill:none;opacity:0;width:0;margin-inline-start:-6px;transition:all var(--t-fast) var(--ease);}
@@ -14997,7 +14998,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1142'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1143'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24607,8 +24608,10 @@ function acTopBack() {
 let _acFeedScope = 'foryou';
 function acGoHome() {
   acStopMic(); acShow('acHomeScreen', 'home');
-  // Restore a pinned circle as its own feed tab (blueprint §Home).
-  if (AC._pinnedCircle === undefined) { try { AC._pinnedCircle = JSON.parse(localStorage.getItem('atwe_pinned_circle') || 'null'); } catch (e) { AC._pinnedCircle = null; } }
+  // Circles are NOT home-feed tabs — they live only on the Circles page. Force any
+  // legacy pinned-circle tab off (clear it once) so nothing circle-related sits in the
+  // home tab row.
+  if (AC._pinnedCircle === undefined || AC._pinnedCircle) { AC._pinnedCircle = null; try { localStorage.removeItem('atwe_pinned_circle'); } catch (e) {} }
   acSyncPinnedTab();
   acSetFeed(_acFeedScope);
   acStartNewPostsPoll();
@@ -25299,17 +25302,11 @@ function acRenderCircles() {
   const list = AC._circles || [];
   const q = (AC._circleQuery || '').trim().toLowerCase();
   const norm = s => (s || '').toLowerCase();
-  const pinnedId = AC._pinnedCircle && AC._pinnedCircle.id;
-  // A clean category row — no avatar. Name + member count + Join (calm outline) + pin (joined).
+  // A clean category row — no avatar. Name + member count + Join (calm outline).
   const row = (c) => {
-    const pinned = c.id === pinnedId;
-    const pinBtn = c.isMember
-      ? `<button class="ac-circ-pin ${pinned ? 'on' : ''}" onclick="event.stopPropagation();acTogglePinCircle(${c.id})" aria-pressed="${pinned}" aria-label="${pinned ? 'Unpin' : 'Pin'} ${escHtml(c.name)} as a feed tab" title="${pinned ? 'Unpin from tabs' : 'Pin as a feed tab'}">${_PIN_ICON}</button>`
-      : '';
     return `<div class="circ2-row" onclick="acOpenCircle(${c.id})">
       <div class="circ2-main"><div class="circ2-name">${escHtml(c.name)}</div>
         <div class="circ2-sub">${acCompact(c.members)} member${c.members === 1 ? '' : 's'}</div></div>
-      ${pinBtn}
       <button class="circ2-join ${c.isMember ? 'joined' : ''}" onclick="event.stopPropagation();acToggleJoin(${c.id},this)" aria-pressed="${c.isMember}">${c.isMember ? 'Joined' : 'Join'}</button>
     </div>`;
   };
@@ -25330,32 +25327,37 @@ function acRenderCircles() {
     </div>`;
   };
 
-  let html = `<div class="ac-circ-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`
-    + `<input id="acCircleSearch" type="search" autocomplete="off" placeholder="Find your industry — ${list.length || 205} categories" aria-label="Find your industry" oninput="acCircleSearchInput(this.value)" value="${escHtml(AC._circleQuery || '')}"/></div>`;
+  const searchBar = `<div class="ac-circ-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`
+    + `<input id="acCircleSearch" type="search" autocomplete="off" placeholder="Search or add a category" aria-label="Search circles" oninput="acCircleSearchInput(this.value)" value="${escHtml(AC._circleQuery || '')}"/></div>`;
+  // A "whole industry" row (a followed sector) for the Your-circles section.
+  const sectorRow = (g) => {
+    const n = list.filter(c => _circleGroupOf(c.name).key === g.key).length;
+    return `<div class="circ2-row" onclick="acOpenSector('${g.key}')">
+      <div class="circ2-gicon"><svg viewBox="0 0 24 24" class="circ2-secic">${_CIRC_GLYPH[g.g] || ''}</svg></div>
+      <div class="circ2-main"><div class="circ2-name">${escHtml(g.name)}</div>
+        <div class="circ2-sub">Whole industry · ${n} categor${n === 1 ? 'y' : 'ies'}</div></div>
+      <button class="circ2-join joined" onclick="event.stopPropagation();acToggleSectorFollow('${g.key}',this)" aria-pressed="true">Following</button>
+    </div>`;
+  };
 
-  // SEARCH MODE — a flat, ungrouped result list.
+  // 1) YOUR CIRCLES first — the whole industries + individual circles you're in.
+  const followedSectors = AC_CIRCLE_GROUPS.filter(g => follows.has(g.key));
+  const joined = list.filter(c => c.isMember).sort((a, b) => a.name.localeCompare(b.name));
+  let yours = '';
+  if (followedSectors.length || joined.length) {
+    yours += secHead(_CIRC_GLYPH.check, 'Your circles', followedSectors.length + joined.length);
+    yours += followedSectors.map(sectorRow).join('') + joined.map(row).join('');
+  }
+
+  // 2) The search box sits right under your circles.
+  let html = yours + searchBar;
+
+  // SEARCH MODE — a flat, ungrouped result list under the search box.
   if (q) {
     const res = list.filter(c => norm(c.name).includes(q)).sort((a, b) => a.name.localeCompare(b.name));
     html += res.length ? secHead('', 'Results', res.length) + res.map(row).join('')
       : `<div class="ac-empty">No categories match “${escHtml(q)}”.</div>`;
     el.innerHTML = html; return;
-  }
-
-  // MY INDUSTRIES — whole sectors the viewer follows (one-tap access to each combined feed).
-  if (follows.size) {
-    const mineG = AC_CIRCLE_GROUPS.filter(g => follows.has(g.key));
-    if (mineG.length) {
-      html += secHead(_CIRC_GLYPH.check, 'My industries', mineG.length);
-      html += mineG.map(g => {
-        const n = (AC._circles || []).filter(c => _circleGroupOf(c.name).key === g.key).length;
-        return `<div class="circ2-row" onclick="acOpenSector('${g.key}')">
-          <div class="circ2-gicon"><svg viewBox="0 0 24 24" class="circ2-secic">${_CIRC_GLYPH[g.g] || ''}</svg></div>
-          <div class="circ2-main"><div class="circ2-name">${escHtml(g.name)}</div>
-            <div class="circ2-sub">Whole industry · ${n} categor${n === 1 ? 'y' : 'ies'}</div></div>
-          <button class="circ2-join joined" onclick="event.stopPropagation();acToggleSectorFollow('${g.key}',this)" aria-pressed="true">Following</button>
-        </div>`;
-      }).join('');
-    }
   }
 
   // SUGGESTED — the viewer's own industries they haven't joined yet (LinkedIn-style).
@@ -25365,13 +25367,13 @@ function acRenderCircles() {
     if (sugg.length) html += secHead(_CIRC_GLYPH.spark, 'Suggested for you', null) + sugg.map(row).join('');
   }
 
-  // GROUPED BROWSE — bucket every circle into its sector, ordered by AC_CIRCLE_GROUPS.
+  // 3) BROWSE / ADD CATEGORIES — grouped by sector with a jump-chip bar.
   const buckets = new Map(); AC_CIRCLE_GROUPS.forEach(g => buckets.set(g.key, []));
   const other = [];
   list.forEach(c => { const g = _circleGroupOf(c.name); const b = buckets.get(g.key); (b || other).push(c); });
   const active = AC_CIRCLE_GROUPS.filter(g => (buckets.get(g.key) || []).length);
-  // Jump-chip bar — tap a sector to scroll straight to it.
   if (active.length) {
+    html += secHead('', 'Browse all industries', null);
     html += `<div class="circ2-chips" id="acCircChips">`
       + active.map(g => `<button class="circ2-chip" onclick="acCircleJump('${g.key}')">${escHtml(g.name)}</button>`).join('')
       + `</div>`;
@@ -25407,15 +25409,7 @@ async function acToggleJoin(id, btn) {
   btn._busy = false;
 }
 // Pin ONE circle so it shows as its own feed tab after Collections (blueprint §Home).
-function acTogglePinCircle(id) {
-  const c = (AC._circles || []).find(x => x.id === id); if (!c) return;
-  const already = AC._pinnedCircle && AC._pinnedCircle.id === id;
-  AC._pinnedCircle = already ? null : { id: c.id, name: c.name };
-  try { if (AC._pinnedCircle) localStorage.setItem('atwe_pinned_circle', JSON.stringify(AC._pinnedCircle)); else localStorage.removeItem('atwe_pinned_circle'); } catch (e) {}
-  acSyncPinnedTab();
-  acRenderCircles();
-  if (!already) showNotif('Pinned “' + c.name + '” as a feed tab.');
-}
+function acTogglePinCircle(id) { /* removed: circles are no longer pinnable as home-feed tabs */ }
 // Insert/remove the pinned-circle tab button after Collections.
 function acSyncPinnedTab() {
   const row = document.getElementById('tbFeedTabs'); if (!row) return;
@@ -28716,10 +28710,11 @@ function acOpenPost(circleId) {
   AC._postFeedCtx = null;
   AC._quoteId = null; document.getElementById('acPostQuote').innerHTML = '';
   AC._replyScope = 'everyone'; const rsl = document.getElementById('acReplyScopeLabel'); if (rsl) rsl.textContent = 'Everyone can reply';
-  // Reply controls only apply to top-level posts (not circle/feed-only contexts).
-  const rsb = document.getElementById('acReplyScopeBtn'); if (rsb) rsb.style.display = (typeof circleId === 'number') ? 'none' : '';
+  // Every post is a normal public post now (a circle is just an extra place it's added),
+  // so the full controls always apply — even when opened from a circle.
+  const rsb = document.getElementById('acReplyScopeBtn'); if (rsb) rsb.style.display = '';
   document.getElementById('acPostText').value = '';
-  document.getElementById('acPostTitle').textContent = AC._postCircleCtx ? 'New circle post' : 'New post';
+  document.getElementById('acPostTitle').textContent = 'New post';
   acThreadReset();
   acMentionClose();
   AC._draftId = null;
@@ -28730,14 +28725,14 @@ function acOpenPost(circleId) {
   AC._myTiers = null; // re-fetch tiers fresh on next sub-only toggle
   const mtRow = document.getElementById('acMinTierRow'); if (mtRow) mtRow.classList.add('hidden');
   if (subBtn) {
-    const eligible = (typeof circleId !== 'number') && !!(S.user && S.user.subPriceCents > 0);
+    const eligible = !!(S.user && S.user.subPriceCents > 0);
     subBtn.classList.toggle('hidden', !eligible);
     subBtn.classList.remove('on');
     document.getElementById('acSubOnlyLabel').textContent = 'Anyone can see this';
   }
-  // Pay-per-view: a one-time unlock price, available on plain main-feed posts (any account).
+  // Pay-per-view: a one-time unlock price, available on any post (any account).
   const ppvRow = document.getElementById('acPpvRow');
-  if (ppvRow) { ppvRow.classList.toggle('hidden', typeof circleId === 'number'); const pi = document.getElementById('acPpvPrice'); if (pi) pi.value = ''; }
+  if (ppvRow) { ppvRow.classList.remove('hidden'); const pi = document.getElementById('acPpvPrice'); if (pi) pi.value = ''; }
   AC._postTagged = []; AC._postCoAuth = []; acRenderTagChips();
   acResetPoll();
   acResetLocation();
@@ -28827,7 +28822,7 @@ async function acPostComposeBack() {
 }
 // Build the "share to" chips: your feed + the circles you belong to.
 async function acRenderPostTargets(circleId) {
-  AC._postToMain = !circleId;          // posting from a circle defaults to circle-only
+  AC._postToMain = true;               // every post is ALWAYS public — a circle is additive
   AC._postSel = new Set(circleId ? [circleId] : []);
   let mine = [];
   try { mine = (await API.req('GET', '/api/circles/mine')).circles || []; } catch {}
@@ -28835,19 +28830,21 @@ async function acRenderPostTargets(circleId) {
   acDrawTargets();
 }
 function acDrawTargets() {
-  const el = document.getElementById('acPostTargets');
+  const el = document.getElementById('acPostTargets'); if (!el) return;
   const mine = AC._myCircles || [];
-  if (!mine.length && !AC._postCircleCtx) { el.innerHTML = ''; return; }
+  if (!mine.length) { el.innerHTML = ''; return; }   // no joined circles → nothing to add to
+  const sel = AC._postSel || (AC._postSel = new Set());
   const chk = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
-  let html = '<span class="ac-tg-label">Share to</span>';
-  html += `<button class="ac-target ${AC._postToMain ? 'on' : ''}" onclick="acToggleTarget('main')">${chk}Your feed</button>`;
-  mine.forEach(c => { html += `<button class="ac-target ${AC._postSel.has(c.id) ? 'on' : ''}" onclick="acToggleTarget(${c.id})">${chk}circle@${escHtml(c.username)}</button>`; });
+  // Your feed is always on (implicit); the chips just ALSO file the post into a circle.
+  let html = `<span class="ac-tg-label">Also add to a circle <span class="ac-tg-opt">optional</span></span>`;
+  mine.forEach(c => { html += `<button class="ac-target ${sel.has(c.id) ? 'on' : ''}" onclick="acToggleTarget(${c.id})">${chk}${escHtml(c.name)}</button>`; });
   el.innerHTML = html;
 }
 function acToggleTarget(which) {
-  if (which === 'main') AC._postToMain = !AC._postToMain;
-  else { if (AC._postSel.has(which)) AC._postSel.delete(which); else AC._postSel.add(which); }
-  if (!AC._postToMain && AC._postSel.size === 0) AC._postToMain = true; // must go somewhere
+  if (which === 'main') return;        // the public feed is always on — not toggleable
+  const sel = AC._postSel || (AC._postSel = new Set());
+  if (sel.has(which)) sel.delete(which); else sel.add(which);
+  AC._postToMain = true;
   acDrawTargets();
 }
 function acPostInput() {
