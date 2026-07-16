@@ -8615,9 +8615,9 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
      reports an unusually large bottom inset. */
   bottom:max(var(--nav-inset), env(safe-area-inset-bottom, 0px) - 11px);
   gap:2px;padding:4px;border-radius:999px;
-  /* Same colour (32,32,36), more opaque so it's less see-through than the old .50 —
-     still translucent + frosted, just more solid (owner request). */
-  background:rgba(32,32,36,.74);
+  /* Same colour (32,32,36), now much more opaque — nearly solid, just a hint of the
+     frosted blur showing through (owner request: "much less see-through"). */
+  background:rgba(32,32,36,.93);
   -webkit-backdrop-filter:blur(30px) saturate(150%);backdrop-filter:blur(30px) saturate(150%);
   border:1px solid rgba(255,255,255,.05);
   
@@ -15005,7 +15005,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1151'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1152'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
