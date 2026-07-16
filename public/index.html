@@ -102,7 +102,7 @@ a{text-decoration:none;color:inherit;}
   /* Market up/down — a functional signal (positive/negative), so it borrows
      the same green/red as every other success/destructive use in the app */
   --fin-up: #30D158;
-  --fin-down: #FF453A;
+  --fin-down: #FF0033;
 
   /* Text */
   --t1: #FFFFFF;
@@ -113,8 +113,8 @@ a{text-decoration:none;color:inherit;}
 
   /* Status — functional signals only, never theme decoration */
   --green: #30D158; --green-edge: #66D98F; --green-tint: #E6FFEF;
-  --red:   #FF453A; --red-edge: #FF6B60;   --red-tint: #FFEAEA;
-  --red-soft: rgba(255,69,58,.16);
+  --red:   #FF0033; --red-edge: #FF3355;   --red-tint: #FFE0E6;
+  --red-soft: rgba(255,0,51,.16);
   --amber: #FFCC00; --amber-edge: #FFE066; /* warning/attention; text = --text-black */
   /* "Rose" (liked/active-heart, unfollow/leave) has no place in the 3-color
      law — an active/selected state is blue's job per the color law, so it's
@@ -523,7 +523,7 @@ body.light .splash-mark{background-color:#d2d2d8;}
 /* Code complete + correct → fade the boxes green (auto-submits). */
 .otp-row.code-ok .otp-box{border-color:rgba(48,209,88,.95);background:rgba(48,209,88,.12);}
 /* Wrong code → a clean red outline (same simple fade as the green), then a shake. */
-.otp-row.code-bad .otp-box{border-color:rgba(255,69,58,.95);background:rgba(255,69,58,.14);}
+.otp-row.code-bad .otp-box{border-color:rgba(255,0,51,.95);background:rgba(255,0,51,.14);}
 .auth-resend{font-size:14px;color:var(--t3);margin:0 0 6px;}
 .auth-resend b{color:var(--t1);font-weight:700;}
 /* App lock / section-lock passcode — native-passcode style: small round dots that fill
@@ -540,7 +540,7 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .al-dot{width:14px;height:14px;border-radius:50%;border:1.5px solid rgba(255,255,255,.32);background:transparent;
   transition:background var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
 .al-dot.filled{background:#fff;border-color:#fff;transform:scale(1.05);}
-.al-dots.code-bad .al-dot{background:rgba(255,69,58,.95);border-color:rgba(255,69,58,.95);}
+.al-dots.code-bad .al-dot{background:rgba(255,0,51,.95);border-color:rgba(255,0,51,.95);}
 .al-dots.shake{animation:alShake .4s;}
 @keyframes alShake{10%,90%{transform:translateX(-2px);}20%,80%{transform:translateX(3px);}30%,50%,70%{transform:translateX(-7px);}40%,60%{transform:translateX(7px);}}
 .al-keys{display:grid;grid-template-columns:repeat(3,1fr);row-gap:14px;max-width:352px;margin:44px auto 0;}
@@ -914,7 +914,7 @@ body.rtl .intro-benefits{text-align:end;}
 .auth-oauth-row .auth-icbtn .auth-ic svg{width:24px;height:24px;}
 .auth-danger{
   box-shadow:0 0 0 .5px var(--red-edge) inset,
-    0 0 calc(14px*var(--boost,0)) -6px rgba(255,69,58,.4);
+    0 0 calc(14px*var(--boost,0)) -6px rgba(255,0,51,.4);
 }
 .auth-input{
   background:
@@ -1376,15 +1376,15 @@ body.light .tb-iconbtn.on{color:#fff;}
 .me-lbl{flex:1;font-size:15.5px;font-weight:600;letter-spacing:-.01em;}
 .me-chev{width:16px;height:16px;stroke:var(--t4);stroke-width:2.2;fill:none;flex-shrink:0;}
 .me-row.danger .me-lbl{color:var(--red);}
-.me-row.danger .me-ic{background:rgba(255,59,48,.12);color:var(--red);}
+.me-row.danger .me-ic{background:rgba(255,0,51,.12);color:var(--red);}
 .me-row.danger .me-ic svg{stroke:var(--red);}
 /* Circle deletion "danger zone" in the edit form. */
 .ac-danger-zone{padding:18px 18px 4px;}
-.ac-danger-btn{width:100%;padding:13px;border:1px solid rgba(255,69,58,.4);background:rgba(255,69,58,.08);
+.ac-danger-btn{width:100%;padding:13px;border:1px solid rgba(255,0,51,.4);background:rgba(255,0,51,.08);
   color:var(--red);font-family:inherit;font-size:15px;font-weight:650;border-radius:14px;cursor:pointer;
   transition:background var(--t-fast) var(--ease);}
-.ac-danger-btn:active{background:rgba(255,69,58,.16);}
-@media(hover:hover){.ac-danger-btn:hover{background:rgba(255,69,58,.14);}}
+.ac-danger-btn:active{background:rgba(255,0,51,.16);}
+@media(hover:hover){.ac-danger-btn:hover{background:rgba(255,0,51,.14);}}
 .ac-danger-btn:disabled{opacity:.55;cursor:default;}
 .ac-danger-note{font-size:12.5px;color:var(--t3);line-height:1.4;padding:9px 2px 0;}
 
@@ -1657,7 +1657,7 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .del-cancel{border:none;background:var(--s3);color:var(--t1);}
 .del-cancel:hover{background:var(--s4);}
 .del-confirm{border:none;background:var(--red-soft);color:var(--red);}
-.del-confirm:hover{background:rgba(255,69,58,.26);}
+.del-confirm:hover{background:rgba(255,0,51,.26);}
 .del-confirm.accent{background:var(--accent);color:var(--accent-tint);}
 .del-confirm.accent:hover{background:var(--accent-hover);}
 .del-confirm[disabled]{opacity:.45;cursor:default;}
@@ -2764,15 +2764,15 @@ textarea#inp::placeholder{color:var(--t3);}
 }
 .mic-btn:hover{background:#3a3a40;color:#fff;}
 .mic-btn.recording{
-  background:rgba(255,69,58,.12);
-  border-color:rgba(255,69,58,.3);
+  background:rgba(255,0,51,.12);
+  border-color:rgba(255,0,51,.3);
   color:var(--red);
   animation:micPulse 1.4s ease-in-out infinite;
 }
 .mic-btn svg{width:15px;height:15px;stroke:currentColor;stroke-width:1.8;fill:none;}
 @keyframes micPulse{
-  0%,100%{box-shadow:0 0 0 0 rgba(255,69,58,.3);}
-  50%{box-shadow:0 0 0 7px rgba(255,69,58,0);}
+  0%,100%{box-shadow:0 0 0 0 rgba(255,0,51,.3);}
+  50%{box-shadow:0 0 0 7px rgba(255,0,51,0);}
 }
 
 .send-btn{
@@ -3080,11 +3080,11 @@ body.light .settings-card{background:none;}
   transition:all var(--t-fast) var(--ease);
 }
 .settings-action.danger{
-  border:1px solid rgba(255,69,58,.3);
-  background:rgba(255,69,58,.08);
+  border:1px solid rgba(255,0,51,.3);
+  background:rgba(255,0,51,.08);
   color:var(--red);
 }
-.settings-action.danger:hover{background:rgba(255,69,58,.16);border-color:rgba(255,69,58,.5);}
+.settings-action.danger:hover{background:rgba(255,0,51,.16);border-color:rgba(255,0,51,.5);}
 .settings-action.accent{
   border:1px solid rgba(var(--accent-rgb),.3);
   background:var(--accent-dim);
@@ -3211,7 +3211,7 @@ body.light .iset-select{color-scheme:light;}
 .iset-signout{display:block;width:calc(100% - 4px);margin:6px 2px 0;background:var(--s1);border:none;
   border-radius:16px;padding:15px;font-size:15.5px;font-weight:600;color:var(--red);text-align:center;
   transition:background var(--t-fast) var(--ease);}
-.iset-signout:hover{background:rgba(255,69,58,.08);}
+.iset-signout:hover{background:rgba(255,0,51,.08);}
 /* iOS-clean cards: in dark themes drop the hairline OUTLINE on the cards — on
    Chrome it read as visible "white lines". The filled rounded card + the inset
    row separators are enough (iOS Settings has no card outline). Light keeps a
@@ -3241,7 +3241,7 @@ body.light .iset-acct,body.light .iset-signout{border:1px solid var(--b1);}
 .iset-row[data-static]:active{background:none;}
 .iset-acct:active{background:var(--s3);transform:scale(.992);}
 .iset-back:active{transform:scale(.88);background:var(--s2);}
-.iset-signout:active{transform:scale(.985);background:rgba(255,69,58,.12);}
+.iset-signout:active{transform:scale(.985);background:rgba(255,0,51,.12);}
 .iset-select:active{border-color:var(--accent);}
 .ac-ptab:active{background:var(--s1);}
 .iset-acct,.iset-back,.iset-signout{transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
@@ -4240,7 +4240,7 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 body.reduce-motion .mc-loc-pin.pulse{animation:none;}
 .mc-live-acts{display:flex;gap:8px;margin-top:8px;}
 .mc-live-btn{flex:1;text-align:center;text-decoration:none;font-size:12.5px;font-weight:600;padding:7px 10px;border-radius:var(--r-pill,999px);border:1px solid var(--b3);color:var(--t1);background:var(--s2);cursor:pointer;}
-.mc-live-btn.danger{color:var(--red);border-color:transparent;background:rgba(255,59,48,.12);}
+.mc-live-btn.danger{color:var(--red);border-color:transparent;background:rgba(255,0,51,.12);}
 /* Sticker — a borderless image, WhatsApp-style (no bubble chrome) */
 .msg-bubble.meta-sticker{background:none!important;padding:0!important;box-shadow:none!important;border:none!important;}
 .msg-sticker{display:block;width:132px;height:132px;object-fit:contain;cursor:pointer;filter:drop-shadow(0 2px 6px rgba(0,0,0,.25));}
@@ -5668,7 +5668,7 @@ body.light .ac-home-stories{border-bottom-color:rgba(0,0,0,.08);}
 .inv-chip{display:inline-block;font-size:11.5px;font-weight:700;border-radius:var(--r-pill);padding:2px 9px;margin-top:3px;}
 .inv-chip.st-sent{background:var(--s2);color:var(--t2);}
 .inv-chip.st-paid{background:rgba(48,209,88,.16);color:var(--green);}
-.inv-chip.st-overdue{background:rgba(255,69,58,.14);color:var(--red);}
+.inv-chip.st-overdue{background:rgba(255,0,51,.14);color:var(--red);}
 .inv-chip.st-cancelled{background:var(--s2);color:var(--t3);text-decoration:line-through;}
 .inv-head{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
 .inv-amount{font-size:32px;font-weight:800;color:var(--t1);text-align:center;margin:6px 0;}
@@ -5783,7 +5783,7 @@ body.light .ac-home-stories{border-bottom-color:rgba(0,0,0,.08);}
 .stock-badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:8px;}
 .stock-badge.ok{background:rgba(48,209,88,.15);color:var(--green);}
 .stock-badge.low{background:rgba(255,204,0,.16);color:var(--amber);}
-.stock-badge.out{background:rgba(255,69,58,.15);color:var(--red);}
+.stock-badge.out{background:rgba(255,0,51,.15);color:var(--red);}
 .addr-card{display:flex;gap:10px;align-items:flex-start;background:var(--s1);border:1.5px solid var(--b1);border-radius:13px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:border-color var(--t-fast);}
 .addr-card.sel{border-color:var(--accent);background:var(--s2);}
 .addr-card-main{flex:1;min-width:0;}
@@ -6146,7 +6146,7 @@ body.light .ac-home-stories{border-bottom-color:rgba(0,0,0,.08);}
 /* Business hours */
 .biz-hours-badge{font-size:11px;font-weight:700;padding:2px 9px;border-radius:8px;margin-inline-start:8px;vertical-align:middle;}
 .biz-hours-badge.open{background:rgba(48,209,88,.16);color:var(--green);}
-.biz-hours-badge.closed{background:rgba(255,69,58,.14);color:var(--red);}
+.biz-hours-badge.closed{background:rgba(255,0,51,.14);color:var(--red);}
 .biz-hours{margin:2px 0 14px;}
 .biz-hours-row{display:flex;justify-content:space-between;font-size:14px;color:var(--t2);padding:5px 2px;border-bottom:1px solid var(--b1);}
 .biz-hours-row.today{font-weight:700;color:var(--t1);}
@@ -7368,7 +7368,7 @@ body.light .ac-scope-chip.active{color:var(--t1);}
   opacity:0;transition:opacity var(--t-base) var(--ease),transform var(--t-base) var(--ease);}
 .offline-banner.show{opacity:1;transform:translateX(-50%) translateY(0);}
 .offline-banner.online{background:rgba(48,209,88,.97);}
-.offline-banner .ob-dot{width:7px;height:7px;border-radius:50%;background:var(--red);box-shadow:0 0 0 3px rgba(255,69,58,.25);}
+.offline-banner .ob-dot{width:7px;height:7px;border-radius:50%;background:var(--red);box-shadow:0 0 0 3px rgba(255,0,51,.25);}
 .offline-banner.online .ob-dot{background:var(--green);box-shadow:0 0 0 3px rgba(48,209,88,.25);}
 /* Deep-link peek bar: a signed-out visitor viewing one public profile gets a
    slim, always-visible sign-in invitation pinned to the bottom (the click-gate
@@ -7505,7 +7505,7 @@ body.light .undo-toast{background:rgba(28,28,30,.98);color:#fff;}
 .ac-job-tag.applied.st-reviewed{color:var(--accent);background:rgba(var(--accent-rgb),.16);}
 .ac-job-tag.applied.st-shortlisted{color:var(--green);background:rgba(48,209,88,.16);}
 .ac-job-tag.applied.st-hired{color:var(--accent-tint);background:var(--accent);}
-.ac-job-tag.applied.st-rejected{color:var(--red);background:rgba(255,69,58,.14);}
+.ac-job-tag.applied.st-rejected{color:var(--red);background:rgba(255,0,51,.14);}
 .ac-job-tag.featured{color:var(--accent);background:var(--accent-dim);}
 body.light .ac-job-tag.featured{color:var(--accent);}
 .ac-job-card.featured{background:linear-gradient(180deg,rgba(var(--accent-rgb),.05),transparent);border-inline-start:3px solid var(--accent);}
@@ -7570,7 +7570,7 @@ body.light .ac-job-tag.featured{color:var(--accent);}
 .ac-appl-status.st-reviewed{background:rgba(var(--accent-rgb),.16);color:var(--accent);}
 .ac-appl-status.st-shortlisted{background:rgba(48,209,88,.16);color:var(--green);}
 .ac-appl-status.st-hired{background:var(--accent);color:var(--accent-tint);}
-.ac-appl-status.st-rejected{background:var(--rose-bg,rgba(255,69,58,.14));color:var(--red);}
+.ac-appl-status.st-rejected{background:var(--rose-bg,rgba(255,0,51,.14));color:var(--red);}
 .ac-appl-acts{display:flex;align-items:center;gap:8px;margin:9px 0 2px 53px;}
 .ac-appl-sel{flex:0 0 auto;font-size:13px;font-weight:600;border:none;background:var(--s1);color:var(--t1);border-radius:10px;padding:7px 10px;cursor:pointer;}
 .ac-appl-sel.st-shortlisted{border-color:var(--green);color:var(--green);}
@@ -7583,7 +7583,7 @@ body.light .ac-job-tag.featured{color:var(--accent);}
 .ac-job-appstatus{margin-top:14px;font-size:14px;color:var(--t2);background:var(--s1);border-radius:12px;padding:11px 14px;text-align:center;}
 .ac-job-appstatus.st-shortlisted{background:rgba(48,209,88,.14);color:var(--green);}
 .ac-job-appstatus.st-hired{background:var(--accent-dim);color:var(--accent);}
-.ac-job-appstatus.st-rejected{background:var(--rose-bg,rgba(255,69,58,.12));color:var(--red);}
+.ac-job-appstatus.st-rejected{background:var(--rose-bg,rgba(255,0,51,.12));color:var(--red);}
 /* Profile headline + work-experience timeline */
 .ac-prof-headline{font-size:15px;color:var(--t2);margin-top:6px;line-height:1.45;}
 /* Verified-business badge + verify CTA/pending */
@@ -7898,7 +7898,7 @@ body.reduce-motion .xp-ai::after{animation:none;}
 /* Appointment status chip */
 .appt-status{margin-inline-start:auto;flex:0 0 auto;font-size:11px;font-weight:700;padding:3px 9px;border-radius:var(--r-pill);background:var(--s3);color:var(--t2);}
 .appt-status.confirmed{background:rgba(48,209,88,.16);color:var(--green);}
-.appt-status.declined,.appt-status.cancelled{background:rgba(255,69,58,.14);color:var(--red);}
+.appt-status.declined,.appt-status.cancelled{background:rgba(255,0,51,.14);color:var(--red);}
 .appt-status.requested{background:rgba(255,204,0,.16);color:var(--amber);}
 /* Tips */
 .tip-amts{display:flex;gap:8px;margin:6px 0 10px;}
@@ -8095,7 +8095,7 @@ body.light .ac-job-early{color:var(--accent);background:var(--accent-dim);}
 /* Meets-requirements badge (applicant view) */
 .ac-appl-meets{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;border-radius:6px;padding:3px 8px;margin-top:6px;}
 .ac-appl-meets.yes{background:rgba(48,209,88,.15);color:var(--green);}
-.ac-appl-meets.no{background:rgba(255,69,58,.15);color:var(--red);}
+.ac-appl-meets.no{background:rgba(255,0,51,.15);color:var(--red);}
 .ac-appl-ans{font-size:12px;color:var(--t2);margin-top:5px;}
 .ac-appl-ans b{color:var(--t1);font-weight:600;}
 /* Applicant toolbar: filter chips + bulk select */
@@ -8151,7 +8151,7 @@ body.light .ac-job-early{color:var(--accent);background:var(--accent-dim);}
 .ac-sal-badge{font-size:11px;font-weight:800;border-radius:6px;padding:2px 8px;}
 .ac-sal-badge.above{background:rgba(48,209,88,.16);color:var(--green);}
 .ac-sal-badge.in-range{background:rgba(var(--accent-rgb),.16);color:var(--accent);}
-.ac-sal-badge.below{background:rgba(255,69,58,.16);color:var(--red);}
+.ac-sal-badge.below{background:rgba(255,0,51,.16);color:var(--red);}
 .ac-sal-range{font-size:12.5px;color:var(--t3);margin-top:5px;}
 .ac-sal-bar{height:6px;border-radius:99px;background:var(--s3);margin:8px 0 4px;position:relative;overflow:hidden;}
 .ac-sal-bar i{position:absolute;top:0;bottom:0;background:linear-gradient(90deg,var(--accent),var(--green));border-radius:99px;}
@@ -8236,7 +8236,7 @@ body.light .ac-job-early{color:var(--accent);background:var(--accent-dim);}
 .pm-item .pm-ic{width:18px;height:18px;flex-shrink:0;}
 .pm-item.danger{color:var(--red);}
 .pm-item.accent{color:var(--accent);font-weight:600;}
-.pm-item.danger:hover{background:rgba(255,69,58,.10);}
+.pm-item.danger:hover{background:rgba(255,0,51,.10);}
 
 /* ── Edit profile ── */
 /* Edit-profile banner with an overlapping avatar (X-style) */
@@ -8954,8 +8954,8 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
   padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;transition:transform var(--t-fast) var(--ease);}
 .gc-banner-join:active{transform:scale(.94);}
 /* Live broadcast banner (a member is live in the group) — red, with a Watch CTA. */
-.live-banner{background:rgba(255,69,58,.12);border-color:rgba(255,69,58,.4);}
-.live-banner:hover{background:rgba(255,69,58,.2);}
+.live-banner{background:rgba(255,0,51,.12);border-color:rgba(255,0,51,.4);}
+.live-banner:hover{background:rgba(255,0,51,.2);}
 .live-banner .gc-banner-join{background:var(--red);}
 .live-banner-dot{flex:0 0 auto;font-size:9.5px;font-weight:900;letter-spacing:.06em;color:#fff;background:var(--red);
   padding:3px 6px;border-radius:5px;line-height:1;animation:liveBlink 2s ease-in-out infinite;}
@@ -9088,7 +9088,7 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 .sp-ctrl.grey{background:rgba(255,255,255,.14);color:#fff;}
 .sp-ctrl.grey.off{background:rgba(255,255,255,.06);color:rgba(255,255,255,.5);}
 .sp-ctrl.accent{background:var(--accent);color:var(--accent-tint);}
-.sp-ctrl.danger{background:rgba(255,69,58,.16);color:var(--red);}
+.sp-ctrl.danger{background:rgba(255,0,51,.16);color:var(--red);}
 /* Live-now strip */
 .ac-live-strip{display:flex;gap:14px;overflow-x:auto;flex-shrink:0;padding:11px 14px;border-bottom:1px solid var(--b1);scrollbar-width:none;}
 .ac-live-strip::-webkit-scrollbar{display:none;}
@@ -14940,7 +14940,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1137'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1138'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
