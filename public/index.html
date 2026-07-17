@@ -3455,10 +3455,10 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
 ───────────────────────────────────────────── */
 @media(max-width:768px){
   .app{flex-direction:column;}
-  /* Wider drawer to match X (owner request) — it now extends further right, leaving
-     only a slim strip of feed. Driving it through --sidebar-w keeps the tappable
+  /* Wide X-style drawer (owner request) — extends well right, leaving a slim strip of
+     feed. Trimmed a touch from 84vw. Driving it through --sidebar-w keeps the tappable
      backdrop (.sb-overlay, inset by --sidebar-w) perfectly in sync with the panel. */
-  :root{--sidebar-w:min(84vw,360px);}
+  :root{--sidebar-w:min(80vw,340px);}
   .sidebar{
     position:fixed;inset:0 auto 0 0;
     z-index:200;
@@ -15109,7 +15109,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1205'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1206'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -21811,7 +21811,7 @@ function acRenderSidebarContext(tab) {
     el.innerHTML = hub.map(row).join('')
       + '<div class="sb-divider"></div>'
       + foot.map(row).join('')
-      + `<button class="sb-btn sb-download" onclick="acDownloadApp()"><span class="sb-atwe-ic" aria-hidden="true"></span> Download the Atwe App</button>`;
+      + `<button class="sb-btn sb-download" onclick="acDownloadApp()"><span class="sb-atwe-ic" aria-hidden="true"></span> Atwe App</button>`;
     return;
   }
   // Contacts is a top option on the Home / Chat / Calls pages.
