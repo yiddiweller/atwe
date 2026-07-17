@@ -462,10 +462,9 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-continue.is-loading,.auth-btn-primary.is-loading{background:#fff;color:#000;border-color:#fff;cursor:default;}
 .auth-continue.is-loading:active,.auth-btn-primary.is-loading:active{transform:none;}
 /* Swirl spinner inside a primary (white) button — dark mark, same smooth spin+pulse. */
-.btn-spinner{display:inline-block;width:22px;height:22px;border:0;border-radius:0;
-  /* Dark→light conic fade (for the white button): dark head chasing to a light tail. */
-  background:conic-gradient(from 90deg, #141416, #4c4c50, #8c8c92, #c6c6cc, #141416);
-  -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;
+.btn-spinner{display:inline-block;width:18px;height:18px;border:0;border-radius:0;
+  /* Small swirl for the white primary button — dark-on-light blade shades. */
+  background:url('/spin-swirl-lite.png') center/contain no-repeat;
   animation:btnspin 1.2s linear infinite;will-change:transform;}
 @keyframes btnspin{to{transform:rotate(360deg);}}
 /* Email step: bottom button stack + "no account" note + create button */
@@ -8441,11 +8440,12 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
    "breathing" scale pulse (separate `scale` property, also compositor-friendly) gives the
    little vortex some life. Dark-grey like a regular spinner. Reused anywhere via .swirl-load. */
 .ac-spin span,.qr-loading span,.swirl-load{width:28px;height:28px;border:0;border-radius:0;
-  /* Apple activity-indicator vibe: a light→dark conic fade wraps the swirl so its blades
-     read as one light, then darker, then darkest. The fade rotates WITH the swirl, so the
-     bright "head" chases around the circle like a continuous reloading indicator. */
-  background:conic-gradient(from 90deg, #c2c2c8, #83838a, #56565c, #38383d, #c2c2c8);
-  -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;
+  /* THE app-wide loading spinner: the Atwe swirl where each of the 4 blades is its own
+     FLAT distinct grey (light → dark → darker → darkest, baked into spin-swirl.png). It
+     spins on the compositor (transform + will-change → 60fps), so the four darknesses
+     chase around like an Apple activity indicator. spin-swirl-lite.png is the dark-on-light
+     variant for white surfaces (buttons). Size it per context (small in buttons). */
+  background:url('/spin-swirl.png') center/contain no-repeat;
   animation:spin 1.2s linear infinite;will-change:transform;}
 .swirl-load{display:inline-block;}
 @keyframes spin{to{transform:rotate(360deg);}}
@@ -15057,7 +15057,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1194'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1195'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
