@@ -220,8 +220,14 @@ html,body{
 #splash.hide{opacity:0;pointer-events:none;}
 .splash-mark{width:62px;height:62px;background-color:#303034;
   -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;
-  animation:splashPulse 2s ease-in-out infinite;}
-@keyframes splashPulse{0%,100%{opacity:.38;transform:scale(.95);}50%{opacity:.92;transform:scale(1.03);}}
+  /* Breathes bigger/smaller (splashPulse) AND turns with a fast-then-slow rhythm
+     (splashSpin, a strong ease-in-out so each revolution winds up fast and eases to a
+     near-stop before the next). Pulse uses the standalone `scale`, spin uses `rotate`,
+     so they compose cleanly and run on the compositor (60fps). */
+  animation:splashPulse 2s ease-in-out infinite, splashSpin 2.4s cubic-bezier(.7,0,.3,1) infinite;
+  will-change:transform,scale,rotate;}
+@keyframes splashPulse{0%,100%{opacity:.4;scale:.93;}50%{opacity:.95;scale:1.06;}}
+@keyframes splashSpin{to{rotate:360deg;}}
 body.light .splash-mark{background-color:#d2d2d8;}
 
 /* Welcome-back splash on login: the Atwe mark fades in soft + see-through,
@@ -15057,7 +15063,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1196'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1197'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
