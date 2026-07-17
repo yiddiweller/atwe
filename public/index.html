@@ -317,9 +317,9 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-main{flex:1;display:flex;flex-direction:column;justify-content:center;}
 .auth-logo{display:flex;justify-content:center;margin-bottom:84px;}
 .auth-lm{width:66px;height:66px;background:#fff;-webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;
-  /* Turns VERY slowly on the login screen — ~40s per revolution (9°/s), almost
+  /* Turns VERY slowly on the login screen — ~75s per revolution (~4.8°/s), almost
      imperceptible, just a subtle "alive" drift. GPU (transform + will-change). */
-  animation:spin 40s linear infinite;will-change:transform;}
+  animation:spin 75s linear infinite;will-change:transform;}
 .auth-actions,.auth-form{display:flex;flex-direction:column;gap:14px;}
 /* Landing buttons sit a drop closer together (founder). */
 #authLandingView .auth-actions{gap:12.5px;}
@@ -15066,7 +15066,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1198'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1199'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
