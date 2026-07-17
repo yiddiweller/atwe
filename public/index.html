@@ -9428,7 +9428,12 @@ body.light #signupDob{color-scheme:light;}
    it reads soft. Blurred + faded to alpha-0 of its own colour for an extra-smooth
    falloff. Black theme only; the pointer handler fades it out over <img>/<video>
    so media never tints. */
-#page-glow{position:fixed;inset:0;pointer-events:none;z-index:1100;overflow:hidden;
+/* z-index:1 + parented INTO .app (see JS) so the whole cursor-pool layer lives in the
+   app's own stacking context, ABOVE the scrolling feed/media (z0) it tints but BELOW
+   every chrome bar (composer/header z3, fab z50, nav z120) and all body-level overlays
+   (z1000+). Previously this was a z:1100 body child, so its media-shield clones (see
+   makeShield) floated on top of the nav + chat composer + overlays — the reported bug. */
+#page-glow{position:fixed;inset:0;pointer-events:none;z-index:1;overflow:hidden;
   mix-blend-mode:soft-light;}
 .pool-orb{position:absolute;left:0;top:0;width:840px;height:840px;border-radius:50%;
   background:radial-gradient(closest-side, rgba(40,130,255,1) 0%, rgba(24,116,252,.5) 40%, rgba(10,110,255,0) 76%);
@@ -15152,7 +15157,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1213'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1214'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -45083,7 +45088,9 @@ function navInit() {
   stage.id = 'page-glow'; stage.setAttribute('aria-hidden', 'true');
   var poolOrb = document.createElement('span'); poolOrb.className = 'pool-orb';
   stage.appendChild(poolOrb);
-  document.body.appendChild(stage);
+  // Parent INTO .app (not body) so the glow + its shields sit in the app's own stacking
+  // context — above the feed/media it tints, below the nav/composer/overlays.
+  (document.getElementById('app') || document.body).appendChild(stage);
 
   // ═══ Media shield ═══ Photos/videos must NEVER catch the pool glow — even while
   // the pointer only APPROACHES them — so they always feel like they sit on top of
@@ -45105,10 +45112,12 @@ function navInit() {
       clone.id = ''; clone.className = ''; clone.removeAttribute('loading');
       clone.setAttribute('data-pool-shield', '1'); // so the scan never re-shields a clone
       if (clone.tagName === 'VIDEO') { clone.removeAttribute('autoplay'); clone.muted = true; }
-      clone.style.cssText = 'position:fixed;margin:0;pointer-events:none;z-index:1101;object-fit:' +
+      clone.style.cssText = 'position:fixed;margin:0;pointer-events:none;z-index:2;object-fit:' +
         cs.objectFit + ';object-position:' + cs.objectPosition + ';border-radius:' + cs.borderRadius + ';';
       positionShield(clone, media);
-      document.body.appendChild(clone);
+      // Same parent as the glow stage (.app) so z:2 sits just above the glow (z:1) but
+      // still below every chrome bar — the shield never floats over the nav/composer again.
+      (document.getElementById('app') || document.body).appendChild(clone);
       shields.set(media, clone);
     } catch (e) {}
   }
