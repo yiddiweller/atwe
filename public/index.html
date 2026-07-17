@@ -3458,7 +3458,7 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
   /* Wide X-style drawer (owner request) — extends well right, leaving a slim strip of
      feed. Trimmed a touch from 84vw. Driving it through --sidebar-w keeps the tappable
      backdrop (.sb-overlay, inset by --sidebar-w) perfectly in sync with the panel. */
-  :root{--sidebar-w:min(80vw,340px);}
+  :root{--sidebar-w:min(74vw,318px);}
   .sidebar{
     position:fixed;inset:0 auto 0 0;
     z-index:200;
@@ -8819,6 +8819,14 @@ body.nav-morph #acHomeFab,body.nav-morph #acChatsFab{display:none;}
   .sidebar .sb-prof-name{font-size:17px;}
   .sidebar .sb-prof-user{font-size:13.5px;}
   .sidebar .sb-profile-counts{justify-content:flex-start;padding:2px 12px 4px;gap:18px;font-size:14px;}
+  /* Pro row = blue (owner request). More specific than the white .sidebar .sb-btn rule
+     so it wins; the star inherits the blue via currentColor. */
+  .sidebar .sb-btn.sb-upgrade{color:var(--accent);}
+  .sidebar .sb-btn.sb-upgrade svg{stroke:var(--accent);}
+  /* The verified check in the header must NOT inherit the big 26px hub-icon size — it's
+     an SVG inside .sb-profilebtn (a .sb-btn). Keep it proportional to the name (owner:
+     "the check is very big"). More specific than `.sidebar .sb-btn svg`, so it wins. */
+  .sidebar .sb-prof-name .vbadge{width:.95em;height:.95em;}
   /* The bottom account trio (Profile · Notifications · Settings) stays pinned at the
      bottom exactly as before — now sized to match the hub. Its badge/avatar are kept. */
   .sidebar .sb-user{padding-top:8px;}
@@ -15109,7 +15117,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1208'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1209'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -21798,19 +21806,17 @@ function acRenderSidebarContext(tab) {
     // Icons: one warm, clean, rounded line set (round caps/joins via CSS), all optically
     // even. Profile + Settings are NOT here — they live in the restored bottom trio below.
     const hub = [
-      ["acNavUpgrade()", 'Pro', '<svg viewBox="0 0 24 24"><path d="M12 3.6l2.35 4.76 5.25.77-3.8 3.7.9 5.24L12 15.98l-4.7 2.47.9-5.24-3.8-3.7 5.25-.77z"/></svg>'],
       ["appTab('home');acSetFeed('collections')", 'Collections', '<svg viewBox="0 0 24 24"><path d="M18 20.5l-6-4.2-6 4.2V6a2.5 2.5 0 0 1 2.5-2.5h7A2.5 2.5 0 0 1 18 6z"/></svg>'],
       ['acOpenCommunities()', 'Communities', '<svg viewBox="0 0 24 24"><circle cx="9" cy="8.7" r="3.3"/><path d="M3.6 18.4a5.4 5.4 0 0 1 10.8 0"/><path d="M16.4 5.9a3.3 3.3 0 0 1 0 6"/><path d="M18.8 18.4a5.4 5.4 0 0 0-3-4.8"/></svg>'],
       ["appTab('home');acSetFeed('circles')", 'Circles', '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/></svg>'],
       ['acOpenGoLive()', 'Spaces', '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.6"/><path d="M8.3 8.3a5.2 5.2 0 0 0 0 7.4"/><path d="M15.7 8.3a5.2 5.2 0 0 1 0 7.4"/></svg>'],
     ];
-    const foot = [
-      ['openHelp()', 'Help', '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9.8 9.4a2.3 2.3 0 0 1 4.45.8c0 1.55-2.25 2-2.25 3.4"/><circle cx="12" cy="16.4" r="0.65" fill="currentColor" stroke="none"/></svg>'],
-    ];
     const row = ([fn, lbl, icon]) => `<button class="sb-btn" onclick="${fn}">${icon} ${lbl}</button>`;
+    // Pro replaces Help in the footer group and is styled blue (sb-upgrade = accent).
+    const proBtn = `<button class="sb-btn sb-upgrade" onclick="acNavUpgrade()"><svg viewBox="0 0 24 24"><path d="M12 3.6l2.35 4.76 5.25.77-3.8 3.7.9 5.24L12 15.98l-4.7 2.47.9-5.24-3.8-3.7 5.25-.77z"/></svg> Pro</button>`;
     el.innerHTML = hub.map(row).join('')
       + '<div class="sb-divider"></div>'
-      + foot.map(row).join('')
+      + proBtn
       + `<button class="sb-btn sb-download" onclick="acDownloadApp()"><span class="sb-atwe-ic" aria-hidden="true"></span> Atwe App</button>`;
     return;
   }
