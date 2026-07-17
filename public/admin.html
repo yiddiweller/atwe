@@ -162,8 +162,13 @@
   .ab-mark{display:inline-block;width:44px;height:44px;background:url('/spin-swirl.png') center/contain no-repeat;
     animation:abSpin 1.2s linear infinite;will-change:transform;}
   @keyframes abSpin{to{transform:rotate(360deg);}}
-  .boot-load,.ld{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;min-height:62vh;}
+  .boot-load{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;min-height:62vh;}
   .boot-load .ab-word{font-size:13px;font-weight:600;letter-spacing:.04em;color:#6E6E73;}
+  /* In-dashboard view loaders sit inside the content area (below the header), so a normal
+     in-flow centre lands a bit high. Pin the swirl to the real screen centre instead
+     (offset past the 250px sidebar on desktop; full-width on mobile). */
+  .ld{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:6;}
+  @media(min-width:901px){ .ld{left:250px;} }
 
   /* ── Overview ── */
   .ov-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:18px;}
