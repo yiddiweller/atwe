@@ -269,9 +269,12 @@ body.light .splash-mark{background-color:#d2d2d8;}
   /* The whole hero rises in once on first load — a clean, premium entrance. */
   .auth-brand-in{position:relative;z-index:1;display:flex;flex-direction:column;align-items:flex-start;gap:clamp(24px,2.4vw,34px);
     max-width:560px;padding:0 9%;animation:brandRise .85s cubic-bezier(.16,1,.3,1) both;}
-  .auth-brand-logo{width:clamp(88px,7vw,120px);height:clamp(88px,7vw,120px);background:#fff;
-    filter:drop-shadow(0 10px 48px rgba(var(--accent-rgb),.32));
-    -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
+  /* Raster (not a CSS mask) so the JS spin is a pure compositor transform → true 60fps
+     (a masked element re-rasterizes the mask every frame and stutters). logo-mark.png is
+     white-on-transparent, so it renders as the white swirl just like the old mask did. */
+  .auth-brand-logo{width:clamp(88px,7vw,120px);height:clamp(88px,7vw,120px);
+    background:url('/logo-mark.png') center/contain no-repeat;
+    filter:drop-shadow(0 10px 48px rgba(var(--accent-rgb),.32));will-change:transform;}
   .auth-brand-text{display:flex;flex-direction:column;gap:20px;}
   /* Headline + subtext scale with the viewport so the hero stays balanced from a
      small laptop up to a wide external monitor. */
@@ -15149,7 +15152,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1212'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1213'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -16740,6 +16743,33 @@ const AUTH_BRAND_STEP = {
   suUserStep: 'username', suCatStep: 'cat', suPhotoStep: 'photo',
   authStep1: 'login', authStep2: 'loginpw', authLandingView: 'landing',
 };
+// ── Desktop login brand logo: a slow ambient spin that BURSTS fast (like a loading
+// spinner) each time you advance to the next step and the tagline under it changes,
+// then eases smoothly back down to the slow drift — and again on the next page. Driven
+// by rAF (velocity model) so the accelerate/decelerate is buttery with no angle jump.
+let _brandSpin = null;
+function brandSpinStart() {
+  if (_brandSpin) return;                                             // idempotent
+  const logo = document.querySelector('.auth-brand-logo');
+  if (!logo || logo.offsetParent === null) return;                   // desktop only (visible)
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const BASE = 9;                                                    // deg/sec — slow ambient roll
+  const st = { angle: 0, vel: BASE, base: BASE, last: 0, raf: 0, logo };
+  const tick = (ts) => {
+    if (!logo.isConnected || logo.offsetParent === null) { _brandSpin = null; return; } // overlay closed → stop
+    if (!st.last) st.last = ts;
+    let dt = (ts - st.last) / 1000; st.last = ts;
+    if (dt > 0.1) dt = 0.1;                                          // clamp after a background gap
+    st.angle = (st.angle + st.vel * dt) % 360;
+    st.vel += (st.base - st.vel) * Math.min(1, dt * 3.2);           // exp ease back to base
+    logo.style.transform = 'rotate(' + st.angle + 'deg)';
+    st.raf = requestAnimationFrame(tick);
+  };
+  st.raf = requestAnimationFrame(tick);
+  _brandSpin = st;
+}
+function brandSpinBoost() { if (_brandSpin) _brandSpin.vel = 640; }  // fast loading burst on a page change
+
 function authBrandFor(stepId) {
   const key = AUTH_BRAND_STEP[stepId] || 'landing';
   const tag = document.getElementById('authBrandTag');
@@ -16750,6 +16780,8 @@ function authBrandFor(stepId) {
   document.getElementById('authBrandSub').innerHTML = s;
   const el = document.getElementById('authBrandText');
   if (el) { el.classList.remove('brand-swap'); void el.offsetWidth; el.classList.add('brand-swap'); }
+  brandSpinStart();  // ensure the ambient spin is running (restarts if the overlay was reopened)
+  brandSpinBoost();  // …and kick it into a fast "loading" burst for this page change
 }
 // Fit on every keystroke in any auth field…
 document.addEventListener('input', (e) => {
