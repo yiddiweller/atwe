@@ -8719,18 +8719,18 @@ body.nav-morph .bottom-nav.bar-anim{
     background var(--t-slow) ease, box-shadow var(--t-slow) ease, border-color var(--t-slow) ease, scale .42s cubic-bezier(.4,.02,.28,1);}
 body.nav-morph .bn-plus{display:flex;position:absolute;inset:0;z-index:5;align-items:center;justify-content:center;
   background:none;border:none;cursor:pointer;opacity:0;pointer-events:none;transition:opacity var(--t-base) ease var(--t-fast);}
-body.nav-morph .bn-plus svg{width:26px;height:26px;fill:none;stroke:#fff;stroke-width:2.8;stroke-linecap:round;}
+body.nav-morph .bn-plus svg{width:26px;height:26px;fill:none;stroke:#111;stroke-width:2.4;stroke-linecap:round;}
 /* Ball state (added on scroll-down, removed on scroll-up / at the top) */
 body.nav-morph.nav-ball .bottom-nav{left:calc(100% - 58px - var(--nav-inset));
   /* Force a true 58×58 square so border-radius:999px renders a PERFECT circle
      (the auto height was ~60px with padding, making it a slight vertical "drop"). */
   box-sizing:border-box;height:58px;
-  /* The ball now matches the nav bar exactly: the SAME dark tint (rgba(18,18,21,.90))
-     and the SAME light blur(2px) — one consistent dark glass — with a WHITE plus (below)
-     so it reads on the dark disc. (Was a white disc with a dark plus.) */
-  background:rgba(18,18,21,.90);
+  /* A WHITE ball (owner likes the white), but a little SEE-THROUGH + frosted with the same
+     light glass treatment as the nav bar (blur 2px) — a translucent white disc, not a solid
+     one. Dark plus below reads on it. */
+  background:rgba(255,255,255,.72);
   -webkit-backdrop-filter:blur(2px) saturate(150%);backdrop-filter:blur(2px) saturate(150%);
-  border-color:transparent;box-shadow:0 12px 34px rgba(0,0,0,.42);}
+  border-color:transparent;box-shadow:0 10px 30px rgba(0,0,0,.30);}
 body.nav-morph .bn-tab{transition:opacity var(--t-base) ease;}
 /* The grey pill TRAVELS smoothly from the old tab to the new one — a clean ease-in-out
    glide (accelerate gently, cruise, decelerate gently) with NO spring/bounce at the end.
@@ -15038,7 +15038,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1186'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1188'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
