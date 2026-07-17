@@ -156,12 +156,13 @@
   .pill.sale{background:var(--accent-dim);color:var(--accent);text-transform:none;}
 
   .empty{text-align:center;padding:54px 20px;color:var(--t3);font-size:14px;}
-  /* Branded boot loader: the spinning Atwe swirl (each blade its own grey) + a small
-     grey "Atwe Admin" underneath, matching the icon's colour. */
-  .boot-load{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:15px;padding:16vh 20px;}
-  .boot-load .ab-mark{width:46px;height:46px;background:url('/spin-swirl.png') center/contain no-repeat;
+  /* The spinning Atwe swirl loader (each blade its own grey). Used for EVERY loading
+     state — the boot screen (with an "Atwe Admin" label) and every in-dashboard view load
+     (icon only). Both variants vertically-centre the icon in the available space. */
+  .ab-mark{display:inline-block;width:44px;height:44px;background:url('/spin-swirl.png') center/contain no-repeat;
     animation:abSpin 1.2s linear infinite;will-change:transform;}
   @keyframes abSpin{to{transform:rotate(360deg);}}
+  .boot-load,.ld{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;min-height:62vh;}
   .boot-load .ab-word{font-size:13px;font-weight:600;letter-spacing:.04em;color:#6E6E73;}
 
   /* ── Overview ── */
@@ -1499,7 +1500,7 @@ let CONTROLS = { controls: {}, meta: [] };
 let _fcSearch = '';
 function renderFeatureControlsView(){
   document.getElementById('stats').innerHTML = '';
-  document.getElementById('content').innerHTML = '<div class="empty">Loading…</div>';
+  document.getElementById('content').innerHTML = '<div class="ld"><span class="ab-mark"></span></div>';
   loadControls();
 }
 async function loadControls(){
@@ -1567,7 +1568,7 @@ const VT_IC = {
   file: '<svg viewBox="0 0 24 24"><path d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><path d="M14 2v6h6"/></svg>',
   secret: '<svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
 };
-function renderVaultView(){ document.getElementById('stats').innerHTML=''; document.getElementById('content').innerHTML='<div class="empty">Loading…</div>'; loadVault(null); }
+function renderVaultView(){ document.getElementById('stats').innerHTML=''; document.getElementById('content').innerHTML='<div class="ld"><span class="ab-mark"></span></div>'; loadVault(null); }
 async function loadVault(parent){
   VAULT.parent = parent || null;
   try {
@@ -1687,7 +1688,7 @@ function ovCard(ic, n, label, cls){
 async function renderOverviewView(){
   document.getElementById('stats').innerHTML = '';
   const content = document.getElementById('content');
-  content.innerHTML = '<div class="empty">Loading…</div>';
+  content.innerHTML = '<div class="ld"><span class="ab-mark"></span></div>';
   try {
     const { stats: s } = await api('GET', '/api/admin/stats');
     content.innerHTML = `
@@ -1779,7 +1780,7 @@ function renderUsernamesView(){
     <div class="panel">
       <h3>Reserved names <span id="lockCount" class="muted"></span></h3>
       <input id="lockSearch" placeholder="Search reserved names…" autocapitalize="none" autocomplete="off" spellcheck="false" style="width:100%;box-sizing:border-box;margin-bottom:10px;" oninput="searchLocks(this.value)"/>
-      <div id="lockList"><div class="empty">Loading…</div></div>
+      <div id="lockList"><div class="ld"><span class="ab-mark"></span></div></div>
       <button id="lockMore" class="act ghost" style="display:none;margin-top:12px;width:100%;" onclick="moreLocks()">Load more</button>
     </div>`;
   document.getElementById('lockInput').addEventListener('keydown', e => { if (e.key === 'Enter') addLock(); });
@@ -1793,7 +1794,7 @@ let CRASHES = { crashes: [] };
 let JOBS = { jobs:[] };
 async function renderSiteView(){
   document.getElementById('stats').innerHTML = '';
-  document.getElementById('content').innerHTML = '<div class="empty">Loading…</div>';
+  document.getElementById('content').innerHTML = '<div class="ld"><span class="ab-mark"></span></div>';
   await loadSite();
 }
 async function loadSite(){
@@ -2071,7 +2072,7 @@ function renderTrafficView(){
       </div>
       <div id="tfLive" class="tf-live"></div>
     </div>
-    <div id="tfBody"><div class="empty">Loading…</div></div>`;
+    <div id="tfBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
   loadTraffic();
   clearInterval(TRAFFIC_T);
   TRAFFIC_T = setInterval(() => { if (VIEW === 'traffic') loadTraffic(); else clearInterval(TRAFFIC_T); }, 30000);
@@ -2162,7 +2163,7 @@ function renderRevenueView(){
       <button class="tf-r ${REV_RANGE==='month'?'on':''}" onclick="setRevRange('month')">30 days</button>
       <button class="tf-r ${REV_RANGE==='year'?'on':''}" onclick="setRevRange('year')">12 months</button>
     </div></div>
-    <div id="revBody"><div class="empty">Loading…</div></div>`;
+    <div id="revBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
   loadRevenue();
   clearInterval(REV_T);
   REV_T = setInterval(() => { if (VIEW === 'revenue') loadRevenue(); else clearInterval(REV_T); }, 30000);
@@ -2206,7 +2207,7 @@ function renderRevenue(){
 let FIN_T = null;
 function renderFinanceView(){
   document.getElementById('stats').innerHTML = '';
-  document.getElementById('content').innerHTML = `<div id="finBody"><div class="empty">Loading…</div></div>`;
+  document.getElementById('content').innerHTML = `<div id="finBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
   loadFinance();
   clearInterval(FIN_T);
   FIN_T = setInterval(() => { if (VIEW === 'finance') loadFinance(); else clearInterval(FIN_T); }, 30000);
@@ -2249,7 +2250,7 @@ function renderFinance(f){
 let GRO_T = null;
 function renderGrowthView(){
   document.getElementById('stats').innerHTML = '';
-  document.getElementById('content').innerHTML = `<div id="groBody"><div class="empty">Loading…</div></div>`;
+  document.getElementById('content').innerHTML = `<div id="groBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
   loadGrowth();
   clearInterval(GRO_T);
   GRO_T = setInterval(() => { if (VIEW === 'growth') loadGrowth(); else clearInterval(GRO_T); }, 30000);
@@ -2287,7 +2288,7 @@ function renderAuditView(){
       <h3>Admin audit log</h3>
       <div class="muted" style="margin:-4px 0 12px;font-size:13px;">Every staff action is recorded here — who did what, to whom, and when. Append-only.</div>
       <input class="in" id="auditSearch" placeholder="Filter by action (e.g. user.ban, dispute, ad.approve)…" oninput="auditFilter(this.value)" style="margin-bottom:12px;max-width:420px;"/>
-      <div id="auditBody"><div class="empty">Loading…</div></div>
+      <div id="auditBody"><div class="ld"><span class="ab-mark"></span></div></div>
     </div>`;
   loadAudit();
 }
@@ -2403,7 +2404,7 @@ async function modPoll(){
 }
 async function modLoadFlags(){
   const el = document.getElementById('modFlags'); if (!el) return;
-  el.innerHTML = '<div class="empty">Loading…</div>';
+  el.innerHTML = '<div class="ld"><span class="ab-mark"></span></div>';
   try {
     const { flags } = await api('GET', '/api/admin/moderation/flags?status=' + MOD.status);
     if (!flags.length) { el.innerHTML = `<div class="empty">${MOD.status==='open'?'No open flags — you\'re clean. Run a scan above.':'Nothing here.'}</div>`; return; }
@@ -2500,7 +2501,7 @@ function renderActivityView(){
   document.getElementById('content').innerHTML = `
     <div class="act-filter" id="actFilter">${ACT_CATS.map(([k,l])=>`<button class="tf-r ${ACT.cat===k?'on':''}" onclick="actSetCat('${k}')">${l}</button>`).join('')}</div>
     <div class="muted" style="font-size:12.5px;margin:8px 2px 12px;"><span class="live-pulse"></span> Live — updates automatically. Everything happening across the platform.</div>
-    <div id="actBody"><div class="empty">Loading…</div></div>`;
+    <div id="actBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
   ACT.events = []; ACT.maxId = 0;
   loadActivity(true);
   clearInterval(ACT_T);
@@ -2546,7 +2547,7 @@ function renderDataReqView(){
       <button class="tf-r ${DR_FILTER==='completed'?'on':''}" onclick="drFilter('completed')">Completed</button>
       <button class="tf-r ${DR_FILTER==='rejected'?'on':''}" onclick="drFilter('rejected')">Rejected</button>
     </div></div>
-    <div id="drBody"><div class="empty">Loading…</div></div>`;
+    <div id="drBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
   loadDataReq();
   clearInterval(DR_T);
   DR_T = setInterval(() => { if (VIEW === 'datareq') loadDataReq(); else clearInterval(DR_T); }, 30000);
@@ -2594,7 +2595,7 @@ function renderAppealsView(){
       <button class="tf-r ${APP_FILTER==='granted'?'on':''}" onclick="appFilter('granted')">Granted</button>
       <button class="tf-r ${APP_FILTER==='denied'?'on':''}" onclick="appFilter('denied')">Denied</button>
     </div></div>
-    <div id="appBody"><div class="empty">Loading…</div></div>`;
+    <div id="appBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
   loadAppeals();
   clearInterval(APP_T);
   APP_T = setInterval(() => { if (VIEW === 'appeals') loadAppeals(); else clearInterval(APP_T); }, 30000);
@@ -2635,7 +2636,7 @@ function renderRefundsView(){
       <button class="tf-r ${REF_FILTER==='approved'?'on':''}" onclick="refFilter('approved')">Approved</button>
       <button class="tf-r ${REF_FILTER==='declined'?'on':''}" onclick="refFilter('declined')">Declined</button>
     </div></div>
-    <div id="refBody"><div class="empty">Loading…</div></div>`;
+    <div id="refBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
   loadRefunds();
   clearInterval(REF_T);
   REF_T = setInterval(() => { if (VIEW === 'refunds') loadRefunds(); else clearInterval(REF_T); }, 30000);
@@ -2668,7 +2669,7 @@ async function resolveRefund(id, action, amountCents){
 let CARDS = null, CARDS_TAB = 'gift', CARDS_Q = '', CARDS_T = null;
 function renderCardsView(){
   document.getElementById('stats').innerHTML = '';
-  document.getElementById('content').innerHTML = `<div id="cardsBody"><div class="empty">Loading…</div></div>`;
+  document.getElementById('content').innerHTML = `<div id="cardsBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
   loadCards();
   clearInterval(CARDS_T);
   CARDS_T = setInterval(() => { if (VIEW === 'cards') loadCards(); else clearInterval(CARDS_T); }, 30000);
@@ -2770,7 +2771,7 @@ const STAFF_PRESETS = {
 let STAFF_NEW = { perms: new Set(), role: '' };
 function renderStaffView(){
   document.getElementById('stats').innerHTML = '';
-  document.getElementById('content').innerHTML = `<div id="staffBody"><div class="empty">Loading…</div></div>`;
+  document.getElementById('content').innerHTML = `<div id="staffBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
   loadStaff();
 }
 async function loadStaff(){
@@ -2832,7 +2833,7 @@ function renderAdsAdminView(){
   document.getElementById('content').innerHTML = `
     <div class="tf-head"><div class="tf-ranges" id="adFilters"></div>
       <button class="tf-r" style="background:var(--accent,var(--accent));color:#fff;border-color:transparent;" onclick="openAdCreate()">+ New ad</button></div>
-    <div id="adsBody"><div class="empty">Loading…</div></div>
+    <div id="adsBody"><div class="ld"><span class="ab-mark"></span></div></div>
     <div class="panel" style="margin-top:22px;">
       <h3>Sponsored listings</h3>
       <div class="sub">Seller-run marketplace CPC campaigns (self-serve — not a review queue). Search or filter, then pause/end an abusive one.</div>
@@ -2840,7 +2841,7 @@ function renderAdsAdminView(){
         <div class="tf-ranges" id="sponFilters"></div>
         <input class="in" id="sponSearchIn" placeholder="Search seller or listing…" style="max-width:240px;" oninput="sponSearchDebounced(this.value)"/>
       </div>
-      <div id="sponBody"><div class="empty">Loading…</div></div>
+      <div id="sponBody"><div class="ld"><span class="ab-mark"></span></div></div>
     </div>`;
   loadAdsAdmin();
   loadSponsored();
@@ -2954,7 +2955,7 @@ async function adcSubmit(){
 let AFFA = null;
 function renderAffAdminView(){
   document.getElementById('stats').innerHTML = '';
-  document.getElementById('content').innerHTML = '<div id="affaBody"><div class="empty">Loading…</div></div>';
+  document.getElementById('content').innerHTML = '<div id="affaBody"><div class="ld"><span class="ab-mark"></span></div></div>';
   loadAffAdmin();
 }
 async function loadAffAdmin(){
@@ -2982,7 +2983,7 @@ async function renderPostsView(){
   content.innerHTML = `
     <div class="toolbar"><div class="muted" style="flex:1;align-self:center;">Most recent posts &amp; replies across the platform.</div>
       <button class="refresh" onclick="renderPostsView()">↻ Refresh</button></div>
-    <div id="postList"><div class="empty">Loading…</div></div>`;
+    <div id="postList"><div class="ld"><span class="ab-mark"></span></div></div>`;
   try { const { posts } = await api('GET', '/api/admin/posts'); APOSTS = posts || []; renderPostList(); }
   catch (e) { const el = document.getElementById('postList'); if (el) el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
@@ -3021,7 +3022,7 @@ function renderSupportView(){
     </div>` : '';
   document.getElementById('content').innerHTML = broadcast + `
     <div class="ov-section">Support requests</div>
-    <div id="supList"><div class="empty">Loading…</div></div>`;
+    <div id="supList"><div class="ld"><span class="ab-mark"></span></div></div>`;
   const inp = document.getElementById('bcInput');
   if (inp) inp.addEventListener('input', () => { document.getElementById('bcCount').textContent = inp.value.length + ' / 4000'; });
   loadSupport();
@@ -3085,7 +3086,7 @@ async function renderReportsView(){
       <label class="rep-selall"><input type="checkbox" id="repAll" onchange="repSelectAll(this.checked)"> Select all</label>
     </div>
     <div id="repBulkBar" class="rep-bulk hidden"></div>
-    <div id="repList"><div class="empty">Loading…</div></div>`;
+    <div id="repList"><div class="ld"><span class="ab-mark"></span></div></div>`;
   try { const { reports } = await api('GET', '/api/admin/reports'); REPORTS = reports || []; renderReportList(); }
   catch (e) { const el = document.getElementById('repList'); if (el) el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
@@ -3145,7 +3146,7 @@ async function renderDisputesView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
     <div class="ov-section">Open disputes</div>
-    <div id="dispList"><div class="empty">Loading…</div></div>`;
+    <div id="dispList"><div class="ld"><span class="ab-mark"></span></div></div>`;
   try { const { disputes } = await api('GET', '/api/admin/disputes'); DISPUTES = disputes || []; renderDisputeList(); }
   catch (e) { const el = document.getElementById('dispList'); if (el) el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
@@ -3211,7 +3212,7 @@ async function renderFeedSignalsView(){
       </select></div>
     <div id="fsWeights"></div>
     <div class="ov-section" style="margin-top:22px;">Signal performance</div>
-    <div id="fsBody"><div class="empty">Loading…</div></div>`;
+    <div id="fsBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
   const sel = document.getElementById('fsDays'); if (sel) sel.value = String(FEED_DAYS);
   renderWeightsEditor();
   try {
@@ -3288,7 +3289,7 @@ async function renderCirclesView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
     <div class="ov-section">Circle deletion requests</div>
-    <div id="circReqList"><div class="empty">Loading…</div></div>`;
+    <div id="circReqList"><div class="ld"><span class="ab-mark"></span></div></div>`;
   try { const { requests } = await api('GET', '/api/admin/circle-requests'); CIRCLEREQS = requests || []; renderCircleReqList(); }
   catch (e) { const el = document.getElementById('circReqList'); if (el) el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
@@ -3471,7 +3472,7 @@ async function openChat(id){
   document.getElementById('chatAvatar').textContent = initial(u.name);
   document.getElementById('chatName').textContent = u.name;
   document.getElementById('chatEmail').textContent = u.email;
-  document.getElementById('chatScroll').innerHTML = '<div class="chat-empty">Loading…</div>';
+  document.getElementById('chatScroll').innerHTML = '<div class="ld" style="min-height:180px"><span class="ab-mark"></span></div>';
   document.getElementById('chatOverlay').classList.add('show');
   document.body.style.overflow = 'hidden';
   setTimeout(() => document.getElementById('chatInput')?.focus(), 250);
