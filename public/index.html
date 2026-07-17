@@ -8719,7 +8719,7 @@ body.nav-morph .bottom-nav.bar-anim{
     background var(--t-slow) ease, box-shadow var(--t-slow) ease, border-color var(--t-slow) ease, scale .42s cubic-bezier(.4,.02,.28,1);}
 body.nav-morph .bn-plus{display:flex;position:absolute;inset:0;z-index:5;align-items:center;justify-content:center;
   background:none;border:none;cursor:pointer;opacity:0;pointer-events:none;transition:opacity var(--t-base) ease var(--t-fast);}
-body.nav-morph .bn-plus svg{width:26px;height:26px;fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round;}
+body.nav-morph .bn-plus svg{width:26px;height:26px;fill:none;stroke:#fff;stroke-width:2.8;stroke-linecap:round;}
 /* Ball state (added on scroll-down, removed on scroll-up / at the top) */
 body.nav-morph.nav-ball .bottom-nav{left:calc(100% - 58px - var(--nav-inset));
   /* Force a true 58×58 square so border-radius:999px renders a PERFECT circle
@@ -15038,7 +15038,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1185'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1186'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
