@@ -3537,6 +3537,38 @@ body.nav-mini .sb-post{width:48px;height:48px;padding:0;border-radius:50%;margin
 body.nav-mini .sb-post span{display:none;}
 body.nav-mini .sb-divider{width:38px;margin-inline-start:auto;margin-inline-end:auto;}
 
+/* ── Unified sidebar look (owner request: ONE design on mobile + desktop). The desktop
+   EXPANDED rail adopts the mobile drawer's styling — big bold-white rows, big rounded
+   line icons, blue Pro, right-sized profile header + verified badge, left-aligned counts,
+   and the world-nav tabs matched to the same size/weight so the whole rail reads as one
+   cohesive list. Scoped to the full rail only: the collapsed icon rails (body.nav-mini)
+   and the manual collapse (.sidebar.collapsed) keep their own icon-only sizing. */
+@media(min-width:769px){
+  body:not(.nav-mini) .sidebar:not(.collapsed) .sb-btn,
+  body:not(.nav-mini) .sidebar:not(.collapsed) .sb-settings{
+    padding:12px 12px;font-size:18px;font-weight:600;gap:18px;color:var(--t1);border-radius:12px;}
+  body:not(.nav-mini) .sidebar:not(.collapsed) .sb-btn svg,
+  body:not(.nav-mini) .sidebar:not(.collapsed) .sb-settings svg{
+    width:24px;height:24px;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round;}
+  body:not(.nav-mini) .sidebar:not(.collapsed) .sb-btn .sb-atwe-ic{width:22px;height:22px;}
+  /* World-nav tabs matched to the hub rows (size + weight + inactive colour); the
+     active tab keeps its own accent pill via :not(.active). */
+  body:not(.nav-mini) .sidebar:not(.collapsed) .sb-navbtn{font-size:18px;gap:18px;font-weight:600;}
+  body:not(.nav-mini) .sidebar:not(.collapsed) .sb-navbtn:not(.active){color:var(--t1);}
+  body:not(.nav-mini) .sidebar:not(.collapsed) .sb-navbtn .sb-navic,
+  body:not(.nav-mini) .sidebar:not(.collapsed) .sb-navbtn > svg,
+  body:not(.nav-mini) .sidebar:not(.collapsed) .sb-navbtn .sb-navlogo{width:24px;height:24px;}
+  body:not(.nav-mini) .sidebar:not(.collapsed) .sb-divider{margin:8px 0;}
+  body:not(.nav-mini) .sidebar:not(.collapsed) .sb-profilebtn{gap:12px;}
+  body:not(.nav-mini) .sidebar:not(.collapsed) .sb-profilebtn .user-avatar{width:44px;height:44px;font-size:17px;}
+  body:not(.nav-mini) .sidebar:not(.collapsed) .sb-prof-name{font-size:17px;}
+  body:not(.nav-mini) .sidebar:not(.collapsed) .sb-prof-user{font-size:13.5px;}
+  body:not(.nav-mini) .sidebar:not(.collapsed) .sb-profile-counts{justify-content:flex-start;padding-left:12px;gap:18px;font-size:14px;}
+  body:not(.nav-mini) .sidebar:not(.collapsed) .sb-btn.sb-upgrade{color:var(--accent);}
+  body:not(.nav-mini) .sidebar:not(.collapsed) .sb-btn.sb-upgrade svg{stroke:var(--accent);}
+  body:not(.nav-mini) .sidebar:not(.collapsed) .sb-prof-name .vbadge{width:.95em;height:.95em;}
+}
+
 /* ─────────────────────────────────────────────
    UTILITIES
 ───────────────────────────────────────────── */
@@ -15117,7 +15149,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1209'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1210'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -21799,10 +21831,11 @@ function sbPostClick() {
 // Contextual sidebar content per social tab (desktop rail).
 function acRenderSidebarContext(tab) {
   const el = document.getElementById('sbContext');
-  // ── Mobile drawer = a fixed X-style account HUB (owner request), not the per-tab
-  // contextual actions. Same basic options on every social tab, sized big to match X.
-  // (Desktop rail ≥769px keeps the contextual per-tab actions below.)
-  if (window.matchMedia && window.matchMedia('(max-width:768px)').matches) {
+  // ── ONE unified X-style account HUB on every device (owner request): the SAME items
+  // and look on the mobile drawer AND the desktop rail. (The desktop rail additionally
+  // shows the 5 world-nav tabs + Post button above this — it has no bottom bar — but the
+  // hub/header/trio/footer + styling are identical, so it reads as one design.)
+  {
     // Icons: one warm, clean, rounded line set (round caps/joins via CSS), all optically
     // even. Profile + Settings are NOT here — they live in the restored bottom trio below.
     const hub = [
