@@ -461,8 +461,11 @@ body.light .splash-mark{background-color:#d2d2d8;}
 /* Loading spinner inside a primary auth button (stays white, shows a spinner) */
 .auth-continue.is-loading,.auth-btn-primary.is-loading{background:#fff;color:#000;border-color:#fff;cursor:default;}
 .auth-continue.is-loading:active,.auth-btn-primary.is-loading:active{transform:none;}
-.btn-spinner{display:inline-block;width:22px;height:22px;border:2.5px solid rgba(0,0,0,.25);
-  border-top-color:rgba(0,0,0,.9);border-radius:50%;animation:btnspin .55s linear infinite;}
+/* Swirl spinner inside a primary (white) button — dark mark, same smooth spin+pulse. */
+.btn-spinner{display:inline-block;width:22px;height:22px;border:0;border-radius:0;
+  background:rgba(0,0,0,.82);
+  -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;
+  animation:btnspin .8s linear infinite, swirlPulse 1.7s ease-in-out infinite;will-change:transform;}
 @keyframes btnspin{to{transform:rotate(360deg);}}
 /* Email step: bottom button stack + "no account" note + create button */
 .auth-emailbtns{margin-top:auto;display:flex;flex-direction:column;gap:12px;}
@@ -8432,8 +8435,17 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
 
 /* Spinner for short loads (opening a thread) */
 .ac-spin{display:flex;justify-content:center;align-items:center;padding:48px 0;}
-.ac-spin span{width:26px;height:26px;border-radius:50%;border:2.5px solid var(--s3);border-top-color:var(--accent);animation:spin .7s linear infinite;}
+/* Swirl loading spinner — the Atwe mark spinning smoothly. The rotation runs on the
+   compositor (transform only + will-change) so it's buttery 60fps, and a slow, subtle
+   "breathing" scale pulse (separate `scale` property, also compositor-friendly) gives the
+   little vortex some life. Dark-grey like a regular spinner. Reused anywhere via .swirl-load. */
+.ac-spin span,.qr-loading span,.swirl-load{width:28px;height:28px;border:0;border-radius:0;
+  background:var(--t3);
+  -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;
+  animation:spin .8s linear infinite, swirlPulse 1.7s ease-in-out infinite;will-change:transform;}
+.swirl-load{display:inline-block;}
 @keyframes spin{to{transform:rotate(360deg);}}
+@keyframes swirlPulse{0%,100%{scale:1;}50%{scale:1.08;}}
 
 /* Slim, self-effacing scrollbars on desktop scroll areas */
 @media(min-width:769px){
@@ -15041,7 +15053,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1192'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1193'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
