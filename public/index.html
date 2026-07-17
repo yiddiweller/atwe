@@ -8737,7 +8737,10 @@ body.nav-morph .bn-tab{transition:opacity var(--t-base) ease;}
    (Opacity still transitions so it fades cleanly during the scroll-collapse morph.) */
 body.nav-morph .bn-indicator{transition:transform var(--t-slow) ease-in-out, width var(--t-base) var(--ease), height var(--t-base) var(--ease), opacity var(--t-base) ease;}
 body.nav-morph.nav-ball .bn-tab,
-body.nav-morph.nav-ball .bn-indicator{opacity:0;pointer-events:none;}
+/* !important on the indicator: the drag/glide code sets an inline opacity:1 on the grey
+   pill, which would otherwise beat this rule and leave the pill peeking through the
+   translucent ball (visible on Home, where the active pill sits at the ball's edge). */
+body.nav-morph.nav-ball .bn-indicator{opacity:0!important;pointer-events:none;}
 body.nav-morph.nav-ball .bn-plus{opacity:1;pointer-events:auto;}
 /* the floating compose FAB steps aside while the ball IS the compose */
 body.nav-morph.nav-ball .ac-fab{opacity:0;pointer-events:none;transition:opacity var(--t-base) ease;}
@@ -15038,7 +15041,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1188'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1189'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
