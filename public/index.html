@@ -331,12 +331,19 @@ body.light .splash-mark{background-color:#d2d2d8;}
   font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;border:none;
   background:rgba(255,255,255,.06);color:var(--t1);-webkit-tap-highlight-color:transparent;
   box-shadow:0 0 0 .5px var(--divider) inset;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-  transition:transform var(--t-fast) var(--ease),filter var(--t-base) var(--ease);}
-.auth-btn:active{transform:scale(.97);filter:brightness(.85);}
+  /* Press-and-hold GROWS the button (see .auth-hold) with the SAME smooth curve as the
+     bottom nav; only `scale` is transitioned on that curve — `transform`/`filter` keep
+     their own. Press-hold must not trigger iOS's blue text-selection caret / callout. */
+  transition:scale .42s cubic-bezier(.4,.02,.28,1),transform var(--t-fast) var(--ease),filter var(--t-base) var(--ease);
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+.auth-btn:active{filter:brightness(.94);}
 @media(hover:hover){.auth-btn:hover{filter:brightness(1.05);}}
+/* Press-and-hold zoom (inverse of the old shrink): a real tap still navigates — see
+   bindAuthBtnHold — while a hold-in-place release just eases back to size without opening. */
+.auth-btn.auth-hold{scale:1.04;will-change:transform;}
 /* Primary (blue): solid --accent fill, tint text, no border/edge of any kind. */
 .auth-btn-primary{background:var(--primary);color:var(--on-primary);box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;}
-.auth-btn-primary:active,.auth-continue:active{transform:scale(.97);filter:brightness(.92);}
+.auth-btn-primary:active,.auth-continue:active{filter:brightness(.96);}
 .auth-btn-primary:disabled{opacity:.4;cursor:default;background:var(--s2);color:var(--t2);}
 .auth-btn-primary:disabled:active{transform:none;filter:none;}
 /* White primary hover (blueprint D): a whisper-dim fill + a rim hint of light,
@@ -15068,7 +15075,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1200'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1201'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -44889,6 +44896,56 @@ function navInit() {
     clearTimeout(btn._tapT);
     btn._tapT = setTimeout(function () { btn.classList.remove('tap-lit'); }, 450);
   }, { passive: true });
+
+  // ═══ Login/auth buttons: press-and-hold ZOOM (the inverse of the old shrink) ═══
+  // Touching a button grows it a hair (1.04) on the exact same smooth curve as the
+  // bottom nav, and lifting eases it back. A real, quick TAP still fires the button's
+  // onclick → it opens its page. Only a press-and-HOLD-in-place release (or a drag off
+  // the button) is non-committal: it just eases back to size WITHOUT navigating, so you
+  // can touch a button, keep your finger down, change your mind, and let go on the login
+  // page. The iOS blue selection/callout is killed in CSS (user-select/touch-callout).
+  (function bindAuthBtnHold() {
+    var SEL = '.auth-btn';        // every auth button carries .auth-btn
+    var HOLD_MS = 260;            // finger held longer than this = "held" → release won't navigate
+    var MOVE_TOL = 10;            // dragging off the button also cancels the tap
+    var cur = null, holdT = null, eatClickUntil = 0;
+    function down(e) {
+      var btn = e.target.closest(SEL);
+      if (!btn || btn.disabled || btn.classList.contains('is-loading')) return;
+      if (cur) return;
+      cur = { btn: btn, id: e.pointerId, x0: e.clientX, y0: e.clientY, moved: false, held: false };
+      btn.classList.add('auth-hold');
+      holdT = setTimeout(function () { if (cur) cur.held = true; }, HOLD_MS);
+    }
+    function move(e) {
+      if (!cur || e.pointerId !== cur.id) return;
+      if (Math.abs(e.clientX - cur.x0) > MOVE_TOL || Math.abs(e.clientY - cur.y0) > MOVE_TOL) cur.moved = true;
+    }
+    function up(e) {
+      if (!cur || (e && e.pointerId != null && e.pointerId !== cur.id)) return;
+      if (holdT) { clearTimeout(holdT); holdT = null; }
+      cur.btn.classList.remove('auth-hold');                       // eases back via the CSS scale transition
+      if (cur.held || cur.moved) eatClickUntil = Date.now() + 600; // held/dragged → suppress the navigation click
+      cur = null;
+    }
+    function cancel() {
+      if (!cur) return;
+      if (holdT) { clearTimeout(holdT); holdT = null; }
+      cur.btn.classList.remove('auth-hold');
+      eatClickUntil = Date.now() + 600;
+      cur = null;
+    }
+    document.addEventListener('pointerdown', down, { passive: true });
+    document.addEventListener('pointermove', move, { passive: true });
+    document.addEventListener('pointerup', up, { passive: true });
+    document.addEventListener('pointercancel', cancel, { passive: true });
+    // Capture-phase suppressor: eat ONLY the click that follows a held/dragged release,
+    // so the button's onclick never navigates. A quick tap sets no window → falls through.
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest(SEL)) return;
+      if (Date.now() < eatClickUntil) { e.preventDefault(); e.stopPropagation(); eatClickUntil = 0; }
+    }, true);
+  })();
 
   // ═══ THE STAGE (#page-glow) — one fixed, pointer-events:none layer hosting
   // Layer A (the cursor pool). Created once; everything on it animates via
