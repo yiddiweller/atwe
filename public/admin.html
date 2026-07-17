@@ -156,6 +156,13 @@
   .pill.sale{background:var(--accent-dim);color:var(--accent);text-transform:none;}
 
   .empty{text-align:center;padding:54px 20px;color:var(--t3);font-size:14px;}
+  /* Branded boot loader: the spinning Atwe swirl (each blade its own grey) + a small
+     grey "Atwe Admin" underneath, matching the icon's colour. */
+  .boot-load{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:15px;padding:16vh 20px;}
+  .boot-load .ab-mark{width:46px;height:46px;background:url('/spin-swirl.png') center/contain no-repeat;
+    animation:abSpin 1.2s linear infinite;will-change:transform;}
+  @keyframes abSpin{to{transform:rotate(360deg);}}
+  .boot-load .ab-word{font-size:13px;font-weight:600;letter-spacing:.04em;color:#6E6E73;}
 
   /* ── Overview ── */
   .ov-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:18px;}
@@ -943,7 +950,7 @@
         <h1 id="viewTitle">Overview</h1>
       </div>
       <div class="stat-row" id="stats"></div>
-      <div id="content"><div class="empty">Loading…</div></div>
+      <div id="content"><div class="boot-load"><span class="ab-mark"></span><div class="ab-word">Atwe Admin</div></div></div>
     </div>
   </main>
 </div>
