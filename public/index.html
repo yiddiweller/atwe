@@ -8618,9 +8618,9 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
   /* DARKER near-black tint (18,18,21 instead of the lighter 32,32,36) at a medium
      opacity — so it reads as a dark bar that's still a little see-through + frosted,
      not a solid light-grey slab (owner request: darker, see-through but not too much). */
-  background:rgba(18,18,21,.90);
-  /* Lighter blur (was 30px → … → 2px) with a STRONG dark tint (.90 alpha — tinted / solid,
-     owner request), so the bar reads darker while staying a little see-through. */
+  background:rgba(18,18,21,.92);
+  /* Lighter blur (was 30px → … → 2px) with a STRONG dark tint (.92 alpha — tinted / solid,
+     in between .90 and .94, owner request), so the bar reads dark while staying a hair see-through. */
   -webkit-backdrop-filter:blur(2px) saturate(150%);backdrop-filter:blur(2px) saturate(150%);
   border:1px solid rgba(255,255,255,.05);
   /* Release ease for the tap zoom-bounce (bn-hold below): slower + soft, so a quick
@@ -15041,7 +15041,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1182'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1183'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
