@@ -8867,6 +8867,17 @@ body.nav-morph.nav-ball .ac-fab{opacity:0;pointer-events:none;transition:opacity
 /* Home + Beam: hide the floating "+" FAB entirely — compose is the top-bar "+"
    at rest and the scroll-ball when scrolling, so the extra FAB is redundant. */
 body.nav-morph #acHomeFab,body.nav-morph #acChatsFab{display:none;}
+/* Home-only nav paint budget: the nav is position:fixed with backdrop-filter:blur, so
+   iOS re-blurs whatever's behind it EVERY scroll frame — cheap over Beam's light list,
+   expensive over Home's image-heavy feed. That live re-blur is the Home-specific cost
+   that starved the nav→"+" morph to ~15fps while Beam's identical morph stayed ~60fps.
+   At the resting nav's 90% dark opacity the 2px blur is imperceptible, so a hair more
+   opaque solid fill looks the same and skips the per-frame re-blur entirely. The ball's
+   translucent white is bumped to a near-solid white (a clean iOS "+" disc) to make up
+   for the dropped frost. Scoped to body.home-feed so Beam's blur is byte-identical. */
+body.home-feed .bottom-nav{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;background:rgba(18,18,21,.94);}
+body.light.home-feed .bottom-nav{background:rgba(255,255,255,.96);}
+body.home-feed.nav-morph.nav-ball .bottom-nav{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;background:rgba(255,255,255,.92);}
 
 
 /* Responsive: bottom bar on mobile, sidebar nav on desktop */
@@ -15188,7 +15199,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1226'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1227'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24811,6 +24822,11 @@ function acShow(screenId, tab) {
   const _cover = (screenId === 'acHomeScreen' || screenId === 'acListScreen');
   if (_cover) { if (typeof _tabRowH === 'function') _tabRowH(); _covSet(0); }
   document.body.classList.toggle('feed-cover', _cover);
+  // Home-only marker: the feed behind the fixed nav is heavy (images), so its live
+  // backdrop-filter re-blur on every scroll frame is the Home-specific cost that made
+  // the nav→"+" morph choppy vs Beam's light list. `home-feed` scopes a blur-free nav
+  // (visually ~identical at the nav's 90% opacity) to Home so Beam's blur is untouched.
+  document.body.classList.toggle('home-feed', screenId === 'acHomeScreen');
   // PAGE-SCROLL: on mobile Home, let the whole document scroll so iOS Safari collapses its
   // bottom toolbar (like X). BUT only in a real browser — the INSTALLED (home-screen) app
   // has no Safari bar, so page-scroll would be pure cost there (the heavy feed scrolls less
