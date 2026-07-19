@@ -2417,6 +2417,11 @@ body.light .tb-feedtab.active{color:var(--t1);}
      layout so the nav's per-frame layout invalidation can't descend into it → 60fps morph,
      matching Beam (whose feed sits in a small internal scroller). */
   body.pgscroll #acFeed{contain:layout;}
+  /* Trim the nav-ball morph transition on Home to the essential motion: keep the left
+     slide + scale, but let the white fill / big box-shadow / border snap instead of
+     animating — repainting that 30px-blur shadow every frame on the heavy feed is the
+     remaining paint cost. Only affects Home page-scroll; Beam is untouched. */
+  body.pgscroll.nav-morph .bottom-nav{transition:left var(--t-slow) cubic-bezier(.34,1.26,.5,1),scale .42s cubic-bezier(.4,.02,.28,1)!important;}
 }
 .tb-word{height:15px;width:auto;display:block;}
 .tb-profile{display:flex;align-items:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
@@ -15183,7 +15188,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1223'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1224'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
