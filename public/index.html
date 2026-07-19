@@ -15173,7 +15173,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1219'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1220'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24802,7 +24802,9 @@ function acShow(screenId, tab) {
   const _pg = screenId === 'acHomeScreen' && window.matchMedia && window.matchMedia('(max-width:768px)').matches;
   document.body.classList.toggle('pgscroll', _pg);
   try { document.documentElement.style.overflow = _pg ? 'visible' : ''; } catch (e) {}
-  if (!_pg) { const _tb0 = document.querySelector('.topbar'); if (_tb0) _tb0.style.transform = ''; } // clear any page-scroll bar-hide on leave
+  { const _tb0 = document.querySelector('.topbar');
+    if (_pg) { if (_tb0 && _tb0.offsetHeight) _pgTbH = _tb0.offsetHeight; _pgTb = null; } // cache bar height here (not per scroll frame); re-cache els
+    else if (_tb0) _tb0.style.transform = ''; }                                            // clear the page-scroll bar-hide on leave
   // Toggle tabs-live on the small top-bar element (NOT <body>) so lifting the bar
   // above the content restyles only that tiny node, not the whole document — a
   // body-level class toggle forced a full-page style recalc on every first scroll
@@ -44733,30 +44735,27 @@ function _onListScroll(e) {
 // Page-scroll mode (mobile Home): the WINDOW scrolls, not #acFeed, so the .ac-list
 // scroll handler never fires. Drive the loved nav pill⇄ball morph + FAB slide off the
 // document's scroll instead. Only active while body.pgscroll (no-op otherwise).
-let _winNbLast = 0;
+let _winNbLast = 0, _pgTbH = 100, _pgTb = null, _pgFab = null, _pgScrim = null;
 function _onWinScroll() {
   if (!document.body.classList.contains('pgscroll')) return;
   const se = document.scrollingElement || document.documentElement;
   const st = se.scrollTop, dy = st - _winNbLast; _winNbLast = st;
   const atBottom = st >= (se.scrollHeight - window.innerHeight - 12);
+  // Cache the elements ONCE and use the bar height measured in acShow (outside scroll).
+  // Reading offsetHeight here EVERY frame forces a synchronous reflow → the jank the owner
+  // noticed vs Beam; the original _onListScroll deliberately never touches layout on scroll.
+  if (!_pgTb) { _pgTb = document.querySelector('.topbar'); _pgFab = document.getElementById('acHomeFab'); _pgScrim = document.getElementById('acTopScrim'); }
   // Top bar: hide (slide up) on scroll-down, return on scroll-up / at top — the page-scroll
-  // stand-in for the original's content-covers-the-menu effect. The bar is position:sticky,
-  // so translating it up just reveals the feed behind it (no gap); .32s CSS ease.
-  const _tbEl = document.querySelector('.topbar.tb-home');
-  const _tbH = _tbEl ? (_tbEl.offsetHeight || 100) : 0;
-  const _tbShow = (on) => { if (_tbEl) _tbEl.style.transform = on ? 'translateY(0)' : 'translateY(' + (-_tbH) + 'px)'; };
+  // stand-in for the original's content-covers-the-menu effect. position:sticky, so
+  // translating it up just reveals the feed behind it (no gap); .32s CSS ease.
+  const show = (on) => { if (_pgTb) _pgTb.style.transform = on ? 'translateY(0)' : 'translateY(' + (-_pgTbH) + 'px)'; };
   if (NAV_MORPH) {                                     // same thresholds as _onListScroll's morph
-    if (st <= 40) { _setNavBall(false); _tbShow(true); }
-    else if (dy > 3) { _setNavBall(true); _tbShow(false); }
-    else if (dy < -3 && !atBottom) { _setNavBall(false); _tbShow(true); }
+    if (st <= 40) { _setNavBall(false); show(true); }
+    else if (dy > 3) { _setNavBall(true); show(false); }
+    else if (dy < -3 && !atBottom) { _setNavBall(false); show(true); }
   }
-  const fab = document.getElementById('acHomeFab');   // FAB settles to the corner as the nav goes
-  if (fab) {
-    const tb = document.querySelector('.topbar');
-    const max = _barMax || (tb && tb.offsetHeight) || 100;
-    fab.style.transform = 'translateY(' + (Math.min(1, Math.max(0, st / max)) * 68) + 'px)';
-  }
-  const scrim = document.getElementById('acTopScrim'); if (scrim) scrim.style.opacity = 0;
+  if (_pgFab) _pgFab.style.transform = 'translateY(' + (Math.min(1, Math.max(0, st / _pgTbH)) * 68) + 'px)'; // FAB settles to the corner
+  if (_pgScrim) _pgScrim.style.opacity = 0;
 }
 function scrollHideInit() {
   if (NAV_MORPH) document.body.classList.add('nav-morph');
