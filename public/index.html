@@ -21,7 +21,11 @@
 <meta name="color-scheme" content="dark light"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<!-- iOS home-screen app: use the plain opaque-black status bar (same mode as admin.html,
+     which fills to the bottom correctly). "black-translucent" (full-bleed under the status
+     bar) was leaving a black strip at the bottom of the installed app on iPhone. Only
+     affects the iOS installed app — Chrome/desktop/web ignore this tag. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black"/>
 <!-- Google Identity Services (Sign in with Google) -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <!-- QR scanning (vendored jsQR, ~no-build). Loaded lazily-ish via defer; only used when scanning. -->
@@ -15152,7 +15156,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1215'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1216'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
