@@ -8868,16 +8868,18 @@ body.nav-morph.nav-ball .ac-fab{opacity:0;pointer-events:none;transition:opacity
    at rest and the scroll-ball when scrolling, so the extra FAB is redundant. */
 body.nav-morph #acHomeFab,body.nav-morph #acChatsFab{display:none;}
 /* Home-only nav paint budget: the nav is position:fixed with backdrop-filter:blur, so
-   iOS re-blurs whatever's behind it EVERY scroll frame — cheap over Beam's light list,
-   expensive over Home's image-heavy feed. That live re-blur is the Home-specific cost
-   that starved the nav→"+" morph to ~15fps while Beam's identical morph stayed ~60fps.
-   At the resting nav's 90% dark opacity the 2px blur is imperceptible, so a hair more
-   opaque solid fill looks the same and skips the per-frame re-blur entirely. The ball's
-   translucent white is bumped to a near-solid white (a clean iOS "+" disc) to make up
-   for the dropped frost. Scoped to body.home-feed so Beam's blur is byte-identical. */
-body.home-feed .bottom-nav{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;background:rgba(18,18,21,.94);}
-body.light.home-feed .bottom-nav{background:rgba(255,255,255,.96);}
-body.home-feed.nav-morph.nav-ball .bottom-nav{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;background:rgba(255,255,255,.92);}
+   iOS re-blurs the image-heavy feed behind it EVERY scroll frame — the Home-specific
+   cost that starved the nav→"+" morph to ~15fps while Beam's light list stayed 60fps.
+   Keep the frosted blur AT REST (owner wants it), but drop it INSTANTLY while actively
+   scrolling — motion hides the 2px blur, and killing the live re-blur lets the morph +
+   scroll ride the compositor at 60fps. It fades back in ~180ms after you stop.
+   `nav-scrolling` is toggled in JS (see _navScrollActive). No resting-look change at
+   all; scoped to body.home-feed so Beam's nav is byte-identical (always blurred). */
+body.home-feed.nav-scrolling .bottom-nav{
+  -webkit-backdrop-filter:none!important;backdrop-filter:none!important;
+  /* Drop ONLY backdrop-filter from the transition so the blur SNAPS off instantly (no
+     420ms "breathing"); left/scale/background still animate the morph normally. */
+  transition:left var(--t-slow) cubic-bezier(.34,1.26,.5,1), background var(--t-slow) ease, box-shadow var(--t-slow) ease, border-color var(--t-slow) ease, scale .42s cubic-bezier(.4,.02,.28,1);}
 
 
 /* Responsive: bottom bar on mobile, sidebar nav on desktop */
@@ -15199,7 +15201,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1227'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1228'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -44715,6 +44717,18 @@ function _darkLoop() {
   else if (++_darkStill > 8) { _darkRAF = 0; return; }
   _darkRAF = requestAnimationFrame(_darkLoop);
 }
+// Frost budget: while actively scrolling the Home feed, drop the nav's live backdrop
+// blur (see the body.home-feed.nav-scrolling CSS) so the pill⇄ball morph + scroll ride
+// the compositor at 60fps; re-add it ~180ms after the finger stops so the frosted glass
+// returns at rest. No-op off Home — Beam keeps its blur always (it's already smooth).
+let _navScrollT = null;
+function _navScrollActive() {
+  const cl = document.body.classList;
+  if (!cl.contains('home-feed')) return;
+  if (!cl.contains('nav-scrolling')) cl.add('nav-scrolling');
+  if (_navScrollT) clearTimeout(_navScrollT);
+  _navScrollT = setTimeout(() => document.body.classList.remove('nav-scrolling'), 180);
+}
 function _onListScroll(e) {
   const sc = e.target;
   if (!sc || !sc.classList || !sc.classList.contains('ac-list')) return;
@@ -44741,6 +44755,7 @@ function _onListScroll(e) {
   // Home feed: keep the darken/blur scrim off — the retracting bar + status strip
   // handle the top cleanly.
   if (sc.id === 'acFeed') {
+    _navScrollActive();                                // frost off while scrolling (Home only)
     const scrim = document.getElementById('acTopScrim');
     if (scrim) scrim.style.opacity = 0;
   }
@@ -44771,6 +44786,7 @@ function _onListScroll(e) {
 let _winNbLast = 0, _pgTbH = 100, _pgFab = null, _pgScrim = null;
 function _onWinScroll() {
   if (!document.body.classList.contains('pgscroll')) return;
+  _navScrollActive();                                  // frost off while scrolling (Home only)
   const se = document.scrollingElement || document.documentElement;
   const st = se.scrollTop, dy = st - _winNbLast; _winNbLast = st;
   const atBottom = st >= (se.scrollHeight - window.innerHeight - 12);
