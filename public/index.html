@@ -5011,7 +5011,7 @@ body.light .ac-post{border-bottom-color:rgba(0,0,0,.07);}
 #acFeed{padding-inline-start:0;padding-inline-end:0;overflow-anchor:none;}
 /* The hairline divider between posts is INSET to the same gutter the content (and
    the floating nav) use, so it starts/ends exactly where the posts do. */
-#acFeed .ac-post{--post-indent:52px;margin:0;padding:12px var(--feed-gutter);border-bottom:none;position:relative;}
+#acFeed .ac-post{--post-indent:52px;margin:0;padding:12px var(--feed-gutter);border-bottom:none;position:relative;contain:layout;}
 /* NB: content-visibility:auto was tried here and REMOVED — some iOS 18.x WebKit
    builds have real crash bugs with c-v in scrolling containers, and after the
    media-by-URL fix its memory benefit is redundant. Don't re-add without testing
@@ -15188,7 +15188,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1225'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1226'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -27572,7 +27572,7 @@ const Dwell = {
             delete this.visible[id];
           }
         });
-      }, { threshold: [0, 0.5, 1] });
+      }, { threshold: 0.5 });
     }
     document.querySelectorAll('#acFeed .ac-post[data-postid]').forEach(c => this.io.observe(c));
     if (!this.timer) this.timer = setInterval(() => this.flush(false), 15000); // periodic flush while the feed is up
@@ -33199,7 +33199,7 @@ function acAdObserve(root) {
         if (!id || AC._adSeen.has(id)) return;
         AC._adSeen.add(id); AC._adPending.add(id); acAdFlush();
       });
-    }, { threshold: [0, 0.5, 1] });
+    }, { threshold: 0.5 });
   }
   (root || document).querySelectorAll('.ac-adcard[data-adid]').forEach((el) => AC._adIO.observe(el));
 }
@@ -33238,7 +33238,7 @@ function acPadObserve(root) {
         if (!id || AC._padSeen.has(id)) return;
         AC._padSeen.add(id); AC._padPending.add(id); acPadFlush();
       });
-    }, { threshold: [0, 0.5, 1] });
+    }, { threshold: 0.5 });
   }
   (root || document).querySelectorAll('.mkt-card[data-adid]').forEach((el) => AC._padIO.observe(el));
 }
