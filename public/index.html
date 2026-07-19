@@ -2405,7 +2405,8 @@ body.light .tb-feedtab.active{color:var(--t1);}
   body.pgscroll.feed-cover #socialWrap{margin-top:0;}
   body.pgscroll.feed-cover #acFeed{padding-top:8px;}
   body.pgscroll.feed-cover #acFeed::before{display:none;}
-  body.pgscroll .topbar.tb-home{position:sticky;top:0;z-index:6;background:var(--bg);}
+  body.pgscroll .topbar.tb-home{position:sticky;top:0;z-index:6;background:var(--bg);
+    transition:transform .32s cubic-bezier(.33,0,.2,1);will-change:transform;}
 }
 .tb-word{height:15px;width:auto;display:block;}
 .tb-profile{display:flex;align-items:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
@@ -15172,7 +15173,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1218'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1219'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24801,6 +24802,7 @@ function acShow(screenId, tab) {
   const _pg = screenId === 'acHomeScreen' && window.matchMedia && window.matchMedia('(max-width:768px)').matches;
   document.body.classList.toggle('pgscroll', _pg);
   try { document.documentElement.style.overflow = _pg ? 'visible' : ''; } catch (e) {}
+  if (!_pg) { const _tb0 = document.querySelector('.topbar'); if (_tb0) _tb0.style.transform = ''; } // clear any page-scroll bar-hide on leave
   // Toggle tabs-live on the small top-bar element (NOT <body>) so lifting the bar
   // above the content restyles only that tiny node, not the whole document — a
   // body-level class toggle forced a full-page style recalc on every first scroll
@@ -44737,10 +44739,16 @@ function _onWinScroll() {
   const se = document.scrollingElement || document.documentElement;
   const st = se.scrollTop, dy = st - _winNbLast; _winNbLast = st;
   const atBottom = st >= (se.scrollHeight - window.innerHeight - 12);
+  // Top bar: hide (slide up) on scroll-down, return on scroll-up / at top — the page-scroll
+  // stand-in for the original's content-covers-the-menu effect. The bar is position:sticky,
+  // so translating it up just reveals the feed behind it (no gap); .32s CSS ease.
+  const _tbEl = document.querySelector('.topbar.tb-home');
+  const _tbH = _tbEl ? (_tbEl.offsetHeight || 100) : 0;
+  const _tbShow = (on) => { if (_tbEl) _tbEl.style.transform = on ? 'translateY(0)' : 'translateY(' + (-_tbH) + 'px)'; };
   if (NAV_MORPH) {                                     // same thresholds as _onListScroll's morph
-    if (st <= 40) _setNavBall(false);
-    else if (dy > 3) _setNavBall(true);
-    else if (dy < -3 && !atBottom) _setNavBall(false);
+    if (st <= 40) { _setNavBall(false); _tbShow(true); }
+    else if (dy > 3) { _setNavBall(true); _tbShow(false); }
+    else if (dy < -3 && !atBottom) { _setNavBall(false); _tbShow(true); }
   }
   const fab = document.getElementById('acHomeFab');   // FAB settles to the corner as the nav goes
   if (fab) {
