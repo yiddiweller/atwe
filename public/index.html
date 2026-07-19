@@ -2406,7 +2406,11 @@ body.light .tb-feedtab.active{color:var(--t1);}
   body.pgscroll.feed-cover #acFeed{padding-top:8px;}
   body.pgscroll.feed-cover #acFeed::before{display:none;}
   body.pgscroll .topbar.tb-home{position:sticky;top:0;z-index:6;background:var(--bg);
-    transition:transform .32s cubic-bezier(.33,0,.2,1);will-change:transform;}
+    transition:transform .32s cubic-bezier(.33,0,.2,1);will-change:transform;
+    /* The bar is a sticky header OVER the scrolling feed here — a live backdrop-filter
+       would re-blur the moving content every frame (the jank vs Beam). The bar is opaque
+       (var(--bg)) so dropping the blur is zero visual change but a huge scroll win. */
+    -webkit-backdrop-filter:none!important;backdrop-filter:none!important;}
 }
 .tb-word{height:15px;width:auto;display:block;}
 .tb-profile{display:flex;align-items:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
@@ -15173,7 +15177,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1220'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1221'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
