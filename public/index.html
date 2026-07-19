@@ -15188,7 +15188,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1224'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1225'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24811,10 +24811,14 @@ function acShow(screenId, tab) {
   const _cover = (screenId === 'acHomeScreen' || screenId === 'acListScreen');
   if (_cover) { if (typeof _tabRowH === 'function') _tabRowH(); _covSet(0); }
   document.body.classList.toggle('feed-cover', _cover);
-  // PAGE-SCROLL TEST (Phase 1): on mobile Home, let the whole document scroll so iOS
-  // Safari collapses its bottom toolbar (like X). Layout overrides live in the mobile
-  // @media CSS (body.pgscroll); here we also free the document's own overflow.
-  const _pg = screenId === 'acHomeScreen' && window.matchMedia && window.matchMedia('(max-width:768px)').matches;
+  // PAGE-SCROLL: on mobile Home, let the whole document scroll so iOS Safari collapses its
+  // bottom toolbar (like X). BUT only in a real browser — the INSTALLED (home-screen) app
+  // has no Safari bar, so page-scroll would be pure cost there (the heavy feed scrolls less
+  // smoothly than the internal scroller). So: browser Home → page-scroll; installed-app Home
+  // → the original buttery internal scroll (matches Beam). Layout overrides live in the
+  // mobile @media CSS (body.pgscroll); here we also free the document's own overflow.
+  const _standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  const _pg = screenId === 'acHomeScreen' && !_standalone && window.matchMedia && window.matchMedia('(max-width:768px)').matches;
   document.body.classList.toggle('pgscroll', _pg);
   try { document.documentElement.style.overflow = _pg ? 'visible' : ''; } catch (e) {}
   if (_pg) { const _tb0 = document.querySelector('.topbar'); if (_tb0 && _tb0.offsetHeight) _pgTbH = _tb0.offsetHeight; } // cache bar height (FAB slide), not per scroll frame
