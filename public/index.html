@@ -2411,6 +2411,12 @@ body.light .tb-feedtab.active{color:var(--t1);}
      (no transform-hide) so the scroll stays buttery. */
   body.pgscroll .topbar.tb-home{position:fixed;top:0;left:0;right:0;z-index:6;background:var(--bg);
     -webkit-backdrop-filter:none!important;backdrop-filter:none!important;}
+  /* THE smoothness fix: the nav-ball morph animates the nav's `left`/`height` (layout
+     properties). With the feed now in the full document flow, each morph frame would
+     re-layout the whole tall feed → ~15fps. `contain:layout` isolates the feed's internal
+     layout so the nav's per-frame layout invalidation can't descend into it → 60fps morph,
+     matching Beam (whose feed sits in a small internal scroller). */
+  body.pgscroll #acFeed{contain:layout;}
 }
 .tb-word{height:15px;width:auto;display:block;}
 .tb-profile{display:flex;align-items:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
@@ -15177,7 +15183,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1222'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1223'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
