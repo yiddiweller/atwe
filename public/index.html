@@ -15172,7 +15172,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1217'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1218'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -27627,9 +27627,13 @@ function acTrimFeed() {
   const postCount = feed.querySelectorAll('.ac-post').length;
   if (postCount <= FEED_DOM_CAP) return;
   let toDrop = postCount - FEED_DOM_CAP; // number of post cards to remove from the top
-  const startScroll = feed.scrollTop;    // capture BEFORE removal — the browser clamps scrollTop
-                                         // to the new (shorter) content as we remove, so reading it
-                                         // afterward and subtracting would double-count and jump to 0.
+  // In page-scroll mode the WINDOW is the scroller (#acFeed doesn't scroll), so read/write
+  // document scroll instead; otherwise the viewport would jump when top cards are removed.
+  const _pgTrim = document.body.classList.contains('pgscroll');
+  const _seTrim = document.scrollingElement || document.documentElement;
+  const startScroll = _pgTrim ? _seTrim.scrollTop : feed.scrollTop; // capture BEFORE removal — the browser
+                                         // clamps scrollTop to the new (shorter) content as we remove, so
+                                         // reading it afterward and subtracting would double-count → jump to 0.
   let removedH = 0, node = feed.firstElementChild;
   while (node && toDrop > 0) {
     const next = node.nextElementSibling;
@@ -27639,7 +27643,10 @@ function acTrimFeed() {
     node.remove(); // topmost card is far above the viewport (we only trim while paging near the bottom)
     node = next;
   }
-  if (removedH > 0) feed.scrollTop = Math.max(0, startScroll - removedH); // keep the viewport steady
+  if (removedH > 0) {                                                     // keep the viewport steady
+    const ns = Math.max(0, startScroll - removedH);
+    if (_pgTrim) _seTrim.scrollTop = ns; else feed.scrollTop = ns;
+  }
 }
 // ── Feed video parking (iOS memory) ──────────────────────────────────────────
 // iOS Safari gives <video> decoders/buffers very little headroom and jettisons the
@@ -27704,7 +27711,8 @@ async function acLoadFeedMore() {
 // New-posts pill: tap to merge fresh posts and jump to the top of the feed.
 function acShowNewPosts() {
   document.getElementById('acNewPosts')?.classList.add('hidden');
-  const feed = document.getElementById('acFeed'); if (feed) feed.scrollTop = 0;
+  const feed = document.getElementById('acFeed');
+  if (feed) { if (document.body.classList.contains('pgscroll')) (document.scrollingElement || document.documentElement).scrollTop = 0; else feed.scrollTop = 0; }
   acLoadFeed();
 }
 let _newPostsTimer = null;
@@ -27716,7 +27724,9 @@ async function acPollNewPosts() {
   if (document.hidden || _appTab !== 'home') return;
   if (_acFeedScope !== 'foryou' && _acFeedScope !== 'following') return;
   const feed = document.getElementById('acFeed');
-  if (!feed || feed.scrollTop < 400 || !AC._feedNewestId) return;
+  if (!feed || !AC._feedNewestId) return;
+  const _fsTop = document.body.classList.contains('pgscroll') ? (document.scrollingElement || document.documentElement).scrollTop : feed.scrollTop;
+  if (_fsTop < 400) return;
   const pill = document.getElementById('acNewPosts');
   if (pill && !pill.classList.contains('hidden')) return; // already showing
   try {
@@ -44718,9 +44728,32 @@ function _onListScroll(e) {
     _revealTrack(sc.scrollTop);
   }
 }
+// Page-scroll mode (mobile Home): the WINDOW scrolls, not #acFeed, so the .ac-list
+// scroll handler never fires. Drive the loved nav pill⇄ball morph + FAB slide off the
+// document's scroll instead. Only active while body.pgscroll (no-op otherwise).
+let _winNbLast = 0;
+function _onWinScroll() {
+  if (!document.body.classList.contains('pgscroll')) return;
+  const se = document.scrollingElement || document.documentElement;
+  const st = se.scrollTop, dy = st - _winNbLast; _winNbLast = st;
+  const atBottom = st >= (se.scrollHeight - window.innerHeight - 12);
+  if (NAV_MORPH) {                                     // same thresholds as _onListScroll's morph
+    if (st <= 40) _setNavBall(false);
+    else if (dy > 3) _setNavBall(true);
+    else if (dy < -3 && !atBottom) _setNavBall(false);
+  }
+  const fab = document.getElementById('acHomeFab');   // FAB settles to the corner as the nav goes
+  if (fab) {
+    const tb = document.querySelector('.topbar');
+    const max = _barMax || (tb && tb.offsetHeight) || 100;
+    fab.style.transform = 'translateY(' + (Math.min(1, Math.max(0, st / max)) * 68) + 'px)';
+  }
+  const scrim = document.getElementById('acTopScrim'); if (scrim) scrim.style.opacity = 0;
+}
 function scrollHideInit() {
   if (NAV_MORPH) document.body.classList.add('nav-morph');
   document.querySelectorAll('.ac-list').forEach(el => el.addEventListener('scroll', _onListScroll, { passive: true }));
+  window.addEventListener('scroll', _onWinScroll, { passive: true }); // page-scroll (pgscroll) mode
   bindNavBubble();
 }
 // Fire the same smooth zoom-in-and-out "bubble" on every bottom-nav tap, on touch-DOWN,
