@@ -2401,15 +2401,15 @@ body.light .tb-feedtab.active{color:var(--t1);}
   body.pgscroll .main{display:block;height:auto;overflow:visible;}
   body.pgscroll #socialWrap,body.pgscroll #socialWrap .ac-win,body.pgscroll #acHomeScreen{display:block;height:auto;min-height:0;}
   body.pgscroll #acFeed{display:block;height:auto;overflow:visible;}
-  /* Neutralise the feed-cover offsets so the test uses a clean sticky header. */
+  /* Neutralise the feed-cover offsets; pad the feed to clear the FIXED top bar. */
   body.pgscroll.feed-cover #socialWrap{margin-top:0;}
-  body.pgscroll.feed-cover #acFeed{padding-top:8px;}
+  body.pgscroll.feed-cover #acFeed{padding-top:calc(var(--bar-h, 52px) + 4px);}
   body.pgscroll.feed-cover #acFeed::before{display:none;}
-  body.pgscroll .topbar.tb-home{position:sticky;top:0;z-index:6;background:var(--bg);
-    transition:transform .32s cubic-bezier(.33,0,.2,1);will-change:transform;
-    /* The bar is a sticky header OVER the scrolling feed here — a live backdrop-filter
-       would re-blur the moving content every frame (the jank vs Beam). The bar is opaque
-       (var(--bg)) so dropping the blur is zero visual change but a huge scroll win. */
+  /* FIXED (not sticky) top bar: iOS repositions a sticky element on the MAIN THREAD every
+     scroll frame, stealing frames from the whole scroll (the jank vs Beam, whose bar isn't
+     sticky). Fixed rides the compositor. Opaque bg → no live blur needed. Always visible
+     (no transform-hide) so the scroll stays buttery. */
+  body.pgscroll .topbar.tb-home{position:fixed;top:0;left:0;right:0;z-index:6;background:var(--bg);
     -webkit-backdrop-filter:none!important;backdrop-filter:none!important;}
 }
 .tb-word{height:15px;width:auto;display:block;}
@@ -15177,7 +15177,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1221'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1222'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24806,9 +24806,7 @@ function acShow(screenId, tab) {
   const _pg = screenId === 'acHomeScreen' && window.matchMedia && window.matchMedia('(max-width:768px)').matches;
   document.body.classList.toggle('pgscroll', _pg);
   try { document.documentElement.style.overflow = _pg ? 'visible' : ''; } catch (e) {}
-  { const _tb0 = document.querySelector('.topbar');
-    if (_pg) { if (_tb0 && _tb0.offsetHeight) _pgTbH = _tb0.offsetHeight; _pgTb = null; } // cache bar height here (not per scroll frame); re-cache els
-    else if (_tb0) _tb0.style.transform = ''; }                                            // clear the page-scroll bar-hide on leave
+  if (_pg) { const _tb0 = document.querySelector('.topbar'); if (_tb0 && _tb0.offsetHeight) _pgTbH = _tb0.offsetHeight; } // cache bar height (FAB slide), not per scroll frame
   // Toggle tabs-live on the small top-bar element (NOT <body>) so lifting the bar
   // above the content restyles only that tiny node, not the whole document — a
   // body-level class toggle forced a full-page style recalc on every first scroll
@@ -44739,26 +44737,21 @@ function _onListScroll(e) {
 // Page-scroll mode (mobile Home): the WINDOW scrolls, not #acFeed, so the .ac-list
 // scroll handler never fires. Drive the loved nav pill⇄ball morph + FAB slide off the
 // document's scroll instead. Only active while body.pgscroll (no-op otherwise).
-let _winNbLast = 0, _pgTbH = 100, _pgTb = null, _pgFab = null, _pgScrim = null;
+let _winNbLast = 0, _pgTbH = 100, _pgFab = null, _pgScrim = null;
 function _onWinScroll() {
   if (!document.body.classList.contains('pgscroll')) return;
   const se = document.scrollingElement || document.documentElement;
   const st = se.scrollTop, dy = st - _winNbLast; _winNbLast = st;
   const atBottom = st >= (se.scrollHeight - window.innerHeight - 12);
-  // Cache the elements ONCE and use the bar height measured in acShow (outside scroll).
-  // Reading offsetHeight here EVERY frame forces a synchronous reflow → the jank the owner
-  // noticed vs Beam; the original _onListScroll deliberately never touches layout on scroll.
-  if (!_pgTb) { _pgTb = document.querySelector('.topbar'); _pgFab = document.getElementById('acHomeFab'); _pgScrim = document.getElementById('acTopScrim'); }
-  // Top bar: hide (slide up) on scroll-down, return on scroll-up / at top — the page-scroll
-  // stand-in for the original's content-covers-the-menu effect. position:sticky, so
-  // translating it up just reveals the feed behind it (no gap); .32s CSS ease.
-  const show = (on) => { if (_pgTb) _pgTb.style.transform = on ? 'translateY(0)' : 'translateY(' + (-_pgTbH) + 'px)'; };
-  if (NAV_MORPH) {                                     // same thresholds as _onListScroll's morph
-    if (st <= 40) { _setNavBall(false); show(true); }
-    else if (dy > 3) { _setNavBall(true); show(false); }
-    else if (dy < -3 && !atBottom) { _setNavBall(false); show(true); }
+  // Cache element refs ONCE — never read layout on scroll (the original _onListScroll is
+  // careful never to, since a per-frame reflow is exactly what stalls the scroll).
+  if (!_pgFab) { _pgFab = document.getElementById('acHomeFab'); _pgScrim = document.getElementById('acTopScrim'); }
+  if (NAV_MORPH) {                                     // pill ⇄ ball, same thresholds as _onListScroll
+    if (st <= 40) _setNavBall(false);
+    else if (dy > 3) _setNavBall(true);
+    else if (dy < -3 && !atBottom) _setNavBall(false);
   }
-  if (_pgFab) _pgFab.style.transform = 'translateY(' + (Math.min(1, Math.max(0, st / _pgTbH)) * 68) + 'px)'; // FAB settles to the corner
+  if (_pgFab) _pgFab.style.transform = 'translateY(' + (Math.min(1, Math.max(0, st / _pgTbH)) * 68) + 'px)'; // FAB → corner
   if (_pgScrim) _pgScrim.style.opacity = 0;
 }
 function scrollHideInit() {
