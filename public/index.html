@@ -1310,6 +1310,34 @@ body.light .tb-iconbtn.on{color:#fff;}
 .tb-feedtab-add svg{width:18px;height:18px;display:block;stroke:var(--t2);transition:stroke var(--t-fast) var(--ease);}
 .tb-feedtab-add:active svg{stroke:var(--t1);}
 @media(hover:hover){.tb-feedtab-add:hover svg{stroke:var(--t1);}}
+/* New chat list sheet (WhatsApp-style: name it + add people/groups) */
+#newListView .notif-card,#newListPicker .notif-card{max-width:600px;}
+.nl-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;position:sticky;top:0;background:var(--bg);z-index:2;}
+.nl-hbtn{width:44px;height:44px;border-radius:50%;border:none;background:rgba(255,255,255,.08);color:var(--t1);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
+body.light .nl-hbtn{background:rgba(0,0,0,.06);}
+.nl-hbtn svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
+.nl-hbtn.nl-done{background:rgba(255,255,255,.16);}
+body.light .nl-hbtn.nl-done{background:rgba(0,0,0,.12);}
+.nl-title{font-size:18px;font-weight:700;color:var(--t1);}
+.nl-body{padding:8px 18px 24px;}
+.nl-flabel{font-size:15px;font-weight:700;color:var(--t2);margin-bottom:10px;}
+.nl-input{width:100%;box-sizing:border-box;background:var(--s2);border:1px solid var(--b2);border-radius:16px;padding:15px 18px;font-size:16px;color:var(--t1);outline:none;}
+.nl-input:focus{border-color:var(--accent);}
+.nl-caption{font-size:14px;color:var(--t2);margin-top:12px;line-height:1.4;}
+.nl-add{display:flex;align-items:center;gap:14px;width:100%;background:var(--s2);border:none;border-radius:16px;padding:14px 16px;font-size:16px;font-weight:600;color:var(--t1);cursor:pointer;text-align:start;}
+.nl-add-ic{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+body.light .nl-add-ic{background:rgba(0,0,0,.06);}
+.nl-add-ic svg{width:20px;height:20px;stroke:var(--t1);}
+.nl-mem{gap:12px;}
+.nl-mem-x{margin-inline-start:auto;width:30px;height:30px;border-radius:50%;border:none;background:rgba(255,255,255,.08);color:var(--t2);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
+body.light .nl-mem-x{background:rgba(0,0,0,.06);}
+.nl-mem-x svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;}
+.nlp-sec{font-size:13px;font-weight:700;color:var(--t2);padding:14px 18px 6px;}
+.nlp-row{cursor:pointer;}
+.nlp-check{margin-inline-start:auto;width:24px;height:24px;border-radius:50%;border:2px solid var(--b2);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease);}
+.nlp-check svg{width:15px;height:15px;fill:none;stroke:#fff;stroke-width:3;opacity:0;}
+.nlp-row.on .nlp-check{background:var(--accent);border-color:var(--accent);}
+.nlp-row.on .nlp-check svg{opacity:1;}
 /* The small Apple-style popover the ⋯ opens. */
 .ai-menu-scrim{position:fixed;inset:0;z-index:1190;background:transparent;}
 .ai-menu-pop{position:fixed;z-index:1191;min-width:236px;max-width:92vw;padding:5px;
@@ -10866,10 +10894,14 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       </div>
       <div class="tb-feedtabs hidden" id="tbChatTabs">
         <button class="tb-feedtab active" id="acseg-chats" onclick="acChatTab('chats')">Chats<span class="ac-chattab-badge hidden" id="acsegBadge-chats">0</span></button>
+        <button class="tb-feedtab" id="acseg-unread" onclick="acChatTab('unread')">Unread</button>
+        <button class="tb-feedtab" id="acseg-favorites" onclick="acChatTab('favorites')">Favorites</button>
         <button class="tb-feedtab" id="acseg-groups" onclick="acChatTab('groups')">Groups<span class="ac-chattab-badge hidden" id="acsegBadge-groups">0</span></button>
         <button class="tb-feedtab" id="acseg-calls" onclick="acChatTab('calls')">Calls<span class="ac-chattab-badge ac-chattab-dot hidden" id="acsegBadge-calls"></span></button>
         <button class="tb-feedtab" id="acseg-contacts" onclick="acChatTab('contacts')">Contacts</button>
-        <!-- Beam ⋯ tools menu moved up to the brand row (#tbBrandMore). -->
+        <!-- Custom list pills render here (acRenderChatLists), then the "+" to make one.
+             Beam ⋯ tools menu moved up to the brand row (#tbBrandMore). -->
+        <button class="tb-feedtab tb-feedtab-add" id="acChatTabAdd" onclick="acOpenNewList(event)" aria-label="New list" title="New list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
       </div>
       <!-- Scroll-darken overlay (Home/Beam cover). A single EMPTY element whose opacity
            is driven directly in JS — so darkening never recalcs the tab buttons; it's a
@@ -11780,6 +11812,33 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <span class="notif-title">Add to your tabs</span>
     </div>
     <div class="notif-list" id="pinPickerBody"></div>
+  </div>
+</div>
+<!-- New chat list (WhatsApp-style): name it + add people/groups → a filter pill on Beam -->
+<div class="overlay hidden" id="newListView">
+  <div class="notif-card" role="dialog" aria-modal="true" aria-label="New list">
+    <div class="nl-head">
+      <button class="nl-hbtn" onclick="closeOverlay('newListView')" aria-label="Cancel"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <span class="nl-title" id="newListTitle">New list</span>
+      <button class="nl-hbtn nl-done" onclick="acCreateNewList()" aria-label="Save"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></button>
+    </div>
+    <div class="nl-body">
+      <div class="nl-flabel">List name</div>
+      <input id="nlName" class="nl-input" type="text" maxlength="40" placeholder="Examples: Work, Friends" autocomplete="off"/>
+      <div class="nl-caption">Any list you create becomes a filter at the top of your Chats tab.</div>
+      <div class="nl-flabel" style="margin-top:22px;">Included</div>
+      <div id="nlIncluded"></div>
+    </div>
+  </div>
+</div>
+<!-- Picker: choose people/groups to include in a list -->
+<div class="overlay hidden" id="newListPicker">
+  <div class="notif-card" role="dialog" aria-modal="true" aria-label="Add people or groups">
+    <div class="notif-head">
+      <button class="notif-back" onclick="closeOverlay('newListPicker')" aria-label="Done"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <span class="notif-title">Add people or groups</span>
+    </div>
+    <div class="notif-list" id="newListPickerBody"></div>
   </div>
 </div>
 <!-- Starred messages (aggregate across DMs + groups) -->
@@ -14136,7 +14195,8 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   <div class="aimp-sep"></div>
   <button class="aimp-item" role="menuitem" id="chatMenuArchived" onclick="acChatMenuPick('archived')"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg><span>Archived</span><span class="aimp-count" id="chatMenuArchivedN"></span></button>
   <div class="aimp-sep"></div>
-  <button class="aimp-item" role="menuitem" id="chatMenuUnread" onclick="acChatMenuPick('unread')"><svg viewBox="0 0 24 24"><polygon points="3 4 21 4 14 12.5 14 19 10 21 10 12.5"/></svg><span>Unread only</span><span class="aimp-check" id="chatMenuUnreadChk" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span></button>
+  <!-- "Unread only" now lives as its own tab in the Beam tab row — hidden here to avoid duplication. -->
+  <button class="aimp-item" role="menuitem" id="chatMenuUnread" onclick="acChatMenuPick('unread')" style="display:none;"><svg viewBox="0 0 24 24"><polygon points="3 4 21 4 14 12.5 14 19 10 21 10 12.5"/></svg><span>Unread only</span><span class="aimp-check" id="chatMenuUnreadChk" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span></button>
   <div class="aimp-sep"></div>
   <button class="aimp-item" role="menuitem" id="chatMenuLastSeen" onclick="acChatMenuPick('lastseen')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg><span>Last seen &amp; online</span><span class="aimp-check" id="chatMenuLastSeenChk" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span></button>
   <div class="aimp-sep hidden" id="chatMenuAutoMsgSep"></div>
@@ -15405,7 +15465,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1264'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1265'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -26687,13 +26747,16 @@ const AC_CHATS_FAB = {
   calls:    { ic: "<span class='nav-fab-ic' style=\"--ic:var(--icn-target)\"></span>", label: 'New call' },
   contacts: { ic: '<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>', label: 'Add contact' },
 };
-const AC_CHATS_TABS = ['chats', 'groups', 'calls', 'contacts'];
+const AC_CHATS_TABS = ['chats', 'unread', 'favorites', 'groups', 'calls', 'contacts'];
+// chats/unread/favorites/groups/list:<id> all render the chat list (#acList), just with
+// a different filter; calls + contacts are their own panes.
+function acIsChatListTab(t) { return t === 'chats' || t === 'unread' || t === 'favorites' || t === 'groups' || String(t).startsWith('list:'); }
 // dir: +1 came from a left-swipe / forward, -1 from a right-swipe / back, 0 a tap.
 // User TAP on a Beam tab → spin the logo, then switch (mirrors acFeedTab on Home). The
 // programmatic acChatsTab calls (entering Beam, boot) don't spin — only real taps.
 function acChatTab(tab) { acSpinBrandMark(); acChatsTab(tab); }
 function acChatsTab(tab, dir) {
-  if (!AC_CHATS_TABS.includes(tab)) tab = 'chats';
+  if (!AC_CHATS_TABS.includes(tab) && !String(tab).startsWith('list:')) tab = 'chats';
   // Collapsing header: the pane jumps to top on a tab switch, so reveal the brand row.
   if (document.body.classList.contains('brand-collapse')) { const _tb = document.querySelector('.topbar'); if (_tb) _tb.style.transform = 'translateY(0px)'; _bcHide = 0; }
   if (AC._chatSelMode) { AC._chatSelMode = false; acChatSel().clear(); document.getElementById('acListScreen')?.classList.remove('selecting'); } // leave bulk-select on tab change
@@ -26708,34 +26771,41 @@ function acChatsTab(tab, dir) {
   try { localStorage.setItem('ac_chats_tab', tab); } catch {} // remember across launches
   closeCallFab();
   if (typeof acRenderLabelBar === 'function') acRenderLabelBar();
-  // Highlight the active tab.
-  AC_CHATS_TABS.forEach(t => document.getElementById('acseg-' + t)?.classList.toggle('active', t === tab));
-  // Show only the active pane.
-  document.getElementById('acList').classList.toggle('hidden', !(tab === 'chats' || tab === 'groups'));
+  const listTab = acIsChatListTab(tab);
+  // Highlight the active tab (built-in tabs + custom-list pills; ids are acseg-<tab>).
+  document.querySelectorAll('#tbChatTabs .tb-feedtab').forEach(b => b.classList.remove('active'));
+  document.getElementById('acseg-' + tab)?.classList.add('active');
+  // Show only the active pane (the chat list is shared by chats/unread/favorites/groups/list).
+  document.getElementById('acList').classList.toggle('hidden', !listTab);
   document.getElementById('acCallList2').classList.toggle('hidden', tab !== 'calls');
   document.getElementById('acContactsHead2').classList.toggle('hidden', tab !== 'contacts');
   document.getElementById('acContactsList2').classList.toggle('hidden', tab !== 'contacts');
   // Slide the new pane in from the swipe direction (skipped for a plain tap).
   if (dir) {
-    const primary = { chats: 'acList', groups: 'acList', calls: 'acCallList2', contacts: 'acContactsList2' }[tab];
+    const primary = listTab ? 'acList' : { calls: 'acCallList2', contacts: 'acContactsList2' }[tab];
     const pel = document.getElementById(primary);
     if (pel) { pel.classList.remove('ac-pane-in-l', 'ac-pane-in-r'); void pel.offsetWidth; pel.classList.add(dir > 0 ? 'ac-pane-in-l' : 'ac-pane-in-r'); }
   }
-  // Search · Starred · Unread-only now live in the ⋯ tools menu after the last tab;
-  // it shows only on the message lists (Chats / Groups), like the old top-bar icons.
-  const showFilter = tab === 'chats' || tab === 'groups';
+  // Search lives in the ⋯ tools menu (moved to the brand row); available on the chat lists.
+  const showFilter = listTab;
   document.getElementById('acChatMoreBtn')?.classList.toggle('hidden', !showFilter);
-  if (!showFilter) { acHideChatSearch(); acCloseChatMenu(); } // leaving All/Chats closes the search + the menu
-  // Swap the FAB's icon + label for the tab's primary action.
-  const fab = document.getElementById('acChatsFab'), cfg = AC_CHATS_FAB[tab];
+  if (!showFilter) { acHideChatSearch(); acCloseChatMenu(); } // leaving the chat lists closes the search + the menu
+  // Swap the FAB's icon + label for the tab's primary action (unread/favorites/list
+  // reuse the Chats action — a new message).
+  const fab = document.getElementById('acChatsFab'), cfg = AC_CHATS_FAB[tab] || (listTab ? AC_CHATS_FAB.chats : null);
   if (fab && cfg) { document.getElementById('acChatsFabIc')?.remove(); fab.innerHTML = cfg.ic; fab.setAttribute('aria-label', cfg.label); }
   // Load the active pane's data.
-  if (tab === 'chats' || tab === 'groups') {
-    AC._chatsFilter = tab; AC._showArchived = false;
+  if (listTab) {
+    // Derive the chat-list filters from the tab: Groups = groups-only, Unread = unread
+    // chats, Favorites = pinned chats, list:<id> = a custom list (label), else all chats.
+    AC._chatsFilter = (tab === 'groups') ? 'groups' : 'chats';
+    AC._unreadOnly = (tab === 'unread');
+    AC._favOnly = (tab === 'favorites');
+    AC._labelFilter = String(tab).startsWith('list:') ? parseInt(tab.slice(5), 10) : null;
+    AC._showArchived = false;
     // INSTANT tab swap: re-filter the in-memory conversations/groups in the same
-    // frame as the tap — never wait on the network to switch panes (the old flow
-    // fetched FIRST, so Groups kept showing the Chats rows for ~a second on
-    // mobile data). The fetch still runs, silently, to refresh in the background.
+    // frame as the tap — never wait on the network to switch panes. The fetch still
+    // runs, silently, to refresh in the background.
     acRenderChats();
     acLoadChats({ silent: true });
   }
@@ -37431,16 +37501,102 @@ async function acLoadLabels() {
   try { const { labels } = await API.req('GET', '/api/atchat/labels'); AC._labels = labels || []; acRenderLabelBar(); }
   catch { AC._labels = AC._labels || []; }
 }
+// The custom lists (WhatsApp-style) now live as pills IN the Beam tab row (between
+// Contacts and the "+"), not in the old separate label bar — keep that bar hidden and
+// render the pills in the tab row instead. Function name kept (called from several spots).
 function acRenderLabelBar() {
-  const bar = document.getElementById('acLabelBar'); if (!bar) return;
-  const tab = AC._chatsTab || AC._chatsFilter;
-  const onChatsTab = tab === 'chats' || tab === 'groups';
-  const labels = AC._labels || [];
-  if (!onChatsTab || (!labels.length && !AC._labelFilter)) { bar.classList.add('hidden'); bar.innerHTML = ''; return; }
-  bar.classList.remove('hidden');
-  let html = labels.map(l => `<button class="ac-lchip ${AC._labelFilter === l.id ? 'on' : ''}" style="--lc:${_LABEL_COLORS[l.color] || 'var(--accent)'}" onclick="acLabelFilter(${l.id})"><span class="ac-lchip-dot"></span>${escHtml(l.name)}${l.count ? ' <b>' + l.count + '</b>' : ''}</button>`).join('');
-  html += `<button class="ac-lchip ac-lchip-mng" onclick="acManageLabels()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Labels</button>`;
-  bar.innerHTML = html;
+  const bar = document.getElementById('acLabelBar'); if (bar) { bar.classList.add('hidden'); bar.innerHTML = ''; }
+  acRenderChatLists();
+}
+// Insert/refresh the custom-list tab pills before the "+" (acChatTabAdd) in #tbChatTabs.
+function acRenderChatLists() {
+  const row = document.getElementById('tbChatTabs'); if (!row) return;
+  const addBtn = document.getElementById('acChatTabAdd');
+  row.querySelectorAll('.tb-chatlist-pill').forEach(b => b.remove());
+  (AC._labels || []).forEach(l => {
+    const tab = 'list:' + l.id;
+    const btn = document.createElement('button');
+    btn.className = 'tb-feedtab tb-chatlist-pill';
+    btn.id = 'acseg-' + tab;
+    if (AC._chatsTab === tab) btn.classList.add('active');
+    btn.textContent = l.name;
+    btn.setAttribute('aria-label', l.name + ' list');
+    btn.onclick = () => acChatTab(tab);
+    row.insertBefore(btn, addBtn || null);
+  });
+}
+// ── New chat list (WhatsApp-style) — name it + add people/groups, becomes a filter pill ──
+function acOpenNewList(e) {
+  if (e) e.stopPropagation();
+  AC._nlMembers = [];
+  showOverlay('newListView');
+  const nm = document.getElementById('nlName'); if (nm) nm.value = '';
+  acRenderNlIncluded();
+  setTimeout(() => document.getElementById('nlName')?.focus(), 60);
+}
+function acRenderNlIncluded() {
+  const box = document.getElementById('nlIncluded'); if (!box) return;
+  const mem = AC._nlMembers || [];
+  let html = mem.map(m => `<div class="ac-item nl-mem">
+    ${acAvatarHtml(m.name, m.avatar, 'user-avatar', m.kind === 'group')}
+    <div class="ac-item-main"><div class="ac-item-name">${escHtml(m.name)}</div></div>
+    <button class="nl-mem-x" onclick="acNlToggle(${jsAttr(m.kind)},${jsAttr(String(m.id))})" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>`).join('');
+  html += `<button class="nl-add" onclick="acNlAddOpen()"><span class="nl-add-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>Add people or groups</button>`;
+  box.innerHTML = html;
+}
+function acNlAddOpen() {
+  showOverlay('newListPicker');
+  acRenderNlPicker();
+}
+function acRenderNlPicker() {
+  const body = document.getElementById('newListPickerBody'); if (!body) return;
+  const mem = AC._nlMembers || [];
+  const has = (kind, id) => mem.some(m => m.kind === kind && String(m.id) === String(id));
+  const dms = (AC.conversations || []).filter(c => c.id !== S.user?.id);
+  const grps = AC.groupsList || [];
+  const row = (kind, id, name, avatar) => `<div class="ac-item nlp-row ${has(kind, id) ? 'on' : ''}" onclick="acNlToggle(${jsAttr(kind)},${jsAttr(String(id))},${jsAttr(name || '')},${jsAttr(avatar || '')})">
+    ${acAvatarHtml(name, avatar, 'user-avatar', kind === 'group')}
+    <div class="ac-item-main"><div class="ac-item-name">${escHtml(name || '')}</div></div>
+    <span class="nlp-check" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>
+  </div>`;
+  let html = '';
+  if (dms.length) html += '<div class="nlp-sec">People</div>' + dms.map(c => row('dm', c.id, c.name, c.avatar)).join('');
+  if (grps.length) html += '<div class="nlp-sec">Groups</div>' + grps.map(g => row('group', g.id, g.name, g.avatar)).join('');
+  if (!dms.length && !grps.length) html = '<div class="ac-empty" style="padding:24px;">No chats yet to add.</div>';
+  body.innerHTML = html;
+}
+function acNlToggle(kind, id, name, avatar) {
+  if (!Array.isArray(AC._nlMembers)) AC._nlMembers = [];
+  const i = AC._nlMembers.findIndex(m => m.kind === kind && String(m.id) === String(id));
+  if (i >= 0) AC._nlMembers.splice(i, 1);
+  else {
+    // name/avatar come from the picker; when removing from the Included list we already have them
+    let nm = name, av = avatar;
+    if (nm === undefined) {
+      const src = kind === 'dm' ? (AC.conversations || []).find(c => String(c.id) === String(id)) : (AC.groupsList || []).find(g => String(g.id) === String(id));
+      nm = src ? src.name : ''; av = src ? src.avatar : '';
+    }
+    AC._nlMembers.push({ kind, id: (kind === 'group' ? parseInt(id, 10) : id), name: nm, avatar: av });
+  }
+  acRenderNlIncluded();
+  if (!document.getElementById('newListPicker').classList.contains('hidden')) acRenderNlPicker();
+}
+async function acCreateNewList() {
+  const name = (document.getElementById('nlName')?.value || '').trim();
+  if (!name) { showNotif('Name your list.'); document.getElementById('nlName')?.focus(); return; }
+  try {
+    const r = await API.req('POST', '/api/atchat/labels', { name, color: 'blue' });
+    let labelId = (r && r.label && r.label.id) || (r && r.id);
+    if (!labelId) { await acLoadLabels(); labelId = ((AC._labels || []).find(l => l.name === name) || {}).id; }
+    for (const m of (AC._nlMembers || [])) {
+      await API.req('POST', '/api/atchat/labels/' + labelId + '/assign', { kind: m.kind, targetId: m.id, on: true }).catch(() => {});
+    }
+    await acLoadLabels();
+    closeOverlay('newListPicker'); closeOverlay('newListView');
+    showNotif('List created.');
+    if (labelId) acChatTab('list:' + labelId);
+  } catch (e) { showNotif(e.message || 'Could not create the list.'); }
 }
 function acLabelFilter(id) {
   AC._labelFilter = AC._labelFilter === id ? null : id;
@@ -37624,6 +37780,7 @@ function acRenderChats() {
   if (lockedView) { dms = dms.filter(isLocked); grps = grps.filter(isLocked); }
   else { dms = dms.filter(x => !isLocked(x)); grps = grps.filter(x => !isLocked(x)); }
   if (unreadOnly) { dms = dms.filter(x => x.unread > 0); grps = grps.filter(x => x.unread > 0); }
+  if (AC._favOnly && !archivedView) { dms = dms.filter(x => x.pin); grps = grps.filter(x => x.pin); } // Favorites = pinned chats
   if (AC._labelFilter && !archivedView) { // filter to chats tagged with the active label
     const lab = (AC._labels || []).find(l => l.id === AC._labelFilter);
     const has = (kind, id) => !!(lab && lab.items.some(i => i.kind === kind && i.targetId === id));
