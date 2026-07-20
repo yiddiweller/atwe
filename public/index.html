@@ -2087,8 +2087,8 @@ body.reduce-motion .tb-brand-mark.spinning{animation:none;}
 @keyframes tbBrandRoll{from{transform:rotate(0)}to{transform:rotate(360deg)}}
 @keyframes tbWordSpit{0%{opacity:0;transform:translateX(-14px);clip-path:inset(0 100% 0 0)}55%{opacity:1}100%{opacity:1;transform:translateX(0);clip-path:inset(0 0 0 0)}}
 .tb-brand.rolling .tb-brand-mark{animation:tbBrandRoll .58s cubic-bezier(.16,.72,.24,1);}
-.tb-brand.rolling .tb-brand-word-txt{animation:tbWordSpit .58s cubic-bezier(.16,.72,.24,1);}
-body.reduce-motion .tb-brand.rolling .tb-brand-mark,body.reduce-motion .tb-brand.rolling .tb-brand-word-txt{animation:none;}
+.tb-brand.rolling .tb-brand-word-txt,.tb-brand.rolling .tb-brand-word{animation:tbWordSpit .58s cubic-bezier(.16,.72,.24,1);}
+body.reduce-motion .tb-brand.rolling .tb-brand-mark,body.reduce-motion .tb-brand.rolling .tb-brand-word-txt,body.reduce-motion .tb-brand.rolling .tb-brand-word{animation:none;}
 /* Exact spacing (founder's mock): the tabs align to the feed gutter (same x as the
    brand logo + the post avatars), and the tab strip runs to the true screen edge. */
 .topbar.tb-solo .tb-tabrow{padding:2px 0 8px var(--feed-gutter,16px);}
@@ -15350,7 +15350,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1252'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1253'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24435,10 +24435,12 @@ function syncTopbar(tab) {
     if (isChat) { _wImg.style.display = 'none'; _wTxt.style.display = 'inline'; _wTxt.textContent = 'Beam'; }
     else { _wImg.style.display = ''; _wTxt.style.display = 'none'; }
   }
-  // World-entry flourish: arriving at Beam or the AI page rolls the swirl + spits the word
-  // out to the right (only when the world actually CHANGES, so re-syncs don't replay it).
-  if ((isChat || isAi) && _brandRollLast !== tab) {
-    const lockup = isChat ? document.getElementById('tbBrandLogo') : document.getElementById('tbAiBrand');
+  // World-entry flourish: arriving at Home, Beam or the AI page rolls the swirl + spits the
+  // word out to the right. Only when the world actually CHANGES (re-syncs don't replay it)
+  // AND never on the very first sync (_brandRollLast===null) — so it does NOT fire on app
+  // open; only once you've been to another world and come back.
+  if ((isHome || isChat || isAi) && _brandRollLast !== null && _brandRollLast !== tab) {
+    const lockup = isAi ? document.getElementById('tbAiBrand') : document.getElementById('tbBrandLogo');
     if (lockup) { lockup.classList.remove('rolling'); void lockup.offsetWidth; lockup.classList.add('rolling'); }
   }
   _brandRollLast = tab;
