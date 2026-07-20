@@ -2177,10 +2177,15 @@ body.light .topbar.tb-solo.tb-home .tb-feedtab.active,body.light .topbar.tb-solo
 /* The old ≡/＋ icoset (and its left-edge fade) is retired on Home/Beam — the brand
    row now carries them — so the tab strip starts flush at the feed gutter, aligned
    under the brand logo (no left inset needed). */
+/* Resting inset lives in the scroller's OWN padding-inline-start (= the gutter), which
+   scrolls WITH the content: at rest the first tab sits at the gutter (even with the right
+   side), but the scroller box itself still spans to the true screen edge (the solo topbar
+   zeroes its inline padding above), so while scrolling a tab runs all the way to the edge
+   on the left — matching the right — instead of clipping early at the gutter. */
 .topbar.tb-solo.tb-home .tb-feedtabs{
-  padding-inline-start:0;scroll-padding-inline:0 var(--feed-gutter);}
+  padding-inline-start:var(--feed-gutter);scroll-padding-inline:0 var(--feed-gutter);}
 .topbar.tb-solo.tb-chat .tb-feedtabs{
-  padding-inline-start:0;scroll-padding-inline:0 var(--feed-gutter);}
+  padding-inline-start:var(--feed-gutter);scroll-padding-inline:0 var(--feed-gutter);}
 .topbar.tb-solo .tb-icoset{position:relative;z-index:1;}
 .topbar.tb-solo .tb-icoset::after{content:'';position:absolute;left:100%;top:0;bottom:0;width:26px;
   background:linear-gradient(to right,var(--bg) 6px,transparent);pointer-events:none;}
@@ -2284,6 +2289,13 @@ body.light .tb-feedtab.active{color:var(--t1);}
    active = bold white and slightly larger, inactive = muted gray. (X-style.) */
 @media(max-width:768px){
   .topbar.tb-home{padding-inline-start:var(--feed-gutter);}
+  /* Full-bleed the SOLO tab row to the true left screen edge (mobile only — desktop
+     keeps the ≡/＋ icoset inset). The solo topbar already zeroes its own inline padding,
+     so with the tab-row's left padding also 0 the scroller spans edge-to-edge; the
+     resting first-tab inset is carried by the scroller's own padding-inline-start
+     (=gutter, set on .tb-solo.tb-home/.tb-chat .tb-feedtabs) which scrolls with the
+     content — even at rest, runs to the edge while scrolling. */
+  .topbar.tb-solo .tb-tabrow{padding-inline-start:0;}
   /* ≡ icon aligns to the same left gutter as the feed content below, a drop bigger. */
   .topbar.tb-home .sb-toggle{justify-content:flex-start;width:auto;}
   .topbar.tb-home .sb-toggle svg{width:26px;height:26px;stroke-width:2.1;}
@@ -2291,10 +2303,7 @@ body.light .tb-feedtab.active{color:var(--t1);}
      the row scrolls left (and the last tab fades at the right edge). The left
      padding equals the fade width so the resting "For You" isn't clipped. */
   .topbar.tb-home .tb-feedtabs{flex:1;justify-content:flex-start;gap:34px;margin-inline-start:8px;
-    /* No right padding: the ⋯ (last item) rests flush at the gutter so its right
-       edge ends exactly where the grey hairline below ends (--feed-gutter inset),
-       matching the post ⋯ menus. The topbar's right padding is set to the gutter
-       too (below) so the row reaches that edge. */
+    /* No right padding: the last item rests flush at the gutter (topbar sets that edge). */
     padding-inline-start:16px;padding-inline-end:0;}
     /* (Left-edge fade is a static overlay on .tb-solo .tb-icoset — see above; no
        mask-image on the scrolling row, so horizontal tab scroll stays 60fps.) */
@@ -15387,7 +15396,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1259'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1260'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
