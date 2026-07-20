@@ -6669,14 +6669,15 @@ body.light .ac-home-stories{border-bottom-color:rgba(0,0,0,.08);}
 body.light .ac-pdot{background:var(--accent);}
 .ac-pf-time b{color:var(--t1);font-weight:700;}
 /* Reply controls */
-/* Reply-scope / PPV etc. as neat rounded pills (grey chip, own line, content-sized). */
-.ac-replyscope{display:flex;width:fit-content;align-items:center;gap:8px;background:var(--s2);border:none;color:var(--accent);
-  font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer;padding:9px 15px;margin:0 0 8px 16px;border-radius:999px;
-  transition:background var(--t-fast) var(--ease);}
-body.light .ac-replyscope{background:var(--s2);}
+/* Reply-scope / PPV etc. as neat rounded pills, sitting SIDE BY SIDE as equal halves
+   (one next to the other) in a flex row, aligned to the content gutter. */
+.ac-scope-row{display:flex;flex-wrap:wrap;gap:8px;padding:4px 16px 8px;}
+.ac-replyscope{display:flex;flex:1 1 45%;min-width:0;align-items:center;justify-content:center;gap:5px;background:var(--s2);
+  border:none;color:var(--accent);font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;padding:11px 8px;margin:0;
+  border-radius:999px;transition:background var(--t-fast) var(--ease);}
 .ac-replyscope:active{background:var(--s3);}
-.ac-replyscope svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;flex-shrink:0;}
-.ac-replyscope:first-of-type{margin-top:4px;}
+.ac-replyscope svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;flex-shrink:0;}
+.ac-replyscope>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 /* "Who can reply?" bottom sheet (X-style) */
 #replyScopeSheet{align-items:flex-end;justify-content:center;padding:0;}
 .rs-sheet{width:100%;max-width:600px;background:var(--bg);border-top-left-radius:20px;border-top-right-radius:20px;
@@ -6873,7 +6874,7 @@ input[type=number]{-moz-appearance:textfield;appearance:textfield;}
   animation:sheetUp .32s cubic-bezier(.22,.61,.36,1);}
 body.light .ac-compose-card{background:var(--bg);}
 .ac-compose-card .msg-top{position:sticky;top:0;z-index:3;background:inherit;border-bottom:1px solid var(--b1);border-radius:26px 26px 0 0;}
-.ac-compose-card .ac-post-toolbar{position:sticky;bottom:0;z-index:3;background:inherit;border-top:1px solid var(--b1);}
+.ac-compose-card .ac-post-toolbar{position:sticky;bottom:0;z-index:3;background:inherit;}
 body.reduce-motion .ac-compose-card{animation:none;}
 .ac-postbody{flex:1;overflow-y:auto;padding:16px;}
 .ac-postbody textarea{width:100%;background:none;border:none;outline:none;resize:none;color:var(--t1);
@@ -6900,8 +6901,8 @@ body.reduce-motion .ac-compose-card{animation:none;}
 /* Bottom tool row: a horizontally SCROLLABLE strip of round grey icon-buttons — all the
    same size + colour (matching the Atwe mark), roomy spacing, and the SAME inset on the
    sides as the bottom. Scrollbar hidden, iOS-style. */
-.ac-post-toolbar{display:flex;align-items:center;gap:14px;padding:14px 16px max(16px,env(safe-area-inset-bottom));
-  border-top:1px solid var(--b1);flex-shrink:0;overflow-x:auto;overflow-y:hidden;
+.ac-post-toolbar{display:flex;align-items:center;gap:14px;padding:8px 16px 16px;
+  flex-shrink:0;overflow-x:auto;overflow-y:hidden;
   -webkit-overflow-scrolling:touch;scrollbar-width:none;touch-action:pan-x;}
 .ac-post-toolbar::-webkit-scrollbar{display:none;}
 /* Each tool is a round LIGHT-GREY disc with a white glyph (same size/colour as the Atwe
@@ -14718,7 +14719,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <div class="ac-postbody">
         <div class="ac-compose-row">
           <div class="ac-compose-av" id="acComposeAv"></div>
-          <textarea id="acPostText" placeholder="Write a post" aria-label="Write a post" maxlength="2000" oninput="acPostInput();acMentionInput(this)"></textarea>
+          <textarea id="acPostText" placeholder="Write a post..." aria-label="Write a post" maxlength="2000" oninput="acPostInput();acMentionInput(this)"></textarea>
         </div>
         <div class="ac-mention-box hidden" id="acMentionBox"></div>
         <div id="acPostQuote"></div>
@@ -14757,22 +14758,25 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       </div>
       <!-- Where to share: your feed + any of your circles -->
       <div class="ac-targets" id="acPostTargets"></div>
-      <button class="ac-replyscope" id="acReplyScopeBtn" onclick="acReplyScopeMenu(this)">
-        <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>
-        <span id="acReplyScopeLabel">Everyone can reply</span>
-      </button>
-      <button class="ac-replyscope hidden" id="acSubOnlyBtn" onclick="acToggleSubOnly()">
-        <svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-        <span id="acSubOnlyLabel">Anyone can see this</span>
-      </button>
-      <div class="ac-replyscope hidden" id="acMinTierRow" style="gap:8px;">
-        <svg viewBox="0 0 24 24"><polygon points="12 2 15 8.5 22 9.3 17 14 18.2 21 12 17.5 5.8 21 7 14 2 9.3 9 8.5"/></svg>
-        <span>Min tier</span>
-        <select id="acMinTier" style="background:none;border:none;color:inherit;font:inherit;outline:none;border-bottom:1px solid var(--b2);flex:1;"></select>
-      </div>
-      <div class="ac-replyscope ppv-row hidden" id="acPpvRow">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 0c0 2.5-2.5 1.5-2.5 4"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg>
-        <span>Pay to unlock $</span><input id="acPpvPrice" type="number" min="1" max="1000" step="1" placeholder="0" inputmode="decimal" oninput="acPostInput && acPostInput()" style="width:60px;background:none;border:none;color:inherit;font:inherit;outline:none;border-bottom:1px solid var(--b2);"/>
+      <!-- Reply-scope / PPV etc. sit side by side as equal pills (one next to the other). -->
+      <div class="ac-scope-row">
+        <button class="ac-replyscope" id="acReplyScopeBtn" onclick="acReplyScopeMenu(this)">
+          <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>
+          <span id="acReplyScopeLabel">Everyone can reply</span>
+        </button>
+        <button class="ac-replyscope hidden" id="acSubOnlyBtn" onclick="acToggleSubOnly()">
+          <svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+          <span id="acSubOnlyLabel">Anyone can see this</span>
+        </button>
+        <div class="ac-replyscope hidden" id="acMinTierRow" style="gap:8px;">
+          <svg viewBox="0 0 24 24"><polygon points="12 2 15 8.5 22 9.3 17 14 18.2 21 12 17.5 5.8 21 7 14 2 9.3 9 8.5"/></svg>
+          <span>Min tier</span>
+          <select id="acMinTier" style="background:none;border:none;color:inherit;font:inherit;outline:none;border-bottom:1px solid var(--b2);flex:1;"></select>
+        </div>
+        <div class="ac-replyscope ppv-row hidden" id="acPpvRow">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 0c0 2.5-2.5 1.5-2.5 4"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg>
+          <span>Pay to unlock $</span><input id="acPpvPrice" type="number" min="1" max="1000" step="1" placeholder="0" inputmode="decimal" oninput="acPostInput && acPostInput()" style="width:44px;background:none;border:none;color:inherit;font:inherit;outline:none;border-bottom:1px solid var(--b2);"/>
+        </div>
       </div>
       <div class="ac-tagchips" id="acTagChips"></div>
       <div class="ac-post-toolbar">
@@ -15518,7 +15522,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1277'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1278'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
