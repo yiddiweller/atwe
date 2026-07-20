@@ -7569,11 +7569,10 @@ body.light #acListScreen .ac-item-inner::before{background:rgba(0,0,0,.07);}
 .ac-item.unread .ac-item-name{font-weight:800;}
 .ac-item.unread .ac-item-last{color:var(--t1);font-weight:600;}
 .ac-draft{color:var(--rose);font-weight:600;}
-/* Read ticks on your own last message in the chat list (WhatsApp-style):
-   single grey ✓ = sent, double accent ✓✓ = seen. */
-.ac-ticks{display:inline-flex;align-items:center;vertical-align:-2px;margin-right:4px;color:var(--t3);flex-shrink:0;}
-.ac-ticks svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;}
-.ac-ticks svg+svg{margin-left:-9px;}
+/* Read indicator on your own last message in the chat list: a small modern eye —
+   grey = sent (not yet seen), accent-blue = seen by the other side. */
+.ac-ticks{display:inline-flex;align-items:center;vertical-align:-3px;margin-right:5px;color:var(--t3);flex-shrink:0;}
+.ac-ticks svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 .ac-ticks.seen{color:var(--accent);}
 .ac-item-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;}
 .ac-item-time{font-size:12.5px;color:var(--t3);}
@@ -15476,7 +15475,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1266'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1267'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -37931,11 +37930,11 @@ function acChatRowDM(c) {
   const threadTag = tid == null ? '' : `<span class="ac-thread-tag">${escHtml(c.thread_title || 'New conversation')}</span>`;
   // A half-typed message replaces the last-message preview (WhatsApp-style) — per thread.
   const draft = Drafts.get('d:' + c.id + (tid != null ? ':t' + tid : ''));
-  // Your own last message carries read ticks in the list (WhatsApp-style):
-  // single grey ✓ = sent, double accent ✓✓ = seen by the other side.
-  const TICK = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
+  // Your own last message carries a read indicator in the list: a small eye that's
+  // grey when just sent, and turns accent-blue once the other side has seen it.
+  const EYE = '<svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
   const ticks = (!draft && c.last_mine && !c.last_deleted && !isSelf && c.last_at)
-    ? `<span class="ac-ticks${c.last_read ? ' seen' : ''}" aria-label="${c.last_read ? 'Seen' : 'Sent'}">${c.last_read ? TICK + TICK : TICK}</span>` : '';
+    ? `<span class="ac-ticks${c.last_read ? ' seen' : ''}" aria-label="${c.last_read ? 'Seen' : 'Sent'}">${EYE}</span>` : '';
   const lastHtml = draft ? `<span class="ac-draft">Draft:</span> ${escHtml(draft)}` : ticks + escHtml(last);
   const lastPlain = draft ? ('Draft: ' + draft) : last;
   return `<div class="ac-item ${on ? 'online' : ''} ${unread && !muted ? 'unread' : ''} ${pinned ? 'ac-pinned' : ''}" data-uid="${c.id}" data-tid="${tid == null ? '' : tid}" onclick="acDmRowTap(${c.id},${tk})">
