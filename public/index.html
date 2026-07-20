@@ -1354,6 +1354,17 @@ body.light .nl-mem-x{background:rgba(0,0,0,.06);}
 .aimp-check{margin-inline-start:auto;display:none;align-items:center;color:var(--accent);}
 .aimp-check svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.4;}
 .aimp-item.on .aimp-check{display:flex;}
+/* The top ⋯ menus (Home AI helpers / Beam tools) + the profile menu share the BOTTOM
+   NAV's exact material — same dark tint, same light blur, same thin hairline — and the
+   same rounded corners, so they read as one family with the nav (founder request). */
+#aiMenuPop,#chatMenuPop,#profileMenu{
+  background:rgba(18,18,21,.90);
+  -webkit-backdrop-filter:blur(2px) saturate(150%);backdrop-filter:blur(2px) saturate(150%);
+  border:1px solid rgba(255,255,255,.05);border-radius:20px;
+}
+body.light #aiMenuPop,body.light #chatMenuPop,body.light #profileMenu{
+  background:rgba(255,255,255,.82);border-color:var(--b3);
+}
 /* Pin indicator on a pinned conversation row. */
 .ac-pin-ic{display:inline-flex;vertical-align:middle;margin-inline-start:5px;color:var(--t3);}
 .ac-pin-ic svg{width:13px;height:13px;stroke:currentColor;stroke-width:2;fill:none;}
@@ -15465,7 +15476,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1265'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1266'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -28357,12 +28368,15 @@ function acOpenAiHub() { showOverlay('aiHub'); }
 // Shared positioner for the small Apple-style tab popovers (feed AI, chat tools):
 // anchor a popover's right edge under the ⋯ dots, below by default, flipping above
 // when it would overflow, and clamped into the viewport.
-function _acAnchorPopover(btn, pop) {
+function _acAnchorPopover(btn, pop, rightEl) {
   pop.style.visibility = 'hidden';
   const r = btn.getBoundingClientRect();
+  // Optionally align the popover's RIGHT edge to a DIFFERENT element (e.g. the profile
+  // icon) instead of the trigger — vertical position still comes from the trigger.
+  const rr = (rightEl && rightEl.getBoundingClientRect) ? rightEl.getBoundingClientRect() : r;
   requestAnimationFrame(() => {
     const pw = pop.offsetWidth, ph = pop.offsetHeight, M = 8;
-    let left = r.right - pw;                         // right edge under the dots
+    let left = rr.right - pw;                        // right edge under the profile icon (or the dots)
     left = Math.max(M, Math.min(left, window.innerWidth - pw - M));
     let top = r.bottom + 6, origin = 'top right';
     if (top + ph > window.innerHeight - M) { top = r.top - ph - 6; origin = 'bottom right'; }
@@ -28384,7 +28398,7 @@ function acOpenFeedAiMenu(e) {
   if (!pop.classList.contains('hidden')) { acCloseFeedAiMenu(); return; } // toggle
   scrim.classList.remove('hidden');
   pop.classList.remove('hidden');
-  _acAnchorPopover(btn, pop);
+  _acAnchorPopover(btn, pop, document.getElementById('tbBrandProf')); // right edge = profile icon
 }
 function acCloseFeedAiMenu() {
   document.getElementById('aiMenuPop')?.classList.add('hidden');
@@ -28413,7 +28427,7 @@ function acOpenChatMenu(e) {
   document.getElementById('chatMenuAutoMsgSep')?.classList.toggle('hidden', !isBiz);
   scrim.classList.remove('hidden');
   pop.classList.remove('hidden');
-  _acAnchorPopover(btn, pop);
+  _acAnchorPopover(btn, pop, document.getElementById('tbBrandProf')); // right edge = profile icon
 }
 function acCloseChatMenu() {
   document.getElementById('chatMenuPop')?.classList.add('hidden');
@@ -44253,9 +44267,18 @@ function toggleProfileMenu(e) {
   menu.style.width = Math.max(br.width, 230) + 'px';
   menu.classList.remove('hidden');
   requestAnimationFrame(() => {
-    const mr = menu.getBoundingClientRect();
-    if (mr.right > window.innerWidth - 8) menu.style.left = (window.innerWidth - mr.width - 8) + 'px';
-    if (mr.left < 8) menu.style.left = '8px';
+    // offsetWidth (layout width) — NOT getBoundingClientRect().width, which the popIn
+    // scale animation shrinks mid-flight and throws the alignment off.
+    const w = menu.offsetWidth;
+    if (openDown) {
+      // From the top-bar profile icon: align the menu's RIGHT edge with the icon's right
+      // edge (founder) — the same right edge the ⋯ menus now use.
+      menu.style.left = Math.max(8, br.right - w) + 'px';
+    } else {
+      const mr = menu.getBoundingClientRect();
+      if (mr.right > window.innerWidth - 8) menu.style.left = (window.innerWidth - w - 8) + 'px';
+      if (mr.left < 8) menu.style.left = '8px';
+    }
   });
 }
 function renderPmAccounts() {
