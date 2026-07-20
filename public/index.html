@@ -15518,7 +15518,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1279'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1280'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25262,7 +25262,12 @@ function acShow(screenId, tab) {
     // Cache/expose the CURRENT topbar height so content on ANY page-scroll screen clears the
     // fixed bar regardless of that bar's exact height (search bar ≠ feed-tab bar). Measured in
     // a rAF too, since the just-shown screen's topbar may not have laid out yet at this point.
-    const _setPgTop = () => { const _tb0 = document.querySelector('.topbar'); if (_tb0 && _tb0.offsetHeight) { _pgTbH = _tb0.offsetHeight; document.body.style.setProperty('--pg-top', _pgTbH + 'px'); } };
+    // Also measure the brand-row height (for the browser collapsing header) + reset it shown.
+    const _setPgTop = () => {
+      const _tb0 = document.querySelector('.topbar'); if (_tb0 && _tb0.offsetHeight) { _pgTbH = _tb0.offsetHeight; document.body.style.setProperty('--pg-top', _pgTbH + 'px'); }
+      const _br0 = document.getElementById('tbBrandRow'); if (_br0 && _br0.offsetHeight) _brandH = _br0.offsetHeight;
+    };
+    _pgHide = 0; _winNbLast = 0; _pgTb = null;          // start the collapsing header fully shown
     _setPgTop();
     requestAnimationFrame(_setPgTop);
   }
@@ -45456,7 +45461,7 @@ function _onListScroll(e) {
 // Page-scroll mode (mobile Home): the WINDOW scrolls, not #acFeed, so the .ac-list
 // scroll handler never fires. Drive the loved nav pill⇄ball morph + FAB slide off the
 // document's scroll instead. Only active while body.pgscroll (no-op otherwise).
-let _winNbLast = 0, _pgTbH = 100, _pgFab = null, _pgScrim = null;
+let _winNbLast = 0, _pgTbH = 100, _pgFab = null, _pgScrim = null, _pgTb = null, _pgHide = 0;
 function _onWinScroll() {
   if (!document.body.classList.contains('pgscroll')) return;
   _navScrollActive();                                  // frost off while scrolling (Home only)
@@ -45469,6 +45474,16 @@ function _onWinScroll() {
     // Cache element refs ONCE — never read layout on scroll (the original _onListScroll is
     // careful never to, since a per-frame reflow is exactly what stalls the scroll).
     if (!_pgFab) { _pgFab = document.getElementById('acHomeFab'); _pgScrim = document.getElementById('acTopScrim'); }
+    if (!_pgTb) _pgTb = document.querySelector('.topbar');
+    // COLLAPSING HEADER in the browser: slide the brand row UP as you scroll down and back
+    // DOWN as you scroll up — delta-tracked 1:1 (stays where you stop), clamped to the
+    // brand-row height so the tabs pin at the top. Exactly the installed app's feel, but
+    // driven off the WINDOW scroll (the fixed bar). One composited transform per frame.
+    if (_pgTb && !_pgTb.classList.contains('hidden')) {
+      if (st <= 0) _pgHide = 0;
+      else _pgHide = Math.max(0, Math.min(_brandH, _pgHide + dy));
+      _pgTb.style.transform = 'translateY(' + (-_pgHide) + 'px)';
+    }
     if (NAV_MORPH) {                                   // pill ⇄ ball, same thresholds as _onListScroll
       if (st <= 40) _setNavBall(false);
       else if (dy > 3) _setNavBall(true);
