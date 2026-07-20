@@ -2075,6 +2075,10 @@ body.tb-collapsed .tb-mainrow{max-height:0;opacity:0;}
    masked element coloured by --t1, so it's already theme-correct — no filter needed.) */
 body.light .tb-brand-word{filter:invert(1) brightness(.1);}
 .tb-brand-actions{display:flex;align-items:center;gap:12px;flex-shrink:0;}
+/* Kill the iOS long-press text-selection / callout (the blue selection handle) AND the
+   Android/Chrome tap-flash on the whole brand row — logo, +, ⋯, avatar are all controls,
+   never selectable text. Same suppression the bottom nav uses. */
+.tb-brandrow,.tb-brandrow *,.tb-tabrow,.tb-tabrow *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;}
 .tb-brand-act{box-sizing:border-box;width:var(--tb-brand-circle);height:var(--tb-brand-circle);border-radius:50%;padding:0;margin:0;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
 /* All three top icons (⋯ · ＋ · profile) share the bottom-nav's exact material: the
    same dark tinted fill + the same thin white hairline border, so they read as one
@@ -15401,7 +15405,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1262'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1263'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
