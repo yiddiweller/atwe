@@ -2079,7 +2079,7 @@ body.light .tb-brand-word{filter:invert(1) brightness(.1);}
 /* All three top icons (⋯ · ＋ · profile) share the bottom-nav's exact material: the
    same dark tinted fill + the same thin white hairline border, so they read as one
    family with the nav. Identical box-sizing + size so all three are exactly equal. */
-.tb-brand-act.more,.tb-brand-act.plus,.tb-brand-act.prof{background:rgba(18,18,21,.90);border:1px solid rgba(255,255,255,.05);}
+.tb-brand-act.more,.tb-brand-act.plus,.tb-brand-act.prof{background:rgba(18,18,21,.90);border:0.5px solid rgba(255,255,255,.09);}
 body.light .tb-brand-act.more,body.light .tb-brand-act.plus,body.light .tb-brand-act.prof{background:rgba(255,255,255,.82);border-color:var(--b3);}
 .tb-brand-act.plus{color:var(--t1);}
 .tb-brand-act.plus svg{width:calc(var(--tb-brand-circle) * 0.52);height:calc(var(--tb-brand-circle) * 0.52);stroke-width:2.6;}
@@ -2089,14 +2089,15 @@ body.light .tb-brand-act.more,body.light .tb-brand-act.plus,body.light .tb-brand
 /* Profile avatar: same hairline as the "+"/⋯ and the nav. The avatar fills the inner
    box (border-box), so the ring sits as a thin edge around it — matching the others. */
 .tb-brand-act.prof .user-avatar{width:100%;height:100%;font-size:calc(var(--tb-brand-circle) * 0.42);border-radius:50%;}
-/* Tap "pop" — the bottom nav's exact zoom-bounce (grow to a peak at 42%, settle back;
-   same .42s ease-in-out curve) on every top icon AND the brand logo, fired on tap. The
-   nav's 1.03 peak is invisible on a small icon, so the amount is scaled up to read at
-   this size while keeping the nav's spring timing/shape identical. */
-@keyframes tbActPop{0%{transform:scale(1);}42%{transform:scale(1.16);}100%{transform:scale(1);}}
-.tb-brand-act.tappop{animation:tbActPop .42s ease-in-out;}
-.tb-brand.tappop{animation:tbActPop .42s ease-in-out;transform-origin:left center;}
-body.reduce-motion .tb-brand-act.tappop,body.reduce-motion .tb-brand.tappop{animation:none;}
+/* Press-and-HOLD zoom — the bottom nav's exact behaviour: on press it grows and STAYS
+   big while held, and on release eases smoothly back to size (same .42s spring both
+   ways). The nav's 1.03 hold is invisible on a small icon, so the amount is scaled up
+   to read at this size while keeping the nav's spring identical. Logo grows from its
+   left edge so it doesn't drift. */
+.tb-brand-act,.tb-brand{transition:scale .42s cubic-bezier(.4,.02,.28,1);}
+.tb-brand{transform-origin:left center;}
+.tb-brand-act.tb-hold,.tb-brand.tb-hold{scale:1.16;}
+body.reduce-motion .tb-brand-act.tb-hold,body.reduce-motion .tb-brand.tb-hold{scale:1;}
 /* Tab-tap "notch": one small, smooth 90° turn of the swirl on every feed-tab switch
    (acSpinBrandMark). It is driven as a CUMULATIVE inline transform (rotate += 90° each
    tap) with a plain transition — NOT a keyframe animation — so the mark LANDS on its
@@ -10831,11 +10832,11 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <span class="tb-brand-word-txt" id="tbBrandWordTxt"></span>
       </button>
       <div class="tb-brand-actions">
-        <button class="tb-brand-act more" id="tbBrandMore" onclick="tbSoloMore(event)" aria-label="More">
-          <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
-        </button>
         <button class="tb-brand-act plus" id="tbBrandPlus" onclick="tbSoloPlus()" aria-label="New">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+        <button class="tb-brand-act more" id="tbBrandMore" onclick="tbSoloMore(event)" aria-label="More">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
         </button>
         <button class="tb-brand-act prof" id="tbBrandProf" onclick="toggleProfileMenu(event)" aria-label="Profile menu"></button>
       </div>
@@ -15400,7 +15401,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1261'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1262'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24518,18 +24519,22 @@ function tbSoloMore(e) {
   if (_appTab === 'chat') { acOpenChatMenu(e); return; }
   acOpenFeedAiMenu(e);
 }
-// Nav-style tap "pop" (grow-and-settle) on the top brand icons (⋯ · + · profile) and the
-// brand logo — same zoom-bounce the bottom nav plays on tap. Fired on pointerdown so it
-// registers even on a quick tap; the class is cleared on animation end so it can replay.
-(function bindBrandTapPop() {
+// Nav-style press-and-HOLD zoom on the top brand icons (+ · ⋯ · profile) and the brand
+// logo: grows on press and stays big while held, eases back on release (same as the
+// bottom nav). Release is bound on window so it always fires even if the finger drifts.
+(function bindBrandTapHold() {
   document.addEventListener('pointerdown', (e) => {
     const el = e.target.closest && e.target.closest('.tb-brand-act, #tbBrandLogo, #tbAiBrand');
     if (!el) return;
-    el.classList.remove('tappop'); void el.offsetWidth; el.classList.add('tappop');
+    el.classList.add('tb-hold');
+    const release = () => {
+      el.classList.remove('tb-hold');
+      window.removeEventListener('pointerup', release);
+      window.removeEventListener('pointercancel', release);
+    };
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
   }, { passive: true });
-  document.addEventListener('animationend', (e) => {
-    if (e.animationName === 'tbActPop' && e.target && e.target.classList) e.target.classList.remove('tappop');
-  });
 })();
 // Show the blue "new" dot on the Home bell when there are unread notifications.
 function acSyncBellDot() {
