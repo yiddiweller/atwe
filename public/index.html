@@ -10768,10 +10768,10 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <!-- (Removed the ◯ Engine/search icon — search lives on the bottom nav.) -->
       </div>
       <div class="tb-feedtabs hidden" id="tbFeedTabs">
-        <button class="tb-feedtab" id="acFeedTab-foryou" onclick="acSetFeed('foryou')">For You</button>
-        <button class="tb-feedtab" id="acFeedTab-following" onclick="acSetFeed('following')">Following</button>
-        <button class="tb-feedtab" id="acFeedTab-circles" onclick="acSetFeed('circles')">Circles</button>
-        <button class="tb-feedtab" id="acFeedTab-bookmarks" onclick="acSetFeed('bookmarks')">Collections</button>
+        <button class="tb-feedtab" id="acFeedTab-foryou" onclick="acFeedTab('foryou')">For You</button>
+        <button class="tb-feedtab" id="acFeedTab-following" onclick="acFeedTab('following')">Following</button>
+        <button class="tb-feedtab" id="acFeedTab-circles" onclick="acFeedTab('circles')">Circles</button>
+        <button class="tb-feedtab" id="acFeedTab-bookmarks" onclick="acFeedTab('bookmarks')">Collections</button>
         <button class="tb-feedtab tb-feedtab-ai spin" id="acFeedTabAi" onclick="acOpenFeedAiMenu(event)" aria-label="Atwe AI" title="Atwe AI"><svg class="tb-aidots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
       </div>
       <div class="tb-feedtabs hidden" id="tbChatTabs">
@@ -15302,7 +15302,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1243'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1244'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25057,8 +25057,10 @@ function acSpinBrandMark() {
   m.classList.add('spinning');
   m.addEventListener('animationend', () => m.classList.remove('spinning'), { once: true });
 }
+// User TAP on a feed tab → spin the logo, then switch. Separate from acSetFeed so the
+// programmatic feed setup at boot (and sidebar entry points) never spin — only real taps.
+function acFeedTab(scope) { acSpinBrandMark(); acSetFeed(scope); }
 function acSetFeed(scope) {
-  acSpinBrandMark();                   // spin the logo on every tab switch
   const prevScope = _acFeedScope;
   _acFeedScope = scope;
   if (typeof acFeedResetPaging === 'function') acFeedResetPaging(); // drop the infinite-scroll observer/state from the previous scope (incl. circles/feeds)
