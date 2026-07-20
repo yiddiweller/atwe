@@ -2586,7 +2586,7 @@ body.light .tb-feedtab.active{color:var(--t1);}
      scroll frame, stealing frames from the whole scroll (the jank vs Beam, whose bar isn't
      sticky). Fixed rides the compositor. Opaque bg → no live blur needed. Always visible
      (no transform-hide) so the scroll stays buttery. */
-  body.pgscroll .topbar.tb-home{position:fixed;top:0;left:0;right:0;z-index:6;background:var(--bg);
+  body.pgscroll .topbar.tb-home,body.pgscroll .topbar.tb-chat{position:fixed;top:0;left:0;right:0;z-index:6;background:var(--bg);
     -webkit-backdrop-filter:none!important;backdrop-filter:none!important;}
   /* THE smoothness fix: the nav-ball morph animates the nav's `left`/`height` (layout
      properties). With the feed now in the full document flow, each morph frame would
@@ -2616,6 +2616,15 @@ body.light .tb-feedtab.active{color:var(--t1);}
   body.pgscroll #acProfileScreen{display:block;height:auto;min-height:0;}
   body.pgscroll #acProfileBody{display:block;height:auto;overflow:visible;padding-bottom:calc(76px + env(safe-area-inset-bottom,0px));}
   body.pgscroll #acProfileScreen .ac-prof-back{position:fixed;}
+  /* Profile hub (the Profile nav tab) — same page-scroll; it owns no top bar. */
+  body.pgscroll #acMeScreen{display:block;height:auto;min-height:0;}
+  body.pgscroll #acMeBody{display:block;height:auto;overflow:visible;padding-bottom:calc(76px + env(safe-area-inset-bottom,0px));}
+  /* Beam (chats/calls/contacts) page-scroll: the whole document scrolls (Safari's bar
+     shrinks); the fixed top bar (above) is cleared by padding the active pane, and the
+     header collapse rides the window scroll (_onWinScroll). */
+  body.pgscroll #acListScreen{display:block;height:auto;min-height:0;}
+  body.pgscroll #acList,body.pgscroll #acCallList2,body.pgscroll #acContactsList2{display:block;height:auto;overflow:visible;padding-top:calc(var(--bar-h,100px) + 2px);padding-bottom:calc(80px + env(safe-area-inset-bottom,0px));}
+  body.pgscroll #acContactsHead2{padding-top:calc(var(--bar-h,100px) + 2px);}
 }
 .tb-word{height:15px;width:auto;display:block;}
 .tb-profile{display:flex;align-items:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
@@ -15525,7 +15534,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1283'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1284'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25227,13 +25236,12 @@ function acShow(screenId, tab) {
   // there (no feed-cover, no darken), so Home does zero cover work per scroll frame.
   // Browser Home keeps page-scroll; Beam keeps the cover.
   const _standaloneBc = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
-  // Collapsing header (installed-app style: brand row slides up, tabs pin) on mobile:
-  //  • Beam (acListScreen): ALWAYS — it already scrolls an inner container, so this reuses
-  //    the exact brand-collapse that's proven smooth in the installed app, in the browser too.
-  //  • Home (acHomeScreen): only when INSTALLED — the browser Home page-scrolls (so Safari's
-  //    own bar can shrink) and gets its collapse from the window scroll (_onWinScroll) instead.
+  // Collapsing header (brand row slides up, tabs pin) on mobile Home + Beam:
+  //  • INSTALLED app → brand-collapse (inner-scroll, buttery). No browser bar to shrink there.
+  //  • BROWSER → page-scroll (below) so Safari's OWN bottom bar shrinks (like X/Instagram);
+  //    the header collapse then rides the WINDOW scroll (_onWinScroll).
   const _mob = window.matchMedia && window.matchMedia('(max-width:768px)').matches;
-  const _bc = ((screenId === 'acHomeScreen' && _standaloneBc) || screenId === 'acListScreen') && _mob;
+  const _bc = (screenId === 'acHomeScreen' || screenId === 'acListScreen') && _standaloneBc && _mob;
   const _cover = (screenId === 'acHomeScreen' || screenId === 'acListScreen') && !_bc;
   if (_cover) { if (typeof _tabRowH === 'function') _tabRowH(); _covSet(0); }
   document.body.classList.toggle('feed-cover', _cover);
@@ -25264,7 +25272,7 @@ function acShow(screenId, tab) {
   // Page-scroll (document scrolls → iOS Safari bar shrinks, like X): browser + mobile only.
   // Rolling out screen-by-screen so each conversion is verifiable; the installed app keeps
   // its buttery internal scroll (no bar to shrink there anyway).
-  const _pgScreens = ['acHomeScreen', 'acSearchScreen', 'acProfileScreen'];
+  const _pgScreens = ['acHomeScreen', 'acSearchScreen', 'acProfileScreen', 'acMeScreen', 'acListScreen'];
   const _pg = _pgScreens.includes(screenId) && !_standalone && window.matchMedia && window.matchMedia('(max-width:768px)').matches;
   document.body.classList.toggle('pgscroll', _pg);
   document.body.classList.toggle('pgscroll-search', _pg && screenId === 'acSearchScreen'); // per-screen chrome hook
@@ -25275,7 +25283,7 @@ function acShow(screenId, tab) {
     // a rAF too, since the just-shown screen's topbar may not have laid out yet at this point.
     // Also measure the brand-row height (for the browser collapsing header) + reset it shown.
     const _setPgTop = () => {
-      const _tb0 = document.querySelector('.topbar'); if (_tb0 && _tb0.offsetHeight) { _pgTbH = _tb0.offsetHeight; document.body.style.setProperty('--pg-top', _pgTbH + 'px'); }
+      const _tb0 = document.querySelector('.topbar'); if (_tb0 && _tb0.offsetHeight) { _pgTbH = _tb0.offsetHeight; document.body.style.setProperty('--pg-top', _pgTbH + 'px'); document.documentElement.style.setProperty('--bar-h', _pgTbH + 'px'); }
       const _br0 = document.getElementById('tbBrandRow'); if (_br0 && _br0.offsetHeight) _brandH = _br0.offsetHeight;
     };
     _pgHide = 0; _winNbLast = 0; _pgTb = null;          // start the collapsing header fully shown
@@ -45478,23 +45486,25 @@ function _onWinScroll() {
   _navScrollActive();                                  // frost off while scrolling (Home only)
   const se = document.scrollingElement || document.documentElement;
   const st = se.scrollTop, dy = st - _winNbLast; _winNbLast = st;
-  // The nav-ball pill⇄"+" morph + the compose-FAB slide are HOME chrome only. On other
-  // page-scroll screens (Search) the bottom nav stays put, like X — no morph, no FAB.
-  if (_appTab === 'home') {
-    const atBottom = st >= (se.scrollHeight - window.innerHeight - 12);
-    // Cache element refs ONCE — never read layout on scroll (the original _onListScroll is
-    // careful never to, since a per-frame reflow is exactly what stalls the scroll).
-    if (!_pgFab) { _pgFab = document.getElementById('acHomeFab'); _pgScrim = document.getElementById('acTopScrim'); }
+  // COLLAPSING HEADER on the WINDOW scroll — Home AND Beam (both have the brand + tabs bar):
+  // slide the brand row UP as you scroll down, back DOWN as you scroll up, delta-tracked 1:1
+  // (stays where you stop), clamped to the brand-row height so the tabs pin at the top. One
+  // composited transform per frame. (Search's bar has no brand row — nothing to collapse.)
+  if (_appTab === 'home' || _appTab === 'chat') {
     if (!_pgTb) _pgTb = document.querySelector('.topbar');
-    // COLLAPSING HEADER in the browser: slide the brand row UP as you scroll down and back
-    // DOWN as you scroll up — delta-tracked 1:1 (stays where you stop), clamped to the
-    // brand-row height so the tabs pin at the top. Exactly the installed app's feel, but
-    // driven off the WINDOW scroll (the fixed bar). One composited transform per frame.
     if (_pgTb && !_pgTb.classList.contains('hidden')) {
       if (st <= 0) _pgHide = 0;
       else _pgHide = Math.max(0, Math.min(_brandH, _pgHide + dy));
       _pgTb.style.transform = 'translateY(' + (-_pgHide) + 'px)';
     }
+  }
+  // The nav-ball pill⇄"+" morph + the compose-FAB slide are HOME chrome only. On other
+  // page-scroll screens (Search/Beam) the bottom nav stays put, like X — no morph, no FAB.
+  if (_appTab === 'home') {
+    const atBottom = st >= (se.scrollHeight - window.innerHeight - 12);
+    // Cache element refs ONCE — never read layout on scroll (the original _onListScroll is
+    // careful never to, since a per-frame reflow is exactly what stalls the scroll).
+    if (!_pgFab) { _pgFab = document.getElementById('acHomeFab'); _pgScrim = document.getElementById('acTopScrim'); }
     if (NAV_MORPH) {                                   // pill ⇄ ball, same thresholds as _onListScroll
       if (st <= 40) _setNavBall(false);
       else if (dy > 3) _setNavBall(true);
