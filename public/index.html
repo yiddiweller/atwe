@@ -2084,8 +2084,10 @@ body.light .tb-brand-act.prof{border-color:rgba(0,0,0,.14);}
 .tb-brand-act.prof .user-avatar{width:100%;height:100%;font-size:calc(var(--tb-brand-circle) * 0.42);border-radius:50%;}
 /* "Loading" spin on the swirl mark, fired on every feed-tab switch (acSpinBrandMark).
    The vortex logo accelerates then eases to a stop (ease-in-out), 2 full turns. */
-@keyframes tbMarkSpin{from{transform:rotate(0)}to{transform:rotate(720deg)}}
-.tb-brand-mark.spinning{animation:tbMarkSpin 1.1s cubic-bezier(.45,0,.12,1);}
+/* Tab-tap: one small, smooth 90° "notch" turn. The swirl has 4-fold symmetry, so 90°
+   lands looking identical — a subtle switch-like tick, not a full spin. */
+@keyframes tbMarkSpin{from{transform:rotate(0)}to{transform:rotate(90deg)}}
+.tb-brand-mark.spinning{animation:tbMarkSpin .5s cubic-bezier(.45,.05,.2,1);}
 body.reduce-motion .tb-brand-mark.spinning{animation:none;}
 /* World-entry flourish (Beam / AI): the swirl ROLLS one turn (fast→slow) and the word
    "spits out" of it to the RIGHT — revealed left→right + sliding into place. Triggered
@@ -15356,7 +15358,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1255'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1256'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24447,7 +24449,9 @@ function syncTopbar(tab) {
   // open; only once you've been to another world and come back.
   if ((isHome || isChat || isAi) && _brandRollLast !== null && _brandRollLast !== tab) {
     const lockup = isAi ? document.getElementById('tbAiBrand') : document.getElementById('tbBrandLogo');
-    if (lockup) { lockup.classList.remove('rolling'); void lockup.offsetWidth; lockup.classList.add('rolling'); }
+    // Remove .rolling once the flourish ends — otherwise its (higher-specificity) rule
+    // permanently overrides the tab-tap .spinning animation (the "spin stopped" bug).
+    if (lockup) { lockup.classList.remove('rolling'); void lockup.offsetWidth; lockup.classList.add('rolling'); setTimeout(() => lockup.classList.remove('rolling'), 640); }
   }
   _brandRollLast = tab;
 }
