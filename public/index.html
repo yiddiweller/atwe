@@ -2087,7 +2087,11 @@ body.light .tb-brand-act.prof{border-color:rgba(0,0,0,.14);}
 /* Tab-tap: one small, smooth 90° "notch" turn. The swirl has 4-fold symmetry, so 90°
    lands looking identical — a subtle switch-like tick, not a full spin. */
 @keyframes tbMarkSpin{from{transform:rotate(0)}to{transform:rotate(90deg)}}
-.tb-brand-mark.spinning{animation:tbMarkSpin .5s cubic-bezier(.45,.05,.2,1);}
+/* easeOutCubic — a strictly monotonic ease-out (control points in order) so the
+   turn never tugs backward near the end. An earlier curve had its control points
+   reversed (x2<x1), which made the rotation backtrack a hair at the stop and read
+   as a tiny "shake". This just glides slower and slower into a smooth landing. */
+.tb-brand-mark.spinning{animation:tbMarkSpin .6s cubic-bezier(.33,1,.68,1);}
 body.reduce-motion .tb-brand-mark.spinning{animation:none;}
 /* World-entry flourish (Beam / AI): the swirl ROLLS one turn (fast→slow) and the word
    "spits out" of it to the RIGHT — revealed left→right + sliding into place. Triggered
@@ -15358,7 +15362,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1256'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1257'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
