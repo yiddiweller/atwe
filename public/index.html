@@ -2436,6 +2436,21 @@ body.light .tb-feedtab.active{color:var(--t1);}
      retracts — mirroring the original menu's cover-darkening. GPU opacity only. */
   #tbRevealBar .rv-darken{position:absolute;inset:0;background:var(--bg);opacity:0;
     pointer-events:none;z-index:2;will-change:opacity;}
+  /* ── COLLAPSING BRAND HEADER (installed-app Home) ────────────────────────────────
+     Founder's design: the feed scrolls 100% NATIVELY (the loved grip); the topbar sits
+     OVER the feed and translates UP as you scroll (finger-tracked in _onListScroll), so
+     the BRAND row (logo + wordmark + ＋ + avatar) slides off the top while the TAB row
+     (For You / Following / …) pins at the top and stays. Overrides the feed-cover layout
+     for Home; the only per-frame JS is ONE composited transform on the topbar (cheap →
+     smooth). --tbfull-h (full topbar height) is measured in acShow; _brandH (brand-row
+     height, the clamp) is cached in JS. */
+  body.brand-collapse .main{position:relative;}
+  body.brand-collapse .topbar.tb-home{position:absolute;top:0;left:0;right:0;z-index:6;
+    background:var(--bg);will-change:transform;margin-top:0;}
+  body.brand-collapse #socialWrap{margin-top:0;}          /* cancel feed-cover's -tabrow offset */
+  body.brand-collapse #acFeed{padding-top:var(--tbfull-h,110px);}  /* clear the full topbar */
+  body.brand-collapse #tbDarken{display:none;}            /* no darken in collapse mode */
+  body.brand-collapse #acFeed::before{display:none;}      /* the cover hairline isn't used here */
   /* ── PAGE-SCROLL TEST (Phase 1, mobile Home only) ─────────────────────────────────
      Let the WHOLE document scroll (instead of the inner #acFeed .ac-list) so iOS Safari
      collapses its bottom toolbar on scroll, like X. Un-fixes the app shell so its content
@@ -15280,7 +15295,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1239'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1240'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24908,6 +24923,23 @@ function acShow(screenId, tab) {
   const _cover = (screenId === 'acHomeScreen' || screenId === 'acListScreen');
   if (_cover) { if (typeof _tabRowH === 'function') _tabRowH(); _covSet(0); }
   document.body.classList.toggle('feed-cover', _cover);
+  // Collapsing brand header — installed-app Home only (browser Home uses page-scroll;
+  // Beam keeps the cover). The topbar translates up on scroll (see _onListScroll); here
+  // we measure its full height (--tbfull-h, feed inset) + cache the brand-row height
+  // (_brandH, the translate clamp). Measured now + next frame (topbar may not be laid out).
+  const _standaloneBc = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  const _bc = screenId === 'acHomeScreen' && _standaloneBc && window.matchMedia && window.matchMedia('(max-width:768px)').matches;
+  document.body.classList.toggle('brand-collapse', _bc);
+  if (_bc) {
+    const _mz = () => {
+      const _tb = document.querySelector('.topbar'); const _br = document.getElementById('tbBrandRow'); const _fd = document.getElementById('acFeed');
+      if (_tb && _tb.offsetHeight) document.body.style.setProperty('--tbfull-h', _tb.offsetHeight + 'px');
+      if (_br && _br.offsetHeight) _brandH = _br.offsetHeight;
+      // Match the topbar's collapse to the feed's current scroll (e.g. a restored position).
+      if (_tb) _tb.style.transform = 'translateY(' + (-Math.min((_fd && _fd.scrollTop) || 0, _brandH)) + 'px)';
+    };
+    _mz(); requestAnimationFrame(_mz);
+  } else { const _tb = document.querySelector('.topbar'); if (_tb) _tb.style.transform = ''; }
   // Home-only marker: the feed behind the fixed nav is heavy (images), so its live
   // backdrop-filter re-blur on every scroll frame is the Home-specific cost that made
   // the nav→"+" morph choppy vs Beam's light list. `home-feed` scopes a blur-free nav
@@ -44825,6 +44857,8 @@ function _navScrollActive() {
   if (_navScrollT) clearTimeout(_navScrollT);
   _navScrollT = setTimeout(() => document.body.classList.remove('nav-scrolling'), 180);
 }
+// Brand-row height (the collapse clamp) — cached in acShow when brand-collapse is active.
+let _brandH = 44;
 function _onListScroll(e) {
   const sc = e.target;
   if (!sc || !sc.classList || !sc.classList.contains('ac-list')) return;
@@ -44852,6 +44886,13 @@ function _onListScroll(e) {
   // handle the top cleanly.
   if (sc.id === 'acFeed') {
     _navScrollActive();                                // frost off while scrolling (Home only)
+    // Collapsing brand header: translate the topbar UP by the scroll amount, clamped to
+    // the brand-row height — brand slides off, tab row pins at the top. Finger-tracked
+    // (tied to scrollTop, stays where you stop); ONE composited transform, so it's smooth.
+    if (document.body.classList.contains('brand-collapse')) {
+      const _tbc = document.querySelector('.topbar');
+      if (_tbc) _tbc.style.transform = 'translateY(' + (-Math.min(sc.scrollTop, _brandH)) + 'px)';
+    }
     const scrim = document.getElementById('acTopScrim');
     if (scrim) scrim.style.opacity = 0;
   }
