@@ -15518,7 +15518,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1280'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1281'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25220,9 +25220,13 @@ function acShow(screenId, tab) {
   // there (no feed-cover, no darken), so Home does zero cover work per scroll frame.
   // Browser Home keeps page-scroll; Beam keeps the cover.
   const _standaloneBc = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
-  // Home AND Beam get the collapsing header (installed app). Both keep the cover only in
-  // the browser (Home also page-scrolls there).
-  const _bc = (screenId === 'acHomeScreen' || screenId === 'acListScreen') && _standaloneBc && window.matchMedia && window.matchMedia('(max-width:768px)').matches;
+  // Collapsing header (installed-app style: brand row slides up, tabs pin) on mobile:
+  //  • Beam (acListScreen): ALWAYS — it already scrolls an inner container, so this reuses
+  //    the exact brand-collapse that's proven smooth in the installed app, in the browser too.
+  //  • Home (acHomeScreen): only when INSTALLED — the browser Home page-scrolls (so Safari's
+  //    own bar can shrink) and gets its collapse from the window scroll (_onWinScroll) instead.
+  const _mob = window.matchMedia && window.matchMedia('(max-width:768px)').matches;
+  const _bc = ((screenId === 'acHomeScreen' && _standaloneBc) || screenId === 'acListScreen') && _mob;
   const _cover = (screenId === 'acHomeScreen' || screenId === 'acListScreen') && !_bc;
   if (_cover) { if (typeof _tabRowH === 'function') _tabRowH(); _covSet(0); }
   document.body.classList.toggle('feed-cover', _cover);
