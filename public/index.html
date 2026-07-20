@@ -1304,6 +1304,12 @@ body.light .tb-iconbtn.on{color:#fff;}
 .tb-feedtab-ai .tb-aidots{width:20px;height:20px;display:block;fill:var(--t2);transition:fill var(--t-fast) var(--ease);}
 .tb-feedtab-ai:active .tb-aidots{fill:var(--t1);}
 @media(hover:hover){.tb-feedtab-ai:hover .tb-aidots{fill:var(--t1);}}
+/* Small grey "+" at the tab-row end — pins a circle/list as a tab. Plain (no circle
+   background), sized to sit with the tab words. */
+.tb-feedtab-add{display:inline-flex;align-items:center;justify-content:center;padding:6px 0;flex-shrink:0;}
+.tb-feedtab-add svg{width:18px;height:18px;display:block;stroke:var(--t2);transition:stroke var(--t-fast) var(--ease);}
+.tb-feedtab-add:active svg{stroke:var(--t1);}
+@media(hover:hover){.tb-feedtab-add:hover svg{stroke:var(--t1);}}
 /* The small Apple-style popover the ⋯ opens. */
 .ai-menu-scrim{position:fixed;inset:0;z-index:1190;background:transparent;}
 .ai-menu-pop{position:fixed;z-index:1191;min-width:236px;max-width:92vw;padding:5px;
@@ -2074,6 +2080,11 @@ body.light .tb-brand-word{filter:invert(1) brightness(.1);}
 /* Solid white "+" with a bolder stroke (founder wants it fully white, not glassy). */
 .tb-brand-act.plus{background:#fff;color:#111;}
 .tb-brand-act.plus svg{width:calc(var(--tb-brand-circle) * 0.5);height:calc(var(--tb-brand-circle) * 0.5);stroke-width:3;}
+/* ⋯ menu — a dark-grey disc with three dots, sitting to the LEFT of the "+". Opens the
+   world's tools popover (Home AI helpers / Beam chat tools). Moved here out of the tab row. */
+.tb-brand-act.more{background:rgba(255,255,255,.13);color:var(--t1);}
+body.light .tb-brand-act.more{background:rgba(0,0,0,.07);}
+.tb-brand-act.more svg{width:calc(var(--tb-brand-circle) * 0.64);height:calc(var(--tb-brand-circle) * 0.64);}
 /* Profile avatar: a very thin, near-invisible hairline ring (same feel as the
    border around the bottom nav pill) so the circle reads even on a fully-black
    avatar. box-sizing:border-box keeps its outer size equal to the "+" circle. */
@@ -10807,6 +10818,9 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <span class="tb-brand-word-txt" id="tbBrandWordTxt"></span>
       </button>
       <div class="tb-brand-actions">
+        <button class="tb-brand-act more" id="tbBrandMore" onclick="tbSoloMore(event)" aria-label="More">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+        </button>
         <button class="tb-brand-act plus" id="tbBrandPlus" onclick="tbSoloPlus()" aria-label="New">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
@@ -10826,14 +10840,18 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <button class="tb-feedtab" id="acFeedTab-following" onclick="acFeedTab('following')">Following</button>
         <button class="tb-feedtab" id="acFeedTab-circles" onclick="acFeedTab('circles')">Circles</button>
         <button class="tb-feedtab" id="acFeedTab-bookmarks" onclick="acFeedTab('bookmarks')">Collections</button>
-        <button class="tb-feedtab tb-feedtab-ai spin" id="acFeedTabAi" onclick="acOpenFeedAiMenu(event)" aria-label="Atwe AI" title="Atwe AI"><svg class="tb-aidots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
+        <!-- Pinned circle/list tabs render here (acRenderPinnedTabs), then the small grey
+             "+" to pin one. The ⋯ AI menu moved up to the brand row (#tbBrandMore). -->
+        <button class="tb-feedtab tb-feedtab-add" id="acFeedTabAdd" onclick="acOpenPinPicker(event)" aria-label="Add a tab" title="Add a circle or list">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
       </div>
       <div class="tb-feedtabs hidden" id="tbChatTabs">
         <button class="tb-feedtab active" id="acseg-chats" onclick="acChatTab('chats')">Chats<span class="ac-chattab-badge hidden" id="acsegBadge-chats">0</span></button>
         <button class="tb-feedtab" id="acseg-groups" onclick="acChatTab('groups')">Groups<span class="ac-chattab-badge hidden" id="acsegBadge-groups">0</span></button>
         <button class="tb-feedtab" id="acseg-calls" onclick="acChatTab('calls')">Calls<span class="ac-chattab-badge ac-chattab-dot hidden" id="acsegBadge-calls"></span></button>
         <button class="tb-feedtab" id="acseg-contacts" onclick="acChatTab('contacts')">Contacts</button>
-        <button class="tb-feedtab tb-feedtab-ai hidden" id="acChatMoreBtn" onclick="acOpenChatMenu(event)" aria-label="More" title="More"><svg class="tb-aidots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
+        <!-- Beam ⋯ tools menu moved up to the brand row (#tbBrandMore). -->
       </div>
       <!-- Scroll-darken overlay (Home/Beam cover). A single EMPTY element whose opacity
            is driven directly in JS — so darkening never recalcs the tab buttons; it's a
@@ -11734,6 +11752,16 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       </div>
     </div>
     <div class="notif-list" id="listsBody"></div>
+  </div>
+</div>
+<!-- Add a circle/list as a Home feed tab (the small grey "+" at the end of the tabs) -->
+<div class="overlay hidden" id="pinPicker">
+  <div class="notif-card" role="dialog" aria-modal="true" aria-label="Add to menu">
+    <div class="notif-head">
+      <button class="notif-back" onclick="closeOverlay('pinPicker')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <span class="notif-title">Add to your tabs</span>
+    </div>
+    <div class="notif-list" id="pinPickerBody"></div>
   </div>
 </div>
 <!-- Starred messages (aggregate across DMs + groups) -->
@@ -15359,7 +15387,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1258'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1259'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24471,6 +24499,12 @@ function tbSoloPlus() {
   if (_appTab === 'chat') { if (typeof acChatsFab === 'function') acChatsFab(); return; }
   acOpenPost();
 }
+// The brand-row ⋯ (top, left of the "+"): opens the world's tools popover — the chat
+// tools on Beam, the AI helpers on Home. (Moved up out of the tab row.)
+function tbSoloMore(e) {
+  if (_appTab === 'chat') { acOpenChatMenu(e); return; }
+  acOpenFeedAiMenu(e);
+}
 // Show the blue "new" dot on the Home bell when there are unread notifications.
 function acSyncBellDot() {
   const dot = document.getElementById('tbHomeBellDot');
@@ -25122,11 +25156,8 @@ function acTopBack() {
 let _acFeedScope = 'foryou';
 function acGoHome() {
   acStopMic(); acShow('acHomeScreen', 'home');
-  // Circles are NOT home-feed tabs — they live only on the Circles page. Force any
-  // legacy pinned-circle tab off (clear it once) so nothing circle-related sits in the
-  // home tab row.
-  if (AC._pinnedCircle === undefined || AC._pinnedCircle) { AC._pinnedCircle = null; try { localStorage.removeItem('atwe_pinned_circle'); } catch (e) {} }
-  acSyncPinnedTab();
+  // Render the user's pinned circle/list tabs (added via the small "+" at the tab-row end).
+  acRenderPinnedTabs();
   acSetFeed(_acFeedScope);
   acStartNewPostsPoll();
 }
@@ -25164,7 +25195,9 @@ function acSetFeed(scope) {
   const _tr = document.getElementById('tbTabRow'); if (_tr) { _tr.style.opacity = ''; _tr.style.transform = ''; _tr.style.pointerEvents = ''; }
   _covSet(0);
   if (typeof _barHide !== 'undefined') { _barHide = 0; _barScroll = 0; }
-  [...AC_FEED_TABS, 'feeds', 'pinned'].forEach(s => document.getElementById('acFeedTab-' + s)?.classList.toggle('active', s === scope));
+  // Clear active on every home tab (built-in + pinned), then light the current one.
+  document.querySelectorAll('#tbFeedTabs .tb-feedtab').forEach(b => b.classList.remove('active'));
+  document.getElementById('acFeedTab-' + scope)?.classList.add('active');
   if (typeof acRevealReset === 'function') acRevealReset(); // switching feed scrolls to top → hide the reveal bar
   // Horizontal page-slide between feeds (X-style pager) — works for a tab TAP and a
   // swipe alike: the new feed slides in from the side it came from. Animating the
@@ -25185,7 +25218,7 @@ function acSetFeed(scope) {
   document.body.classList.toggle('feeds-immersive', scope === 'feeds');
   const fab = document.getElementById('acHomeFab');
   if (scope === 'circles') { if (fab) fab.style.display = 'none'; acLoadCircles(); _introSoon('circles'); }
-  else if (scope === 'pinned') { if (fab) { fab.style.display = ''; fab.onclick = acOpenPost; } acLoadPinnedFeed(); }
+  else if (typeof scope === 'string' && scope.startsWith('pin:')) { if (fab) { fab.style.display = ''; fab.onclick = acOpenPost; } acLoadPinFeed(scope); }
   else if (scope === 'feeds') { if (fab) { fab.style.display = ''; fab.onclick = acFeedCompose; } acLoadFeedTimeline(); }
   else { if (fab) { fab.style.display = ''; fab.onclick = acOpenPost; } acLoadFeed(); }
   acLoadLiveStrip();
@@ -25212,7 +25245,7 @@ function acBindFeedSwipe() {
     if (!active) return; active = false;
     const t = e.changedTouches[0]; const dx = t.clientX - x0, dy = t.clientY - y0;
     if (Math.abs(dx) < 65 || Math.abs(dx) < Math.abs(dy) * 1.6) return; // not a clear horizontal swipe
-    const order = [...AC_FEED_TABS]; if (AC._pinnedCircle) order.push('pinned');
+    const order = [...AC_FEED_TABS, ...acPinnedTabs().map(p => acPinScope(p.type, p.id))];
     const cur = order.indexOf(_acFeedScope); if (cur < 0) return;
     const next = dx < 0 ? cur + 1 : cur - 1; // swipe left → next tab, right → previous
     if (next < 0 || next >= order.length) return;
@@ -25936,38 +25969,113 @@ async function acToggleJoin(id, btn) {
     const c = (AC._circles || []).find(x => x.id === id);
     if (c) { c.isMember = !joined; c.members += joined ? -1 : 1; }
     // A left circle can't stay pinned as a tab.
-    if (joined && AC._pinnedCircle && AC._pinnedCircle.id === id) { AC._pinnedCircle = null; try { localStorage.removeItem('atwe_pinned_circle'); } catch (e) {} acSyncPinnedTab(); }
+    if (joined && acIsPinnedTab('circle', id)) acTogglePinTab('circle', id);
     acRenderCircles(); // move the row between My circles / Browse + show/hide its pin control
   } catch (e) { btn.classList.toggle('joined', joined); btn.setAttribute('aria-pressed', String(joined)); btn.textContent = joined ? 'Joined' : 'Join'; showNotif(e.message || 'Could not update.'); }
   btn._busy = false;
 }
 // Pin ONE circle so it shows as its own feed tab after Collections (blueprint §Home).
 function acTogglePinCircle(id) { /* removed: circles are no longer pinnable as home-feed tabs */ }
-// Insert/remove the pinned-circle tab button after Collections.
-function acSyncPinnedTab() {
-  const row = document.getElementById('tbFeedTabs'); if (!row) return;
-  let btn = document.getElementById('acFeedTab-pinned');
-  const p = AC._pinnedCircle;
-  if (!p) { if (btn) btn.remove(); if (_acFeedScope === 'pinned') acSetFeed('foryou'); return; }
-  if (!btn) {
-    btn = document.createElement('button');
-    btn.className = 'tb-feedtab'; btn.id = 'acFeedTab-pinned';
-    btn.onclick = () => acSetFeed('pinned');
-    const ai = document.getElementById('acFeedTabAi');
-    row.insertBefore(btn, ai || null); // after Collections, before the AI ⋯
+// ── Pinned tabs (circles + lists the user pinned to the Home tab row via the "+") ──
+// Persisted locally as [{type:'circle'|'list', id, name}], rendered as extra tabs
+// between "Collections" and the "+" add button. Tapping one loads that circle's/list's
+// posts inline into #acFeed (same surface as For You / Following).
+const PIN_TABS_MAX = 6;
+function acPinnedTabs() {
+  if (!Array.isArray(AC._pinnedTabs)) {
+    try { AC._pinnedTabs = JSON.parse(localStorage.getItem('atwe_pinned_tabs') || '[]'); } catch (e) { AC._pinnedTabs = []; }
+    if (!Array.isArray(AC._pinnedTabs)) AC._pinnedTabs = [];
   }
-  btn.textContent = p.name;
-  btn.setAttribute('aria-label', p.name + ' circle feed');
+  return AC._pinnedTabs;
 }
-async function acLoadPinnedFeed() {
-  const el = document.getElementById('acFeed'); const p = AC._pinnedCircle;
-  if (!p) { acSetFeed('foryou'); return; }
+function acSavePinnedTabs() { try { localStorage.setItem('atwe_pinned_tabs', JSON.stringify(acPinnedTabs())); } catch (e) {} }
+function acIsPinnedTab(type, id) { return acPinnedTabs().some(p => p.type === type && String(p.id) === String(id)); }
+function acPinScope(type, id) { return 'pin:' + type + ':' + id; }
+// Render (or re-render) the pinned tabs into the row, just before the "+" add button.
+function acRenderPinnedTabs() {
+  const row = document.getElementById('tbFeedTabs'); if (!row) return;
+  const addBtn = document.getElementById('acFeedTabAdd');
+  row.querySelectorAll('.tb-feedtab-pin').forEach(b => b.remove());
+  acPinnedTabs().forEach(p => {
+    const scope = acPinScope(p.type, p.id);
+    const btn = document.createElement('button');
+    btn.className = 'tb-feedtab tb-feedtab-pin';
+    btn.id = 'acFeedTab-' + scope;
+    btn.textContent = p.name;
+    btn.setAttribute('aria-label', p.name + (p.type === 'circle' ? ' circle' : ' list') + ' feed');
+    btn.onclick = () => acFeedTab(scope);
+    row.insertBefore(btn, addBtn || null);
+  });
+}
+function acTogglePinTab(type, id, name) {
+  const pins = acPinnedTabs();
+  const i = pins.findIndex(p => p.type === type && String(p.id) === String(id));
+  if (i >= 0) { pins.splice(i, 1); if (_acFeedScope === acPinScope(type, id)) acSetFeed('foryou'); }
+  else {
+    if (pins.length >= PIN_TABS_MAX) { showNotif('You can pin up to ' + PIN_TABS_MAX + ' tabs.'); return false; }
+    pins.push({ type, id, name: String(name || '').slice(0, 24) || (type === 'circle' ? 'Circle' : 'List') });
+  }
+  acSavePinnedTabs(); acRenderPinnedTabs();
+  return true;
+}
+// Load a pinned circle's or list's posts inline into the Home feed surface.
+async function acLoadPinFeed(scope) {
+  const el = document.getElementById('acFeed'); if (!el) return;
+  const parts = String(scope).split(':'); const type = parts[1], id = parts[2];
+  const pin = acPinnedTabs().find(p => p.type === type && String(p.id) === String(id));
+  const name = pin ? pin.name : '';
   el.innerHTML = acSkelFeed();
   try {
-    const d = await API.req('GET', '/api/circles/' + p.id);
-    const posts = (d.posts && d.posts.length) ? d.posts.map(acPostCard).join('') : `<div class="ac-empty">No posts in ${escHtml(p.name)} yet.<br/>Be the first to post in this circle.</div>`;
-    el.innerHTML = posts;
-  } catch (e) { acErr(el, 'acLoadPinnedFeed()'); }
+    let posts = [];
+    if (type === 'circle') { const d = await API.req('GET', '/api/circles/' + id); posts = d.posts || []; }
+    else { const d = await API.req('GET', '/api/social/lists/' + id + '/timeline'); posts = d.posts || []; }
+    el.innerHTML = (posts && posts.length) ? posts.map(acPostCard).join('')
+      : `<div class="ac-empty" style="padding:28px;">No posts in ${escHtml(name)} yet.</div>`;
+  } catch (e) { acErr(el, 'acLoadPinFeed()'); }
+}
+// The small grey "+" at the tab-row end: pick a circle or list to pin as a tab.
+async function acOpenPinPicker(e) {
+  if (e) e.stopPropagation();
+  showOverlay('pinPicker');
+  const body = document.getElementById('pinPickerBody'); if (!body) return;
+  body.innerHTML = acSkelRows(4);
+  try {
+    const [circ, lst] = await Promise.all([
+      API.req('GET', '/api/circles').catch(() => ({ circles: [] })),
+      API.req('GET', '/api/social/lists').catch(() => ({ lists: [] })),
+    ]);
+    AC._pinPickCircles = (circ.circles || []).filter(c => c.isMember);
+    AC._pinPickLists = lst.lists || [];
+    acRenderPinPicker();
+  } catch (err) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">Could not load.</div>'; }
+}
+function acRenderPinPicker() {
+  const body = document.getElementById('pinPickerBody'); if (!body) return;
+  const circles = AC._pinPickCircles || [], lists = AC._pinPickLists || [];
+  const rowHtml = (type, id, name, sub) => {
+    const pinned = acIsPinnedTab(type, id);
+    return `<div class="ac-item">
+      <div class="rr-ic" style="width:38px;height:38px;border-radius:10px;background:var(--s3);color:var(--t2);display:flex;align-items:center;justify-content:center;flex-shrink:0;">${type === 'circle' ? '<svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;stroke-width:1.9;fill:none;"><circle cx="12" cy="12" r="9"/><path d="M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18M3 12h18"/></svg>' : '<svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;stroke-width:1.9;fill:none;"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>'}</div>
+      <div class="ac-item-main"><div class="ac-item-name">${escHtml(name)}</div><div class="ac-item-last">${escHtml(sub)}</div></div>
+      <button class="ac-pill-btn ${pinned ? '' : 'accent'}" style="padding:6px 15px;${pinned ? 'color:var(--red);' : ''}" onclick="acPinPickTap(${jsAttr(type)},${jsAttr(String(id))},${jsAttr(name)},this)">${pinned ? 'Remove' : 'Add'}</button>
+    </div>`;
+  };
+  let html = '';
+  html += '<div class="ac-sec-head" style="padding:12px 16px 6px;color:var(--t2);font-size:13px;font-weight:700;">Circles you\'re in</div>';
+  html += circles.length ? circles.map(c => rowHtml('circle', c.id, c.name, (c.members || 0) + ' members')).join('')
+    : '<div class="ac-empty" style="padding:10px 16px;color:var(--t2);font-size:14px;">Join a circle to pin it here.</div>';
+  html += '<div class="ac-sec-head" style="padding:16px 16px 6px;color:var(--t2);font-size:13px;font-weight:700;">Your lists</div>';
+  html += lists.length ? lists.map(l => rowHtml('list', l.id, l.name, (l.members || 0) + ' member' + (l.members === 1 ? '' : 's'))).join('')
+    : '<div class="ac-empty" style="padding:10px 16px;color:var(--t2);font-size:14px;">Create a list from Collections to pin it here.</div>';
+  body.innerHTML = html;
+}
+function acPinPickTap(type, id, name, btn) {
+  const ok = acTogglePinTab(type, id, name);
+  if (ok === false) return;
+  const pinned = acIsPinnedTab(type, id);
+  btn.textContent = pinned ? 'Remove' : 'Add';
+  btn.classList.toggle('accent', !pinned);
+  btn.style.color = pinned ? 'var(--red)' : '';
 }
 // Follow / unfollow a WHOLE sector (one tap = the entire industry's combined feed).
 // Optimistic + persisted server-side (cross-device, targeted add/remove). Works from
@@ -28164,7 +28272,7 @@ function _acAnchorPopover(btn, pop) {
 // two AI helpers. (The full-screen #aiHub sheet stays for the Me-hub entry point.)
 function acOpenFeedAiMenu(e) {
   if (e) { e.stopPropagation(); }
-  const btn = document.getElementById('acFeedTabAi');
+  const btn = document.getElementById('tbBrandMore');
   const pop = document.getElementById('aiMenuPop');
   const scrim = document.getElementById('aiMenuScrim');
   if (!btn || !pop || !scrim) return;
@@ -28186,7 +28294,7 @@ function acFeedAiPick(which) {
 // to be top-bar icons: Search chats · Starred messages · Unread only (toggle).
 function acOpenChatMenu(e) {
   if (e) { e.stopPropagation(); }
-  const btn = document.getElementById('acChatMoreBtn');
+  const btn = document.getElementById('tbBrandMore');
   const pop = document.getElementById('chatMenuPop');
   const scrim = document.getElementById('chatMenuScrim');
   if (!btn || !pop || !scrim) return;
