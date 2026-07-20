@@ -2052,7 +2052,7 @@ body.tb-collapsed .tb-mainrow{max-height:0;opacity:0;}
 .tb-brand-word{height:var(--tb-brand-h);}
 /* Text wordmark (used for "Beam" / "Atwe AI" so each world reads distinctly). Sized so
    its cap-height ≈ the image wordmark's height; hidden until syncTopbar picks it. */
-.tb-brand-word-txt{display:none;font-size:26px;font-weight:800;letter-spacing:-.02em;line-height:1;color:var(--t1);white-space:nowrap;}
+.tb-brand-word-txt{display:none;font-size:23.5px;font-weight:800;letter-spacing:-.02em;line-height:1;color:var(--t1);white-space:nowrap;}
 /* AI-page lockup: same swirl mark + text style as the Home/Beam brand lockup (it isn't
    inside .tb-brandrow, so it carries its own size vars). Replaces the ≡ on the AI page. */
 .tb-ai-brand{--tb-brand-icon:22px;--tb-brand-h:18px;background:none;border:none;padding:0;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent;flex-shrink:0;}
@@ -15323,7 +15323,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1246'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1247'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
