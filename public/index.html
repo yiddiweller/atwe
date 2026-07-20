@@ -9504,7 +9504,7 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 .live-card{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;}
 .live-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;}
 /* Live shopping card */
-.live-shop{position:absolute;left:14px;right:14px;bottom:calc(96px + env(safe-area-inset-bottom));z-index:3;background:rgba(20,20,24,.82);backdrop-filter:blur(18px) saturate(1.5);border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:10px 12px;display:flex;align-items:center;gap:11px;color:#fff;animation:lsRise .25s ease;}
+.live-shop{position:absolute;left:14px;right:14px;bottom:calc(96px + env(safe-area-inset-bottom));z-index:3;background:rgba(20,20,24,.82);-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:10px 12px;display:flex;align-items:center;gap:11px;color:#fff;animation:lsRise .25s ease;}
 @keyframes lsRise{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
 .live-shop-img{width:46px;height:46px;border-radius:10px;background-size:cover;background-position:center;flex:0 0 auto;background-color:#2a2a30;}
 .live-shop-img.noimg{display:flex;align-items:center;justify-content:center;}
@@ -15518,7 +15518,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1281'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1282'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
