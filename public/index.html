@@ -2608,22 +2608,22 @@ body.light .tb-feedtab.active{color:var(--t1);}
   body.pgscroll-search .topbar{position:fixed;top:0;left:0;right:0;z-index:6;background:var(--bg);
     -webkit-backdrop-filter:none!important;backdrop-filter:none!important;}
   body.pgscroll #acSearchScreen{display:block;height:auto;min-height:0;padding-top:var(--pg-top,56px);}
-  body.pgscroll #acSearchPageResults{display:block;height:auto;overflow:visible;padding-bottom:calc(100px + env(safe-area-inset-bottom,0px));}
+  body.pgscroll #acSearchPageResults{display:block;height:auto;overflow:visible;}
   /* Profile page-scroll: let the whole document scroll so Safari's own bottom bar shrinks
      (like Home). The profile owns its header (no shared topbar → no top pad); the floating
      back button becomes fixed so it stays reachable, and the sticky tabs pin at the top as
      before. Bottom pad clears the floating nav pill. */
   body.pgscroll #acProfileScreen{display:block;height:auto;min-height:0;}
-  body.pgscroll #acProfileBody{display:block;height:auto;overflow:visible;padding-bottom:calc(100px + env(safe-area-inset-bottom,0px));}
+  body.pgscroll #acProfileBody{display:block;height:auto;overflow:visible;padding-bottom:calc(76px + env(safe-area-inset-bottom,0px));}
   body.pgscroll #acProfileScreen .ac-prof-back{position:fixed;}
   /* Profile hub (the Profile nav tab) — same page-scroll; it owns no top bar. */
   body.pgscroll #acMeScreen{display:block;height:auto;min-height:0;}
-  body.pgscroll #acMeBody{display:block;height:auto;overflow:visible;padding-bottom:calc(100px + env(safe-area-inset-bottom,0px));}
+  body.pgscroll #acMeBody{display:block;height:auto;overflow:visible;padding-bottom:calc(76px + env(safe-area-inset-bottom,0px));}
   /* Beam (chats/calls/contacts) page-scroll: the whole document scrolls (Safari's bar
      shrinks); the fixed top bar (above) is cleared by padding the active pane, and the
      header collapse rides the window scroll (_onWinScroll). */
   body.pgscroll #acListScreen{display:block;height:auto;min-height:0;}
-  body.pgscroll #acList,body.pgscroll #acCallList2,body.pgscroll #acContactsList2{display:block;height:auto;overflow:visible;padding-top:calc(var(--bar-h,100px) + 2px);padding-bottom:calc(100px + env(safe-area-inset-bottom,0px));}
+  body.pgscroll #acList,body.pgscroll #acCallList2,body.pgscroll #acContactsList2{display:block;height:auto;overflow:visible;padding-top:calc(var(--bar-h,100px) + 2px);padding-bottom:calc(80px + env(safe-area-inset-bottom,0px));}
   body.pgscroll #acContactsHead2{padding-top:calc(var(--bar-h,100px) + 2px);}
 }
 .tb-word{height:15px;width:auto;display:block;}
@@ -9128,38 +9128,6 @@ body.home-feed .bottom-nav{
    ride the compositor at 60fps; restored the instant you stop — no fade (rule above). */
 body.home-feed.nav-scrolling .bottom-nav{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;}
 
-/* ── X / Instagram-style bottom bar in the MOBILE BROWSER (body.webnav) ───────────────
-   In a real browser (not the installed PWA) the floating pill sat mid-feed with content
-   visible above / behind / below it, and content bled under Safari's own translucent
-   toolbar — "in the background". Here the nav becomes a SOLID, edge-to-edge bar pinned
-   right above Safari's toolbar: content disappears cleanly behind it, exactly like the X
-   web app. The trick that lifts it OUT from behind Safari's toolbar without touching
-   viewport-fit=cover (which the installed app needs) is `bottom:calc(100lvh - 100dvh)` —
-   that difference is the height Safari's toolbar currently occupies, so the bar sits at
-   the DYNAMIC viewport bottom, and because dvh tracks the shrinking toolbar the whole bar
-   rides DOWN as you scroll and the toolbar minimises ("the app gets lower") — never
-   overlapping it, never floating over content. Older iOS (no dvh) just keeps the base
-   floating pill. Installed PWA: untouched (webnav is never set there). */
-body.webnav .bottom-nav{
-  left:0!important;right:0!important;width:100%!important;
-  bottom:calc(100lvh - 100dvh)!important;
-  border-radius:0!important;
-  gap:2px;
-  padding:7px 12px calc(7px + env(safe-area-inset-bottom,0px))!important;
-  background:var(--bg)!important;
-  -webkit-backdrop-filter:none!important;backdrop-filter:none!important;
-  border:none!important;border-top:1px solid var(--b2)!important;
-  box-shadow:none!important;
-}
-body.light.webnav .bottom-nav{border-top-color:var(--b3)!important;}
-/* Never shrink to the floating "ball" in the browser (a solid bar can't morph to a ball);
-   the pill⇄ball morph is also disabled in JS for webnav, this is belt-and-suspenders. */
-body.webnav.nav-morph .bottom-nav,
-body.webnav.nav-ball .bottom-nav{left:0!important;right:0!important;width:100%!important;border-radius:0!important;}
-body.webnav.nav-ball .bn-indicator{opacity:0!important;}
-/* Compose FAB rides just above the solid bar and tracks Safari's toolbar the same way. */
-body.webnav .ac-fab{bottom:calc(100lvh - 100dvh + 66px)!important;}
-
 
 /* Responsive: bottom bar on mobile, sidebar nav on desktop */
 @media(max-width:768px){
@@ -15566,7 +15534,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1285'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1284'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25308,12 +25276,6 @@ function acShow(screenId, tab) {
   const _pg = _pgScreens.includes(screenId) && !_standalone && window.matchMedia && window.matchMedia('(max-width:768px)').matches;
   document.body.classList.toggle('pgscroll', _pg);
   document.body.classList.toggle('pgscroll-search', _pg && screenId === 'acSearchScreen'); // per-screen chrome hook
-  // WEB-BROWSER bottom bar (mobile browser only, NOT the installed PWA): turn the floating
-  // pill into a SOLID, full-width bar pinned right above Safari's own toolbar — so content
-  // disappears cleanly BEHIND it (X/Instagram-style) instead of the pill floating over the
-  // feed with content bleeding around it + under Safari's translucent bar. Everything is
-  // scoped to body.webnav in CSS, so the installed app's floating pill is 100% untouched.
-  document.body.classList.toggle('webnav', !_standalone && _mob);
   try { document.documentElement.style.overflow = _pg ? 'visible' : ''; } catch (e) {}
   if (_pg) {
     // Cache/expose the CURRENT topbar height so content on ANY page-scroll screen clears the
@@ -45543,13 +45505,11 @@ function _onWinScroll() {
     // Cache element refs ONCE — never read layout on scroll (the original _onListScroll is
     // careful never to, since a per-frame reflow is exactly what stalls the scroll).
     if (!_pgFab) { _pgFab = document.getElementById('acHomeFab'); _pgScrim = document.getElementById('acTopScrim'); }
-    // In the mobile browser the nav is a SOLID full-width bar (body.webnav) — it must never
-    // morph to the floating "ball". Keep the pill⇄ball morph for the installed app only.
-    if (NAV_MORPH && !document.body.classList.contains('webnav')) { // pill ⇄ ball, same thresholds as _onListScroll
+    if (NAV_MORPH) {                                   // pill ⇄ ball, same thresholds as _onListScroll
       if (st <= 40) _setNavBall(false);
       else if (dy > 3) _setNavBall(true);
       else if (dy < -3 && !atBottom) _setNavBall(false);
-    } else if (document.body.classList.contains('webnav')) { _setNavBall(false); }
+    }
     if (_pgFab) _pgFab.style.transform = 'translateY(' + (Math.min(1, Math.max(0, st / _pgTbH)) * 68) + 'px)'; // FAB → corner
   }
   const scrim = document.getElementById('acTopScrim'); if (scrim) scrim.style.opacity = 0;
