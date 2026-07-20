@@ -2061,7 +2061,9 @@ body.light .tb-brand-mark,body.light .tb-brand-word{filter:invert(1) brightness(
 /* Profile avatar: a very thin, near-invisible hairline ring (same feel as the
    border around the bottom nav pill) so the circle reads even on a fully-black
    avatar. box-sizing:border-box keeps its outer size equal to the "+" circle. */
-.tb-brand-act.prof{background:var(--bg);border:1px solid rgba(255,255,255,.14);}
+/* content-box so the AVATAR itself is the full circle size (== the "+" circle), with
+   the hairline ring added as an EXTRA layer OUTSIDE it (not eating into the avatar). */
+.tb-brand-act.prof{box-sizing:content-box;background:var(--bg);border:1px solid rgba(255,255,255,.14);}
 body.light .tb-brand-act.prof{border-color:rgba(0,0,0,.14);}
 .tb-brand-act.prof .user-avatar{width:100%;height:100%;font-size:calc(var(--tb-brand-circle) * 0.42);border-radius:50%;}
 /* Exact spacing (founder's mock): the tabs align to the feed gutter (same x as the
@@ -2447,8 +2449,8 @@ body.light .tb-feedtab.active{color:var(--t1);}
   body.brand-collapse .main{position:relative;}
   body.brand-collapse .topbar.tb-home{position:absolute;top:0;left:0;right:0;z-index:6;
     background:var(--bg);will-change:transform;margin-top:0;}
-  body.brand-collapse #socialWrap{margin-top:0;}          /* cancel feed-cover's -tabrow offset */
-  body.brand-collapse #acFeed{padding-top:var(--tbfull-h,110px);}  /* clear the full topbar */
+  body.brand-collapse #socialWrap{margin-top:0;}          /* no cover offset here */
+  body.brand-collapse #acFeed{padding-top:var(--tbfull-h,110px);background:var(--bg);}  /* clear the full topbar; solid bg */
   body.brand-collapse #tbDarken{display:none;}            /* no darken in collapse mode */
   body.brand-collapse #acFeed::before{display:none;}      /* the cover hairline isn't used here */
   /* ── PAGE-SCROLL TEST (Phase 1, mobile Home only) ─────────────────────────────────
@@ -10749,7 +10751,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <button class="tb-brand-act plus" id="tbBrandPlus" onclick="tbSoloPlus()" aria-label="New">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
-        <button class="tb-brand-act prof" id="tbBrandProf" onclick="acGoProfile()" aria-label="Profile"></button>
+        <button class="tb-brand-act prof" id="tbBrandProf" onclick="toggleProfileMenu(event)" aria-label="Profile menu"></button>
       </div>
      </div>
      <div class="tb-tabrow hidden" id="tbTabRow">
@@ -15295,7 +15297,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1240'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1241'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24917,26 +24919,27 @@ function acShow(screenId, tab) {
   if (!['acProfileScreen', 'acCircleScreen', 'acThreadScreen', 'acPostViewScreen'].includes(screenId)) acSetPath('/');
   if (typeof acRevealBars === 'function') acRevealBars(); // navigation always restores the bars
   AC_SCREENS.forEach(id => document.getElementById(id).classList.toggle('hidden', id !== screenId));
-  // Home + Beam get the scroll-cover (content rises behind a fixed, darkening menu).
-  // Measure the tab-row height FIRST so the constant offset/padding match before the
-  // class applies (else the content would jump on toggle).
-  const _cover = (screenId === 'acHomeScreen' || screenId === 'acListScreen');
-  if (_cover) { if (typeof _tabRowH === 'function') _tabRowH(); _covSet(0); }
-  document.body.classList.toggle('feed-cover', _cover);
-  // Collapsing brand header — installed-app Home only (browser Home uses page-scroll;
-  // Beam keeps the cover). The topbar translates up on scroll (see _onListScroll); here
-  // we measure its full height (--tbfull-h, feed inset) + cache the brand-row height
-  // (_brandH, the translate clamp). Measured now + next frame (topbar may not be laid out).
+  // Collapsing brand header — installed-app Home ONLY. It fully REPLACES the old cover
+  // there (no feed-cover, no darken), so Home does zero cover work per scroll frame.
+  // Browser Home keeps page-scroll; Beam keeps the cover.
   const _standaloneBc = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
   const _bc = screenId === 'acHomeScreen' && _standaloneBc && window.matchMedia && window.matchMedia('(max-width:768px)').matches;
+  // Beam always covers; Home covers ONLY when not the collapsing header (i.e. browser).
+  const _cover = (screenId === 'acListScreen') || (screenId === 'acHomeScreen' && !_bc);
+  if (_cover) { if (typeof _tabRowH === 'function') _tabRowH(); _covSet(0); }
+  document.body.classList.toggle('feed-cover', _cover);
   document.body.classList.toggle('brand-collapse', _bc);
   if (_bc) {
     const _mz = () => {
       const _tb = document.querySelector('.topbar'); const _br = document.getElementById('tbBrandRow'); const _fd = document.getElementById('acFeed');
       if (_tb && _tb.offsetHeight) document.body.style.setProperty('--tbfull-h', _tb.offsetHeight + 'px');
       if (_br && _br.offsetHeight) _brandH = _br.offsetHeight;
-      // Match the topbar's collapse to the feed's current scroll (e.g. a restored position).
-      if (_tb) _tb.style.transform = 'translateY(' + (-Math.min((_fd && _fd.scrollTop) || 0, _brandH)) + 'px)';
+      // Sync the delta state to the feed's current scroll (e.g. a restored position) so the
+      // header starts consistent and tracks correctly from the first scroll event.
+      const _st = (_fd && _fd.scrollTop) || 0;
+      _bcHide = Math.max(0, Math.min(_brandH, _st));
+      if (_fd) _fd._bcLast = _st;
+      if (_tb) _tb.style.transform = 'translateY(' + (-_bcHide) + 'px)';
     };
     _mz(); requestAnimationFrame(_mz);
   } else { const _tb = document.querySelector('.topbar'); if (_tb) _tb.style.transform = ''; }
@@ -44857,8 +44860,9 @@ function _navScrollActive() {
   if (_navScrollT) clearTimeout(_navScrollT);
   _navScrollT = setTimeout(() => document.body.classList.remove('nav-scrolling'), 180);
 }
-// Brand-row height (the collapse clamp) — cached in acShow when brand-collapse is active.
-let _brandH = 44;
+// Brand-row height (the collapse clamp) + the live hide amount (0..brandH), delta-tracked
+// so the header hides AND re-shows 1:1 with the finger in both directions.
+let _brandH = 44, _bcHide = 0;
 function _onListScroll(e) {
   const sc = e.target;
   if (!sc || !sc.classList || !sc.classList.contains('ac-list')) return;
@@ -44875,7 +44879,8 @@ function _onListScroll(e) {
     _barScroll = st;
     _barHide = Math.min(_barMax, Math.max(0, st));
     if (!_barRAF) _barRAF = requestAnimationFrame(_applyBars);  // nav/FAB hide only (cover is pure CSS)
-    if (_appTab === 'home' || _appTab === 'chat') {    // tab-darkening (+ momentum-smooth loop)
+    if ((_appTab === 'home' || _appTab === 'chat') && !document.body.classList.contains('brand-collapse')) {
+      // (Skipped entirely on the collapsing-header Home — no darken/cover work per frame.)
       _setCov(st);
       _darkEl = sc; _darkLastY = -1; _darkStill = 0;
       if (!_darkRAF) _darkRAF = requestAnimationFrame(_darkLoop);
@@ -44886,12 +44891,19 @@ function _onListScroll(e) {
   // handle the top cleanly.
   if (sc.id === 'acFeed') {
     _navScrollActive();                                // frost off while scrolling (Home only)
-    // Collapsing brand header: translate the topbar UP by the scroll amount, clamped to
-    // the brand-row height — brand slides off, tab row pins at the top. Finger-tracked
-    // (tied to scrollTop, stays where you stop); ONE composited transform, so it's smooth.
+    // Collapsing brand header: translate the topbar UP as you scroll DOWN and back DOWN
+    // as you scroll UP — DELTA-tracked so it reverses the exact same way (1:1 with the
+    // finger, stays where you stop). Clamped to the brand-row height; forced fully shown
+    // at the very top. ONE composited transform per frame, so it's smooth.
     if (document.body.classList.contains('brand-collapse')) {
       const _tbc = document.querySelector('.topbar');
-      if (_tbc) _tbc.style.transform = 'translateY(' + (-Math.min(sc.scrollTop, _brandH)) + 'px)';
+      if (_tbc) {
+        const st = sc.scrollTop;
+        const prev = (sc._bcLast != null) ? sc._bcLast : st; sc._bcLast = st;
+        if (st <= 0) _bcHide = 0;
+        else _bcHide = Math.max(0, Math.min(_brandH, _bcHide + (st - prev)));
+        _tbc.style.transform = 'translateY(' + (-_bcHide) + 'px)';
+      }
     }
     const scrim = document.getElementById('acTopScrim');
     if (scrim) scrim.style.opacity = 0;
@@ -44913,7 +44925,8 @@ function _onListScroll(e) {
   // Scroll-tracked reveal of the top menu (Home/Beam): the floating menu rides the scroll
   // 1:1 (see _revealTrack). Called here for immediacy AND in _darkLoop so it keeps
   // tracking through iOS momentum after the finger lifts.
-  if (((_appTab === 'home' && sc.id === 'acFeed') || _appTab === 'chat') && typeof _revealTrack === 'function') {
+  if (((_appTab === 'home' && sc.id === 'acFeed') || _appTab === 'chat') && typeof _revealTrack === 'function'
+      && !document.body.classList.contains('brand-collapse')) {   // the collapse owns the header on Home
     _revealTrack(sc.scrollTop);
   }
 }
