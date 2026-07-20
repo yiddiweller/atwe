@@ -6843,8 +6843,11 @@ body.light .ac-adcard{box-shadow:0 4px 16px rgba(15,20,25,.07);}
    intro sheets: all four corners rounded, no grab handle, over a dimmed scrim. */
 #acPostScreen{position:fixed;inset:0;z-index:1400;background:rgba(0,0,0,.5);
   -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
-  flex-direction:row;align-items:flex-end;justify-content:center;
-  padding:0 12px calc(12px + env(safe-area-inset-bottom,0px));}
+  /* Centered, floating card with the SAME inset on top · both sides · bottom (founder).
+     align-items:stretch makes the card fill the height between the equal top/bottom
+     insets, so the margins read as uniform all the way around. */
+  flex-direction:row;align-items:stretch;justify-content:center;
+  padding:max(16px,env(safe-area-inset-top,0px)) 16px max(16px,env(safe-area-inset-bottom,0px));}
 /* Desktop: pop-up sheets that anchor to the bottom edge on mobile (composer, new
    chat, emoji, reply-scope, comments, more-menu, group preview) float CENTRED in
    the viewport as fully-rounded cards instead. Mobile keeps the bottom-sheet feel. */
@@ -6859,7 +6862,7 @@ body.light .ac-adcard{box-shadow:0 4px 16px rgba(15,20,25,.07);}
 input[type=number]::-webkit-outer-spin-button,
 input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
 input[type=number]{-moz-appearance:textfield;appearance:textfield;}
-.ac-compose-card{background:var(--s1);width:100%;max-width:600px;max-height:min(90vh,760px);
+.ac-compose-card{background:var(--s1);width:100%;max-width:600px;max-height:100%;
   border-radius:26px;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;
   -webkit-overflow-scrolling:touch;box-shadow:0 18px 60px rgba(0,0,0,.55);
   animation:sheetUp .32s cubic-bezier(.22,.61,.36,1);}
@@ -6886,8 +6889,12 @@ body.reduce-motion .ac-compose-card{animation:none;}
 .ac-thread-ta::placeholder{color:var(--t3);}
 .ac-thread-rm{flex:0 0 auto;background:none;border:none;color:var(--t3);cursor:pointer;padding:3px;border-radius:6px;}
 .ac-thread-rm svg{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none;}
-.ac-post-toolbar{display:flex;align-items:center;padding:10px 14px max(10px,env(safe-area-inset-bottom));
-  border-top:1px solid var(--b1);flex-shrink:0;}
+/* Bottom tool row: a horizontally SCROLLABLE strip (there are more tools than fit) with
+   a little breathing room between icons; the scrollbar is hidden, iOS-style. */
+.ac-post-toolbar{display:flex;align-items:center;gap:6px;padding:12px 14px max(12px,env(safe-area-inset-bottom));
+  border-top:1px solid var(--b1);flex-shrink:0;overflow-x:auto;overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;touch-action:pan-x;}
+.ac-post-toolbar::-webkit-scrollbar{display:none;}
 
 /* Profile */
 #acProfileBody{padding:0;}
@@ -15494,7 +15501,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1275'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1276'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
