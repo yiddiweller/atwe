@@ -6669,9 +6669,14 @@ body.light .ac-home-stories{border-bottom-color:rgba(0,0,0,.08);}
 body.light .ac-pdot{background:var(--accent);}
 .ac-pf-time b{color:var(--t1);font-weight:700;}
 /* Reply controls */
-.ac-replyscope{display:inline-flex;align-items:center;gap:7px;background:none;border:none;color:var(--accent);font-size:13.5px;
-  font-weight:600;font-family:inherit;cursor:pointer;padding:6px 2px;margin:2px 0 6px;}
-.ac-replyscope svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
+/* Reply-scope / PPV etc. as neat rounded pills (grey chip, own line, content-sized). */
+.ac-replyscope{display:flex;width:fit-content;align-items:center;gap:8px;background:var(--s2);border:none;color:var(--accent);
+  font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer;padding:9px 15px;margin:0 0 8px 16px;border-radius:999px;
+  transition:background var(--t-fast) var(--ease);}
+body.light .ac-replyscope{background:var(--s2);}
+.ac-replyscope:active{background:var(--s3);}
+.ac-replyscope svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;flex-shrink:0;}
+.ac-replyscope:first-of-type{margin-top:4px;}
 /* "Who can reply?" bottom sheet (X-style) */
 #replyScopeSheet{align-items:flex-end;justify-content:center;padding:0;}
 .rs-sheet{width:100%;max-width:600px;background:var(--bg);border-top-left-radius:20px;border-top-right-radius:20px;
@@ -6875,9 +6880,12 @@ body.reduce-motion .ac-compose-card{animation:none;}
   font-size:17px;font-family:inherit;line-height:1.5;min-height:120px;}
 .ac-postbody textarea::placeholder{color:var(--t3);}
 /* Composer: small avatar to the left of the input (X-style) */
-.ac-compose-row{display:flex;gap:10px;align-items:flex-start;}
-.ac-compose-row textarea{flex:1;min-width:0;margin-top:2px;}
-.ac-compose-av{flex:0 0 auto;width:30px;height:30px;margin-top:4px;}
+.ac-compose-row{display:flex;gap:12px;align-items:flex-start;}
+/* The avatar's centre lines up with the CENTRE of the first placeholder line: the line
+   box is font-size(17)×line-height(1.5)=25.5px, so its centre sits 12.75px down; a 30px
+   avatar centres there at margin-top = 12.75 − 15 ≈ 0 (kept explicit so it never drifts). */
+.ac-compose-row textarea{flex:1;min-width:0;margin-top:0;padding:0;line-height:1.5;}
+.ac-compose-av{flex:0 0 auto;width:30px;height:30px;margin-top:-2px;}
 .ac-compose-av .user-avatar{width:30px;height:30px;font-size:13px;}
 /* Composer header: no "New post" title, no divider line (clean like the sample) */
 #acPostScreen .msg-top{border-bottom:none;}
@@ -6889,12 +6897,21 @@ body.reduce-motion .ac-compose-card{animation:none;}
 .ac-thread-ta::placeholder{color:var(--t3);}
 .ac-thread-rm{flex:0 0 auto;background:none;border:none;color:var(--t3);cursor:pointer;padding:3px;border-radius:6px;}
 .ac-thread-rm svg{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none;}
-/* Bottom tool row: a horizontally SCROLLABLE strip (there are more tools than fit) with
-   a little breathing room between icons; the scrollbar is hidden, iOS-style. */
-.ac-post-toolbar{display:flex;align-items:center;gap:6px;padding:12px 14px max(12px,env(safe-area-inset-bottom));
+/* Bottom tool row: a horizontally SCROLLABLE strip of round grey icon-buttons — all the
+   same size + colour (matching the Atwe mark), roomy spacing, and the SAME inset on the
+   sides as the bottom. Scrollbar hidden, iOS-style. */
+.ac-post-toolbar{display:flex;align-items:center;gap:14px;padding:14px 16px max(16px,env(safe-area-inset-bottom));
   border-top:1px solid var(--b1);flex-shrink:0;overflow-x:auto;overflow-y:hidden;
   -webkit-overflow-scrolling:touch;scrollbar-width:none;touch-action:pan-x;}
 .ac-post-toolbar::-webkit-scrollbar{display:none;}
+/* Each tool is a round LIGHT-GREY disc with a white glyph (same size/colour as the Atwe
+   mark at the end); scoped to the composer so the chat composer's icons are untouched. */
+.ac-post-toolbar .msg-attach{width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.09);color:var(--t1);}
+body.light .ac-post-toolbar .msg-attach{background:rgba(0,0,0,.05);}
+.ac-post-toolbar .msg-attach:active{background:rgba(255,255,255,.16);}
+body.light .ac-post-toolbar .msg-attach:active{background:rgba(0,0,0,.1);}
+.ac-post-toolbar .msg-attach svg{width:20px;height:20px;}
+.ac-post-toolbar .msg-attach.ac-ai-btn img{width:20px;height:20px;border-radius:6px;}
 
 /* Profile */
 #acProfileBody{padding:0;}
@@ -14701,7 +14718,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <div class="ac-postbody">
         <div class="ac-compose-row">
           <div class="ac-compose-av" id="acComposeAv"></div>
-          <textarea id="acPostText" placeholder="What's happening?" aria-label="What's happening?" maxlength="2000" oninput="acPostInput();acMentionInput(this)"></textarea>
+          <textarea id="acPostText" placeholder="Write a post" aria-label="Write a post" maxlength="2000" oninput="acPostInput();acMentionInput(this)"></textarea>
         </div>
         <div class="ac-mention-box hidden" id="acMentionBox"></div>
         <div id="acPostQuote"></div>
@@ -15501,7 +15518,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1276'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1277'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
