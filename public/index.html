@@ -2052,10 +2052,14 @@ body.tb-collapsed .tb-mainrow{max-height:0;opacity:0;}
 .tb-brand-word{height:var(--tb-brand-h);}
 /* Text wordmark (used for "Beam" / "Atwe AI" so each world reads distinctly). Sized so
    its cap-height ≈ the image wordmark's height; hidden until syncTopbar picks it. */
-.tb-brand-word-txt{display:none;font-size:23.5px;font-weight:800;letter-spacing:-.02em;line-height:1;color:var(--t1);white-space:nowrap;}
+.tb-brand-word-txt{display:none;font-size:23.5px;font-weight:700;letter-spacing:-.02em;line-height:1;color:var(--t1);white-space:nowrap;}
 /* AI-page lockup: same swirl mark + text style as the Home/Beam brand lockup (it isn't
    inside .tb-brandrow, so it carries its own size vars). Replaces the ≡ on the AI page. */
 .tb-ai-brand{--tb-brand-icon:22px;--tb-brand-h:18px;background:none;border:none;padding:0;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent;flex-shrink:0;}
+/* Position the AI lockup exactly where the Home/Beam brand lockup sits: same top gap and
+   the same feed-gutter left inset (the tb-plain topbar already supplies the 18px gutter;
+   the main row drops its own default 20px side padding so they don't compound). */
+.topbar.tb-ai .tb-mainrow{height:auto;max-height:none;overflow:visible;align-items:flex-start;padding:17px 0 8px 0;}
 /* The mark + wordmark PNGs are white → invert to near-black on the Light theme. */
 body.light .tb-brand-mark,body.light .tb-brand-word{filter:invert(1) brightness(.1);}
 .tb-brand-actions{display:flex;align-items:center;gap:12px;flex-shrink:0;}
@@ -15323,7 +15327,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1247'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1248'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24384,6 +24388,7 @@ function syncTopbar(tab) {
   document.querySelector('.topbar')?.classList.toggle('tb-home', isHome);
   document.querySelector('.topbar')?.classList.toggle('tb-chat', isChat);
   document.querySelector('.topbar')?.classList.toggle('tb-plain', isSearch || tab === 'ai');
+  document.querySelector('.topbar')?.classList.toggle('tb-ai', tab === 'ai');   // AI world lockup position
   // Home + Beam use the single-row world header (≡ · ＋ · ◯ + tabs, no label row).
   document.querySelector('.topbar')?.classList.toggle('tb-solo', isHome || isChat);
   document.getElementById('tbTabRow')?.classList.toggle('hidden', !(isHome || isChat));
@@ -25081,7 +25086,9 @@ const AC_FEED_TABS = ['foryou', 'following', 'circles', 'bookmarks'];
 // Quick "loading" spin of the swirl mark on every feed-tab switch (see the CSS). The
 // vortex logo speeds up then eases to a stop; retriggers on each tap via a reflow.
 function acSpinBrandMark() {
-  const m = document.querySelector('.tb-brand-mark');
+  // Target the BRAND-ROW mark specifically — the AI-page lockup also has a .tb-brand-mark
+  // (earlier in the DOM), so a bare querySelector would spin the wrong/hidden one.
+  const m = document.querySelector('#tbBrandRow .tb-brand-mark');
   if (!m) return;
   m.classList.remove('spinning');
   void m.offsetWidth;                 // force reflow so a rapid re-tap restarts the spin
