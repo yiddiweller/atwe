@@ -1338,6 +1338,9 @@ body.light .nl-mem-x{background:rgba(0,0,0,.06);}
 .nlp-check svg{width:15px;height:15px;fill:none;stroke:#fff;stroke-width:3;opacity:0;}
 .nlp-row.on .nlp-check{background:var(--accent);border-color:var(--accent);}
 .nlp-row.on .nlp-check svg{opacity:1;}
+/* Communities Beam pane header (Joined/Discover toggle + New) */
+.ac-comm-head{display:flex;align-items:center;gap:8px;padding:12px var(--feed-gutter,16px) 8px;}
+.ac-comm-new{margin-inline-start:auto;flex:0 0 auto;padding:6px 14px;}
 /* The small Apple-style popover the ⋯ opens. */
 .ai-menu-scrim{position:fixed;inset:0;z-index:1190;background:transparent;}
 .ai-menu-pop{position:fixed;z-index:1191;min-width:236px;max-width:92vw;padding:5px;
@@ -10907,6 +10910,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <button class="tb-feedtab" id="acseg-unread" onclick="acChatTab('unread')">Unread</button>
         <button class="tb-feedtab" id="acseg-favorites" onclick="acChatTab('favorites')">Favorites</button>
         <button class="tb-feedtab" id="acseg-groups" onclick="acChatTab('groups')">Groups<span class="ac-chattab-badge hidden" id="acsegBadge-groups">0</span></button>
+        <button class="tb-feedtab" id="acseg-communities" onclick="acChatTab('communities')">Communities</button>
         <button class="tb-feedtab" id="acseg-calls" onclick="acChatTab('calls')">Calls<span class="ac-chattab-badge ac-chattab-dot hidden" id="acsegBadge-calls"></span></button>
         <button class="tb-feedtab" id="acseg-contacts" onclick="acChatTab('contacts')">Contacts</button>
         <!-- Custom list pills render here (acRenderChatLists), then the "+" to make one.
@@ -14597,6 +14601,16 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <div class="ac-msg-results hidden" id="acMsgResults"></div>
       <!-- Calls pane (duplicate of the Call page's history list) -->
       <div class="ac-list hidden" id="acCallList2"></div>
+      <!-- Communities pane (WhatsApp-style): Joined/Discover + New; rows open the
+           existing community detail overlay with all its features. -->
+      <div class="ac-list hidden" id="acCommList2">
+        <div class="ac-comm-head">
+          <button class="ac-jv on" id="commPaneMine" onclick="acCommPaneTab('mine')">Joined</button>
+          <button class="ac-jv" id="commPaneDiscover" onclick="acCommPaneTab('discover')">Discover</button>
+          <button class="ac-pill-btn accent ac-comm-new" onclick="acCommCreateOpen()">＋ New</button>
+        </div>
+        <div id="commPaneBody"></div>
+      </div>
       <!-- Contacts pane (duplicate of the Contacts screen) -->
       <div class="ac-contacts-head hidden" id="acContactsHead2">
         <div class="ac-searchbar-row">
@@ -15475,7 +15489,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1272'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1273'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -22675,6 +22689,26 @@ async function acLoadCommunities() {
     </div>`).join('') : `<div class="ac-empty" style="padding:26px;">${AC._commScope === 'mine' ? 'You haven’t joined any communities yet.' : 'No communities yet — create the first one.'}</div>`;
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
+// ── Communities as a Beam TAB (inline pane) — reuses the same rows + the full
+// community detail/join/create overlays, so every WhatsApp-style feature works. ──
+function acCommPaneTab(scope) {
+  AC._commScope = scope;
+  document.getElementById('commPaneMine')?.classList.toggle('on', scope === 'mine');
+  document.getElementById('commPaneDiscover')?.classList.toggle('on', scope === 'discover');
+  acLoadCommunitiesPane();
+}
+async function acLoadCommunitiesPane() {
+  const body = document.getElementById('commPaneBody'); if (!body) return;
+  body.innerHTML = acSkelRows(3);
+  try {
+    const { communities } = await API.req('GET', '/api/communities?scope=' + (AC._commScope || 'mine'));
+    body.innerHTML = communities.length ? communities.map(c => `<div class="ac-item" onclick="acOpenCommunity(${c.id})">
+      ${acGroupAvatarHtml({ name: c.name, avatar: c.avatar }, 'ac-grp-ava')}
+      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span>${c.isMember ? '<span class="ev-badge">Joined</span>' : ''}</div>
+        <div class="ac-item-last">${c.members} member${c.members === 1 ? '' : 's'} · ${c.groups} group${c.groups === 1 ? '' : 's'}</div></div>
+    </div>`).join('') : `<div class="ac-empty" style="padding:30px 20px;">${AC._commScope === 'mine' ? 'You haven’t joined any communities yet.<br/>Tap ＋ New to start one, or switch to Discover.' : 'No communities yet — create the first one.'}</div>`;
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
 function acCommCreateOpen() {
   document.getElementById('commName').value = '';
   document.getElementById('commDesc').value = '';
@@ -26757,7 +26791,7 @@ const AC_CHATS_FAB = {
   calls:    { ic: "<span class='nav-fab-ic' style=\"--ic:var(--icn-target)\"></span>", label: 'New call' },
   contacts: { ic: '<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>', label: 'Add contact' },
 };
-const AC_CHATS_TABS = ['chats', 'unread', 'favorites', 'groups', 'calls', 'contacts'];
+const AC_CHATS_TABS = ['chats', 'unread', 'favorites', 'groups', 'communities', 'calls', 'contacts'];
 // chats/unread/favorites/groups/list:<id> all render the chat list (#acList), just with
 // a different filter; calls + contacts are their own panes.
 function acIsChatListTab(t) { return t === 'chats' || t === 'unread' || t === 'favorites' || t === 'groups' || String(t).startsWith('list:'); }
@@ -26788,11 +26822,12 @@ function acChatsTab(tab, dir) {
   // Show only the active pane (the chat list is shared by chats/unread/favorites/groups/list).
   document.getElementById('acList').classList.toggle('hidden', !listTab);
   document.getElementById('acCallList2').classList.toggle('hidden', tab !== 'calls');
+  document.getElementById('acCommList2')?.classList.toggle('hidden', tab !== 'communities');
   document.getElementById('acContactsHead2').classList.toggle('hidden', tab !== 'contacts');
   document.getElementById('acContactsList2').classList.toggle('hidden', tab !== 'contacts');
   // Slide the new pane in from the swipe direction (skipped for a plain tap).
   if (dir) {
-    const primary = listTab ? 'acList' : { calls: 'acCallList2', contacts: 'acContactsList2' }[tab];
+    const primary = listTab ? 'acList' : { calls: 'acCallList2', contacts: 'acContactsList2', communities: 'acCommList2' }[tab];
     const pel = document.getElementById(primary);
     if (pel) { pel.classList.remove('ac-pane-in-l', 'ac-pane-in-r'); void pel.offsetWidth; pel.classList.add(dir > 0 ? 'ac-pane-in-l' : 'ac-pane-in-r'); }
   }
@@ -26804,6 +26839,7 @@ function acChatsTab(tab, dir) {
   // reuse the Chats action — a new message).
   const fab = document.getElementById('acChatsFab'), cfg = AC_CHATS_FAB[tab] || (listTab ? AC_CHATS_FAB.chats : null);
   if (fab && cfg) { document.getElementById('acChatsFabIc')?.remove(); fab.innerHTML = cfg.ic; fab.setAttribute('aria-label', cfg.label); }
+  if (fab) fab.style.display = (tab === 'communities') ? 'none' : ''; // communities pane has its own "+ New"
   // Load the active pane's data.
   if (listTab) {
     // Derive the chat-list filters from the tab: Groups = groups-only, Unread = unread
@@ -26820,6 +26856,7 @@ function acChatsTab(tab, dir) {
     acLoadChats({ silent: true });
   }
   else if (tab === 'calls') { try { localStorage.setItem('ac_calls_seen', Date.now()); } catch {} acLoadCalls('acCallList2'); }
+  else if (tab === 'communities') { acCommPaneTab(AC._commScope || 'mine'); }
   else if (tab === 'contacts') {
     AC._cScope = 'chats'; AC._contactSelect = false;
     document.getElementById('acSelectBar2')?.classList.add('hidden');
