@@ -2609,6 +2609,13 @@ body.light .tb-feedtab.active{color:var(--t1);}
     -webkit-backdrop-filter:none!important;backdrop-filter:none!important;}
   body.pgscroll #acSearchScreen{display:block;height:auto;min-height:0;padding-top:var(--pg-top,56px);}
   body.pgscroll #acSearchPageResults{display:block;height:auto;overflow:visible;}
+  /* Profile page-scroll: let the whole document scroll so Safari's own bottom bar shrinks
+     (like Home). The profile owns its header (no shared topbar → no top pad); the floating
+     back button becomes fixed so it stays reachable, and the sticky tabs pin at the top as
+     before. Bottom pad clears the floating nav pill. */
+  body.pgscroll #acProfileScreen{display:block;height:auto;min-height:0;}
+  body.pgscroll #acProfileBody{display:block;height:auto;overflow:visible;padding-bottom:calc(76px + env(safe-area-inset-bottom,0px));}
+  body.pgscroll #acProfileScreen .ac-prof-back{position:fixed;}
 }
 .tb-word{height:15px;width:auto;display:block;}
 .tb-profile{display:flex;align-items:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
@@ -15518,7 +15525,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1282'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1283'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25257,7 +25264,7 @@ function acShow(screenId, tab) {
   // Page-scroll (document scrolls → iOS Safari bar shrinks, like X): browser + mobile only.
   // Rolling out screen-by-screen so each conversion is verifiable; the installed app keeps
   // its buttery internal scroll (no bar to shrink there anyway).
-  const _pgScreens = ['acHomeScreen', 'acSearchScreen'];
+  const _pgScreens = ['acHomeScreen', 'acSearchScreen', 'acProfileScreen'];
   const _pg = _pgScreens.includes(screenId) && !_standalone && window.matchMedia && window.matchMedia('(max-width:768px)').matches;
   document.body.classList.toggle('pgscroll', _pg);
   document.body.classList.toggle('pgscroll-search', _pg && screenId === 'acSearchScreen'); // per-screen chrome hook
