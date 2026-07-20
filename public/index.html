@@ -2082,17 +2082,14 @@ body.light .tb-brand-word{filter:invert(1) brightness(.1);}
 .tb-brand-act.prof{box-sizing:content-box;background:var(--bg);border:1px solid rgba(255,255,255,.14);}
 body.light .tb-brand-act.prof{border-color:rgba(0,0,0,.14);}
 .tb-brand-act.prof .user-avatar{width:100%;height:100%;font-size:calc(var(--tb-brand-circle) * 0.42);border-radius:50%;}
-/* "Loading" spin on the swirl mark, fired on every feed-tab switch (acSpinBrandMark).
-   The vortex logo accelerates then eases to a stop (ease-in-out), 2 full turns. */
-/* Tab-tap: one small, smooth 90° "notch" turn. The swirl has 4-fold symmetry, so 90°
-   lands looking identical — a subtle switch-like tick, not a full spin. */
-@keyframes tbMarkSpin{from{transform:rotate(0)}to{transform:rotate(90deg)}}
-/* easeOutCubic — a strictly monotonic ease-out (control points in order) so the
-   turn never tugs backward near the end. An earlier curve had its control points
-   reversed (x2<x1), which made the rotation backtrack a hair at the stop and read
-   as a tiny "shake". This just glides slower and slower into a smooth landing. */
-.tb-brand-mark.spinning{animation:tbMarkSpin .6s cubic-bezier(.33,1,.68,1);}
-body.reduce-motion .tb-brand-mark.spinning{animation:none;}
+/* Tab-tap "notch": one small, smooth 90° turn of the swirl on every feed-tab switch
+   (acSpinBrandMark). It is driven as a CUMULATIVE inline transform (rotate += 90° each
+   tap) with a plain transition — NOT a keyframe animation — so the mark LANDS on its
+   final angle and HOLDS there. A keyframe animation snaps back to the base (0°) the
+   instant it ends, and because the swirl is only ~4-fold symmetric (90° ≈ a visible ~5°
+   off 0°), that snap-back read as a tiny shake right at the stop. Holding the end angle
+   removes the snap entirely. easeOutCubic below, applied inline. */
+body.reduce-motion .tb-brand-mark{transition:none !important;}
 /* World-entry flourish (Beam / AI): the swirl ROLLS one turn (fast→slow) and the word
    "spits out" of it to the RIGHT — revealed left→right + sliding into place. Triggered
    in syncTopbar only when the world actually changes (the .rolling class on the lockup). */
@@ -15362,7 +15359,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1257'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1258'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24455,7 +24452,15 @@ function syncTopbar(tab) {
     const lockup = isAi ? document.getElementById('tbAiBrand') : document.getElementById('tbBrandLogo');
     // Remove .rolling once the flourish ends — otherwise its (higher-specificity) rule
     // permanently overrides the tab-tap .spinning animation (the "spin stopped" bug).
-    if (lockup) { lockup.classList.remove('rolling'); void lockup.offsetWidth; lockup.classList.add('rolling'); setTimeout(() => lockup.classList.remove('rolling'), 640); }
+    if (lockup) {
+      lockup.classList.remove('rolling'); void lockup.offsetWidth; lockup.classList.add('rolling'); setTimeout(() => lockup.classList.remove('rolling'), 640);
+      // The roll ends visually at 0°; reset the tab-tap notch counter + clear any held
+      // inline rotation so the mark rests cleanly at 0° after the flourish (no snap when
+      // .rolling is removed and the inline transform takes back over).
+      const rm = lockup.querySelector('.tb-brand-mark');
+      if (rm) { rm.style.transition = 'none'; rm.style.transform = ''; }
+      _brandMarkAngle = 0;
+    }
   }
   _brandRollLast = tab;
 }
@@ -25130,17 +25135,19 @@ function acGoHome() {
 // (Circles — the 200+ industry feeds — is the differentiator and sits before
 // Collections; 'bookmarks' renders as "Collections").
 const AC_FEED_TABS = ['foryou', 'following', 'circles', 'bookmarks'];
-// Quick "loading" spin of the swirl mark on every feed-tab switch (see the CSS). The
-// vortex logo speeds up then eases to a stop; retriggers on each tap via a reflow.
+// Small smooth 90° "notch" turn of the swirl on every feed-tab switch. Driven as a
+// CUMULATIVE inline rotation that HOLDS at its end angle (no keyframe snap-back → no
+// end-of-turn shake — see the CSS note). Each tap adds another 90° and eases to a stop.
+let _brandMarkAngle = 0;
 function acSpinBrandMark() {
   // Target the BRAND-ROW mark specifically — the AI-page lockup also has a .tb-brand-mark
-  // (earlier in the DOM), so a bare querySelector would spin the wrong/hidden one.
+  // (earlier in the DOM), so a bare querySelector would turn the wrong/hidden one.
   const m = document.querySelector('#tbBrandRow .tb-brand-mark');
   if (!m) return;
-  m.classList.remove('spinning');
-  void m.offsetWidth;                 // force reflow so a rapid re-tap restarts the spin
-  m.classList.add('spinning');
-  m.addEventListener('animationend', () => m.classList.remove('spinning'), { once: true });
+  if (document.body.classList.contains('reduce-motion')) return;
+  _brandMarkAngle += 90;
+  m.style.transition = 'transform .6s cubic-bezier(.33,1,.68,1)';
+  m.style.transform = 'rotate(' + _brandMarkAngle + 'deg)';
 }
 // User TAP on a feed tab → spin the logo, then switch. Separate from acSetFeed so the
 // programmatic feed setup at boot (and sidebar entry points) never spin — only real taps.
@@ -44656,7 +44663,7 @@ function ptrInit() {
     if (mark) { const f = Math.min(dist / TH, 1); mark.style.transform = 'rotate(' + (-f * 170).toFixed(1) + 'deg)'; mark.style.backgroundColor = dist >= TH ? YELLOW : windColor(f); }
   };
   // Spring the wound mark back to rest (a cancelled pull — quick, no full spin).
-  const springMarkBack = () => { if (!mark) return; mark.style.transition = 'transform .3s cubic-bezier(.2,1.1,.35,1), background-color .3s ease'; mark.style.transform = 'rotate(0deg)'; mark.style.backgroundColor = restColor(); setTimeout(() => { if (mark) { mark.style.transition = 'none'; mark.style.transform = ''; mark.style.backgroundColor = ''; } }, 340); };
+  const springMarkBack = () => { if (!mark) return; mark.style.transition = 'transform .3s cubic-bezier(.2,1.1,.35,1), background-color .3s ease'; mark.style.transform = 'rotate(0deg)'; mark.style.backgroundColor = restColor(); setTimeout(() => { if (mark) { mark.style.transition = 'none'; mark.style.transform = ''; mark.style.backgroundColor = ''; _brandMarkAngle = 0; } }, 340); };
   win.addEventListener('touchstart', (e) => {
     if (refreshing || e.touches.length !== 1) { pulling = false; return; }
     list = ptrActiveList();
@@ -44674,7 +44681,7 @@ function ptrInit() {
     // Roll back like a flywheel: fast off the mark, spins THREE full turns forward, then a
     // long, gentle deceleration to a full stop (slower by the very end). Meanwhile the
     // colour eases from the peak yellow back to rest white as it winds down.
-    if (mark) { mark.style.transition = 'transform 1.15s cubic-bezier(.04,.85,.1,1), background-color 1s ease'; mark.style.transform = 'rotate(1080deg)'; mark.style.backgroundColor = restColor(); setTimeout(() => { if (mark) { mark.style.transition = 'none'; mark.style.transform = ''; mark.style.backgroundColor = ''; } }, 1200); }
+    if (mark) { mark.style.transition = 'transform 1.15s cubic-bezier(.04,.85,.1,1), background-color 1s ease'; mark.style.transform = 'rotate(1080deg)'; mark.style.backgroundColor = restColor(); setTimeout(() => { if (mark) { mark.style.transition = 'none'; mark.style.transform = ''; mark.style.backgroundColor = ''; _brandMarkAngle = 0; } }, 1200); }
     // Fire the white→blue light sweep under the tabs.
     const bm = document.getElementById('tbRefreshBeam');
     if (bm) { bm.classList.remove('sweep'); void bm.offsetWidth; bm.classList.add('sweep'); setTimeout(() => bm.classList.remove('sweep'), 800); }
