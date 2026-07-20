@@ -15475,7 +15475,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1270'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1271'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -37932,7 +37932,7 @@ function acChatRowDM(c) {
   const draft = Drafts.get('d:' + c.id + (tid != null ? ':t' + tid : ''));
   // Your own last message carries a read indicator in the list: a small eye that's
   // grey when just sent, and turns accent-blue once the other side has seen it.
-  const EYE = '<svg viewBox="0 0 24 24"><path d="M2 12s4.5-8 10-8 10 8 10 8-4.5 8-10 8-10-8-10-8z"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>';
+  const EYE = '<svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="7.4" ry="8.6"/><circle cx="12" cy="12" r="3.1" fill="currentColor" stroke="none"/></svg>';
   const ticks = (!draft && c.last_mine && !c.last_deleted && !isSelf && c.last_at)
     ? `<span class="ac-ticks${c.last_read ? ' seen' : ''}" aria-label="${c.last_read ? 'Seen' : 'Sent'}">${EYE}</span>` : '';
   const lastHtml = draft ? `<span class="ac-draft">Draft:</span> ${escHtml(draft)}` : ticks + escHtml(last);
