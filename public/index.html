@@ -1346,10 +1346,11 @@ body.light .nl-mem-x{background:rgba(0,0,0,.06);}
 .ai-menu-pop{position:fixed;z-index:1191;min-width:236px;max-width:92vw;padding:5px;
   background:var(--menu-bg);-webkit-backdrop-filter:var(--menu-blur);backdrop-filter:var(--menu-blur);
   border:1px solid var(--menu-border);border-radius:15px;box-shadow:var(--menu-shadow);
-  transform-origin:top right;animation:aimpIn .28s cubic-bezier(.25,.85,.3,1);}
-/* iOS context-menu pop: springs up from the anchor corner with a subtle overshoot and a
-   quick fade — smoother/cooler than the old instant scale. */
-@keyframes aimpIn{0%{opacity:0;transform:scale(.78);}55%{opacity:1;transform:scale(1.02);}100%{opacity:1;transform:scale(1);}}
+  transform-origin:top right;animation:aimpIn .34s cubic-bezier(.3,.9,.35,1);}
+/* iOS context-menu emergence: the menu bursts OUT of the tapped button — starts small at
+   the button (origin set in JS to the button) and springs up to full with a subtle
+   overshoot + quick fade, so it reads as the button expanding INTO the menu (Apple style). */
+@keyframes aimpIn{0%{opacity:0;transform:scale(.35);}58%{opacity:1;transform:scale(1.03);}100%{opacity:1;transform:scale(1);}}
 body.reduce-motion .ai-menu-pop{animation-duration:.01s;}
 .aimp-item{display:flex;align-items:center;gap:12px;width:100%;text-align:start;background:none;border:none;
   color:var(--t1);font-family:inherit;font-size:15px;font-weight:500;padding:12px 12px;border-radius:10px;cursor:pointer;}
@@ -2648,8 +2649,8 @@ body.light .tb-feedtab.active{color:var(--t1);}
   backdrop-filter:var(--menu-blur);-webkit-backdrop-filter:var(--menu-blur);
   border:1px solid var(--menu-border);border-radius:16px;padding:7px;
   box-shadow:var(--menu-shadow);
-  transform-origin:top right;                 /* springs from the profile-icon corner */
-  animation:aimpIn .28s cubic-bezier(.25,.85,.3,1);
+  transform-origin:top right;                 /* JS overrides to the tapped button's point */
+  animation:aimpIn .34s cubic-bezier(.3,.9,.35,1);
 }
 body.reduce-motion .brand-menu{animation-duration:.01s;}
 .brand-menu.hidden{display:none;}
@@ -15561,7 +15562,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1294'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1295'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
