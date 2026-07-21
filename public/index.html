@@ -2369,7 +2369,7 @@ body.light .tb-feedtab.active{color:var(--t1);}
   /* Tabs: roomier spacing, and a soft edge fade so a tab dissolves UNDER the ≡ as
      the row scrolls left (and the last tab fades at the right edge). The left
      padding equals the fade width so the resting "For You" isn't clipped. */
-  .topbar.tb-home .tb-feedtabs{flex:1;justify-content:flex-start;gap:34px;margin-inline-start:8px;
+  .topbar.tb-home .tb-feedtabs{flex:1;justify-content:flex-start;gap:40px;margin-inline-start:8px;
     /* No right padding: the last item rests flush at the gutter (topbar sets that edge). */
     padding-inline-start:16px;padding-inline-end:0;}
     /* (Left-edge fade is a static overlay on .tb-solo .tb-icoset — see above; no
@@ -2404,7 +2404,7 @@ body.light .tb-feedtab.active{color:var(--t1);}
   /* Search + AI: put the ≡ at the exact same gutter position as Home/Chat. */
   .topbar.tb-plain{padding-inline-start:var(--feed-gutter);}
   .topbar.tb-plain .sb-toggle{justify-content:flex-start;width:auto;}
-  .topbar.tb-chat .tb-feedtabs{flex:1;justify-content:flex-start;gap:34px;margin-inline-start:8px;padding-inline-start:16px;padding-inline-end:0;}
+  .topbar.tb-chat .tb-feedtabs{flex:1;justify-content:flex-start;gap:40px;margin-inline-start:8px;padding-inline-start:16px;padding-inline-end:0;}
     /* (Left-edge fade is a static overlay on .tb-solo .tb-icoset — no mask on the
        scrolling row, so the Beam tab scroll stays 60fps too.) */
   /* Beam tabs bottom-align to the hairline so the active tab carries a short BLUE
@@ -15579,7 +15579,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1317'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1318'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
