@@ -8138,7 +8138,7 @@ body.reduce-motion .xp-ai::after{animation:none;}
 .ev-cmeta{font-size:12.5px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .ev-cgoing{font-size:12px;color:var(--t2);margin-top:4px;}
 .ev-badge{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:var(--r-pill);background:var(--s3);color:var(--t2);margin-inline-start:6px;}
-.ev-badge.live{background:var(--red);color:#fff;}
+.ev-badge.live{background:var(--green);color:#fff;}
 /* Event detail */
 .ev-detail-when{display:flex;align-items:center;gap:9px;color:var(--t1);font-size:14px;font-weight:600;margin:10px 0 4px;}
 .ev-detail-when svg{width:18px;height:18px;stroke:var(--accent);stroke-width:2;fill:none;flex-shrink:0;}
@@ -9601,7 +9601,7 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 #spaceOverlay{z-index:2090;display:flex;align-items:flex-end;justify-content:center;}
 .space-card{background:linear-gradient(180deg,var(--s3),var(--s2) 62%,var(--s1));width:min(560px,100%);max-height:92vh;border-radius:var(--r-xl) var(--r-xl) 0 0;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 -20px 60px rgba(0,0,0,.6);padding-bottom:max(16px,env(safe-area-inset-bottom));}
 .space-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 6px;}
-.live-badge.audio{background:linear-gradient(90deg,var(--accent),var(--accent));}
+.live-badge.audio{background:var(--green);}
 .space-min{background:rgba(255,255,255,.12);border:none;color:#fff;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;}
 .space-min svg{width:18px;height:18px;stroke:currentColor;stroke-width:2.2;fill:none;}
 .space-title{padding:2px 18px 0;color:#fff;font-size:20px;font-weight:800;line-height:1.2;}
@@ -15576,7 +15576,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1303'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1304'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
