@@ -9180,10 +9180,14 @@ body.home-feed.nav-scrolling .bottom-nav{-webkit-backdrop-filter:none!important;
 @media(max-width:768px){ #navBackdrop{display:block;} }
 /* Hidden wherever the pill itself is hidden (post detail, open thread, composer, …). */
 .bottom-nav.nav-off ~ #navBackdrop{display:none!important;}
-/* When the pill morphs to the "+" ball on scroll-down, smoothly fade the darkness away;
-   it fades back in when the pill returns to the full nav bar on scroll-up (opacity only,
-   so it's GPU-cheap and never affects the fade's shape/position). */
-body.nav-ball #navBackdrop{opacity:0;}
+/* Smoothly fade the darkness away whenever it shouldn't be shown, so it's only ever visible
+   at REST behind a full nav bar — never mid-jitter. It fades out when the pill morphs to the
+   "+" ball (scroll-down) AND while actively scrolling (nav-scrolling), and fades back in the
+   moment the finger stops and the bar is resting. Opacity-only (GPU-cheap), so it never
+   affects the fade's shape/position — and it hides the iOS-Safari fixed-layer jitter that
+   made the bottom look messy mid-scroll. */
+body.nav-ball #navBackdrop,
+body.nav-scrolling #navBackdrop{opacity:0;}
 /* SAFARI (browser tab): the CSS gradient above is used ONLY by the installed PWA
    (display-mode:standalone), where it's perfect. In a Safari browser tab, `vh`/fixed CSS
    can't follow the URL bar as it grows/shrinks, so the black piece drifted off the bar and
@@ -15612,7 +15616,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1335'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1336'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -45556,7 +45560,10 @@ function _navScrollActive() {
   if (!cl.contains('home-feed')) return;
   if (!cl.contains('nav-scrolling')) cl.add('nav-scrolling');
   if (_navScrollT) clearTimeout(_navScrollT);
-  _navScrollT = setTimeout(() => document.body.classList.remove('nav-scrolling'), 180);
+  _navScrollT = setTimeout(() => {
+    document.body.classList.remove('nav-scrolling');
+    if (typeof _syncNavBlack === 'function') _syncNavBlack();   // reposition the darkness before it fades back in
+  }, 180);
 }
 // Brand-row height (the collapse clamp) + the live hide amount (0..brandH), delta-tracked
 // so the header hides AND re-shows 1:1 with the finger in both directions.
@@ -45729,6 +45736,10 @@ function _syncNavBlack() {
       return;
     }
     if (getComputedStyle(bd).display === 'none') return;   // nav-off / desktop → nothing to paint
+    // While actively scrolling the darkness is faded out (CSS) — skip the reposition/repaint
+    // (getBoundingClientRect + gradient parse) so scrolling stays smooth. It's repositioned the
+    // moment scrolling stops (see _navScrollActive), just before it fades back in.
+    if (document.body.classList.contains('nav-scrolling')) return;
     // Pill's real bottom (reliable in every Safari bar state); the visible bottom is that plus
     // the pill's own bottom gap (--nav-inset). Anchor the SAME gradient the CSS uses to it.
     const pillBottom = _navBackdropProbe().getBoundingClientRect().bottom;
