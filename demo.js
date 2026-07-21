@@ -4,15 +4,20 @@
 // demo users, so teardown is a single DELETE that cascades away all demo content.
 const bcrypt = require('bcryptjs');
 
-// ── Deterministic, royalty-free placeholder media (loaded by URL, no real identities) ──
-// People get gender-matched real portraits; businesses get a clean monogram logo
-// (a face on a company avatar looks wrong). Banners are real stock photos.
-const portrait = (i, female) => `https://randomuser.me/api/portraits/${female ? 'women' : 'men'}/${i % 100}.jpg`;
-const logo = (name) => `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}&backgroundType=gradientLinear&fontWeight=600&radius=18`;
-const banner = (i) => `https://picsum.photos/seed/atwe-bn-${i}/900/300`;
-const postPic = (i) => `https://picsum.photos/seed/atwe-post-${i}/900/650`;
-const storyPic = (i) => `https://picsum.photos/seed/atwe-st-${i}/700/1100`;
-const prodPic = (i) => `https://picsum.photos/seed/atwe-pr-${i}/800/800`;
+// ── Deterministic, royalty-free placeholder media ──
+// All images are served through OUR OWN origin (/api/demo-media?u=…) instead of hot-linking
+// the external hosts directly — some devices (Safari content blockers / ad-blockers / iCloud
+// Private Relay) block third-party image hosts, which made demo images vanish on those
+// (notably iOS) while working elsewhere. The proxy is host-allowlisted server-side.
+// People get real MEN portraits (owner: no women for now); businesses get a faceless monogram
+// logo (a face on a company avatar looks wrong). Banners are real stock photos.
+const proxy = (u) => '/api/demo-media?u=' + encodeURIComponent(u);
+const portrait = (i) => proxy(`https://randomuser.me/api/portraits/men/${i % 100}.jpg`);
+const logo = (name) => proxy(`https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}&backgroundType=gradientLinear&fontWeight=600&radius=18`);
+const banner = (i) => proxy(`https://picsum.photos/seed/atwe-bn-${i}/900/300`);
+const postPic = (i) => proxy(`https://picsum.photos/seed/atwe-post-${i}/900/650`);
+const storyPic = (i) => proxy(`https://picsum.photos/seed/atwe-st-${i}/700/1100`);
+const prodPic = (i) => proxy(`https://picsum.photos/seed/atwe-pr-${i}/800/800`);
 
 const FIRST_M = ['James', 'Daniel', 'Michael', 'David', 'Marcus', 'Ethan', 'Liam', 'Noah', 'Omar', 'Andre', 'Lucas', 'Carlos', 'Ryan', 'Jacob', 'Samuel', 'Nathan', 'Kevin', 'Tariq', 'Diego', 'Aaron', 'Victor', 'Isaac', 'Leon', 'Mateo'];
 const FIRST_F = ['Sophia', 'Maria', 'Emma', 'Olivia', 'Aisha', 'Chloe', 'Grace', 'Layla', 'Hannah', 'Nina', 'Priya', 'Sara', 'Zoe', 'Mia', 'Elena', 'Fatima', 'Ava', 'Lily', 'Naomi', 'Ruby', 'Jade', 'Talia', 'Maya', 'Iris'];
@@ -64,7 +69,7 @@ const DEMO_ADS = [
   { sponsor: 'Keystone Realty', title: 'Find your dream home', body: 'Browse brand-new listings in your area this week.', cta: 'View homes', url: 'https://keystone.example.com' },
   { sponsor: 'Cascade Advisors', title: 'Grow your savings', body: 'Smart, simple financial planning. Book a free consult.', cta: 'Get started', url: 'https://cascade.example.com' },
 ];
-const adPic = (i) => `https://picsum.photos/seed/atwe-ad-${i}/1000/600`;
+const adPic = (i) => proxy(`https://picsum.photos/seed/atwe-ad-${i}/1000/600`);
 
 // One demo run. `client` is a pg client/pool with .query; `adminId` follows some demo
 // users so the admin's own feed/stories fill up. Returns the count created.
@@ -76,7 +81,7 @@ async function seedDemo(client, adminId) {
   for (let i = 0; i < N; i++) {
     const ind = IND[i % IND.length];
     const isBiz = i % 5 === 0; // ~20% businesses
-    const female = i % 2 === 0;
+    const female = false;      // owner: only men / businesses for now (no women)
     let name, username, headline;
     if (isBiz) {
       name = ind.biz[i % ind.biz.length] + ' ' + (['Studio', 'Co.', 'Group', ''][i % 4]);
@@ -92,7 +97,7 @@ async function seedDemo(client, adminId) {
     }
     const bio = `${headline} ${isBiz ? '' : '|'} ${ind.cat}. ${['Let’s build something great.', 'Open to collaborations.', 'Always learning.', 'Here to help.'][i % 4]}`.trim();
     const email = `demo${i}@demo.atwe.local`;
-    const av = isBiz ? logo(name) : portrait(i, female); // logo for businesses, real photo for people
+    const av = isBiz ? logo(name) : portrait(i); // logo for businesses, real MEN photo for people
     const bn = banner(i);
     const verified = isBiz && i % 3 === 0;
     const bvs = isBiz ? (verified ? 'verified' : 'none') : 'none';
