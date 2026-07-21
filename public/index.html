@@ -2138,7 +2138,7 @@ body.light .tb-brand-word{filter:invert(1) brightness(.1);}
 .tb-brand-act.more,.tb-brand-act.plus,.tb-brand-act.prof{background:rgba(18,18,21,.90);border:1px solid rgba(255,255,255,.05);}
 body.light .tb-brand-act.more,body.light .tb-brand-act.plus,body.light .tb-brand-act.prof{background:rgba(255,255,255,.82);border-color:var(--b3);}
 .tb-brand-act.plus{color:var(--t1);}
-.tb-brand-act.plus svg{width:calc(var(--tb-brand-circle) * 0.52);height:calc(var(--tb-brand-circle) * 0.52);stroke-width:2.6;}
+.tb-brand-act.plus svg{width:calc(var(--tb-brand-circle) * 0.52);height:calc(var(--tb-brand-circle) * 0.52);stroke-width:3.2;/* owner: a bolder + */}
 /* ⋯ menu — three dots, sitting to the LEFT of the "+". Opens the world's tools popover. */
 .tb-brand-act.more{color:var(--t1);}
 .tb-brand-act.more svg{width:calc(var(--tb-brand-circle) * 0.66);height:calc(var(--tb-brand-circle) * 0.66);}
@@ -15579,7 +15579,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1309'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1310'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
