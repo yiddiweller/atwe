@@ -9365,9 +9365,11 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 
 /* Realtime: presence dots + typing indicator */
 .ac-ava-wrap{position:relative;flex-shrink:0;}
-.ac-online-dot{position:absolute;right:0;bottom:0;width:12px;height:12px;border-radius:50%;background:var(--green);
-  border:2.5px solid var(--bg);opacity:0;transform:scale(.5);transition:all var(--t-fast) var(--ease);}
-.ac-item.online .ac-online-dot{opacity:1;transform:scale(1);}
+/* Presence: a thin BRIGHT-GREEN RING around the avatar when the person is online/active
+   (owner: a ring around the profile reads cleaner than a corner dot). Same --green as
+   everything else; a 2px page-coloured gap sets it off the photo. The old dot is retired. */
+.ac-online-dot{display:none;}
+.ac-item.online .user-avatar{box-shadow:0 0 0 2px var(--bg), 0 0 0 4px var(--green);}
 /* Typing indicator — an in-flow bubble that sits UNDER the last message (the last
    row of the thread), iMessage-style, so it never covers the latest message. When
    the real message arrives the dots are removed and the message bubble expands in
@@ -9493,15 +9495,15 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 .gc-banner-join{flex:0 0 auto;background:var(--accent);color:var(--accent-tint);border:none;border-radius:var(--r-pill);
   padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;transition:transform var(--t-fast) var(--ease);}
 .gc-banner-join:active{transform:scale(.94);}
-/* Live broadcast banner (a member is live in the group) — red, with a Watch CTA. */
-.live-banner{background:rgba(255,0,51,.12);border-color:rgba(255,0,51,.4);}
-.live-banner:hover{background:rgba(255,0,51,.2);}
-.live-banner .gc-banner-join{background:var(--red);}
-.live-banner-dot{flex:0 0 auto;font-size:9.5px;font-weight:900;letter-spacing:.06em;color:#fff;background:var(--red);
+/* Live broadcast banner (a member is live in the group) — GREEN (owner), with a Watch CTA. */
+.live-banner{background:rgba(48,209,88,.12);border-color:rgba(48,209,88,.4);}
+.live-banner:hover{background:rgba(48,209,88,.2);}
+.live-banner .gc-banner-join{background:var(--green);}
+.live-banner-dot{flex:0 0 auto;font-size:9.5px;font-weight:900;letter-spacing:.06em;color:#fff;background:var(--green);
   padding:3px 6px;border-radius:5px;line-height:1;animation:liveBlink 2s ease-in-out infinite;}
 @keyframes liveBlink{0%,100%{opacity:1;}50%{opacity:.55;}}
-/* Header "Go live" icon glows red so it stands out as the broadcast action. */
-.ac-golive-btn svg{stroke:var(--red);}
+/* Header "Go live" icon glows GREEN (owner) so it stands out as the broadcast action. */
+.ac-golive-btn svg{stroke:var(--green);}
 /* Live "call started" alert — slides in for online group members who aren't
    already viewing the group; tap Join to drop straight into the call. */
 .gc-toast{position:fixed;top:max(14px,calc(env(safe-area-inset-top) + 10px));left:50%;transform:translate(-50%,-150%);
@@ -9573,7 +9575,7 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 .lsp-name{flex:1;min-width:0;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .lsp-price{font-size:13px;font-weight:700;flex:0 0 auto;}
 .live-top{position:absolute;top:max(14px,env(safe-area-inset-top));left:14px;right:14px;display:flex;align-items:center;gap:10px;z-index:2;}
-.live-badge{background:var(--red);color:#fff;font-size:12px;font-weight:800;letter-spacing:.06em;padding:4px 9px;border-radius:6px;}
+.live-badge{background:var(--green);color:#fff;font-size:12px;font-weight:800;letter-spacing:.06em;padding:4px 9px;border-radius:6px;}
 .live-count{display:inline-flex;align-items:center;gap:5px;background:rgba(0,0,0,.5);color:#fff;font-size:13px;font-weight:700;padding:5px 11px;border-radius:var(--r-pill);border:none;cursor:pointer;font-family:inherit;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);transition:background var(--t-fast) var(--ease);}
 .live-count:active{transform:scale(.95);}
 .live-count svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
@@ -9635,8 +9637,8 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 .ac-live-strip.hidden{display:none;}
 .ac-live-item{background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;flex-shrink:0;width:60px;}
 .ac-live-ava{position:relative;display:block;}
-.ac-live-ava .user-avatar{width:54px;height:54px;font-size:20px;border:2px solid var(--red);}
-.ac-live-dot{position:absolute;bottom:-3px;left:50%;transform:translateX(-50%);background:var(--red);color:#fff;font-size:8.5px;font-weight:800;letter-spacing:.04em;padding:1px 5px;border-radius:4px;border:1.5px solid var(--bg);}
+.ac-live-ava .user-avatar{width:54px;height:54px;font-size:20px;border:2px solid var(--green);}
+.ac-live-dot{position:absolute;bottom:-3px;left:50%;transform:translateX(-50%);background:var(--green);color:#fff;font-size:8.5px;font-weight:800;letter-spacing:.04em;padding:1px 5px;border-radius:4px;border:1.5px solid var(--bg);}
 .ac-live-name{font-size:11.5px;color:var(--t2);max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 
 /* Multi-account rows in the profile menu */
@@ -15574,7 +15576,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1302'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1303'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
