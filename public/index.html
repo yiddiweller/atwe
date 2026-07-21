@@ -9179,22 +9179,14 @@ body.home-feed.nav-scrolling .bottom-nav{-webkit-backdrop-filter:none!important;
 @media(max-width:768px){ #navBackdrop{display:block;} }
 /* Hidden wherever the pill itself is hidden (post detail, open thread, composer, …). */
 .bottom-nav.nav-off ~ #navBackdrop{display:none!important;}
-/* SAFARI (browser tab) override. In a browser tab the bottom URL bar eats the lower
-   ~100px of the screen, so the gradient above hid its DARK part under that bar and only
-   the light upper part showed above it → bright content peeked through beside the pill.
-   In a browser we instead keep it FULLY solid --bg from under the bar up THROUGH the pill
-   zone (fully black like the old solid seal), and put the soft fade ABOVE the pill only.
-   The installed PWA is display-mode:standalone → keeps the perfect gradient above, untouched. */
-@media (display-mode: browser){
-  #navBackdrop{
-    background:var(--bg);   /* fallback: solid */
-    background:linear-gradient(to top,
-      var(--bg) 0,
-      var(--bg) calc(100vh + 82px),                                   /* solid black from under the bar up through the whole pill zone */
-      color-mix(in srgb, var(--bg) 58%, transparent) calc(100vh + 118px),
-      color-mix(in srgb, var(--bg) 24%, transparent) calc(100vh + 148px),
-      transparent calc(100vh + 178px));}                              /* soft fade ABOVE the pill → clear */
-}
+/* SAFARI (browser tab): the CSS gradient above is used ONLY by the installed PWA
+   (display-mode:standalone), where it's perfect. In a Safari browser tab, `vh`/fixed CSS
+   can't follow the URL bar as it grows/shrinks, so the black piece drifted off the bar and
+   bright content leaked around it. There, `_syncNavBlack()` takes over with inline styles:
+   it MEASURES the pill's real position (via a hidden probe that shares the pill's bottom
+   anchor but never morphs) and paints the fade from there — solid black from the pill down
+   and under the bar, soft fade above — re-measured every time the bar changes size, so it
+   stays glued to the bar. The rule above is just the pre-JS fallback in that case. */
 
 
 /* Responsive: bottom bar on mobile, sidebar nav on desktop */
@@ -15615,7 +15607,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1328'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1329'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -45677,7 +45669,7 @@ function _onWinScroll() {
 // bottom. Re-measured on scroll / Safari-bar shrink / resize so it always tracks the pill —
 // env(safe-area) proved unreliable on real iOS Safari, so we read the actual rect instead.
 // rAF-coalesced so multiple triggers in a frame do one measurement.
-let _navBlackRAF = 0, _navGap = 23;
+let _navBlackRAF = 0, _navGap = 23, _navProbe = null, _navPillH = 0;
 // Resolve the pill's real side gap (--nav-inset, a calc()) to px ONCE via a hidden probe,
 // so the gap UNDER the pill is the exact same space as the gap on its SIDES (owner request),
 // even if --feed-gutter/--nav-inset ever change. parseFloat on the raw calc() string is NaN.
@@ -45691,13 +45683,59 @@ function _resolveNavGap() {
     if (w > 0) _navGap = w;
   } catch (e) {}
 }
-// The nav fade is now PURE CSS (100dvh-anchored gradient — see #navBackdrop). It no longer
-// tracks the pill's measured position, which is what used to make it jump when the pill
-// morphed to "+" or bounced. Kept as a no-op so its many event-listener call sites stay
-// valid; it also clears any stale inline styles a prior build may have set so CSS wins.
+// A Safari-style browser TAB (not an installed standalone PWA)? The installed app keeps the
+// perfect pure-CSS gradient; only a browser tab needs the JS bar-tracking below.
+function _navIsBrowser() {
+  try {
+    if (window.navigator.standalone) return false;                                        // iOS installed PWA
+    if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return false;
+    return true;
+  } catch (e) { return true; }
+}
+// A hidden fixed probe with the pill's EXACT bottom anchor. It tracks Safari's URL bar
+// identically to the pill, but NEVER morphs to the "+" ball, bounces on tap, or scroll-hides
+// — so measuring it can never "jump" the way measuring the live pill did. Created once.
+function _navBackdropProbe() {
+  if (_navProbe && document.body.contains(_navProbe)) return _navProbe;
+  const p = document.createElement('div');
+  p.setAttribute('aria-hidden', 'true');
+  p.style.cssText = 'position:fixed;left:0;right:0;height:0;visibility:hidden;pointer-events:none;z-index:-1;'
+    + 'bottom:max(var(--nav-inset), env(safe-area-inset-bottom, 0px) - 11px);';
+  document.body.appendChild(p);
+  _navProbe = p;
+  return p;
+}
+// Paint #navBackdrop. INSTALLED PWA → pure CSS (clear any inline & bail). SAFARI browser tab →
+// measure the pill (via the jump-proof probe) and paint a fade that stays glued to the bar:
+// transparent above the pill → fully-solid --bg by the pill's TOP → solid all the way down and
+// under the URL bar (a clean black seal, no bright leak). Re-runs on every bar resize/scroll.
 function _syncNavBlack() {
-  const bd = document.getElementById('navBackdrop');
-  if (bd && bd.style.top) { bd.style.top = ''; bd.style.bottom = ''; bd.style.height = ''; }
+  if (_navBlackRAF) return;
+  _navBlackRAF = requestAnimationFrame(() => {
+    _navBlackRAF = 0;
+    const bd = document.getElementById('navBackdrop');
+    if (!bd) return;
+    if (!_navIsBrowser()) {   // installed PWA: let the CSS gradient own it
+      if (bd.style.top || bd.style.background) { bd.style.top = ''; bd.style.bottom = ''; bd.style.height = ''; bd.style.background = ''; }
+      return;
+    }
+    if (getComputedStyle(bd).display === 'none') return;   // nav-off / desktop → nothing to paint
+    const nav = document.getElementById('bottomNav');
+    if (!nav) return;
+    // Cache the pill's RESTING height once (skip while it's the morph ball, which is a different size).
+    if (!_navPillH && !document.body.classList.contains('nav-ball')) {
+      const h = nav.getBoundingClientRect().height;
+      if (h > 0) _navPillH = h;
+    }
+    const pillH = _navPillH || 58;
+    const pillBottom = _navBackdropProbe().getBoundingClientRect().bottom;   // pill's real bottom, tracks the bar
+    const pillTop = pillBottom - pillH;
+    const fade = 96;                                                          // height of the soft fade ABOVE the pill
+    bd.style.top = Math.max(0, Math.round(pillTop - fade)) + 'px';
+    bd.style.bottom = 'auto';
+    bd.style.height = '140vh';                                                // far under the URL bar → the seal stays solid there
+    bd.style.background = 'linear-gradient(to bottom, transparent 0px, var(--bg) ' + fade + 'px)';
+  });
 }
 function scrollHideInit() {
   _resolveNavGap();
