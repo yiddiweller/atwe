@@ -2102,7 +2102,7 @@ body.tb-collapsed .tb-mainrow{max-height:0;opacity:0;}
    two right-side circles (decoupled so the circles can be a bit bigger than the logo).
    The top padding subtracts half the circle-vs-logo difference so the LOGO's top inset
    still equals the side gutter (18px) even though the taller circles set the row height. */
-.topbar.tb-solo .tb-brandrow{--tb-brand-h:20px;--tb-brand-icon:24px;--tb-brand-circle:24px;/* owner: trio circles 24px; bigger logo lockup (h20, mark24); right edge pinned to --feed-gutter */display:flex;align-items:center;justify-content:space-between;padding:calc(var(--feed-gutter,16px) - (var(--tb-brand-circle) - var(--tb-brand-h)) / 2) var(--feed-gutter,16px) 12px;}
+.topbar.tb-solo .tb-brandrow{--tb-brand-h:20px;--tb-brand-icon:24px;--tb-brand-circle:36px;/* owner: trio circles 36px; bigger logo lockup (h20, mark24); right edge pinned to --feed-gutter */display:flex;align-items:center;justify-content:space-between;padding:calc(var(--feed-gutter,16px) - (var(--tb-brand-circle) - var(--tb-brand-h)) / 2) var(--feed-gutter,16px) 12px;}
 .topbar.tb-solo .tb-icoset{display:none;}   /* the ≡ + ＋ moved into the brand row above */
 .tb-brand{display:flex;align-items:center;gap:calc(var(--tb-brand-h) * 0.48);background:none;border:none;padding:0;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;flex-shrink:0;}
 .tb-brand img{display:block;width:auto;}
@@ -15579,7 +15579,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1312'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1313'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
