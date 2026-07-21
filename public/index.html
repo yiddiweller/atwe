@@ -9129,17 +9129,16 @@ body.home-feed .bottom-nav{
 body.home-feed.nav-scrolling .bottom-nav{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;}
 
 /* ── Solid black strip UNDER the floating nav pill (mobile BROWSER only) ──────────────
-   The pill itself stays 100% as it always was — see-through / blurry, posts visible
-   behind it. NOTHING is added behind the pill. This only fills the area BELOW the pill:
-   leave the SAME gap under the pill as the pill has on its sides (--nav-inset), then from
-   there straight down to the very bottom of the screen it's solid var(--bg), full width —
-   so the light-grey "app in the background" (incl. behind Safari's own bottom bar) is gone.
-   height = the pill's OWN bottom-offset MINUS one side-gap, so the strip's top sits exactly
-   one --nav-inset below the pill's bottom; and because that offset uses env(safe-area-inset-
-   bottom) it SHRINKS as Safari's bar shrinks (the pill drops → the strip gets smaller).
-   z-index below the pill (120); pointer-events:none (purely visual). Installed PWA: never. */
-#navBackdrop{display:none;position:fixed;left:0;right:0;bottom:0;z-index:110;pointer-events:none;
-  height:max(0px, max(var(--nav-inset), env(safe-area-inset-bottom, 0px) - 11px) - var(--nav-inset));
+   The pill itself stays 100% as it always was — see-through / blurry, posts visible behind
+   it. NOTHING is added behind the pill. This fills everything BELOW the pill with solid
+   var(--bg), full width, from just under the pill straight down to the very bottom of the
+   screen (incl. behind Safari's own bottom bar) — so the light-grey "app in the background"
+   there is gone. Its TOP is set in JS (`_syncNavBlack`) to the pill's REAL rendered bottom
+   + one side-gap (--nav-inset), re-measured whenever Safari's bar / the pill moves, so it
+   tracks correctly no matter how iOS positions the pill (env(safe-area) proved unreliable
+   on real Safari). bottom:0 anchors it to the physical screen bottom. z-index below the
+   pill (120); pointer-events:none (purely visual). Installed PWA: never shown. */
+#navBackdrop{display:none;position:fixed;left:0;right:0;bottom:0;top:auto;z-index:110;pointer-events:none;
   background:var(--bg);}
 @media(max-width:768px){ #navBackdrop{display:block;} }
 /* Hidden wherever the pill itself is hidden (post detail, open thread, composer, …). */
@@ -15562,7 +15561,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1289'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1290'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25298,6 +25297,7 @@ function acShow(screenId, tab) {
   // mobile @media CSS (body.pgscroll); here we also free the document's own overflow.
   const _standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
   document.body.classList.toggle('pwa-installed', _standalone); // gates the solid nav backdrop off in the installed app
+  if (typeof _syncNavBlack === 'function') { requestAnimationFrame(_syncNavBlack); setTimeout(_syncNavBlack, 60); }
   // Page-scroll (document scrolls → iOS Safari bar shrinks, like X): browser + mobile only.
   // Rolling out screen-by-screen so each conversion is verifiable; the installed app keeps
   // its buttery internal scroll (no bar to shrink there anyway).
@@ -45156,6 +45156,7 @@ function _setNavBall(on) {
   // tabs row stays stuck at the top. Scroll up reverses both.
   document.body.classList.toggle('nav-ball', on);
   document.body.classList.toggle('tb-collapsed', on);
+  if (typeof _syncNavBlack === 'function') _syncNavBlack();  // pill moved → realign the black strip
 }
 // The morph ball's compose action is context-aware: a new post on Home, a new
 // chat on Beam.
@@ -45542,12 +45543,40 @@ function _onWinScroll() {
     if (_pgFab) _pgFab.style.transform = 'translateY(' + (Math.min(1, Math.max(0, st / _pgTbH)) * 68) + 'px)'; // FAB → corner
   }
   const scrim = document.getElementById('acTopScrim'); if (scrim) scrim.style.opacity = 0;
+  _syncNavBlack();
+}
+// Solid black under the floating pill (mobile browser). Measures the pill's REAL rendered
+// bottom and paints #navBackdrop from just under it (one --nav-inset gap) down to the screen
+// bottom. Re-measured on scroll / Safari-bar shrink / resize so it always tracks the pill —
+// env(safe-area) proved unreliable on real iOS Safari, so we read the actual rect instead.
+// rAF-coalesced so multiple triggers in a frame do one measurement.
+let _navBlackRAF = 0;
+function _syncNavBlack() {
+  if (_navBlackRAF) return;
+  _navBlackRAF = requestAnimationFrame(() => {
+    _navBlackRAF = 0;
+    const bd = document.getElementById('navBackdrop');
+    if (!bd || getComputedStyle(bd).display === 'none') return;   // hidden (installed / nav-off / desktop)
+    const nav = document.getElementById('bottomNav');
+    if (!nav) return;
+    const r = nav.getBoundingClientRect();
+    const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nav-inset')) || 23;
+    bd.style.top = Math.max(0, Math.round(r.bottom + gap)) + 'px';  // black starts one gap below the pill
+  });
 }
 function scrollHideInit() {
   if (NAV_MORPH) document.body.classList.add('nav-morph');
   document.querySelectorAll('.ac-list').forEach(el => el.addEventListener('scroll', _onListScroll, { passive: true }));
   window.addEventListener('scroll', _onWinScroll, { passive: true }); // page-scroll (pgscroll) mode
+  // Keep the black-under-pill strip aligned as Safari's bar shrinks/grows and on any resize.
+  window.addEventListener('scroll', _syncNavBlack, { passive: true });
+  window.addEventListener('resize', _syncNavBlack);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', _syncNavBlack);
+    window.visualViewport.addEventListener('scroll', _syncNavBlack);
+  }
   bindNavBubble();
+  _syncNavBlack();
 }
 // Fire the same smooth zoom-in-and-out "bubble" on every bottom-nav tap, on touch-DOWN,
 // via a fixed-duration animation — so a quick/tiny tap gets the identical full pop as a
