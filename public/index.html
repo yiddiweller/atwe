@@ -681,7 +681,7 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .su-photo-ring{position:relative;width:148px;height:148px;border-radius:50%;border:none;cursor:pointer;
   background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;overflow:hidden;
   -webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease);background-size:cover;background-position:center;}
-.su-photo-ring.biz{border-radius:28%;} /* business signup → app-shaped picture, matching the business avatar */
+.su-photo-ring.biz{border-radius:50%;} /* business signup picture is a full circle too (owner) */
 .su-photo-ring:active{transform:scale(.98);}
 .su-photo-ph{width:64px;height:64px;color:rgba(255,255,255,.22);}
 .su-photo-ring.has-photo .su-photo-ph{display:none;}
@@ -2030,7 +2030,7 @@ body.light .cloud-overlay{background:rgba(0,0,0,.42);}
   flex-shrink:0;
 }
 /* Business accounts: an app-shaped (rounded-square) avatar instead of a circle. */
-.user-avatar.biz{border-radius:28%;}
+.user-avatar.biz{border-radius:50%;} /* business avatars are full circles (owner) — a new business tell is coming separately */
 .user-info{flex:1;min-width:0;}
 .sb-profile-label{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .user-name{font-size:13px;font-weight:600;color:var(--t1);
@@ -7121,7 +7121,7 @@ body.light .ac-follow-btn.following{background:transparent;color:var(--t1);}
 .ac-circ-ic{display:flex;align-items:center;justify-content:center;overflow:hidden;}
 .ac-circ-ic svg{width:54%;height:54%;stroke:var(--accent);stroke-width:2;fill:none;}
 /* Company logos are rounded squares (distinct from people/circle round avatars). */
-.ac-co-sq{border-radius:26%!important;}
+.ac-co-sq{border-radius:50%!important;} /* business avatars are circles now (owner) */
 .ac-prof-link{color:var(--accent);font-size:14px;font-weight:600;text-decoration:none;word-break:break-all;}
 .ac-prof-link:hover{text-decoration:underline;}
 .ac-grp-ava-lg{width:76px;height:76px;font-size:28px;margin:0 auto;}
@@ -8765,7 +8765,7 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
 @keyframes shimmer{100%{transform:translateX(100%);}}
 .skel-row{display:flex;gap:12px;padding:14px 16px;border-bottom:1px solid var(--b1);}
 .skel-ava{width:42px;height:42px;border-radius:50%;flex-shrink:0;}
-.skel-ava.biz{border-radius:26%;} /* business profile skeleton → app-shaped, so the loading state matches the real business avatar */
+.skel-ava.biz{border-radius:50%;} /* business skeleton is a full circle too, matching the real business avatar (owner) */
 .skel-lines{flex:1;display:flex;flex-direction:column;gap:9px;padding-top:4px;}
 .skel-line{height:11px;border-radius:6px;}
 /* Feed skeleton: a grey ghost of a real post card (image box + action pills) so
@@ -15579,7 +15579,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1305'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1306'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
