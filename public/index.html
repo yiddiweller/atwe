@@ -15607,7 +15607,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1329'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1330'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -45669,7 +45669,7 @@ function _onWinScroll() {
 // bottom. Re-measured on scroll / Safari-bar shrink / resize so it always tracks the pill —
 // env(safe-area) proved unreliable on real iOS Safari, so we read the actual rect instead.
 // rAF-coalesced so multiple triggers in a frame do one measurement.
-let _navBlackRAF = 0, _navGap = 23, _navProbe = null, _navPillH = 0;
+let _navBlackRAF = 0, _navGap = 23, _navProbe = null;
 // Resolve the pill's real side gap (--nav-inset, a calc()) to px ONCE via a hidden probe,
 // so the gap UNDER the pill is the exact same space as the gap on its SIDES (owner request),
 // even if --feed-gutter/--nav-inset ever change. parseFloat on the raw calc() string is NaN.
@@ -45692,23 +45692,24 @@ function _navIsBrowser() {
     return true;
   } catch (e) { return true; }
 }
-// A hidden fixed probe with the pill's EXACT bottom anchor. It tracks Safari's URL bar
-// identically to the pill, but NEVER morphs to the "+" ball, bounces on tap, or scroll-hides
-// — so measuring it can never "jump" the way measuring the live pill did. Created once.
+// A hidden `bottom:0` fixed probe. On iOS Safari a bottom:0 fixed element sits at the VISIBLE
+// viewport bottom (the top edge of the URL bar) and moves with it as the bar grows/shrinks —
+// so measuring its rect gives the live visible bottom in the same coordinate system as the
+// backdrop's inline `top`. It never morphs/bounces, so measuring it can never "jump". Once.
 function _navBackdropProbe() {
   if (_navProbe && document.body.contains(_navProbe)) return _navProbe;
   const p = document.createElement('div');
   p.setAttribute('aria-hidden', 'true');
-  p.style.cssText = 'position:fixed;left:0;right:0;height:0;visibility:hidden;pointer-events:none;z-index:-1;'
-    + 'bottom:max(var(--nav-inset), env(safe-area-inset-bottom, 0px) - 11px);';
+  p.style.cssText = 'position:fixed;left:0;right:0;bottom:0;height:0;visibility:hidden;pointer-events:none;z-index:-1;';
   document.body.appendChild(p);
   _navProbe = p;
   return p;
 }
 // Paint #navBackdrop. INSTALLED PWA → pure CSS (clear any inline & bail). SAFARI browser tab →
-// measure the pill (via the jump-proof probe) and paint a fade that stays glued to the bar:
-// transparent above the pill → fully-solid --bg by the pill's TOP → solid all the way down and
-// under the URL bar (a clean black seal, no bright leak). Re-runs on every bar resize/scroll.
+// paint the EXACT SAME see-through gradient the installed app uses (transparent → gently
+// darkening → ~95% near-black at the visible bottom), positioned by measuring the real visible
+// bottom so it tracks the URL bar, and extend fully-solid --bg BELOW it (under the URL bar) so
+// that strip is clean black — no bright leak, X-style. Re-runs on every bar resize/scroll.
 function _syncNavBlack() {
   if (_navBlackRAF) return;
   _navBlackRAF = requestAnimationFrame(() => {
@@ -45720,21 +45721,19 @@ function _syncNavBlack() {
       return;
     }
     if (getComputedStyle(bd).display === 'none') return;   // nav-off / desktop → nothing to paint
-    const nav = document.getElementById('bottomNav');
-    if (!nav) return;
-    // Cache the pill's RESTING height once (skip while it's the morph ball, which is a different size).
-    if (!_navPillH && !document.body.classList.contains('nav-ball')) {
-      const h = nav.getBoundingClientRect().height;
-      if (h > 0) _navPillH = h;
-    }
-    const pillH = _navPillH || 58;
-    const pillBottom = _navBackdropProbe().getBoundingClientRect().bottom;   // pill's real bottom, tracks the bar
-    const pillTop = pillBottom - pillH;
-    const fade = 96;                                                          // height of the soft fade ABOVE the pill
-    bd.style.top = Math.max(0, Math.round(pillTop - fade)) + 'px';
+    const vb = _navBackdropProbe().getBoundingClientRect().bottom;   // visible viewport bottom (top of Safari's URL bar)
+    // Same 135px see-through fade as the installed app, anchored to the visible bottom; then
+    // fully-solid --bg from 137px down (= under the URL bar) for a clean black seal.
+    bd.style.top = Math.max(0, Math.round(vb - 135)) + 'px';
     bd.style.bottom = 'auto';
-    bd.style.height = '140vh';                                                // far under the URL bar → the seal stays solid there
-    bd.style.background = 'linear-gradient(to bottom, transparent 0px, var(--bg) ' + fade + 'px)';
+    bd.style.height = '140vh';
+    bd.style.background = 'linear-gradient(to bottom,'
+      + 'transparent 0px,'
+      + 'color-mix(in srgb,var(--bg) 22%,transparent) 35px,'
+      + 'color-mix(in srgb,var(--bg) 46%,transparent) 73px,'
+      + 'color-mix(in srgb,var(--bg) 80%,transparent) 111px,'
+      + 'color-mix(in srgb,var(--bg) 95%,transparent) 135px,'
+      + 'var(--bg) 137px)';
   });
 }
 function scrollHideInit() {
