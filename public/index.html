@@ -15561,7 +15561,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1291'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1292'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -45550,7 +45550,20 @@ function _onWinScroll() {
 // bottom. Re-measured on scroll / Safari-bar shrink / resize so it always tracks the pill —
 // env(safe-area) proved unreliable on real iOS Safari, so we read the actual rect instead.
 // rAF-coalesced so multiple triggers in a frame do one measurement.
-let _navBlackRAF = 0;
+let _navBlackRAF = 0, _navGap = 23;
+// Resolve the pill's real side gap (--nav-inset, a calc()) to px ONCE via a hidden probe,
+// so the gap UNDER the pill is the exact same space as the gap on its SIDES (owner request),
+// even if --feed-gutter/--nav-inset ever change. parseFloat on the raw calc() string is NaN.
+function _resolveNavGap() {
+  try {
+    const p = document.createElement('div');
+    p.style.cssText = 'position:absolute;left:-9999px;top:0;width:var(--nav-inset);height:0;visibility:hidden;pointer-events:none;';
+    document.body.appendChild(p);
+    const w = p.getBoundingClientRect().width;
+    p.remove();
+    if (w > 0) _navGap = w;
+  } catch (e) {}
+}
 function _syncNavBlack() {
   if (_navBlackRAF) return;
   _navBlackRAF = requestAnimationFrame(() => {
@@ -45560,7 +45573,7 @@ function _syncNavBlack() {
     const nav = document.getElementById('bottomNav');
     if (!nav) return;
     const r = nav.getBoundingClientRect();
-    const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nav-inset')) || 23;
+    const gap = _navGap;   // == the pill's own side inset, so side gap === bottom gap exactly
     // Start one gap below the pill's REAL bottom and extend WAY down (past the physical
     // screen bottom, under Safari's bar — the extra is off-screen + harmless). A plain
     // bottom:0 fixed element stops at Safari's bar on iOS and never covers under it; a tall
@@ -45571,6 +45584,7 @@ function _syncNavBlack() {
   });
 }
 function scrollHideInit() {
+  _resolveNavGap();
   if (NAV_MORPH) document.body.classList.add('nav-morph');
   document.querySelectorAll('.ac-list').forEach(el => el.addEventListener('scroll', _onListScroll, { passive: true }));
   window.addEventListener('scroll', _onWinScroll, { passive: true }); // page-scroll (pgscroll) mode
