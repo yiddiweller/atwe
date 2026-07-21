@@ -2157,6 +2157,9 @@ body.reduce-motion .tb-brand-act.tb-hold,body.reduce-motion .tb-brand.tb-hold{sc
 /* When a top-bar icon menu opens, the WHOLE icon-button trio softly fades out (owner: it
    should feel like all the buttons collapsed into the one menu). Restored on close. */
 body.tb-menu-open .tb-brand-act{opacity:0;pointer-events:none;}
+/* On CLOSE the buttons snap back INSTANTLY (no fade) so they're already there as the menu
+   dissolves away over them — no dead gap before they reappear (owner: the delay felt cheap). */
+body.tb-no-fade .tb-brand-act{transition:none!important;}
 /* Tab-tap "notch": one small, smooth 90° turn of the swirl on every feed-tab switch
    (acSpinBrandMark). It is driven as a CUMULATIVE inline transform (rotate += 90° each
    tap) with a plain transition — NOT a keyframe animation — so the mark LANDS on its
@@ -15571,7 +15574,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1299'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1300'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -28534,13 +28537,18 @@ function _animateMenuPopClose(pop, scrim) {
   if (pop.classList.contains('hidden')) { if (scrim) scrim.classList.add('hidden'); return; }
   if (pop._closingAnim) return;         // already collapsing — ignore repeat close taps
   pop._closingAnim = true;
+  // Bring the icon buttons back RIGHT NOW (instantly, no fade), so they're already in place
+  // as the menu dissolves away on top of them — kills the empty-gap lag that felt cheap.
+  document.body.classList.add('tb-no-fade');
+  _restoreMenuSrcBtn();
+  requestAnimationFrame(() => document.body.classList.remove('tb-no-fade'));
   let t;
   const finish = () => {
     clearTimeout(t);
     pop.removeEventListener('animationend', finish);
     pop.classList.remove('menu-closing');
     pop._closingAnim = false;
-    pop.classList.add('hidden');        // real hide → observer restores the icon buttons
+    pop.classList.add('hidden');        // real hide (buttons already restored above)
     if (scrim) scrim.classList.add('hidden');
   };
   pop.addEventListener('animationend', finish);
