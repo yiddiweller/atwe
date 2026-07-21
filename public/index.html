@@ -15562,7 +15562,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1296'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1297'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -28487,9 +28487,35 @@ function acOpenAiHub() { showOverlay('aiHub'); }
 // Shared positioner for the small Apple-style tab popovers (feed AI, chat tools):
 // anchor a popover's right edge under the ⋯ dots, below by default, flipping above
 // when it would overflow, and clamped into the viewport.
+// ── Hide the source icon button while its menu is open (owner: the button should DISAPPEAR
+// so it looks like the button itself expanded into the menu). Restored on close via a single
+// MutationObserver that catches every close path. Only one button is ever hidden at a time. ──
+let _menuSrcBtn = null, _menuCloseWatched = false;
+function _restoreMenuSrcBtn() {
+  if (!_menuSrcBtn) return;
+  _menuSrcBtn.style.opacity = '';
+  _menuSrcBtn.style.pointerEvents = '';
+  _menuSrcBtn = null;
+}
+function _hideMenuSrcBtn(btn) {
+  if (_menuSrcBtn && _menuSrcBtn !== btn) _restoreMenuSrcBtn();
+  if (!btn) return;
+  _menuSrcBtn = btn;
+  btn.style.opacity = '0';              // opacity (not display) keeps its layout box, so menu positioning stays correct
+  btn.style.pointerEvents = 'none';
+  if (!_menuCloseWatched) {             // self-init the close watcher on first use
+    _menuCloseWatched = true;
+    const obs = new MutationObserver(muts => {
+      for (const m of muts) { if (m.target.classList && m.target.classList.contains('hidden')) { _restoreMenuSrcBtn(); return; } }
+    });
+    ['aiMenuPop', 'chatMenuPop', 'contactsMorePop', 'giftCardPop', 'authQrMenu', 'alMorePop', 'profileMenu']
+      .forEach(id => { const el = document.getElementById(id); if (el) obs.observe(el, { attributes: true, attributeFilter: ['class'] }); });
+  }
+}
 function _acAnchorPopover(btn, pop, rightEl) {
   pop.style.visibility = 'hidden';
   const r = btn.getBoundingClientRect();
+  _hideMenuSrcBtn(btn);                 // the button vanishes into the menu (rect already captured above)
   // Optionally align the popover's RIGHT edge to a DIFFERENT element (e.g. the profile
   // icon) instead of the trigger — vertical position still comes from the trigger.
   const rr = (rightEl && rightEl.getBoundingClientRect) ? rightEl.getBoundingClientRect() : r;
@@ -44384,7 +44410,9 @@ function toggleProfileMenu(e) {
   renderPmAccounts();
   // Anchor near the trigger: open downward from a top-bar avatar, upward from
   // the sidebar profile card (bottom-left).
-  const br = e.currentTarget.getBoundingClientRect();
+  const trigger = e.currentTarget;
+  const br = trigger.getBoundingClientRect();
+  _hideMenuSrcBtn(trigger);            // the tapped avatar vanishes into the menu (rect captured above)
   const openDown = br.top < window.innerHeight / 2;
   menu.style.left = br.left + 'px';
   // COVER the avatar/button (owner: the menu blocks/replaces the button, not sit below it).
