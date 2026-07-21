@@ -15561,7 +15561,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1293'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1294'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -28496,10 +28496,14 @@ function _acAnchorPopover(btn, pop, rightEl) {
     const pw = pop.offsetWidth, ph = pop.offsetHeight, M = 8;
     let left = rr.right - pw;                        // right edge under the profile icon (or the dots)
     left = Math.max(M, Math.min(left, window.innerWidth - pw - M));
-    let top = r.bottom + 12, origin = 'top right'; // 12px gap below the icons = the icon↔icon gap
-    if (top + ph > window.innerHeight - M) { top = r.top - ph - 12; origin = 'bottom right'; }
+    let top = r.bottom + 12, flipped = false;      // 12px gap below the icons = the icon↔icon gap
+    if (top + ph > window.innerHeight - M) { top = r.top - ph - 12; flipped = true; }
     top = Math.max(M, top); // never clip off the top edge (capped height scrolls inside)
-    pop.style.transformOrigin = origin;
+    // iOS context-menu emergence: grow FROM the tapped button — origin at the button's
+    // horizontal centre, on the menu edge nearest it (top when the menu is below, bottom
+    // when it flips above). So the menu unfolds out of the exact button you pressed.
+    const originX = Math.max(0, Math.min(pw, Math.round(r.left + r.width / 2 - left)));
+    pop.style.transformOrigin = originX + 'px ' + (flipped ? ph + 'px' : '0px');
     pop.style.left = Math.round(left) + 'px';
     pop.style.top = Math.round(top) + 'px';
     pop.style.visibility = '';
@@ -44384,10 +44388,11 @@ function toggleProfileMenu(e) {
   else { menu.style.top = 'auto'; menu.style.bottom = (window.innerHeight - br.top + 12) + 'px'; }
   menu.style.width = Math.max(br.width, 230) + 'px';
   menu.classList.remove('hidden');
+  menu.style.visibility = 'hidden';   // reveal only after the origin is anchored, so the spring plays from the button (no 1-frame jump)
   requestAnimationFrame(() => {
     // offsetWidth (layout width) — NOT getBoundingClientRect().width, which the popIn
     // scale animation shrinks mid-flight and throws the alignment off.
-    const w = menu.offsetWidth;
+    const w = menu.offsetWidth, ph = menu.offsetHeight;
     if (openDown) {
       // From the top-bar profile icon: align the menu's RIGHT edge with the icon's right
       // edge (founder) — the same right edge the ⋯ menus now use.
@@ -44397,6 +44402,12 @@ function toggleProfileMenu(e) {
       if (mr.right > window.innerWidth - 8) menu.style.left = (window.innerWidth - w - 8) + 'px';
       if (mr.left < 8) menu.style.left = '8px';
     }
+    // iOS context-menu emergence: grow FROM the tapped avatar/button — origin at the
+    // button's horizontal centre, on the menu edge nearest it.
+    const finalLeft = parseFloat(menu.style.left) || 0;
+    const originX = Math.max(0, Math.min(w, Math.round(br.left + br.width / 2 - finalLeft)));
+    menu.style.transformOrigin = originX + 'px ' + (openDown ? '0px' : ph + 'px');
+    menu.style.visibility = '';
   });
 }
 function renderPmAccounts() {
