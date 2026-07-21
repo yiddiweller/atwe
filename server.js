@@ -1349,6 +1349,32 @@ app.get('/api/media/:kind/:id/:idx/:sig', async (req, res) => {
   } catch (e) { res.status(500).end(); }
 });
 
+// Demo-mode media proxy. Demo images come from a few external hosts (randomuser / dicebear /
+// picsum). On some devices (a Safari content blocker, an ad-blocker, or iCloud Private Relay)
+// third-party image hosts are blocked, so demo images vanished there while loading fine
+// elsewhere. Serving them through our OWN origin sidesteps that entirely. Strictly host-
+// allowlisted (no SSRF), https-only, hard-cached. Used only by demo.js's seeded image URLs.
+const DEMO_MEDIA_HOSTS = new Set(['randomuser.me', 'api.dicebear.com', 'picsum.photos', 'fastly.picsum.photos', 'i.picsum.photos']);
+app.get('/api/demo-media', async (req, res) => {
+  try {
+    let url;
+    try { url = new URL(String(req.query.u || '')); } catch { return res.status(400).end(); }
+    if (url.protocol !== 'https:' || !DEMO_MEDIA_HOSTS.has(url.hostname)) return res.status(400).end();
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 8000);
+    let up;
+    try { up = await fetch(url.href, { signal: ac.signal, redirect: 'follow', headers: { 'User-Agent': 'AtweDemo/1.0', 'Accept': 'image/*' } }); }
+    finally { clearTimeout(timer); }
+    if (!up || !up.ok) return res.status(502).end();
+    const ct = (up.headers.get('content-type') || 'image/jpeg').split(';')[0].trim();
+    if (!/^image\//.test(ct)) return res.status(502).end();   // only ever serve images
+    const buf = Buffer.from(await up.arrayBuffer());
+    res.setHeader('Content-Type', ct);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.end(buf);
+  } catch (e) { res.status(502).end(); }
+});
+
 // Structured rich-message payload (poll / event / location / contact).
 // Returns: null = none, object = sanitized payload, undefined = invalid.
 // Interactive types start with empty live state (votes / RSVPs) that later
