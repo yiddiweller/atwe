@@ -9369,7 +9369,10 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
    (owner: a ring around the profile reads cleaner than a corner dot). Same --green as
    everything else; a 2px page-coloured gap sets it off the photo. The old dot is retired. */
 .ac-online-dot{display:none;}
-.ac-item.online .user-avatar{box-shadow:0 0 0 2px var(--bg), 0 0 0 4px var(--green);}
+/* The ring lives INSIDE the avatar's own footprint (inset shadows) so a live avatar is the
+   EXACT same total size as every other one (owner): the photo shrinks a hair, a 2px page-
+   coloured gap, then a 2px --green ring right at the edge — no bigger, no row shift. */
+.ac-item.online .user-avatar{box-shadow:inset 0 0 0 2px var(--green), inset 0 0 0 4px var(--bg);}
 /* Typing indicator — an in-flow bubble that sits UNDER the last message (the last
    row of the thread), iMessage-style, so it never covers the latest message. When
    the real message arrives the dots are removed and the message bubble expands in
@@ -15576,7 +15579,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1304'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1305'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
