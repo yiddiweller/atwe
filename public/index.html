@@ -2144,10 +2144,13 @@ body.light .tb-brand-act.more,body.light .tb-brand-act.plus,body.light .tb-brand
    ways). The nav's 1.03 hold is invisible on a small icon, so the amount is scaled up
    to read at this size while keeping the nav's spring identical. Logo grows from its
    left edge so it doesn't drift. */
-.tb-brand-act,.tb-brand{transition:scale .42s cubic-bezier(.4,.02,.28,1);}
+.tb-brand-act,.tb-brand{transition:scale .42s cubic-bezier(.4,.02,.28,1), opacity var(--t-base) ease;}
 .tb-brand{transform-origin:left center;}
 .tb-brand-act.tb-hold,.tb-brand.tb-hold{scale:1.16;}
 body.reduce-motion .tb-brand-act.tb-hold,body.reduce-motion .tb-brand.tb-hold{scale:1;}
+/* When a top-bar icon menu opens, the WHOLE icon-button trio softly fades out (owner: it
+   should feel like all the buttons collapsed into the one menu). Restored on close. */
+body.tb-menu-open .tb-brand-act{opacity:0;pointer-events:none;}
 /* Tab-tap "notch": one small, smooth 90° turn of the swirl on every feed-tab switch
    (acSpinBrandMark). It is driven as a CUMULATIVE inline transform (rotate += 90° each
    tap) with a plain transition — NOT a keyframe animation — so the mark LANDS on its
@@ -15562,7 +15565,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1297'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1298'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -28492,6 +28495,7 @@ function acOpenAiHub() { showOverlay('aiHub'); }
 // MutationObserver that catches every close path. Only one button is ever hidden at a time. ──
 let _menuSrcBtn = null, _menuCloseWatched = false;
 function _restoreMenuSrcBtn() {
+  document.body.classList.remove('tb-menu-open');  // always clear (safe even if it wasn't set) → the trio fades back
   if (!_menuSrcBtn) return;
   _menuSrcBtn.style.opacity = '';
   _menuSrcBtn.style.pointerEvents = '';
@@ -28503,6 +28507,9 @@ function _hideMenuSrcBtn(btn) {
   _menuSrcBtn = btn;
   btn.style.opacity = '0';              // opacity (not display) keeps its layout box, so menu positioning stays correct
   btn.style.pointerEvents = 'none';
+  // If the menu came from the top-bar icon trio, fade the WHOLE trio out (all buttons collapse
+  // into the one menu). Non-top-bar menus (contacts/gift ⋯) only hide their own button.
+  if (btn.closest && btn.closest('.tb-brand-actions')) document.body.classList.add('tb-menu-open');
   if (!_menuCloseWatched) {             // self-init the close watcher on first use
     _menuCloseWatched = true;
     const obs = new MutationObserver(muts => {
