@@ -9128,6 +9128,25 @@ body.home-feed .bottom-nav{
    ride the compositor at 60fps; restored the instant you stop — no fade (rule above). */
 body.home-feed.nav-scrolling .bottom-nav{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;}
 
+/* ── Solid backdrop under the floating nav pill (mobile BROWSER only) ─────────────────
+   The pill stays exactly as it is (floating). This band makes the bottom zone under and
+   around it fully solid (var(--bg)) so feed content vanishes cleanly there instead of
+   showing around the pill or bleeding under Safari's own translucent bottom bar. Its
+   height mirrors the pill's OWN bottom offset + the pill's height, so its top edge meets
+   the pill's top and it tracks Safari's bar shrinking (env(safe-area-inset-bottom) grows
+   when the bar is up, shrinks when minimised). z-index sits below the pill (120) but above
+   the feed; pointer-events:none so taps/scroll behave exactly as before (purely visual).
+   Installed PWA: never shown (its floating pill is untouched — no Safari bar to cover). */
+#navBackdrop{display:none;position:fixed;left:0;right:0;bottom:0;z-index:110;pointer-events:none;
+  height:calc(max(var(--nav-inset), env(safe-area-inset-bottom, 0px) - 11px) + 64px);
+  background:var(--bg);}
+@media(max-width:768px){ #navBackdrop{display:block;} }
+/* Hidden wherever the pill itself is hidden (post detail, open thread, composer, …). */
+.bottom-nav.nav-off ~ #navBackdrop{display:none!important;}
+/* Never in the installed app (belt-and-suspenders alongside the JS body.pwa-installed guard). */
+@media (display-mode: standalone){ #navBackdrop{display:none!important;} }
+body.pwa-installed #navBackdrop{display:none!important;}
+
 
 /* Responsive: bottom bar on mobile, sidebar nav on desktop */
 @media(max-width:768px){
@@ -11099,6 +11118,14 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
     </nav>
+    <!-- Solid backdrop BEHIND + BELOW the floating nav pill (mobile browser only). The pill
+         stays exactly as it is (floating, untouched); this just makes the whole bottom zone
+         under and around it fully solid so feed content disappears cleanly there instead of
+         peeking around the pill or bleeding under Safari's own bottom bar. Sized with the
+         SAME formula as the pill's bottom offset so its top meets the pill's top and it
+         tracks Safari's bar as it shrinks. Sits below the pill via z-index; the installed
+         PWA never shows it (its floating pill is left 100% as-is). -->
+    <div id="navBackdrop" aria-hidden="true"></div>
 
   </main>
 
@@ -15534,7 +15561,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1286'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1287'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25269,6 +25296,7 @@ function acShow(screenId, tab) {
   // → the original buttery internal scroll (matches Beam). Layout overrides live in the
   // mobile @media CSS (body.pgscroll); here we also free the document's own overflow.
   const _standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  document.body.classList.toggle('pwa-installed', _standalone); // gates the solid nav backdrop off in the installed app
   // Page-scroll (document scrolls → iOS Safari bar shrinks, like X): browser + mobile only.
   // Rolling out screen-by-screen so each conversion is verifiable; the installed app keeps
   // its buttery internal scroll (no bar to shrink there anyway).
