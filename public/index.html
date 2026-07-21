@@ -15561,7 +15561,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1292'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1293'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -45528,19 +45528,21 @@ function _onWinScroll() {
       _pgTb.style.transform = 'translateY(' + (-_pgHide) + 'px)';
     }
   }
-  // The nav-ball pill⇄"+" morph + the compose-FAB slide are HOME chrome only. On other
-  // page-scroll screens (Search/Beam) the bottom nav stays put, like X — no morph, no FAB.
-  if (_appTab === 'home') {
+  // The pill⇄"+" ball morph runs on Home AND Beam (owner: Beam should morph like Home, with
+  // the new black-under-nav effect tracking it). The compose-FAB slide stays Home-only —
+  // Beam's morphed "+" ball opens a new chat via acNavBallTap.
+  if (_appTab === 'home' || _appTab === 'chat') {
     const atBottom = st >= (se.scrollHeight - window.innerHeight - 12);
-    // Cache element refs ONCE — never read layout on scroll (the original _onListScroll is
-    // careful never to, since a per-frame reflow is exactly what stalls the scroll).
-    if (!_pgFab) { _pgFab = document.getElementById('acHomeFab'); _pgScrim = document.getElementById('acTopScrim'); }
     if (NAV_MORPH) {                                   // pill ⇄ ball, same thresholds as _onListScroll
       if (st <= 40) _setNavBall(false);
       else if (dy > 3) _setNavBall(true);
       else if (dy < -3 && !atBottom) _setNavBall(false);
     }
-    if (_pgFab) _pgFab.style.transform = 'translateY(' + (Math.min(1, Math.max(0, st / _pgTbH)) * 68) + 'px)'; // FAB → corner
+    if (_appTab === 'home') {
+      // Cache element refs ONCE — never read layout on scroll (a per-frame reflow stalls scroll).
+      if (!_pgFab) { _pgFab = document.getElementById('acHomeFab'); _pgScrim = document.getElementById('acTopScrim'); }
+      if (_pgFab) _pgFab.style.transform = 'translateY(' + (Math.min(1, Math.max(0, st / _pgTbH)) * 68) + 'px)'; // FAB → corner
+    }
   }
   const scrim = document.getElementById('acTopScrim'); if (scrim) scrim.style.opacity = 0;
   _syncNavBlack();
