@@ -9141,18 +9141,15 @@ body.home-feed .bottom-nav{
    ride the compositor at 60fps; restored the instant you stop — no fade (rule above). */
 body.home-feed.nav-scrolling .bottom-nav{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;}
 
-/* ── Solid black strip UNDER the floating nav pill (mobile BROWSER only) ──────────────
-   The pill itself stays 100% as it always was — see-through / blurry, posts visible behind
-   it. NOTHING is added behind the pill. This fills everything BELOW the pill with solid
-   var(--bg), full width, from just under the pill straight down to the very bottom of the
-   screen (incl. behind Safari's own bottom bar) — so the light-grey "app in the background"
-   there is gone. Its TOP is set in JS (`_syncNavBlack`) to the pill's REAL rendered bottom
-   + one side-gap (--nav-inset), re-measured whenever Safari's bar / the pill moves, so it
-   tracks correctly no matter how iOS positions the pill (env(safe-area) proved unreliable
-   on real Safari). bottom:0 anchors it to the physical screen bottom. z-index below the
-   pill (120); pointer-events:none (purely visual). Installed PWA: never shown. */
-#navBackdrop{display:none;position:fixed;left:0;right:0;z-index:110;pointer-events:none;
-  background:var(--bg);}
+/* ── Liquid-Glass fade behind the floating nav pill (mobile BROWSER only) ─────────────
+   Apple-style: from the TOP of the nav pill down to the very bottom of the screen the
+   background eases from clear → the app's own bg colour (deep dark on the Black theme), so
+   content melts into darkness under the bar and the floating pill reads clean + premium. The
+   pill itself is untouched (it floats on top, z-index 120). The gradient + geometry are set
+   in JS (`_syncNavBlack`): top = the pill's REAL rendered top, and the fade reaches full bg
+   by the screen bottom, then stays solid below (covers under Safari's own bottom bar). Full
+   width, pointer-events:none (purely visual), below the pill. Installed PWA: not shown. */
+#navBackdrop{display:none;position:fixed;left:0;right:0;z-index:110;pointer-events:none;}
 @media(max-width:768px){ #navBackdrop{display:block;} }
 /* Hidden wherever the pill itself is hidden (post detail, open thread, composer, …). */
 .bottom-nav.nav-off ~ #navBackdrop{display:none!important;}
@@ -15579,7 +15576,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1323'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1324'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -45664,14 +45661,17 @@ function _syncNavBlack() {
     const nav = document.getElementById('bottomNav');
     if (!nav) return;
     const r = nav.getBoundingClientRect();
-    const gap = _navGap;   // == the pill's own side inset, so side gap === bottom gap exactly
-    // Start one gap below the pill's REAL bottom and extend WAY down (past the physical
-    // screen bottom, under Safari's bar — the extra is off-screen + harmless). A plain
-    // bottom:0 fixed element stops at Safari's bar on iOS and never covers under it; a tall
-    // height guarantees the whole zone below the pill is solid, incl. behind Safari's bar.
-    bd.style.top = Math.max(0, Math.round(r.bottom + gap)) + 'px';
+    // Liquid-Glass fade: start at the pill's REAL top and ease from clear → the app's own bg
+    // colour by the screen bottom, then stay solid below (the 120vh overshoot is off-screen +
+    // covers under Safari's bar). Measured live so it tracks however iOS positions the pill.
+    const top = Math.max(0, Math.round(r.top));
+    const span = Math.max(60, Math.round(window.innerHeight - top)); // pill top → visual screen bottom
+    bd.style.top = top + 'px';
     bd.style.bottom = 'auto';
     bd.style.height = '120vh';
+    // Clear a hair behind the pill's top, then ease to full bg by ~the screen bottom so the
+    // lower zone reads "very dark", and hold solid past it. var(--bg) keeps it theme-correct.
+    bd.style.background = 'linear-gradient(to bottom, transparent 0px, transparent ' + Math.round(span * 0.10) + 'px, var(--bg) ' + Math.round(span * 0.94) + 'px)';
   });
 }
 function scrollHideInit() {
