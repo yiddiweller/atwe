@@ -9170,11 +9170,10 @@ body.home-feed.nav-scrolling .bottom-nav{-webkit-backdrop-filter:none!important;
   background:var(--bg);             /* fallback (no color-mix): solid seal, safe */
   background:linear-gradient(to top,
     var(--bg) 0,                                                     /* off-screen: fully solid */
-    var(--bg) calc(100vh - 2px),                                    /* … held solid to just under the visible bottom */
-    color-mix(in srgb, var(--bg) 95%, transparent) 100vh,           /* visible bottom edge: near-black tint (not pure black) */
-    color-mix(in srgb, var(--bg) 80%, transparent) calc(100vh + 24px),
-    color-mix(in srgb, var(--bg) 46%, transparent) calc(100vh + 62px),   /* nav-bar zone: mid glass tint */
-    color-mix(in srgb, var(--bg) 22%, transparent) calc(100vh + 100px),
+    var(--bg) calc(100vh + 22px),                                   /* SOLID black across the bottom ~22px edge — so iOS Safari samples black and tints its URL bar black (no bright bleed) */
+    color-mix(in srgb, var(--bg) 60%, transparent) calc(100vh + 34px),
+    color-mix(in srgb, var(--bg) 33%, transparent) calc(100vh + 62px),   /* see-through mid */
+    color-mix(in srgb, var(--bg) 13%, transparent) calc(100vh + 98px),   /* lighter → more glass */
     transparent calc(100vh + 135px));}                              /* top of the fade: clear */
 @media(max-width:768px){ #navBackdrop{display:block;} }
 /* Hidden wherever the pill itself is hidden (post detail, open thread, composer, …). */
@@ -15607,7 +15606,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1330'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1331'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -45722,18 +45721,18 @@ function _syncNavBlack() {
     }
     if (getComputedStyle(bd).display === 'none') return;   // nav-off / desktop → nothing to paint
     const vb = _navBackdropProbe().getBoundingClientRect().bottom;   // visible viewport bottom (top of Safari's URL bar)
-    // Same 135px see-through fade as the installed app, anchored to the visible bottom; then
-    // fully-solid --bg from 137px down (= under the URL bar) for a clean black seal.
+    // Same see-through fade as the installed app (transparent → lighter tints → SOLID black
+    // across the bottom ~22px). The solid bottom strip is what makes iOS Safari sample black
+    // and tint its URL bar black (X-style) with no bright bleed; solid holds down under the bar.
     bd.style.top = Math.max(0, Math.round(vb - 135)) + 'px';
     bd.style.bottom = 'auto';
     bd.style.height = '140vh';
     bd.style.background = 'linear-gradient(to bottom,'
       + 'transparent 0px,'
-      + 'color-mix(in srgb,var(--bg) 22%,transparent) 35px,'
-      + 'color-mix(in srgb,var(--bg) 46%,transparent) 73px,'
-      + 'color-mix(in srgb,var(--bg) 80%,transparent) 111px,'
-      + 'color-mix(in srgb,var(--bg) 95%,transparent) 135px,'
-      + 'var(--bg) 137px)';
+      + 'color-mix(in srgb,var(--bg) 13%,transparent) 37px,'
+      + 'color-mix(in srgb,var(--bg) 33%,transparent) 73px,'
+      + 'color-mix(in srgb,var(--bg) 60%,transparent) 101px,'
+      + 'var(--bg) 113px)';
   });
 }
 function scrollHideInit() {
