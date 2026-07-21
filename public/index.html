@@ -9138,7 +9138,7 @@ body.home-feed.nav-scrolling .bottom-nav{-webkit-backdrop-filter:none!important;
    tracks correctly no matter how iOS positions the pill (env(safe-area) proved unreliable
    on real Safari). bottom:0 anchors it to the physical screen bottom. z-index below the
    pill (120); pointer-events:none (purely visual). Installed PWA: never shown. */
-#navBackdrop{display:none;position:fixed;left:0;right:0;bottom:0;top:auto;z-index:110;pointer-events:none;
+#navBackdrop{display:none;position:fixed;left:0;right:0;z-index:110;pointer-events:none;
   background:var(--bg);}
 @media(max-width:768px){ #navBackdrop{display:block;} }
 /* Hidden wherever the pill itself is hidden (post detail, open thread, composer, …). */
@@ -15561,7 +15561,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1290'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1291'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -45561,7 +45561,13 @@ function _syncNavBlack() {
     if (!nav) return;
     const r = nav.getBoundingClientRect();
     const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nav-inset')) || 23;
-    bd.style.top = Math.max(0, Math.round(r.bottom + gap)) + 'px';  // black starts one gap below the pill
+    // Start one gap below the pill's REAL bottom and extend WAY down (past the physical
+    // screen bottom, under Safari's bar — the extra is off-screen + harmless). A plain
+    // bottom:0 fixed element stops at Safari's bar on iOS and never covers under it; a tall
+    // height guarantees the whole zone below the pill is solid, incl. behind Safari's bar.
+    bd.style.top = Math.max(0, Math.round(r.bottom + gap)) + 'px';
+    bd.style.bottom = 'auto';
+    bd.style.height = '120vh';
   });
 }
 function scrollHideInit() {
