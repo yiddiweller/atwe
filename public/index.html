@@ -9169,12 +9169,14 @@ body.home-feed.nav-scrolling .bottom-nav{-webkit-backdrop-filter:none!important;
   height:calc(100vh + 200px);       /* … and extend 200px up into the nav zone for the fade */
   background:var(--bg);             /* fallback (no color-mix): solid seal, safe */
   background:linear-gradient(to top,
-    var(--bg) 0,                                                     /* off-screen: fully solid */
-    var(--bg) calc(100vh + 22px),                                   /* SOLID black across the bottom ~22px edge — so iOS Safari samples black and tints its URL bar black (no bright bleed) */
-    color-mix(in srgb, var(--bg) 60%, transparent) calc(100vh + 34px),
-    color-mix(in srgb, var(--bg) 33%, transparent) calc(100vh + 62px),   /* see-through mid */
-    color-mix(in srgb, var(--bg) 13%, transparent) calc(100vh + 98px),   /* lighter → more glass */
-    transparent calc(100vh + 135px));}                              /* top of the fade: clear */
+    var(--bg) 0,                                                      /* off-screen: fully solid */
+    var(--bg) calc(100vh + 16px),                                    /* SOLID black across the bottom edge (iOS Safari samples this → black bar, no bleed) */
+    color-mix(in srgb, var(--bg) 96%, transparent) calc(100vh + 22px),
+    color-mix(in srgb, var(--bg) 92%, transparent) calc(100vh + 40px),   /* behind the pill: dark glass (hides bright content) */
+    color-mix(in srgb, var(--bg) 80%, transparent) calc(100vh + 85px),
+    color-mix(in srgb, var(--bg) 45%, transparent) calc(100vh + 105px),  /* see-through fade ABOVE the pill */
+    color-mix(in srgb, var(--bg) 22%, transparent) calc(100vh + 130px),
+    transparent calc(100vh + 160px));}                               /* top of the fade: clear */
 @media(max-width:768px){ #navBackdrop{display:block;} }
 /* Hidden wherever the pill itself is hidden (post detail, open thread, composer, …). */
 .bottom-nav.nav-off ~ #navBackdrop{display:none!important;}
@@ -15606,7 +15608,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1331'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1332'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -45691,24 +45693,27 @@ function _navIsBrowser() {
     return true;
   } catch (e) { return true; }
 }
-// A hidden `bottom:0` fixed probe. On iOS Safari a bottom:0 fixed element sits at the VISIBLE
-// viewport bottom (the top edge of the URL bar) and moves with it as the bar grows/shrinks —
-// so measuring its rect gives the live visible bottom in the same coordinate system as the
-// backdrop's inline `top`. It never morphs/bounces, so measuring it can never "jump". Once.
+// A hidden fixed probe with the pill's EXACT bottom anchor. iOS renders it exactly where it
+// renders the pill (reliably ABOVE Safari's bar, in every bar state) and it tracks the bar
+// identically — but never morphs/bounces, so measuring it can never "jump". (bottom:0 proved
+// unreliable: when Safari's bar was EXPANDED, iOS clamped a bottom:0 fixed element BELOW the
+// bar, so the measured "visible bottom" fell off-screen and the whole fade dropped with it,
+// leaving the pill floating on bright content.) Created once.
 function _navBackdropProbe() {
   if (_navProbe && document.body.contains(_navProbe)) return _navProbe;
   const p = document.createElement('div');
   p.setAttribute('aria-hidden', 'true');
-  p.style.cssText = 'position:fixed;left:0;right:0;bottom:0;height:0;visibility:hidden;pointer-events:none;z-index:-1;';
+  p.style.cssText = 'position:fixed;left:0;right:0;height:0;visibility:hidden;pointer-events:none;z-index:-1;'
+    + 'bottom:max(var(--nav-inset), env(safe-area-inset-bottom, 0px) - 11px);';
   document.body.appendChild(p);
   _navProbe = p;
   return p;
 }
 // Paint #navBackdrop. INSTALLED PWA → pure CSS (clear any inline & bail). SAFARI browser tab →
-// paint the EXACT SAME see-through gradient the installed app uses (transparent → gently
-// darkening → ~95% near-black at the visible bottom), positioned by measuring the real visible
-// bottom so it tracks the URL bar, and extend fully-solid --bg BELOW it (under the URL bar) so
-// that strip is clean black — no bright leak, X-style. Re-runs on every bar resize/scroll.
+// paint the SAME shape as the installed-app CSS gradient (see-through fade up top → dark glass
+// behind the pill → SOLID black across the bottom edge), positioned from the pill's REAL bottom
+// (via the probe) so it tracks the URL bar. The solid bottom is what makes Safari tint its bar
+// black (no bleed). Re-runs on every bar resize/scroll.
 function _syncNavBlack() {
   if (_navBlackRAF) return;
   _navBlackRAF = requestAnimationFrame(() => {
@@ -45720,19 +45725,21 @@ function _syncNavBlack() {
       return;
     }
     if (getComputedStyle(bd).display === 'none') return;   // nav-off / desktop → nothing to paint
-    const vb = _navBackdropProbe().getBoundingClientRect().bottom;   // visible viewport bottom (top of Safari's URL bar)
-    // Same see-through fade as the installed app (transparent → lighter tints → SOLID black
-    // across the bottom ~22px). The solid bottom strip is what makes iOS Safari sample black
-    // and tint its URL bar black (X-style) with no bright bleed; solid holds down under the bar.
-    bd.style.top = Math.max(0, Math.round(vb - 135)) + 'px';
+    // Pill's real bottom (reliable in every Safari bar state); the visible bottom is that plus
+    // the pill's own bottom gap (--nav-inset). Anchor the SAME gradient the CSS uses to it.
+    const pillBottom = _navBackdropProbe().getBoundingClientRect().bottom;
+    const vb = pillBottom + _navGap;
+    bd.style.top = Math.max(0, Math.round(vb - 160)) + 'px';
     bd.style.bottom = 'auto';
     bd.style.height = '140vh';
     bd.style.background = 'linear-gradient(to bottom,'
       + 'transparent 0px,'
-      + 'color-mix(in srgb,var(--bg) 13%,transparent) 37px,'
-      + 'color-mix(in srgb,var(--bg) 33%,transparent) 73px,'
-      + 'color-mix(in srgb,var(--bg) 60%,transparent) 101px,'
-      + 'var(--bg) 113px)';
+      + 'color-mix(in srgb,var(--bg) 22%,transparent) 30px,'
+      + 'color-mix(in srgb,var(--bg) 45%,transparent) 55px,'
+      + 'color-mix(in srgb,var(--bg) 80%,transparent) 75px,'       // dark by the pill top
+      + 'color-mix(in srgb,var(--bg) 92%,transparent) 120px,'      // dark glass behind the pill
+      + 'color-mix(in srgb,var(--bg) 96%,transparent) 138px,'
+      + 'var(--bg) 144px)';                                        // SOLID black across the bottom edge + under the bar
   });
 }
 function scrollHideInit() {
