@@ -11230,13 +11230,16 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <span class="bn-label" data-i18n="Beam">Beam</span>
         <span class="bn-dot hidden" id="bnavDot"></span>
       </button>
-      <button class="bn-tab" id="bnav-ai" onclick="appTab('ai')" aria-label="Atwe AI">
-        <span class="bn-icon" style="--ic:var(--icn-knot)"></span>
-        <span class="bn-label">Atwe AI</span>
-      </button>
+      <!-- Middle (3rd) icon: keeps its swirl graphic (icn-knot) but now OPENS ENGINE.
+           4th icon: keeps its ring graphic (icn-ring) but now OPENS ATWE AI. Only the
+           destinations/ids swap; the icon graphics stay in place (founder request). -->
       <button class="bn-tab" id="bnav-search" onclick="appTab('search')" aria-label="Engine" data-i18n-aria="Engine">
-        <span class="bn-icon" style="--ic:var(--icn-ring)"></span>
+        <span class="bn-icon" style="--ic:var(--icn-knot)"></span>
         <span class="bn-label" data-i18n="Engine">Engine</span>
+      </button>
+      <button class="bn-tab" id="bnav-ai" onclick="appTab('ai')" aria-label="Atwe AI">
+        <span class="bn-icon" style="--ic:var(--icn-ring)"></span>
+        <span class="bn-label">Atwe AI</span>
       </button>
       <button class="bn-tab" id="bnav-profile" onclick="appTab('profile')" aria-label="Profile">
         <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-4 0-7 2.2-7 5 0 .6.4 1 1 1h12c.6 0 1-.4 1-1 0-2.8-3-5-7-5z"/></svg>
@@ -15629,7 +15632,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1368'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1369'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
