@@ -205,7 +205,183 @@ async function seedDemo(client, adminId) {
         JOIN LATERAL (SELECT id FROM users WHERE is_demo AND id <> p.user_id ORDER BY random() LIMIT (floor(random()*3)::int)) u ON true
       WHERE p.parent_id IS NULL AND p.user_id IN (SELECT id FROM users WHERE is_demo)`);
   } catch (e) { console.error('demo engagement pass failed (non-fatal):', e.message); }
+  await seedDemoExtras(client, ids);   // fill every other surface (jobs, events, courses, reviews, profiles, …)
   return allIds.length;
+}
+
+// Populate the REST of the app so every screen looks like a real, years-old platform:
+// professional profiles, jobs, events, courses, reviews, business info, discovery + group
+// chats. Each block is independent + fail-safe (a schema hiccup in one never blocks the rest
+// or the core seed). Everything is owned by demo users, so teardown cascades it all away.
+async function seedDemoExtras(client, ids) {
+  const people = ids.filter((x) => !x.isBiz);
+  const biz = ids.filter((x) => x.isBiz);
+  const nameOf = (x) => x.ind.biz[x.id % x.ind.biz.length];
+
+  // ── Professional profiles: experience, education, skills, endorsements, certs, recs ──
+  try {
+    const SCHOOLS = ['State University', 'City College', 'Metro Business School', 'Riverside University', 'Northgate College', 'Tech Institute'];
+    const DEGREES = ['B.S.', 'B.A.', 'M.B.A.', 'B.Eng.', 'Diploma', 'Associate degree'];
+    const SKILLS = ['Communication', 'Leadership', 'Project management', 'Problem solving', 'Time management', 'Teamwork', 'Negotiation', 'Customer service', 'Strategy', 'Attention to detail'];
+    for (let i = 0; i < people.length; i++) {
+      const { id: uid, ind } = people[i];
+      const startY = 2015 + (i % 7);
+      await client.query('INSERT INTO experiences (user_id, title, company, start_year, end_year) VALUES ($1,$2,$3,$4,NULL)', [uid, ind.head[i % ind.head.length], ind.biz[i % ind.biz.length], startY]);
+      await client.query('INSERT INTO experiences (user_id, title, company, start_year, end_year) VALUES ($1,$2,$3,$4,$5)', [uid, ind.head[(i + 1) % ind.head.length], ind.biz[(i + 2) % ind.biz.length], startY - 3, startY - 1]);
+      await client.query('INSERT INTO education (user_id, school, degree, field, start_year, end_year) VALUES ($1,$2,$3,$4,$5,$6)', [uid, SCHOOLS[i % SCHOOLS.length], DEGREES[i % DEGREES.length], ind.cat, startY - 7, startY - 3]);
+      for (const nm of [...new Set([ind.cat, SKILLS[i % SKILLS.length], SKILLS[(i + 3) % SKILLS.length], SKILLS[(i + 6) % SKILLS.length]])]) {
+        await client.query('INSERT INTO user_skills (user_id, name) VALUES ($1,$2) ON CONFLICT DO NOTHING', [uid, nm]);
+      }
+      if (i % 2 === 0) await client.query('INSERT INTO certifications (user_id, name, issuer, issue_year) VALUES ($1,$2,$3,$4)', [uid, ind.cat + ' Professional Certificate', SCHOOLS[(i + 2) % SCHOOLS.length], startY + 1]);
+    }
+    await client.query(`INSERT INTO skill_endorsements (skill_id, endorser_id)
+      SELECT s.id, u.id FROM user_skills s
+        JOIN LATERAL (SELECT id FROM users WHERE is_demo AND id <> s.user_id ORDER BY random() LIMIT (2 + floor(random()*8)::int)) u ON true
+       WHERE s.user_id IN (SELECT id FROM users WHERE is_demo) ON CONFLICT DO NOTHING`);
+    await client.query(`INSERT INTO recommendations (author_id, subject_id, relationship, body, status)
+      SELECT a.id, subj.id, 'Worked together',
+        (ARRAY['One of the most reliable people I have worked with. Highly recommend.','Delivers every time and a pleasure to collaborate with.','Sharp, dependable, and genuinely cares about the work.','Would work with them again in a heartbeat.'])[1+floor(random()*4)::int], 'visible'
+      FROM users subj JOIN LATERAL (SELECT id FROM users WHERE is_demo AND id <> subj.id ORDER BY random() LIMIT (1 + floor(random()*2)::int)) a ON true
+       WHERE subj.is_demo ON CONFLICT DO NOTHING`);
+  } catch (e) { console.error('demo profiles pass failed (non-fatal):', e.message); }
+
+  // ── Jobs + "open to work" listings ──
+  try {
+    const JT = ['Full-time', 'Part-time', 'Contract'];
+    const LOCS = ['New York, NY', 'Austin, TX', 'Remote', 'Chicago, IL', 'Los Angeles, CA'];
+    for (let i = 0; i < biz.length; i++) {
+      const { id: bid, ind } = biz[i];
+      const nJobs = 1 + (i % 2);
+      for (let k = 0; k < nJobs; k++) {
+        const title = ind.head[(i + k) % ind.head.length];
+        const sMin = (30 + ((i + k) % 8) * 5) * 1000;
+        await client.query(`INSERT INTO jobs (posted_by, title, company, location, industry, type, remote, description, salary_min, salary_max, salary_period, hours, created_at)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'year',$11, now() - make_interval(days => $12))`,
+          [bid, title, nameOf(biz[i]), LOCS[(i + k) % LOCS.length], ind.cat, JT[(i + k) % 3], (i + k) % 3 === 0,
+            'We are hiring a ' + title.toLowerCase() + ' to join our growing team. You will help us do great work for our clients. Experience preferred, great attitude required.',
+            sMin, sMin + (15 + ((i + k) % 5) * 5) * 1000, JT[(i + k) % 3], (5 + (i * 3 + k) % 40)]);
+      }
+    }
+    for (let i = 0; i < people.length; i += 4) {
+      const { id: uid, ind } = people[i];
+      await client.query(`INSERT INTO worker_listings (user_id, role, location, schedule, rate_min, rate_max, rate_period, remote, about)
+        VALUES ($1,$2,$3,$4,$5,$6,'hour',$7,$8) ON CONFLICT (user_id) DO NOTHING`,
+        [uid, ind.head[i % ind.head.length], LOCS[i % LOCS.length], ['Full-time', 'Part-time', 'Flexible'][i % 3], 40 + (i % 6) * 10, 90 + (i % 6) * 10, i % 2 === 0,
+          'Experienced ' + ind.head[i % ind.head.length].toLowerCase() + ' open to new opportunities in ' + ind.cat.toLowerCase() + '.']);
+    }
+  } catch (e) { console.error('demo jobs pass failed (non-fatal):', e.message); }
+
+  // ── Events + RSVPs ──
+  try {
+    const hosts = ids.filter((_, i) => i % 7 === 0);
+    for (let i = 0; i < hosts.length; i++) {
+      const { id: hid, ind } = hosts[i];
+      const online = i % 2 === 0;
+      const r = await client.query(`INSERT INTO events (host_id, title, description, starts_at, ends_at, online, location, cover, price_cents, capacity)
+        VALUES ($1,$2,$3, now() + make_interval(days => $4), now() + make_interval(days => $4, hours => 2), $5,$6,$7,$8,$9) RETURNING id`,
+        [hid, ind.cat + ' Meetup', 'Join us for an evening of ' + ind.cat.toLowerCase() + ' talks, networking and Q&A. All welcome.',
+          3 + (i * 2) % 40, online, online ? 'Online (link after RSVP)' : ['New York, NY', 'Austin, TX', 'Chicago, IL'][i % 3], storyPic(1000 + i), (i % 3 === 0) ? 0 : (10 + i % 4) * 500, (i % 2 === 0) ? null : 30 + (i % 5) * 10]);
+      await client.query("INSERT INTO event_rsvps (event_id, user_id, status) VALUES ($1,$2,'going') ON CONFLICT DO NOTHING", [r.rows[0].id, hid]);
+    }
+    await client.query(`INSERT INTO event_rsvps (event_id, user_id, status)
+      SELECT e.id, u.id, (ARRAY['going','going','interested'])[1+floor(random()*3)::int]
+      FROM events e JOIN LATERAL (SELECT id FROM users WHERE is_demo AND id <> e.host_id ORDER BY random() LIMIT (3 + floor(random()*12)::int)) u ON true
+      WHERE e.host_id IN (SELECT id FROM users WHERE is_demo) ON CONFLICT DO NOTHING`);
+  } catch (e) { console.error('demo events pass failed (non-fatal):', e.message); }
+
+  // ── Courses + lessons + enrollments ──
+  try {
+    const teachers = people.filter((_, i) => i % 6 === 0);
+    for (let i = 0; i < teachers.length; i++) {
+      const { id: cid, ind } = teachers[i];
+      const cr = await client.query('INSERT INTO courses (creator_id, title, description, cover, price_cents, published) VALUES ($1,$2,$3,$4,$5,true) RETURNING id',
+        [cid, ind.cat + ' Fundamentals', 'A practical, beginner-friendly ' + ind.cat.toLowerCase() + ' course. Learn by doing with real examples.', storyPic(2000 + i), (i % 3 === 0) ? 0 : (19 + (i % 4) * 10) * 100]);
+      const sections = ['Getting started', 'Core concepts', 'Going further'];
+      for (let s = 0; s < sections.length; s++) {
+        for (let l = 0; l < 2; l++) {
+          await client.query('INSERT INTO course_lessons (course_id, section, title, content, position) VALUES ($1,$2,$3,$4,$5)',
+            [cr.rows[0].id, sections[s], 'Lesson ' + (s * 2 + l + 1) + ': ' + sections[s], 'In this lesson we cover ' + sections[s].toLowerCase() + ' with hands-on examples you can follow along with.', s * 2 + l]);
+        }
+      }
+    }
+    await client.query(`INSERT INTO course_enrollments (course_id, user_id)
+      SELECT c.id, u.id FROM courses c JOIN LATERAL (SELECT id FROM users WHERE is_demo AND id <> c.creator_id ORDER BY random() LIMIT (3 + floor(random()*15)::int)) u ON true
+      WHERE c.creator_id IN (SELECT id FROM users WHERE is_demo) ON CONFLICT DO NOTHING`);
+  } catch (e) { console.error('demo courses pass failed (non-fatal):', e.message); }
+
+  // ── Reviews (product + business) + business hours / services / Q&A ──
+  try {
+    await client.query(`INSERT INTO product_reviews (product_id, reviewer_id, rating, body)
+      SELECT p.id, u.id, (ARRAY[5,5,4,5,4,3])[1+floor(random()*6)::int],
+        (ARRAY['Exactly as described. Very happy!','Great quality and fast to work with.','Would buy again. Recommended.','Solid value for the price.','Really pleased with this.'])[1+floor(random()*5)::int]
+      FROM products p JOIN LATERAL (SELECT id FROM users WHERE is_demo AND id <> p.business_id ORDER BY random() LIMIT (1 + floor(random()*5)::int)) u ON true
+      WHERE p.business_id IN (SELECT id FROM users WHERE is_demo) ON CONFLICT DO NOTHING`);
+    await client.query(`INSERT INTO business_reviews (business_id, reviewer_id, rating, body)
+      SELECT b.id, u.id, (ARRAY[5,5,4,5,4])[1+floor(random()*5)::int],
+        (ARRAY['Fantastic to work with. Highly recommend.','Professional, friendly and great results.','Went above and beyond. Will be back.','Exactly what we needed. Thank you!'])[1+floor(random()*4)::int]
+      FROM users b JOIN LATERAL (SELECT id FROM users WHERE is_demo AND id <> b.id ORDER BY random() LIMIT (2 + floor(random()*6)::int)) u ON true
+      WHERE b.is_demo AND b.account_type = 'business' ON CONFLICT DO NOTHING`);
+    const HOURS = JSON.stringify([{ open: '09:00', close: '17:00' }, { open: '09:00', close: '17:00' }, { open: '09:00', close: '17:00' }, { open: '09:00', close: '17:00' }, { open: '09:00', close: '17:00' }, { open: '10:00', close: '14:00' }, { closed: true }]);
+    await client.query("UPDATE users SET business_hours = $1::jsonb WHERE is_demo AND account_type = 'business' AND business_hours IS NULL", [HOURS]);
+    for (let i = 0; i < biz.length; i++) {
+      const { id: bid, ind } = biz[i];
+      for (let k = 0; k < Math.min(3, ind.prods.length); k++) {
+        await client.query('INSERT INTO business_services (business_id, name, duration_min) VALUES ($1,$2,$3)', [bid, ind.prods[k], [30, 45, 60][k % 3]]);
+      }
+      // one Q&A per business (asked by another demo user, answered by the owner)
+      const asker = (people[(i * 5) % people.length] || {}).id;
+      if (asker && asker !== bid) {
+        const q = await client.query('INSERT INTO business_questions (business_id, asker_id, body) VALUES ($1,$2,$3) RETURNING id', [bid, asker, 'Do you take new clients this month?']);
+        await client.query('INSERT INTO business_answers (question_id, answerer_id, body) VALUES ($1,$2,$3)', [q.rows[0].id, bid, 'Yes! We have a few openings — send us a message and we will get you booked in.']);
+      }
+    }
+  } catch (e) { console.error('demo reviews/business pass failed (non-fatal):', e.message); }
+
+  // ── Discovery: newsletters, showcases, communities ──
+  try {
+    const nlOwners = people.filter((_, i) => i % 8 === 0);
+    for (let i = 0; i < nlOwners.length; i++) {
+      const { id: oid, ind } = nlOwners[i];
+      const nl = await client.query('INSERT INTO newsletters (owner_id, title, description, cover) VALUES ($1,$2,$3,$4) RETURNING id',
+        [oid, 'The ' + ind.cat + ' Weekly', 'Practical ' + ind.cat.toLowerCase() + ' tips, trends and stories — every week.', banner(200 + i)]);
+      await client.query('INSERT INTO newsletter_subs (newsletter_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [nl.rows[0].id, oid]);
+      await client.query(`INSERT INTO newsletter_subs (newsletter_id, user_id)
+        SELECT $1, id FROM users WHERE is_demo AND id <> $2 ORDER BY random() LIMIT (5 + floor(random()*20)::int) ON CONFLICT DO NOTHING`, [nl.rows[0].id, oid]);
+    }
+    for (let i = 0; i < people.length; i += 3) {
+      const { id: uid, ind } = people[i];
+      await client.query('INSERT INTO showcases (user_id, title, description, images, category, position) VALUES ($1,$2,$3,$4::text[],$5,0)',
+        [uid, ind.cat + ' project', 'A recent ' + ind.cat.toLowerCase() + ' project I am proud of.', [storyPic(3000 + i), postPic(3000 + i)], ind.cat]);
+    }
+    await client.query(`INSERT INTO showcase_likes (showcase_id, user_id)
+      SELECT s.id, u.id FROM showcases s JOIN LATERAL (SELECT id FROM users WHERE is_demo AND id <> s.user_id ORDER BY random() LIMIT (2 + floor(random()*10)::int)) u ON true
+      WHERE s.user_id IN (SELECT id FROM users WHERE is_demo) ON CONFLICT DO NOTHING`);
+    const COMMS = ['Founders & Builders', 'Local Business Network', 'Creatives Collective', 'Marketing Pros'];
+    for (let i = 0; i < COMMS.length; i++) {
+      const owner = ids[(i * 17) % ids.length].id;
+      const c = await client.query('INSERT INTO communities (name, description, avatar, created_by) VALUES ($1,$2,$3,$4) RETURNING id',
+        [COMMS[i], 'A community to connect, learn and grow together.', logo(COMMS[i]), owner]);
+      await client.query("INSERT INTO community_members (community_id, user_id, role) VALUES ($1,$2,'admin') ON CONFLICT DO NOTHING", [c.rows[0].id, owner]);
+      await client.query(`INSERT INTO community_members (community_id, user_id)
+        SELECT $1, id FROM users WHERE is_demo AND id <> $2 ORDER BY random() LIMIT (10 + floor(random()*30)::int) ON CONFLICT DO NOTHING`, [c.rows[0].id, owner]);
+    }
+  } catch (e) { console.error('demo discovery pass failed (non-fatal):', e.message); }
+
+  // ── Group chats (so Beam has real groups with history; the viewer is added on immerse) ──
+  try {
+    const GROUPS = ['Founders Circle', 'Local Business Network', 'Creatives Hub', 'Weekend Meetup', 'Tech Talk'];
+    for (let g = 0; g < GROUPS.length; g++) {
+      const owner = ids[(g * 13) % ids.length].id;
+      const gr = await client.query('INSERT INTO at_groups (name, created_by, description) VALUES ($1,$2,$3) RETURNING id', [GROUPS[g], owner, 'A place to connect and share.']);
+      const gid = gr.rows[0].id;
+      await client.query("INSERT INTO at_group_members (group_id, user_id, role) VALUES ($1,$2,'admin') ON CONFLICT DO NOTHING", [gid, owner]);
+      await client.query(`INSERT INTO at_group_members (group_id, user_id)
+        SELECT $1, id FROM users WHERE is_demo AND id <> $2 ORDER BY random() LIMIT 8 ON CONFLICT DO NOTHING`, [gid, owner]);
+      await client.query(`INSERT INTO at_group_messages (group_id, sender_id, body, created_at)
+        SELECT $1, m.user_id, (ARRAY['Welcome everyone! 👋','Great to be here.','Anyone going to the meetup next week?','Just shared a resource — check it out.','Happy Friday all!'])[1+floor(random()*5)::int], now() - (random() * interval '10 days')
+        FROM at_group_members m WHERE m.group_id = $1 ORDER BY random() LIMIT 12`, [gid]);
+    }
+  } catch (e) { console.error('demo groups pass failed (non-fatal):', e.message); }
 }
 
 // Refresh demo stories so the story tray is ALWAYS live whenever demo mode is (re)enabled.
@@ -250,13 +426,36 @@ async function immerseInDemo(client, userId) {
     const { rows } = await client.query(
       `SELECT id FROM users WHERE is_demo = true AND id <> $1 ORDER BY id`, [userId]);
     if (!rows.length) return 0;
-    let made = 0;
+    let made = 0; const followed = [];
     // Stride the seed order (industries cycle through it) so the ~40 followed are varied.
     for (let i = 0; i < rows.length && made < 40; i += 2) {
       const r = await client.query(
         'INSERT INTO follows (follower_id, following_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [userId, rows[i].id]);
-      made += r.rowCount || 0;
+      if (r.rowCount) { followed.push(rows[i].id); made++; }
     }
+    // A few demo people DM this account, so Beam isn't empty (the 2 newest stay unread).
+    try {
+      const HELLO = ['Hey! Loved your latest post 🙌', 'Thanks for connecting — let me know if I can ever help.', 'Are you around this week for a quick chat?', 'Big fan of your work. Keep it up!', 'Welcome! Great to have you here.'];
+      const dmers = followed.slice(0, 5);
+      for (let d = 0; d < dmers.length; d++) {
+        await client.query(
+          `INSERT INTO at_messages (sender_id, recipient_id, body, read_at, created_at)
+           VALUES ($1,$2,$3, CASE WHEN $4 THEN now() - make_interval(hours => 1) ELSE NULL END, now() - make_interval(hours => $5))`,
+          [dmers[d], userId, HELLO[d % HELLO.length], d >= 2, (d * 8 + 2)]);
+      }
+      // A few "started following you" notifications (actor is required + must be real).
+      for (let n = 0; n < Math.min(6, followed.length); n++) {
+        await client.query(
+          `INSERT INTO notifications (user_id, actor_id, type, read, created_at)
+           VALUES ($1,$2,'follow',$3, now() - make_interval(hours => $4))`,
+          [userId, followed[followed.length - 1 - n], n >= 2, (n * 5 + 1)]);
+      }
+      // Add this account to one demo group so Beam has a group thread with history.
+      const grp = await client.query(
+        `SELECT id FROM at_groups WHERE created_by IN (SELECT id FROM users WHERE is_demo = true) ORDER BY id LIMIT 1`);
+      if (grp.rows[0]) await client.query(
+        'INSERT INTO at_group_members (group_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [grp.rows[0].id, userId]);
+    } catch (e) { console.error('demo immerse messages failed (non-fatal):', e.message); }
     return made;
   } catch (e) { console.error('demo immerse failed (non-fatal):', e.message); return 0; }
 }
