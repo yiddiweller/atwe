@@ -15683,7 +15683,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1375'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1376'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -45714,12 +45714,30 @@ function appGoBack() {
   return 'exit';
 }
 let _navReady = false, _exitArmed = false, _exitTimer = null;
+// True ONLY for the installed, standalone home-screen app. There, Back has to stay
+// trapped inside the app (there's no browser chrome and no referrer to fall back to),
+// so it uses an Android-style double-tap-to-exit. In a REGULAR browser tab there IS a
+// previous page — the visitor came from somewhere (a Google result, a link) — and Back
+// must behave like any professional website: once nothing is left to close in-app, walk
+// back to that real previous page instead of the old trap's history.go(-1), which
+// reloaded the app and booted it to a lingering /ai path or the last-used tab. That
+// reload was the actual "Back takes me to the Atwe AI page I never opened" bug.
+function _isStandaloneApp() {
+  try { return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true; }
+  catch (e) { return false; }
+}
 function navInit() {
   if (_navReady) return; _navReady = true;
   try { history.replaceState({ atwe: 0 }, ''); history.pushState({ atwe: 1 }, ''); } catch (e) {}
   window.addEventListener('popstate', () => {
     const r = appGoBack();
+    // Handled in-app (closed an overlay, popped a sub-screen, restored a tab): re-arm
+    // the sentinel so the NEXT Back is intercepted too.
     if (r !== 'exit') { try { history.pushState({ atwe: 1 }, ''); } catch (e) {} return; }
+    // Nothing left to close. Regular browser → leave the app the normal way, returning
+    // to wherever the visitor came from (e.g. the Google search), like any website.
+    if (!_isStandaloneApp()) { try { history.back(); } catch (e) {} return; }
+    // Installed standalone app → keep the double-tap-to-exit affordance.
     if (_exitArmed) { _exitArmed = false; try { history.go(-1); } catch (e) {} return; }
     _exitArmed = true; showNotif('Press back again to exit');
     clearTimeout(_exitTimer); _exitTimer = setTimeout(() => { _exitArmed = false; }, 2000);
