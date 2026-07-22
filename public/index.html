@@ -12253,7 +12253,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <select class="jp-in jp-sel" id="wpRatePer" style="max-width:120px;"><option value="hour">/ hour</option><option value="day">/ day</option><option value="week">/ week</option><option value="month">/ month</option><option value="year">/ year</option></select>
     </div>
     <label class="jp-remote"><input type="checkbox" id="wpRemote"/> <span>Open to remote work</span></label>
-    <textarea class="jp-in jp-desc" id="wpAbout" placeholder="A short note for employers — experience, what you’re after…" maxlength="2000"></textarea>
+    <textarea class="jp-in jp-desc" id="wpAbout" placeholder="A short note for employers, experience, what you’re after…" maxlength="2000"></textarea>
     <button class="ac-pill-btn accent jp-submit" id="wpSubmit" onclick="acSubmitWorkerPost()">Post listing</button>
     <button class="ac-pill-btn" id="wpRemoveBtn" style="display:none;margin-top:8px;color:var(--red);" onclick="acRemoveWorkerListing()">Remove my listing</button>
   </div>
@@ -12462,8 +12462,8 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <div class="jp-row"><input class="jp-in" id="rbEmail" type="email" placeholder="Email" maxlength="160"/><input class="jp-in" id="rbPhone" type="tel" placeholder="Phone" maxlength="60"/></div>
     <input class="jp-in" id="rbLocation" type="text" placeholder="Location (city, country)" maxlength="120"/>
     <div class="jp-row"><input class="jp-in" id="rbTarget" type="text" placeholder="Job / role you want" maxlength="160"/><input class="jp-in" id="rbYears" type="text" placeholder="Years of experience" maxlength="40"/></div>
-    <textarea class="jp-in jp-ta" id="rbHistory" rows="4" placeholder="Work history — for each job: title, company, dates, and what you did. Plain text is fine." maxlength="4000"></textarea>
-    <textarea class="jp-in jp-ta" id="rbEducation" rows="2" placeholder="Education — school, qualification, years (optional)" maxlength="2000"></textarea>
+    <textarea class="jp-in jp-ta" id="rbHistory" rows="4" placeholder="Work history, for each job: title, company, dates, and what you did. Plain text is fine." maxlength="4000"></textarea>
+    <textarea class="jp-in jp-ta" id="rbEducation" rows="2" placeholder="Education, school, qualification, years (optional)" maxlength="2000"></textarea>
     <input class="jp-in" id="rbSkills" type="text" placeholder="Key skills (comma separated)" maxlength="1000"/>
     <textarea class="jp-in jp-ta" id="rbAbout" rows="2" placeholder="A line about you / your goal (optional)" maxlength="2000"></textarea>
     <button class="ac-pill-btn accent jp-submit" id="rbBtn" onclick="acResumeBuild()">✨ Build my resume</button>
@@ -12615,7 +12615,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Lesson">
     <button class="sheet-close" onclick="closeOverlay('lessonForm')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title" id="lessonFormTitle">Add a lesson</div>
-    <input class="jp-in" id="lsnSection" type="text" maxlength="100" list="lsnSecList" placeholder="Module / section — e.g. Getting Started (optional)"/>
+    <input class="jp-in" id="lsnSection" type="text" maxlength="100" list="lsnSecList" placeholder="Module / section, e.g. Getting Started (optional)"/>
     <datalist id="lsnSecList"></datalist>
     <input class="jp-in" id="lsnTitle" type="text" maxlength="200" placeholder="Lesson title" style="margin-top:8px;"/>
     <input class="jp-in" id="lsnVideo" type="url" maxlength="500" placeholder="Video URL (optional)" style="margin-top:8px;"/>
@@ -13102,7 +13102,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <button class="sheet-close" onclick="closeOverlay('potFormView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title" id="potFormTitle">New pot</div>
     <input class="jp-in" id="potName" type="text" maxlength="60" placeholder="What are you saving for?"/>
-    <input class="jp-in" id="potTarget" type="number" min="0" step="0.01" placeholder="Goal amount ($) — optional" style="margin-top:8px;"/>
+    <input class="jp-in" id="potTarget" type="number" min="0" step="0.01" placeholder="Goal amount ($), optional" style="margin-top:8px;"/>
     <button class="ac-pill-btn accent jp-submit" id="potSaveBtn" onclick="acPotSave()">Create pot</button>
   </div>
 </div>
@@ -13272,7 +13272,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <div class="prod-thumbs" id="prodThumbs"></div>
     <input class="jp-in" id="prodName" type="text" maxlength="140" placeholder="Product name" style="margin-top:8px;"/>
     <input class="jp-in" id="prodPrice" type="number" min="0" max="50000" step="0.01" placeholder="Price ($)" style="margin-top:8px;"/>
-    <input class="jp-in" id="prodCategory" type="text" maxlength="60" list="prodCatList" placeholder="Category / menu section — e.g. Mains, Drinks (optional)" style="margin-top:8px;"/>
+    <input class="jp-in" id="prodCategory" type="text" maxlength="60" list="prodCatList" placeholder="Category / menu section, e.g. Mains, Drinks (optional)" style="margin-top:8px;"/>
     <datalist id="prodCatList"><option value="Featured"></option><option value="Starters"></option><option value="Mains"></option><option value="Sides"></option><option value="Desserts"></option><option value="Drinks"></option><option value="Specials"></option><option value="New"></option><option value="Best sellers"></option><option value="Sale"></option></datalist>
     <select class="jp-in" id="prodKind" style="margin-top:8px;" onchange="acProdKindChange()"><option value="physical">Physical item</option><option value="digital">Digital</option><option value="service">Service</option><option value="rental">Rental / stay</option></select>
     <!-- Rentals: priced per night/month, booked by date range -->
@@ -13285,7 +13285,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <input class="jp-in" id="prodStock" type="number" min="0" max="1000000" step="1" placeholder="Stock / quantity (leave blank = unlimited)" style="margin-top:8px;"/>
     <!-- Digital auto-delivery (digital kind only) -->
     <div id="prodDigitalSec" style="margin-top:8px;display:none;">
-      <textarea class="jp-in" id="prodDigital" maxlength="4000" placeholder="Digital delivery — download link, license key or access instructions" style="min-height:54px;"></textarea>
+      <textarea class="jp-in" id="prodDigital" maxlength="4000" placeholder="Digital delivery, download link, license key or access instructions" style="min-height:54px;"></textarea>
       <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">⚡ Sent to the buyer instantly when they pay — in their chat and on the order. Only they can see it.</div>
     </div>
     <!-- Variants / options (size, colour, …) -->
@@ -13464,10 +13464,10 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <div class="ac-disc-sub" style="margin:0 0 14px;">Automatically reply to customers — a one-time greeting for new or long-absent contacts, and an away message while you can't reply personally.</div>
     <div class="pf-sec-label">Greeting message</div>
     <div class="iset-row" data-static style="margin-bottom:8px;"><div class="iset-main"><div class="iset-label">Send a greeting</div><div class="iset-sub">Once to a new customer, or after 14 days of no chat</div></div><label class="ios-switch"><input type="checkbox" id="amGreetOn"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>
-    <textarea class="jp-in" id="amGreetMsg" maxlength="500" placeholder="Hi! Thanks for reaching out — we'll get back to you shortly." style="min-height:80px;"></textarea>
+    <textarea class="jp-in" id="amGreetMsg" maxlength="500" placeholder="Hi! Thanks for reaching out. We'll get back to you shortly." style="min-height:80px;"></textarea>
     <div class="pf-sec-label" style="margin-top:16px;">Away message</div>
     <div class="iset-row" data-static style="margin-bottom:8px;"><div class="iset-main"><div class="iset-label">Currently away</div><div class="iset-sub">Auto-reply while you can't respond personally</div></div><label class="ios-switch"><input type="checkbox" id="amAwayOn"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>
-    <textarea class="jp-in" id="amAwayMsg" maxlength="500" placeholder="We're away right now — we'll reply as soon as we're back." style="min-height:80px;"></textarea>
+    <textarea class="jp-in" id="amAwayMsg" maxlength="500" placeholder="We're away right now. We'll reply as soon as we're back." style="min-height:80px;"></textarea>
     <div class="iset-row" data-static style="margin-top:8px;"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></span><div class="iset-main"><div class="iset-label">When to send</div><div class="iset-sub" id="amAwaySchedSub">Whenever away is on</div></div><select class="iset-select" id="amAwaySched" onchange="acAwaySchedChanged()"><option value="always">Always</option><option value="outside_hours">Outside business hours</option></select></div>
     <div class="ac-disc-sub" id="amAwaySchedHint" style="margin:6px 2px 0;display:none;">Set your open hours in your business profile — the away message will only send when you're closed.</div>
     <button class="ac-pill-btn accent jp-submit" id="amSaveBtn" style="margin-top:14px;" onclick="acSaveAutoMessages()">Save</button>
@@ -13665,7 +13665,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <button class="sheet-close" onclick="closeOverlay('payLinkView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title">Payment links</div>
     <div class="ac-disc-sub" style="margin:0 0 8px;">Create a “pay me” link to share anywhere. People pay you from their wallet balance.</div>
-    <input class="jp-in" id="plAmount" type="number" min="1" step="0.01" placeholder="Fixed amount ($) — or leave open"/>
+    <input class="jp-in" id="plAmount" type="number" min="1" step="0.01" placeholder="Fixed amount ($), or leave open"/>
     <input class="jp-in" id="plNote" type="text" maxlength="200" placeholder="What’s it for? (optional)" style="margin-top:8px;"/>
     <button class="ac-pill-btn accent jp-submit" id="plCreateBtn" onclick="acPayLinkCreate()">Create link</button>
     <div class="ac-section-row" style="margin:16px 0 4px;"><span class="ac-prof-head" style="margin:0;">Your links</span><button class="ac-link-btn" onclick="acPayLinkPayPrompt()">Pay a link</button></div>
@@ -13862,13 +13862,13 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <button class="sheet-close" onclick="closeOverlay('showcaseForm')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title" id="scFormTitle">Add to showcase</div>
     <div class="ac-disc-sub" style="margin:2px 0 10px;">Show your work, a new product, or anything — no products required.</div>
-    <input class="jp-in" id="scfTitle" type="text" maxlength="140" placeholder="Title — e.g. “Kitchen remodel” or “New Lamp”"/>
+    <input class="jp-in" id="scfTitle" type="text" maxlength="140" placeholder="Title, e.g. “Kitchen remodel” or “New Lamp”"/>
     <textarea class="jp-in" id="scfDesc" maxlength="4000" rows="4" placeholder="Describe it…" style="margin-top:8px;"></textarea>
     <input type="file" id="scImgFile" accept="image/*" multiple class="hidden" onchange="acScPickImg(event)"/>
     <div class="prod-img-pick" onclick="document.getElementById('scImgFile').click()" style="margin-top:8px;"><span>＋ Add photos</span></div>
     <div class="prod-thumbs" id="scThumbs"></div>
-    <input class="jp-in" id="scfCategory" type="text" maxlength="60" placeholder="Category (optional) — e.g. Branding, Plumbing" style="margin-top:8px;"/>
-    <input class="jp-in" id="scfLink" type="url" maxlength="600" placeholder="Link (optional) — https://…" style="margin-top:8px;"/>
+    <input class="jp-in" id="scfCategory" type="text" maxlength="60" placeholder="Category (optional), e.g. Branding, Plumbing" style="margin-top:8px;"/>
+    <input class="jp-in" id="scfLink" type="url" maxlength="600" placeholder="Link (optional), https://…" style="margin-top:8px;"/>
     <div id="scProductPick" style="margin-top:8px;"></div>
     <button class="ac-pill-btn accent jp-submit" onclick="acSaveShowcase()">Save</button>
   </div>
@@ -14384,7 +14384,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <button class="sheet-close" onclick="closeOverlay('servicesView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="ac-section-row"><span class="jp-title" style="margin:0;">Services & local</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 14px;" onclick="acOpenServiceForm()">＋ Offer a service</button></div>
     <div class="ac-disc-sub" style="margin:2px 0 10px;">Find a pro — a magician, a plumber, a tutor — or list your own. Browse local businesses, jobs and events too.</div>
-    <input class="jp-in" id="svcSearch" type="text" placeholder="Find a service — “magician”, “plumber”…" maxlength="80" oninput="acSvcSearchDebounced()" style="margin-bottom:8px;"/>
+    <input class="jp-in" id="svcSearch" type="text" placeholder="Find a service, “magician”, “plumber”…" maxlength="80" oninput="acSvcSearchDebounced()" style="margin-bottom:8px;"/>
     <div class="svc-cats" id="svcCats"></div>
     <div class="ac-section-row" style="margin-top:6px;"><span></span><button class="ac-link-btn" onclick="acOpenMyServices()">My services</button></div>
     <div id="servicesBody"></div>
@@ -14403,7 +14403,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <input class="jp-in" id="svcfCategory" type="text" maxlength="60" placeholder="e.g. Entertainment, Plumbing, Tutoring" list="svcCatList"/>
     <datalist id="svcCatList"></datalist>
     <label class="su-lab">Area / location</label>
-    <input class="jp-in" id="svcfArea" type="text" maxlength="80" placeholder="e.g. Brooklyn, NY — or “Remote”"/>
+    <input class="jp-in" id="svcfArea" type="text" maxlength="80" placeholder="e.g. Brooklyn, NY, or “Remote”"/>
     <label class="su-lab">Rate <span style="color:var(--t3);font-weight:400;">(optional)</span></label>
     <input class="jp-in" id="svcfRate" type="text" maxlength="60" placeholder="e.g. from $200, $50/hr"/>
     <label class="su-lab">Description</label>
@@ -15455,7 +15455,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <div class="cloud-crumbs" id="noteStatus">Saved</div>
       </div>
     </div>
-    <textarea class="note-editor" id="noteEditor" placeholder="Write a shared note — SOPs, policies, meeting notes, price lists…" oninput="acNoteEdit()" aria-label="Note body"></textarea>
+    <textarea class="note-editor" id="noteEditor" placeholder="Write a shared note, SOPs, policies, meeting notes, price lists…" oninput="acNoteEdit()" aria-label="Note body"></textarea>
   </div>
 </div>
 
@@ -15489,7 +15489,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <div class="sheet-modal-head"><div class="sheet-modal-title">Fields</div><button onclick="acFormFieldsDone()" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
     <div id="formFieldsBody"></div>
     <div class="form-addfield">
-      <input id="formNewFieldLabel" placeholder="Field name — e.g. Temperature" maxlength="120" aria-label="Field name"/>
+      <input id="formNewFieldLabel" placeholder="Field name, e.g. Temperature" maxlength="120" aria-label="Field name"/>
       <select id="formNewFieldType" aria-label="Field type"><option value="text">Text</option><option value="number">Number</option><option value="check">Yes / No</option><option value="date">Date</option></select>
       <button onclick="acFormAddField()" aria-label="Add field"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
     </div>
@@ -15610,7 +15610,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     </div>
     <div class="cl-body" id="clTplBody">
       <div class="cl-ai">
-        <input id="clAiPrompt" placeholder="Describe it — e.g. “closing checklist for a cleaning crew”" maxlength="300" onkeydown="if(event.key==='Enter'){event.preventDefault();acChecklistAi();}" aria-label="Describe the checklist"/>
+        <input id="clAiPrompt" placeholder="Describe it, e.g. “closing checklist for a cleaning crew”" maxlength="300" onkeydown="if(event.key==='Enter'){event.preventDefault();acChecklistAi();}" aria-label="Describe the checklist"/>
         <button id="clAiBtn" onclick="acChecklistAi()"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.2H22l-6 4.5 2.3 7.3-6.3-4.6L5.7 21l2.3-7.3-6-4.5h7.6z"/></svg> Generate with Atwe AI</button>
         <button id="clChatBtn" onclick="acChecklistFromChat()" style="background:linear-gradient(120deg,var(--green),var(--accent));"><svg viewBox="0 0 24 24" style="fill:currentColor;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg> Turn this chat into tasks</button>
       </div>
@@ -15631,7 +15631,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1340'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1341'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -15820,7 +15820,7 @@ async function switchAccount(id) {
   } catch (e) {
     Accounts.remove(id);
     API.setToken(prev);
-    showNotif('That account’s session expired — please sign in again.');
+    showNotif('That account’s session expired. Please sign in again.');
     addExistingAccount();
   }
 }
@@ -16296,7 +16296,7 @@ async function resetConfirm() {
   try {
     const { token, user } = await API.req('POST', '/api/auth/reset/confirm', { identifier: _resetIdentifier, code, password });
     await onAuthSuccess(token, user);
-    showNotif('Password updated — welcome back!');
+    showNotif('Password updated. Welcome back!');
   } catch (e) {
     setBtnLoading(btn, false);
     setError('resetPwError', e.message || 'Could not reset your password.');
@@ -16417,34 +16417,34 @@ async function handleUrlParams() {
     if (wp) _pendingGo = wp;
   }
   if (p.get('verify')) {
-    try { await API.req('POST', '/api/auth/verify', { token: p.get('verify') }); showNotif('Email verified — thank you!'); }
+    try { await API.req('POST', '/api/auth/verify', { token: p.get('verify') }); showNotif('Email verified. Thank you!'); }
     catch (e) { showNotif(e.message || 'Verification link invalid or expired.'); }
     stripParam();
   }
   if (p.get('checkout') === 'success') { showNotif('Welcome to Atwe Pro!'); stripParam(); }
-  else if (p.get('checkout') === 'cancel') { showNotif('Checkout canceled — no charge was made.'); stripParam(); }
-  if (p.get('boost') === 'success') { showNotif('Your job is boosted — it’s now featured.'); stripParam(); }
-  else if (p.get('boost') === 'cancel') { showNotif('Boost canceled — no charge was made.'); stripParam(); }
-  else if (p.get('promote') === 'success') { showNotif('Your post is promoted — it’ll reach more people.'); stripParam(); }
-  else if (p.get('promote') === 'cancel') { showNotif('Promotion canceled — no charge was made.'); stripParam(); }
+  else if (p.get('checkout') === 'cancel') { showNotif('Checkout canceled. No charge was made.'); stripParam(); }
+  if (p.get('boost') === 'success') { showNotif('Your job is boosted. It’s now featured.'); stripParam(); }
+  else if (p.get('boost') === 'cancel') { showNotif('Boost canceled. No charge was made.'); stripParam(); }
+  else if (p.get('promote') === 'success') { showNotif('Your post is promoted. It’ll reach more people.'); stripParam(); }
+  else if (p.get('promote') === 'cancel') { showNotif('Promotion canceled. No charge was made.'); stripParam(); }
   else if (p.get('ad') === 'success') { showNotif('Your ad is live 🎉'); stripParam(); }
-  else if (p.get('ad') === 'cancel') { showNotif('Ad payment canceled — no charge was made.'); stripParam(); }
-  else if (p.get('tip') === 'success') { showNotif('Tip sent — thank you for supporting them!'); stripParam(); }
-  else if (p.get('tip') === 'cancel') { showNotif('Tip canceled — no charge was made.'); stripParam(); }
-  else if (p.get('ticket') === 'success') { showNotif('You’re going — your ticket is confirmed.'); stripParam(); }
-  else if (p.get('nlsub') === 'success') { showNotif('Subscribed — enjoy the newsletter!'); stripParam(); }
-  else if (p.get('creatorsub') === 'success') { showNotif('You’re subscribed — enjoy the exclusive posts!'); stripParam(); }
-  else if (p.get('creatorsub') === 'cancel') { showNotif('Subscription canceled — no charge was made.'); stripParam(); }
-  else if (p.get('invoice') === 'success') { showNotif('Invoice paid — thank you!'); stripParam(); }
-  else if (p.get('invoice') === 'cancel') { showNotif('Payment canceled — no charge was made.'); stripParam(); }
-  else if (p.get('order') === 'success') { showNotif('Order placed — thank you!'); stripParam(); }
-  else if (p.get('order') === 'cancel') { showNotif('Checkout canceled — no charge was made.'); stripParam(); }
+  else if (p.get('ad') === 'cancel') { showNotif('Ad payment canceled. No charge was made.'); stripParam(); }
+  else if (p.get('tip') === 'success') { showNotif('Tip sent. Thank you for supporting them!'); stripParam(); }
+  else if (p.get('tip') === 'cancel') { showNotif('Tip canceled. No charge was made.'); stripParam(); }
+  else if (p.get('ticket') === 'success') { showNotif('You’re going. Your ticket is confirmed.'); stripParam(); }
+  else if (p.get('nlsub') === 'success') { showNotif('Subscribed. Enjoy the newsletter!'); stripParam(); }
+  else if (p.get('creatorsub') === 'success') { showNotif('You’re subscribed. Enjoy the exclusive posts!'); stripParam(); }
+  else if (p.get('creatorsub') === 'cancel') { showNotif('Subscription canceled. No charge was made.'); stripParam(); }
+  else if (p.get('invoice') === 'success') { showNotif('Invoice paid. Thank you!'); stripParam(); }
+  else if (p.get('invoice') === 'cancel') { showNotif('Payment canceled. No charge was made.'); stripParam(); }
+  else if (p.get('order') === 'success') { showNotif('Order placed. Thank you!'); stripParam(); }
+  else if (p.get('order') === 'cancel') { showNotif('Checkout canceled. No charge was made.'); stripParam(); }
   else if (p.get('pay') === 'success') { showNotif('Money sent!'); stripParam(); }
-  else if (p.get('pay') === 'cancel') { showNotif('Payment canceled — no charge was made.'); stripParam(); }
+  else if (p.get('pay') === 'cancel') { showNotif('Payment canceled. No charge was made.'); stripParam(); }
   else if (p.get('topup') === 'success') { showNotif('Money added to your wallet.'); stripParam(); }
-  else if (p.get('topup') === 'cancel') { showNotif('Top-up canceled — no charge was made.'); stripParam(); }
-  else if (p.get('cashout') === 'ready') { showNotif('Bank setup complete — you can cash out now.'); stripParam(); }
-  else if (p.get('cashout') === 'refresh') { showNotif('Bank setup didn’t finish — try again.'); stripParam(); }
+  else if (p.get('topup') === 'cancel') { showNotif('Top-up canceled. No charge was made.'); stripParam(); }
+  else if (p.get('cashout') === 'ready') { showNotif('Bank setup complete. You can cash out now.'); stripParam(); }
+  else if (p.get('cashout') === 'refresh') { showNotif('Bank setup didn’t finish. Try again.'); stripParam(); }
   // Referral invite link (?ref=CODE): stash it; it's claimed once the user is signed in.
   if (p.get('ref')) { try { localStorage.setItem('atwe_ref', p.get('ref').toUpperCase().slice(0, 16)); } catch {} stripParam(); }
   if (p.get('aff')) { const ac = p.get('aff').toUpperCase().slice(0, 16); try { localStorage.setItem('atwe_aff', ac); } catch {} API.req('POST', '/api/affiliate/click/' + encodeURIComponent(ac)).catch(() => {}); stripParam(); }
@@ -17001,7 +17001,7 @@ function otpPaste(e) {
   otpSync();
 }
 function checkEmailHint() {
-  showNotif('We emailed you a 6-digit code — check your inbox (and spam).');
+  showNotif('We emailed you a 6-digit code. Check your inbox (and spam).');
 }
 
 /* ── Resend countdown ── */
@@ -18331,9 +18331,9 @@ function startSuCountdown(secs) {
 let _gTokenClient = null;
 function googleLogin() {
   const cid = S.config?.googleClientId;
-  if (!cid) { showNotif('Google sign-in is coming soon — use a username or email for now.'); return; }
+  if (!cid) { showNotif('Google sign-in is coming soon. Use a username or email for now.'); return; }
   if (!(window.google && google.accounts && google.accounts.oauth2)) {
-    showNotif('Google sign-in is still loading — try again in a moment.'); return;
+    showNotif('Google sign-in is still loading. Try again in a moment.'); return;
   }
   try {
     if (!_gTokenClient) {
@@ -18391,7 +18391,7 @@ function loadAppleSDK() {
 }
 async function appleLogin() {
   const cid = S.config?.appleClientId;
-  if (!cid) { showNotif('Apple sign-in is coming soon — use a username or email for now.'); return; }
+  if (!cid) { showNotif('Apple sign-in is coming soon. Use a username or email for now.'); return; }
   try {
     await loadAppleSDK();
     AppleID.auth.init({ clientId: cid, scope: 'name email', redirectURI: location.origin + '/', usePopup: true, state: Math.random().toString(36).slice(2) });
@@ -18405,7 +18405,7 @@ async function appleLogin() {
   } catch (e) {
     const code = e && (e.error || (e.message === 'sdk' && 'sdk'));
     if (code === 'popup_closed_by_user' || code === 'user_cancelled_authorize' || code === 'user_trigger_new_signin_flow') return; // user dismissed
-    if (code === 'sdk') { showNotif('Apple sign-in is still loading — try again in a moment.'); return; }
+    if (code === 'sdk') { showNotif('Apple sign-in is still loading. Try again in a moment.'); return; }
     showNotif((e && e.message) || 'Apple sign-in failed. Please try again.');
   }
 }
@@ -18750,7 +18750,7 @@ function newProject() {
 function loadProject(id) {
   newChat();
   S._activeProject = id;
-  showNotif('Project opened — new chats will be added here.');
+  showNotif('Project opened. New chats will be added here.');
 }
 
 function getOrCreateChat(firstMsg) {
@@ -19276,7 +19276,7 @@ function toggleMic() {
     document.getElementById('micBtn').classList.remove('recording');
     inp.style.display = '';
     document.getElementById('voiceAnim').classList.remove('active');
-    showNotif('Voice input error — try again.');
+    showNotif('Voice input error. Try again.');
   };
   recognition.start();
 }
@@ -19337,7 +19337,7 @@ async function acApplyVerification(btn) {
   try {
     const r = await API.req('POST', '/api/verification/apply', {});
     if (S.user) S.user.verification = r.verification;
-    showNotif('Application submitted — your badge is under review.');
+    showNotif('Application submitted. Your badge is under review.');
   } catch (e) {
     showNotif(e && e.message ? e.message : 'Could not submit. Please try again.');
   }
@@ -22040,7 +22040,7 @@ async function acSubmitReport() {
   const btn = document.getElementById('reportSubmit'); btn.disabled = true;
   try {
     await API.req('POST', '/api/reports', { targetType: r.type, targetId: r.id, reason: AC._reportReason, note: document.getElementById('reportNote').value.trim() });
-    closeOverlay('reportSheet'); showNotif('Thanks — your report was sent to the Atwe team.');
+    closeOverlay('reportSheet'); showNotif('Thanks. Your report was sent to the Atwe team.');
   } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not submit the report.'); }
 }
 
@@ -23147,7 +23147,7 @@ async function acPublishIssue() {
   if (!title) { showNotif('Give the issue a title.'); return; }
   try {
     await API.req('POST', '/api/newsletters/' + id + '/issues', { title, body: document.getElementById('nlIssueBody').value.trim() });
-    closeOverlay('nlIssueCompose'); showNotif('Issue published — subscribers notified.');
+    closeOverlay('nlIssueCompose'); showNotif('Issue published. Subscribers notified.');
     acOpenNewsletter(id);
   } catch (e) { showNotif(e.message || 'Could not publish.'); }
 }
@@ -23422,7 +23422,7 @@ async function acEnrollCourse() {
   if (c.priceCents && !(await appConfirm({ title: 'Enroll in this course?', message: c.title + ' · $' + (c.priceCents / 100).toFixed(2) + ' from your wallet balance.', confirmText: 'Enroll' }))) return;
   try {
     await API.req('POST', '/api/courses/' + c.id + '/enroll');
-    showNotif('Enrolled — happy learning!');
+    showNotif('Enrolled. Happy learning!');
     if (c.priceCents) acRefreshBalance && acRefreshBalance();
     acOpenCourse(c.id);
   } catch (e) { acHandlePayErr ? acHandlePayErr(e, 'Could not enroll.') : showNotif(e.message || 'Could not enroll.'); }
@@ -24368,7 +24368,7 @@ async function acRankApplicants(id) {
     const map = {}; (ranked || []).forEach((r) => { map[r.uid] = r; });
     (AC._applicants || []).forEach((a) => { const r = map[a.id]; a.aiScore = r ? r.score : null; a.aiReason = r ? r.reason : null; });
     AC._applRanked = true; acRenderApplicantList(id);
-    showNotif('Ranked by Atwe AI — best fit first.');
+    showNotif('Ranked by Atwe AI. Best fit first.');
   } catch (e) { if (btn) { btn.disabled = false; btn.textContent = '✨ Rank'; } showNotif(e.message || 'Could not rank.'); }
 }
 function acRenderApplicantList(id) {
@@ -24542,7 +24542,7 @@ function acScreenRender() {
     const yn = q.type === 'yesno' ? `<select onchange="acScreenSet(${i},'expect',this.value)"><option value="">Any answer</option><option value="yes" ${q.expect === 'yes' ? 'selected' : ''}>Must be Yes</option><option value="no" ${q.expect === 'no' ? 'selected' : ''}>Must be No</option></select>` : '';
     const num = q.type === 'number' ? `<input type="number" placeholder="Min" value="${q.expect != null ? q.expect : ''}" style="width:80px;margin:0;" oninput="acScreenSet(${i},'expect',this.value)"/>` : '';
     return `<div class="jp-sq">
-      <input type="text" placeholder="Question — e.g. Authorized to work here?" value="${escHtml(q.text || '')}" oninput="acScreenSet(${i},'text',this.value)" maxlength="200"/>
+      <input type="text" placeholder="Question, e.g. Authorized to work here?" value="${escHtml(q.text || '')}" oninput="acScreenSet(${i},'text',this.value)" maxlength="200"/>
       <div class="jp-sq-row">
         <select onchange="acScreenSet(${i},'type',this.value)"><option value="yesno" ${q.type === 'yesno' ? 'selected' : ''}>Yes / No</option><option value="number" ${q.type === 'number' ? 'selected' : ''}>Number</option><option value="text" ${q.type === 'text' ? 'selected' : ''}>Text</option></select>
         ${yn}${num}
@@ -25672,7 +25672,7 @@ async function acFeedReport(id) {
   const p = AC._immPosts && AC._immPosts[id]; if (!p) return;
   const ok = await appConfirm({ title: 'Report this video?', message: 'Our team will review it for violating Atwe’s guidelines.', confirmText: 'Report', danger: true });
   if (!ok) return;
-  try { await API.req('POST', '/api/reports', { targetType: 'feedpost', targetId: id, reason: 'inappropriate' }); showNotif('Reported — thank you'); }
+  try { await API.req('POST', '/api/reports', { targetType: 'feedpost', targetId: id, reason: 'inappropriate' }); showNotif('Reported. Thank you'); }
   catch (e) { showNotif(e.message || 'Could not report.'); }
 }
 // Send the video in a message — reuses the forward picker to pick people/groups.
@@ -26607,7 +26607,7 @@ async function acToggleJoinFeed(id, btn) {
     if (leaving && !r.isMember) f.members = Math.max(0, (f.members || 1) - (btn.classList.contains('joined') ? 1 : 0));
     btn.className = 'ac-join-btn ' + acFeedJoinClass(f);
     btn.textContent = acFeedJoinLabel(f);
-    if (r.requested) showNotif('Request sent — the admin will review it.');
+    if (r.requested) showNotif('Request sent. The admin will review it.');
   } catch (e) { showNotif(e.message || 'Could not update.'); }
   btn._busy = false;
 }
@@ -26677,7 +26677,7 @@ async function acToggleJoinFeedScreen(btn) {
     btn.className = 'ac-join-btn ' + acFeedJoinClass(f);
     btn.textContent = acFeedJoinLabel(f);
     const b = document.querySelector('#acFeedBody .ac-stat b'); if (b) b.textContent = f.members;
-    if (r.requested) showNotif('Request sent — the admin will review it.');
+    if (r.requested) showNotif('Request sent. The admin will review it.');
   } catch (e) { showNotif(e.message || 'Could not update.'); }
   btn._busy = false;
 }
@@ -27694,7 +27694,7 @@ function acSaveChatPrefs() {
   // once, then tell the user.
   return API.req('PUT', '/api/atchat/prefs', body).catch(() =>
     new Promise(r => setTimeout(r, 1200)).then(() => API.req('PUT', '/api/atchat/prefs', body))
-      .catch(() => { showNotif('Couldn’t sync your chat settings — check your connection.'); })
+      .catch(() => { showNotif('Couldn’t sync your chat settings. Check your connection.'); })
   );
 }
 // Archive/unarchive as a TARGETED server op — never part of the full prefs blob, so a
@@ -27704,7 +27704,7 @@ function acPushArchive(body) {
   if (!isAccount()) return Promise.resolve();
   return API.req('POST', '/api/atchat/archive', body).catch(() =>
     new Promise(r => setTimeout(r, 1200)).then(() => API.req('POST', '/api/atchat/archive', body))
-      .catch(() => { showNotif('Couldn’t sync your archived chats — check your connection.'); })
+      .catch(() => { showNotif('Couldn’t sync your archived chats. Check your connection.'); })
   );
 }
 // Apply a live 'prefsync' event (archive changed on another of the user's devices): replace
@@ -30049,7 +30049,7 @@ async function acAiRun(task, getText, setText) {
   showNotif('Atwe AI is writing…');
   try {
     const r = await API.req('POST', '/api/ai/write', { task, text, instruction });
-    if (r.text) { setText(r.text); showNotif('Done — review and edit before posting.'); }
+    if (r.text) { setText(r.text); showNotif('Done. Review and edit before posting.'); }
   } catch (e) { showNotif(e.message || 'Atwe AI is unavailable right now.'); }
 }
 function acComposeAi(e) {
@@ -30062,14 +30062,14 @@ async function acProfileAi(field) {
   const headline = document.getElementById('pfHeadline').value.trim();
   const bio = document.getElementById('pfBio').value.trim();
   const ctx = [name && ('Name: ' + name), headline && ('Current headline: ' + headline), bio && ('Current bio: ' + bio)].filter(Boolean).join('\n');
-  if (!ctx) { showNotif('Add a few details first — name, role, or a line about you.'); return; }
+  if (!ctx) { showNotif('Add a few details first. Name, role, or a line about you.'); return; }
   showNotif('Atwe AI is polishing your ' + (field === 'headline' ? 'headline' : 'bio') + '…');
   try {
     const r = await API.req('POST', '/api/ai/write', { task: field, text: ctx });
     if (!r.text) return;
     if (field === 'headline') document.getElementById('pfHeadline').value = r.text.slice(0, 120);
     else document.getElementById('pfBio').value = r.text.slice(0, 280);
-    showNotif('Updated — tweak it, then Save.');
+    showNotif('Updated. Tweak it, then Save.');
   } catch (e) { showNotif(e.message || 'Atwe AI is unavailable right now.'); }
 }
 // Show an AI text result in the Atwe AI card (reuses the explain overlay).
@@ -30173,7 +30173,7 @@ async function acSelAiAct(task) {
       const ns = r.s, ne = r.s + out.length;
       try { inp.focus(); inp.setSelectionRange(ns, ne); } catch {}
       AC._selRange = { s: ns, e: ne };
-      showNotif('Updated — edit before sending.');
+      showNotif('Updated. Edit before sending.');
     }
   } catch (e) { showNotif((e && e.message) || 'Atwe AI is unavailable right now.'); }
   finally { AC._selBusy = false; if (bar) bar.classList.remove('busy'); acHideSelToolbar(); }
@@ -30365,7 +30365,7 @@ async function acSubmitPost() {
           if (feedCtx) acOpenFeed(feedCtx);
           else if (circleCtx) acOpenCircle(circleCtx);
           else acGoHome();
-        } catch (e) { showNotif('Could not undo — the post may already be gone.'); }
+        } catch (e) { showNotif('Could not undo. The post may already be gone.'); }
       });
     } else {
       showNotif('Posted!');
@@ -31785,7 +31785,7 @@ async function acPayInvoice() {
   try {
     const r = await API.req('POST', '/api/invoices/' + AC._invId + '/pay');
     if (r.url) { location.href = r.url; return; }
-    showNotif('Paid — thank you!'); acOpenInvoice(AC._invId);
+    showNotif('Paid. Thank you!'); acOpenInvoice(AC._invId);
   } catch (e) { showNotif(e.message || 'Could not pay the invoice.'); }
 }
 async function acCancelInvoice() {
@@ -31893,7 +31893,7 @@ async function acOpenQuote(id) {
 async function acAcceptQuote() {
   try {
     const r = await API.req('POST', '/api/quotes/' + AC._qId + '/accept');
-    showNotif('Quote accepted — pay the invoice to get started.');
+    showNotif('Quote accepted. Pay the invoice to get started.');
     closeOverlay('quoteView');
     if (r.invoice && r.invoice.id) acOpenInvoice(r.invoice.id);
   } catch (e) { showNotif(e.message || 'Could not accept the quote.'); }
@@ -32117,7 +32117,7 @@ async function acRentalBook(id) {
   const s = (document.getElementById('rentStart') || {}).value, e = (document.getElementById('rentEnd') || {}).value;
   if (!s || !e) { showNotif('Pick your check-in and check-out dates.'); return; }
   if (Date.parse(e) <= Date.parse(s)) { showNotif('Check-out must be after check-in.'); return; }
-  try { await API.req('POST', '/api/rentals/' + id + '/book', { startDate: s, endDate: e }); closeOverlay('listingView'); showNotif('Booking requested — the host will confirm.'); }
+  try { await API.req('POST', '/api/rentals/' + id + '/book', { startDate: s, endDate: e }); closeOverlay('listingView'); showNotif('Booking requested. The host will confirm.'); }
   catch (err) { showNotif((err && err.message) || 'Could not request the booking.'); }
 }
 const _BK_STATUS = { requested: 'Requested', confirmed: 'Confirmed', paid: 'Booked', declined: 'Declined', cancelled: 'Cancelled' };
@@ -32165,9 +32165,9 @@ async function acBookingCancel(id) {
   catch (e) { showNotif((e && e.message) || 'Could not cancel.'); }
 }
 async function acRentalPay(id, total) {
-  if (typeof acCanPayBalance === 'function' && !acCanPayBalance(total)) { showNotif('Not enough balance — top up your wallet first.'); if (typeof acOpenWallet === 'function') acOpenWallet(); return; }
+  if (typeof acCanPayBalance === 'function' && !acCanPayBalance(total)) { showNotif('Not enough balance. Top up your wallet first.'); if (typeof acOpenWallet === 'function') acOpenWallet(); return; }
   const cid = (typeof acPayCid === 'function') ? acPayCid() : ('rent' + id + '_' + Date.now());
-  try { await API.req('POST', '/api/rentals/bookings/' + id + '/pay', { clientId: cid }); showNotif('Booking paid — enjoy your stay! 🎉'); if (typeof acRefreshBalance === 'function') acRefreshBalance(); acLoadBookings(); }
+  try { await API.req('POST', '/api/rentals/bookings/' + id + '/pay', { clientId: cid }); showNotif('Booking paid. Enjoy your stay! 🎉'); if (typeof acRefreshBalance === 'function') acRefreshBalance(); acLoadBookings(); }
   catch (e) { if (e && e.body && e.body.insufficientBalance) { showNotif('Not enough balance.'); return; } showNotif((e && e.message) || 'Could not pay.'); }
 }
 // Pick a variant on the open listing → highlight chip, reset qty, re-render the buy block.
@@ -32363,7 +32363,7 @@ async function acLoadMarketplace() {
 // Save the current marketplace query (+ kind) as an alert.
 async function acSaveMktSearch() {
   if (!AC._mktQ || AC._mktQ.length < 2) return;
-  try { await API.req('POST', '/api/saved-market-searches', { q: AC._mktQ, kind: AC._mktKind || undefined }); showNotif('Saved — we’ll alert you on matches.'); }
+  try { await API.req('POST', '/api/saved-market-searches', { q: AC._mktQ, kind: AC._mktKind || undefined }); showNotif('Saved. We’ll alert you on matches.'); }
   catch (e) { showNotif(e.message || 'Could not save the search.'); }
 }
 async function acOpenSavedSearches() {
@@ -32997,7 +32997,7 @@ async function acCartRecoveryCheckout(businessId) {
     const { carts } = await API.req('GET', '/api/cart');
     AC._carts = carts || [];
     const g = AC._carts.find((c) => c.seller.id === businessId);
-    if (!g || !g.items.length) { showNotif('Your cart is empty — those items may no longer be available.'); return; }
+    if (!g || !g.items.length) { showNotif('Your cart is empty. Those items may no longer be available.'); return; }
     acCheckout(businessId);
   } catch (e) { showNotif((e && e.message) || 'Could not open checkout.'); }
 }
@@ -33675,7 +33675,7 @@ async function acOpenPayLink(code) {
 // Buyer confirms receipt → releases the held escrow to the seller.
 async function acConfirmOrder() {
   if (!(await appConfirm({ title: 'Release payment?', message: 'Confirm you’ve received your order. The held payment goes to the seller — this can’t be undone.', confirmText: 'Confirm & release' }))) return;
-  try { await API.req('POST', '/api/orders/' + AC._ordId + '/confirm'); showNotif('Payment released — thanks!'); acRefreshBalance(); acOpenOrder(AC._ordId); }
+  try { await API.req('POST', '/api/orders/' + AC._ordId + '/confirm'); showNotif('Payment released. Thanks!'); acRefreshBalance(); acOpenOrder(AC._ordId); }
   catch (e) { showNotif(e.message || 'Could not release the payment.'); }
 }
 // Open a dispute (buyer or seller) → goes to Atwe for review.
@@ -33683,7 +33683,7 @@ function acDisputeOrder() { document.getElementById('disputeReason').value = '';
 async function acSubmitDispute() {
   const reason = document.getElementById('disputeReason').value.trim();
   if (!reason) { showNotif('Tell us what went wrong.'); return; }
-  try { await API.req('POST', '/api/orders/' + AC._ordId + '/dispute', { reason }); closeOverlay('disputeView'); showNotif('Dispute opened — we’ll review it.'); acOpenOrder(AC._ordId); }
+  try { await API.req('POST', '/api/orders/' + AC._ordId + '/dispute', { reason }); closeOverlay('disputeView'); showNotif('Dispute opened. We’ll review it.'); acOpenOrder(AC._ordId); }
   catch (e) { showNotif(e.message || 'Could not open the dispute.'); }
 }
 
@@ -34211,7 +34211,7 @@ async function acPayCampaign(id, amountCents) {
     if (r && r.url) { location.href = r.url; return; }
     showNotif('Your ad is live 🎉'); if (typeof acRefreshBalance === 'function') acRefreshBalance(); acOpenAds();
   } catch (e) {
-    if (e && e.body && e.body.insufficientBalance) return showNotif('Not enough balance — top up your wallet or set up card billing.');
+    if (e && e.body && e.body.insufficientBalance) return showNotif('Not enough balance. Top up your wallet or set up card billing.');
     showNotif((e && e.message) || 'Could not process the payment.');
   }
 }
@@ -34319,7 +34319,7 @@ function acAffPickBadge(input) {
   const f = input.files && input.files[0]; if (!f) return;
   const r = new FileReader();
   r.onload = () => {
-    if (typeof r.result !== 'string' || r.result.length > 1200000) return showNotif('That image is too large — use a small icon (max ~1MB).');
+    if (typeof r.result !== 'string' || r.result.length > 1200000) return showNotif('That image is too large. Use a small icon (max ~1MB).');
     AC._affBadge = r.result;
     document.getElementById('affPreview').innerHTML = `<img src="${r.result}" alt="" style="width:64px;height:64px;border-radius:16px;object-fit:cover;box-shadow:0 0 0 1px rgba(128,128,128,.2);"/>`;
     const btn = document.getElementById('affPickBtn'); if (btn) btn.textContent = 'Change logo';
@@ -34407,7 +34407,7 @@ async function acSplitDoCreate() {
   const btn = document.getElementById('splitCreateBtn'); if (btn) btn.disabled = true;
   try {
     await API.req('POST', '/api/splits', { title, participants: AC._splitPeople.map(p => ({ userId: p.id, amountCents: each })) });
-    closeOverlay('splitCreate'); showNotif('Requests sent — they can pay their share.');
+    closeOverlay('splitCreate'); showNotif('Requests sent. They can pay their share.');
     if (!document.getElementById('splitView').classList.contains('hidden')) { acSplitTab('created'); }
   } catch (e) { showNotif(e.message || 'Could not create the split.'); }
   finally { if (btn) btn.disabled = false; }
@@ -34586,7 +34586,7 @@ function acCopyText(text, okMsg) {
 }
 function fallbackCopy(text, done) {
   try { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); done && done(); }
-  catch { showNotif('Couldn’t copy — long-press to copy manually.'); }
+  catch { showNotif('Couldn’t copy. Long-press to copy manually.'); }
 }
 
 /* ── Loyalty / rewards points ── */
@@ -34690,7 +34690,7 @@ function acHandleScannedQr(data) {
     return;
   }
   // Profile mode: a ?u=<username> link, a /<username> path, or a bare @username.
-  if (/^atwe-link:/i.test(s)) { acStopQrScan(); closeOverlay('qrScanView'); showNotif('That’s a login QR — use Settings → Link a device.'); return; }
+  if (/^atwe-link:/i.test(s)) { acStopQrScan(); closeOverlay('qrScanView'); showNotif('That’s a login QR. Use Settings → Link a device.'); return; }
   acStopQrScan(); closeOverlay('qrScanView'); closeOverlay('qrView');
   let username = null;
   try { const u = new URL(s); username = u.searchParams.get('u'); if (!username) { const m = u.pathname.match(/^\/([A-Za-z0-9._-]+)$/); if (m && !['circle', 'group'].includes(m[1])) username = m[1]; } }
@@ -34705,7 +34705,7 @@ async function acConfirmLinkDevice(code) {
   if (!ok) return;
   try {
     await API.req('POST', '/api/auth/link/approve', { code });
-    showNotif('Device linked — it’s now signed in. You can manage it in Devices & sessions.');
+    showNotif('Device linked. It’s now signed in. You can manage it in Devices & sessions.');
   } catch (e) { showNotif(e.message || 'Could not link the device.'); }
 }
 /* ── Device-link: logged-out side (show a QR, wait for approval) ── */
@@ -35430,7 +35430,7 @@ async function acRevPickMedia(e) {
   for (const f of files) {
     if (AC._revMedia.length >= 4) { showNotif('Up to 4 photos/videos.'); break; }
     if (f.type && f.type.startsWith('video/')) {
-      if (f.size > 3.6 * 1024 * 1024) { showNotif('That video is too large — keep it under 3.5MB.'); continue; }
+      if (f.size > 3.6 * 1024 * 1024) { showNotif('That video is too large. Keep it under 3.5MB.'); continue; }
       try { AC._revMedia.push(await acFileToDataUrl(f)); } catch (_) {}
     } else if (f.type && f.type.startsWith('image/')) {
       try { await new Promise(r => downscaleImage(f, (d) => { AC._revMedia.push(d); r(); }, 1280)); } catch (_) {}
@@ -35470,7 +35470,7 @@ async function acSubmitBuyerRate() {
   if (!AC._brStars) { showNotif('Pick a star rating.'); return; }
   try {
     await API.req('POST', '/api/orders/' + AC._brOrder + '/review-buyer', { rating: AC._brStars, body: document.getElementById('buyerRateBody').value.trim() });
-    closeOverlay('buyerRateView'); showNotif('Thanks — rating saved.');
+    closeOverlay('buyerRateView'); showNotif('Thanks. Rating saved.');
   } catch (e) { showNotif(e.message || 'Could not save your rating.'); }
 }
 async function acSubmitReview() {
@@ -35486,7 +35486,7 @@ async function acSubmitReview() {
 function acShipOrder() { document.getElementById('shipCarrier').value = 'USPS'; document.getElementById('shipTracking').value = ''; showOverlay('shipSheet'); }
 async function acSubmitShip() {
   try { await API.req('POST', '/api/orders/' + AC._ordId + '/ship', { carrier: document.getElementById('shipCarrier').value, tracking: document.getElementById('shipTracking').value.trim() });
-    closeOverlay('shipSheet'); showNotif('Marked shipped — the buyer’s been notified.'); acOpenOrder(AC._ordId);
+    closeOverlay('shipSheet'); showNotif('Marked shipped. The buyer’s been notified.'); acOpenOrder(AC._ordId);
   } catch (e) { showNotif(e.message || 'Could not update.'); }
 }
 async function acDeliverOrder() {
@@ -35550,7 +35550,7 @@ async function acLabelBuy() {
   document.getElementById('labelBody').innerHTML = '<div class="ac-empty" style="padding:20px 0;">Buying label…</div>';
   try {
     await API.req('POST', _acLabelBase() + '/buy', { rateId: AC._label.chosenId, clientId: AC._label.cid });
-    closeOverlay('labelSheet'); showNotif('Label purchased — the buyer’s been notified.'); acOpenOrder(AC._ordId);
+    closeOverlay('labelSheet'); showNotif('Label purchased. The buyer’s been notified.'); acOpenOrder(AC._ordId);
   } catch (e) {
     showNotif(e.message || 'Could not buy the label.');
     acLabelRenderRates();
@@ -35646,7 +35646,7 @@ async function acBookSlot(iso) {
     showNotif('Booked! Confirmed for ' + when + (r.depositHeld ? ' · deposit held.' : '.'));
     if (r.depositHeld) acRefreshBalance && acRefreshBalance();
   } catch (e) {
-    if (e && e.body && e.body.slotTaken) { showNotif('That time was just taken — pick another.'); acLoadBookSlots(); return; }
+    if (e && e.body && e.body.slotTaken) { showNotif('That time was just taken. Pick another.'); acLoadBookSlots(); return; }
     acHandlePayErr ? acHandlePayErr(e, 'Could not book that time.') : showNotif(e.message || 'Could not book.');
   }
 }
@@ -36098,7 +36098,7 @@ async function acSubmitRec() {
   try {
     await API.req('POST', '/api/recommendations', { username: AC._recFor.username, relationship: document.getElementById('recRel').value.trim(), body });
     closeOverlay('recWrite');
-    showNotif('Recommendation sent — they’ll choose whether to show it.');
+    showNotif('Recommendation sent. They’ll choose whether to show it.');
   } catch (e) { showNotif(e.message || 'Could not send.'); }
   finally { btn.disabled = false; btn.textContent = lbl; }
 }
@@ -37293,7 +37293,7 @@ async function acStoryPickImg(e) {
   const pick = document.getElementById('stImgPick');
   if (f.type && f.type.startsWith('video/')) {
     // A video story: same ~3.5MB ceiling as feed/reels. It carries its own audio.
-    if (f.size > 3.6 * 1024 * 1024) { showNotif('That video is too large — keep it under 3.5MB.'); return; }
+    if (f.size > 3.6 * 1024 * 1024) { showNotif('That video is too large. Keep it under 3.5MB.'); return; }
     try {
       const d = await acFileToDataUrl(f);
       AC._stVid = d; AC._stImg = null;
@@ -38753,7 +38753,7 @@ async function rtConnect() {
     try {
       const d = JSON.parse(e.data);
       if (d.type === 'cashout_status') {
-        if (d.payoutsEnabled) showNotif('🏦 Your bank is ready — you can cash out now.');
+        if (d.payoutsEnabled) showNotif('🏦 Your bank is ready. You can cash out now.');
         const cv = document.getElementById('cashoutView'); if (cv && !cv.classList.contains('hidden')) acOpenCashout();
         return;
       }
@@ -39968,7 +39968,7 @@ async function paNotInterested() {
     // Remove the card immediately wherever it's shown.
     document.querySelectorAll('.ac-post[data-postid="' + pid + '"]').forEach((card) => { card.style.transition = 'opacity .2s'; card.style.opacity = '0'; setTimeout(() => card.remove(), 200); });
     if (AC._feedPosts) AC._feedPosts = AC._feedPosts.filter((p) => p.id !== pid);
-    showNotif('Thanks — you’ll see less like this.');
+    showNotif('Thanks. You’ll see less like this.');
   } catch (e) { showNotif((e && e.message) || 'Could not update your preferences.'); }
 }
 function acBmkMoveFromMenu() { const pid = AC._paPostId; closeOverlay('postActions'); if (pid != null) acBmkMoveOpen(pid); }
@@ -43191,7 +43191,7 @@ async function acRetractSend(id) {
   AC.messages.splice(idx, 1);
   acRenderThread();
   try { await API.req('DELETE', acMsgApi(id) + '?scope=everyone'); acLoadChats?.(); }
-  catch (e) { showNotif('Couldn’t undo — the message was already delivered.'); }
+  catch (e) { showNotif('Couldn’t undo. The message was already delivered.'); }
 }
 
 /* ── Attachments: photo / video / file ── */
@@ -43236,7 +43236,7 @@ function acShareLocation() {
   showNotif('Getting your location…');
   navigator.geolocation.getCurrentPosition(
     (pos) => acSendMeta({ t: 'location', lat: pos.coords.latitude, lng: pos.coords.longitude, label: null }),
-    () => showNotif('Couldn’t get your location — check the permission.'),
+    () => showNotif('Couldn’t get your location. Check the permission.'),
     { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
   );
 }
@@ -43265,7 +43265,7 @@ async function acStartLiveLocation(seconds) {
   showNotif('Getting your location…');
   let first;
   try { first = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 })); }
-  catch { showNotif('Couldn’t get your location — check the permission.'); return; }
+  catch { showNotif('Couldn’t get your location. Check the permission.'); return; }
   let start;
   try { start = await API.req('POST', '/api/atchat/live-location', { to: peerId, seconds, lat: first.coords.latitude, lng: first.coords.longitude }); }
   catch (e) { showNotif(e.message || 'Could not start live location.'); return; }
@@ -43467,7 +43467,7 @@ async function acScheduleMsgConfirm() {
     await API.req('POST', '/api/atchat/schedule', { kind: t.kind, to: t.to, body: AC._schedBody, sendAt: new Date(val).toISOString() });
     closeOverlay('schedMsg');
     const inp = document.getElementById('acInput'); if (inp) { inp.value = ''; acAutosize(); acSaveDraft && acSaveDraft(); }
-    showNotif('Message scheduled — it’ll send automatically.');
+    showNotif('Message scheduled. It’ll send automatically.');
   } catch (e) { showNotif(e.message || 'Could not schedule the message.'); }
 }
 async function acOpenScheduled() {
@@ -43927,7 +43927,7 @@ function acToggleSecret() {
   if (AC._secret) AC._viewOnce = false;
   closeOverlay('acAttachMenu');
   acRenderSecretBar();
-  if (AC._secret) showNotif('Secret mode on — your next message vanishes after it’s seen.');
+  if (AC._secret) showNotif('Secret mode on. Your next message vanishes after it’s seen.');
 }
 function acRenderSecretBar() {
   const bar = document.getElementById('acSecretBar'); if (!bar) return;
@@ -44154,7 +44154,7 @@ function acVoiceFinalize() {
   acRecChunks = [];
   // An empty/near-silent blob means the tap was too quick (released during mic
   // spin-up). Tell the user instead of dropping it silently.
-  if (blob.size < 512) { if (autoSend) showNotif('Hold to record — that was too short.'); return; }
+  if (blob.size < 512) { if (autoSend) showNotif('Hold to record. That was too short.'); return; }
   if (blob.size > AC_MEDIA_MAX) { showNotif('That voice note is too long (16 MB max).'); return; }
   const reader = new FileReader();
   reader.onload = () => { acSetAttach({ data: reader.result, kind: 'audio', name: null }); if (autoSend) acSend(); };
@@ -44633,7 +44633,7 @@ function acPfUseLocation() {
   if (!navigator.geolocation) { showNotif('Location isn’t available on this device.'); return; }
   const btn = document.getElementById('pfGeoBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Getting location…'; }
   navigator.geolocation.getCurrentPosition(
-    (pos) => { _pfGeo = { lat: +pos.coords.latitude.toFixed(5), lng: +pos.coords.longitude.toFixed(5) }; if (btn) btn.disabled = false; acRenderPfGeo(); showNotif('Location captured — save to apply.'); },
+    (pos) => { _pfGeo = { lat: +pos.coords.latitude.toFixed(5), lng: +pos.coords.longitude.toFixed(5) }; if (btn) btn.disabled = false; acRenderPfGeo(); showNotif('Location captured. Save to apply.'); },
     () => { if (btn) { btn.disabled = false; } acRenderPfGeo(); showNotif('Couldn’t get your location. Check permissions.'); },
     { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
   );
@@ -44856,7 +44856,7 @@ function closeCamera() {
 }
 function capturePhoto() {
   const v = document.getElementById('camVideo');
-  if (!v.videoWidth) { showNotif('Camera is still starting — try again in a moment.'); return; }
+  if (!v.videoWidth) { showNotif('Camera is still starting. Try again in a moment.'); return; }
   const c = document.getElementById('camCanvas');
   c.width = v.videoWidth; c.height = v.videoHeight;
   c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
