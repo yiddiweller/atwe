@@ -7640,7 +7640,7 @@ app.get('/api/stories', auth.requireAuth, async (req, res) => {
          JOIN users u ON u.id = s.user_id
          LEFT JOIN story_views sv ON sv.story_id = s.id AND sv.viewer_id = $1
         WHERE s.expires_at > now()
-          AND (s.user_id = $1 OR (NOT u.deactivated AND s.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1)))
+          AND (s.user_id = $1 OR (NOT u.deactivated AND s.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))${_demoMode ? ' OR (u.is_demo AND NOT u.deactivated)' : ''})
           AND (s.audience = 'all' OR s.user_id = $1 OR s.user_id IN (SELECT user_id FROM close_friends WHERE friend_id = $1))
           AND s.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
           AND s.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)
