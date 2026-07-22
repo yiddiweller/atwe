@@ -1459,7 +1459,7 @@ body.light #aiMenuPop,body.light #chatMenuPop,body.light #profileMenu{
 #acMeBody{padding:calc(env(safe-area-inset-top,0px) + 18px) var(--feed-gutter) 40px;max-width:560px;margin:0 auto;width:100%;}
 .me-hero{position:relative;display:flex;align-items:center;gap:15px;width:100%;padding:18px 17px;margin:2px 0 18px;
   border:none;border-radius:20px;cursor:pointer;text-align:start;font-family:inherit;overflow:hidden;
-  background:linear-gradient(135deg,var(--s2),var(--s1));-webkit-tap-highlight-color:transparent;transition:transform var(--t-fast) var(--ease);}
+  background:var(--s3);-webkit-tap-highlight-color:transparent;transition:transform var(--t-fast) var(--ease);}
 .me-hero:active{transform:scale(.99);}
 .me-hero-ava{flex:0 0 auto;}
 .me-hero-ava .user-avatar{width:62px;height:62px;font-size:24px;}
@@ -1485,11 +1485,15 @@ body.light #aiMenuPop,body.light #chatMenuPop,body.light #profileMenu{
 /* Border-top on the group + border-bottom on every row is what frames the WHOLE
    group top-and-bottom in the page-bg colour, not just between rows — see the
    matching `.iset-group`/`.iset-row` comment above. */
-.me-group{background:var(--s1);border:none;border-top:1px solid var(--bg);border-radius:20px;overflow:hidden;margin-bottom:12px;}
+/* Card gray matches Apple Settings (--s3 = #1C1C1E on dark) — a touch lighter than
+   the near-black surfaces elsewhere, kept theme-aware so Light stays a light card. */
+.me-group{background:var(--s3);border:none;border-top:1px solid var(--bg);border-radius:20px;overflow:hidden;margin-bottom:12px;}
 .me-row{position:relative;display:flex;align-items:center;gap:13px;width:100%;padding:12px 15px;min-height:52px;border:none;border-bottom:1px solid var(--bg);background:none;cursor:pointer;
   text-align:start;font-family:inherit;color:var(--t1);transition:background var(--t-fast) var(--ease);}
-.me-row:active{background:var(--s2);}
-@media(hover:hover){.me-row:hover{background:var(--s2);}}
+/* Press/hover: a translucent grey that LIGHTENS the card on dark and darkens it on
+   light, so the highlight reads correctly in both themes on the lighter card. */
+.me-row:active{background:rgba(120,120,128,.18);}
+@media(hover:hover){.me-row:hover{background:rgba(120,120,128,.18);}}
 /* Blue-tint icon disc (design blueprint: blue is an identity accent, and icon
    discs are one of its allowed uses). Soft --accent-dim fill + accent glyph. */
 .me-ic{width:30px;height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:9px;background:var(--accent-dim);color:var(--accent);}
@@ -15617,7 +15621,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1361'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1362'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
