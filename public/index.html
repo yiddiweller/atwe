@@ -7271,6 +7271,13 @@ body.light .ac-brand-logo{filter:invert(1);}
 .ac-searchbar .search-ic{width:17px;height:17px;color:var(--t3);flex-shrink:0;}
 .ac-searchbar input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);font-size:15px;font-family:inherit;}
 .ac-searchbar input::placeholder{color:var(--t3);}
+/* Engine full-width search bar (sits under the brand row + scope tabs, inside the screen). */
+.eng-searchbar-wrap{padding:6px var(--feed-gutter) 8px;}
+.eng-searchbar{display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border-radius:14px;background:var(--s2);border:1px solid var(--b2);transition:border-color var(--t-fast) var(--ease);}
+.eng-searchbar:focus-within{border-color:var(--b3);}
+.eng-searchbar svg{width:18px;height:18px;stroke:var(--t3);stroke-width:2;fill:none;flex-shrink:0;}
+.eng-searchbar input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);font-size:15px;font-family:inherit;}
+.eng-searchbar input::placeholder{color:var(--t3);}
 /* The app's main vertical scroller (feed, profile, Me-hub, most screens). It must
    scroll ONLY vertically — overflow-x:hidden kills the "sloppy sideways drift on
    up/down scroll" bug (a child a hair wider than the viewport would otherwise let
@@ -11047,10 +11054,9 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         </button>
         <button class="tb-homeava hidden" id="tbHomeAva" onclick="toggleSidebar()" aria-label="Menu"></button>
         <span class="tb-pagelabel" id="tbPageLabel">Atwe</span>
-        <div class="tb-search hidden" id="tbSearch">
-          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input id="tbSearchInput" type="text" placeholder="Search everything on Atwe" aria-label="Search everything on Atwe" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="acDoSearch(this.value)"/>
-        </div>
+        <!-- Engine's search field moved to a full-width bar inside #acSearchScreen.
+             This stays as an empty hidden placeholder (syncTopbar guards on it). -->
+        <div class="tb-search hidden" id="tbSearch"></div>
       </div>
       <div class="topbar-actions">
         <button class="tb-home-act hidden" id="tbHomeCompose" onclick="acOpenPost()" aria-label="New post">
@@ -11111,6 +11117,9 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
              Beam ⋯ tools menu moved up to the brand row (#tbBrandMore). -->
         <button class="tb-feedtab tb-feedtab-add" id="acChatTabAdd" onclick="acOpenNewList(event)" aria-label="New list" title="New list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
       </div>
+      <!-- Engine (search) scope tabs — All · People · Services · … — filled by
+           acRenderSearchScopes; shown only on the Engine world (syncTopbar). -->
+      <div class="tb-feedtabs hidden" id="tbSearchScopes"></div>
       <!-- Scroll-darken overlay (Home/Beam cover). A single EMPTY element whose opacity
            is driven directly in JS — so darkening never recalcs the tab buttons; it's a
            pure GPU compositor opacity change, which keeps iOS scrolling on its own
@@ -14761,7 +14770,14 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
 
     <!-- SEARCH -->
     <div class="ac-screen hidden" id="acSearchScreen">
-      <div class="ac-search-scopes" id="acSearchScopes"></div>
+      <!-- Full-width Engine search bar (no ≡/two-line icon; just a magnifier + field),
+           sitting under the brand row + scope tabs (which live in the top bar). -->
+      <div class="eng-searchbar-wrap">
+        <div class="eng-searchbar">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="tbSearchInput" type="text" placeholder="Search everything on Atwe" aria-label="Search everything on Atwe" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="acDoSearch(this.value)"/>
+        </div>
+      </div>
       <div class="ac-list" id="acSearchPageResults"><div class="ac-empty">Search for people and posts.</div></div>
     </div>
 
@@ -15632,7 +15648,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1369'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1370'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -22651,8 +22667,9 @@ function acSearchUserRow(u) {
   return `<div class="ac-item" onclick="acGoProfile('${u.username}')">${acAvatarHtml(u.name, u.avatar, 'user-avatar', acIsBiz(u))}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</span>${tag}</div><div class="ac-item-last">${sub}</div>${acFollowedByLine(u)}${acCatChips(u.categories, false)}</div></div>`;
 }
 function acRenderSearchScopes() {
-  const el = document.getElementById('acSearchScopes'); if (!el) return;
-  el.innerHTML = _searchScopeChips.map(([s, l]) => `<button class="ac-scope-chip ${_searchScope === s ? 'active' : ''}" onclick="acSetSearchScope('${s}')">${l}</button>`).join('');
+  // Engine scopes ride in the top-bar tab row as word tabs (same look as the Home/Beam tabs).
+  const el = document.getElementById('tbSearchScopes'); if (!el) return;
+  el.innerHTML = _searchScopeChips.map(([s, l]) => `<button class="tb-feedtab ${_searchScope === s ? 'active' : ''}" onclick="acSetSearchScope('${s}')">${l}</button>`).join('');
 }
 function acGoSearch() {
   acStopMic();
@@ -22752,13 +22769,16 @@ function acSearchDiscover() {
     T("acOpenNewsletters()", 'Newsletters', I.newsletters),
     T("acOpenShowcaseDiscover()", 'Showcase', I.showcase),
   ].join('');
-  return `<div class="ac-explore">
-    <button class="xp-ai" onclick="acEngineAskAi()" aria-label="Ask Atwe AI">
+  // The "Ask Atwe AI" hero is deliberately NOT at the very top now — it sits after the
+  // first Discover section (founder: "place it lower, after scrolling a little").
+  const askAi = `<button class="xp-ai" onclick="acEngineAskAi()" aria-label="Ask Atwe AI">
       <span class="xp-ai-ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15.5 10.1 10.9 5.5 9l4.6-1.4z"/><circle cx="18" cy="17" r="1.4"/><circle cx="6" cy="16" r="1.1"/></svg></span>
       <span class="xp-ai-tx"><span class="xp-ai-t">Ask Atwe AI</span><span class="xp-ai-s">Describe what you need. Find the right job, worker, or service.</span></span>
       <svg class="xp-ai-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
-    </button>
+    </button>`;
+  return `<div class="ac-explore">
     ${discover.trim() ? '<div class="xp-catlabel">Discover</div><div class="xp-grid xp-grid-tiles">' + discover + '</div>' : ''}
+    ${askAi}
     ${more.trim() ? '<div class="xp-catlabel">More to explore</div><div class="xp-grid xp-grid-tiles">' + more + '</div>' : ''}
     <div id="acTrending"></div>
     <div id="acNearYou"></div>
@@ -24716,7 +24736,7 @@ function syncTopbar(tab) {
   const isChat = tab === 'chat';
   // Home shows the For you / Following tabs centered; Chat shows All / Chats /
   // Calls / Contacts the same way — both in place of the wordmark.
-  search.classList.toggle('hidden', !isSearch);
+  search.classList.add('hidden');   // Engine's search field now lives full-width in the screen, not the top bar
   if (feedTabs) feedTabs.classList.toggle('hidden', !isHome);
   if (chatTabs) chatTabs.classList.toggle('hidden', !isChat);
   if (!isChat) { document.getElementById('acChatMoreBtn')?.classList.add('hidden'); if (typeof acCloseChatMenu === 'function') acCloseChatMenu(); if (typeof acHideChatSearch === 'function') acHideChatSearch(); } // chat-only controls
@@ -24731,11 +24751,17 @@ function syncTopbar(tab) {
   if (aiBrand) aiBrand.style.display = isAi ? 'flex' : 'none';
   document.querySelector('.topbar')?.classList.toggle('tb-home', isHome);
   document.querySelector('.topbar')?.classList.toggle('tb-chat', isChat);
-  document.querySelector('.topbar')?.classList.toggle('tb-plain', isSearch || tab === 'ai');
+  document.querySelector('.topbar')?.classList.toggle('tb-plain', tab === 'ai');
   document.querySelector('.topbar')?.classList.toggle('tb-ai', tab === 'ai');   // AI world lockup position
-  // Home + Beam use the single-row world header (≡ · ＋ · ◯ + tabs, no label row).
-  document.querySelector('.topbar')?.classList.toggle('tb-solo', isHome || isChat);
-  document.getElementById('tbTabRow')?.classList.toggle('hidden', !(isHome || isChat));
+  // Home + Beam + Engine use the single-row world header (brand lockup + tabs).
+  document.querySelector('.topbar')?.classList.toggle('tb-solo', isHome || isChat || isSearch);
+  document.querySelector('.topbar')?.classList.toggle('tb-engine', isSearch);   // Engine-specific tweaks
+  document.getElementById('tbTabRow')?.classList.toggle('hidden', !(isHome || isChat || isSearch));
+  // Engine's scope tabs (All · People · …) ride in the tab row like the feed/chat tabs.
+  const searchScopes = document.getElementById('tbSearchScopes');
+  if (searchScopes) { searchScopes.classList.toggle('hidden', !isSearch); if (isSearch && typeof acRenderSearchScopes === 'function') acRenderSearchScopes(); }
+  // Engine: hide the "+" (no compose here); keep the ⋯ (→ Settings) + avatar.
+  document.getElementById('tbBrandPlus')?.classList.toggle('hidden', isSearch);
   // Home + Beam lead with the ≡ hamburger + the label, and a single compose "+"
   // on the right (no avatar, no bell — the extra affordances were removed).
   const homeAva = document.getElementById('tbHomeAva');
@@ -24745,7 +24771,7 @@ function syncTopbar(tab) {
   if (ham) ham.style.display = isAi ? 'none' : '';   // AI uses the swirl lockup instead of ≡
   // Brand row (Home/Beam): fill the right-side avatar with the signed-in user's photo.
   const brandProf = document.getElementById('tbBrandProf');
-  if (brandProf && (isHome || isChat)) {
+  if (brandProf && (isHome || isChat || isSearch)) {
     brandProf.innerHTML = acAvatarHtml(S.user?.name, S.user?.avatar, '', typeof acIsBiz === 'function' && acIsBiz(S.user));
   }
   // Brand label: the Atwe wordmark IMAGE on Home; the word "Beam" as text on Beam, so
@@ -24754,13 +24780,14 @@ function syncTopbar(tab) {
   const _wTxt = document.getElementById('tbBrandWordTxt');
   if (_wImg && _wTxt) {
     if (isChat) { _wImg.style.display = 'none'; _wTxt.style.display = 'inline'; _wTxt.textContent = 'Beam'; }
+    else if (isSearch) { _wImg.style.display = 'none'; _wTxt.style.display = 'inline'; _wTxt.textContent = 'Engine'; }
     else { _wImg.style.display = ''; _wTxt.style.display = 'none'; }
   }
   // World-entry flourish: arriving at Home, Beam or the AI page rolls the swirl + spits the
   // word out to the right. Only when the world actually CHANGES (re-syncs don't replay it)
   // AND never on the very first sync (_brandRollLast===null) — so it does NOT fire on app
   // open; only once you've been to another world and come back.
-  if ((isHome || isChat || isAi) && _brandRollLast !== null && _brandRollLast !== tab) {
+  if ((isHome || isChat || isAi || isSearch) && _brandRollLast !== null && _brandRollLast !== tab) {
     const lockup = isAi ? document.getElementById('tbAiBrand') : document.getElementById('tbBrandLogo');
     // Remove .rolling once the flourish ends — otherwise its (higher-specificity) rule
     // permanently overrides the tab-tap .spinning animation (the "spin stopped" bug).
@@ -24786,6 +24813,7 @@ function tbSoloPlus() {
 // The brand-row ⋯ (top, left of the "+"): opens the world's tools popover — the chat
 // tools on Beam, the AI helpers on Home. (Moved up out of the tab row.)
 function tbSoloMore(e) {
+  if (_appTab === 'search') { if (typeof openSettings === 'function') openSettings(); return; } // Engine ⋯ → Settings
   if (_appTab === 'chat') { acOpenChatMenu(e); return; }
   acOpenFeedAiMenu(e);
 }
