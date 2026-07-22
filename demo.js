@@ -106,7 +106,7 @@ async function seedDemo(client, adminId) {
         `INSERT INTO users (name, email, password_hash, username, email_verified, dob, avatar, banner, bio, headline, categories, account_type, verified, business_verify_status, is_demo, created_at)
          VALUES ($1,$2,$3,$4,true,'1990-01-01',$5,$6,$7,$8,$9::jsonb,$10,$11,$12,true, now() - make_interval(days => $13))
          ON CONFLICT (email) DO NOTHING RETURNING id`,
-        [name, email, pass, username, av, bn, bio, headline, JSON.stringify([ind.cat]), isBiz ? 'business' : 'personal', verified, bvs, (i % 30)]
+        [name, email, pass, username, av, bn, bio, headline, JSON.stringify([ind.cat]), isBiz ? 'business' : 'personal', verified, bvs, (30 + (i * 43) % 1250)]
       );
       if (!r.rows[0]) continue;
       const uid = r.rows[0].id;
@@ -234,6 +234,33 @@ async function refreshDemoStories(client) {
   } catch (e) { console.error('demo story refresh failed (non-fatal):', e.message); return 0; }
 }
 
+// "Immerse" a real account into the demo: auto-follow a varied spread of ~40 demo people
+// (across industries) so this account's feed, stories and network look like an active,
+// established user's — while leaving the rest (~60) UNfollowed so Who-to-follow / search /
+// discovery stay full and genuinely followable. Idempotent (ON CONFLICT + a skip once the
+// account already follows enough demo people), and fully reversible — turning demo mode off
+// deletes the demo users, which cascades away these follow rows. This mirrors the REAL app:
+// stories/feed are follow-based, so the demo looks authentic instead of force-fed.
+async function immerseInDemo(client, userId) {
+  try {
+    const has = await client.query(
+      `SELECT COUNT(*)::int AS n FROM follows f JOIN users u ON u.id = f.following_id
+        WHERE f.follower_id = $1 AND u.is_demo = true`, [userId]);
+    if ((has.rows[0] && has.rows[0].n) >= 20) return 0;   // already immersed — nothing to do
+    const { rows } = await client.query(
+      `SELECT id FROM users WHERE is_demo = true AND id <> $1 ORDER BY id`, [userId]);
+    if (!rows.length) return 0;
+    let made = 0;
+    // Stride the seed order (industries cycle through it) so the ~40 followed are varied.
+    for (let i = 0; i < rows.length && made < 40; i += 2) {
+      const r = await client.query(
+        'INSERT INTO follows (follower_id, following_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [userId, rows[i].id]);
+      made += r.rowCount || 0;
+    }
+    return made;
+  } catch (e) { console.error('demo immerse failed (non-fatal):', e.message); return 0; }
+}
+
 // Tear it all down: deleting the demo users cascades to their posts, follows, stories,
 // products, hashtags, etc. (everything is owned by a demo user).
 async function teardownDemo(client) {
@@ -244,4 +271,4 @@ async function teardownDemo(client) {
   return r.rowCount;
 }
 
-module.exports = { seedDemo, teardownDemo, refreshDemoStories };
+module.exports = { seedDemo, teardownDemo, refreshDemoStories, immerseInDemo };

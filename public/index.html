@@ -15631,7 +15631,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1337'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1338'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -15979,8 +15979,24 @@ function acPruneEmptyGroups(root){
 // once when the app first opens (and whenever a demo action is blocked, e.g. trying
 // to buy from a demo account), then fades away on its own.
 function acRenderDemoBanner() {
-  if (S.config && S.config.demoMode) acFlashDemo(); // first open → flash it
+  if (S.config && S.config.demoMode) { acFlashDemo(); acDemoImmerse(); } // first open → flash it + auto-follow demo people
   else { const b = document.getElementById('demoBanner'); if (b) b.remove(); }
+}
+// While demo mode is on, auto-follow a varied spread of ~40 demo people (server-side) so THIS
+// account's feed + stories look like an active, established user's — matching the real app,
+// which is follow-based. Runs once per session; refreshes the stories + feed when it lands so
+// the demo fills up immediately. No-op signed-out or when demo mode is off (the server gates it).
+let _demoImmersed = false;
+async function acDemoImmerse() {
+  if (_demoImmersed || !S.user || !S.user.username) return;
+  _demoImmersed = true;
+  try {
+    const r = await API.req('POST', '/api/demo/immerse');
+    if (r && r.followed > 0) {
+      if (typeof acLoadStoryTray === 'function') acLoadStoryTray();
+      if (_appTab === 'home' && typeof acLoadFeed === 'function') acLoadFeed();
+    }
+  } catch (e) { /* best-effort — the demo just won't pre-fill this session */ }
 }
 function acFlashDemo() {
   if (!(S.config && S.config.demoMode)) return;
