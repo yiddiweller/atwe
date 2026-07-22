@@ -730,6 +730,7 @@ app.post('/api/admin/demo', auth.requireAdmin, async (req, res) => {
       const existing = await db.query('SELECT COUNT(*)::int AS n FROM users WHERE is_demo = true');
       let count = existing.rows[0].n;
       if (count === 0) count = await demo.seedDemo(db, req.user.id); // idempotent: only seed when empty
+      else await demo.refreshDemoStories(db);  // accounts already exist → refresh the (expired) 24h stories so the tray fills up again
       _demoMode = true; await db.setSetting(DEMO_KEY, true);
       adminAudit(req, 'demo.on', 'settings', 'demo_mode', { count });
       res.json({ on: true, count });
