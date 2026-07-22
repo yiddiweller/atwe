@@ -6843,7 +6843,7 @@ body.light .cc-ic-img{filter:brightness(0);}
 /* Opaque fallback logo: show it in its own colours (no white-forcing → no white box). */
 .cc-ic-img.cc-ic-raw,body.light .cc-ic-img.cc-ic-raw{filter:none;}
 /* ─── Sponsored ad card (in the feed) + advertiser flow ─── */
-.ac-adcard{margin:0 0 2px;border:none;border-radius:18px;overflow:hidden;background:var(--s1);
+.ac-adcard{margin:0 0 2px;border:none;border-radius:18px;overflow:hidden;background:var(--s2);
   box-shadow:0 4px 20px rgba(0,0,0,.20);cursor:pointer;}
 /* In the home feed, inset the ad to the same gutter as posts so it starts/ends
    at the exact width of a post card (not edge-to-edge). */
@@ -15625,7 +15625,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1365'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1366'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
