@@ -1538,7 +1538,6 @@ async function isKnownCaller(calleeId, callerId) {
   try {
     const q = await db.query(
       `SELECT
-         EXISTS(SELECT 1 FROM contacts WHERE owner_id = $1 AND contact_id = $2) AS saved,
          EXISTS(SELECT 1 FROM connections WHERE status = 'accepted'
                 AND ((requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1))) AS connected,
          EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2) AS follows,
@@ -1546,7 +1545,7 @@ async function isKnownCaller(calleeId, callerId) {
       [calleeId, callerId]
     );
     const r = q.rows[0] || {};
-    return !!(r.saved || r.connected || r.follows || r.talked);
+    return !!(r.connected || r.follows || r.talked);
   } catch (e) { return true; }
 }
 
@@ -8317,7 +8316,6 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
                 (SELECT status FROM connections WHERE ((requester_id = $2 AND addressee_id = $1) OR (requester_id = $1 AND addressee_id = $2)) LIMIT 1) AS conn_status,
                 (SELECT requester_id FROM connections WHERE ((requester_id = $2 AND addressee_id = $1) OR (requester_id = $1 AND addressee_id = $2)) LIMIT 1) AS conn_requester,
                 EXISTS(SELECT 1 FROM follows WHERE follower_id = $2 AND following_id = $1) AS is_following,
-                EXISTS(SELECT 1 FROM contacts WHERE owner_id = $2 AND contact_id = $1) AS is_contact,
                 EXISTS(SELECT 1 FROM blocks WHERE blocker_id = $2 AND blocked_id = $1) AS is_blocked,
                 EXISTS(SELECT 1 FROM post_notify WHERE user_id = $2 AND target_id = $1) AS is_notifying`,
         [t.id, req.user.id]
@@ -8444,7 +8442,6 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       subPrice: t.sub_price_cents || 0, subBlurb: t.sub_blurb || null, isSubscribed, subscriberCount,
       subTiers: tiers, myTierId,
       isFollowing: counts.rows[0].is_following,
-      isContact: counts.rows[0].is_contact,
       isBlocked: counts.rows[0].is_blocked,
       isNotifying: counts.rows[0].is_notifying,
       isMe: t.id === req.user.id,
@@ -8495,7 +8492,7 @@ app.get('/api/public/profile/:username', async (req, res) => {
       counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts, connections: null },
       posts: posts.rows.map(mapPost),
       replies: [], skills: [], recommendations: [], featured: [], experiences: [], education: [], certifications: [],
-      connectionState: 'none', isFollowing: false, isContact: false, isBlocked: false, isNotifying: false, isMe: false,
+      connectionState: 'none', isFollowing: false, isBlocked: false, isNotifying: false, isMe: false,
       pinnedPost: null, mutualConnections: 0, followedBy: [], followedByCount: 0, trustScore: null,
       subPrice: 0, subBlurb: null, isSubscribed: false, subscriberCount: 0, subTiers: [], myTierId: null,
       isMuted: false, isPeek: true,
@@ -20351,129 +20348,6 @@ app.patch('/api/feeds/:id', auth.requireAuth, async (req, res) => {
     }
     const r = upd.rows[0];
     res.json({ feed: { id: r.id, username: r.username, name: r.name, bio: r.bio || null, avatar: r.avatar || null, open: r.open, isAdmin: true, isMember: true } });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
-  }
-});
-
-/* ═══════════════════════════════════════════════
-   CONTACTS  —  a personal saved list of people
-═══════════════════════════════════════════════ */
-app.get('/api/contacts', auth.requireAuth, async (req, res) => {
-  try {
-    const [list, counts] = await Promise.all([
-      db.query(
-        `SELECT u.id, u.name, u.username, u.avatar,
-                c.email, c.phone, c.socials, c.website, c.address, c.about, c.notes,
-                u.contact_email AS p_email, u.phone AS p_phone, u.website AS p_website
-         FROM contacts c JOIN users u ON u.id = c.contact_id
-         WHERE c.owner_id = $1 AND u.username IS NOT NULL
-         ORDER BY lower(u.name)`,
-        [req.user.id]
-      ),
-      db.query(
-        `SELECT (SELECT COUNT(*)::int FROM contacts WHERE owner_id = $1) AS count,
-                (SELECT COUNT(*)::int FROM contacts WHERE contact_id = $1) AS reverse_count`,
-        [req.user.id]
-      ),
-    ]);
-    res.json({
-      count: counts.rows[0].count,
-      reverseCount: counts.rows[0].reverse_count,
-      contacts: list.rows.map((u) => ({
-        id: u.id, name: u.name, username: u.username, avatar: u.avatar || null,
-        email: u.email || '', phone: u.phone || '', socials: u.socials || '',
-        website: u.website || '', address: u.address || '', about: u.about || '', notes: u.notes || '',
-        // Their PUBLIC profile contact info — auto-shown on the contact page when
-        // you haven't saved your own value for that field.
-        profileEmail: u.p_email || '', profilePhone: u.p_phone || '', profileWebsite: u.p_website || '',
-      })),
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
-  }
-});
-// The people who have YOU saved in their contacts (the reverse of /api/contacts) —
-// a browseable full-screen list. Declared before /:id routes so "reverse" isn't an :id.
-app.get('/api/contacts/reverse', auth.requireAuth, async (req, res) => {
-  try {
-    const r = await db.query(
-      `SELECT u.id, u.name, u.username, u.avatar, u.account_type, u.verified
-         FROM contacts c JOIN users u ON u.id = c.owner_id
-        WHERE c.contact_id = $1 AND u.username IS NOT NULL
-        ORDER BY lower(u.name)`,
-      [req.user.id]
-    );
-    res.json({
-      contacts: r.rows.map((u) => ({
-        id: u.id, name: u.name, username: u.username, avatar: u.avatar || null,
-        accountType: u.account_type || 'personal', verified: !!u.verified,
-      })),
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
-  }
-});
-// Update a contact's owner-private details (not their profile).
-app.patch('/api/contacts/:id', auth.requireAuth, async (req, res) => {
-  const target = routeId(req.params.id);
-  if (!Number.isInteger(target)) return res.status(400).json({ error: 'Invalid user id.' });
-  const fields = ['email', 'phone', 'socials', 'website', 'address', 'about', 'notes'];
-  const vals = [], sets = [];
-  fields.forEach((f) => {
-    if (f in req.body) { vals.push(String(req.body[f] || '').slice(0, 2000)); sets.push(`${f} = $${vals.length}`); }
-  });
-  if (!sets.length) return res.json({ ok: true });
-  vals.push(req.user.id, target);
-  try {
-    const r = await db.query(
-      `UPDATE contacts SET ${sets.join(', ')} WHERE owner_id = $${vals.length - 1} AND contact_id = $${vals.length}`,
-      vals
-    );
-    if (!r.rowCount) return res.status(404).json({ error: 'Contact not found.' });
-    res.json({ ok: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
-  }
-});
-// Bulk-delete contacts (select / select-all on the contacts page).
-// Declared before /:id so "delete" isn't captured as an :id.
-app.post('/api/contacts/delete', auth.requireAuth, async (req, res) => {
-  const ids = [...new Set((Array.isArray(req.body.ids) ? req.body.ids : []).map((x) => parseInt(x, 10)).filter(Number.isInteger))];
-  try {
-    if (req.body.all) await db.query('DELETE FROM contacts WHERE owner_id = $1', [req.user.id]);
-    else if (ids.length) await db.query('DELETE FROM contacts WHERE owner_id = $1 AND contact_id = ANY($2)', [req.user.id, ids]);
-    res.json({ ok: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
-  }
-});
-app.post('/api/contacts/:id', auth.requireAuth, rateLimit(120, 60000, 'contact'), async (req, res) => {
-  const target = routeId(req.params.id);
-  if (!Number.isInteger(target)) return res.status(400).json({ error: 'Invalid user id.' });
-  if (target === req.user.id) return res.status(400).json({ error: 'You cannot add yourself.' });
-  try {
-    const t = await chatIdentity(target);
-    if (!t || !t.username) return res.status(404).json({ error: 'User not found.' });
-    await db.query('INSERT INTO contacts (owner_id, contact_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, target]);
-    notify(target, req.user.id, 'contact', null);
-    res.json({ ok: true, isContact: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
-  }
-});
-app.delete('/api/contacts/:id', auth.requireAuth, async (req, res) => {
-  const target = routeId(req.params.id);
-  if (!Number.isInteger(target)) return res.status(400).json({ error: 'Invalid user id.' });
-  try {
-    await db.query('DELETE FROM contacts WHERE owner_id = $1 AND contact_id = $2', [req.user.id, target]);
-    res.json({ ok: true, isContact: false });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
