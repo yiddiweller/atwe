@@ -2606,14 +2606,16 @@ body.light .tb-feedtab.active{color:var(--t1);}
      height, the clamp) is cached in JS. */
   body.brand-collapse .main{position:relative;}
   body.brand-collapse .topbar.tb-home,
-  body.brand-collapse .topbar.tb-chat{position:absolute;top:0;left:0;right:0;z-index:6;
+  body.brand-collapse .topbar.tb-chat,
+  body.brand-collapse .topbar.tb-engine{position:absolute;top:0;left:0;right:0;z-index:6;
     background:var(--bg);will-change:transform;margin-top:0;}
   body.brand-collapse #socialWrap{margin-top:0;}          /* no cover offset here */
   /* Clear the full topbar on Home's feed AND every Beam pane (Chats/Groups + Calls +
-     Contacts list + its search head); solid bg so nothing shows through the topbar. */
+     Contacts list + its search head) AND the Engine scroller; solid bg. */
   body.brand-collapse #acFeed,
   body.brand-collapse #acList,
   body.brand-collapse #acCallList2,
+  body.brand-collapse #acSearchScroll,
   body.brand-collapse #acContactsList2{padding-top:var(--tbfull-h,110px);background:var(--bg);}
   body.brand-collapse #acContactsHead2{padding-top:calc(var(--tbfull-h,110px) + 8px);}
   body.brand-collapse #tbDarken{display:none;}            /* no darken in collapse mode */
@@ -2660,7 +2662,7 @@ body.light .tb-feedtab.active{color:var(--t1);}
   body.pgscroll-search .topbar{position:fixed;top:0;left:0;right:0;z-index:6;background:var(--bg);
     -webkit-backdrop-filter:none!important;backdrop-filter:none!important;}
   body.pgscroll #acSearchScreen{display:block;height:auto;min-height:0;padding-top:var(--pg-top,56px);}
-  body.pgscroll #acSearchPageResults{display:block;height:auto;overflow:visible;}
+  body.pgscroll #acSearchScroll,body.pgscroll #acSearchPageResults{display:block;height:auto;overflow:visible;}
   /* Profile page-scroll: let the whole document scroll so Safari's own bottom bar shrinks
      (like Home). The profile owns its header (no shared topbar → no top pad); the floating
      back button becomes fixed so it stays reachable, and the sticky tabs pin at the top as
@@ -7277,7 +7279,7 @@ body.light .ac-brand-logo{filter:invert(1);}
 .ac-searchbar input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);font-size:15px;font-family:inherit;}
 .ac-searchbar input::placeholder{color:var(--t3);}
 /* Engine full-width search bar (sits under the brand row + scope tabs, inside the screen). */
-.eng-searchbar-wrap{padding:6px var(--feed-gutter) 8px;}
+.eng-searchbar-wrap{padding:6px 10px 8px;}   /* +8px from the #acSearchScroll .ac-list padding = the 18px gutter */
 .eng-searchbar{display:flex;align-items:center;gap:10px;width:100%;padding:11px 16px;border-radius:999px;background:var(--s2);border:1px solid var(--b2);transition:border-color var(--t-fast) var(--ease);}
 .eng-searchbar:focus-within{border-color:var(--b3);}
 .eng-searchbar svg{width:18px;height:18px;stroke:var(--t3);stroke-width:2;fill:none;flex-shrink:0;}
@@ -14788,15 +14790,18 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
 
     <!-- SEARCH -->
     <div class="ac-screen hidden" id="acSearchScreen">
-      <!-- Full-width Engine search bar (no ≡/two-line icon; just a magnifier + field),
-           sitting under the brand row + scope tabs (which live in the top bar). -->
-      <div class="eng-searchbar-wrap">
-        <div class="eng-searchbar">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input id="tbSearchInput" type="text" placeholder="Search everything on Atwe" aria-label="Search everything on Atwe" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="acDoSearch(this.value)"/>
+      <!-- One scroller holds the full-width search bar + the results, so both scroll
+           together and the brand row collapses on scroll (like Home/Beam). The scope
+           tabs live in the top bar and pin. -->
+      <div class="ac-list" id="acSearchScroll">
+        <div class="eng-searchbar-wrap">
+          <div class="eng-searchbar">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input id="tbSearchInput" type="text" placeholder="Search everything on Atwe" aria-label="Search everything on Atwe" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="acDoSearch(this.value)"/>
+          </div>
         </div>
+        <div id="acSearchPageResults"><div class="ac-empty">Search for people and posts.</div></div>
       </div>
-      <div class="ac-list" id="acSearchPageResults"><div class="ac-empty">Search for people and posts.</div></div>
     </div>
 
     <!-- MESSAGES (DM list) — now a tabbed page: Chats · Calls · Contacts.
@@ -15666,7 +15671,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1372'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1373'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25071,7 +25076,7 @@ function acShow(screenId, tab) {
   //  • BROWSER → page-scroll (below) so Safari's OWN bottom bar shrinks (like X/Instagram);
   //    the header collapse then rides the WINDOW scroll (_onWinScroll).
   const _mob = window.matchMedia && window.matchMedia('(max-width:768px)').matches;
-  const _bc = (screenId === 'acHomeScreen' || screenId === 'acListScreen') && _standaloneBc && _mob;
+  const _bc = (screenId === 'acHomeScreen' || screenId === 'acListScreen' || screenId === 'acSearchScreen') && _standaloneBc && _mob;
   const _cover = (screenId === 'acHomeScreen' || screenId === 'acListScreen') && !_bc;
   if (_cover) { if (typeof _tabRowH === 'function') _tabRowH(); _covSet(0); }
   document.body.classList.toggle('feed-cover', _cover);
@@ -45278,7 +45283,7 @@ function _onListScroll(e) {
   // same way (1:1 with the finger, stays where you stop). Clamped to the brand-row height;
   // forced fully shown at the very top. ONE composited transform per frame, so it's smooth.
   if (document.body.classList.contains('brand-collapse') &&
-      (sc.id === 'acFeed' || sc.id === 'acList' || sc.id === 'acCallList2' || sc.id === 'acContactsList2')) {
+      (sc.id === 'acFeed' || sc.id === 'acList' || sc.id === 'acCallList2' || sc.id === 'acContactsList2' || sc.id === 'acSearchScroll')) {
     const _tbc = document.querySelector('.topbar');
     if (_tbc) {
       const st = sc.scrollTop;
@@ -45322,8 +45327,8 @@ function _onWinScroll() {
   // COLLAPSING HEADER on the WINDOW scroll — Home AND Beam (both have the brand + tabs bar):
   // slide the brand row UP as you scroll down, back DOWN as you scroll up, delta-tracked 1:1
   // (stays where you stop), clamped to the brand-row height so the tabs pin at the top. One
-  // composited transform per frame. (Search's bar has no brand row — nothing to collapse.)
-  if (_appTab === 'home' || _appTab === 'chat') {
+  // composited transform per frame. Engine also has a brand row now, so it collapses too.
+  if (_appTab === 'home' || _appTab === 'chat' || _appTab === 'search') {
     if (!_pgTb) _pgTb = document.querySelector('.topbar');
     if (_pgTb && !_pgTb.classList.contains('hidden')) {
       if (st <= 0) _pgHide = 0;
