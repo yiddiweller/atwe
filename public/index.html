@@ -37,9 +37,9 @@
 <!-- QR scanning (vendored jsQR, ~no-build). Loaded lazily-ish via defer; only used when scanning. -->
 <script src="/jsqr.js" defer></script>
 <meta name="apple-mobile-web-app-title" content="Atwe"/>
-<!-- iOS Home-Screen launch screens: a black, logo-centered splash iOS shows during the
-     WebKit cold-start, so the app launches over a branded black screen (like a native
-     launch screen) instead of a blank one. One per iPhone physical resolution; portrait. -->
+<!-- iOS Home-Screen launch screens: a PURE-BLACK splash iOS shows during the WebKit
+     cold-start (no logo — every launch layer is black so the native-splash→webview
+     handoff has nothing to flash). One per iPhone physical resolution; portrait. -->
 <link rel="apple-touch-startup-image" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/splash-640x1136.png"/>
 <link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/splash-750x1334.png"/>
 <link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash-1242x2208.png"/>
@@ -254,6 +254,10 @@ html,body{
 @keyframes splashPulse{0%,100%{opacity:.4;scale:.93;}50%{opacity:.95;scale:1.06;}}
 @keyframes splashSpin{to{rotate:360deg;}}
 body.light .splash-mark{background-color:#d2d2d8;}
+/* Installed app (Home-Screen PWA): pure-black launch, no logo — the boot cover is a
+   plain black screen so the whole launch (iOS splash → this → app) is continuous black
+   with nothing to blink. The pulsing mark stays only in a normal browser tab. */
+@media (display-mode: standalone){ #splash .splash-mark{ display:none; } }
 
 /* Welcome-back splash on login: the Atwe mark fades in soft + see-through,
    then the member's own photo fades through it, then we reveal the app. */
@@ -15653,7 +15657,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1352'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1353'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
