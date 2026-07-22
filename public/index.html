@@ -1496,12 +1496,12 @@ body.light #aiMenuPop,body.light #chatMenuPop,body.light #profileMenu{
 @media(hover:hover){.me-row:hover{background:rgba(120,120,128,.18);}}
 /* Blue-tint icon disc (design blueprint: blue is an identity accent, and icon
    discs are one of its allowed uses). Soft --accent-dim fill + accent glyph. */
-.me-ic{width:30px;height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:9px;background:var(--accent-dim);color:var(--accent);}
-.me-ic svg{width:18px;height:18px;stroke:var(--accent);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+.me-ic{width:30px;height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--t1);}
+.me-ic svg{width:20px;height:20px;stroke:var(--t1);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
 .me-lbl{flex:1;font-size:15.5px;font-weight:600;letter-spacing:-.01em;}
 .me-chev{width:16px;height:16px;stroke:var(--t4);stroke-width:2.2;fill:none;flex-shrink:0;}
 .me-row.danger .me-lbl{color:var(--red);}
-.me-row.danger .me-ic{background:rgba(255,0,51,.12);color:var(--red);}
+.me-row.danger .me-ic{background:none;color:var(--red);}
 .me-row.danger .me-ic svg{stroke:var(--red);}
 /* Circle deletion "danger zone" in the edit form. */
 .ac-danger-zone{padding:18px 18px 4px;}
@@ -3429,7 +3429,11 @@ body.light .settings-date{color-scheme:light;}
    never sits under the floating search pill, which is fixed to the viewport now
    rather than part of the scrolling flow. */
 .settings-card.iset{padding:6px 12px 96px;max-width:600px;}
-#settingsOverlay{padding:0;}
+/* No backdrop-filter on the settings overlay: a filtered ancestor becomes the
+   containing block for position:fixed, which made the fixed "Search settings" bar
+   ride the overlay's scroll instead of pinning to the viewport. Without it the bar
+   is truly viewport-fixed and stays at the bottom while the list scrolls. */
+#settingsOverlay{padding:0;backdrop-filter:none;-webkit-backdrop-filter:none;}
 .iset-head{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;
   padding:10px 2px 12px;margin-bottom:4px;background:var(--bg);
   -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);}
@@ -3474,7 +3478,7 @@ body.light .iset-search{background:rgba(255,255,255,.82);border-color:var(--b3);
 @keyframes isetSlideBack{from{opacity:0;transform:translate3d(-34px,0,0);}to{opacity:1;transform:translate3d(0,0,0);}}
 body.reduce-motion .iset-body{animation:none;}
 /* Account card (top of hub) */
-.iset-acct{display:flex;align-items:center;gap:14px;background:var(--s1);border:none;
+.iset-acct{display:flex;align-items:center;gap:14px;background:var(--s2);border:none;
   border-radius:18px;padding:16px 16px;margin:0 2px 22px;cursor:pointer;
   transition:background var(--t-fast) var(--ease);}
 .iset-acct:hover{background:var(--s2);}
@@ -3484,7 +3488,7 @@ body.reduce-motion .iset-body{animation:none;}
 .iset-acct-sub{font-size:13px;color:var(--t3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .iset-acct .iset-chev{width:18px;height:18px;}
 /* Grouped card */
-.iset-group{background:var(--s1);border:none;border-radius:16px;overflow:hidden;
+.iset-group{background:var(--s2);border:none;border-radius:16px;overflow:hidden;
   margin:0 2px 22px;}
 .iset-cap{font-size:12px;color:var(--t3);margin:0 14px 8px;line-height:1.45;}
 .iset-cap a{color:var(--accent);}
@@ -3492,7 +3496,7 @@ body.reduce-motion .iset-body{animation:none;}
 /* Row */
 .iset-row{position:relative;display:flex;align-items:center;gap:13px;padding:12px 15px;min-height:50px;
   cursor:pointer;transition:background var(--t-fast) var(--ease);background:none;width:100%;text-align:start;}
-.iset-row:hover{background:var(--s2);}
+.iset-row:hover{background:var(--s3);}
 .iset-row[data-static]{cursor:default;}
 .iset-row[data-static]:hover{background:none;}
 /* Full-width hairline (edge to edge, no inset past the icon column) in the exact
@@ -15621,7 +15625,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1363'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1364'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
