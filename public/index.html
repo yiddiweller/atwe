@@ -6676,8 +6676,8 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .ac-sg-foot{padding-inline-start:var(--feed-gutter);}
 .ac-sg-scroll{display:flex;gap:11px;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scroll-padding-inline-start:var(--feed-gutter);scrollbar-width:none;padding:4px var(--feed-gutter) 8px;}
 .ac-sg-scroll::-webkit-scrollbar{display:none;}
-.ac-sgc{flex:0 0 auto;width:248px;scroll-snap-align:start;background:var(--bg-1);border:none;border-radius:16px;overflow:hidden;cursor:pointer;transition:background var(--t-fast) var(--ease);}
-@media(hover:hover){.ac-sgc:hover{background:var(--bg-2);}}
+.ac-sgc{flex:0 0 auto;width:248px;scroll-snap-align:start;background:var(--bg-2);border:none;border-radius:16px;overflow:hidden;cursor:pointer;transition:background var(--t-fast) var(--ease);}
+@media(hover:hover){.ac-sgc:hover{background:var(--s3);}}
 .ac-sgc-cover{height:72px;background:var(--s2);background-size:cover;background-position:center;}
 .ac-sgc-cover[data-grad="0"]{background-image:linear-gradient(135deg,var(--accent),var(--s4));}
 .ac-sgc-cover[data-grad="1"]{background-image:linear-gradient(135deg,var(--accent),var(--s3));}
@@ -6843,7 +6843,7 @@ body.light .cc-ic-img{filter:brightness(0);}
 /* Opaque fallback logo: show it in its own colours (no white-forcing → no white box). */
 .cc-ic-img.cc-ic-raw,body.light .cc-ic-img.cc-ic-raw{filter:none;}
 /* ─── Sponsored ad card (in the feed) + advertiser flow ─── */
-.ac-adcard{margin:0 0 2px;border:1px solid var(--divider);border-radius:18px;overflow:hidden;background:var(--s1);
+.ac-adcard{margin:0 0 2px;border:none;border-radius:18px;overflow:hidden;background:var(--s1);
   box-shadow:0 4px 20px rgba(0,0,0,.20);cursor:pointer;}
 /* In the home feed, inset the ad to the same gutter as posts so it starts/ends
    at the exact width of a post card (not edge-to-edge). */
@@ -15625,7 +15625,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1364'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1365'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
