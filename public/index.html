@@ -15632,7 +15632,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1347'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1348'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -22189,11 +22189,11 @@ function syncNavPill() {
   // NB: a position:fixed nav always reports offsetParent === null, so check
   // actual layout size instead (0 on desktop where the bar is display:none).
   if (!active || nav.offsetWidth === 0) { ind.style.opacity = '0'; return; }
-  // A BIG pill filling the active tab, leaving only the bar's own ~5px padding as a
-  // tiny, even gap. Because the bubble's rounded cap (Ø = tab height) is then
-  // concentric with the bar's rounded end, that 5px gap is identical all the way
-  // around — including where it nests inside the bar's rounded corner.
-  const padX = 0, padY = 0;
+  // A BIG pill that fills the active tab AND grows 2px into the bar's padding on EVERY side,
+  // so it sits closer to the bar's border (iOS-liquid-glass style) while keeping a small gap
+  // that's identical all the way around — the bubble's rounded cap stays concentric with the
+  // bar's rounded end, so the gap is even, including where it nests inside the rounded corner.
+  const padX = -2, padY = -2;
   const newX = active.offsetLeft + padX, newY = active.offsetTop + padY;
   const apply = (animate) => {
     const m = /translate\(\s*(-?[\d.]+)px/.exec(ind.style.transform || '');
@@ -45825,9 +45825,9 @@ function bindNavBubble() {
     } else {
       el.style.transition = 'none';
     }
-    el.style.width = tab.offsetWidth + 'px';
-    el.style.height = tab.offsetHeight + 'px';
-    el.style.transform = 'translate(' + tab.offsetLeft + 'px,' + tab.offsetTop + 'px)';
+    el.style.width = (tab.offsetWidth + 4) + 'px';               // +2px each side (matches syncNavPill)
+    el.style.height = (tab.offsetHeight + 4) + 'px';
+    el.style.transform = 'translate(' + (tab.offsetLeft - 2) + 'px,' + (tab.offsetTop - 2) + 'px)';
     el.style.opacity = '1';
   };
   const dragMoveTo = (clientX) => {
@@ -45844,9 +45844,9 @@ function bindNavBubble() {
     press.target = tabs[ni];
     const active = nav.querySelector('.bn-tab.active') || tabs[0];
     el.style.transition = 'none';
-    el.style.width = active.offsetWidth + 'px';
-    el.style.height = active.offsetHeight + 'px';
-    el.style.transform = 'translate(' + left + 'px,' + active.offsetTop + 'px)';
+    el.style.width = (active.offsetWidth + 4) + 'px';            // +2px each side (matches syncNavPill)
+    el.style.height = (active.offsetHeight + 4) + 'px';
+    el.style.transform = 'translate(' + (left - 2) + 'px,' + (active.offsetTop - 2) + 'px)';
     el.style.opacity = '1';
   };
   const endPress = (navigate) => {
