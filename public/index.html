@@ -131,7 +131,7 @@ a{text-decoration:none;color:inherit;}
 
   /* Market up/down — a functional signal (positive/negative), so it borrows
      the same green/red as every other success/destructive use in the app */
-  --fin-up: #30D158;
+  --fin-up: #88FF00;
   --fin-down: #FF0033;
 
   /* Text */
@@ -142,7 +142,7 @@ a{text-decoration:none;color:inherit;}
   --text-black: #1D1D1F;   /* text on a light or yellow surface only */
 
   /* Status — functional signals only, never theme decoration */
-  --green: #30D158; --green-edge: #66D98F; --green-tint: #E6FFEF;
+  --green: #88FF00; --green-edge: #A6FF4D; --green-tint: #F1FFDC; --on-green: #163300;
   --red:   #FF0033; --red-edge: #FF3355;   --red-tint: #FFE0E6;
   --red-soft: rgba(255,0,51,.16);
   --amber: #FFCC00; --amber-edge: #FFE066; /* warning/attention; text = --text-black */
@@ -154,7 +154,7 @@ a{text-decoration:none;color:inherit;}
   --rose-bg-2: rgba(var(--accent-rgb),.2);
   --rose-line: rgba(var(--accent-rgb),.5);
   /* Money — credits/balances read as a positive/success signal */
-  --money:      #30D158;
+  --money:      #88FF00;
   --money-bg:   rgba(48,209,88,.14);
   --money-line: rgba(48,209,88,.4);
   /* Protection / escrow was a 5th decorative violet; folded into blue as the
@@ -4565,7 +4565,7 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
   background:rgba(255,255,255,.1);color:inherit;font-family:inherit;-webkit-tap-highlight-color:transparent;
   transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
 .mc-rsvp button:active{transform:scale(.94);}
-.mc-rsvp button.on.going{background:var(--green);color:#fff;}
+.mc-rsvp button.on.going{background:var(--green);color:var(--on-green);}
 .mc-rsvp button.on.maybe{background:var(--amber);color:var(--text-black);}
 .mc-rsvp button.on.no{background:var(--red);color:#fff;}
 /* Location */
@@ -5862,6 +5862,14 @@ body.light .ac-home-stories{border-bottom-color:rgba(0,0,0,.08);}
 .ac-home-stories .story-ring.seen{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--t3);}   /* seen = grey ring (same thickness as the blue), not gone */
 .ac-home-stories .story-ring.add{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--t3);}    /* "Your Daily" = grey ring matching the blue's thickness + size */
 .ac-home-stories .story-name{font-size:11.5px;max-width:64px;}
+/* Live people ride in the SAME row as the Dailies — on the left (more urgent), then a
+   thin vertical divider, then the Dailies. Live cell = green ring + a small LIVE pill. */
+.ac-home-stories .story-ring.live{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--green);}
+.ac-home-stories .story-live-badge{position:absolute;bottom:-4px;left:50%;transform:translateX(-50%);background:var(--green);color:var(--on-green);font-size:8px;font-weight:800;letter-spacing:.03em;padding:1px 5px;border-radius:5px;border:2px solid var(--bg);line-height:1.4;}
+/* The divider between the live group and the Dailies — a short grey hairline, centered
+   against the 56px rings (name labels sit below, so it's top-aligned + nudged down). */
+.ac-home-stories .story-div{flex:0 0 auto;align-self:flex-start;width:1px;height:34px;margin:11px 3px 0;background:var(--b2);border-radius:1px;}
+body.light .ac-home-stories .story-div{background:rgba(0,0,0,.12);}
 /* Multiple conversations with the same person */
 .ac-thread-badge{position:absolute;right:-3px;top:-3px;min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:var(--accent-tint);font-size:11px;font-weight:800;display:grid;place-items:center;padding:0 4px;border:2px solid var(--bg);}
 .tp-ic{flex:0 0 auto;width:38px;height:38px;border-radius:11px;background:var(--accent-dim);color:var(--accent);display:grid;place-items:center;}
@@ -7068,7 +7076,7 @@ body.light .ac-post-toolbar .msg-attach:active{background:rgba(0,0,0,.1);}
 .ac-conn-btn{flex:0 0 auto;border-radius:var(--r-pill);padding:9px 16px;font-size:14px;font-weight:700;cursor:pointer;
   border:1px solid var(--primary);background:var(--primary);color:var(--on-primary);transition:all var(--t-fast) var(--ease);white-space:nowrap;}
 .ac-conn-btn.pending_out{background:transparent;color:var(--t2);border-color:var(--b3);}
-.ac-conn-btn.pending_in{background:var(--green);border-color:var(--green);color:#fff;}
+.ac-conn-btn.pending_in{background:var(--green);border-color:var(--green);color:var(--on-green);}
 .ac-conn-btn.connected{background:transparent;color:var(--t1);border-color:var(--b3);}
 .ac-conn-btn:active{transform:scale(.96);}
 .ac-prof-actions .ac-conn-btn{height:38px;padding:0 16px;display:flex;align-items:center;justify-content:center;}
@@ -8176,7 +8184,7 @@ body.reduce-motion .xp-ai::after{animation:none;}
 .ev-cmeta{font-size:12.5px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .ev-cgoing{font-size:12px;color:var(--t2);margin-top:4px;}
 .ev-badge{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:var(--r-pill);background:var(--s3);color:var(--t2);margin-inline-start:6px;}
-.ev-badge.live{background:var(--green);color:#fff;}
+.ev-badge.live{background:var(--green);color:var(--on-green);}
 /* Event detail */
 .ev-detail-when{display:flex;align-items:center;gap:9px;color:var(--t1);font-size:14px;font-weight:600;margin:10px 0 4px;}
 .ev-detail-when svg{width:18px;height:18px;stroke:var(--accent);stroke-width:2;fill:none;flex-shrink:0;}
@@ -8248,7 +8256,7 @@ body.reduce-motion .xp-ai::after{animation:none;}
 .lsn-row.locked{opacity:.62;cursor:default;}
 .lsn-row-title{flex:1;min-width:0;font-size:14px;font-weight:500;}
 .lsn-check{width:22px;height:22px;flex:0 0 auto;border-radius:50%;border:1.6px solid var(--b3);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:var(--t3);}
-.lsn-check.on{background:var(--green);border-color:var(--green);color:#fff;}
+.lsn-check.on{background:var(--green);border-color:var(--green);color:var(--on-green);}
 .lsn-check.lock{border:none;}
 .lsn-check.lock svg{width:15px;height:15px;stroke:var(--t4);fill:none;stroke-width:2;}
 .lsn-edit{flex:0 0 auto;background:none;border:none;color:var(--accent);font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;}
@@ -9593,7 +9601,7 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 .live-banner{background:rgba(48,209,88,.12);border-color:rgba(48,209,88,.4);}
 .live-banner:hover{background:rgba(48,209,88,.2);}
 .live-banner .gc-banner-join{background:var(--green);}
-.live-banner-dot{flex:0 0 auto;font-size:9.5px;font-weight:900;letter-spacing:.06em;color:#fff;background:var(--green);
+.live-banner-dot{flex:0 0 auto;font-size:9.5px;font-weight:900;letter-spacing:.06em;color:var(--on-green);background:var(--green);
   padding:3px 6px;border-radius:5px;line-height:1;animation:liveBlink 2s ease-in-out infinite;}
 @keyframes liveBlink{0%,100%{opacity:1;}50%{opacity:.55;}}
 /* Header "Go live" icon glows GREEN (owner) so it stands out as the broadcast action. */
@@ -9611,7 +9619,7 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 .gc-toast-txt{flex:1;min-width:0;}
 .gc-toast-title{font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .gc-toast-sub{font-size:12.5px;color:rgba(255,255,255,.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.gc-toast-join{flex-shrink:0;background:var(--green);color:#fff;border:none;border-radius:var(--r-pill);
+.gc-toast-join{flex-shrink:0;background:var(--green);color:var(--on-green);border:none;border-radius:var(--r-pill);
   padding:8px 16px;font-size:13.5px;font-weight:700;cursor:pointer;transition:transform var(--t-fast) var(--ease);}
 .gc-toast-join:active{transform:scale(.94);}
 .gc-toast-x{flex-shrink:0;width:30px;height:30px;border-radius:50%;background:none;border:none;color:rgba(255,255,255,.6);
@@ -9669,7 +9677,7 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 .lsp-name{flex:1;min-width:0;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .lsp-price{font-size:13px;font-weight:700;flex:0 0 auto;}
 .live-top{position:absolute;top:max(14px,env(safe-area-inset-top));left:14px;right:14px;display:flex;align-items:center;gap:10px;z-index:2;}
-.live-badge{background:var(--green);color:#fff;font-size:12px;font-weight:800;letter-spacing:.06em;padding:4px 9px;border-radius:6px;}
+.live-badge{background:var(--green);color:var(--on-green);font-size:12px;font-weight:800;letter-spacing:.06em;padding:4px 9px;border-radius:6px;}
 .live-count{display:inline-flex;align-items:center;gap:5px;background:rgba(0,0,0,.5);color:#fff;font-size:13px;font-weight:700;padding:5px 11px;border-radius:var(--r-pill);border:none;cursor:pointer;font-family:inherit;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);transition:background var(--t-fast) var(--ease);}
 .live-count:active{transform:scale(.95);}
 .live-count svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
@@ -9732,7 +9740,7 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 .ac-live-item{background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;flex-shrink:0;width:60px;}
 .ac-live-ava{position:relative;display:block;}
 .ac-live-ava .user-avatar{width:54px;height:54px;font-size:20px;border:2px solid var(--green);}
-.ac-live-dot{position:absolute;bottom:-3px;left:50%;transform:translateX(-50%);background:var(--green);color:#fff;font-size:8.5px;font-weight:800;letter-spacing:.04em;padding:1px 5px;border-radius:4px;border:1.5px solid var(--bg);}
+.ac-live-dot{position:absolute;bottom:-3px;left:50%;transform:translateX(-50%);background:var(--green);color:var(--on-green);font-size:8.5px;font-weight:800;letter-spacing:.04em;padding:1px 5px;border-radius:4px;border:1.5px solid var(--bg);}
 .ac-live-name{font-size:11.5px;color:var(--t2);max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 
 /* Multi-account rows in the profile menu */
@@ -15597,7 +15605,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1357'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1358'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -36833,7 +36841,15 @@ function acRenderStoryTray() {
       <span class="story-ring ${t.hasUnseen ? 'unseen' : 'seen'}">${acAvatarHtml(t.user.name, t.user.avatar, 'user-avatar', t.user.accountType === 'business')}</span>
       <span class="story-name">${escHtml((t.user.name || '').split(' ')[0])}</span>
     </button>`).join('');
-  trays.forEach(el => { el.innerHTML = myCell + cells; el.classList.remove('hidden'); });
+  // Live people ride in the SAME row, on the LEFT (going live is the more urgent thing),
+  // then a thin grey divider, then the Dailies. Divider only shows when someone is live.
+  const live = (typeof _acFeedScope !== 'undefined' && _acFeedScope === 'circles') ? [] : (AC._liveStreams || []);
+  const liveCells = live.map((s, i) => `<button class="story-cell" onclick="acOpenLiveItem(AC._liveStreams[${i}])">
+      <span class="story-ring live">${acAvatarHtml(s.user.name, s.user.avatar, 'user-avatar', s.user.accountType === 'business')}<span class="story-live-badge">${s.mode === 'audio' ? 'AUDIO' : 'LIVE'}</span></span>
+      <span class="story-name">${escHtml((s.user.name || '').split(' ')[0])}</span>
+    </button>`).join('');
+  const divider = live.length ? '<span class="story-div" aria-hidden="true"></span>' : '';
+  trays.forEach(el => { el.innerHTML = liveCells + divider + myCell + cells; el.classList.remove('hidden'); });
 }
 // ── Composer ──
 function acOpenStoryComposer() {
@@ -41594,19 +41610,17 @@ function spaceRender() {
 }
 // "Live now" strip on the home feed.
 async function acLoadLiveStrip() {
+  // Live people now live INSIDE the Daily tray (one merged row), not a separate strip.
+  // Keep the old strip element permanently hidden; just refresh the live data and
+  // re-render the tray so the live cells + divider appear on the left of the Dailies.
   const el = document.getElementById('acLiveStrip');
-  if (!el) return;
-  if (_acFeedScope === 'circles') { el.classList.add('hidden'); return; }
+  if (el) { el.classList.add('hidden'); el.innerHTML = ''; }
+  if (typeof _acFeedScope !== 'undefined' && _acFeedScope === 'circles') { AC._liveStreams = []; acRenderStoryTray(); return; }
   try {
     const { streams } = await API.req('GET', '/api/live');
-    if (!streams.length) { el.classList.add('hidden'); el.innerHTML = ''; return; }
-    AC._liveStreams = streams;
-    el.classList.remove('hidden');
-    el.innerHTML = streams.map((s, i) => `<button class="ac-live-item" onclick="acOpenLiveItem(AC._liveStreams[${i}])">
-      <span class="ac-live-ava">${acAvatarHtml(s.user.name, s.user.avatar, 'user-avatar')}<span class="ac-live-dot">${s.mode === 'audio' ? 'AUDIO' : 'LIVE'}</span></span>
-      <span class="ac-live-name">${escHtml((s.user.name || '').split(' ')[0])}</span>
-    </button>`).join('');
-  } catch { el.classList.add('hidden'); }
+    AC._liveStreams = streams || [];
+  } catch { AC._liveStreams = []; }
+  acRenderStoryTray();
 }
 
 async function acOpenGroup(id) {
