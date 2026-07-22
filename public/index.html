@@ -1326,6 +1326,11 @@ body.light .tb-iconbtn.on{color:#fff;}
 /* Atwe-AI button: superseded by the ⋯ entry in the feed-tab row (see .tb-feedtab-ai) */
 .tb-ai-btn{display:none!important;}
 .tb-ai-btn img{width:22px;height:22px;border-radius:6px;display:block;}
+/* Profile avatar on the Atwe AI page top-right (shown only on .topbar.tb-ai). */
+.tb-ai-prof{display:none;width:36px;height:36px;border-radius:50%;padding:0;border:none;background:none;cursor:pointer;overflow:hidden;flex-shrink:0;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;transition:scale .42s cubic-bezier(.4,.02,.28,1);}
+.topbar.tb-ai .tb-ai-prof{display:flex;}
+.tb-ai-prof .user-avatar{width:100%;height:100%;font-size:15px;border-radius:50%;}
+.tb-ai-prof.tb-hold{scale:1.16;}
 /* Feed-tab ⋯ — sits after Circles with the same gap, opens the Atwe AI popover. */
 .tb-feedtab-ai{display:inline-flex;align-items:center;justify-content:center;padding:6px 0;flex-shrink:0;border-radius:10px;}
 .tb-feedtab-ai .tb-aidots{width:20px;height:20px;display:block;fill:var(--t2);transition:fill var(--t-fast) var(--ease);}
@@ -2222,14 +2227,14 @@ body.reduce-motion .tb-brand.rolling .tb-brand-mark,body.reduce-motion .tb-brand
    the old tabs reserved extra bottom padding for the underline (7px top / 12px
    bottom), which floated the text above the icon centers — symmetric now.
    (Doubled-class selectors outrank the later per-world mobile rules.) */
-.topbar.tb-solo.tb-home .tb-feedtab.active::after,.topbar.tb-solo.tb-chat .tb-feedtab.active::after{display:none;}
+.topbar.tb-solo.tb-home .tb-feedtab.active::after,.topbar.tb-solo.tb-chat .tb-feedtab.active::after,.topbar.tb-solo.tb-engine .tb-feedtab.active::after{display:none;}
 .topbar.tb-solo.tb-home .tb-feedtab,.topbar.tb-solo.tb-chat .tb-feedtab{padding-top:8px;padding-bottom:8px;
   /* Home + Beam tab words must be IDENTICAL across worlds — same size/weight/colour
      so switching worlds never feels "off" (founder). */
   font-size:15px;font-weight:600;color:var(--t2);}
-.topbar.tb-solo.tb-home .tb-feedtab.active,.topbar.tb-solo.tb-chat .tb-feedtab.active{font-weight:700;color:#fff;}
-body.light .topbar.tb-solo.tb-home .tb-feedtab.active,body.light .topbar.tb-solo.tb-chat .tb-feedtab.active{color:var(--t1);}
-.topbar.tb-solo.tb-home .tb-feedtabs,.topbar.tb-solo.tb-chat .tb-feedtabs{align-self:center;align-items:center;}
+.topbar.tb-solo.tb-home .tb-feedtab.active,.topbar.tb-solo.tb-chat .tb-feedtab.active,.topbar.tb-solo.tb-engine .tb-feedtab.active{font-weight:700;color:#fff;}
+body.light .topbar.tb-solo.tb-home .tb-feedtab.active,body.light .topbar.tb-solo.tb-chat .tb-feedtab.active,body.light .topbar.tb-solo.tb-engine .tb-feedtab.active{color:var(--t1);}
+.topbar.tb-solo.tb-home .tb-feedtabs,.topbar.tb-solo.tb-chat .tb-feedtabs,.topbar.tb-solo.tb-engine .tb-feedtabs{align-self:center;align-items:center;}
 /* The ≡ + ＋ icoset is retired on Home/Beam — the brand row above now carries the
    drawer-opener (logo) + compose (＋). Hidden here so the tab row is just the tabs. */
 .topbar.tb-solo .tb-icoset{display:none;}
@@ -2245,7 +2250,7 @@ body.light .topbar.tb-solo.tb-home .tb-feedtab.active,body.light .topbar.tb-solo
 @media(min-width:769px){.tb-ico.tb-ico-menu{display:none;}} /* desktop has the sidebar */
 /* Beam tabs match the home row's scrollable rhythm in solo mode (they were
    space-between across the full width, which fights the icon cluster). */
-.topbar.tb-solo.tb-chat .tb-feedtabs{justify-content:flex-start;gap:36px;margin-inline-start:0;/* owner: more space between Beam tabs, matched to Home */}
+.topbar.tb-solo.tb-chat .tb-feedtabs,.topbar.tb-solo.tb-engine .tb-feedtabs{justify-content:flex-start;gap:36px;margin-inline-start:0;/* owner: more space between Beam tabs, matched to Home */}
 /* Unified Home + Beam tab-row geometry (founder polish, single source of truth —
    (0,4,0) so it beats the per-world mobile rules):
    • text sits CLOSE to the ≡/＋ icons (small start padding + tiny icoset gap above);
@@ -2282,12 +2287,12 @@ body.light .topbar.tb-solo.tb-home .tb-feedtab.active,body.light .topbar.tb-solo
    on the left — matching the right — instead of clipping early at the gutter. */
 .topbar.tb-solo.tb-home .tb-feedtabs{
   padding-inline-start:var(--feed-gutter);scroll-padding-inline:0 var(--feed-gutter);}
-.topbar.tb-solo.tb-chat .tb-feedtabs{
+.topbar.tb-solo.tb-chat .tb-feedtabs,.topbar.tb-solo.tb-engine .tb-feedtabs{
   padding-inline-start:var(--feed-gutter);scroll-padding-inline:0 var(--feed-gutter);}
 .topbar.tb-solo .tb-icoset{position:relative;z-index:1;}
 .topbar.tb-solo .tb-icoset::after{content:'';position:absolute;left:100%;top:0;bottom:0;width:26px;
   background:linear-gradient(to right,var(--bg) 6px,transparent);pointer-events:none;}
-.topbar.tb-solo.tb-chat .tb-icoset::after{width:20px;}
+.topbar.tb-solo.tb-chat .tb-icoset::after,.topbar.tb-solo.tb-engine .tb-icoset::after{width:20px;}
 /* Desktop (≥769px) keeps the sidebar + its original topbar: the mobile brand row is
    hidden and the old icoset / tab-start inset are restored, so desktop is unchanged. */
 @media(min-width:769px){
@@ -2440,11 +2445,11 @@ body.light .tb-feedtab.active{color:var(--t1);}
        scrolling row, so the Beam tab scroll stays 60fps too.) */
   /* Beam tabs bottom-align to the hairline so the active tab carries a short BLUE
      underline sitting on it (blueprint §Beam) — mirrors the Home feed tabs. */
-  .topbar.tb-chat .tb-feedtabs{align-self:stretch;align-items:flex-end;}
-  .topbar.tb-chat .tb-feedtab{padding:6px 0 12px;font-size:15px;font-weight:600;color:var(--t2);}
-  .topbar.tb-chat .tb-feedtab.active{font-weight:700;color:#fff;}
-  body.light .topbar.tb-chat .tb-feedtab.active{color:var(--t1);}
-  .topbar.tb-chat .tb-feedtab.active::after{content:"";position:absolute;left:50%;transform:translateX(-50%);
+  .topbar.tb-chat .tb-feedtabs,.topbar.tb-engine .tb-feedtabs{align-self:stretch;align-items:flex-end;}
+  .topbar.tb-chat .tb-feedtab,.topbar.tb-engine .tb-feedtab{padding:6px 0 12px;font-size:15px;font-weight:600;color:var(--t2);}
+  .topbar.tb-chat .tb-feedtab.active,.topbar.tb-engine .tb-feedtab.active{font-weight:700;color:#fff;}
+  body.light .topbar.tb-chat .tb-feedtab.active,body.light .topbar.tb-engine .tb-feedtab.active{color:var(--t1);}
+  .topbar.tb-chat .tb-feedtab.active::after,.topbar.tb-engine .tb-feedtab.active::after{content:"";position:absolute;left:50%;transform:translateX(-50%);
     bottom:0;width:22px;height:3px;border-radius:3px;background:var(--accent);}
 
   /* ── Phase 5: two-row Home top bar (blueprint §Home) ──
@@ -7273,7 +7278,7 @@ body.light .ac-brand-logo{filter:invert(1);}
 .ac-searchbar input::placeholder{color:var(--t3);}
 /* Engine full-width search bar (sits under the brand row + scope tabs, inside the screen). */
 .eng-searchbar-wrap{padding:6px var(--feed-gutter) 8px;}
-.eng-searchbar{display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border-radius:14px;background:var(--s2);border:1px solid var(--b2);transition:border-color var(--t-fast) var(--ease);}
+.eng-searchbar{display:flex;align-items:center;gap:10px;width:100%;padding:11px 16px;border-radius:999px;background:var(--s2);border:1px solid var(--b2);transition:border-color var(--t-fast) var(--ease);}
 .eng-searchbar:focus-within{border-color:var(--b3);}
 .eng-searchbar svg{width:18px;height:18px;stroke:var(--t3);stroke-width:2;fill:none;flex-shrink:0;}
 .eng-searchbar input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);font-size:15px;font-family:inherit;}
@@ -8168,9 +8173,12 @@ body.reduce-motion .xp-ai::after{animation:none;}
 .xp-tile .ac-cart-badge{top:6px;right:calc(50% - 30px);}
 /* Engine DISCOVER grid (design blueprint): a clean grid of near-black CARDS, each
    with a blue-tint icon disc + a bold label. Overrides the horizontal-scroll strip. */
-.xp-grid-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;overflow:visible;padding-bottom:0;
+/* Discover / More rows scroll horizontally (like the Home/Beam tab strips) instead of
+   stacking in a grid — swipe right→left for more. Keeps the rounded-card tile look. */
+.xp-grid-tiles{display:flex;gap:10px;overflow-x:auto;overflow-y:visible;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x;padding-bottom:2px;
   -webkit-mask-image:none;mask-image:none;}
-.xp-grid-tiles .xp-tile{width:auto;background:var(--s1);border-radius:16px;padding:14px 6px 12px;gap:9px;}
+.xp-grid-tiles::-webkit-scrollbar{display:none;}
+.xp-grid-tiles .xp-tile{flex:0 0 auto;width:84px;background:var(--s1);border-radius:16px;padding:14px 6px 12px;gap:9px;}
 @media(hover:hover){.xp-grid-tiles .xp-tile:hover{background:var(--s2);}}
 .xp-grid-tiles .xp-tile-ic{width:44px;height:44px;border-radius:13px;background:rgba(var(--accent-rgb),.14);}
 .xp-grid-tiles .xp-tile-ic svg{stroke:var(--accent);}
@@ -11063,6 +11071,8 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
         <button class="tb-iconbtn tb-ai-btn" id="tbAiBtn" onclick="acOpenAiHub()" aria-label="Atwe AI" title="Atwe AI"><img src="/logo-mark.png" alt=""/></button>
+        <!-- Profile avatar top-right on the Atwe AI page (shown only there via .topbar.tb-ai). -->
+        <button class="tb-ai-prof" id="tbAiProf" onclick="toggleProfileMenu(event)" aria-label="Profile menu"></button>
         <button class="tb-login" id="loginPill" onclick="openLogin()">Log in</button>
       </div>
      </div>
@@ -15648,7 +15658,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1370'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1371'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -22778,8 +22788,8 @@ function acSearchDiscover() {
     </button>`;
   return `<div class="ac-explore">
     ${discover.trim() ? '<div class="xp-catlabel">Discover</div><div class="xp-grid xp-grid-tiles">' + discover + '</div>' : ''}
-    ${askAi}
     ${more.trim() ? '<div class="xp-catlabel">More to explore</div><div class="xp-grid xp-grid-tiles">' + more + '</div>' : ''}
+    ${askAi}
     <div id="acTrending"></div>
     <div id="acNearYou"></div>
   </div>`;
@@ -24749,6 +24759,9 @@ function syncTopbar(tab) {
   label.textContent = labels[tab] || 'Atwe';
   const aiBrand = document.getElementById('tbAiBrand');
   if (aiBrand) aiBrand.style.display = isAi ? 'flex' : 'none';
+  // Fill the Atwe AI page's top-right profile avatar (shown via .topbar.tb-ai CSS).
+  const aiProf = document.getElementById('tbAiProf');
+  if (aiProf && isAi) aiProf.innerHTML = acAvatarHtml(S.user?.name, S.user?.avatar, '', typeof acIsBiz === 'function' && acIsBiz(S.user));
   document.querySelector('.topbar')?.classList.toggle('tb-home', isHome);
   document.querySelector('.topbar')?.classList.toggle('tb-chat', isChat);
   document.querySelector('.topbar')?.classList.toggle('tb-plain', tab === 'ai');
@@ -24822,7 +24835,7 @@ function tbSoloMore(e) {
 // bottom nav). Release is bound on window so it always fires even if the finger drifts.
 (function bindBrandTapHold() {
   document.addEventListener('pointerdown', (e) => {
-    const el = e.target.closest && e.target.closest('.tb-brand-act, #tbBrandLogo, #tbAiBrand');
+    const el = e.target.closest && e.target.closest('.tb-brand-act, #tbBrandLogo, #tbAiBrand, #tbAiProf');
     if (!el) return;
     el.classList.add('tb-hold');
     const release = () => {
