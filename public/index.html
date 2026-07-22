@@ -4,19 +4,19 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <title>Atwe</title>
-<meta name="description" content="Atwe AI — Intelligent assistant for modern businesses"/>
+<meta name="description" content="The network built for business — connect, message, hire, sell and grow, all in one place."/>
 <!-- Site name + social/SEO metadata (tells Google to show "Atwe", not "atwe.com") -->
 <meta property="og:site_name" content="Atwe"/>
 <meta property="og:type" content="website"/>
 <meta property="og:title" content="Atwe"/>
-<meta property="og:description" content="The network built for business. Connect, message and grow, all in one place."/>
+<meta property="og:description" content="The network built for business — connect, message, hire, sell and grow, all in one place."/>
 <meta property="og:url" content="https://atwe.com/"/>
 <meta property="og:image" content="https://atwe.com/icon-384.png"/>
 <meta name="twitter:card" content="summary"/>
 <meta name="twitter:title" content="Atwe"/>
-<meta name="twitter:description" content="The network built for business. Connect, message and grow, all in one place."/>
+<meta name="twitter:description" content="The network built for business — connect, message, hire, sell and grow, all in one place."/>
 <meta name="twitter:image" content="https://atwe.com/icon-384.png"/>
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Atwe","alternateName":"Atwe AI","url":"https://atwe.com/"}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Atwe","url":"https://atwe.com/"}</script>
 <meta name="theme-color" content="#000000"/>
 <meta name="color-scheme" content="dark light"/>
 <meta name="mobile-web-app-capable" content="yes"/>
@@ -30,7 +30,7 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <!-- QR scanning (vendored jsQR, ~no-build). Loaded lazily-ish via defer; only used when scanning. -->
 <script src="/jsqr.js" defer></script>
-<meta name="apple-mobile-web-app-title" content="Atwe AI"/>
+<meta name="apple-mobile-web-app-title" content="Atwe"/>
 <link rel="manifest" href="/manifest.json"/>
 <link rel="icon" type="image/png" sizes="any" href="/favicon.png"/>
 <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
@@ -15631,7 +15631,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1338'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1339'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
