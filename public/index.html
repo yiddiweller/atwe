@@ -8820,6 +8820,13 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
 .skel-media{height:180px;border-radius:16px;margin-top:12px;}
 .skel-acts{display:flex;gap:26px;margin-top:14px;}
 .skel-pill{width:42px;height:11px;border-radius:6px;}
+/* Home-feed skeleton: a row of grey circles at the top, ghosting the Dailies/stories
+   tray, so the loading state matches the real home layout. */
+.skel-stories{display:flex;gap:14px;padding:8px var(--feed-gutter) 12px;overflow:hidden;border-bottom:0.5px solid var(--b2);}
+body.light .skel-stories{border-bottom-color:rgba(0,0,0,.08);}
+.skel-story-cell{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:8px;width:64px;}
+.skel-story-ring{width:56px;height:56px;border-radius:50%;}
+.skel-story-name{width:38px;height:9px;border-radius:5px;}
 /* Thread skeleton: ghost message bubbles shown while a chat loads for the first
    time — the modern alternative to a spinner. It mirrors the REAL bubbles: same
    22px radius, same left/right sides, the same run spacing (.msg-row.gap = 11px),
@@ -9796,6 +9803,8 @@ body.reduce-motion .notif-detail{transition:none;}
 .notif-brand-mark{width:19px;height:19px;background:#fff;-webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
 /* Loading skeleton rows in the notifications list carry no divider — match the real rows. */
 .notif-list .skel-row{border-bottom:none;}
+/* Beam chat-list skeleton: no dividers either — the real chat rows have none now. */
+#acListScreen .skel-row{border-bottom:none;}
 .notif-dot{position:absolute;top:50%;right:var(--feed-gutter);transform:translateY(-50%);width:9px;height:9px;border-radius:50%;background:var(--accent);flex-shrink:0;}
 
 /* Contacts: add (+/✓) buttons */
@@ -15605,7 +15614,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1358'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1359'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -22097,6 +22106,12 @@ function acNotFound(el, title, sub) {
     <button class="ac-err-btn" onclick="acGoHome()">Back to Home</button>
   </div>`;
 }
+// A row of grey story circles (ghost of the Dailies tray) for the home-feed skeleton.
+function acSkelStories() {
+  let cells = '';
+  for (let i = 0; i < 7; i++) cells += '<div class="skel-story-cell"><div class="skel skel-story-ring"></div><div class="skel skel-story-name"></div></div>';
+  return '<div class="skel-stories" aria-hidden="true">' + cells + '</div>';
+}
 function acSkelFeed(n) {
   let s = '';
   for (let i = 0; i < (n || 5); i++) {
@@ -28082,7 +28097,8 @@ async function acLoadFeed() {
   Dwell.reset(); // flush the outgoing feed's dwell before the list is replaced
   acFeedResetPaging();
   AC._feedAds = null; // fresh sponsored-ad rotation on each full feed load
-  el.innerHTML = acSkelFeed();
+  // Ghost the Dailies tray (grey circles) atop the skeleton on the scopes that show it.
+  el.innerHTML = ((scope === 'foryou' || scope === 'following') ? acSkelStories() : '') + acSkelFeed();
   if (scope === 'bookmarks') acLoadBmkFolders(); // refresh the folder chip row
   try {
     let url = '/api/social/feed?scope=' + scope;
