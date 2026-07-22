@@ -2552,7 +2552,8 @@ body.light .tb-feedtab.active{color:var(--t1);}
      top of the menu. top:calc(-1*tabrow-h) offsets the feed's own top padding so it
      pins exactly at the menu's top edge (just under the status bar). z-index:10 keeps
      it above the posts + the menu. */
-  body.feed-cover #acFeed::before, body.feed-cover #acList::before{
+  /* Home keeps its hairline under the tabs; Beam (#acList) does NOT (founder). */
+  body.feed-cover #acFeed::before{
     content:'';display:block;position:sticky;top:calc(-1 * var(--tabrow-h));z-index:10;
     height:1px;margin-bottom:-1px;background:var(--b2);pointer-events:none;}
   /* ADDITIVE tab-row touch strip (see the matching HTML/JS). Transparent, sits over the
@@ -2576,6 +2577,8 @@ body.light .tb-feedtab.active{color:var(--t1);}
     transform:translateY(-100%);
     will-change:transform;backface-visibility:hidden;pointer-events:none;display:none;
     border-bottom:1px solid var(--b2);background:var(--bg);}
+  /* Beam has no hairline under its tabs, so its scroll-up reveal bar carries none either. */
+  #tbRevealBar.tb-chat{border-bottom:none;}
   /* While the reveal menu is on screen, hide the feed's sticky cover-hairline so the two
      1px lines never stack into a "doubled"/frizzy line. */
   body.feed-cover #acFeed.rv-eng::before, body.feed-cover #acList.rv-eng::before{opacity:0;}
@@ -15614,7 +15617,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1360'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1361'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
