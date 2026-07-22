@@ -744,6 +744,19 @@ app.post('/api/admin/demo', auth.requireAdmin, async (req, res) => {
   finally { _demoBusy = false; }
 });
 
+// "Immerse" the calling account into the demo while demo mode is ON: auto-follow a varied
+// spread of ~40 demo people so its feed + stories fill up like an active, established user's
+// (the real app is follow-based — this makes the demo authentic on EVERY device/account, not
+// just the one that toggled demo mode). No-op when demo mode is off or the account is already
+// immersed. Reverses automatically on demo teardown (the follow rows cascade with the users).
+app.post('/api/demo/immerse', auth.requireAuth, async (req, res) => {
+  if (!_demoMode) return res.json({ demo: false, followed: 0 });
+  try {
+    const followed = await demo.immerseInDemo(db, req.user.id);
+    res.json({ demo: true, followed });
+  } catch (err) { console.error('demo immerse failed:', err); res.json({ demo: true, followed: 0 }); }
+});
+
 app.patch('/api/admin/site', auth.requireAdmin, async (req, res) => {
   await loadSiteLock();
   const s = { ..._siteLock };
@@ -7640,7 +7653,7 @@ app.get('/api/stories', auth.requireAuth, async (req, res) => {
          JOIN users u ON u.id = s.user_id
          LEFT JOIN story_views sv ON sv.story_id = s.id AND sv.viewer_id = $1
         WHERE s.expires_at > now()
-          AND (s.user_id = $1 OR (NOT u.deactivated AND s.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))${_demoMode ? ' OR (u.is_demo AND NOT u.deactivated)' : ''})
+          AND (s.user_id = $1 OR (NOT u.deactivated AND s.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1)))
           AND (s.audience = 'all' OR s.user_id = $1 OR s.user_id IN (SELECT user_id FROM close_friends WHERE friend_id = $1))
           AND s.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
           AND s.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)
