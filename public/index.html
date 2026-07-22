@@ -1267,7 +1267,8 @@ body.light{
 .nc-sheet{width:100%;max-width:480px;margin:0 9px calc(9px + env(safe-area-inset-bottom,0px));
   background:rgba(22,22,24,.72);backdrop-filter:blur(34px) saturate(1.7);-webkit-backdrop-filter:blur(34px) saturate(1.7);
   border:none;border-radius:26px;padding:8px;display:flex;flex-direction:column;gap:1px;
-  box-shadow:0 22px 64px rgba(0,0,0,.6);animation:ncUp .34s cubic-bezier(.2,.85,.3,1.04);}
+  box-shadow:0 22px 64px rgba(0,0,0,.6);animation:ncUp .34s cubic-bezier(.2,.85,.3,1.04);
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
 @keyframes ncUp{from{opacity:0;transform:translateY(44px);}to{opacity:1;transform:none;}}
 .nc-overlay.closing .nc-sheet{animation:ncDown .18s var(--ease) forwards;}
 @keyframes ncDown{from{opacity:1;transform:none;}to{opacity:0;transform:translateY(44px);}}
@@ -7262,6 +7263,12 @@ body.light .ac-brand-logo{filter:invert(1);}
   transition:background var(--t-fast) var(--ease);}
 .ac-sel-wrap.selected{background:rgba(255,255,255,.07);}
 body.light .ac-sel-wrap.selected{background:rgba(0,0,0,.05);}
+/* In select mode, give each row its own inset rounded box with a vertical GAP, so
+   adjacent SELECTED grey boxes read as separate cards instead of one connected block.
+   Neutralize the inner row's full-bleed negative margin so its content stays inside
+   the rounded box. */
+#acListScreen.selecting .ac-sel-wrap{margin:4px 10px;border-radius:18px;}
+#acListScreen.selecting .ac-sel-wrap .ac-item{margin:0;border-radius:18px;}
 .ac-sel-check{flex:0 0 auto;width:23px;height:23px;margin-inline-start:8px;border-radius:50%;
   border:2px solid var(--t3);display:flex;align-items:center;justify-content:center;
   transition:background var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease);}
@@ -7533,6 +7540,10 @@ body.light .gp-card{background:#fff;}
    reaches JS for swipe-to-delete/mark-unread. Fixes the Beam "sticks when I start
    scrolling" stall, the counterpart of the home-feed pull-to-refresh fix. */
 #acListScreen .ac-item{margin:0 -8px;padding:0;border-radius:0;position:relative;overflow:hidden;-webkit-tap-highlight-color:transparent;touch-action:pan-y;}
+/* A press-and-hold on a chat row opens the row menu — it must NEVER trigger iOS's
+   text selection (the blue handles + Copy/Look Up/Translate callout). Kill selection
+   + the callout on the rows themselves. (Message bubbles in a thread stay selectable.) */
+#acListScreen .ac-item, #acListScreen .ac-item *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
 #acListScreen .ac-item-inner{gap:13px;padding:12px var(--feed-gutter);position:relative;touch-action:pan-y;}
 /* Beam chats list (blueprint §Beam): 48px avatars, ~72px rows, headline-weight name. */
 #acListScreen .ac-item .user-avatar{width:48px;height:48px;font-size:18px;}
@@ -7540,8 +7551,9 @@ body.light .gp-card{background:#fff;}
 /* Pinned chats float at top on a subtle elevated fill. */
 #acListScreen .ac-item.ac-pinned .ac-item-inner{background:var(--s1);}
 body.light #acListScreen .ac-item.ac-pinned .ac-item-inner{background:var(--s2);}
-#acListScreen .ac-item::after{content:"";position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:1px;background:var(--b2);transition:opacity var(--t-base) var(--ease);}
-body.light #acListScreen .ac-item::after{background:rgba(0,0,0,.07);}
+/* No hairline dividers between chat rows — the row padding gives the separation, so
+   the list reads clean (WhatsApp/iMessage-style) without lines between conversations. */
+#acListScreen .ac-item::after{content:none;}
 /* Desktop hover matches Home's cards exactly (same opacity + timing) instead of
    the heavier tint every other .ac-item usage gets. Touch devices never see this. */
 @media(hover:hover){#acListScreen .ac-item:hover .ac-item-inner{background-color:rgba(255,255,255,.025);}}
@@ -12122,7 +12134,6 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
 <!-- Chat-row long-press actions (mark read / mute / delete / leave) -->
 <div class="overlay hidden nc-overlay" id="chatRowActions" onclick="if(event.target===this)closeOverlay('chatRowActions')">
   <div class="nc-sheet" role="dialog" aria-modal="true" aria-label="Chat options">
-    <div class="nc-grab"></div>
     <div class="nc-title" id="craTitle">Chat</div>
     <div id="craActions"></div>
     <button class="nc-cancel" onclick="closeOverlay('chatRowActions')">Cancel</button>
@@ -15586,7 +15597,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1356'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1357'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
