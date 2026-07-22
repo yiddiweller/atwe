@@ -9169,6 +9169,14 @@ body.light .skel-stories{border-bottom-color:rgba(0,0,0,.08);}
 .bottom-nav.bn-dragging .bn-indicator{background:rgba(255,255,255,.2);}
 .bn-dot{position:absolute;top:5px;right:9px;width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid rgba(64,64,68,.95);z-index:2;}
 .bn-dot.hidden{display:none;}
+/* Blue-icon nav notification (replaces the little dot): a world's nav icon glows
+   accent-blue when it has something new. Overrides the normal active/inactive icon
+   colour; fades in/out smoothly. Cleared when you leave that world (see acDismissNavNotif). */
+.bn-tab.bn-notif .bn-icon{background:var(--accent);}
+.bn-tab.bn-notif svg{fill:var(--accent);}
+.bn-tab .bn-icon,.bn-tab svg{transition:transform var(--t-slow) cubic-bezier(.34,1.56,.64,1),background var(--t-base) ease,fill var(--t-base) ease;}
+/* Desktop sidebar nav gets the same blue-icon cue. */
+.sb-navbtn.bn-notif svg{stroke:var(--accent);color:var(--accent);}
 
 /* ─── Scroll-morph: bottom nav → white "+" ball (feature-flagged: body.nav-morph) ───
    On the home feed, scrolling DOWN morphs the glass pill into a small white
@@ -15675,7 +15683,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1374'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1375'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -22295,6 +22303,8 @@ function appTab(tab, opts) {
   // (Guest mode was removed — nothing is usable without an account.)
   if (!isAccount()) { openLogin(); return; }
   if (tab !== 'ai' && !S.user?.username) { showNotif('Pick a username to start.'); openProfileEdit(true); return; }
+  // Blue-icon nav notif: leaving a world dismisses its glow (it re-blues only on NEW activity).
+  if (_appTab && _appTab !== tab && !_silent && typeof acDismissNavNotif === 'function') acDismissNavNotif(_appTab);
   _appTab = tab;
   if (tab !== 'call') { try { localStorage.setItem('atwe_last_tab', tab); } catch {} }
   const social = tab !== 'ai';
@@ -44126,6 +44136,26 @@ function vnSeek(e, track) {
   audio.currentTime = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * audio.duration;
 }
 
+// ── Blue-icon nav notification ──────────────────────────────────────────────
+// A world's nav icon glows blue when it has something new; it STAYS blue while you're
+// on that world and turns back to normal when you LEAVE it (re-bluing only on NEW
+// activity). Beam (unread messages) is the wired source today; extensible to others.
+let _beamDismissedAt = -1, _lastBeamUnread = 0;
+function acSetNavNotif(tab, on) {
+  document.getElementById('bnav-' + tab)?.classList.toggle('bn-notif', !!on);
+  document.getElementById('snav-' + tab)?.classList.toggle('bn-notif', !!on);
+}
+// Leaving a world dismisses its current notif so it won't re-blue until NEW activity.
+function acDismissNavNotif(tab) {
+  if (tab === 'chat') _beamDismissedAt = _lastBeamUnread;
+  acSetNavNotif(tab, false);
+}
+// Beam: blue only while there's unread you haven't dismissed by leaving Beam.
+function acBeamNavNotif(unread) {
+  _lastBeamUnread = unread || 0;
+  if (!unread) _beamDismissedAt = -1;                       // inbox clear → reset the dismissal
+  acSetNavNotif('chat', unread > 0 && unread > _beamDismissedAt);
+}
 async function acRefreshUnread() {
   const b = document.getElementById('acBadge');
   const nav = document.getElementById('acBadgeNav');
@@ -44136,7 +44166,8 @@ async function acRefreshUnread() {
     const { unread, dmUnread, groupUnread } = await API.req('GET', '/api/atchat/unread');
     if (b) { b.textContent = unread; b.classList.toggle('hidden', !unread); }
     if (nav) { nav.textContent = unread; nav.classList.toggle('hidden', !unread); }
-    if (dot) dot.classList.toggle('hidden', !unread);
+    if (dot) dot.classList.add('hidden');   // the dot is retired — the Beam nav ICON turns blue instead
+    acBeamNavNotif(unread);
     document.getElementById('acTabDot')?.classList.toggle('hidden', !dmUnread);
     document.getElementById('acTabDotG')?.classList.toggle('hidden', !groupUnread);
     // Beam tab badges: Chats shows every conversation (DMs + groups) so it carries
