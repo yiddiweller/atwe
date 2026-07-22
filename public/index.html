@@ -2259,7 +2259,7 @@ body.light .topbar.tb-solo.tb-home .tb-feedtab.active,body.light .topbar.tb-solo
      the bottom-hairline's right inset (it no longer sticks past it to the screen edge).
      Mid-scroll the row still travels to the true edge — the end-padding only sets
      where the FINAL rest lands. */
-.topbar.tb-solo.tb-home .tb-feedtabs,.topbar.tb-solo.tb-chat .tb-feedtabs{
+.topbar.tb-solo.tb-home .tb-feedtabs,.topbar.tb-solo.tb-chat .tb-feedtabs,.topbar.tb-solo.tb-engine .tb-feedtabs{
   margin-inline-start:0;
   /* Constrain the row to the space beside the icons so its content overflows
      INTERNALLY (a real, scrollable strip) instead of the container running off the
@@ -7281,8 +7281,16 @@ body.light .ac-brand-logo{filter:invert(1);}
 .eng-searchbar{display:flex;align-items:center;gap:10px;width:100%;padding:11px 16px;border-radius:999px;background:var(--s2);border:1px solid var(--b2);transition:border-color var(--t-fast) var(--ease);}
 .eng-searchbar:focus-within{border-color:var(--b3);}
 .eng-searchbar svg{width:18px;height:18px;stroke:var(--t3);stroke-width:2;fill:none;flex-shrink:0;}
-.eng-searchbar input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);font-size:15px;font-family:inherit;}
+.eng-searchbar input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);font-size:16px;font-family:inherit;}
 .eng-searchbar input::placeholder{color:var(--t3);}
+/* iOS Safari zooms the whole page in when a focused text field is UNDER 16px. Floor every
+   text field at 16px on phones so tapping any search/text bar (Engine, chats, composers,
+   comments, …) never triggers that zoom. Uses !important to beat the per-component sizes;
+   the 15px→16px bump is visually imperceptible. Excludes non-text control types. */
+@media (max-width: 768px){
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):not([type=button]):not([type=submit]),
+  textarea, select, [contenteditable]{ font-size:16px !important; }
+}
 /* The app's main vertical scroller (feed, profile, Me-hub, most screens). It must
    scroll ONLY vertically — overflow-x:hidden kills the "sloppy sideways drift on
    up/down scroll" bug (a child a hair wider than the viewport would otherwise let
@@ -15658,7 +15666,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1371'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1372'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24758,23 +24766,20 @@ function syncTopbar(tab) {
   label.classList.toggle('hidden', isSearch || isAi);
   label.textContent = labels[tab] || 'Atwe';
   const aiBrand = document.getElementById('tbAiBrand');
-  if (aiBrand) aiBrand.style.display = isAi ? 'flex' : 'none';
-  // Fill the Atwe AI page's top-right profile avatar (shown via .topbar.tb-ai CSS).
-  const aiProf = document.getElementById('tbAiProf');
-  if (aiProf && isAi) aiProf.innerHTML = acAvatarHtml(S.user?.name, S.user?.avatar, '', typeof acIsBiz === 'function' && acIsBiz(S.user));
+  if (aiBrand) aiBrand.style.display = 'none';   // retired: the Atwe AI page uses the standard brand row now
   document.querySelector('.topbar')?.classList.toggle('tb-home', isHome);
   document.querySelector('.topbar')?.classList.toggle('tb-chat', isChat);
-  document.querySelector('.topbar')?.classList.toggle('tb-plain', tab === 'ai');
-  document.querySelector('.topbar')?.classList.toggle('tb-ai', tab === 'ai');   // AI world lockup position
+  document.querySelector('.topbar')?.classList.toggle('tb-plain', false);
+  document.querySelector('.topbar')?.classList.toggle('tb-ai', false);   // AI now uses the standard brand row (like Engine)
   // Home + Beam + Engine use the single-row world header (brand lockup + tabs).
-  document.querySelector('.topbar')?.classList.toggle('tb-solo', isHome || isChat || isSearch);
+  document.querySelector('.topbar')?.classList.toggle('tb-solo', isHome || isChat || isSearch || isAi);
   document.querySelector('.topbar')?.classList.toggle('tb-engine', isSearch);   // Engine-specific tweaks
   document.getElementById('tbTabRow')?.classList.toggle('hidden', !(isHome || isChat || isSearch));
   // Engine's scope tabs (All · People · …) ride in the tab row like the feed/chat tabs.
   const searchScopes = document.getElementById('tbSearchScopes');
   if (searchScopes) { searchScopes.classList.toggle('hidden', !isSearch); if (isSearch && typeof acRenderSearchScopes === 'function') acRenderSearchScopes(); }
-  // Engine: hide the "+" (no compose here); keep the ⋯ (→ Settings) + avatar.
-  document.getElementById('tbBrandPlus')?.classList.toggle('hidden', isSearch);
+  // Engine + Atwe AI: hide the "+" (no compose here); keep the ⋯ (→ Settings) + avatar.
+  document.getElementById('tbBrandPlus')?.classList.toggle('hidden', isSearch || isAi);
   // Home + Beam lead with the ≡ hamburger + the label, and a single compose "+"
   // on the right (no avatar, no bell — the extra affordances were removed).
   const homeAva = document.getElementById('tbHomeAva');
@@ -24784,7 +24789,7 @@ function syncTopbar(tab) {
   if (ham) ham.style.display = isAi ? 'none' : '';   // AI uses the swirl lockup instead of ≡
   // Brand row (Home/Beam): fill the right-side avatar with the signed-in user's photo.
   const brandProf = document.getElementById('tbBrandProf');
-  if (brandProf && (isHome || isChat || isSearch)) {
+  if (brandProf && (isHome || isChat || isSearch || isAi)) {
     brandProf.innerHTML = acAvatarHtml(S.user?.name, S.user?.avatar, '', typeof acIsBiz === 'function' && acIsBiz(S.user));
   }
   // Brand label: the Atwe wordmark IMAGE on Home; the word "Beam" as text on Beam, so
@@ -24794,6 +24799,7 @@ function syncTopbar(tab) {
   if (_wImg && _wTxt) {
     if (isChat) { _wImg.style.display = 'none'; _wTxt.style.display = 'inline'; _wTxt.textContent = 'Beam'; }
     else if (isSearch) { _wImg.style.display = 'none'; _wTxt.style.display = 'inline'; _wTxt.textContent = 'Engine'; }
+    else if (isAi) { _wImg.style.display = 'none'; _wTxt.style.display = 'inline'; _wTxt.textContent = 'Atwe AI'; }
     else { _wImg.style.display = ''; _wTxt.style.display = 'none'; }
   }
   // World-entry flourish: arriving at Home, Beam or the AI page rolls the swirl + spits the
@@ -24826,7 +24832,7 @@ function tbSoloPlus() {
 // The brand-row ⋯ (top, left of the "+"): opens the world's tools popover — the chat
 // tools on Beam, the AI helpers on Home. (Moved up out of the tab row.)
 function tbSoloMore(e) {
-  if (_appTab === 'search') { if (typeof openSettings === 'function') openSettings(); return; } // Engine ⋯ → Settings
+  if (_appTab === 'search' || _appTab === 'ai') { if (typeof openSettings === 'function') openSettings(); return; } // Engine + AI ⋯ → Settings
   if (_appTab === 'chat') { acOpenChatMenu(e); return; }
   acOpenFeedAiMenu(e);
 }
