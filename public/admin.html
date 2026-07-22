@@ -4,7 +4,8 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <meta name="theme-color" content="#000000"/>
-<title>Atwe — Admin</title>
+<title>Atwe Admin</title>
+<meta name="apple-mobile-web-app-title" content="Atwe Admin"/>
 <link rel="icon" type="image/png" sizes="any" href="/favicon.png"/>
 <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -940,6 +941,7 @@
     <div class="side-foot">
       <div class="side-role">Signed in as <b id="sideRole">Admin</b></div>
       <a class="back" id="backLink" href="/">← Back to app</a>
+      <button class="side-lock" onclick="openProductBook()">📘 Product Book</button>
       <button class="side-lock" onclick="openAdminLock()">Device lock</button>
       <button class="side-logout" onclick="doLogout()">Log out</button>
     </div>
@@ -1274,6 +1276,21 @@ async function pinSubmit(code){
   }
 }
 function pinCancel(){ if (_pin.mode === 'unlock') showGate(); else renderView(); }
+
+// The Complete Product Book (footer → "📘 Product Book"): the confidential
+// master PDF, served admin-only from /api/admin/product-book. Fetched with the
+// bearer token as a blob (a plain <a href> couldn't carry the Authorization
+// header), then opened in a new tab.
+async function openProductBook(){
+  try {
+    const res = await fetch('/api/admin/product-book', { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) throw new Error(res.status === 404 ? 'The Product Book is not on this deploy yet.' : 'Could not load the Product Book (' + res.status + ').');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) { alert(e.message || 'Could not open the Product Book.'); }
+}
 
 // Manage the device lock from inside the dashboard (footer → "Device lock").
 function openAdminLock(){
