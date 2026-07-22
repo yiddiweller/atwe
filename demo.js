@@ -208,6 +208,32 @@ async function seedDemo(client, adminId) {
   return allIds.length;
 }
 
+// Refresh demo stories so the story tray is ALWAYS live whenever demo mode is (re)enabled.
+// The initial seed's stories expire after 24h, and the seed itself is idempotent (only runs
+// on an empty platform) — so once that first 24h passed, toggling demo mode on again never
+// recreated them, and the tray went empty on any device that looked past the window. This
+// clears the old/expired demo stories and drops in a fresh 24h batch, so ~1/3 of demo users
+// have a live story again (matching the original seed), on every device/browser.
+async function refreshDemoStories(client) {
+  try {
+    await client.query(`DELETE FROM stories WHERE user_id IN (SELECT id FROM users WHERE is_demo = true)`);
+    const { rows } = await client.query(`SELECT id FROM users WHERE is_demo = true ORDER BY id`);
+    let img = 0, made = 0;
+    for (let i = 0; i < rows.length; i++) {
+      if (i % 3 !== 0) continue;                          // ~1/3 of demo users have a story (as in seedDemo)
+      const photo = i % 2 === 0;
+      await client.query(
+        `INSERT INTO stories (user_id, kind, media, caption, bg, expires_at, created_at)
+         VALUES ($1,$2,$3,$4,$5, now() + interval '24 hours', now() - make_interval(hours => $6))`,
+        [rows[i].id, photo ? 'image' : 'text', photo ? storyPic(img++) : null,
+         photo ? '' : 'Hello 👋', STORY_BG[i % STORY_BG.length], (i % 20)]
+      );
+      made++;
+    }
+    return made;
+  } catch (e) { console.error('demo story refresh failed (non-fatal):', e.message); return 0; }
+}
+
 // Tear it all down: deleting the demo users cascades to their posts, follows, stories,
 // products, hashtags, etc. (everything is owned by a demo user).
 async function teardownDemo(client) {
@@ -218,4 +244,4 @@ async function teardownDemo(client) {
   return r.rowCount;
 }
 
-module.exports = { seedDemo, teardownDemo };
+module.exports = { seedDemo, teardownDemo, refreshDemoStories };
