@@ -5864,22 +5864,25 @@ body.light .order-success{background:rgba(255,255,255,.82);}
 /* Home stories rail (blueprint §Home): a 72px row, 56px avatars, a 2px BLUE ring on
    unseen/active + no ring once viewed, the own slot with a plus badge. Rides on top of
    the feed (scrolls away). */
-.ac-home-stories{gap:14px;padding:8px var(--feed-gutter) 12px;border-bottom:0.5px solid var(--b2);}
+/* padding-left 5px (not the full gutter) so the story avatar's left edge lines up with
+   the POST avatars below (both land ~16px from the container edge) instead of sitting
+   inset. Circles are a touch smaller (52px). The skeleton (.skel-stories) mirrors this. */
+.ac-home-stories{gap:14px;padding:8px 16px 12px 5px;border-bottom:0.5px solid var(--b2);}
 body.light .ac-home-stories{border-bottom-color:rgba(0,0,0,.08);}
-.ac-home-stories .story-cell{width:64px;gap:6px;}
-.ac-home-stories .story-ring{width:56px;height:56px;padding:0;background:none;}
-.ac-home-stories .story-ring .user-avatar{width:56px;height:56px;border:none;}
+.ac-home-stories .story-cell{width:58px;gap:6px;}
+.ac-home-stories .story-ring{width:52px;height:52px;padding:0;background:none;}
+.ac-home-stories .story-ring .user-avatar{width:52px;height:52px;border:none;}
 .ac-home-stories .story-ring.unseen{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent);}
 .ac-home-stories .story-ring.seen{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--t3);}   /* seen = grey ring (same thickness as the blue), not gone */
 .ac-home-stories .story-ring.add{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--t3);}    /* "Your Daily" = grey ring matching the blue's thickness + size */
-.ac-home-stories .story-name{font-size:11.5px;max-width:64px;}
+.ac-home-stories .story-name{font-size:11.5px;max-width:58px;}
 /* Live people ride in the SAME row as the Dailies — on the left (more urgent), then a
    thin vertical divider, then the Dailies. Live cell = green ring + a small LIVE pill. */
 .ac-home-stories .story-ring.live{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--green);}
 .ac-home-stories .story-live-badge{position:absolute;bottom:-4px;left:50%;transform:translateX(-50%);background:var(--green);color:var(--on-green);font-size:8px;font-weight:800;letter-spacing:.03em;padding:1px 5px;border-radius:5px;border:2px solid var(--bg);line-height:1.4;}
 /* The divider between the live group and the Dailies — a short grey hairline, centered
    against the 56px rings (name labels sit below, so it's top-aligned + nudged down). */
-.ac-home-stories .story-div{flex:0 0 auto;align-self:flex-start;width:2px;height:34px;margin:11px 4px 0;background:rgba(255,255,255,.22);border-radius:2px;}
+.ac-home-stories .story-div{flex:0 0 auto;align-self:flex-start;width:2px;height:34px;margin:9px 4px 0;background:rgba(255,255,255,.22);border-radius:2px;}
 body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 /* Multiple conversations with the same person */
 .ac-thread-badge{position:absolute;right:-3px;top:-3px;min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:var(--accent-tint);font-size:11px;font-weight:800;display:grid;place-items:center;padding:0 4px;border:2px solid var(--bg);}
@@ -8833,10 +8836,10 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
 .skel-pill{width:42px;height:11px;border-radius:6px;}
 /* Home-feed skeleton: a row of grey circles at the top, ghosting the Dailies/stories
    tray, so the loading state matches the real home layout. */
-.skel-stories{display:flex;gap:14px;padding:8px var(--feed-gutter) 12px;overflow:hidden;border-bottom:0.5px solid var(--b2);}
+.skel-stories{display:flex;gap:14px;padding:8px 16px 12px 5px;overflow:hidden;border-bottom:0.5px solid var(--b2);}
 body.light .skel-stories{border-bottom-color:rgba(0,0,0,.08);}
-.skel-story-cell{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:8px;width:64px;}
-.skel-story-ring{width:56px;height:56px;border-radius:50%;}
+.skel-story-cell{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:8px;width:58px;}
+.skel-story-ring{width:52px;height:52px;border-radius:50%;}
 .skel-story-name{width:38px;height:9px;border-radius:5px;}
 /* Thread skeleton: ghost message bubbles shown while a chat loads for the first
    time — the modern alternative to a spinner. It mirrors the REAL bubbles: same
@@ -15625,7 +15628,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1366'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1367'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
