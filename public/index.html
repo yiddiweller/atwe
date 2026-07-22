@@ -5832,8 +5832,8 @@ body.light .ac-home-stories{border-bottom-color:rgba(0,0,0,.08);}
 .ac-home-stories .story-ring{width:56px;height:56px;padding:0;background:none;}
 .ac-home-stories .story-ring .user-avatar{width:56px;height:56px;border:none;}
 .ac-home-stories .story-ring.unseen{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent);}
-.ac-home-stories .story-ring.seen{box-shadow:none;}
-.ac-home-stories .story-ring.add{box-shadow:0 0 0 2px var(--bg),0 0 0 3px var(--b3);}
+.ac-home-stories .story-ring.seen{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--t3);}   /* seen = grey ring (same thickness as the blue), not gone */
+.ac-home-stories .story-ring.add{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--t3);}    /* "Your story" = grey ring matching the blue's thickness + size */
 .ac-home-stories .story-name{font-size:11.5px;max-width:64px;}
 /* Multiple conversations with the same person */
 .ac-thread-badge{position:absolute;right:-3px;top:-3px;min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:var(--accent-tint);font-size:11px;font-weight:800;display:grid;place-items:center;padding:0 4px;border:2px solid var(--bg);}
@@ -15631,7 +15631,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1342'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1343'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -45208,7 +45208,7 @@ function ptrInit() {
   const logo = ind.querySelector('.ptr-logo');
   const TH = 70;      // pull distance (px) that triggers a refresh
   const HOLD = 56;    // gap held open while refreshing
-  let startY = 0, dist = 0, pulling = false, refreshing = false, list = null, mark = null, restRgb = [255, 255, 255];
+  let startY = 0, startX = 0, dist = 0, pulling = false, refreshing = false, list = null, mark = null, restRgb = [255, 255, 255];
   // The swirl mark's colour shifts from its rest colour toward vivid blue as you wind it.
   const parseRgb = (s) => { const m = /(\d+)\D+(\d+)\D+(\d+)/.exec(s || ''); return m ? [+m[1], +m[2], +m[3]] : [255, 255, 255]; };
   const BLUE = [29, 155, 246];
@@ -45250,6 +45250,8 @@ function ptrInit() {
   const onMove = (e) => {
     if (!pulling || refreshing || !list) return;
     const dy = e.touches[0].clientY - startY;
+    const dx = e.touches[0].clientX - startX;
+    if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) { disarm(); return; } // a sideways swipe — never pull
     if (dy <= 0 || list.scrollTop > 0) { disarm(); return; } // a normal scroll — never touch the scroller
     dist = Math.min(dy * 0.5, 110);
     place(dist, true);
@@ -45264,8 +45266,12 @@ function ptrInit() {
   const springMarkBack = () => { if (!mark) return; mark.style.transition = 'transform .3s cubic-bezier(.2,1.1,.35,1), background-color .3s ease'; mark.style.transform = 'rotate(0deg)'; mark.style.backgroundColor = restColor(); setTimeout(() => { if (mark) { mark.style.transition = 'none'; mark.style.transform = ''; mark.style.backgroundColor = ''; _brandMarkAngle = 0; } }, 340); };
   win.addEventListener('touchstart', (e) => {
     if (refreshing || e.touches.length !== 1) { pulling = false; return; }
+    // Never arm pull-to-refresh when the touch begins on a horizontally-scrolling strip —
+    // the story tray, who-to-follow carousel, or an image carousel — so a sideways swipe
+    // there can't drag the whole feed down (the "gap when I scroll stories" issue).
+    if (e.target && e.target.closest && e.target.closest('.ac-home-stories,.story-tray,.ac-sg-scroll,.ac-imgcar,.ac-imggrid')) { pulling = false; return; }
     list = ptrActiveList();
-    if (list && list.scrollTop <= 0) { startY = e.touches[0].clientY; dist = 0; pulling = true; mark = document.querySelector('#tbBrandRow .tb-brand-mark'); if (mark) { mark.style.transition = 'transform 0s, background-color .18s ease'; restRgb = parseRgb(getComputedStyle(mark).backgroundColor); } }
+    if (list && list.scrollTop <= 0) { startY = e.touches[0].clientY; startX = e.touches[0].clientX; dist = 0; pulling = true; mark = document.querySelector('#tbBrandRow .tb-brand-mark'); if (mark) { mark.style.transition = 'transform 0s, background-color .18s ease'; restRgb = parseRgb(getComputedStyle(mark).backgroundColor); } }
     else pulling = false;
   }, { passive: true });
   win.addEventListener('touchmove', onMove, { passive: true });
