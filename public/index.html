@@ -5864,10 +5864,11 @@ body.light .order-success{background:rgba(255,255,255,.82);}
 /* Home stories rail (blueprint §Home): a 72px row, 56px avatars, a 2px BLUE ring on
    unseen/active + no ring once viewed, the own slot with a plus badge. Rides on top of
    the feed (scrolls away). */
-/* padding-left 5px (not the full gutter) so the story avatar's left edge lines up with
-   the POST avatars below (both land ~16px from the container edge) instead of sitting
-   inset. Circles are a touch smaller (52px). The skeleton (.skel-stories) mirrors this. */
-.ac-home-stories{gap:14px;padding:8px 16px 12px 5px;border-bottom:0.5px solid var(--b2);}
+/* Full-bleed (margin:0 -8px cancels the list's 8px padding, like the posts) with SYMMETRIC
+   13px padding, so the row is balanced/centered AND the story avatar's left edge lines up
+   with the POST avatars below (~16px in). Circles are a touch smaller (52px). The skeleton
+   (.skel-stories) mirrors this exactly so there's no shift on load. */
+.ac-home-stories{gap:14px;margin:0 -8px;padding:8px 13px 12px;border-bottom:0.5px solid var(--b2);}
 body.light .ac-home-stories{border-bottom-color:rgba(0,0,0,.08);}
 .ac-home-stories .story-cell{width:58px;gap:6px;}
 .ac-home-stories .story-ring{width:52px;height:52px;padding:0;background:none;}
@@ -8836,7 +8837,7 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
 .skel-pill{width:42px;height:11px;border-radius:6px;}
 /* Home-feed skeleton: a row of grey circles at the top, ghosting the Dailies/stories
    tray, so the loading state matches the real home layout. */
-.skel-stories{display:flex;gap:14px;padding:8px 16px 12px 5px;overflow:hidden;border-bottom:0.5px solid var(--b2);}
+.skel-stories{display:flex;gap:14px;margin:0 -8px;padding:8px 13px 12px;overflow:hidden;border-bottom:0.5px solid var(--b2);}
 body.light .skel-stories{border-bottom-color:rgba(0,0,0,.08);}
 .skel-story-cell{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:8px;width:58px;}
 .skel-story-ring{width:52px;height:52px;border-radius:50%;}
@@ -15628,7 +15629,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1367'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1368'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
