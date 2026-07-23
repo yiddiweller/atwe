@@ -107,8 +107,8 @@ a{text-decoration:none;color:inherit;}
 
   /* Accent — the ONE blue, everywhere it's used: primary buttons, links,
      active states, selection, focus. Nothing else is blue's job. */
-  --accent:       #0A84FF;
-  --accent-rgb:   10,132,255; /* raw channels so rgba(var(--accent-rgb),a) tints track the theme */
+  --accent:       #0088FF;
+  --accent-rgb:   0,136,255; /* raw channels so rgba(var(--accent-rgb),a) tints track the theme */
   --accent-dim:   rgba(var(--accent-rgb),0.10);
   --accent-mid:   rgba(var(--accent-rgb),0.20);
   --accent-glow:  rgba(var(--accent-rgb),0.30);
@@ -145,11 +145,11 @@ a{text-decoration:none;color:inherit;}
   --green: #88FF00; --green-edge: #A6FF4D; --green-tint: #F1FFDC; --on-green: #163300;
   --red:   #FF0033; --red-edge: #FF3355;   --red-tint: #FFE0E6;
   --red-soft: rgba(255,0,51,.16);
-  --amber: #FFCC00; --amber-edge: #FFE066; /* warning/attention; text = --text-black */
+  --amber: #FFBB00; --amber-edge: #FFE066; /* warning/attention; text = --text-black */
   /* "Rose" (liked/active-heart, unfollow/leave) has no place in the 3-color
      law — an active/selected state is blue's job per the color law, so it's
      folded into blue rather than kept as a 4th decorative hue. */
-  --rose:      #0A84FF;
+  --rose:      #0088FF;
   --rose-bg:   rgba(var(--accent-rgb),.12);
   --rose-bg-2: rgba(var(--accent-rgb),.2);
   --rose-line: rgba(var(--accent-rgb),.5);
@@ -159,15 +159,15 @@ a{text-decoration:none;color:inherit;}
   --money-line: rgba(48,209,88,.4);
   /* Protection / escrow was a 5th decorative violet; folded into blue as the
      one "this is the trustworthy/primary path" signal, per the color law. */
-  --violet:      #0A84FF;
+  --violet:      #0088FF;
   --violet-bg:   rgba(var(--accent-rgb),.14);
   --violet-line: rgba(var(--accent-rgb),.42);
   /* Reserve accent — a beautiful purple kept on hand for any future need the
      colour law doesn't cover (an extra hue we didn't plan for). Defined, but
      deliberately NOT used anywhere yet. */
-  --purple:      #8b5cf6;
-  --purple-bg:   rgba(139,92,246,.14);
-  --purple-line: rgba(139,92,246,.42);
+  --purple:      #AA00FF;
+  --purple-bg:   rgba(170,0,255,.14);
+  --purple-line: rgba(170,0,255,.42);
 
   /* Layout */
   --sidebar-w: 244px;
@@ -3993,7 +3993,7 @@ body.light{
   --s1:#F5F5F7;--s2:#F5F5F7;--s3:#e6ecf0;--s4:#d9e1e8;
   --b1:rgba(0,0,0,.04);--b2:#eff3f4;--b3:#e1e8ed;--b4:#cfd9de;
   --divider:#D1D1D6;
-  --accent:#007AFF;--accent-rgb:0,122,255;--accent-hover:#0066D6;--accent-light:#3395FF;
+  --accent:#0088FF;--accent-rgb:0,136,255;--accent-hover:#0066D6;--accent-light:#3395FF;
   --accent-dim:rgba(0,122,255,.10);--accent-mid:rgba(0,122,255,.20);--accent-glow:rgba(0,122,255,.30);
   --accent-tint:#FFFFFF;   /* Apple's own light-mode blue buttons use white text */
   --primary:#111114;--on-primary:#FFFFFF;   /* Light-theme primary: near-black fill, white label */
@@ -9931,7 +9931,7 @@ body.light #signupDob{color-scheme:light;}
    The pool is a soft deep-blue radial (--pool ramp) that follows the pointer at
    ~12% peak over a 420px radius; on touch it appears under the finger during a
    drag only. Black theme only. */
-/* A soft AZURE radial (--accent family #0A84FF, matching the login-panel glow +
+/* A soft AZURE radial (--accent family #0088FF, matching the login-panel glow +
    the shop-icon blue) that follows the pointer, composited with SOFT-LIGHT on the
    stage. Soft-light satisfies all four asks at once: it's INVISIBLE on true
    #000000 (soft-light(#000,x)=#000, so the black void never lights), it lifts any
@@ -15720,7 +15720,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1384'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1385'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -18634,7 +18634,7 @@ function applyTheme() {
    app is just overriding those variables. A custom pick is persisted per-device
    and applied on body (inline > the body.light theme rule, so it wins in every
    theme). Clearing it falls back to the theme's own blue. */
-const ACCENT_PRESETS = ['#0A84FF','#34C759','#5AC8FA','#00C7BE','#FF9500','#FF3B30','#FF2D55','#AF52DE','#5E5CE6','#A2845E','#8E8E93','#FFD60A'];
+const ACCENT_PRESETS = ['#0088FF','#34C759','#5AC8FA','#00C7BE','#FF9500','#FF3B30','#FF2D55','#AF52DE','#5E5CE6','#A2845E','#8E8E93','#FFD60A'];
 function getAccent() { try { const v = localStorage.getItem('atwe_accent'); return /^#[0-9a-f]{6}$/i.test(v || '') ? v : null; } catch { return null; } }
 function _hexRgb(hex) { const n = parseInt(hex.slice(1), 16); return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }; }
 function _shade(hex, amt) { // amt <0 darken, >0 lighten
@@ -29365,7 +29365,7 @@ async function _renderPostshot(p) {
   const SC = 2, W = 600, PAD = 22, AV = 48, cW = W - PAD * 2;
   const light = document.body.classList.contains('light');
   const bg = _psVar('--bg', light ? '#fff' : '#000'), t1 = _psVar('--t1', light ? '#1d1d1f' : '#ffffff'),
-    t3 = _psVar('--t3', '#6e6e73'), accent = _psVar('--accent', '#0a84ff'), rose = _psVar('--rose', '#0a84ff'),
+    t3 = _psVar('--t3', '#6e6e73'), accent = _psVar('--accent', '#0088FF'), rose = _psVar('--rose', '#0088FF'),
     verify = _psVar('--verify', light ? '#6E6E73' : '#d3d5d7'),
     border = light ? 'rgba(0,0,0,.09)' : 'rgba(255,255,255,.13)';
   const a = p.author || {};
@@ -39190,11 +39190,11 @@ function acThreadSearchKey(e) {
 const _CHAT_THEMES = [
   { id: '', label: 'Default', css: '' },
   { id: 'ink', label: 'Ink', css: 'linear-gradient(160deg,#000000,#141416)' },
-  { id: 'dusk', label: 'Dusk', css: 'linear-gradient(160deg,#0a84ff,#141416)' },
+  { id: 'dusk', label: 'Dusk', css: 'linear-gradient(160deg,#0088FF,#141416)' },
   { id: 'forest', label: 'Forest', css: 'linear-gradient(160deg,#101010,#242426)' },
-  { id: 'ocean', label: 'Ocean', css: 'linear-gradient(160deg,#000000,#0a84ff)' },
+  { id: 'ocean', label: 'Ocean', css: 'linear-gradient(160deg,#000000,#0088FF)' },
   { id: 'sunset', label: 'Sunset', css: 'linear-gradient(160deg,#1c1c1e,#3a3a3c)' },
-  { id: 'rose', label: 'Rose', css: 'linear-gradient(160deg,#141416,#0a84ff)' },
+  { id: 'rose', label: 'Rose', css: 'linear-gradient(160deg,#141416,#0088FF)' },
   { id: 'slate', label: 'Slate', css: '#1c1c1e' },
   { id: 'charcoal', label: 'Charcoal', css: '#0b0b0d' },
 ];
