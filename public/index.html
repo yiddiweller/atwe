@@ -162,6 +162,12 @@ a{text-decoration:none;color:inherit;}
   --violet:      #0A84FF;
   --violet-bg:   rgba(var(--accent-rgb),.14);
   --violet-line: rgba(var(--accent-rgb),.42);
+  /* Reserve accent — a beautiful purple kept on hand for any future need the
+     colour law doesn't cover (an extra hue we didn't plan for). Defined, but
+     deliberately NOT used anywhere yet. */
+  --purple:      #8b5cf6;
+  --purple-bg:   rgba(139,92,246,.14);
+  --purple-line: rgba(139,92,246,.42);
 
   /* Layout */
   --sidebar-w: 244px;
@@ -15714,7 +15720,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1383'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1384'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
