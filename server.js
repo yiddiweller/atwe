@@ -21410,6 +21410,74 @@ app.delete('/api/admin/staff/:id', auth.requireAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 
+// ─── Admin: system accounts (e.g. @support) — username + password, no real email ───
+// Superadmin-only. Platform-owned accounts that sign in by USERNAME (login already
+// accepts a username or an email). They carry a synthetic, non-deliverable email and
+// are flagged `staff_created` so self-serve email password-reset never applies — the
+// admin manages the password from here instead (set a new one any time; passwords are
+// hashed and can't be shown back, so "forgot" = reset, which the admin always can do).
+app.get('/api/admin/system-accounts', auth.requireAdmin, async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, name, username, avatar, is_admin, plan, created_at, last_login_at
+       FROM users WHERE staff_created = true ORDER BY created_at DESC`);
+    res.json({ accounts: rows });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load accounts.' }); }
+});
+app.post('/api/admin/system-accounts', auth.requireAdmin, async (req, res) => {
+  const username = String(req.body.username || '').trim().replace(/^@/, '');
+  const name = (String(req.body.name || '').trim() || ('@' + username)).slice(0, 80);
+  const password = String(req.body.password || '');
+  if (!username || username.length > 40 || !/^[a-zA-Z0-9._-]+$/.test(username)) {
+    return res.status(400).json({ error: 'Username can use letters, numbers, dots, dashes and underscores.' });
+  }
+  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  try {
+    if (await usernameReserved(username)) return res.status(409).json({ error: 'That username is reserved.' });
+    const hash = await auth.hashPassword(password);
+    const email = username.toLowerCase() + '@atwe.invalid'; // synthetic, never delivered to
+    const { rows } = await db.query(
+      `INSERT INTO users (name, email, password_hash, is_admin, email_verified, username, account_type, staff_created, onboarded)
+       VALUES ($1, $2, $3, false, true, $4, 'personal', true, true)
+       RETURNING id, name, username, created_at`,
+      [name, email, hash, username]
+    );
+    adminAudit(req, 'system_account.create', 'user', rows[0].id, { username });
+    res.status(201).json({ account: rows[0] });
+  } catch (e) {
+    if (e.code === '23505') return res.status(409).json({ error: 'That username is already taken.' });
+    console.error(e); res.status(500).json({ error: 'Could not create the account.' });
+  }
+});
+app.post('/api/admin/system-accounts/:id/password', auth.requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const password = String(req.body.password || '');
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  try {
+    // Restricted to staff_created accounts ON PURPOSE: an admin must NOT be able to set
+    // an arbitrary member's password (that would be a silent account takeover).
+    const t = (await db.query('SELECT staff_created FROM users WHERE id = $1', [id])).rows[0];
+    if (!t || !t.staff_created) return res.status(404).json({ error: 'Not a system account.' });
+    const hash = await auth.hashPassword(password);
+    await db.query('UPDATE users SET password_hash = $1 WHERE id = $2 AND staff_created = true', [hash, id]);
+    await db.query('DELETE FROM auth_sessions WHERE user_id = $1', [id]).catch(() => {}); // sign it out everywhere so the new password takes effect
+    adminAudit(req, 'system_account.set_password', 'user', id, {});
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the password.' }); }
+});
+app.delete('/api/admin/system-accounts/:id', auth.requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const t = (await db.query('SELECT staff_created FROM users WHERE id = $1', [id])).rows[0];
+    if (!t || !t.staff_created) return res.status(404).json({ error: 'Not a system account.' });
+    await db.query('DELETE FROM users WHERE id = $1 AND staff_created = true', [id]);
+    adminAudit(req, 'system_account.delete', 'user', id, {});
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the account.' }); }
+});
+
 // ─── Admin: Appeals queue (staff `users` scope — same team that suspends/bans) ───
 app.get('/api/admin/appeals', auth.requirePerm('users'), async (req, res) => {
   const state = ['open', 'granted', 'denied'].includes(req.query.state) ? req.query.state : null;

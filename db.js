@@ -3041,6 +3041,10 @@ async function initSchema() {
   // Distinct from `deactivated` (hibernate, which hides the profile entirely).
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS paused BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pause_message TEXT;`);
+  // Admin-created "system" accounts (e.g. @support): username + password, no real
+  // email, sign in by username. Flagged so they're excluded from self-serve password
+  // reset (the admin manages their password from the dashboard instead).
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS staff_created BOOLEAN NOT NULL DEFAULT false;`);
   // Business profiles pick ONE primary call-to-action pill shown to visitors on
   // their profile: 'book' (open the booking sheet), 'order' (open the storefront)
   // or 'message' (start a DM). NULL = no explicit CTA (a personal account, or a
