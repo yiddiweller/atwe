@@ -5882,11 +5882,12 @@ body.light .order-success{background:rgba(255,255,255,.82);}
    circles "popping out" on the left). Symmetric 5px padding inside the list's 8px gutter
    lands the first avatar at ~16px — lined up with the post avatars below — and keeps the
    row balanced. Circles are smaller (46px). */
-/* Left padding = the feed gutter, so the CIRCLE itself (the avatar) starts on the exact
-   same left line as the post avatars below — the circles line up vertically. (The thin
-   ring/halo peeks ~4px further left, which is intentional and subtle.) The skeleton uses
-   the same padding + sizes so nothing shifts on load. */
-.ac-home-stories{gap:14px;padding:8px var(--feed-gutter) 12px;border-bottom:0.5px solid var(--b2);}
+/* Left padding = gutter + 4px so the RING/RIM's outer edge (it paints a 4px halo outside
+   the circle) lands on --feed-gutter — flush with the post avatars below, rim and all, not
+   poking out on the left. NOTE this deliberately differs from the skeleton (.skel-stories),
+   which uses the plain gutter: the skeleton has no rim, so its bare circle lands on the line
+   at the plain gutter. Two different paddings, but both put the visible left edge on the line. */
+.ac-home-stories{gap:14px;padding:8px calc(var(--feed-gutter) + 4px) 12px;border-bottom:0.5px solid var(--b2);}
 body.light .ac-home-stories{border-bottom-color:rgba(0,0,0,.08);}
 .ac-home-stories .story-cell{width:54px;gap:6px;}
 .ac-home-stories .story-ring{width:54px;height:54px;padding:0;background:none;}
@@ -15690,7 +15691,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1379'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1380'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
