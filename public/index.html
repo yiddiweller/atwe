@@ -9958,6 +9958,11 @@ body.light #page-glow .pool-orb{display:none;}
    removes the layer entirely; the JS shield-cloning + idle drift are gated off
    to match. Zero visual change on touch. */
 @media (hover: none), (pointer: coarse){ #page-glow{display:none!important;} }
+/* ── EDGE-GLOW REMOVED (design rule: "no edge glow"). The pointer-tracked bulb rim
+   (.rim-ring) and the cursor pool (#page-glow) are disabled everywhere — no shiny rim
+   lighting up blue/white near the screen edge. The JS that injects them stays inert. ── */
+#page-glow{display:none!important;}
+.rim-ring{display:none!important;}
 
 /* Layer B — bulb rim. A 2.5px ring hugging the surface's rounded edge at
    --gx/--gy, twin geometry in one element: the sharp core (white→icy) is the
@@ -15720,7 +15725,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1385'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1386'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
