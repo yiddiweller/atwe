@@ -2,6 +2,26 @@
 
 Guidance for AI assistants (and humans) working in this repository.
 
+## 📱 iOS / mobile app — resume protocol ("continue with the app")
+
+A **native iOS app** (Expo + TypeScript, currently Expo **SDK 54**) lives in
+`atwe-mobile/` — a client of this same backend, **no backend changes**. It is
+being built **true-native, phase by phase**, for a non-technical founder.
+
+**Trigger — when the user says "continue with the app"** (or otherwise asks to
+resume the iOS / mobile work): FIRST read **`atwe-mobile/PROJECT-STATUS.md`** —
+the living resume point (current state · what's built · next steps · how to run ·
+Apple / TestFlight status · locked decisions · gotchas) — then continue the build
+from exactly there. **Keep `PROJECT-STATUS.md` updated** as each phase lands so it
+always reflects the true state, and commit + push every change to the working
+branch (`claude/claude-md-docs-cajkf9`).
+
+**Working style (match it exactly):** the founder is non-technical. Explain in
+plain language, **one action at a time**, verify each step (they share
+screenshots), stay patient and warm, never assume tooling familiarity, and give
+honest trade-offs. This is the same hand-held approach that first got the app
+live on their phone — preserve it. (Full context also lives in `PROJECT-STATUS.md`.)
+
 ## What this is
 
 **Atwe AI** — a single-page web chat application: an "intelligent assistant for
@@ -27,6 +47,57 @@ post "open to work"), a real **connections graph**, **skills/endorsements**, wor
 **experience**, an **Atwe AI job/worker matchmaker**, **business verification**,
 **reporting + an admin queue**, and **paid job boosts**. See **"Business
 networking & jobs marketplace"** below.
+
+## 🎨 Atwe Design System — THE canonical rules (single source of truth)
+
+> **This section is the one and only design law for Atwe.** It supersedes any
+> older/conflicting styling anywhere in the app or admin. When the owner asks
+> "our rules / our colours / our design", it is THIS. Every new surface and every
+> edit — in `public/index.html` AND `public/admin.html` — must follow it exactly.
+> A saveable reference lives at `docs/Atwe-Design-Rules.pdf` (+ `Atwe-Build-Plan.pdf`).
+
+**The colour ladder (loudest → quietest). Reference colours ONLY via variables; never hardcode.**
+
+| Role | Hex | Used for |
+|------|-----|----------|
+| **Black** | `#000000` | The background, always. Never a panel colour behind content. |
+| **White** | `#FFFFFF` | The ONE primary action per screen (solid white pill, dark label). `--pill`/`--on-primary`. |
+| **Dark grey** | `#1C1C1E` fill + `rgba(255,255,255,.05)` border | Secondary buttons beside the white one. **The only bordered thing in the app.** |
+| **Blue** | `#0088FF` (`--accent`, rgb `0,136,255`) | Identity, NOT action — links, usernames, active tab, verified seal, toggles-on, the AI. |
+| **Green** | `#88FF00` (`--green`, dark text `--green-ink #132a00`) | Accept · pick up a call · live · success · money. |
+| **Red** | `#FF0033` (`--red`) | Delete · decline · destructive. |
+| **Yellow** | `#FFBB00` (`--amber`) | Information & heads-up notices. |
+| **Purple** | `#AA00FF` (`--purple`) | **Reserve only** — on hand for a future need the ladder doesn't cover. Not used yet. |
+
+Green/red/yellow lettered text sits on their fills with **dark** text (bright hues) — never white-on-lime.
+
+**The rules (every one, everywhere):**
+1. **Buttons are always full pills** — both ends fully rounded (`border-radius:999px`).
+2. **Boxes are the exception, not the rule.** Most buttons/controls sit **directly on black, no box**
+   (Home top-right icons, the login screen). A grey box is used **only** to group options/content —
+   never wrap a button in a box just to have one; plain-on-black is the default.
+3. **Solid, never outlined.** Grey boxes/cards are **solid fills, NO outline border** — they separate
+   from black by their fill. The ONLY border in the app is the thin one on a secondary button.
+4. **Matching corners.** When a pill sits in a grey box's corner, the box's corner rounds to **hug it**
+   (box radius = pill radius + the padding gap). One radius system app-wide.
+5. **Divider cuts contrast with their ground:** a **black** cut on a grey box, a **grey** line on the
+   black background. Always visible, never a heavy rule.
+6. **Wide, sharp, edge-to-edge** to the 18px gutter — like the Home feed. Never a narrow card floating
+   in the middle of the screen.
+7. **No edge-glow.** No shiny rim that lights up (blue→white) around the screen as a finger nears the
+   edge. Motion is quiet feedback, never a light show. (The old `.rim-ring`/light-engine glow is removed.)
+8. **Brand & voice.** Product = **Atwe**; assistant = **Atwe AI** (the swirl). Never surface Claude/
+   Anthropic. Plain, calm copy (Apple/X restraint). No emojis in the app chrome.
+9. **Five worlds** (bottom nav, in order): **Home · Beam · Engine · Atwe AI · Account** (internal tab
+   ids stay `home/chat/search/ai/profile`; only the *label* is "Account").
+10. **Verified seal** = a neutral **silver** seal sized to the name (never blue, never a plain dot).
+11. **Anchored** flow = pure black, only answer-boxes boxed, buttons morph in place (no blink/jump),
+    grey→white pills, red destructive. **Glide menu** = the frosted press-hold context sheet.
+12. **Themes:** Black-first, plus Light and System; everything flows through the colour variables so a
+    theme flips in one place. Three motion tokens (`--t-fast/base/slow`); reduced-motion respected.
+
+**The admin dashboard (`public/admin.html`) uses the SAME palette + rules** — same variable values, same
+colour ladder, same button/box grammar. Keep it in lockstep with the app.
 
 ## Stack & layout
 
