@@ -5901,6 +5901,24 @@ body.light .order-success{background:rgba(255,255,255,.82);}
    at the plain gutter. Two different paddings, but both put the visible left edge on the line. */
 .ac-home-stories{gap:14px;padding:8px calc(var(--feed-gutter) + 4px) 12px;border-bottom:0.5px solid var(--b2);}
 body.light .ac-home-stories{border-bottom-color:rgba(0,0,0,.08);}
+
+/* ── In-app announcement banner (MOTD) — solid grey card, no outline, style-coloured accent dot, white-pill CTA ── */
+/* beats `body.feed-cover #acFeed > *{background:var(--bg)}` (line ~2539) which black-fills every feed child */
+.ac-annbar,body.feed-cover #acFeed>.ac-annbar{margin:10px var(--feed-gutter) 4px;background:var(--s3)!important;border-radius:16px;padding:13px 14px;
+  display:flex;align-items:center;gap:11px;}
+.ac-annbar.hidden{display:none;}
+body.light .ac-annbar,body.light.feed-cover #acFeed>.ac-annbar{background:#f0f2f5!important;}
+.ac-annbar .aab-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--accent);align-self:flex-start;margin-top:5px;}
+.ac-annbar.st-success .aab-dot{background:var(--green);}
+.ac-annbar.st-warning .aab-dot{background:var(--amber);}
+.ac-annbar .aab-msg{flex:1;min-width:0;font-size:14px;line-height:1.4;color:var(--t1);}
+.ac-annbar .aab-cta{flex-shrink:0;background:var(--primary);color:var(--on-primary);border:none;border-radius:999px;
+  padding:8px 15px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;transition:transform var(--t-fast) var(--ease),filter var(--t-fast) var(--ease);}
+.ac-annbar .aab-cta:active{transform:scale(.97);filter:brightness(.92);}
+.ac-annbar .aab-x{flex-shrink:0;width:26px;height:26px;border:none;background:none;color:var(--t3);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;border-radius:50%;align-self:flex-start;}
+.ac-annbar .aab-x svg{width:16px;height:16px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;}
+@media(hover:hover){.ac-annbar .aab-x:hover{background:var(--menu-hl);color:var(--t1);}}
 .ac-home-stories .story-cell{width:54px;gap:6px;}
 .ac-home-stories .story-ring{width:54px;height:54px;padding:0;background:none;}
 .ac-home-stories .story-ring .user-avatar{width:54px;height:54px;border:none;}
@@ -15725,7 +15743,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1386'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1387'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25278,6 +25296,63 @@ function acGoHome() {
   acRenderPinnedTabs();
   acSetFeed(_acFeedScope);
   acStartNewPostsPoll();
+  acLoadAnnouncement();
+}
+
+// ── In-app announcement banner (MOTD) ──────────────────────────────────────────
+// One admin-composed, dismissible, audience-targeted banner at the very top of the
+// home feed (For You / Following), above the story rail. It's baked into the feed's
+// innerHTML so it scrolls away and survives scope switches; the async first fetch
+// injects it into an already-painted feed.
+let _annLoaded = false;
+function _annDismissed() { try { return JSON.parse(localStorage.getItem('atwe_ann_dismissed') || '[]'); } catch { return []; } }
+function _annDismiss(id) {
+  const set = _annDismissed(); if (!set.includes(id)) set.push(id);
+  try { localStorage.setItem('atwe_ann_dismissed', JSON.stringify(set.slice(-100))); } catch {}
+}
+async function acLoadAnnouncement() {
+  if (_annLoaded) { acAnnInject(); return; } // already fetched — just make sure it's shown
+  _annLoaded = true;
+  try {
+    const { announcement: a } = await API.req('GET', '/api/announcement');
+    AC._annData = (a && !_annDismissed().includes(a.id)) ? a : null;
+    acAnnInject();
+  } catch (e) { AC._annData = null; } // best-effort; never blocks Home
+}
+// The banner markup — '' when there's nothing (or it was dismissed).
+function acAnnBarHtml() {
+  const a = AC._annData; if (!a || _annDismissed().includes(a.id)) return '';
+  const cta = a.ctaLabel && a.ctaUrl ? `<button class="aab-cta" onclick="acAnnClick(${a.id})">${escHtml(a.ctaLabel)}</button>` : '';
+  const x = a.dismissible !== false
+    ? `<button class="aab-x" onclick="acAnnDismiss(${a.id})" aria-label="Dismiss"><svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>` : '';
+  return `<div class="ac-annbar st-${a.style || 'info'}"><span class="aab-dot"></span><span class="aab-msg">${escHtml(a.message)}</span>${cta}${x}</div>`;
+}
+// Insert the banner into an already-painted feed (used when the async fetch lands
+// after the feed rendered). No-op if it's already there or there's nothing to show.
+function acAnnInject() {
+  const feed = document.getElementById('acFeed'); if (!feed) return;
+  const existing = feed.querySelector(':scope > .ac-annbar');
+  if (!AC._annData || _annDismissed().includes(AC._annData.id)) { if (existing) existing.remove(); return; }
+  if (existing) return;
+  const html = acAnnBarHtml(); if (!html) return;
+  feed.insertAdjacentHTML('afterbegin', html);
+  _annFireImpression();
+}
+function _annFireImpression() {
+  if (!AC._annData || AC._annSeen === AC._annData.id) return;
+  AC._annSeen = AC._annData.id; // count once per session
+  API.req('POST', '/api/announcement/' + AC._annData.id + '/impression').catch(() => {});
+}
+function acAnnDismiss(id) {
+  _annDismiss(id); AC._annData = null;
+  document.querySelectorAll('#acFeed > .ac-annbar').forEach(el => el.remove());
+}
+function acAnnClick(id) {
+  const a = AC._annData; if (!a || !a.ctaUrl) return;
+  API.req('POST', '/api/announcement/' + id + '/click').catch(() => {});
+  const url = a.ctaUrl;
+  if (/^https?:\/\//i.test(url)) window.open(url, '_blank', 'noopener');
+  else location.assign(url); // in-app deep link → SPA router picks it up on load
 }
 // The four home feed tabs, in order (drives the tab row + swipe navigation).
 // Order per the design blueprint: For You · Following · Circles · Collections
@@ -28290,7 +28365,11 @@ async function acLoadFeed() {
       // A stories rail rides on top of the feed on Home (blueprint §Home) — it scrolls
       // away like Instagram. acLoadStoryTray() fills every .js-story-tray (this one too).
       const railHtml = (scope === 'foryou' || scope === 'following') ? '<div class="story-tray js-story-tray ac-home-stories hidden" id="acHomeStories"></div>' : '';
-      el.innerHTML = railHtml + bar + list.join('');
+      // Announcement banner (MOTD) rides at the very top of the home feed, above the
+      // story rail, on the main feeds — baked in so a scope switch keeps it.
+      const annHtml = (scope === 'foryou' || scope === 'following') ? acAnnBarHtml() : '';
+      el.innerHTML = annHtml + railHtml + bar + list.join('');
+      if (annHtml) _annFireImpression();
       if (scope === 'foryou' || scope === 'following') {
         acLoadStoryTray(); acFeedSetupSentinel(); // stories + arm infinite scroll (cheap)
         // Defer the iterate-every-card observer setup (dwell / video-park / ad
@@ -28311,6 +28390,9 @@ async function acLoadFeed() {
       el.innerHTML = `<div class="ac-feed-empty"><div class="ac-feed-empty-ic">${empty.icon}</div><div class="ac-feed-empty-line">${empty.line}</div><div class="ac-feed-empty-sub">${empty.sub}</div><button class="ac-pill-btn accent ac-feed-empty-cta" onclick="${empty.act}">${empty.cta}</button></div><div id="acFeedSuggest"></div>`;
       acLoadSuggestions('acFeedSuggest');
     }
+    // Ensure the MOTD banner is at the top of the home feed regardless of which
+    // render branch ran (loaded list, empty state) — no-op if already baked in.
+    if (scope === 'foryou' || scope === 'following') acAnnInject();
   } catch (e) {
     acErr(el, 'acLoadFeed()');
   }

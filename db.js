@@ -546,6 +546,28 @@ async function initSchema() {
     );
   `);
 
+  // Announcements — an admin-composed in-app banner (MOTD): one concise, dismissible
+  // message shown to a targeted audience for an optional window, with impression/click
+  // tracking. The #1 owner→member reach channel.
+  await query(`
+    CREATE TABLE IF NOT EXISTS announcements (
+      id           SERIAL PRIMARY KEY,
+      message      TEXT NOT NULL,
+      cta_label    TEXT,
+      cta_url      TEXT,
+      style        TEXT NOT NULL DEFAULT 'info',   -- info | success | warning
+      audience     TEXT NOT NULL DEFAULT 'all',    -- all | business | personal | pro | free
+      dismissible  BOOLEAN NOT NULL DEFAULT true,
+      active       BOOLEAN NOT NULL DEFAULT true,
+      starts_at    TIMESTAMPTZ,
+      ends_at      TIMESTAMPTZ,
+      impressions  INTEGER NOT NULL DEFAULT 0,
+      clicks       INTEGER NOT NULL DEFAULT 0,
+      created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
   // Admin Vault — a private, admin-only "drive" for sensitive files, folders and
   // secrets (PDFs, passwords, API keys). `kind` ∈ folder|file|secret; folders nest
   // via `parent_id` (adjacency list, root = NULL). File bytes and secret values are

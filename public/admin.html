@@ -450,6 +450,16 @@
   .custom-row input:focus{border-color:var(--b3);}
   .custom-row input::placeholder{color:var(--t4);}
 
+  /* ── Announcements form ── */
+  .ann-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;}
+  @media(max-width:560px){.ann-grid{grid-template-columns:1fr;}}
+  .ann-f{display:flex;flex-direction:column;gap:5px;min-width:0;}
+  .ann-f>span{font-size:11.5px;color:var(--t3);font-weight:600;padding-left:2px;}
+  .ann-f input,.ann-f select{background:var(--s1);border:1px solid var(--b1);border-radius:12px;color:var(--t1);
+    padding:10px 12px;font:inherit;font-size:14px;outline:none;transition:border-color .15s var(--ease);}
+  .ann-f input:focus,.ann-f select:focus{border-color:var(--b3);}
+  .ann-f input::placeholder{color:var(--t4);}
+
   /* ── Broadcast + support ── */
   .panel{background:var(--s1);border:none;border-radius:var(--r-md);padding:16px;margin-bottom:22px;}
   .panel h3{font-size:14.5px;font-weight:700;margin-bottom:3px;}
@@ -919,6 +929,7 @@
 
       <div class="nav-label" data-group="content">Content</div>
       <button class="tab" data-v="posts" onclick="switchTab('posts')">Posts</button>
+      <button class="tab" data-v="announcements" onclick="switchTab('announcements')">Announcements</button>
       <button class="tab" data-v="circles" onclick="switchTab('circles')">Circles</button>
       <button class="tab" data-v="feed" onclick="switchTab('feed')">Feed</button>
 
@@ -1377,6 +1388,7 @@ const TAB_PERM = {
   finance: 'revenue', growth: 'growth', audit: 'super', staff: 'super',
   refunds: 'refunds', appeals: 'users', datareq: 'users', activity: 'super', investigate: 'moderation', moderate: 'moderation',
   cards: 'revenue', features: 'super', featurecontrols: 'super', vault: 'super',
+  announcements: 'super',
 };
 function canSee(tab){ const p = TAB_PERM[tab]; if (ME.superadmin) return true; return p !== 'super' && ME.perms.includes(p); }
 
@@ -1448,6 +1460,7 @@ const NAV_TITLES = {
   investigate:'Investigate', moderate:'AI content scan', disputes:'Disputes', appeals:'Appeals', support:'Support', datareq:'Data requests',
   posts:'Posts', circles:'Circles', feed:'Feed', activity:'Activity', traffic:'Traffic', growth:'Growth',
   audit:'Audit log', site:'Site', cards:'Cards', features:'Features', featurecontrols:'Feature Controls', vault:'Vault',
+  announcements:'Announcements',
 };
 // Mobile: slide the sidebar in/out.
 function toggleNav(open){
@@ -1492,7 +1505,124 @@ function renderView(){
   else if (VIEW === 'features') renderFeaturesView();
   else if (VIEW === 'featurecontrols') renderFeatureControlsView();
   else if (VIEW === 'vault') renderVaultView();
+  else if (VIEW === 'announcements') renderAnnouncementsView();
   else renderOverviewView();
+}
+
+/* ─── Announcements (in-app banner / MOTD) ─── */
+let ANN = { list: [] };
+async function renderAnnouncementsView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="ld"><span class="ab-mark"></span></div>';
+  await loadAnnouncements();
+}
+async function loadAnnouncements(){
+  try {
+    ANN = await api('GET', '/api/admin/announcements');
+    renderAnnouncements();
+  } catch (e){ document.getElementById('content').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+const ANN_STYLE_OPTS = [['info','Info · blue'],['success','Success · green'],['warning','Warning · yellow']];
+const ANN_AUD_OPTS = [['all','Everyone'],['business','Business accounts'],['personal','Personal accounts'],['pro','Pro members'],['free','Free members']];
+function renderAnnouncements(){
+  if (VIEW !== 'announcements') return;
+  const list = ANN.list || ANN.announcements || [];
+  const styleChip = s => `<span class="pill ${s==='success'?'pro':(s==='warning'?'susp':'')}">${esc(s)}</span>`;
+  const rows = list.map(a => {
+    const ctr = a.impressions > 0 ? Math.round((a.clicks / a.impressions) * 100) : 0;
+    const win = [a.starts_at ? 'from ' + fmtDateTime(a.starts_at) : null, a.ends_at ? 'until ' + fmtDateTime(a.ends_at) : null].filter(Boolean).join(' ') || 'always';
+    const audLabel = (ANN_AUD_OPTS.find(x => x[0] === a.audience) || ['','Everyone'])[1];
+    return `<div class="panel" style="margin-bottom:12px;">
+      <div style="display:flex;align-items:flex-start;gap:10px;justify-content:space-between;">
+        <div style="min-width:0;">
+          <div class="srt" style="white-space:normal;">${styleChip(a.style)} ${esc(a.message)}</div>
+          <div class="srs" style="margin-top:6px;">${esc(audLabel)} · ${esc(win)}${a.dismissible === false ? ' · not dismissible' : ''}${a.cta_label ? ' · button “' + esc(a.cta_label) + '”' : ''}</div>
+          <div class="srs" style="margin-top:4px;">${a.impressions||0} seen · ${a.clicks||0} clicks · ${ctr}% CTR</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0;">
+          <button class="switch ${a.active ? 'on' : ''}" onclick="toggleAnn(${a.id}, ${a.active ? 'false' : 'true'})" aria-label="Active"><span></span></button>
+        </div>
+      </div>
+      <div class="dur-row" style="margin-top:12px;">
+        <button class="dur" onclick="editAnn(${a.id})">Edit</button>
+        <button class="dur" onclick="delAnn(${a.id})" style="color:var(--red);">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('content').innerHTML = `
+    <div class="panel">
+      <h3>New announcement</h3>
+      <div class="sub">A slim banner shown at the top of Home. Keep it to one short line. Members can dismiss it (unless you turn that off), and you can see how many saw it and tapped the button.</div>
+      <textarea id="annMsg" maxlength="280" rows="2" placeholder="e.g. New: send money to any @username, instantly. Tap to try it." style="width:100%;box-sizing:border-box;background:var(--s1);border:1px solid var(--b1);border-radius:12px;color:var(--t1);padding:11px 13px;font:inherit;resize:vertical;"></textarea>
+      <div class="ann-grid">
+        <label class="ann-f"><span>Style</span><select id="annStyle">${ANN_STYLE_OPTS.map(o => `<option value="${o[0]}">${o[1]}</option>`).join('')}</select></label>
+        <label class="ann-f"><span>Who sees it</span><select id="annAud">${ANN_AUD_OPTS.map(o => `<option value="${o[0]}">${o[1]}</option>`).join('')}</select></label>
+      </div>
+      <div class="ann-grid">
+        <label class="ann-f"><span>Button label <span class="muted">(optional)</span></span><input id="annCtaLabel" maxlength="40" placeholder="e.g. Try it" autocomplete="off"/></label>
+        <label class="ann-f"><span>Button link</span><input id="annCtaUrl" maxlength="500" placeholder="https://… or /wallet" autocomplete="off"/></label>
+      </div>
+      <div class="ann-grid">
+        <label class="ann-f"><span>Start <span class="muted">(optional)</span></span><input id="annStart" type="datetime-local"/></label>
+        <label class="ann-f"><span>End <span class="muted">(optional)</span></span><input id="annEnd" type="datetime-local"/></label>
+      </div>
+      <label class="site-row" style="cursor:pointer;">
+        <div><div class="srt">Members can dismiss it</div><div class="srs">A close button on the banner. Turn off for a critical notice.</div></div>
+        <input type="checkbox" id="annDismiss" checked style="width:20px;height:20px;"/>
+      </label>
+      <div class="custom-row" style="margin-top:14px;"><button class="act" id="annSaveBtn" onclick="saveAnn()">Publish announcement</button></div>
+    </div>
+    <h3 style="margin:22px 2px 12px;font-size:15px;">All announcements</h3>
+    ${rows || '<div class="empty" style="padding:14px 0;">No announcements yet.</div>'}`;
+  ANN._editing = null;
+}
+function _annForm(){
+  return {
+    message: document.getElementById('annMsg').value.trim(),
+    style: document.getElementById('annStyle').value,
+    audience: document.getElementById('annAud').value,
+    ctaLabel: document.getElementById('annCtaLabel').value.trim(),
+    ctaUrl: document.getElementById('annCtaUrl').value.trim(),
+    startsAt: document.getElementById('annStart').value ? new Date(document.getElementById('annStart').value).toISOString() : '',
+    endsAt: document.getElementById('annEnd').value ? new Date(document.getElementById('annEnd').value).toISOString() : '',
+    dismissible: document.getElementById('annDismiss').checked,
+  };
+}
+async function saveAnn(){
+  const f = _annForm();
+  if (!f.message) return notify('Write a message first.');
+  if (f.ctaLabel && !f.ctaUrl) return notify('A button label needs a link.');
+  const editing = ANN._editing;
+  try {
+    if (editing) await api('PATCH', '/api/admin/announcements/' + editing, { ...f, active: true });
+    else await api('POST', '/api/admin/announcements', f);
+    notify(editing ? 'Announcement updated.' : 'Announcement published.');
+    await loadAnnouncements();
+  } catch (e){ notify(e.message); }
+}
+function editAnn(id){
+  const a = (ANN.list || ANN.announcements || []).find(x => x.id === id); if (!a) return;
+  document.getElementById('annMsg').value = a.message || '';
+  document.getElementById('annStyle').value = a.style || 'info';
+  document.getElementById('annAud').value = a.audience || 'all';
+  document.getElementById('annCtaLabel').value = a.cta_label || '';
+  document.getElementById('annCtaUrl').value = a.cta_url || '';
+  const toLocal = ts => { if (!ts) return ''; const d = new Date(ts); const off = d.getTimezoneOffset(); return new Date(d - off*60000).toISOString().slice(0,16); };
+  document.getElementById('annStart').value = toLocal(a.starts_at);
+  document.getElementById('annEnd').value = toLocal(a.ends_at);
+  document.getElementById('annDismiss').checked = a.dismissible !== false;
+  document.getElementById('annSaveBtn').textContent = 'Save changes';
+  ANN._editing = id;
+  document.querySelector('.main-inner')?.scrollTo(0, 0); window.scrollTo(0, 0);
+}
+async function toggleAnn(id, want){
+  try { await api('PATCH', '/api/admin/announcements/' + id, { active: want }); await loadAnnouncements(); }
+  catch (e){ notify(e.message); }
+}
+async function delAnn(id){
+  if (!confirm('Delete this announcement? Its view/click stats go with it.')) return;
+  try { await api('DELETE', '/api/admin/announcements/' + id); notify('Deleted.'); await loadAnnouncements(); }
+  catch (e){ notify(e.message); }
 }
 
 /* ─── Features (product feature checklist, embedded) ─── */

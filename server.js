@@ -21478,6 +21478,128 @@ app.delete('/api/admin/system-accounts/:id', auth.requireAdmin, async (req, res)
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the account.' }); }
 });
 
+// ─── In-app announcement banner (MOTD) ───────────────────────────────────────
+// One admin-composed, dismissible, audience-targeted, scheduled banner shown at the
+// top of Home with impression/click tracking. Style drives the accent colour on the
+// client (info=blue / success=green / warning=yellow — the canonical palette).
+const ANN_STYLES = ['info', 'success', 'warning'];
+const ANN_AUDIENCES = ['all', 'business', 'personal', 'pro', 'free'];
+function announcementAudienceMatches(audience, u) {
+  if (audience === 'all' || !audience) return true;
+  if (!u) return false; // a targeted banner never shows to a signed-out visitor
+  if (audience === 'business') return u.account_type === 'business';
+  if (audience === 'personal') return u.account_type !== 'business';
+  if (audience === 'pro') return u.plan === 'pro';
+  if (audience === 'free') return u.plan !== 'pro';
+  return true;
+}
+function cleanAnnUrl(v) {
+  const s = String(v || '').trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s.slice(0, 500);
+  if (s.startsWith('/')) return s.slice(0, 500); // in-app deep link
+  return null;
+}
+// Public: the single active banner this viewer should see (newest first). optionalAuth
+// so a guest still gets an `all`-audience banner.
+app.get('/api/announcement', auth.optionalAuth, async (req, res) => {
+  try {
+    let u = null;
+    if (req.user) {
+      u = (await db.query('SELECT account_type, plan FROM users WHERE id = $1', [req.user.id])).rows[0] || null;
+    }
+    const { rows } = await db.query(
+      `SELECT id, message, cta_label, cta_url, style, audience, dismissible
+       FROM announcements
+       WHERE active = true
+         AND (starts_at IS NULL OR starts_at <= now())
+         AND (ends_at IS NULL OR ends_at > now())
+       ORDER BY created_at DESC LIMIT 20`);
+    const hit = rows.find(a => announcementAudienceMatches(a.audience, u));
+    if (!hit) return res.json({ announcement: null });
+    res.json({ announcement: {
+      id: hit.id, message: hit.message, ctaLabel: hit.cta_label || null,
+      ctaUrl: hit.cta_url || null, style: hit.style, dismissible: hit.dismissible !== false
+    } });
+  } catch (err) { console.error(err); res.json({ announcement: null }); }
+});
+app.post('/api/announcement/:id/impression', auth.requireAuth, rateLimit(60, 60000, 'ann-imp'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (Number.isInteger(id)) db.query('UPDATE announcements SET impressions = impressions + 1 WHERE id = $1', [id]).catch(() => {});
+  res.json({ ok: true });
+});
+app.post('/api/announcement/:id/click', auth.requireAuth, rateLimit(60, 60000, 'ann-click'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (Number.isInteger(id)) db.query('UPDATE announcements SET clicks = clicks + 1 WHERE id = $1', [id]).catch(() => {});
+  res.json({ ok: true });
+});
+// Admin CRUD (superadmin — a platform-wide broadcast is a superadmin action).
+app.get('/api/admin/announcements', auth.requireAdmin, async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT a.id, a.message, a.cta_label, a.cta_url, a.style, a.audience, a.dismissible,
+              a.active, a.starts_at, a.ends_at, a.impressions, a.clicks, a.created_at,
+              u.name AS created_by_name
+       FROM announcements a LEFT JOIN users u ON u.id = a.created_by
+       ORDER BY a.created_at DESC LIMIT 200`);
+    res.json({ announcements: rows });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load announcements.' }); }
+});
+app.post('/api/admin/announcements', auth.requireAdmin, async (req, res) => {
+  const message = String(req.body.message || '').trim().slice(0, 280);
+  const style = ANN_STYLES.includes(req.body.style) ? req.body.style : 'info';
+  const audience = ANN_AUDIENCES.includes(req.body.audience) ? req.body.audience : 'all';
+  const ctaLabel = String(req.body.ctaLabel || '').trim().slice(0, 40) || null;
+  const ctaUrl = cleanAnnUrl(req.body.ctaUrl);
+  const dismissible = req.body.dismissible !== false;
+  const active = req.body.active !== false;
+  const startsAt = req.body.startsAt ? new Date(req.body.startsAt) : null;
+  const endsAt = req.body.endsAt ? new Date(req.body.endsAt) : null;
+  if (!message) return res.status(400).json({ error: 'A message is required.' });
+  if (startsAt && isNaN(+startsAt)) return res.status(400).json({ error: 'Invalid start date.' });
+  if (endsAt && isNaN(+endsAt)) return res.status(400).json({ error: 'Invalid end date.' });
+  if (ctaLabel && !ctaUrl) return res.status(400).json({ error: 'A button label needs a link.' });
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO announcements (message, cta_label, cta_url, style, audience, dismissible, active, starts_at, ends_at, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+      [message, ctaLabel, ctaUrl, style, audience, dismissible, active, startsAt, endsAt, req.user.id]);
+    adminAudit(req, 'announcement.create', 'announcement', rows[0].id, { style, audience });
+    res.status(201).json({ id: rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the announcement.' }); }
+});
+app.patch('/api/admin/announcements/:id', auth.requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const sets = [], vals = [];
+  const push = (col, v) => { vals.push(v); sets.push(`${col} = $${vals.length}`); };
+  if (req.body.message !== undefined) { const m = String(req.body.message).trim().slice(0, 280); if (!m) return res.status(400).json({ error: 'A message is required.' }); push('message', m); }
+  if (req.body.style !== undefined) push('style', ANN_STYLES.includes(req.body.style) ? req.body.style : 'info');
+  if (req.body.audience !== undefined) push('audience', ANN_AUDIENCES.includes(req.body.audience) ? req.body.audience : 'all');
+  if (req.body.ctaLabel !== undefined) push('cta_label', String(req.body.ctaLabel).trim().slice(0, 40) || null);
+  if (req.body.ctaUrl !== undefined) push('cta_url', cleanAnnUrl(req.body.ctaUrl));
+  if (req.body.dismissible !== undefined) push('dismissible', req.body.dismissible !== false);
+  if (req.body.active !== undefined) push('active', req.body.active !== false);
+  if (req.body.startsAt !== undefined) push('starts_at', req.body.startsAt ? new Date(req.body.startsAt) : null);
+  if (req.body.endsAt !== undefined) push('ends_at', req.body.endsAt ? new Date(req.body.endsAt) : null);
+  if (!sets.length) return res.json({ ok: true });
+  vals.push(id);
+  try {
+    await db.query(`UPDATE announcements SET ${sets.join(', ')} WHERE id = $${vals.length}`, vals);
+    adminAudit(req, 'announcement.update', 'announcement', id, {});
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the announcement.' }); }
+});
+app.delete('/api/admin/announcements/:id', auth.requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    await db.query('DELETE FROM announcements WHERE id = $1', [id]);
+    adminAudit(req, 'announcement.delete', 'announcement', id, {});
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the announcement.' }); }
+});
+
 // ─── Admin: Appeals queue (staff `users` scope — same team that suspends/bans) ───
 app.get('/api/admin/appeals', auth.requirePerm('users'), async (req, res) => {
   const state = ['open', 'granted', 'denied'].includes(req.query.state) ? req.query.state : null;
