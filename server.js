@@ -1064,6 +1064,8 @@ function publicUser(row) {
     subPriceCents: row.sub_price_cents || 0, // own creator-subscription price (0 = off)
     readReceipts: row.read_receipts !== false,
     privateProfileViews: !!row.private_profile_views,
+    paused: !!row.paused, // Pro "Away" mode — account temporarily unavailable
+    pauseMessage: row.pause_message || null,
     // Last seen & online visibility. WhatsApp-style reciprocity: a viewer who hides
     // their own ('nobody') can't see anyone else's either (enforced server-side +
     // gated client-side). 'everyone' (default) / 'connections' / 'nobody'.
@@ -3356,7 +3358,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, business_hours, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, business_hours, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, paused, pause_message, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -4030,6 +4032,27 @@ app.post('/api/account/deactivate', auth.requireAuth, rateLimit(5, 60000, 'deact
     logEvent('account', 'account.deactivate', { req, subjectType: 'user', subjectId: req.user.id });
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not deactivate your account.' }); }
+});
+
+// Pro "Pause / Away" mode: mark the account temporarily unavailable with an optional
+// message (moving, on a break, etc.). Unlike hibernate, the account stays signed in and
+// the profile is still reachable — it just shows an "unavailable" banner + the message so
+// visitors know what's going on, and it's fully reversible any time. Enabling requires Pro
+// (the plan is looked up server-side, never trusted from the client); turning it OFF is
+// always allowed so a downgraded member can never get stuck paused.
+app.post('/api/account/pause', auth.requireAuth, rateLimit(20, 60000, 'acct-pause'), async (req, res) => {
+  const paused = req.body.paused === true;
+  const message = (req.body.message ? String(req.body.message) : '').slice(0, 280).trim();
+  try {
+    if (paused) {
+      const u = (await db.query('SELECT plan FROM users WHERE id = $1', [req.user.id])).rows[0];
+      if (!u) return res.status(404).json({ error: 'Account not found.' });
+      if (u.plan !== 'pro') return res.status(402).json({ error: 'Pausing your account is an Atwe Pro feature.', upgrade: true });
+    }
+    await db.query('UPDATE users SET paused = $1, pause_message = $2 WHERE id = $3', [paused, paused ? (message || null) : null, req.user.id]);
+    logEvent('account', paused ? 'account.pause' : 'account.unpause', { req, subjectType: 'user', subjectId: req.user.id });
+    res.json({ ok: true, paused, pauseMessage: paused ? (message || null) : null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update your account.' }); }
 });
 
 /* ─── New-user onboarding (guided first run) ─── */
@@ -8302,7 +8325,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query(`SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, profile_cta, pinned_post_id, sub_price_cents, sub_blurb, created_at, deactivated, connections_visible, business_hours, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, (SELECT username FROM users bu WHERE bu.id = users.aff_business_id) AS aff_business_username FROM users WHERE lower(username) = lower($1)`, [handle]);
+    const u = await db.query(`SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, profile_cta, pinned_post_id, sub_price_cents, sub_blurb, created_at, deactivated, paused, pause_message, connections_visible, business_hours, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, (SELECT username FROM users bu WHERE bu.id = users.aff_business_id) AS aff_business_username FROM users WHERE lower(username) = lower($1)`, [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     // A hibernated (deactivated) account's profile is hidden from everyone but the owner.
@@ -8428,7 +8451,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     }
     res.json({
       businessJobs, businessPeople, mutualConnections, reviewSummary, trustScore, followedBy, followedByCount,
-      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone', profileCta: ['book', 'order', 'message'].includes(t.profile_cta) ? t.profile_cta : null, joinedAt: t.created_at || null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null, affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: t.aff_business_username || null } : null },
+      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone', profileCta: ['book', 'order', 'message'].includes(t.profile_cta) ? t.profile_cta : null, joinedAt: t.created_at || null, paused: !!t.paused, pauseMessage: t.paused ? (t.pause_message || null) : null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null, affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: t.aff_business_username || null } : null },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       education: edu.rows.map(mapEducation),
       certifications: certs.rows.map(mapCertification),
@@ -8470,6 +8493,7 @@ app.get('/api/public/profile/:username', async (req, res) => {
     const u = await db.query(
       `SELECT id, name, username, avatar, banner, bio, location, website, headline, verified,
               categories, account_type, business_verify_status, otw_visibility, created_at, deactivated,
+              paused, pause_message,
               profile_cta, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label
        FROM users WHERE lower(username) = lower($1)`, [handle]);
     const t = u.rows[0];
@@ -8489,6 +8513,7 @@ app.get('/api/public/profile/:username', async (req, res) => {
         businessVerified: t.business_verify_status === 'verified',
         businessVerifyStatus: ['pending', 'verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none',
         openToWork: t.otw_visibility === 'everyone', joinedAt: t.created_at || null,
+        paused: !!t.paused, pauseMessage: t.paused ? (t.pause_message || null) : null,
         profileCta: ['book', 'order', 'message'].includes(t.profile_cta) ? t.profile_cta : null,
         affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: null } : null,
       },
