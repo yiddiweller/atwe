@@ -4400,6 +4400,9 @@ app.get('/api/atchat/search', auth.requireAuth, rateLimit(60, 60000, 'atchat-sea
     if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
     const q = (req.query.q || '').toString().trim().replace(/^@/, '');
     if (q.length < 1) return res.json({ users: [] });
+    // Escape LIKE wildcards so a literal % or _ can't turn the query into a match-everything
+    // enumeration (parity with every other search route's escaping — this one was the lone gap).
+    const esc = q.replace(/[%_\\]/g, '\\$&');
     const { rows } = await db.query(
       `SELECT id, name, username, avatar, verified, categories FROM users
        WHERE username IS NOT NULL AND id <> $1 AND (
@@ -4407,7 +4410,7 @@ app.get('/api/atchat/search', auth.requireAuth, rateLimit(60, 60000, 'atchat-sea
          OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $2)
        )
        ORDER BY (username ILIKE $3) DESC, username ASC LIMIT 20`,
-      [req.user.id, '%' + q + '%', q + '%']
+      [req.user.id, '%' + esc + '%', esc + '%']
     );
     res.json({ users: rows.map(r => ({ ...r, categories: Array.isArray(r.categories) ? r.categories : [] })) });
   } catch (err) {
@@ -10644,8 +10647,9 @@ app.get('/api/ads/feed', auth.optionalAuth, async (req, res) => {
     res.json({ ads: rows.map((a) => mapAd(a)) });
   } catch (e) { console.error(e); res.json({ ads: [] }); }
 });
-// Impression tracking (batched, one bump per id per call). Fire-and-forget.
-app.post('/api/ads/impressions', async (req, res) => {
+// Impression tracking (batched, one bump per id per call). Fire-and-forget. Auth + rate-limited
+// (ads only render inside the signed-in feed) so an anonymous script can't inflate ad metrics.
+app.post('/api/ads/impressions', auth.requireAuth, rateLimit(120, 60000, 'ad-impr'), async (req, res) => {
   const ids = Array.isArray(req.body.ids) ? req.body.ids.map((x) => parseInt(x, 10)).filter(Number.isInteger).slice(0, 20) : [];
   res.json({ ok: true });
   if (!db.isConfigured() || !ids.length) return;
@@ -10656,8 +10660,9 @@ app.post('/api/ads/impressions', async (req, res) => {
     } catch (_) {}
   }
 });
-// Click → record + return the destination URL for the client to open.
-app.post('/api/ads/:id/click', async (req, res) => {
+// Click → record + return the destination URL for the client to open. Auth + rate-limited
+// so click counts (advertiser analytics) can't be inflated by an anonymous script.
+app.post('/api/ads/:id/click', auth.requireAuth, rateLimit(60, 60000, 'ad-click'), async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ad.' });
   try {
@@ -16666,9 +16671,14 @@ async function payAffiliateCommission(orderId, sellerCredited) {
   try {
     const o = (await db.query('SELECT affiliate_id, seller_id, commission_cents FROM orders WHERE id = $1', [orderId])).rows[0];
     if (!o || !o.affiliate_id || !(o.commission_cents > 0)) return;
-    const exists = (await db.query('SELECT 1 FROM affiliate_earnings WHERE order_id = $1', [orderId])).rowCount;
-    if (exists) return; // already processed
     const pid = (await db.query('SELECT product_id FROM order_items WHERE order_id = $1 LIMIT 1', [orderId])).rows[0];
+    // Claim the commission row FIRST (before moving money): two concurrent invocations for the
+    // same order can't both pass an exists-check and pay twice — only the ON CONFLICT winner
+    // proceeds. (Replaces a check-then-insert TOCTOU that left a double-pay window.)
+    const claim = await db.query(
+      'INSERT INTO affiliate_earnings (affiliate_id, order_id, product_id, amount_cents, paid) VALUES ($1,$2,$3,$4,false) ON CONFLICT (order_id) DO NOTHING RETURNING id',
+      [o.affiliate_id, orderId, pid ? pid.product_id : null, o.commission_cents]);
+    if (!claim.rowCount) return; // already processed/claimed by a concurrent call
     let paid = false;
     if (sellerCredited) {
       const t = await walletTransfer(o.seller_id, o.affiliate_id, o.commission_cents, 'Affiliate commission', false);
@@ -16678,9 +16688,10 @@ async function payAffiliateCommission(orderId, sellerCredited) {
       paid = true;
       rtPush(o.affiliate_id, 'wallet', { type: 'receive', amountCents: o.commission_cents });
     }
-    await db.query('INSERT INTO affiliate_earnings (affiliate_id, order_id, product_id, amount_cents, paid) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (order_id) DO NOTHING',
-      [o.affiliate_id, orderId, pid ? pid.product_id : null, o.commission_cents, paid]);
-    if (paid) notify(o.affiliate_id, o.seller_id, 'affiliate', null, null, null, pid ? pid.product_id : null);
+    if (paid) {
+      await db.query('UPDATE affiliate_earnings SET paid = true WHERE order_id = $1', [orderId]).catch(() => {});
+      notify(o.affiliate_id, o.seller_id, 'affiliate', null, null, null, pid ? pid.product_id : null);
+    }
   } catch (e) { /* commission is best-effort; the order is unaffected */ }
 }
 // Generate / fetch my affiliate link for a product.
@@ -20731,15 +20742,21 @@ async function executeRefund(reqRow, amountCents, adminId) {
   const uid = reqRow.user_id;
   const note = 'Refund · ' + reqRow.kind;
   if (reqRow.kind === 'order') {
-    const o = (await db.query('SELECT seller_id FROM orders WHERE id = $1', [parseInt(reqRow.ref_id, 10)])).rows[0];
-    if (o && o.seller_id) {
-      const t = await walletTransfer(o.seller_id, uid, amountCents, note, false).catch(() => ({ ok: false }));
+    const oid = parseInt(reqRow.ref_id, 10);
+    // Claim atomically BEFORE moving money: flip to 'refunded' only if it isn't already.
+    // rowCount 0 means a concurrent Return/RMA or dispute resolution already refunded this
+    // exact order — so we must NOT pay again. This is what prevents a cross-mechanism
+    // double-refund (an open refund request approved after the order was refunded elsewhere).
+    const claim = await db.query(`UPDATE orders SET status='refunded' WHERE id=$1 AND status NOT IN ('refunded','cancelled') RETURNING seller_id`, [oid]).catch(() => ({ rowCount: 0, rows: [] }));
+    if (!claim.rowCount) return { ok: false, alreadyRefunded: true };
+    const sellerId = claim.rows[0].seller_id;
+    if (sellerId) {
+      const t = await walletTransfer(sellerId, uid, amountCents, note, false).catch(() => ({ ok: false }));
       if (!t.ok) await walletCreditStandalone(uid, amountCents, 'refund', note);
     } else {
       await walletCreditStandalone(uid, amountCents, 'refund', note);
     }
-    await db.query(`UPDATE orders SET status='refunded' WHERE id=$1 AND status NOT IN ('refunded','cancelled')`, [parseInt(reqRow.ref_id, 10)]).catch(() => {});
-    return;
+    return { ok: true };
   }
   if (reqRow.kind === 'tip') {
     const tp = (await db.query('SELECT to_id FROM tips WHERE id = $1', [parseInt(reqRow.ref_id, 10)])).rows[0];
@@ -20751,7 +20768,7 @@ async function executeRefund(reqRow, amountCents, adminId) {
     }
     // Peer-to-peer money reversed — NOT company revenue (per the money model), so no
     // company_revenue row here (an earlier version wrongly logged one for tip refunds).
-    return;
+    return { ok: true };
   }
   // Platform charges: the platform kept the money, so credit the member and net the
   // Revenue dashboard with a negative row.
@@ -20760,6 +20777,7 @@ async function executeRefund(reqRow, amountCents, adminId) {
     'INSERT INTO company_revenue (source, ref_id, payer_id, payer_name, amount_cents, note) VALUES ($1,$2,$3,(SELECT name FROM users WHERE id=$3),$4,$5)',
     ['refund', reqRow.ref_id, uid, -Math.abs(amountCents), 'Refund of ' + reqRow.kind]
   ).catch(() => {});
+  return { ok: true };
 }
 
 // Member files a refund request against a payment they made.
@@ -20772,6 +20790,13 @@ app.post('/api/refunds', auth.requireAuth, rateLimit(20, 60000, 'refund-req'), a
     const pay = await refundVerifyPayment(req.user.id, kind, refId);
     if (!pay) return res.status(404).json({ error: 'We couldn’t find that payment on your account.' });
     if (pay.alreadyDone) return res.status(400).json({ error: 'That order was already refunded or cancelled.' });
+    // Block a fresh request against a payment already refunded via ANY prior request — the
+    // ON CONFLICT below only blocks a second OPEN request, so once the first is approved a
+    // duplicate could otherwise be filed and approved again (double-refunding tips/charges).
+    const settled = await db.query(
+      `SELECT 1 FROM refund_requests WHERE kind=$1 AND ref_id=$2 AND status IN ('approved','resolving') LIMIT 1`,
+      [kind, refId]).then(r => r.rows.length > 0).catch(() => false);
+    if (settled) return res.status(400).json({ error: 'That payment was already refunded.' });
     const { rows } = await db.query(
       `INSERT INTO refund_requests (user_id, kind, ref_id, amount_cents, reason) VALUES ($1,$2,$3,$4,$5)
        ON CONFLICT (user_id, kind, ref_id) WHERE status = 'open' DO NOTHING
@@ -21091,6 +21116,11 @@ app.patch('/api/admin/users/:id', auth.requirePerm('users'), async (req, res) =>
     fields.push(`plan = $${values.length}`);
   }
   if (typeof req.body.is_admin === 'boolean') {
+    // Granting/revoking admin is a SUPERADMIN-only power: this route is requirePerm('users'),
+    // which a scoped support staffer (not a superadmin) also passes — without this gate such a
+    // staffer could PATCH their own id with {is_admin:true} and self-escalate to superadmin,
+    // defeating RBAC entirely (staff/scope granting is otherwise superadmin-only).
+    if (!req.isSuperAdmin) return res.status(403).json({ error: 'Only a superadmin can change admin access.' });
     // Guard: an admin can't strip their own admin rights (avoid lockout).
     if (req.user.id === id && req.body.is_admin === false) {
       return res.status(400).json({ error: 'You cannot remove your own admin access.' });
@@ -21102,14 +21132,17 @@ app.patch('/api/admin/users/:id', auth.requirePerm('users'), async (req, res) =>
     values.push(req.body.email_verified);
     fields.push(`email_verified = $${values.length}`);
   }
-  // Approve/revoke the verified badge. Either way the pending request is cleared.
+  // Approve/revoke the verified badge — a trust signal, so superadmin-only (a scoped
+  // staffer must not be able to self-grant a blue check). Either way the pending request clears.
   if (typeof req.body.verified === 'boolean') {
+    if (!req.isSuperAdmin) return res.status(403).json({ error: 'Only a superadmin can change verification.' });
     values.push(req.body.verified);
     fields.push(`verified = $${values.length}`);
     fields.push('verify_requested_at = NULL');
   }
-  // Business verification status: none | pending | verified.
+  // Business verification status: none | pending | verified — also a trust signal, superadmin-only.
   if (['none', 'pending', 'verified'].includes(req.body.businessVerifyStatus)) {
+    if (!req.isSuperAdmin) return res.status(403).json({ error: 'Only a superadmin can change business verification.' });
     values.push(req.body.businessVerifyStatus);
     fields.push(`business_verify_status = $${values.length}`);
   }
@@ -21487,12 +21520,31 @@ app.post('/api/admin/refunds/:id/resolve', auth.requirePerm('refunds'), async (r
     if (!Number.isInteger(amount) || amount <= 0) amount = rr.amount_cents;
     amount = Math.min(amount, Math.max(rr.amount_cents, 0) || amount); // never refund more than paid
     if (!amount || amount <= 0) { await db.query(`UPDATE refund_requests SET status='open' WHERE id=$1`, [id]); return res.status(400).json({ error: 'Nothing to refund on this payment.' }); }
+    // Never pay out twice for the SAME underlying payment: if another request for this exact
+    // (kind, ref_id) was already approved — or is mid-resolve — decline this one instead of
+    // paying again. Orders are additionally protected by the atomic claim inside executeRefund;
+    // this covers tips + platform charges, which have no status column of their own to guard.
+    const dupPaid = await db.query(
+      `SELECT 1 FROM refund_requests WHERE kind=$1 AND ref_id=$2 AND id<>$3 AND status IN ('approved','resolving') LIMIT 1`,
+      [rr.kind, rr.ref_id, id]).then(r => r.rows.length > 0).catch(() => false);
+    if (dupPaid) {
+      await db.query(`UPDATE refund_requests SET status='declined', resolution_note=$2, resolved_by=$3, resolved_at=now() WHERE id=$1`, [id, 'This payment was already refunded.', req.user.id]).catch(() => {});
+      return res.status(409).json({ error: 'That payment was already refunded.' });
+    }
+    let execResult;
     try {
-      await executeRefund(rr, amount, req.user.id);
+      execResult = await executeRefund(rr, amount, req.user.id);
     } catch (e) {
       await db.query(`UPDATE refund_requests SET status='open' WHERE id=$1`, [id]).catch(() => {});
       console.error('refund exec failed:', e.message);
       return res.status(500).json({ error: 'Could not move the money. Try again.' });
+    }
+    // executeRefund's atomic order-claim came back empty → the order was already refunded by
+    // another mechanism (Return/RMA, dispute). No money moved; decline instead of falsely
+    // reporting a refund.
+    if (execResult && execResult.alreadyRefunded) {
+      await db.query(`UPDATE refund_requests SET status='declined', resolution_note=$2, resolved_by=$3, resolved_at=now() WHERE id=$1`, [id, 'This payment was already refunded.', req.user.id]).catch(() => {});
+      return res.status(409).json({ error: 'That payment was already refunded.' });
     }
     await db.query(`UPDATE refund_requests SET status='approved', refunded_cents=$2, resolution_note=$3, resolved_by=$4, resolved_at=now() WHERE id=$1`, [id, amount, note, req.user.id]);
     adminAudit(req, 'refund.approve', 'refund', id, { kind: rr.kind, refId: rr.ref_id, amountCents: amount });
