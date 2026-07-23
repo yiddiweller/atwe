@@ -2208,7 +2208,10 @@ body.reduce-motion .tb-brand-mark{transition:none !important;}
    "spits out" of it to the RIGHT — revealed left→right + sliding into place. Triggered
    in syncTopbar only when the world actually changes (the .rolling class on the lockup). */
 @keyframes tbBrandRoll{from{transform:rotate(0)}to{transform:rotate(360deg)}}
-@keyframes tbWordSpit{0%{opacity:0;transform:translateX(-14px);clip-path:inset(0 100% 0 0)}55%{opacity:1}100%{opacity:1;transform:translateX(0);clip-path:inset(0 0 0 0)}}
+/* Negative TOP/BOTTOM insets so the clip only reveals left→right and never trims the
+   glyph edges — a tight inset(0 … 0 …) clipped the descender of the "g" in "Engine"
+   (line-height:1 puts it below the box) for the animation, then it snapped back. */
+@keyframes tbWordSpit{0%{opacity:0;transform:translateX(-14px);clip-path:inset(-40% 100% -40% 0)}55%{opacity:1}100%{opacity:1;transform:translateX(0);clip-path:inset(-40% 0 -40% 0)}}
 .tb-brand.rolling .tb-brand-mark{animation:tbBrandRoll .58s cubic-bezier(.16,.72,.24,1);}
 .tb-brand.rolling .tb-brand-word-txt,.tb-brand.rolling .tb-brand-word{animation:tbWordSpit .58s cubic-bezier(.16,.72,.24,1);}
 body.reduce-motion .tb-brand.rolling .tb-brand-mark,body.reduce-motion .tb-brand.rolling .tb-brand-word-txt,body.reduce-motion .tb-brand.rolling .tb-brand-word{animation:none;}
@@ -15683,7 +15686,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1376'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1377'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24826,7 +24829,10 @@ function syncTopbar(tab) {
   // AND never on the very first sync (_brandRollLast===null) — so it does NOT fire on app
   // open; only once you've been to another world and come back.
   if ((isHome || isChat || isAi || isSearch) && _brandRollLast !== null && _brandRollLast !== tab) {
-    const lockup = isAi ? document.getElementById('tbAiBrand') : document.getElementById('tbBrandLogo');
+    // All four worlds (Home / Beam / Engine / Atwe AI) now share the SAME brand-row
+    // lockup (#tbBrandLogo) — the old separate #tbAiBrand is hidden — so the flourish
+    // must roll the shared lockup on the AI page too (else the AI logo stayed stiff).
+    const lockup = document.getElementById('tbBrandLogo');
     // Remove .rolling once the flourish ends — otherwise its (higher-specificity) rule
     // permanently overrides the tab-tap .spinning animation (the "spin stopped" bug).
     if (lockup) {
