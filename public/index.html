@@ -5882,15 +5882,19 @@ body.light .order-success{background:rgba(255,255,255,.82);}
    circles "popping out" on the left). Symmetric 5px padding inside the list's 8px gutter
    lands the first avatar at ~16px — lined up with the post avatars below — and keeps the
    row balanced. Circles are smaller (46px). */
-.ac-home-stories{gap:14px;padding:8px 5px 12px;border-bottom:0.5px solid var(--b2);}
+/* Left padding = gutter + 4px: the ring paints a 4px halo OUTSIDE its box, so this
+   lands the halo's visible left edge exactly on --feed-gutter — flush with the post
+   avatars below, not sticking out further left. The skeleton uses the same padding +
+   sizes so the core circles never shift on load. */
+.ac-home-stories{gap:14px;padding:8px calc(var(--feed-gutter) + 4px) 12px;border-bottom:0.5px solid var(--b2);}
 body.light .ac-home-stories{border-bottom-color:rgba(0,0,0,.08);}
-.ac-home-stories .story-cell{width:52px;gap:6px;}
-.ac-home-stories .story-ring{width:46px;height:46px;padding:0;background:none;}
-.ac-home-stories .story-ring .user-avatar{width:46px;height:46px;border:none;}
+.ac-home-stories .story-cell{width:54px;gap:6px;}
+.ac-home-stories .story-ring{width:54px;height:54px;padding:0;background:none;}
+.ac-home-stories .story-ring .user-avatar{width:54px;height:54px;border:none;}
 .ac-home-stories .story-ring.unseen{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent);}
 .ac-home-stories .story-ring.seen{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--t3);}   /* seen = grey ring (same thickness as the blue), not gone */
 .ac-home-stories .story-ring.add{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--t3);}    /* "Your Daily" = grey ring matching the blue's thickness + size */
-.ac-home-stories .story-name{font-size:11.5px;max-width:52px;}
+.ac-home-stories .story-name{font-size:11.5px;max-width:54px;}
 /* Live people ride in the SAME row as the Dailies — on the left (more urgent), then a
    thin vertical divider, then the Dailies. Live cell = green ring + a small LIVE pill. */
 .ac-home-stories .story-ring.live{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--green);}
@@ -8869,10 +8873,10 @@ body.light .ac-item:active{background:rgba(0,0,0,.06);}
 .skel-pill{width:42px;height:11px;border-radius:6px;}
 /* Home-feed skeleton: a row of grey circles at the top, ghosting the Dailies/stories
    tray, so the loading state matches the real home layout. */
-.skel-stories{display:flex;gap:14px;padding:8px 5px 12px;overflow:hidden;border-bottom:0.5px solid var(--b2);}
+.skel-stories{display:flex;gap:14px;padding:8px calc(var(--feed-gutter) + 4px) 12px;overflow:hidden;border-bottom:0.5px solid var(--b2);}
 body.light .skel-stories{border-bottom-color:rgba(0,0,0,.08);}
-.skel-story-cell{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:8px;width:52px;}
-.skel-story-ring{width:46px;height:46px;border-radius:50%;}
+.skel-story-cell{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:8px;width:54px;}
+.skel-story-ring{width:54px;height:54px;border-radius:50%;}
 .skel-story-name{width:38px;height:9px;border-radius:5px;}
 /* Thread skeleton: ghost message bubbles shown while a chat loads for the first
    time — the modern alternative to a spinner. It mirrors the REAL bubbles: same
@@ -15686,7 +15690,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1377'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1378'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
