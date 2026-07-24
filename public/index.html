@@ -14030,6 +14030,13 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <input class="jp-in" id="prodName" type="text" maxlength="140" placeholder="Product name" style="margin-top:8px;"/>
     <input class="jp-in" id="prodPrice" type="number" min="0" max="50000" step="0.01" placeholder="Price ($)" style="margin-top:8px;"/>
     <input class="jp-in" id="prodCategory" type="text" maxlength="60" list="prodCatList" placeholder="Category / menu section, e.g. Mains, Drinks (optional)" style="margin-top:8px;"/>
+    <select class="jp-in" id="prodCondition" aria-label="Condition" style="margin-top:8px;">
+      <option value="">Condition (optional)</option>
+      <option value="new">New</option>
+      <option value="like_new">Like new</option>
+      <option value="good">Good</option>
+      <option value="fair">Fair</option>
+    </select>
     <datalist id="prodCatList"><option value="Featured"></option><option value="Starters"></option><option value="Mains"></option><option value="Sides"></option><option value="Desserts"></option><option value="Drinks"></option><option value="Specials"></option><option value="New"></option><option value="Best sellers"></option><option value="Sale"></option></datalist>
     <select class="jp-in" id="prodKind" style="margin-top:8px;" onchange="acProdKindChange()"><option value="physical">Physical item</option><option value="digital">Digital</option><option value="service">Service</option><option value="rental">Rental / stay</option></select>
     <!-- Rentals: priced per night/month, booked by date range -->
@@ -16442,7 +16449,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1444'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1445'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -33698,7 +33705,8 @@ async function acOpenListing(id) {
     const shipLine = l.needsShipping ? `<div class="mkt-ship">${l.shipFree ? '🚚 Free shipping' : '🚚 + $' + (l.shipFeeCents / 100).toFixed(2) + ' shipping'}</div>` : '';
     const ratingLine = l.reviewCount ? `<div class="mkt-rating" onclick="document.getElementById('prodReviews').scrollIntoView({behavior:'smooth'})">${acStars(l.rating)}<span>${l.rating} · ${l.reviewCount} review${l.reviewCount === 1 ? '' : 's'}</span></div>` : '';
     // Social proof: units sold (paid-state orders) — "N sold", eBay/Amazon-style.
-    const soldLine = l.soldCount ? `<div class="mkt-sold">${l.soldCount >= 100 ? '100+' : l.soldCount} sold</div>` : '';
+    const condLbl = { new: 'New', like_new: 'Like new', good: 'Good', fair: 'Fair' }[l.condition];
+    const soldLine = (l.soldCount || condLbl) ? `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${condLbl ? `<div class="mkt-sold">Condition: ${condLbl}</div>` : ''}${l.soldCount ? `<div class="mkt-sold">${l.soldCount >= 100 ? '100+' : l.soldCount} sold</div>` : ''}</div>` : '';
     // Variant picker (when the product has options).
     const vpick = l.hasVariants ? `<div class="vpick-h">Options</div><div class="vpick" id="mktVpick">${l.variants.map(v => `<button class="vchip${v.soldOut ? ' out' : ''}" ${v.soldOut ? 'disabled' : `onclick="acPickVariant(${v.id})"`}>${escHtml(v.label)}${v.priceCents !== l.priceCents ? ` · $${(v.priceCents / 100).toFixed(2)}` : ''}</button>`).join('')}</div>` : '';
     const heart = own ? '' : `<button class="mkt-save ${l.saved ? 'on' : ''}" id="mktSaveBtn" onclick="acToggleSave(${l.id},this)" aria-label="Save"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg></button>`;
@@ -34637,6 +34645,7 @@ function acProductFormOpen(productId) {
   document.getElementById('prodName').value = p ? p.name : '';
   document.getElementById('prodPrice').value = p ? (p.priceCents / 100) : '';
   document.getElementById('prodCategory').value = p ? (p.category || '') : '';
+  { const c = document.getElementById('prodCondition'); if (c) c.value = p ? (p.condition || '') : ''; }
   document.getElementById('prodKind').value = p ? p.kind : 'physical';
   document.getElementById('prodDesc').value = p ? (p.description || '') : '';
   document.getElementById('prodStock').value = (p && p.stock !== null && p.stock !== undefined) ? p.stock : '';
@@ -34703,6 +34712,7 @@ async function acSaveProduct() {
   const stockRaw = document.getElementById('prodStock').value.trim();
   const payload = { name, priceCents, kind, description: document.getElementById('prodDesc').value.trim(),
     category: document.getElementById('prodCategory').value.trim(),
+    condition: (document.getElementById('prodCondition') || {}).value || null,
     stock: stockRaw === '' ? '' : Math.max(0, parseInt(stockRaw, 10) || 0) };
   if (kind === 'physical') {
     payload.shipFree = document.getElementById('prodShipFree').checked;
