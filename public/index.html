@@ -16592,7 +16592,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1476'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1477'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -32103,9 +32103,33 @@ async function acOpenScheduledPosts() {
       const when = new Date(p.scheduledAt);
       const w = when.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' · ' + when.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
       const media = p.hasImage ? ' 📷' : (p.mediaKind === 'video' ? ' 🎬' : '');
-      return `<div class="ac-item"><div class="ac-item-main"><div class="ac-item-last">${escHtml((p.body || '').slice(0, 140)) || '<i>Media post</i>'}${media}</div><div class="ac-item-last" style="opacity:.6;font-size:12px;">Goes live ${w}</div></div><button class="ac-link-btn" style="color:var(--red);" onclick="acCancelScheduled(${p.id})">Cancel</button></div>`;
+      return `<div class="ac-item" data-schedid="${p.id}"><div class="ac-item-main"><div class="ac-item-last">${escHtml((p.body || '').slice(0, 140)) || '<i>Media post</i>'}${media}</div><div class="ac-item-last" style="opacity:.6;font-size:12px;">Goes live ${w}</div>
+        <div class="sched-edit hidden"><input class="jp-in" type="datetime-local" style="margin:8px 0 0;"/><div style="display:flex;gap:8px;margin-top:8px;"><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:7px 16px;" onclick="acReschedSave(${p.id}, this)">Save</button><button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 16px;" onclick="acReschedToggle(${p.id}, false)">Cancel</button></div></div>
+      </div><span style="display:flex;flex-direction:column;gap:2px;align-items:flex-end;"><button class="ac-link-btn" onclick="acReschedToggle(${p.id}, true, ${jsAttr(p.scheduledAt)})">Change time</button><button class="ac-link-btn" style="color:var(--red);" onclick="acCancelScheduled(${p.id})">Cancel</button></span></div>`;
     }).join('') : '<div class="ac-empty" style="padding:20px;">No scheduled posts.</div>';
   } catch (e) { list.innerHTML = '<div class="ac-empty">Could not load.</div>'; }
+}
+// Inline reschedule editor on a scheduled-post row.
+function acReschedToggle(id, open, currentIso) {
+  const row = document.querySelector(`.ac-item[data-schedid="${id}"]`); if (!row) return;
+  const ed = row.querySelector('.sched-edit'); if (!ed) return;
+  ed.classList.toggle('hidden', !open);
+  if (open) {
+    const d = currentIso ? new Date(currentIso) : new Date(Date.now() + 3600 * 1000);
+    const pad = (n) => String(n).padStart(2, '0');
+    ed.querySelector('input').value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+}
+async function acReschedSave(id, btn) {
+  const row = document.querySelector(`.ac-item[data-schedid="${id}"]`);
+  const when = new Date(row?.querySelector('.sched-edit input')?.value);
+  if (isNaN(when.getTime())) { showNotif('Pick a date and time.'); return; }
+  btn.disabled = true;
+  try {
+    await API.req('PATCH', '/api/social/scheduled/' + id, { scheduledAt: when.toISOString() });
+    showNotif('Rescheduled.');
+    acOpenScheduledPosts();
+  } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not reschedule.'); }
 }
 async function acCancelScheduled(id) {
   if (!(await appConfirm({ title: 'Cancel scheduled post?', message: 'It won’t be published.', confirmText: 'Cancel post', danger: true }))) return;
