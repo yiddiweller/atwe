@@ -1014,6 +1014,30 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS post_reposts_user_idx ON post_reposts(user_id, created_at DESC);`);
+  // Community notes ("readers added context"): a reader-proposed note on a post, plus
+  // per-user Helpful/Not-helpful ratings. A note becomes `shown` at consensus.
+  await query(`
+    CREATE TABLE IF NOT EXISTS post_notes (
+      id         SERIAL PRIMARY KEY,
+      post_id    INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      author_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body       TEXT NOT NULL,
+      source_url TEXT,
+      status     TEXT NOT NULL DEFAULT 'proposed',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (post_id, author_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS post_notes_post_idx ON post_notes(post_id, status);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS post_note_ratings (
+      note_id    INTEGER NOT NULL REFERENCES post_notes(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      helpful    BOOLEAN NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (note_id, user_id)
+    );
+  `);
   // Quote posts: a new post embedding another (the quoted post stays if the quoter is deleted).
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS quote_id INTEGER REFERENCES posts(id) ON DELETE SET NULL;`);
   // Who can reply to a post: 'everyone' | 'following' (people the author follows)
