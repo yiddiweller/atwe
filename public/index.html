@@ -5683,9 +5683,19 @@ body.reduce-motion #acFeed{animation:none!important;}
 .ac-like.react-insightful,.ac-like.react-funny{color:var(--amber);}
 .ac-like.react-support{color:var(--purple);}
 @media(hover:hover){.ac-like.react-celebrate:hover,.ac-like.react-love:hover,.ac-like.react-insightful:hover,.ac-like.react-funny:hover,.ac-like.react-support:hover{color:inherit;}}
-.ac-react-cluster{display:inline-flex;align-items:center;margin-left:-2px;}
+.ac-react-cluster{display:inline-flex;align-items:center;margin-left:-2px;cursor:pointer;}
 .ac-react-cluster .ac-rc-em{font-size:13px;line-height:1;margin-left:-3px;}
 .ac-react-cluster .ac-rc-em:first-child{margin-left:0;}
+/* "See who reacted" sheet: tabs + reactor rows */
+.rx-tabs{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 12px;scrollbar-width:none;}
+.rx-tabs::-webkit-scrollbar{display:none;}
+.rx-tab{flex:0 0 auto;border:none;border-radius:999px;background:var(--s2);color:var(--t2);font-size:13.5px;font-weight:700;padding:7px 14px;cursor:pointer;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
+.rx-tab.on{background:var(--accent);color:var(--accent-tint,#fff);}
+#reactionsList .rx-row-em{font-size:18px;line-height:1;margin-inline-start:auto;padding-inline-start:8px;}
+/* Reaction burst (delight) */
+.rx-burst{position:fixed;inset:0;pointer-events:none;z-index:4200;}
+.rx-particle{position:fixed;transform:translate(-50%,-50%);opacity:0;will-change:transform,opacity;animation:rxFloat .85s cubic-bezier(.22,.61,.36,1) forwards;}
+@keyframes rxFloat{0%{opacity:0;transform:translate(-50%,-50%) scale(.4);}22%{opacity:1;transform:translate(calc(-50% + var(--dx)*.5),calc(-50% + var(--dy)*.5)) scale(1.1);}100%{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy) - 24px)) scale(.9);}}
 /* Floating reaction bar (frosted menu material, pops above the like button). */
 .ac-react-bar{position:fixed;z-index:4000;display:flex;gap:2px;padding:6px 8px;border-radius:999px;
   background:var(--menu-bg);backdrop-filter:blur(var(--menu-blur,20px)) saturate(1.6);-webkit-backdrop-filter:blur(var(--menu-blur,20px)) saturate(1.6);
@@ -11827,6 +11837,15 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Reactions breakdown: who reacted, with tabs per reaction type -->
+<div class="overlay hidden" id="reactionsSheet" onclick="if(event.target===this)closeOverlay('reactionsSheet')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Reactions">
+    <div class="msg-top"><button class="msg-back" onclick="closeOverlay('reactionsSheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button><span class="ac-title">Reactions</span></div>
+    <div class="rx-tabs" id="reactionsTabs"></div>
+    <div id="reactionsList"></div>
+  </div>
+</div>
+
 <!-- Community notes: all notes on a post (read + rate) -->
 <div class="overlay hidden" id="notesView">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Readers added context">
@@ -13325,6 +13344,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <button class="as-item hidden" id="paInfoBtn" onclick="acPostInfoFrom('other')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5"/><path d="M12 7.6h.01"/></svg> <span>Info</span></button>
     <button class="as-item hidden" id="paPostshotBtn" onclick="acPostshot(AC._paPostId)"><svg viewBox="0 0 24 24"><path d="M4 8h3l1.4-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.3"/></svg> <span>Postshot</span></button>
     <button class="as-item hidden" id="paNotInterestedBtn" onclick="paNotInterested()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12h7"/></svg> <span>Not interested in this post</span></button>
+    <button class="as-item hidden" id="paReactionsBtn" onclick="closeOverlay('postActions');acOpenReactions(AC._paPostId)"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg> <span>See who reacted</span></button>
     <button class="as-item hidden" id="paAddContextBtn" onclick="closeOverlay('postActions');acAddNoteOpen(AC._paPostId)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="16" x2="12" y2="11"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> <span>Add context</span></button>
     <button class="as-item" onclick="paMute()"><svg viewBox="0 0 24 24"><path d="M11 5 6.5 9H3v6h3.5L11 19z"/><path d="M22 9.5l-5 5M17 9.5l5 5"/></svg> <span id="paMuteLabel">Mute</span></button>
     <button class="as-item danger" onclick="paBlock()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/></svg> <span id="paBlockLabel">Block</span></button>
@@ -15972,7 +15992,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1394'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1395'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -29106,7 +29126,7 @@ function acReactCluster(p) {
   const keys = Object.keys(rc).filter((k) => rc[k] > 0);
   if (!keys.some((k) => k !== 'like')) return '';
   const top = keys.sort((a, b) => rc[b] - rc[a]).slice(0, 3).map(acReactMeta).filter(Boolean);
-  return `<span class="ac-react-cluster">${top.map((r) => `<span class="ac-rc-em">${r.emoji}</span>`).join('')}</span>`;
+  return `<span class="ac-react-cluster" onclick="event.stopPropagation();acOpenReactions(${p.id})">${top.map((r) => `<span class="ac-rc-em">${r.emoji}</span>`).join('')}</span>`;
 }
 // The like/react button — shared by the feed card and the post-detail card.
 function acLikeBtn(p, stop) {
@@ -29148,6 +29168,7 @@ async function acToggleLike(btn, id) {
   } else {
     acApplyReaction(id, 'like', cur + 1);
     if (!document.body.classList.contains('reduce-motion')) { btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop'); setTimeout(() => btn.classList.remove('pop'), 450); }
+    acReactBurst(btn, '👍');
     try { const r = await API.req('POST', '/api/social/posts/' + id + '/like', { reaction: 'like' }); acApplyReaction(id, r.reaction, r.likes); acReactSyncCache(id, r); }
     catch { acApplyReaction(id, null, cur); }
   }
@@ -29161,6 +29182,7 @@ async function acReact(pid, reaction) {
   const optCount = wasOn ? cur : cur + 1;
   acApplyReaction(pid, reaction, optCount);
   if (btn && !document.body.classList.contains('reduce-motion')) { btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop'); setTimeout(() => btn.classList.remove('pop'), 450); }
+  acReactBurst(btn, (acReactMeta(reaction) || {}).emoji || '👍');
   try { const r = await API.req('POST', '/api/social/posts/' + pid + '/like', { reaction }); acApplyReaction(pid, r.reaction, r.likes); acReactSyncCache(pid, r); }
   catch { acApplyReaction(pid, wasOn ? (prevReact || 'like') : null, cur); }
 }
@@ -29207,6 +29229,53 @@ function acBindReactions() {
     if (to && to.closest && (to.closest('#acReactBar') || to.closest('.ac-like[data-pid]'))) return;
     clearTimeout(_hoverT);
   });
+}
+// A little emoji burst floats up from the button when you react (delight).
+function acReactBurst(btn, emoji) {
+  if (!btn || document.body.classList.contains('reduce-motion')) return;
+  const r = btn.getBoundingClientRect();
+  const cx = r.left + 10, cy = r.top + r.height / 2;
+  const layer = document.createElement('div'); layer.className = 'rx-burst';
+  for (let i = 0; i < 7; i++) {
+    const s = document.createElement('span'); s.className = 'rx-particle'; s.textContent = emoji;
+    const ang = -Math.PI / 2 + (i / 6 - 0.5) * 1.5; const dist = 26 + (i % 3) * 12;
+    s.style.setProperty('--dx', (Math.cos(ang) * dist).toFixed(1) + 'px');
+    s.style.setProperty('--dy', (Math.sin(ang) * dist - 10).toFixed(1) + 'px');
+    s.style.left = cx + 'px'; s.style.top = cy + 'px';
+    s.style.animationDelay = (i * 16) + 'ms'; s.style.fontSize = (13 + (i % 3) * 4) + 'px';
+    layer.appendChild(s);
+  }
+  document.body.appendChild(layer);
+  setTimeout(() => layer.remove(), 950);
+}
+// \u2500\u2500 "See who reacted" \u2014 the reactions breakdown sheet (tabs per reaction) \u2500\u2500
+async function acOpenReactions(postId) {
+  AC._reactPost = postId; AC._reactTab = 'all'; AC._reactData = null;
+  showOverlay('reactionsSheet');
+  const el = document.getElementById('reactionsList'); if (el) el.innerHTML = acSkelRows(3);
+  document.getElementById('reactionsTabs').innerHTML = '';
+  try {
+    const d = await API.req('GET', '/api/social/posts/' + postId + '/reactions');
+    AC._reactData = d; acRenderReactionTabs(); acRenderReactionList();
+  } catch (e) { if (el) el.innerHTML = '<div class="art-loading">Could not load reactions.</div>'; }
+}
+function acRenderReactionTabs() {
+  const d = AC._reactData; if (!d) return;
+  const total = (d.reactors || []).length;
+  const tabs = [`<button class="rx-tab ${AC._reactTab === 'all' ? 'on' : ''}" onclick="acReactTab('all')">All ${total}</button>`];
+  for (const r of POST_REACTS) { const n = (d.counts || {})[r.id] || 0; if (n > 0) tabs.push(`<button class="rx-tab ${AC._reactTab === r.id ? 'on' : ''}" onclick="acReactTab('${r.id}')">${r.emoji} ${n}</button>`); }
+  document.getElementById('reactionsTabs').innerHTML = tabs.join('');
+}
+function acReactTab(t) { AC._reactTab = t; acRenderReactionTabs(); acRenderReactionList(); }
+function acRenderReactionList() {
+  const d = AC._reactData; const el = document.getElementById('reactionsList'); if (!d || !el) return;
+  let list = d.reactors || [];
+  if (AC._reactTab !== 'all') list = list.filter((u) => u.reaction === AC._reactTab);
+  if (!list.length) { el.innerHTML = '<div class="art-loading">No one yet.</div>'; return; }
+  el.innerHTML = list.map((u) => {
+    const rm = acReactMeta(u.reaction);
+    return `<div class="ac-item" onclick="closeOverlay('reactionsSheet');acGoProfile(${jsAttr(u.username || '')})">${acAvatarHtml(u.name, u.avatar, 'user-avatar', u.accountType === 'business')}<div class="ac-item-main"><div class="ac-item-name">${escHtml(u.name)}${vbadge(!!u.verified)}</div><div class="ac-item-last">@${escHtml(u.username || '')}</div></div><span class="rx-row-em">${rm ? rm.emoji : '\ud83d\udc4d'}</span></div>`;
+  }).join('');
 }
 // Quote embed \u2014 flat (no box), tap to open the quoted post.
 function acQuoteHtml(q) {
@@ -40299,6 +40368,8 @@ function acOpenUserActions(anchor, id, showFollow, postId) {
   if (niBtn) niBtn.classList.toggle('hidden', AC._paPostId == null);
   const acxBtn = document.getElementById('paAddContextBtn');
   if (acxBtn) acxBtn.classList.toggle('hidden', AC._paPostId == null); // "Add context" applies to a post
+  const rxBtn = document.getElementById('paReactionsBtn');
+  if (rxBtn) rxBtn.classList.toggle('hidden', AC._paPostId == null); // "See who reacted" applies to a post
   const psBtn = document.getElementById('paPostshotBtn');
   if (psBtn) psBtn.classList.toggle('hidden', AC._paPostId == null); // Postshot needs a post
   const infoBtn = document.getElementById('paInfoBtn');
