@@ -16406,7 +16406,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1428'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1429'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -34667,6 +34667,10 @@ async function acOpenOrder(id) {
         ? `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="closeOverlay('orderView');acOpenListing(${reviewProd});setTimeout(()=>acWriteReviewOpen(${reviewProd}),400)">★ Review your purchase</button>`
         : `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="closeOverlay('orderView');acOpenReviews(${jsAttr(o.seller.username)},${o.seller.id})">Leave a review</button>`;
     }
+    // ── Buy again (buyer, completed orders) — Amazon-style re-order into the cart ──
+    if (!o.mine && ['fulfilled', 'delivered', 'released'].includes(o.status) && (o.items || []).some(it => it.productId)) {
+      action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acBuyAgain()">🔁 Buy again</button>`;
+    }
     // ── Two-way review (seller rates the buyer, once the order is complete) ──
     if (o.mine && ['fulfilled', 'delivered', 'released'].includes(o.status)) {
       action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acRateBuyerOpen(${o.id}, ${jsAttr(o.buyer.name)})">★ Rate the buyer</button>`;
@@ -37013,6 +37017,23 @@ async function acLabelBuy() {
   }
 }
 // Printable packing slip (ship-to + items) for the seller.
+// Buy again: re-add this order's items to the cart (skips listings that have since
+// been removed/hidden — you're told how many made it), then opens the cart.
+async function acBuyAgain() {
+  const o = AC._ordCur; if (!o) return;
+  const items = (o.items || []).filter(it => it.productId);
+  if (!items.length) { showNotif('These items are no longer available.'); return; }
+  let ok = 0, fail = 0;
+  for (const it of items) {
+    try { await API.req('POST', '/api/cart', { productId: it.productId, qty: it.qty || 1 }); ok++; }
+    catch (_) { fail++; }
+  }
+  if (!ok) { showNotif('These items are no longer available.'); return; }
+  acRefreshCartBadge && acRefreshCartBadge();
+  showNotif(fail ? `${ok} added to your cart · ${fail} no longer available.` : 'Added to your cart.');
+  closeOverlay('orderView');
+  acOpenCart();
+}
 // Printable order receipt (buyer + seller) — itemized lines, totals, payment state.
 // Opens a print window (same pattern as the packing slip); Save as PDF from there.
 function acOrderReceipt() {
