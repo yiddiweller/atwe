@@ -16457,7 +16457,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1450'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1451'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -26670,9 +26670,39 @@ function acFeedToggleSound() {
   document.querySelectorAll('.feed-card video').forEach(v => { v.muted = _feedMuted; if (!_feedMuted) v.play().catch(() => {}); });
   document.querySelectorAll('.feed-sound').forEach(b => { b.innerHTML = _feedMuted ? FEED_SND_OFF : FEED_SND_ON; });
 }
+// Double-tap a reel/short to like it (TikTok-style) — like only, never unlike,
+// with the shared heart burst at the tap point. Rail/button taps are left alone.
+function acBindFeedDblTap(root) {
+  if (!root || root._fdtBound) return; root._fdtBound = true;
+  const likeAt = (card, x, y) => {
+    const id = parseInt(card.dataset.id, 10);
+    if (!Number.isInteger(id)) return;
+    const rail = _feedRailEl(id);
+    if (rail && rail.dataset.vote !== '1') { try { acFeedVote(id, 1); } catch (_) {} }
+    acHeartBurst(x, y);
+    if (navigator.vibrate) { try { navigator.vibrate(11); } catch (_) {} }
+  };
+  root.addEventListener('dblclick', (e) => {
+    if (e.target.closest('.feed-rail') || e.target.closest('button')) return;
+    const card = e.target.closest('.feed-card'); if (!card) return;
+    e.preventDefault(); likeAt(card, e.clientX, e.clientY);
+  });
+  let lastTap = 0, lastId = null;
+  root.addEventListener('touchend', (e) => {
+    if (e.touches.length) return;
+    if (e.target.closest('.feed-rail') || e.target.closest('button')) { lastId = null; return; }
+    const card = e.target.closest && e.target.closest('.feed-card');
+    if (!card) { lastId = null; return; }
+    const id = card.dataset.id, now = Date.now();
+    const t = e.changedTouches && e.changedTouches[0];
+    if (id === lastId && now - lastTap < 300) { e.preventDefault(); likeAt(card, t ? t.clientX : 0, t ? t.clientY : 0); lastId = null; }
+    else { lastId = id; lastTap = now; }
+  });
+}
 // Play whichever card's video is on screen; pause the rest (Shorts behaviour).
 function acFeedAutoplay(root) {
   root = root || document.getElementById('acFeed');
+  acBindFeedDblTap(root); // double-tap-to-like rides along wherever cards render
   if (_feedIO) _feedIO.disconnect();
   _feedIO = new IntersectionObserver((ents) => {
     ents.forEach(en => {
