@@ -1769,6 +1769,7 @@ const PUSH_VERBS = {
   event_rsvp: 'is going to your event', event_reminder: 'an event you’re going to starts soon', rec_received: 'recommended you',
   creator_sub: 'subscribed to you', tip: 'sent you a tip', review_reply: 'responded to your review',
   invoice_reminder: 'sent a reminder — an invoice is waiting',
+  split_reminder: 'sent a reminder — your share of a split is waiting',
   appt_request: 'requested an appointment',
   appt_rescheduled: 'proposed a new appointment time',
   appt_reminder: 'has an appointment with you soon',
@@ -17828,6 +17829,7 @@ function mapSplit(s, shares, me) {
   const mine = shares.find((x) => x.user_id === me);
   return {
     id: s.id, title: s.title, totalCents: total, paidCents: paid, createdAt: s.created_at,
+    lastRemindedAt: s.last_reminded_at || null,
     creator: { id: s.creator_id, name: s.creator_name, username: s.creator_username, avatar: s.creator_avatar || null },
     iAmCreator: s.creator_id === me, myShareCents: mine ? mine.amount_cents : 0, myPaid: mine ? mine.paid : false,
     shares: shares.map((x) => ({ user: { id: x.user_id, name: x.name, username: x.username, avatar: x.avatar || null }, amountCents: x.amount_cents, paid: x.paid })),
@@ -17938,6 +17940,45 @@ app.post('/api/splits/:id/pay', auth.requireAuth, blockImpersonation, rateLimit(
     rtPush(req.user.id, 'wallet', { type: 'update', amountCents: amount });
     res.json({ ok: true, paidCents: amount });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not pay your share.' }); }
+});
+// Remind everyone who hasn't paid their share yet (creator only). One nudge per
+// split per 24h, claimed atomically so a double-tap can't double-send. Each unpaid
+// participant gets a notification and their pay card re-surfaces in the chat.
+app.post('/api/splits/:id/remind', auth.requireAuth, rateLimit(30, 60000, 'split-remind'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const claim = await db.query(
+      `UPDATE splits SET last_reminded_at = now()
+        WHERE id = $1 AND creator_id = $2
+          AND (last_reminded_at IS NULL OR last_reminded_at < now() - interval '24 hours')
+          AND EXISTS (SELECT 1 FROM split_shares WHERE split_id = $1 AND paid = false)
+        RETURNING title`,
+      [id, req.user.id]
+    );
+    if (!claim.rowCount) {
+      const sp = (await db.query('SELECT creator_id, last_reminded_at, (SELECT COUNT(*)::int FROM split_shares WHERE split_id = splits.id AND paid = false) AS unpaid FROM splits WHERE id = $1', [id])).rows[0];
+      if (!sp || sp.creator_id !== req.user.id) return res.status(404).json({ error: 'Split not found.' });
+      if (!sp.unpaid) return res.status(400).json({ error: 'Everyone has paid — nothing to remind.' });
+      const hrs = Math.max(1, Math.ceil(24 - (Date.now() - new Date(sp.last_reminded_at).getTime()) / 3600000));
+      return res.status(429).json({ error: `Already reminded — you can nudge again in about ${hrs}h.`, coolingDown: true });
+    }
+    const title = claim.rows[0].title;
+    const unpaid = (await db.query('SELECT user_id, amount_cents FROM split_shares WHERE split_id = $1 AND paid = false', [id])).rows;
+    for (const sh of unpaid) {
+      notify(sh.user_id, req.user.id, 'split_reminder');
+      try {
+        if (await dmAllowed(req.user.id, sh.user_id)) {
+          const meta = { t: 'split', splitId: id, title, amountCents: sh.amount_cents };
+          const m = await db.query(`INSERT INTO at_messages (sender_id, recipient_id, body, meta) VALUES ($1,$2,'',$3) RETURNING id, created_at`, [req.user.id, sh.user_id, JSON.stringify(meta)]);
+          const msg = { id: m.rows[0].id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null, created_at: m.rows[0].created_at, reply_to: null, forwarded: false, meta };
+          rtPush(sh.user_id, 'msg', { kind: 'dm', peerId: req.user.id, message: { ...msg, mine: false } });
+          rtPush(req.user.id, 'msg', { kind: 'dm', peerId: sh.user_id, message: { ...msg, mine: true } });
+        }
+      } catch (e) { /* card best-effort; the notification landed */ }
+    }
+    res.json({ ok: true, reminded: unpaid.length });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send reminders.' }); }
 });
 
 /* ─── Orders ─── */

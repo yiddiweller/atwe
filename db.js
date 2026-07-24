@@ -1268,6 +1268,8 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS split_shares_user_idx ON split_shares(user_id) WHERE paid = false;`);
+  // "Remind everyone unpaid" nudges — throttled to one per 24h per split.
+  await query(`ALTER TABLE splits ADD COLUMN IF NOT EXISTS last_reminded_at TIMESTAMPTZ;`);
   // Money requests (wallet "Request" action): a requester asks a payer for an
   // amount; the payer pays from balance (a normal money send) or declines.
   await query(`
