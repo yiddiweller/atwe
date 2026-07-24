@@ -18001,6 +18001,7 @@ function mapOrder(o, items, me) {
     discountCents: o.discount_cents || 0, couponCode: o.coupon_code || null,
     note: o.note || null, createdAt: o.created_at, paidAt: o.paid_at || null,
     cancelReason: o.cancel_reason ? (ORDER_CANCEL_LABELS[o.cancel_reason] || null) : null, cancelNote: o.cancel_note || null, cancelledByMe: o.cancelled_by != null && o.cancelled_by === me,
+    archived: o.seller_id === me ? !!o.seller_archived : !!o.buyer_archived,
     mine: o.seller_id === me, // I'm the seller (vs the buyer)
     escrow: !!o.escrow, autoReleaseAt: o.auto_release_at || null, releasedAt: o.released_at || null,
     disputeReason: o.dispute_reason || null, disputedByMe: o.disputed_by === me,
@@ -18018,7 +18019,7 @@ function mapOrder(o, items, me) {
     items: (items || []).map((it) => ({ productId: it.product_id || null, name: it.name, priceCents: it.price_cents, qty: it.qty, variantLabel: it.variant_label || null })),
   };
 }
-const ORDER_SELECT = `SELECT o.id, o.buyer_id, o.seller_id, o.total_cents, o.status, o.note, o.created_at, o.paid_at, o.cancel_reason, o.cancel_note, o.cancelled_by,
+const ORDER_SELECT = `SELECT o.id, o.buyer_id, o.seller_id, o.total_cents, o.status, o.note, o.created_at, o.paid_at, o.cancel_reason, o.cancel_note, o.cancelled_by, o.buyer_archived, o.seller_archived,
   o.escrow, o.auto_release_at, o.released_at, o.dispute_reason, o.disputed_by,
   o.discount_cents, o.coupon_code,
   o.shipping_cents, o.tax_cents, o.needs_shipping, o.pickup, o.pickup_location, o.ship_name, o.ship_phone, o.ship_line1, o.ship_line2, o.ship_city, o.ship_region, o.ship_postal, o.ship_country,
@@ -18580,10 +18581,26 @@ app.post('/api/orders/buy', auth.requireAuth, blockImpersonation, rateLimit(20, 
     res.status(201).json({ ok: true, orderId, paid: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not place the order.' }); }
 });
+// Archive an order for MY side only (a tidy-up, never a delete — the other
+// party's view and every money/fulfilment path are untouched).
+app.post('/api/orders/:id/archive', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const on = req.body.archived !== false;
+  try {
+    const o = (await db.query('SELECT buyer_id, seller_id FROM orders WHERE id = $1', [id])).rows[0];
+    if (!o || (o.buyer_id !== req.user.id && o.seller_id !== req.user.id)) return res.status(404).json({ error: 'Order not found.' });
+    const col = o.seller_id === req.user.id ? 'seller_archived' : 'buyer_archived';
+    await db.query(`UPDATE orders SET ${col} = $1 WHERE id = $2`, [on, id]);
+    res.json({ ok: true, archived: on });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the order.' }); }
+});
 app.get('/api/orders', auth.requireAuth, async (req, res) => {
   const scope = req.query.scope === 'seller' ? 'seller' : 'buyer';
+  const archived = req.query.archived === 'true';
   try {
-    const where = scope === 'seller' ? 'WHERE o.seller_id = $1' : 'WHERE o.buyer_id = $1';
+    const where = (scope === 'seller' ? 'WHERE o.seller_id = $1' : 'WHERE o.buyer_id = $1')
+      + (scope === 'seller' ? ` AND o.seller_archived = ${archived}` : ` AND o.buyer_archived = ${archived}`);
     const { rows } = await db.query(ORDER_SELECT + ' ' + where + ' ORDER BY o.created_at DESC LIMIT 200', [req.user.id]);
     const out = [];
     for (const o of rows) {
