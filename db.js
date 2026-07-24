@@ -1832,6 +1832,9 @@ async function initSchema() {
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS min_tier_level INTEGER NOT NULL DEFAULT 0;`);
   // Pay-per-view: a one-time price to unlock a single post's content. NULL/0 = free.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS ppv_cents INTEGER;`);
+  // Celebration posts: an occasion tag (new_role / work_anniversary / …) gives the
+  // post a celebratory banner. NULL = an ordinary post.
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS occasion TEXT;`);
   await query(`
     CREATE TABLE IF NOT EXISTS post_unlocks (
       post_id    INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
