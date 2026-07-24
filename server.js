@@ -1025,6 +1025,31 @@ app.post('/api/contact', rateLimit(6, 60000), auth.optionalAuth, async (req, res
   res.json({ ok: true });
 });
 
+// In-app "Report a problem / Send feedback" (signed-in). Reuses the support inbox,
+// tagged with a category + a little device context so the team can triage. Rides the
+// admin Activity feed too.
+const FEEDBACK_CATEGORIES = ['bug', 'idea', 'question', 'other'];
+app.post('/api/feedback', auth.requireAuth, rateLimit(10, 60000, 'feedback'), async (req, res) => {
+  const category = FEEDBACK_CATEGORIES.includes(req.body.category) ? req.body.category : 'other';
+  const body = (req.body.body || '').toString().trim();
+  if (body.length < 3) return res.status(400).json({ error: 'Please describe the problem or idea.' });
+  if (body.length > 5000) return res.status(400).json({ error: 'That’s a bit long — please shorten it.' });
+  // Small, non-PII device context to help reproduce bugs (build + platform only).
+  const meta = {
+    build: (req.body.build || '').toString().slice(0, 20) || null,
+    platform: (req.body.platform || '').toString().slice(0, 40) || null,
+  };
+  try {
+    const email = req.user.email || 'account@atwe';
+    const ins = await db.query(
+      'INSERT INTO support_requests (user_id, email, message, category, meta) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+      [req.user.id, email, body, category, JSON.stringify(meta)]
+    );
+    if (typeof logEvent === 'function') logEvent('system', 'feedback.filed', { actorId: req.user.id, meta: { category, id: ins.rows[0].id } });
+    res.status(201).json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send your feedback. Please try again.' }); }
+});
+
 app.get('/api/test', async (_req, res) => {
   try {
     const msg = await anthropic.messages.create({
@@ -22925,7 +22950,7 @@ app.delete('/api/admin/posts/:id', auth.requirePerm('moderation'), async (req, r
 app.get('/api/admin/support', auth.requirePerm('support'), async (_req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT s.id, s.email, s.message, s.created_at, s.user_id, u.name AS user_name, u.username AS user_username
+      `SELECT s.id, s.email, s.message, s.created_at, s.user_id, s.category, s.meta, u.name AS user_name, u.username AS user_username
        FROM support_requests s LEFT JOIN users u ON u.id = s.user_id
        ORDER BY s.created_at DESC LIMIT 200`
     );
