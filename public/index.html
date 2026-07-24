@@ -6107,6 +6107,8 @@ body.reduce-motion .ac-react-bar,body.reduce-motion .ac-rb-btn{animation:none;}
 .esc-dot{width:8px;height:8px;border-radius:50%;background:var(--green);flex:0 0 auto;box-shadow:0 0 0 3px rgba(48,209,88,.15);margin-top:3px;}
 .esc-chip .esc-dot{margin-top:0;}
 .sf-esc{background:var(--s1);border-radius:12px;padding:11px 13px;margin:12px 0 6px;color:var(--t2);}
+/* Vacation-mode heads-up on a storefront (amber = information, per the ladder) */
+.sf-vac{background:var(--amber);color:#3a2c00;border-radius:12px;padding:11px 13px;margin:12px 0 6px;font-size:13.5px;font-weight:600;}
 /* Order-placed success pulse (green check) shown before the order confirmation. */
 .order-success{position:fixed;inset:0;z-index:4000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
   background:rgba(0,0,0,.72);opacity:0;transition:opacity var(--t-base) var(--ease);pointer-events:none;}
@@ -14000,6 +14002,20 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Shop vacation mode (pause new orders while away) -->
+<div class="overlay hidden" id="vacationView" onclick="if(event.target===this)closeOverlay('vacationView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Vacation mode">
+    <button class="sheet-close" onclick="closeOverlay('vacationView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Vacation mode</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Your listings stay visible, but no one can place a new order until you’re back. Existing orders and chats are unaffected.</div>
+    <label class="pf-inq-row"><span>Pause new orders</span><input type="checkbox" id="vacToggle" onchange="acVacSync()"/></label>
+    <div id="vacMsgRow" style="display:none;">
+      <input class="jp-in" id="vacMsg" maxlength="200" placeholder="Message for shoppers (e.g. Back on 3 August)" autocomplete="off"/>
+    </div>
+    <button class="ac-pill-btn accent jp-submit" style="margin-top:12px;" onclick="acVacSave()">Save</button>
+  </div>
+</div>
+
 <!-- Cancel an order: pick a reason (the other party sees it) -->
 <div class="overlay hidden" id="cancelOrderView" onclick="if(event.target===this)closeOverlay('cancelOrderView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Cancel order">
@@ -16645,7 +16661,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1494'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1495'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -37362,8 +37378,33 @@ async function acOpenStoreManage() {
     ${row(SI.chart, 'Sales & analytics', 'Revenue, orders and top products', 'closeOverlay(\'storeManageView\');acOpenShopAnalytics()')}
     ${row(SI.megaphone, 'Cart recovery', 'Win back abandoned carts via Beam', 'closeOverlay(\'storeManageView\');acOpenCartRecovery()')}
     ${row(SI.wallet, 'Wallet & payouts', 'Your balance and cash-out', 'closeOverlay(\'storeManageView\');acOpenWallet()')}
+    ${row(SI.store, 'Vacation mode', 'Pause new orders while you’re away', 'acOpenVacation()')}
   </div>`;
   });
+}
+// ── Shop vacation mode (pause new orders while away) ──
+async function acOpenVacation() {
+  showOverlay('vacationView');
+  const t = document.getElementById('vacToggle'), m = document.getElementById('vacMsg');
+  try {
+    const d = await API.req('GET', '/api/shop/vacation');
+    if (t) t.checked = !!d.paused;
+    if (m) m.value = d.message || '';
+  } catch (_) {}
+  acVacSync();
+}
+function acVacSync() {
+  const on = !!document.getElementById('vacToggle')?.checked;
+  const row = document.getElementById('vacMsgRow'); if (row) row.style.display = on ? '' : 'none';
+}
+async function acVacSave() {
+  const paused = !!document.getElementById('vacToggle')?.checked;
+  const message = (document.getElementById('vacMsg')?.value || '').trim();
+  try {
+    await API.req('PUT', '/api/shop/vacation', { paused, message });
+    showNotif(paused ? 'Vacation mode on — your shop isn’t taking new orders.' : 'Vacation mode off — you’re open for orders.');
+    closeOverlay('vacationView');
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
 }
 // Cart recovery settings + counters (business owner).
 async function acOpenCartRecovery() {
@@ -37415,9 +37456,13 @@ async function acOpenStorefront(biz) {
       ${isOwner ? `<button class="ac-pill-btn accent sm" style="flex:0 0 auto;" onclick="acProductFormOpen()">＋ Add</button>` : ''}</div>`;
     // Escrow reassurance for shoppers (design blueprint); owners don't need it.
     const escLine = isOwner ? '' : `<div class="esc-note sf-esc"><span class="esc-dot"></span>Every order is protected. Your money is held in escrow and released when you confirm delivery.</div>`;
+    // Vacation mode: an amber heads-up so shoppers know before they try to buy.
+    const vac = biz.shopPaused
+      ? `<div class="sf-vac">🌴 ${escHtml(biz.shopPauseMessage || (isOwner ? 'Your shop is paused — no new orders while vacation mode is on.' : 'This shop is on a break and isn’t taking orders right now.'))}</div>`
+      : '';
     const grid = visible.length ? acGroupedProductGrid(visible, isOwner)
       : `<div class="ac-empty" style="padding:26px;">${isOwner ? 'No products yet. Add your first item.' : 'This store has no items yet.'}</div>`;
-    b.innerHTML = `${head}${escLine}<div id="sfBundles"></div>${grid}`;
+    b.innerHTML = `${head}${vac}${escLine}<div id="sfBundles"></div>${grid}`;
     acLoadStorefrontBundles(biz.id, isOwner);
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:22px;">' + escHtml(e.message || 'Could not load the store.') + '</div>'; }
 }

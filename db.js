@@ -2729,6 +2729,9 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS event_rsvps_user_idx ON event_rsvps(user_id);`);
   // Event reminders: once per going-RSVP, flipped by the flusher shortly before start.
   await query(`ALTER TABLE event_rsvps ADD COLUMN IF NOT EXISTS reminded BOOLEAN NOT NULL DEFAULT false;`);
+  // Shop vacation mode: listings stay visible but can't be bought while away.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS shop_paused BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS shop_pause_message TEXT;`);
   // Why a pending order was cancelled (+ who), so the other party sees the reason.
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancel_reason TEXT;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancel_note TEXT;`);

@@ -4187,6 +4187,23 @@ app.post('/api/account/pause', auth.requireAuth, rateLimit(20, 60000, 'acct-paus
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update your account.' }); }
 });
 
+// Shop vacation mode (free for every seller — unlike account pause, this only
+// stops NEW orders; listings, chats and existing orders carry on as normal).
+app.get('/api/shop/vacation', auth.requireAuth, async (req, res) => {
+  try {
+    const r = (await db.query('SELECT shop_paused, shop_pause_message FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+    res.json({ paused: !!r.shop_paused, message: r.shop_pause_message || null });
+  } catch (err) { res.status(500).json({ error: 'Could not load your shop settings.' }); }
+});
+app.put('/api/shop/vacation', auth.requireAuth, async (req, res) => {
+  const paused = req.body.paused === true;
+  const message = (req.body.message || '').toString().trim().slice(0, 200) || null;
+  try {
+    await db.query('UPDATE users SET shop_paused = $1, shop_pause_message = $2 WHERE id = $3', [paused, paused ? message : null, req.user.id]);
+    res.json({ ok: true, paused, message: paused ? message : null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update your shop.' }); }
+});
+
 /* ─── New-user onboarding (guided first run) ─── */
 const ONBOARD_INTENTS = ['hiring', 'job', 'network', 'sell', 'explore'];
 // A small curated set of broadly-useful topics, blended with the user's industry
@@ -8834,7 +8851,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query(`SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, profile_cta, pinned_post_id, sub_price_cents, sub_blurb, created_at, deactivated, paused, pause_message, connections_visible, business_hours, hours_note, hiring, pronouns, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, (SELECT username FROM users bu WHERE bu.id = users.aff_business_id) AS aff_business_username FROM users WHERE lower(username) = lower($1)`, [handle]);
+    const u = await db.query(`SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, profile_cta, pinned_post_id, sub_price_cents, sub_blurb, created_at, deactivated, paused, pause_message, connections_visible, business_hours, hours_note, shop_paused, shop_pause_message, hiring, pronouns, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, (SELECT username FROM users bu WHERE bu.id = users.aff_business_id) AS aff_business_username FROM users WHERE lower(username) = lower($1)`, [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     // A hibernated (deactivated) account's profile is hidden from everyone but the owner.
@@ -8961,7 +8978,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     }
     res.json({
       businessJobs, businessPeople, mutualConnections, reviewSummary, trustScore, followedBy, followedByCount,
-      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, pronouns: t.pronouns || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone', profileCta: ['book', 'order', 'message'].includes(t.profile_cta) ? t.profile_cta : null, joinedAt: t.created_at || null, paused: !!t.paused, pauseMessage: t.paused ? (t.pause_message || null) : null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null, hoursNote: t.hours_note || null, hiring: !!t.hiring, inquiryEnabled: !!t.inquiry_enabled, inquiryIntro: t.inquiry_intro || null, status: userStatus(t), affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: t.aff_business_username || null } : null },
+      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, pronouns: t.pronouns || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone', profileCta: ['book', 'order', 'message'].includes(t.profile_cta) ? t.profile_cta : null, joinedAt: t.created_at || null, paused: !!t.paused, pauseMessage: t.paused ? (t.pause_message || null) : null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null, hoursNote: t.hours_note || null, shopPaused: !!t.shop_paused, shopPauseMessage: t.shop_paused ? (t.shop_pause_message || null) : null, hiring: !!t.hiring, inquiryEnabled: !!t.inquiry_enabled, inquiryIntro: t.inquiry_intro || null, status: userStatus(t), affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: t.aff_business_username || null } : null },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       education: edu.rows.map(mapEducation),
       certifications: certs.rows.map(mapCertification),
@@ -16102,6 +16119,7 @@ app.post('/api/offers', auth.requireAuth, rateLimit(30, 60000, 'offer'), async (
     if (!p || !p.active) return res.status(404).json({ error: 'That listing isn’t available.' });
     if (p.seller_demo) return res.status(400).json({ demo: true, error: 'This is a demo listing.' });
     if (p.business_id === req.user.id) return res.status(400).json({ error: 'You can’t make an offer on your own listing.' });
+    { const sp = await shopPausedMessage(p.business_id); if (sp) return res.status(400).json({ error: sp, shopPaused: true }); }
     if (await blockedEither(req.user.id, p.business_id)) return res.status(403).json({ error: 'You can’t make an offer to this seller.' });
     const ins = await db.query(
       `INSERT INTO offers (product_id, buyer_id, seller_id, amount_cents, status, turn) VALUES ($1,$2,$3,$4,'pending','seller') RETURNING id`,
@@ -18364,6 +18382,7 @@ app.post('/api/orders', auth.requireAuth, blockImpersonation, rateLimit(20, 6000
     if (await blockedEither(req.user.id, sellerId)) return res.status(403).json({ error: 'You can’t order from this seller.' });
     const sd = (await db.query('SELECT is_demo FROM users WHERE id = $1', [sellerId])).rows[0];
     if (sd && sd.is_demo) return res.status(400).json({ demo: true, error: 'This is a demo seller — buying is disabled in demo mode.' });
+    { const sp = await shopPausedMessage(sellerId); if (sp) return res.status(400).json({ error: sp, shopPaused: true }); }
     const cart = await db.query(
       `SELECT c.product_id, c.qty, c.variant_id, p.name, p.price_cents, p.kind, p.stock, p.variants, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location FROM cart_items c JOIN products p ON p.id = c.product_id
        WHERE c.user_id = $1 AND p.business_id = $2 AND p.active = true`,
@@ -18455,6 +18474,7 @@ app.post('/api/orders/buy', auth.requireAuth, blockImpersonation, rateLimit(20, 
     const p = (await db.query('SELECT p.business_id, p.name, p.price_cents, p.active, p.kind, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, u.is_demo AS seller_demo FROM products p JOIN users u ON u.id = p.business_id WHERE p.id = $1', [productId])).rows[0];
     if (!p || !p.active) return res.status(404).json({ error: 'That listing isn’t available.' });
     if (p.seller_demo) return res.status(400).json({ demo: true, error: 'This is a demo listing — buying is disabled in demo mode.' });
+    { const sp = await shopPausedMessage(p.business_id); if (sp) return res.status(400).json({ error: sp, shopPaused: true }); }
     if (p.business_id === req.user.id) return res.status(400).json({ error: 'You can’t buy your own listing.' });
     if (await blockedEither(req.user.id, p.business_id)) return res.status(403).json({ error: 'You can’t order from this seller.' });
     const rv = resolveVariant(p, req.body.variantId);
@@ -18794,6 +18814,15 @@ app.post('/api/webhooks/shippo', async (req, res) => {
   } catch (e) { console.error('shippo webhook error:', e.message); }
 });
 // Cancel: the buyer while still pending, or the seller before fulfilment.
+// Shop vacation mode: a seller can pause their store — listings stay visible but
+// can't be bought until they're back. Returns a message when paused, else null.
+async function shopPausedMessage(sellerId) {
+  try {
+    const r = (await db.query('SELECT shop_paused, shop_pause_message FROM users WHERE id = $1', [sellerId])).rows[0];
+    if (!r || !r.shop_paused) return null;
+    return r.shop_pause_message || 'This shop is on a break right now — it isn’t taking orders.';
+  } catch (_) { return null; } // fail open: a DB blip must never block a sale
+}
 // Why an order was cancelled (whitelisted; anything else → free-text note only).
 const ORDER_CANCEL_REASONS = ['changed_mind', 'found_cheaper', 'ordered_by_mistake', 'too_slow', 'out_of_stock', 'cant_fulfil', 'other'];
 const ORDER_CANCEL_LABELS = {
@@ -18987,6 +19016,7 @@ app.post('/api/bundles/:id/buy', auth.requireAuth, blockImpersonation, rateLimit
     const b = (await db.query('SELECT b.id, b.seller_id, b.name, b.price_cents, b.active, u.is_demo AS seller_demo FROM bundles b JOIN users u ON u.id = b.seller_id WHERE b.id = $1', [id])).rows[0];
     if (!b || !b.active) return res.status(404).json({ error: 'That bundle isn’t available.' });
     if (b.seller_demo) return res.status(400).json({ demo: true, error: 'This is a demo bundle — buying is disabled in demo mode.' });
+    { const sp = await shopPausedMessage(b.seller_id); if (sp) return res.status(400).json({ error: sp, shopPaused: true }); }
     if (b.seller_id === req.user.id) return res.status(400).json({ error: 'You can’t buy your own bundle.' });
     if (await blockedEither(req.user.id, b.seller_id)) return res.status(403).json({ error: 'You can’t order from this seller.' });
     const comps = await loadBundleItems(id);
