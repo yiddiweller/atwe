@@ -1683,7 +1683,7 @@ async function canActAs(userId, businessId, perm) {
 // requests / job notifications always deliver (they're important or actionable).
 // Order here is the order shown in the UI; `key` must match the client.
 const NOTIF_CATEGORIES = [
-  { key: 'likes',        label: 'Likes & reposts',                types: ['like', 'repost'] },
+  { key: 'likes',        label: 'Likes & reposts',                types: ['like', 'repost', 'story_mention'] },
   { key: 'replies',      label: 'Replies & quotes',               types: ['reply', 'quote'] },
   { key: 'follows',      label: 'New followers',                  types: ['follow'] },
   { key: 'posts',        label: 'Posts from people you follow',   types: ['post'] },
@@ -1749,6 +1749,7 @@ const PUSH_VERBS = {
   like: 'liked your post', reply: 'replied to your post', follow: 'followed you',
   message: 'sent you a message', call: 'called you', video_call: 'video-called you',
   chat_request: 'wants to chat with you', mention: 'mentioned you', quote: 'quoted your post',
+  story_mention: 'mentioned you in their Daily',
   job_application: 'applied to your job', connection_request: 'wants to connect',
   connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills',
   event_rsvp: 'is going to your event', event_reminder: 'an event you’re going to starts soon', rec_received: 'recommended you',
@@ -7785,6 +7786,7 @@ function mapStory(s, me) {
     audience: s.audience === 'close' ? 'close' : 'all',
     sharedPost,
     link: s.link_url ? { url: s.link_url, label: s.link_label || null } : null,
+    mentions: Array.isArray(s.mention_users) ? s.mention_users.filter(Boolean) : [],
     poll: (s.poll_q && Array.isArray(s.poll_opts) && s.poll_opts.length === 2) ? {
       q: s.poll_q,
       options: [{ text: s.poll_opts[0], votes: Number(s.poll_v0 || 0) }, { text: s.poll_opts[1], votes: Number(s.poll_v1 || 0) }],
@@ -7846,6 +7848,20 @@ app.post('/api/stories', auth.requireAuth, rateLimit(30, 60000, 'story-post'), r
   }
   // Question sticker: a text prompt inviting responses.
   const questionPrompt = (req.body.questionPrompt || '').toString().trim().slice(0, 80) || null;
+  // Mention sticker: ≤5 tagged people — real, handled, not deactivated, not blocked, not self.
+  let mentionedIds = null;
+  {
+    const raw = [...new Set((Array.isArray(req.body.mentionedIds) ? req.body.mentionedIds : []).map((x) => parseInt(x, 10)).filter(Number.isInteger))]
+      .filter((id) => id !== req.user.id).slice(0, 5);
+    if (raw.length) {
+      const ok = [];
+      for (const id of raw) {
+        const u = (await db.query('SELECT 1 FROM users WHERE id = $1 AND username IS NOT NULL AND NOT deactivated', [id])).rows[0];
+        if (u && !(await blockedEither(req.user.id, id))) ok.push(id);
+      }
+      if (ok.length) mentionedIds = ok;
+    }
+  }
   let media = null;
   let sharedPostId = null;
   if (kind === 'post') {
@@ -7885,9 +7901,11 @@ app.post('/api/stories', auth.requireAuth, rateLimit(30, 60000, 'story-post'), r
     // Tagged products (≤5 of the poster's OWN active products) on a story.
     const taggedProductIds = await validateOwnProductIds(req.user.id, req.body.productIds);
     const r = await db.query(
-      'INSERT INTO stories (user_id, kind, media, caption, bg, audience, shared_post_id, link_url, link_label, poll_q, poll_opts, question_prompt) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id, user_id, kind, media, caption, bg, audience, shared_post_id, link_url, link_label, poll_q, poll_opts, question_prompt, created_at, expires_at',
-      [req.user.id, kind, media, caption, bg, audience, sharedPostId, linkUrl, linkLabel, pollQ, pollOpts, questionPrompt]
+      'INSERT INTO stories (user_id, kind, media, caption, bg, audience, shared_post_id, link_url, link_label, poll_q, poll_opts, question_prompt, mentioned_ids) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id, user_id, kind, media, caption, bg, audience, shared_post_id, link_url, link_label, poll_q, poll_opts, question_prompt, mentioned_ids, created_at, expires_at',
+      [req.user.id, kind, media, caption, bg, audience, sharedPostId, linkUrl, linkLabel, pollQ, pollOpts, questionPrompt, mentionedIds]
     );
+    // Mention sticker: tell each tagged person (social-muteable; deep-links to the author).
+    if (mentionedIds) for (const mid of mentionedIds) notify(mid, req.user.id, 'story_mention').catch?.(() => {});
     if (taggedProductIds.length) await saveContentProductTags('story', r.rows[0].id, taggedProductIds);
     // Refresh the open clients of the audience: all followers, or — for a close-
     // friends story — only the people on the close-friends list.
@@ -7946,7 +7964,9 @@ app.get('/api/stories/:userId', auth.requireAuth, async (req, res) => {
     }
     const { rows } = await db.query(
       `SELECT s.id, s.user_id, s.kind, s.media, s.caption, s.bg, s.audience, s.created_at, s.expires_at, s.shared_post_id, s.link_url, s.link_label,
-              s.poll_q, s.poll_opts, s.question_prompt,
+              s.poll_q, s.poll_opts, s.question_prompt, s.mentioned_ids,
+              (SELECT json_agg(json_build_object('id', mu.id, 'name', mu.name, 'username', mu.username))
+                 FROM users mu WHERE mu.id = ANY(s.mentioned_ids)) AS mention_users,
               (SELECT COUNT(*) FROM story_poll_votes v WHERE v.story_id = s.id AND v.opt = 0) AS poll_v0,
               (SELECT COUNT(*) FROM story_poll_votes v WHERE v.story_id = s.id AND v.opt = 1) AS poll_v1,
               (SELECT opt FROM story_poll_votes v WHERE v.story_id = s.id AND v.voter_id = $1) AS poll_myvote,

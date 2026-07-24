@@ -946,6 +946,9 @@ async function initSchema() {
   // that viewers tap to open — great for businesses driving traffic.
   await query(`ALTER TABLE stories ADD COLUMN IF NOT EXISTS link_url TEXT;`);
   await query(`ALTER TABLE stories ADD COLUMN IF NOT EXISTS link_label TEXT;`);
+  // Mention sticker (IG-style): tag up to 5 people on a Daily — they're notified and
+  // shown as tappable @chips in the viewer.
+  await query(`ALTER TABLE stories ADD COLUMN IF NOT EXISTS mentioned_ids INTEGER[];`);
   // Poll sticker (IG-style): a Daily can carry one 2-option poll. Question + exactly
   // two option labels live on the story; votes are one-per-viewer.
   await query(`ALTER TABLE stories ADD COLUMN IF NOT EXISTS poll_q TEXT;`);
