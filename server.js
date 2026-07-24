@@ -1089,6 +1089,8 @@ function publicUser(row) {
     cartRecoveryEnabled: row.cart_recovery_enabled !== false,
     cartRecoveryDelayHours: row.cart_recovery_delay_hours || 1,
     cartRemindersOff: !!row.cart_reminders_off,
+    inquiryEnabled: !!row.inquiry_enabled,
+    inquiryIntro: row.inquiry_intro || null,
     lat: row.lat != null ? Number(row.lat) : null,
     lng: row.lng != null ? Number(row.lng) : null,
     dob: row.dob ? new Date(row.dob).toISOString().slice(0, 10) : null,
@@ -3807,6 +3809,9 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
   if ('awayEnabled' in req.body) { vals.push(req.body.awayEnabled === true); fields.push(`away_enabled = $${vals.length}`); }
   if ('awayMessage' in req.body) { vals.push((req.body.awayMessage || '').trim().slice(0, 500) || null); fields.push(`away_message = $${vals.length}`); }
   if ('awaySchedule' in req.body) { vals.push(req.body.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always'); fields.push(`away_schedule = $${vals.length}`); }
+  // Contact / lead form (business): a toggle + an optional intro line.
+  if ('inquiryEnabled' in req.body) { vals.push(req.body.inquiryEnabled === true); fields.push(`inquiry_enabled = $${vals.length}`); }
+  if ('inquiryIntro' in req.body) { vals.push((req.body.inquiryIntro || '').trim().slice(0, 200) || null); fields.push(`inquiry_intro = $${vals.length}`); }
   // Business primary CTA pill (book / order / message). Anything else clears it.
   if ('profileCta' in req.body) {
     const c = req.body.profileCta;
@@ -8449,7 +8454,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query(`SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, profile_cta, pinned_post_id, sub_price_cents, sub_blurb, created_at, deactivated, paused, pause_message, connections_visible, business_hours, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, (SELECT username FROM users bu WHERE bu.id = users.aff_business_id) AS aff_business_username FROM users WHERE lower(username) = lower($1)`, [handle]);
+    const u = await db.query(`SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, profile_cta, pinned_post_id, sub_price_cents, sub_blurb, created_at, deactivated, paused, pause_message, connections_visible, business_hours, inquiry_enabled, inquiry_intro, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, (SELECT username FROM users bu WHERE bu.id = users.aff_business_id) AS aff_business_username FROM users WHERE lower(username) = lower($1)`, [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     // A hibernated (deactivated) account's profile is hidden from everyone but the owner.
@@ -8575,7 +8580,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     }
     res.json({
       businessJobs, businessPeople, mutualConnections, reviewSummary, trustScore, followedBy, followedByCount,
-      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone', profileCta: ['book', 'order', 'message'].includes(t.profile_cta) ? t.profile_cta : null, joinedAt: t.created_at || null, paused: !!t.paused, pauseMessage: t.paused ? (t.pause_message || null) : null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null, affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: t.aff_business_username || null } : null },
+      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone', profileCta: ['book', 'order', 'message'].includes(t.profile_cta) ? t.profile_cta : null, joinedAt: t.created_at || null, paused: !!t.paused, pauseMessage: t.paused ? (t.pause_message || null) : null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null, inquiryEnabled: !!t.inquiry_enabled, inquiryIntro: t.inquiry_intro || null, affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: t.aff_business_username || null } : null },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       education: edu.rows.map(mapEducation),
       certifications: certs.rows.map(mapCertification),
@@ -18882,6 +18887,52 @@ async function userTrustScore(userId) {
   } catch (e) { return null; }
 }
 // Leave or update a review for a business (1:1 per reviewer; upsert).
+// ── Contact / lead forms (business) ──
+// A visitor submits the contact form on a business profile → a private lead.
+app.post('/api/business/:id/inquiry', auth.requireAuth, rateLimit(10, 3600000, 'biz-inquiry'), async (req, res) => {
+  const bizId = routeId(req.params.id);
+  if (!Number.isInteger(bizId)) return res.status(400).json({ error: 'Invalid business id.' });
+  if (bizId === req.user.id) return res.status(400).json({ error: 'You can’t contact your own business.' });
+  const message = (req.body.message || '').toString().trim().slice(0, 2000);
+  const email = (req.body.email || '').toString().trim().slice(0, 160) || null;
+  const phone = (req.body.phone || '').toString().trim().slice(0, 40) || null;
+  if (message.length < 3) return res.status(400).json({ error: 'Please write a short message.' });
+  try {
+    const biz = (await db.query('SELECT account_type, inquiry_enabled FROM users WHERE id = $1', [bizId])).rows[0];
+    if (!biz || biz.account_type !== 'business' || !biz.inquiry_enabled) return res.status(404).json({ error: 'This business isn’t taking inquiries.' });
+    if (await blockedEither(req.user.id, bizId)) return res.status(403).json({ error: 'You can’t contact this business.' });
+    await db.query('INSERT INTO business_inquiries (business_id, from_id, email, phone, message) VALUES ($1,$2,$3,$4,$5)',
+      [bizId, req.user.id, email, phone, message]);
+    notify(bizId, req.user.id, 'inquiry', null);
+    res.status(201).json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send your message.' }); }
+});
+// The business's leads inbox.
+app.get('/api/business/inquiries', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT i.id, i.email, i.phone, i.message, i.status, i.created_at,
+              u.id AS from_id, u.name AS from_name, u.username AS from_username, u.avatar AS from_avatar, u.verified AS from_verified, u.account_type AS from_type
+       FROM business_inquiries i JOIN users u ON u.id = i.from_id
+       WHERE i.business_id = $1 ORDER BY (i.status = 'new') DESC, i.created_at DESC LIMIT 200`, [req.user.id]);
+    const newCount = rows.filter((r) => r.status === 'new').length;
+    res.json({ newCount, inquiries: rows.map((r) => ({
+      id: r.id, email: r.email, phone: r.phone, message: r.message, status: r.status, created_at: r.created_at,
+      from: { id: r.from_id, name: r.from_name, username: r.from_username, avatar: mediaRef(r.from_avatar, 'avatar', r.from_id), verified: !!r.from_verified, accountType: r.from_type === 'business' ? 'business' : 'personal' },
+    })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your leads.' }); }
+});
+// Mark a lead read / archived (owner only).
+app.patch('/api/business/inquiries/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const status = ['new', 'read', 'archived'].includes(req.body.status) ? req.body.status : null;
+  if (!status) return res.status(400).json({ error: 'Invalid status.' });
+  try {
+    await db.query('UPDATE business_inquiries SET status = $1 WHERE id = $2 AND business_id = $3', [status, id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
 app.post('/api/business/:id/reviews', auth.requireAuth, rateLimit(20, 60000, 'review'), async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid business id.' });

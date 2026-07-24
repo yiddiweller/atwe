@@ -3158,6 +3158,23 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS business_questions_idx ON business_questions(business_id, created_at DESC);`);
+  // Contact / lead forms: a business shows a "Contact" form on its profile; each
+  // submission is a private lead in the business's inbox.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS inquiry_enabled BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS inquiry_intro TEXT;`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS business_inquiries (
+      id          SERIAL PRIMARY KEY,
+      business_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      from_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      email       TEXT,
+      phone       TEXT,
+      message     TEXT NOT NULL,
+      status      TEXT NOT NULL DEFAULT 'new',
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS business_inquiries_idx ON business_inquiries(business_id, created_at DESC);`);
   await query(`
     CREATE TABLE IF NOT EXISTS business_answers (
       id          SERIAL PRIMARY KEY,
