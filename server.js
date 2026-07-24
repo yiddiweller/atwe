@@ -4904,6 +4904,19 @@ async function startSecretTimers(recipientId, senderId, thread) {
     return r.rows;
   } catch (e) { return []; }
 }
+// Mark EVERY conversation read at once (chat-list ⋯ → "Mark all as read"):
+// clears all incoming unread DMs + advances every group membership's read marker.
+app.post('/api/atchat/read-all', auth.requireAuth, async (req, res) => {
+  try {
+    const dm = await db.query('UPDATE at_messages SET read_at = now() WHERE recipient_id = $1 AND read_at IS NULL', [req.user.id]);
+    await db.query('UPDATE at_group_members SET last_read_at = now() WHERE user_id = $1', [req.user.id]);
+    rtPush(req.user.id, 'read-self', {}); // clear unread on my other devices
+    // Any per-sender "message" notifications are now stale too.
+    db.query(`UPDATE notifications SET read = true WHERE user_id = $1 AND type = 'message' AND read = false`, [req.user.id])
+      .then((n) => { if (n.rowCount) rtPush(req.user.id, 'notif', {}); }).catch(() => {});
+    res.json({ ok: true, cleared: dm.rowCount });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not mark all read.' }); }
+});
 app.post('/api/atchat/with/:id/read', auth.requireAuth, async (req, res) => {
   const other = routeId(req.params.id);
   if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user id.' });
