@@ -13062,7 +13062,7 @@ app.get('/api/worker-listings', auth.requireAuth, async (req, res) => {
 /* ═══════════════════════════════════════════════
    REPORTS  —  flag a job / worker / user / post for admin review
 ═══════════════════════════════════════════════ */
-const REPORT_TYPES = ['job', 'worker', 'user', 'post', 'feedpost'];
+const REPORT_TYPES = ['job', 'worker', 'user', 'post', 'feedpost', 'review', 'business_review'];
 const REPORT_REASONS = ['illegal', 'ip', 'sensitive', 'underage', 'prostitution', 'privacy', 'illegal_sales', 'dislike', 'doxxing', 'spam', 'harassment', 'hate', 'scam', 'inappropriate', 'fake', 'other'];
 app.post('/api/reports', auth.requireAuth, rateLimit(20, 60000, 'report'), async (req, res) => {
   const targetType = String(req.body.targetType || '');
@@ -13388,6 +13388,8 @@ app.patch('/api/admin/reports/:id', auth.requirePerm('moderation'), async (req, 
       if (tt === 'job') await db.query('DELETE FROM jobs WHERE id = $1', [ti]).catch(() => {});
       else if (tt === 'worker') await db.query('DELETE FROM worker_listings WHERE user_id = $1', [ti]).catch(() => {});
       else if (tt === 'post') await db.query('DELETE FROM posts WHERE id = $1', [ti]).catch(() => {});
+      else if (tt === 'review') await db.query('DELETE FROM product_reviews WHERE id = $1', [ti]).catch(() => {});
+      else if (tt === 'business_review') await db.query('DELETE FROM business_reviews WHERE id = $1', [ti]).catch(() => {});
       // 'user' removal is intentionally manual (use Delete user) to avoid accidents.
     }
     await db.query('UPDATE reports SET status = $1 WHERE id = $2', [status, id]);
