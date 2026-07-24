@@ -14951,9 +14951,28 @@ app.get('/api/wallet', auth.requireAuth, async (req, res) => {
          FROM wallet_tx WHERE user_id = $1 AND created_at >= date_trunc('month', now())`,
       [req.user.id]
     )).rows[0] || { in_c: 0, out_c: 0 };
+    // Where this month's money WENT, bucketed for the tap-open breakdown
+    // (Cash-App-style "spending insights" without a separate analytics screen).
+    const spend = (await db.query(
+      `SELECT CASE
+                WHEN kind IN ('order','escrow_hold','gift_card') THEN 'Shopping'
+                WHEN kind = 'send' AND note ILIKE 'Order payment%' THEN 'Shopping'
+                WHEN kind = 'send' AND note ILIKE 'Split:%' THEN 'Bill splits'
+                WHEN kind = 'send' AND note ILIKE 'Tip%' THEN 'Tips'
+                WHEN kind = 'send' THEN 'Sent to people'
+                WHEN kind = 'tip' THEN 'Tips'
+                WHEN kind = 'cashout' THEN 'Cashed out to bank'
+                WHEN kind = 'pot_in' THEN 'Moved into pots'
+                ELSE 'Other'
+              END AS bucket, SUM(-delta_cents)::int AS cents
+         FROM wallet_tx
+        WHERE user_id = $1 AND delta_cents < 0 AND created_at >= date_trunc('month', now())
+        GROUP BY 1 ORDER BY SUM(-delta_cents) DESC`,
+      [req.user.id]
+    )).rows;
     res.json({
       balanceCents: me.balance_cents || 0,
-      month: { inCents: mo.in_c, outCents: mo.out_c },
+      month: { inCents: mo.in_c, outCents: mo.out_c, spend: spend.map((s) => ({ bucket: s.bucket, cents: s.cents })) },
       transactions: tx.rows.map((r) => ({
         id: r.id, kind: r.kind, deltaCents: r.delta_cents, balanceAfter: r.balance_after,
         note: r.note || null, createdAt: r.created_at,
