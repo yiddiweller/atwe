@@ -4574,6 +4574,31 @@ app.get('/api/atchat/search', auth.requireAuth, rateLimit(60, 60000, 'atchat-sea
   }
 });
 
+// "Your people": recent DM peers + accepted connections, most-recent first.
+// Powers the resting list in the group-member and broadcast pickers (before any
+// search is typed) — the WhatsApp "your contacts" analog for a network app.
+app.get('/api/contacts', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.account_type, MAX(x.last_at) AS last_at
+         FROM (
+           SELECT CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END AS uid, MAX(m.created_at) AS last_at
+             FROM at_messages m WHERE m.sender_id = $1 OR m.recipient_id = $1 GROUP BY 1
+           UNION ALL
+           SELECT CASE WHEN c.requester_id = $1 THEN c.addressee_id ELSE c.requester_id END, MAX(c.created_at)
+             FROM connections c WHERE (c.requester_id = $1 OR c.addressee_id = $1) AND c.status = 'accepted' GROUP BY 1
+         ) x
+         JOIN users u ON u.id = x.uid
+        WHERE u.id <> $1 AND u.username IS NOT NULL AND NOT COALESCE(u.deactivated, false)
+          AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $1 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = $1))
+        GROUP BY u.id, u.name, u.username, u.avatar, u.verified, u.account_type
+        ORDER BY MAX(x.last_at) DESC NULLS LAST LIMIT 100`,
+      [req.user.id]
+    );
+    res.json({ contacts: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: mediaRef(u.avatar, 'avatar', u.id), verified: !!u.verified, accountType: u.account_type === 'business' ? 'business' : 'personal' })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load contacts.' }); }
+});
+
 // List the signed-in user's conversations (latest message + unread count each).
 app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
   try {
