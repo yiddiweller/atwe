@@ -8455,6 +8455,9 @@ body.light .ac-job-tag.featured{color:var(--accent);}
 .rep-row.on .rep-radio{border-color:var(--accent);}
 .rep-row.on .rep-radio::after{content:'';position:absolute;inset:4px;border-radius:999px;background:var(--accent);}
 .ac-job-report{margin-top:16px;text-align:center;font-size:13px;color:var(--t3);cursor:pointer;padding:8px;}
+/* Job application deadline chips */
+.jd-closes{color:var(--amber);}
+.jd-closed{color:var(--red);font-weight:700;}
 /* Similar jobs under the job detail */
 .simjob-head{font-size:14px;font-weight:800;color:var(--t1);margin:18px 2px 8px;}
 .simjob-row{display:flex;align-items:center;gap:10px;width:100%;background:var(--s1);border:none;border-radius:14px;padding:12px 14px;margin-bottom:8px;cursor:pointer;text-align:start;font-family:inherit;}
@@ -13639,6 +13642,8 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <select class="jp-in jp-sel" id="jpPayPer" style="max-width:120px;"><option value="year">/ year</option><option value="month">/ month</option><option value="week">/ week</option><option value="day">/ day</option><option value="hour">/ hour</option></select>
     </div>
     <input class="jp-in" id="jpHours" type="text" placeholder="Hours / schedule (e.g. 40 hrs/week, Mon–Fri 9–5)" maxlength="60"/>
+    <label class="jp-lbl" for="jpCloses" style="display:block;margin:8px 2px 4px;font-size:12.5px;color:var(--t3);">Applications close (optional)</label>
+    <input class="jp-in" id="jpCloses" type="date"/>
     <textarea class="jp-in jp-desc" id="jpDesc" placeholder="Describe the role, requirements, responsibilities…" maxlength="6000"></textarea>
     <div class="jp-screen">
       <div class="jp-screen-head"><span>Screening questions <span class="jp-screen-opt">optional</span></span><button type="button" class="jp-screen-add" onclick="acScreenAdd()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add</button></div>
@@ -16407,7 +16412,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1430'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1431'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25022,7 +25027,9 @@ async function acOpenJob(id) {
         <button class="ac-pill-btn ac-job-savebtn" style="flex:0 0 auto;color:var(--red);" onclick="acDeleteJob(${job.id})">Delete</button>
       </div>`;
     } else {
-      const primary = job.applied
+      const primary = job.closed
+        ? `<button class="ac-pill-btn" style="flex:1;" disabled>Applications closed</button>`
+        : job.applied
         ? `<button class="ac-pill-btn" style="flex:1;" onclick="acWithdrawJob(${job.id})">Withdraw</button>`
         : `<button class="ac-pill-btn accent" style="flex:1;" onclick="acApplyJob(${job.id})">Apply now</button>`;
       const sb = `<button class="ac-pill-btn ac-job-savebtn ${job.saved ? 'on' : ''}" style="flex:0 0 auto;" onclick="acToggleSaveJobDetail(${job.id})">${job.saved ? '★ Saved' : '☆ Save'}</button>`;
@@ -25047,7 +25054,7 @@ async function acOpenJob(id) {
       ${job.industry ? `<span class="ac-job-ind">${escHtml(job.industry)}</span>` : ''}
       ${details ? `<div class="ac-jd-grid">${details}</div>` : ''}
       <div id="salInsight"></div>
-      ${!job.mine ? `<div class="ac-job-insights">${job.earlyApplicant && !job.applied ? '<span class="ac-job-early">⚡ Be an early applicant</span>' : ''}<span class="ac-jd-insight">${job.applicants || 0} applicant${job.applicants === 1 ? '' : 's'}</span><span class="ac-jd-insight">Posted ${acTime(job.created_at)}</span></div>` : ''}
+      ${!job.mine ? `<div class="ac-job-insights">${job.earlyApplicant && !job.applied && !job.closed ? '<span class="ac-job-early">⚡ Be an early applicant</span>' : ''}<span class="ac-jd-insight">${job.applicants || 0} applicant${job.applicants === 1 ? '' : 's'}</span><span class="ac-jd-insight">Posted ${acTime(job.created_at)}</span>${job.closesAt ? `<span class="ac-jd-insight ${job.closed ? 'jd-closed' : 'jd-closes'}">${job.closed ? 'Closed' : '⏳ Closes ' + new Date(job.closesAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>` : ''}</div>` : (job.closesAt ? `<div class="ac-job-insights"><span class="ac-jd-insight ${job.closed ? 'jd-closed' : 'jd-closes'}">${job.closed ? 'Applications closed' : '⏳ Applications close ' + new Date(job.closesAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span></div>` : '')}
       ${!job.mine ? `<div id="jmWrap"><button class="jm-btn" onclick="acJobMatch(${job.id})"><svg viewBox="0 0 24 24"><path d="M12 2l1.9 4.6L18.5 9l-4.6 1.9L12 15.5 10.1 10.9 5.5 9l4.6-1.4z"/></svg> See how you match. With Atwe AI</button></div>` : ''}
       ${(!job.mine && job.poster && job.poster.accountType === 'business') ? `<button class="jm-btn" onclick="acOpenReferral(${job.id})"><svg viewBox="0 0 24 24" style="fill:none;stroke:var(--accent);stroke-width:2;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Ask a connection for a referral</button>` : ''}
       ${!job.mine ? `<button class="jm-btn" onclick="acOpenInterviewPrep(${job.id})"><svg viewBox="0 0 24 24" style="fill:var(--accent);"><path d="M12 2l1.9 4.6L18.5 9l-4.6 1.9L12 15.5 10.1 10.9 5.5 9l4.6-1.4z"/></svg> Prep for the interview. With Atwe AI</button>` : ''}
@@ -25450,6 +25457,9 @@ async function acSubmitJob() {
     salaryPeriod: document.getElementById('jpPayPer').value,
     hours: document.getElementById('jpHours').value.trim(),
   };
+  // Optional deadline: applications close at the END of the chosen day (local).
+  const closes = (document.getElementById('jpCloses') || {}).value;
+  if (closes) { const d = new Date(closes + 'T23:59:59'); if (!isNaN(d.getTime())) body.closesAt = d.toISOString(); }
   const screening = (AC._jpScreening || []).filter(q => (q.text || '').trim());
   if (screening.length) body.screening = screening;
   try { await API.req('POST', '/api/jobs', body); closeOverlay('jobPost'); showNotif('Job posted!'); _searchScope = 'jobs'; acRenderSearchScopes(); acLoadJobs(''); }

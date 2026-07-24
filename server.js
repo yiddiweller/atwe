@@ -12038,6 +12038,9 @@ function mapJob(j, me) {
     earlyApplicant: j.applicants != null ? j.applicants < 10 : undefined,
     applied: !!j.applied, saved: !!j.saved, mine: j.poster_id === me,
     applicationStatus: j.application_status || null, featured: !!j.featured,
+    // Application deadline (LinkedIn/Indeed-style): closed once closes_at passes.
+    closesAt: j.closes_at || null,
+    closed: !!(j.closes_at && new Date(j.closes_at) <= new Date()),
     // Screening questions the applicant must answer — the knockout `expect` is
     // stripped here (applicants never see the required answer).
     screening: (Array.isArray(j.screening) ? j.screening : []).map((q) => ({ id: q.id, text: q.text, type: q.type, required: !!q.required })),
@@ -12068,7 +12071,7 @@ function answersMeet(screening, answers) {
   return true;
 }
 const JOB_COLS = `j.id, j.title, j.company, j.location, j.industry, j.type, j.remote, j.description, j.created_at, j.screening,
-  j.salary_min, j.salary_max, j.salary_period, j.hours,
+  j.salary_min, j.salary_max, j.salary_period, j.hours, j.closes_at,
 
   u.id AS poster_id, u.name AS poster_name, u.username AS poster_username, u.avatar AS poster_avatar, u.account_type AS poster_account_type,
   EXISTS(SELECT 1 FROM job_applications a WHERE a.job_id = j.id AND a.user_id = $1) AS applied,
@@ -12109,10 +12112,13 @@ app.post('/api/jobs', auth.requireAuth, rateLimit(20, 60000, 'job-post'), async 
       }
     }
     const screening = sanitizeScreening(req.body.screening);
+    // Optional application deadline — must be in the future.
+    let closesAt = null;
+    if (req.body.closesAt) { const d = new Date(req.body.closesAt); if (!isNaN(d.getTime()) && d.getTime() > Date.now()) closesAt = d; }
     const { rows } = await db.query(
-      `INSERT INTO jobs (posted_by, title, company, location, industry, type, remote, description, salary_min, salary_max, salary_period, hours, screening)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
-      [req.user.id, title, company, location, industry, type, remote, description, salaryMin, salaryMax, salaryPeriod, hours, JSON.stringify(screening)]
+      `INSERT INTO jobs (posted_by, title, company, location, industry, type, remote, description, salary_min, salary_max, salary_period, hours, screening, closes_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
+      [req.user.id, title, company, location, industry, type, remote, description, salaryMin, salaryMax, salaryPeriod, hours, JSON.stringify(screening), closesAt]
     );
     res.status(201).json({ id: rows[0].id });
     // Fan out saved-search alerts (best-effort, after responding).
@@ -12249,9 +12255,10 @@ app.post('/api/jobs/:id/apply', auth.requireAuth, rateLimit(40, 60000, 'job-appl
     for (const k of Object.keys(req.body.answers).slice(0, 5)) answers[String(k).slice(0, 8)] = String(req.body.answers[k]).slice(0, 200);
   }
   try {
-    const j = await db.query('SELECT posted_by FROM jobs WHERE id = $1', [id]);
+    const j = await db.query('SELECT posted_by, closes_at FROM jobs WHERE id = $1', [id]);
     if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
     if (j.rows[0].posted_by === req.user.id) return res.status(400).json({ error: 'This is your own listing.' });
+    if (j.rows[0].closes_at && new Date(j.rows[0].closes_at) <= new Date()) return res.status(400).json({ error: 'Applications for this job have closed.' });
     const r = await db.query(
       `INSERT INTO job_applications (job_id, user_id, note, resume_id, resume_title, resume_data, answers) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`,
       [id, req.user.id, note, resumeId, resumeTitle, resumeData ? JSON.stringify(resumeData) : null, answers ? JSON.stringify(answers) : null]
