@@ -7383,6 +7383,9 @@ body.light .ac-adcard{box-shadow:0 4px 16px rgba(15,20,25,.07);}
 .ac-trend-n{font-size:11.5px;color:var(--t3);}
 
 /* New-post composer */
+/* ALT chip on post images that carry a description (X-style) */
+.ac-img-wrap{position:relative;}
+.ac-alt-badge{position:absolute;right:10px;bottom:10px;background:rgba(0,0,0,.72);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:800;letter-spacing:.4px;padding:3px 7px;cursor:pointer;font-family:inherit;}
 /* Reply-sort chips on the post detail (Top · Newest) */
 .reply-head{display:flex;align-items:center;justify-content:space-between;}
 .reply-sort{display:inline-flex;gap:6px;}
@@ -13982,6 +13985,15 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Image description (ALT chip on a post image) -->
+<div class="overlay hidden" id="altTextView" onclick="if(event.target===this)closeOverlay('altTextView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Image description">
+    <button class="sheet-close" onclick="closeOverlay('altTextView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Image description</div>
+    <div class="ac-disc-sub" id="altTextBody" style="margin:4px 0 8px;white-space:pre-wrap;"></div>
+  </div>
+</div>
+
 <!-- Wallet transaction detail (tap a history row) -->
 <div class="overlay hidden" id="walletTxView" onclick="if(event.target===this)closeOverlay('walletTxView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Transaction details">
@@ -16580,7 +16592,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1475'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1476'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -29010,6 +29022,12 @@ function acCarScroll(el) {
   const i = Math.round(el.scrollLeft / el.clientWidth);
   [...dots.children].forEach((d, j) => d.classList.toggle('on', j === i));
 }
+// Show an image's alt description in a small sheet (tapping the ALT chip).
+function acShowAltText(text) {
+  const box = document.getElementById('altTextBody');
+  if (box) box.textContent = text || '';
+  showOverlay('altTextView');
+}
 function acPostMedia(p, inFeed) {
   const stop = inFeed ? 'event.stopPropagation();' : '';
   const alt = p.imageAlt ? escHtml(p.imageAlt) : '';
@@ -29021,7 +29039,12 @@ function acPostMedia(p, inFeed) {
     const cells = imgs.slice(0, 4).map((src, i) => `<img src="${src}" alt="${i === 0 ? alt : ''}" loading="lazy" decoding="async" onclick="${stop}openImageViewer(this.src, this, ${p.id})"/>`).join('');
     return `<div class="ac-imggrid n${n}" onclick="${stop}">${cells}</div>`;
   }
-  if (imgs.length === 1) return `<img class="ac-post-img" src="${imgs[0]}" alt="${alt}" loading="lazy" decoding="async" onload="acFitPostImg(this)" onclick="${stop}openImageViewer(this.src, this, ${p.id})"/>`;
+  // X-style ALT chip: images that carry a description get a small badge — tap to
+  // read it (useful for everyone, not just screen readers).
+  if (imgs.length === 1) {
+    const img = `<img class="ac-post-img" src="${imgs[0]}" alt="${alt}" loading="lazy" decoding="async" onload="acFitPostImg(this)" onclick="${stop}openImageViewer(this.src, this, ${p.id})"/>`;
+    return alt ? `<div class="ac-img-wrap">${img}<button class="ac-alt-badge" onclick="${stop}acShowAltText(${jsAttr(p.imageAlt)})" aria-label="Image description">ALT</button></div>` : img;
+  }
   if (p.media && p.mediaKind === 'video') return `<div class="ac-vid-wrap" onclick="${stop}"><video class="ac-post-img ac-post-vid" src="${p.media}" controls preload="metadata" playsinline onloadedmetadata="acVidDur(this)"></video><span class="ac-vid-dur" aria-hidden="true"></span></div>`;
   if (p.media && p.mediaKind === 'file') {
     const name = p.mediaName || 'Document';
