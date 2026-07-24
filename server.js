@@ -8999,14 +8999,19 @@ app.get('/api/social/follows/:username', auth.requireAuth, async (req, res) => {
     if (!t.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const uid = t.rows[0].id;
     if (uid !== req.user.id && await blockedEither(req.user.id, uid)) return res.status(404).json({ error: 'User not found.' });
-    // followers → people who follow uid; following → people uid follows.
+    // followers → people who follow uid; following → people uid follows. Each row
+    // carries whether the VIEWER follows that person (drives the list's buttons).
     const sql = type === 'followers'
-      ? `SELECT u.id, u.name, u.username, u.avatar, u.verified FROM follows f JOIN users u ON u.id = f.follower_id
+      ? `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.account_type,
+                EXISTS(SELECT 1 FROM follows f2 WHERE f2.follower_id = $2 AND f2.following_id = u.id) AS i_follow
+         FROM follows f JOIN users u ON u.id = f.follower_id
          WHERE f.following_id = $1 AND u.username IS NOT NULL AND NOT u.deactivated ORDER BY lower(u.name) LIMIT 200`
-      : `SELECT u.id, u.name, u.username, u.avatar, u.verified FROM follows f JOIN users u ON u.id = f.following_id
+      : `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.account_type,
+                EXISTS(SELECT 1 FROM follows f2 WHERE f2.follower_id = $2 AND f2.following_id = u.id) AS i_follow
+         FROM follows f JOIN users u ON u.id = f.following_id
          WHERE f.follower_id = $1 AND u.username IS NOT NULL AND NOT u.deactivated ORDER BY lower(u.name) LIMIT 200`;
-    const { rows } = await db.query(sql, [uid]);
-    res.json({ users: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified })) });
+    const { rows } = await db.query(sql, [uid, req.user.id]);
+    res.json({ users: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, accountType: u.account_type === 'business' ? 'business' : 'personal', iFollow: !!u.i_follow, isMe: u.id === req.user.id })) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -9286,6 +9291,16 @@ app.delete('/api/social/follow/:id', auth.requireAuth, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
+});
+// Remove a FOLLOWER (X-style, the reverse direction): they stop following you.
+// Deliberately silent — no notification, and they may follow again later.
+app.delete('/api/social/followers/:id', auth.requireAuth, rateLimit(60, 60000, 'rm-follower'), async (req, res) => {
+  const follower = routeId(req.params.id);
+  if (!Number.isInteger(follower)) return res.status(400).json({ error: 'Invalid user id.' });
+  try {
+    await db.query('DELETE FROM follows WHERE follower_id = $1 AND following_id = $2', [follower, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove them.' }); }
 });
 /* ═══════════════════════════════════════════════
    CONNECTIONS  —  the mutual professional graph
