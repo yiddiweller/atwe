@@ -2583,6 +2583,7 @@ async function initSchema() {
   // Professional profile: a short headline + a work-experience timeline. An entry
   // may link to a company page (company_id), which powers the page's "People here".
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS headline TEXT;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pronouns TEXT;`); // e.g. she/her — shown next to the handle
   await query(`
     CREATE TABLE IF NOT EXISTS experiences (
       id         SERIAL PRIMARY KEY,
