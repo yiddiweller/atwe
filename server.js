@@ -8797,6 +8797,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
                 (SELECT status FROM connections WHERE ((requester_id = $2 AND addressee_id = $1) OR (requester_id = $1 AND addressee_id = $2)) LIMIT 1) AS conn_status,
                 (SELECT requester_id FROM connections WHERE ((requester_id = $2 AND addressee_id = $1) OR (requester_id = $1 AND addressee_id = $2)) LIMIT 1) AS conn_requester,
                 EXISTS(SELECT 1 FROM follows WHERE follower_id = $2 AND following_id = $1) AS is_following,
+                EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2) AS follows_me,
                 EXISTS(SELECT 1 FROM blocks WHERE blocker_id = $2 AND blocked_id = $1) AS is_blocked,
                 EXISTS(SELECT 1 FROM post_notify WHERE user_id = $2 AND target_id = $1) AS is_notifying`,
         [t.id, req.user.id]
@@ -8923,6 +8924,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       subPrice: t.sub_price_cents || 0, subBlurb: t.sub_blurb || null, isSubscribed, subscriberCount,
       subTiers: tiers, myTierId,
       isFollowing: counts.rows[0].is_following,
+      followsYou: counts.rows[0].follows_me && t.id !== req.user.id,
       isBlocked: counts.rows[0].is_blocked,
       isNotifying: counts.rows[0].is_notifying,
       isMe: t.id === req.user.id,
