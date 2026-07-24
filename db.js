@@ -1867,6 +1867,8 @@ async function initSchema() {
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS article_title TEXT;`);
   // Document posts: the original filename for a document attachment (media_kind='file').
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS media_name TEXT;`);
+  // Pinned comment: a parent post can pin one of its replies to the top (by reply id).
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS pinned_reply_id INTEGER;`);
   await query(`
     CREATE TABLE IF NOT EXISTS post_unlocks (
       post_id    INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
