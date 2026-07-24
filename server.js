@@ -18994,10 +18994,14 @@ app.get('/api/products/:id/reviews', auth.requireAuth, async (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   try {
     const { rows } = await db.query(
-      `SELECT r.id, r.rating, r.body, r.media, r.created_at, r.reviewer_id, u.name AS rn, u.username AS ru, u.avatar AS ra, u.verified AS rv
-       FROM product_reviews r JOIN users u ON u.id = r.reviewer_id WHERE r.product_id = $1 ORDER BY r.created_at DESC LIMIT 200`, [id]);
+      `SELECT r.id, r.rating, r.body, r.media, r.created_at, r.reviewer_id, u.name AS rn, u.username AS ru, u.avatar AS ra, u.verified AS rv,
+              (SELECT COUNT(*) FROM product_review_helpful h WHERE h.review_id = r.id) AS helpful_count,
+              EXISTS(SELECT 1 FROM product_review_helpful h WHERE h.review_id = r.id AND h.user_id = $2) AS helpful_by_me
+       FROM product_reviews r JOIN users u ON u.id = r.reviewer_id WHERE r.product_id = $1
+       ORDER BY (SELECT COUNT(*) FROM product_review_helpful h WHERE h.review_id = r.id) DESC, r.created_at DESC LIMIT 200`, [id, req.user.id]);
     const sum = (await db.query('SELECT COUNT(*)::int AS count, COALESCE(ROUND(AVG(rating)::numeric,1),0) AS avg FROM product_reviews WHERE product_id = $1', [id])).rows[0];
     const reviews = rows.map((r) => ({ id: r.id, rating: r.rating, body: r.body || '', media: Array.isArray(r.media) ? r.media : [], createdAt: r.created_at, mine: r.reviewer_id === req.user.id,
+      helpfulCount: Number(r.helpful_count || 0), helpfulByMe: !!r.helpful_by_me,
       reviewer: { id: r.reviewer_id, name: r.rn, username: r.ru, avatar: r.ra || null, verified: !!r.rv } }));
     const mine = reviews.find((r) => r.mine) || null;
     const purchased = await hasPurchased(req.user.id, id);
@@ -19034,6 +19038,21 @@ app.delete('/api/products/:id/reviews', auth.requireAuth, async (req, res) => {
     await db.query('DELETE FROM product_reviews WHERE product_id = $1 AND reviewer_id = $2', [id, req.user.id]);
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove your review.' }); }
+});
+// Toggle "this review was helpful" (Amazon-style). Can't vote on your own review.
+app.post('/api/products/reviews/:id/helpful', auth.requireAuth, async (req, res) => {
+  const rid = routeId(req.params.id);
+  if (!Number.isInteger(rid)) return res.status(400).json({ error: 'Invalid id.' });
+  const on = req.body.on !== false;
+  try {
+    const r = (await db.query('SELECT reviewer_id FROM product_reviews WHERE id = $1', [rid])).rows[0];
+    if (!r) return res.status(404).json({ error: 'Review not found.' });
+    if (r.reviewer_id === req.user.id) return res.status(400).json({ error: 'You can’t mark your own review helpful.' });
+    if (on) await db.query('INSERT INTO product_review_helpful (review_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [rid, req.user.id]);
+    else await db.query('DELETE FROM product_review_helpful WHERE review_id = $1 AND user_id = $2', [rid, req.user.id]);
+    const count = Number((await db.query('SELECT COUNT(*) AS c FROM product_review_helpful WHERE review_id = $1', [rid])).rows[0].c);
+    res.json({ ok: true, helpfulCount: count, helpfulByMe: on });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
 });
 // Two-way reviews: a seller rates the BUYER after an order completes. One per order;
 // feeds the buyer's unified trust score. Order must be in a completed state.
