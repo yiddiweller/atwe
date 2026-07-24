@@ -6555,6 +6555,13 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .wf-chip.on{background:var(--accent-dim);color:var(--accent);}
 /* "This month" activity strip atop the wallet history (green in · plain out) */
 .wm-strip{display:flex;align-items:center;gap:12px;background:var(--s1);border-radius:14px;padding:10px 14px;margin-bottom:10px;font-size:13.5px;}
+/* Tap-open "where the money went" breakdown under the month strip. */
+.wm-spend{background:var(--s1);border-radius:14px;padding:10px 14px;margin:-4px 0 10px;}
+.wm-srow{display:flex;align-items:center;gap:10px;padding:5px 0;font-size:12.5px;}
+.wm-sk{flex:0 0 118px;color:var(--t2);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.wm-sbar{flex:1;height:7px;border-radius:99px;background:var(--s3);overflow:hidden;}
+.wm-sbar span{display:block;height:100%;border-radius:99px;background:var(--accent);}
+.wm-sv{flex:0 0 auto;font-weight:700;color:var(--t1);}
 .wm-lbl{color:var(--t3);font-weight:600;margin-inline-end:auto;}
 .wm-in{color:var(--green);font-weight:700;}
 .wm-out{color:var(--t1);font-weight:700;}
@@ -16795,7 +16802,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1527'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1528'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -33741,8 +33748,15 @@ function acRenderWalletHistory() {
   // "This month" activity strip (Cash-App-style), server-computed so a busy
   // month is never undercounted by the 60-row history window.
   const mo = AC._walletMonth;
+  // Tap the month strip → where the money went (Cash-App-style breakdown).
+  const hasSpend = mo && Array.isArray(mo.spend) && mo.spend.length > 0;
+  const spendRows = hasSpend ? (() => {
+    const max = Math.max(...mo.spend.map(s => s.cents), 1);
+    return `<div class="wm-spend ${AC._wmOpen ? '' : 'hidden'}" id="wmSpend">${mo.spend.map(s =>
+      `<div class="wm-srow"><span class="wm-sk">${escHtml(s.bucket)}</span><span class="wm-sbar"><span style="width:${Math.max(6, Math.round(s.cents / max * 100))}%"></span></span><span class="wm-sv">$${(s.cents / 100).toFixed(2)}</span></div>`).join('')}</div>`;
+  })() : '';
   const moBar = (mo && (mo.inCents || mo.outCents))
-    ? `<div class="wm-strip"><span class="wm-lbl">${new Date().toLocaleDateString([], { month: 'long' })}</span><span class="wm-in">+${acMoneyFmt(mo.inCents)}</span><span class="wm-out">−${acMoneyFmt(mo.outCents)}</span></div>`
+    ? `<div class="wm-strip" ${hasSpend ? `onclick="AC._wmOpen=!AC._wmOpen;acRenderWalletHistory()" style="cursor:pointer;" role="button" aria-label="Show where the money went"` : ''}><span class="wm-lbl">${new Date().toLocaleDateString([], { month: 'long' })}${hasSpend ? ' ›' : ''}</span><span class="wm-in">+${acMoneyFmt(mo.inCents)}</span><span class="wm-out">−${acMoneyFmt(mo.outCents)}</span></div>${spendRows}`
     : '';
   if (!tx.length) { h.innerHTML = moBar + '<div class="ac-empty" style="padding:20px;">No transactions yet. Add money or send some to a friend.</div>'; return; }
   const f = AC._walletFilter || 'all';
