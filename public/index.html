@@ -16532,7 +16532,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1462'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1463'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -32534,7 +32534,7 @@ function acRenderProfile(d, mine) {
       ${(!mine && d.mutualConnections) ? `<div class="ac-prof-mutual"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>${d.mutualConnections} mutual connection${d.mutualConnections === 1 ? '' : 's'}</div>` : ''}
       ${!mine ? acFollowedByLine({ followedBy: d.followedBy, followedByCount: d.followedByCount }) : ''}
       ${acProfNote(u)}
-      ${u.bio ? `<div class="ac-prof-bio">${escHtml(u.bio)}</div>` : ''}
+      ${u.bio ? `<div class="ac-prof-bio">${acLinkifyPost(u.bio)}</div>` : ''}
       ${acProfMeta(u)}
       ${acTrustChip(d.trustScore)}
       ${acProfMore(u)}
