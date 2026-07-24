@@ -4521,7 +4521,7 @@ app.post('/api/messages', auth.requireAuth, rateLimit(20, 60000), async (req, re
    Requires the signed-in user to have a @username.
 ═══════════════════════════════════════════════ */
 async function chatIdentity(userId) {
-  const { rows } = await db.query('SELECT id, name, username, avatar, verified FROM users WHERE id = $1', [userId]);
+  const { rows } = await db.query('SELECT id, name, username, avatar, verified, account_type FROM users WHERE id = $1', [userId]);
   return rows[0] || null;
 }
 // Strict numeric id from a route param (rejects "5abc" etc.).
@@ -4993,7 +4993,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
       }
     } catch (e) { /* permission extras are best-effort */ }
     res.json({
-      peer: { id: peer.id, name: peer.name, username: peer.username, avatar: mediaRef(peer.avatar, 'avatar', peer.id) },
+      peer: { id: peer.id, name: peer.name, username: peer.username, avatar: mediaRef(peer.avatar, 'avatar', peer.id), accountType: peer.account_type === 'business' ? 'business' : 'personal' },
       canMessage, request, incomingRequest, connectGated, thread,
       disappearing: await dmDisappearSeconds(req.user.id, other),
       messages: rows.map((m) => {
