@@ -956,6 +956,8 @@ body.rtl .intro-benefits{text-align:end;}
 .ac-pill-btn.accent{
   box-shadow:none;
 }
+/* Compact pills inside follower/following list rows (X-style). */
+.fl-btn{flex:0 0 auto;padding:6px 14px;font-size:12.5px;}
 .ac-pill-btn.accent::after{
   content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
   background:radial-gradient(100px 76px at var(--mx,50%) var(--my,120%),
@@ -16771,7 +16773,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1521'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1522'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -43469,12 +43471,47 @@ async function acOpenFollowList(username, type) {
   el.innerHTML = acSkelRows(5);
   try {
     const { users } = await API.req('GET', '/api/social/follows/' + encodeURIComponent(username) + '?type=' + type);
+    // Follow/Following state per row (X-style); on YOUR OWN followers list each
+    // row also gets Remove — they quietly stop following you, and aren't told.
+    const myList = S.user && S.user.username && username.toLowerCase() === S.user.username.toLowerCase();
     el.innerHTML = users.length
-      ? users.map(u => `<div class="ac-item" onclick="closeOverlay('followListOverlay');appTab('home');acGoProfile('${u.username}')">
-          ${acAvatarHtml(u.name, u.avatar)}
-          <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</span></div><div class="ac-item-last">@${escHtml(u.username)}</div></div></div>`).join('')
+      ? users.map(u => {
+        const btn = u.isMe ? '' : (u.iFollow
+          ? `<button class="ac-pill-btn fl-btn" onclick="event.stopPropagation();acFlFollow(this, ${u.id}, false)">Following</button>`
+          : `<button class="ac-pill-btn accent fl-btn" onclick="event.stopPropagation();acFlFollow(this, ${u.id}, true)">Follow</button>`);
+        const remove = (myList && type === 'followers' && !u.isMe)
+          ? `<button class="ac-pill-btn fl-btn" style="color:var(--red);" onclick="event.stopPropagation();acRemoveFollower(${u.id}, ${jsAttr(u.name)}, this)">Remove</button>` : '';
+        return `<div class="ac-item" onclick="closeOverlay('followListOverlay');appTab('home');acGoProfile('${u.username}')">
+          ${acAvatarHtml(u.name, u.avatar, 'user-avatar', u.accountType === 'business')}
+          <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</span></div><div class="ac-item-last">@${escHtml(u.username)}</div></div>
+          <span style="display:flex;gap:7px;flex:0 0 auto;">${btn}${remove}</span></div>`;
+      }).join('')
       : `<div class="ac-empty">${type === 'followers' ? 'No followers yet.' : 'Not following anyone yet.'}</div>`;
   } catch (e) { acErr(el, ''); }
+}
+// Follow / unfollow straight from a list row (button morphs in place).
+async function acFlFollow(btn, id, on) {
+  try {
+    await API.req(on ? 'POST' : 'DELETE', '/api/social/follow/' + id, on ? {} : undefined);
+    btn.textContent = on ? 'Following' : 'Follow';
+    btn.classList.toggle('accent', !on);
+    btn.setAttribute('onclick', `event.stopPropagation();acFlFollow(this, ${id}, ${on ? 'false' : 'true'})`);
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+// Remove a follower (X-style): they stop following you; they are NOT notified
+// and can follow again later — it's quieter than a block.
+async function acRemoveFollower(id, name, btn) {
+  const ok = await appConfirm({
+    title: 'Remove this follower?',
+    message: (name || 'They') + ' will stop following you. They won’t be told, and they can follow you again later.',
+    confirmText: 'Remove', danger: true,
+  });
+  if (!ok) return;
+  try {
+    await API.req('DELETE', '/api/social/followers/' + id);
+    const row = btn.closest('.ac-item'); if (row) row.remove();
+    showNotif('Removed from your followers.');
+  } catch (e) { showNotif(e.message || 'Could not remove.'); }
 }
 function acOpenUserActions(anchor, id, showFollow, postId) {
   const a = (AC._authors || {})[id];
