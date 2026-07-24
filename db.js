@@ -942,6 +942,40 @@ async function initSchema() {
   // that viewers tap to open — great for businesses driving traffic.
   await query(`ALTER TABLE stories ADD COLUMN IF NOT EXISTS link_url TEXT;`);
   await query(`ALTER TABLE stories ADD COLUMN IF NOT EXISTS link_label TEXT;`);
+  // Poll sticker (IG-style): a Daily can carry one 2-option poll. Question + exactly
+  // two option labels live on the story; votes are one-per-viewer.
+  await query(`ALTER TABLE stories ADD COLUMN IF NOT EXISTS poll_q TEXT;`);
+  await query(`ALTER TABLE stories ADD COLUMN IF NOT EXISTS poll_opts TEXT[];`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS story_poll_votes (
+      story_id INTEGER NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+      voter_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      opt      SMALLINT NOT NULL,
+      voted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (story_id, voter_id)
+    );
+  `);
+  // Question sticker (IG-style): a Daily can invite text responses. Prompt lives on the
+  // story; responses land in the author's inbox (one row per responder, latest wins).
+  await query(`ALTER TABLE stories ADD COLUMN IF NOT EXISTS question_prompt TEXT;`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS story_question_responses (
+      id          SERIAL PRIMARY KEY,
+      story_id    INTEGER NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+      responder_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body        TEXT NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (story_id, responder_id)
+    );
+  `);
+  // Mute a person's Daily: hide their stories from your tray without unfollowing.
+  await query(`
+    CREATE TABLE IF NOT EXISTS story_mutes (
+      muter_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      muted_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (muter_id, muted_id)
+    );
+  `);
   await query(`
     CREATE TABLE IF NOT EXISTS close_friends (
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

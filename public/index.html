@@ -6100,6 +6100,7 @@ body.light .order-success{background:rgba(255,255,255,.82);}
 .story-ring .user-avatar{width:54px;height:54px;border:2px solid var(--bg);}
 .story-ring.unseen{background:linear-gradient(135deg,var(--accent),var(--violet),var(--rose));}
 .story-ring.seen{background:var(--b2);}
+.story-cell.muted{opacity:.5;}
 .story-ring.add{background:var(--s2);}
 .story-add{position:absolute;right:-1px;bottom:-1px;width:20px;height:20px;border-radius:50%;background:var(--accent);color:var(--accent-tint);display:grid;place-items:center;font-size:15px;font-weight:700;border:2px solid var(--bg);}
 .story-name{font-size:11.5px;color:var(--t2);max-width:66px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -6248,6 +6249,34 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 /* Daily link sticker — composer box + the tappable viewer chip */
 .st-link-box{margin-top:2px;}
 .st-link-rm{background:none;border:none;color:var(--t3);font-size:13px;cursor:pointer;padding:8px 0 0;}
+.st-poll-opts{display:flex;gap:8px;}
+.st-poll-opts .jp-in{flex:1;}
+/* Daily poll + question stickers in the viewer (centered cards on the story) */
+.story-sticker-wrap{position:absolute;left:0;right:0;bottom:150px;z-index:3;display:flex;justify-content:center;padding:0 20px;pointer-events:none;}
+.story-poll,.story-qbox{pointer-events:auto;width:100%;max-width:320px;background:rgba(255,255,255,.14);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-radius:22px;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,.32);}
+.story-poll-q,.story-qbox-q{color:#fff;font-size:16px;font-weight:800;text-align:center;margin-bottom:12px;text-shadow:0 1px 3px rgba(0,0,0,.35);word-break:break-word;}
+.story-poll-opts{display:flex;flex-direction:column;gap:9px;}
+.story-poll-opt{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.95);color:#111114;font-size:15px;font-weight:700;padding:12px 16px;border:none;border-radius:14px;cursor:pointer;transition:transform var(--t-fast) var(--ease);}
+.story-poll-opt:active{transform:scale(.98);}
+.story-poll-opt.voted{cursor:default;}
+.story-poll-opt.mine{box-shadow:inset 0 0 0 2px var(--accent);}
+.story-poll-fill{position:absolute;left:0;top:0;bottom:0;background:rgba(0,136,255,.22);z-index:0;transition:width var(--t-slow) var(--ease);}
+.story-poll-txt,.story-poll-pct{position:relative;z-index:1;}
+.story-poll-pct{font-variant-numeric:tabular-nums;color:#111114;}
+.story-poll-total{color:rgba(255,255,255,.9);font-size:12.5px;text-align:center;margin-top:10px;text-shadow:0 1px 2px rgba(0,0,0,.4);}
+.story-qbox-row{display:flex;gap:8px;align-items:center;}
+.story-qbox-in{flex:1;background:rgba(255,255,255,.95);border:none;border-radius:var(--r-pill);color:#111114;font-size:15px;padding:11px 15px;outline:none;}
+.story-qbox-send{flex-shrink:0;width:40px;height:40px;border-radius:50%;border:none;background:var(--primary);color:var(--on-primary);cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.story-qbox-send svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.story-qbox-sent{color:#fff;font-size:13px;text-align:center;margin-top:9px;opacity:.9;text-shadow:0 1px 2px rgba(0,0,0,.4);}
+.story-qbox-count{margin-top:10px;width:100%;background:rgba(255,255,255,.95);color:#111114;border:none;border-radius:var(--r-pill);font-size:14px;font-weight:700;padding:10px;cursor:pointer;}
+/* Question-sticker responses inbox */
+.qresp-list{display:flex;flex-direction:column;gap:2px;max-height:60vh;overflow-y:auto;}
+.qresp-row{display:flex;gap:11px;align-items:flex-start;padding:12px 2px;border-bottom:1px solid var(--bg);}
+.qresp-txt{min-width:0;flex:1;}
+.qresp-name{font-size:14px;font-weight:700;color:var(--t1);display:inline-flex;align-items:center;cursor:pointer;}
+.qresp-body{font-size:14.5px;color:var(--t1);line-height:1.45;margin-top:2px;white-space:pre-wrap;word-break:break-word;}
+.qresp-empty{color:var(--t3);text-align:center;padding:28px 0;font-size:14.5px;}
 .story-link-wrap{position:absolute;left:0;right:0;bottom:120px;z-index:3;display:flex;justify-content:center;padding:0 16px;pointer-events:none;}
 .story-link-chip{pointer-events:auto;display:inline-flex;align-items:center;gap:8px;max-width:80%;background:rgba(255,255,255,.94);color:#111114;font-size:14.5px;font-weight:700;padding:11px 18px;border-radius:var(--r-pill);cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.3);}
 .story-link-chip svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;}
@@ -13910,6 +13939,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <div class="story-bars" id="storyBars"></div>
     <div class="story-head">
       <div class="story-head-user" id="storyHeadUser" onclick="acStoryGoProfile()"></div>
+      <button class="story-x" id="storyMoreBtn" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()" onclick="event.stopPropagation();acStoryMoreMenu()" aria-label="More" style="display:none"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
       <button class="story-x" onclick="acStoryClose()" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="story-body" id="storyBody"></div>
@@ -13945,6 +13975,19 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <input class="jp-in" id="stLinkLabel" type="text" maxlength="30" placeholder="Button text (optional, e.g. Shop now)" style="margin-top:8px;"/>
       <button class="st-link-rm" onclick="acStoryLinkToggle(false)" type="button">Remove link</button>
     </div>
+    <!-- Poll sticker: a 2-option poll on the Daily -->
+    <button class="ac-compose-prodadd" id="stPollAddBtn" style="margin-top:8px;" onclick="acStoryPollToggle(true)" type="button">＋ Add a poll</button>
+    <div class="st-link-box hidden" id="stPollBox">
+      <input class="jp-in" id="stPollQ" type="text" maxlength="80" placeholder="Ask a question…" style="margin-top:8px;"/>
+      <div class="st-poll-opts"><input class="jp-in" id="stPollA" type="text" maxlength="30" placeholder="Option 1" value="Yes"/><input class="jp-in" id="stPollB" type="text" maxlength="30" placeholder="Option 2" value="No"/></div>
+      <button class="st-link-rm" onclick="acStoryPollToggle(false)" type="button">Remove poll</button>
+    </div>
+    <!-- Question sticker: invite text responses -->
+    <button class="ac-compose-prodadd" id="stQAddBtn" style="margin-top:8px;" onclick="acStoryQToggle(true)" type="button">＋ Add a question box</button>
+    <div class="st-link-box hidden" id="stQBox">
+      <input class="jp-in" id="stQPrompt" type="text" maxlength="80" placeholder="Ask me anything…" style="margin-top:8px;"/>
+      <button class="st-link-rm" onclick="acStoryQToggle(false)" type="button">Remove question</button>
+    </div>
     <!-- Audience: all followers, or just close friends -->
     <div class="st-aud-row">
       <button class="st-aud on" id="stAudAll" onclick="acStoryAud('all')"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>Followers</button>
@@ -13970,6 +14013,15 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <button class="st-aud" id="a2dAudClose" onclick="acA2dAud('close')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="8.5 12 11 14.5 15.5 9.5"/></svg>Close friends</button>
     </div>
     <button class="ac-pill-btn accent jp-submit" id="a2dPostBtn" onclick="acDoAddToStory()">Share to Daily</button>
+  </div>
+</div>
+
+<!-- Daily question-sticker responses (author inbox) -->
+<div class="overlay hidden" id="storyResponses" onclick="if(event.target===this)closeOverlay('storyResponses')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Responses">
+    <button class="sheet-close" onclick="closeOverlay('storyResponses')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="storyRespPrompt">Responses</div>
+    <div id="storyRespList" class="qresp-list"></div>
   </div>
 </div>
 
@@ -16195,7 +16247,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1404'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1405'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25506,7 +25558,7 @@ function notifRow(n, i) {
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
-  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item' };
+  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', story_answer: 'responded to your question', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -38154,8 +38206,8 @@ function acRenderStoryTray() {
       <span class="story-ring ${mine ? 'seen' : 'add'}">${meAva}${mine ? '' : '<span class="story-add">+</span>'}</span>
       <span class="story-name">Your Daily</span>
     </button>`;
-  const cells = others.map(t => `<button class="story-cell" onclick="acOpenStory(${t.user.id})">
-      <span class="story-ring ${t.hasUnseen ? 'unseen' : 'seen'}">${acAvatarHtml(t.user.name, t.user.avatar, 'user-avatar', t.user.accountType === 'business')}</span>
+  const cells = others.map(t => `<button class="story-cell ${t.muted ? 'muted' : ''}" onclick="acOpenStory(${t.user.id})">
+      <span class="story-ring ${t.muted ? 'seen' : (t.hasUnseen ? 'unseen' : 'seen')}">${acAvatarHtml(t.user.name, t.user.avatar, 'user-avatar', t.user.accountType === 'business')}</span>
       <span class="story-name">${escHtml((t.user.name || '').split(' ')[0])}</span>
     </button>`).join('');
   // Live people ride in the SAME row, on the LEFT (going live is the more urgent thing),
@@ -38177,7 +38229,7 @@ function acOpenStoryComposer() {
   document.getElementById('stBgRow').innerHTML = _STORY_BGS.map(b => `<button class="story-bg ${b.id === 'g1' ? 'on' : ''}" data-bg="${b.id}" style="background:${b.css}" onclick="acStoryBgPick('${b.id}')"></button>`).join('');
   document.getElementById('stTextPrev').style.background = _storyBgCss('g1');
   AC._postProducts = []; acRenderPostProdChip(); // fresh product tags per composer open
-  acStoryLinkToggle(false); // fresh (collapsed, cleared) link sticker per open
+  acStoryLinkToggle(false); acStoryPollToggle(false); acStoryQToggle(false); // fresh stickers per open
   acStoryTab('photo');
   showOverlay('storyCompose');
 }
@@ -38214,6 +38266,20 @@ function acStoryLinkToggle(on) {
   document.getElementById('stLinkAddBtn').classList.toggle('hidden', on);
   if (!on) { document.getElementById('stLinkUrl').value = ''; document.getElementById('stLinkLabel').value = ''; }
   else setTimeout(() => document.getElementById('stLinkUrl').focus(), 60);
+}
+// Daily poll sticker composer.
+function acStoryPollToggle(on) {
+  document.getElementById('stPollBox').classList.toggle('hidden', !on);
+  document.getElementById('stPollAddBtn').classList.toggle('hidden', on);
+  if (!on) { document.getElementById('stPollQ').value = ''; document.getElementById('stPollA').value = 'Yes'; document.getElementById('stPollB').value = 'No'; }
+  else setTimeout(() => document.getElementById('stPollQ').focus(), 60);
+}
+// Daily question sticker composer.
+function acStoryQToggle(on) {
+  document.getElementById('stQBox').classList.toggle('hidden', !on);
+  document.getElementById('stQAddBtn').classList.toggle('hidden', on);
+  if (!on) document.getElementById('stQPrompt').value = '';
+  else setTimeout(() => document.getElementById('stQPrompt').focus(), 60);
 }
 
 // ── Add a post to your Daily (re-share a post as a Story card) ──
@@ -38502,6 +38568,19 @@ async function acStoryPost() {
     const lu = (document.getElementById('stLinkUrl').value || '').trim();
     if (lu) { body.linkUrl = lu; const ll = (document.getElementById('stLinkLabel').value || '').trim(); if (ll) body.linkLabel = ll; }
   }
+  // Poll sticker (needs a question + both options).
+  if (!document.getElementById('stPollBox').classList.contains('hidden')) {
+    const q = (document.getElementById('stPollQ').value || '').trim();
+    const a = (document.getElementById('stPollA').value || '').trim();
+    const bo = (document.getElementById('stPollB').value || '').trim();
+    if (q && a && bo) body.poll = { q, a, b: bo };
+    else if (q || a !== 'Yes' || bo !== 'No') { showNotif('A poll needs a question and both options.'); if (btn) { btn.disabled = false; btn.textContent = 'Share to Daily'; } return; }
+  }
+  // Question sticker (needs a prompt).
+  if (!document.getElementById('stQBox').classList.contains('hidden')) {
+    const p = (document.getElementById('stQPrompt').value || '').trim();
+    if (p) body.questionPrompt = p;
+  }
   if (btn) { btn.disabled = true; btn.textContent = 'Sharing…'; }
   try {
     await API.req('POST', '/api/stories', body);
@@ -38544,6 +38623,66 @@ function acStoryOpenLink(storyId) {
   const url = AC._storyLinks && AC._storyLinks[storyId];
   if (url) window.open(url, '_blank', 'noopener');
 }
+// ── Daily poll sticker (viewer) ──
+function acStoryPollHtml(it) {
+  if (!it.poll) return '';
+  const p = it.poll, showResults = (p.myVote != null) || it.mine, total = p.total || 0;
+  const guard = 'onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()"';
+  const opts = p.options.map((o, i) => {
+    const pct = total ? Math.round(o.votes / total * 100) : 0;
+    if (showResults) return `<div class="story-poll-opt voted ${p.myVote === i ? 'mine' : ''}"><div class="story-poll-fill" style="width:${pct}%"></div><span class="story-poll-txt">${escHtml(o.text)}</span><span class="story-poll-pct">${pct}%</span></div>`;
+    return `<button class="story-poll-opt" ${guard} onclick="event.stopPropagation();acStoryPollVote(${it.id},${i})">${escHtml(o.text)}</button>`;
+  }).join('');
+  const totalLine = showResults ? `<div class="story-poll-total">${total} vote${total === 1 ? '' : 's'}</div>` : '';
+  return `<div class="story-sticker-wrap"><div class="story-poll" ${guard}><div class="story-poll-q">${escHtml(p.q)}</div><div class="story-poll-opts">${opts}</div>${totalLine}</div></div>`;
+}
+async function acStoryPollVote(storyId, opt) {
+  const sv = AC._sv; const it = sv && sv.items[sv.si]; if (!it || !it.poll) return;
+  try {
+    const r = await API.req('POST', '/api/stories/' + storyId + '/poll-vote', { opt });
+    it.poll.options[0].votes = r.v0; it.poll.options[1].votes = r.v1; it.poll.total = r.total; it.poll.myVote = r.myVote;
+    // Re-render just the sticker in place.
+    const wrap = document.querySelector('#storyCap .story-poll')?.closest('.story-sticker-wrap');
+    if (wrap) wrap.outerHTML = acStoryPollHtml(it);
+  } catch (e) { showNotif(e.message || 'Could not vote.'); }
+}
+// ── Daily question sticker (viewer) ──
+function acStoryQHtml(it) {
+  if (!it.question) return '';
+  const guard = 'onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()"';
+  const prompt = escHtml(it.question.prompt);
+  if (it.mine) {
+    const n = it.question.responseCount || 0;
+    return `<div class="story-sticker-wrap"><div class="story-qbox" ${guard}><div class="story-qbox-q">${prompt}</div><button class="story-qbox-count" onclick="event.stopPropagation();acStoryOpenResponses(${it.id})">${n} response${n === 1 ? '' : 's'}</button></div></div>`;
+  }
+  const sent = it.question.responded;
+  return `<div class="story-sticker-wrap"><div class="story-qbox" ${guard}><div class="story-qbox-q">${prompt}</div>
+    <div class="story-qbox-row"><input class="story-qbox-in" id="storyQInput_${it.id}" maxlength="500" placeholder="${sent ? 'Sent — send another…' : 'Type your response…'}" autocomplete="off" onfocus="acStoryReplyFocus()" onblur="acStoryReplyBlur()" onkeydown="if(event.key==='Enter'){event.preventDefault();acStoryQSend(${it.id});}"/>
+    <button class="story-qbox-send" onclick="event.stopPropagation();acStoryQSend(${it.id})" aria-label="Send"><svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button></div>
+    <div class="story-qbox-sent" id="storyQSent_${it.id}" style="${sent ? '' : 'display:none'}">Sent ✓</div></div></div>`;
+}
+async function acStoryQSend(storyId) {
+  const input = document.getElementById('storyQInput_' + storyId);
+  const body = (input && input.value || '').trim();
+  if (!body) return;
+  try {
+    await API.req('POST', '/api/stories/' + storyId + '/answer', { body });
+    if (input) input.value = '';
+    const sent = document.getElementById('storyQSent_' + storyId); if (sent) sent.style.display = '';
+    const it = AC._sv && AC._sv.items[AC._sv.si]; if (it && it.question) it.question.responded = true;
+    showNotif('Response sent.');
+    input && input.blur();
+  } catch (e) { showNotif(e.message || 'Could not send.'); }
+}
+async function acStoryOpenResponses(storyId) {
+  try {
+    const d = await API.req('GET', '/api/stories/' + storyId + '/responses');
+    const rows = (d.responses || []).map((r) => `<div class="qresp-row">${acAvatarHtml(r.user.name, r.user.avatar, 'user-avatar sm', r.user.accountType === 'business')}<div class="qresp-txt"><div class="qresp-name" onclick="closeOverlay('storyResponses');acGoProfile('${escHtml(r.user.username || '')}')">${escHtml(r.user.name)}${vbadge(acIsVerified(r.user))}</div><div class="qresp-body">${escHtml(r.body)}</div></div></div>`).join('');
+    document.getElementById('storyRespPrompt').textContent = d.prompt || 'Responses';
+    document.getElementById('storyRespList').innerHTML = rows || '<div class="qresp-empty">No responses yet.</div>';
+    showOverlay('storyResponses');
+  } catch (e) { showNotif(e.message || 'Could not load responses.'); }
+}
 // A tagged-product pill on a story (above the caption; pointer-guarded so tapping it
 // doesn't advance/pause the story).
 function acStoryProdTag(it) {
@@ -38571,6 +38710,8 @@ function acStoryShow(si) {
     `<div class="story-bar"><div class="story-bar-fill" style="width:${i < si ? 100 : 0}%"></div></div>`).join('');
   // Header.
   document.getElementById('storyHeadUser').innerHTML = `${acAvatarHtml(g.user.name, g.user.avatar, 'user-avatar sm', g.user.accountType === 'business')}<div><div class="story-h-name">${escHtml(g.user.name)}${vbadge(acIsVerified(g.user))}</div><div class="story-h-time">${sv.highlight ? 'Highlight' : acTime(it.createdAt)}</div></div>`;
+  // The ⋯ (mute) menu shows only on someone else's Daily (not your own, not highlights).
+  const moreBtn = document.getElementById('storyMoreBtn'); if (moreBtn) moreBtn.style.display = (!it.mine && !sv.highlight) ? 'flex' : 'none';
   // Body.
   const bodyEl = document.getElementById('storyBody');
   if (it.kind === 'text') bodyEl.innerHTML = `<div class="story-text" style="background:${_storyBgCss(it.bg)}"><span>${escHtml(it.caption || '')}</span></div>`;
@@ -38580,7 +38721,7 @@ function acStoryShow(si) {
   // Caption (for media) + any tagged products (shoppable story).
   const capEl = document.getElementById('storyCap');
   const capTxt = (it.kind !== 'text' && it.caption) ? `<div class="story-cap-in">${escHtml(it.caption)}</div>` : '';
-  capEl.innerHTML = capTxt + acStoryProdTag(it) + acStoryLinkChip(it);
+  capEl.innerHTML = capTxt + acStoryProdTag(it) + acStoryLinkChip(it) + acStoryPollHtml(it) + acStoryQHtml(it);
   // Footer: own → viewers + delete; others → empty.
   const foot = document.getElementById('storyFoot');
   if (sv.highlight) {
@@ -38675,6 +38816,27 @@ function acStoryNext() { const sv = AC._sv; if (!sv) return; clearTimeout(sv.tim
 function acStoryPrev() { const sv = AC._sv; if (!sv) return; clearTimeout(sv.timer); if (sv.si > 0) acStoryShow(sv.si - 1); else acStoryEnterGroup(sv.gi - 1, 'last'); }
 function acStoryClose() { const sv = AC._sv; if (sv) clearTimeout(sv.timer); AC._sv = null; closeOverlay('storyViewer'); acLoadStoryTray(); }
 function acStoryGoProfile() { const sv = AC._sv; if (!sv) return; const u = sv.groups[sv.gi].user; acStoryClose(); acGoProfile(u.username); }
+// Mute / unmute this person's Daily from the viewer ⋯ menu.
+async function acStoryMoreMenu() {
+  const sv = AC._sv; if (!sv) return; const g = sv.groups[sv.gi]; if (!g || g.mine) return;
+  const first = (g.user.name || '').split(' ')[0] || g.user.name;
+  const muted = !!g.muted;
+  acStoryPause();
+  const ok = await appConfirm({
+    title: muted ? ('Unmute ' + first + '’s Daily?') : ('Mute ' + first + '’s Daily?'),
+    message: muted ? 'Their Daily will appear in your tray again.' : 'You won’t see their Daily in your tray. You can unmute anytime.',
+    confirmText: muted ? 'Unmute' : 'Mute',
+  });
+  if (ok) {
+    try {
+      await API.req(muted ? 'DELETE' : 'POST', '/api/stories/mute/' + g.user.id);
+      g.muted = !muted; showNotif(muted ? 'Unmuted' : 'Muted');
+      acLoadStoryTray();
+      if (!muted) { acStoryClose(); return; } // muted → drop out of the tray
+    } catch (e) { showNotif(e.message || 'Could not update.'); }
+  }
+  acStoryResume();
+}
 async function acStoryDelete(id) {
   const sv = AC._sv; if (sv) clearTimeout(sv.timer);
   if (!(await appConfirm({ title: 'Delete Daily?', message: 'It will be removed for everyone.', confirmText: 'Delete', danger: true }))) { if (sv) acStoryShow(sv.si); return; }

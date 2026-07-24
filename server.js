@@ -7757,6 +7757,13 @@ function mapStory(s, me) {
     audience: s.audience === 'close' ? 'close' : 'all',
     sharedPost,
     link: s.link_url ? { url: s.link_url, label: s.link_label || null } : null,
+    poll: (s.poll_q && Array.isArray(s.poll_opts) && s.poll_opts.length === 2) ? {
+      q: s.poll_q,
+      options: [{ text: s.poll_opts[0], votes: Number(s.poll_v0 || 0) }, { text: s.poll_opts[1], votes: Number(s.poll_v1 || 0) }],
+      total: Number(s.poll_v0 || 0) + Number(s.poll_v1 || 0),
+      myVote: (s.poll_myvote === 0 || s.poll_myvote === 1) ? s.poll_myvote : null,
+    } : null,
+    question: s.question_prompt ? { prompt: s.question_prompt, responded: !!s.question_responded, responseCount: s.question_count != null ? Number(s.question_count) : undefined } : null,
     products: tagProductsFrom(s),
   };
 }
@@ -7800,6 +7807,17 @@ app.post('/api/stories', auth.requireAuth, rateLimit(30, 60000, 'story-post'), r
     linkLabel = (req.body.linkLabel || '').toString().trim().slice(0, 30) || null;
     if (!linkLabel) { try { linkLabel = new URL(linkUrl).hostname.replace(/^www\./, ''); } catch { linkLabel = null; } }
   }
+  // Poll sticker: {q, options:[a,b]} (or {q,a,b}). Both options required; capped lengths.
+  let pollQ = null, pollOpts = null;
+  const rawPoll = req.body.poll;
+  if (rawPoll && typeof rawPoll === 'object') {
+    const q = (rawPoll.q || '').toString().trim().slice(0, 80);
+    const a = ((rawPoll.a != null ? rawPoll.a : (rawPoll.options || [])[0]) || '').toString().trim().slice(0, 30);
+    const bopt = ((rawPoll.b != null ? rawPoll.b : (rawPoll.options || [])[1]) || '').toString().trim().slice(0, 30);
+    if (q && a && bopt) { pollQ = q; pollOpts = [a, bopt]; }
+  }
+  // Question sticker: a text prompt inviting responses.
+  const questionPrompt = (req.body.questionPrompt || '').toString().trim().slice(0, 80) || null;
   let media = null;
   let sharedPostId = null;
   if (kind === 'post') {
@@ -7839,8 +7857,8 @@ app.post('/api/stories', auth.requireAuth, rateLimit(30, 60000, 'story-post'), r
     // Tagged products (≤5 of the poster's OWN active products) on a story.
     const taggedProductIds = await validateOwnProductIds(req.user.id, req.body.productIds);
     const r = await db.query(
-      'INSERT INTO stories (user_id, kind, media, caption, bg, audience, shared_post_id, link_url, link_label) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, user_id, kind, media, caption, bg, audience, shared_post_id, link_url, link_label, created_at, expires_at',
-      [req.user.id, kind, media, caption, bg, audience, sharedPostId, linkUrl, linkLabel]
+      'INSERT INTO stories (user_id, kind, media, caption, bg, audience, shared_post_id, link_url, link_label, poll_q, poll_opts, question_prompt) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id, user_id, kind, media, caption, bg, audience, shared_post_id, link_url, link_label, poll_q, poll_opts, question_prompt, created_at, expires_at',
+      [req.user.id, kind, media, caption, bg, audience, sharedPostId, linkUrl, linkLabel, pollQ, pollOpts, questionPrompt]
     );
     if (taggedProductIds.length) await saveContentProductTags('story', r.rows[0].id, taggedProductIds);
     // Refresh the open clients of the audience: all followers, or — for a close-
@@ -7863,7 +7881,8 @@ app.get('/api/stories', auth.requireAuth, async (req, res) => {
     const { rows } = await db.query(
       `SELECT s.user_id, u.name, u.username, u.avatar, u.account_type, u.verified,
               COUNT(*)::int AS count, MAX(s.created_at) AS last_at,
-              bool_or(sv.viewer_id IS NULL) AS has_unseen
+              bool_or(sv.viewer_id IS NULL) AS has_unseen,
+              EXISTS(SELECT 1 FROM story_mutes sm WHERE sm.muter_id = $1 AND sm.muted_id = s.user_id) AS muted
          FROM stories s
          JOIN users u ON u.id = s.user_id
          LEFT JOIN story_views sv ON sv.story_id = s.id AND sv.viewer_id = $1
@@ -7873,11 +7892,14 @@ app.get('/api/stories', auth.requireAuth, async (req, res) => {
           AND s.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
           AND s.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)
         GROUP BY s.user_id, u.name, u.username, u.avatar, u.account_type, u.verified
-        ORDER BY (s.user_id = $1) DESC, bool_or(sv.viewer_id IS NULL) DESC, MAX(s.created_at) DESC`,
+        ORDER BY (s.user_id = $1) DESC,
+                 EXISTS(SELECT 1 FROM story_mutes sm WHERE sm.muter_id = $1 AND sm.muted_id = s.user_id) ASC,
+                 bool_or(sv.viewer_id IS NULL) DESC, MAX(s.created_at) DESC`,
       [me]
     );
     res.json({ tray: rows.map((r) => ({
       user: { id: r.user_id, name: r.name, username: r.username, avatar: r.avatar || null, accountType: r.account_type === 'business' ? 'business' : 'personal', verified: !!r.verified },
+      muted: !!r.muted,
       count: r.count, lastAt: r.last_at, hasUnseen: !!r.has_unseen, mine: r.user_id === me,
     })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load stories.' }); }
@@ -7896,6 +7918,12 @@ app.get('/api/stories/:userId', auth.requireAuth, async (req, res) => {
     }
     const { rows } = await db.query(
       `SELECT s.id, s.user_id, s.kind, s.media, s.caption, s.bg, s.audience, s.created_at, s.expires_at, s.shared_post_id, s.link_url, s.link_label,
+              s.poll_q, s.poll_opts, s.question_prompt,
+              (SELECT COUNT(*) FROM story_poll_votes v WHERE v.story_id = s.id AND v.opt = 0) AS poll_v0,
+              (SELECT COUNT(*) FROM story_poll_votes v WHERE v.story_id = s.id AND v.opt = 1) AS poll_v1,
+              (SELECT opt FROM story_poll_votes v WHERE v.story_id = s.id AND v.voter_id = $1) AS poll_myvote,
+              EXISTS(SELECT 1 FROM story_question_responses qr WHERE qr.story_id = s.id AND qr.responder_id = $1) AS question_responded,
+              ${uid === me ? '(SELECT COUNT(*) FROM story_question_responses qr WHERE qr.story_id = s.id)' : 'NULL'} AS question_count,
               (sv.viewer_id IS NOT NULL) AS seen,
               (SELECT json_build_object('id', sp.id, 'body', sp.body, 'image', sp.image, 'author_id', spu.id,
                        'author_name', spu.name, 'author_username', spu.username, 'author_avatar', spu.avatar,
@@ -7946,6 +7974,71 @@ app.get('/api/stories/:id/viewers', auth.requireAuth, async (req, res) => {
     res.json({ viewers: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, accountType: u.account_type === 'business' ? 'business' : 'personal', verified: !!u.verified, viewedAt: u.viewed_at })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load viewers.' }); }
 });
+// Can I see this story? Own, or I follow the author + not blocked + audience allows.
+async function canViewStoryRow(me, s) {
+  if (!s || new Date(s.expires_at) <= new Date()) return false;
+  if (s.user_id === me) return true;
+  if (await blockedEither(me, s.user_id)) return false;
+  if (!(await db.query('SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2', [me, s.user_id])).rowCount) return false;
+  if (s.audience === 'close') return (await db.query('SELECT 1 FROM close_friends WHERE user_id = $1 AND friend_id = $2', [s.user_id, me])).rowCount > 0;
+  return true;
+}
+// Vote on a Daily poll sticker (one vote per viewer, can't be changed). Returns tallies.
+app.post('/api/stories/:id/poll-vote', auth.requireAuth, rateLimit(120, 60000, 'story-poll'), async (req, res) => {
+  const id = routeId(req.params.id);
+  const opt = parseInt(req.body.opt, 10);
+  if (!Number.isInteger(id) || (opt !== 0 && opt !== 1)) return res.status(400).json({ error: 'Invalid vote.' });
+  try {
+    const s = (await db.query('SELECT id, user_id, audience, poll_q, expires_at FROM stories WHERE id = $1', [id])).rows[0];
+    if (!s || !s.poll_q) return res.status(404).json({ error: 'That poll is no longer available.' });
+    if (!(await canViewStoryRow(req.user.id, s))) return res.status(403).json({ error: 'Not available.' });
+    if (s.user_id !== req.user.id) {
+      await db.query('INSERT INTO story_poll_votes (story_id, voter_id, opt) VALUES ($1,$2,$3) ON CONFLICT (story_id, voter_id) DO NOTHING', [id, req.user.id, opt]);
+    }
+    const t = await db.query(
+      `SELECT COUNT(*) FILTER (WHERE opt=0) AS v0, COUNT(*) FILTER (WHERE opt=1) AS v1,
+              (SELECT opt FROM story_poll_votes WHERE story_id=$1 AND voter_id=$2) AS myvote
+         FROM story_poll_votes WHERE story_id=$1`, [id, req.user.id]);
+    const r = t.rows[0];
+    res.json({ v0: Number(r.v0), v1: Number(r.v1), total: Number(r.v0) + Number(r.v1), myVote: (r.myvote === 0 || r.myvote === 1) ? r.myvote : null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not record your vote.' }); }
+});
+// Respond to a Daily question sticker → lands in the author's inbox + notifies them.
+app.post('/api/stories/:id/answer', auth.requireAuth, rateLimit(60, 60000, 'story-answer'), async (req, res) => {
+  const id = routeId(req.params.id);
+  const body = (req.body.body || '').toString().trim().slice(0, 500);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  if (!body) return res.status(400).json({ error: 'Write a response.' });
+  try {
+    const s = (await db.query('SELECT id, user_id, audience, question_prompt, expires_at FROM stories WHERE id = $1', [id])).rows[0];
+    if (!s || !s.question_prompt) return res.status(404).json({ error: 'That question is no longer available.' });
+    if (s.user_id === req.user.id) return res.status(400).json({ error: 'You can’t respond to your own question.' });
+    if (!(await canViewStoryRow(req.user.id, s))) return res.status(403).json({ error: 'Not available.' });
+    await db.query(
+      `INSERT INTO story_question_responses (story_id, responder_id, body) VALUES ($1,$2,$3)
+       ON CONFLICT (story_id, responder_id) DO UPDATE SET body = EXCLUDED.body, created_at = now()`,
+      [id, req.user.id, body]
+    );
+    notify(s.user_id, req.user.id, 'story_answer');
+    res.status(201).json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send your response.' }); }
+});
+// Author-only: the responses to a Daily question sticker.
+app.get('/api/stories/:id/responses', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const s = (await db.query('SELECT user_id, question_prompt FROM stories WHERE id = $1', [id])).rows[0];
+    if (!s) return res.status(404).json({ error: 'Story not found.' });
+    if (s.user_id !== req.user.id) return res.status(403).json({ error: 'Only the author can see responses.' });
+    const { rows } = await db.query(
+      `SELECT qr.id, qr.body, qr.created_at, u.id AS uid, u.name, u.username, u.avatar, u.account_type, u.verified
+         FROM story_question_responses qr JOIN users u ON u.id = qr.responder_id
+        WHERE qr.story_id = $1 ORDER BY qr.created_at DESC LIMIT 200`, [id]);
+    res.json({ prompt: s.question_prompt, responses: rows.map((r) => ({ id: r.id, body: r.body, createdAt: r.created_at,
+      user: { id: r.uid, name: r.name, username: r.username, avatar: r.avatar || null, accountType: r.account_type === 'business' ? 'business' : 'personal', verified: !!r.verified } })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load responses.' }); }
+});
 // Reply to a story (→ a DM to the author) or send a quick emoji reaction. The DM
 // carries a server-built meta card referencing the story so the author sees which
 // one you replied to (IG/WhatsApp-status style). A reaction is just a reply whose
@@ -7991,6 +8084,23 @@ app.delete('/api/stories/:id', auth.requireAuth, async (req, res) => {
     if (!r.rowCount) return res.status(404).json({ error: 'Story not found.' });
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the story.' }); }
+});
+// Mute / unmute a person's Daily (hide their stories from your tray without unfollowing).
+app.post('/api/stories/mute/:userId', auth.requireAuth, async (req, res) => {
+  const uid = routeId(req.params.userId);
+  if (!Number.isInteger(uid) || uid === req.user.id) return res.status(400).json({ error: 'Invalid user.' });
+  try {
+    await db.query('INSERT INTO story_mutes (muter_id, muted_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [req.user.id, uid]);
+    res.json({ ok: true, muted: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not mute.' }); }
+});
+app.delete('/api/stories/mute/:userId', auth.requireAuth, async (req, res) => {
+  const uid = routeId(req.params.userId);
+  if (!Number.isInteger(uid)) return res.status(400).json({ error: 'Invalid user.' });
+  try {
+    await db.query('DELETE FROM story_mutes WHERE muter_id = $1 AND muted_id = $2', [req.user.id, uid]);
+    res.json({ ok: true, muted: false });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not unmute.' }); }
 });
 // Light periodic sweep of expired stories (reads already filter them out).
 setInterval(() => { db.query('DELETE FROM stories WHERE expires_at < now()').catch(() => {}); }, 600000).unref?.();
