@@ -6765,7 +6765,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
     const g = await db.query(
-      `SELECT g.id, g.name, g.username, g.avatar, g.created_by, g.broadcast, g.disappearing, g.description,
+      `SELECT g.id, g.name, g.username, g.avatar, g.created_by, g.broadcast, g.disappearing, g.slow_mode_seconds, g.description,
               (SELECT (m.muted AND (m.muted_until IS NULL OR m.muted_until > now())) FROM at_group_members m WHERE m.group_id = g.id AND m.user_id = $2) AS muted
        FROM at_groups g WHERE g.id = $1`,
       [gid, req.user.id]
@@ -6804,7 +6804,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       requests = rq.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null }));
     }
     res.json({
-      group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by, broadcast: g.rows[0].broadcast, muted: !!g.rows[0].muted, disappearing: g.rows[0].disappearing || 0, description: g.rows[0].description || null, iAmAdmin },
+      group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by, broadcast: g.rows[0].broadcast, muted: !!g.rows[0].muted, disappearing: g.rows[0].disappearing || 0, slowMode: g.rows[0].slow_mode_seconds || 0, description: g.rows[0].description || null, iAmAdmin },
       requests,
       lastRead,
       live: ls ? liveStreamPublic(ls) : null,
@@ -6825,6 +6825,20 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
 });
 
 // Send a message to a group.
+// Slow mode (admin-only): non-admins wait N seconds between messages. Whitelisted
+// durations only; 0 turns it off. Members learn the new value on their next open.
+const SLOW_MODE_OPTS = [0, 10, 30, 60, 300, 900, 3600];
+app.post('/api/atchat/groups/:id/slow-mode', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  const seconds = parseInt(req.body.seconds, 10);
+  if (!SLOW_MODE_OPTS.includes(seconds)) return res.status(400).json({ error: 'Pick one of the listed durations.' });
+  try {
+    if (!(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only an admin can change slow mode.' });
+    await db.query('UPDATE at_groups SET slow_mode_seconds = $1 WHERE id = $2', [seconds, gid]);
+    res.json({ ok: true, slowMode: seconds });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update slow mode.' }); }
+});
 app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 60000, 'group-send'), async (req, res) => {
   const gid = routeId(req.params.id);
   if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
@@ -6844,9 +6858,27 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
     // Broadcast ("channel") groups are admin-post-only.
-    const gb = await db.query('SELECT broadcast FROM at_groups WHERE id = $1', [gid]);
+    const gb = await db.query('SELECT broadcast, slow_mode_seconds FROM at_groups WHERE id = $1', [gid]);
     if (gb.rows[0] && gb.rows[0].broadcast && !(await isGroupAdmin(gid, req.user.id))) {
       return res.status(403).json({ error: 'Only an admin can post in this channel.' });
+    }
+    // Slow mode (Telegram-style): non-admin members wait N seconds between their
+    // own messages. Admins are exempt; a duplicate clientId retry passes through
+    // to the idempotent insert below rather than being blocked here.
+    const slow = (gb.rows[0] && gb.rows[0].slow_mode_seconds) || 0;
+    if (slow > 0 && !(await isGroupAdmin(gid, req.user.id))) {
+      const lastQ = await db.query(
+        `SELECT EXTRACT(EPOCH FROM (now() - MAX(created_at)))::int AS ago,
+                bool_or(client_id = $3) AS same_client
+           FROM at_group_messages WHERE group_id = $1 AND sender_id = $2
+            AND created_at > now() - ($4 || ' seconds')::interval`,
+        [gid, req.user.id, req.body.clientId || '', String(slow)]
+      );
+      const l = lastQ.rows[0];
+      if (l && l.ago != null && !l.same_client) {
+        const left = Math.max(1, slow - l.ago);
+        return res.status(429).json({ error: `Slow mode is on — you can send again in ${left}s.`, slowMode: left });
+      }
     }
     const me = await chatIdentity(req.user.id);
     const clientId = (typeof req.body.clientId === 'string' && req.body.clientId.length <= 64) ? req.body.clientId : null;
