@@ -1838,6 +1838,9 @@ async function initSchema() {
   // Celebration posts: an occasion tag (new_role / work_anniversary / …) gives the
   // post a celebratory banner. NULL = an ordinary post.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS occasion TEXT;`);
+  // Long-form articles: a headline. A post with a non-null article_title is an
+  // "article" — its `body` holds the long-form content, `image` is the cover.
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS article_title TEXT;`);
   await query(`
     CREATE TABLE IF NOT EXISTS post_unlocks (
       post_id    INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
