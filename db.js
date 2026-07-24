@@ -2729,6 +2729,8 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS event_rsvps_user_idx ON event_rsvps(user_id);`);
   // Event reminders: once per going-RSVP, flipped by the flusher shortly before start.
   await query(`ALTER TABLE event_rsvps ADD COLUMN IF NOT EXISTS reminded BOOLEAN NOT NULL DEFAULT false;`);
+  // Invoice settled outside Atwe (cash/bank) — a bookkeeping mark, no wallet money moved.
+  await query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS paid_outside BOOLEAN NOT NULL DEFAULT false;`);
   // ~1h-before reminders for confirmed appointments + scheduled calls (both parties).
   await query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reminded BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE scheduled_calls ADD COLUMN IF NOT EXISTS reminded BOOLEAN NOT NULL DEFAULT false;`);
