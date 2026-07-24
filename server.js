@@ -12485,6 +12485,24 @@ app.delete('/api/jobs/:id', auth.requireAuth, async (req, res) => {
 
 // Repost a job (LinkedIn-style): a FRESH posting with the same details — new
 // date, no applicants, no boost carried over, deadline reset. The original
+// Close applications now / reopen (owner only) — LinkedIn's "stop accepting
+// applications". Closing stamps closes_at = now() (the same field a deadline
+// uses, so every existing "closed" check — apply gating, the Closed chip —
+// just works); reopening clears it, which also clears any passed deadline.
+app.post('/api/jobs/:id/close', auth.requireAuth, rateLimit(30, 60000, 'job-close'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid job id.' });
+  const close = req.body.closed !== false;
+  try {
+    const r = await db.query(
+      close ? `UPDATE jobs SET closes_at = now() WHERE id = $1 AND posted_by = $2 RETURNING id`
+            : `UPDATE jobs SET closes_at = NULL WHERE id = $1 AND posted_by = $2 RETURNING id`,
+      [id, req.user.id]
+    );
+    if (!r.rowCount) return res.status(404).json({ error: 'Job not found.' });
+    res.json({ ok: true, closed: close });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the job.' }); }
+});
 // stays untouched (delete it separately if it's done). Same free-business cap
 // as posting new, and saved-search alerts fire like any new job.
 app.post('/api/jobs/:id/repost', auth.requireAuth, rateLimit(20, 60000, 'job-post'), async (req, res) => {

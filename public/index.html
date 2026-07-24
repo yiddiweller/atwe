@@ -16696,7 +16696,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1508'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1509'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25398,6 +25398,24 @@ function acApplTimeline(status) {
   const end = rejected ? `<span class="ajt-bar on rej"></span><span class="ajt-step rej"><i></i><b>Not selected</b></span>` : '';
   return `<div class="ajt" role="img" aria-label="Application status: ${rejected ? 'not selected' : (labels[status] || 'applied')}">${nodes}${end}</div>`;
 }
+// Close / reopen applications on your own job (LinkedIn "stop accepting
+// applications"): the post stays visible with a Closed tag; seekers can't apply.
+async function acJobSetClosed(id, close) {
+  if (close) {
+    const ok = await appConfirm({
+      title: 'Close applications?',
+      message: 'The job stays visible, marked as closed — nobody new can apply. You can reopen it any time.',
+      confirmText: 'Close applications',
+      danger: false,
+    });
+    if (!ok) return;
+  }
+  try {
+    await API.req('POST', '/api/jobs/' + id + '/close', { closed: !!close });
+    showNotif(close ? 'Applications closed.' : 'Applications reopened.');
+    acOpenJob(id); acJobsRefresh();
+  } catch (e) { showNotif(e.message || 'Could not update the job.'); }
+}
 // Repost a job (owner): a FRESH posting with the same details — new date, zero
 // applicants, boost/deadline not carried. The original stays until you delete it.
 async function acRepostJob(id) {
@@ -25440,6 +25458,7 @@ async function acOpenJob(id) {
         ${boost}
         <button class="ac-pill-btn" style="flex:0 0 auto;" onclick="acShareJob(${job.id})">↗ Share</button>
         <button class="ac-pill-btn" style="flex:0 0 auto;" onclick="acRepostJob(${job.id})">↻ Repost</button>
+        <button class="ac-pill-btn" style="flex:0 0 auto;" onclick="acJobSetClosed(${job.id}, ${job.closed ? 'false' : 'true'})">${job.closed ? 'Reopen applications' : 'Close applications'}</button>
         <button class="ac-pill-btn ac-job-savebtn" style="flex:0 0 auto;color:var(--red);" onclick="acDeleteJob(${job.id})">Delete</button>
       </div>`;
     } else {
