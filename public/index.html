@@ -16624,7 +16624,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1488'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1489'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -33818,7 +33818,8 @@ async function acOpenInvoice(id) {
       <div class="inv-parties">${inv.mine ? 'Billed to ' : 'From '}<b>${escHtml(other.name)}</b> @${escHtml(other.username)}</div>
       ${items}${due}
       ${inv.note ? `<div class="ev-desc">${escHtml(inv.note)}</div>` : ''}
-      ${action}`;
+      ${action}
+      <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acInvoicePrint()">🖨 Print / save PDF</button>`;
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Invoice not available.') + '</div>'; }
 }
 async function acPayInvoice() {
@@ -33832,6 +33833,28 @@ async function acCancelInvoice() {
   if (!(await appConfirm({ title: 'Cancel invoice?', message: 'The customer will no longer be able to pay it.', confirmText: 'Cancel invoice', danger: true }))) return;
   try { await API.req('POST', '/api/invoices/' + AC._invId + '/cancel'); showNotif('Invoice cancelled.'); acOpenInvoice(AC._invId); }
   catch (e) { showNotif(e.message || 'Could not cancel.'); }
+}
+// Print / save-as-PDF a clean invoice document (either party; mirrors the
+// packing-slip print-window pattern — the browser's print dialog offers PDF).
+function acInvoicePrint() {
+  const inv = AC._invCur; if (!inv) return;
+  const rows = (inv.items && inv.items.length)
+    ? inv.items.map((it) => `<tr><td>${escHtml(it.description || it.label || 'Item')}</td><td class="r">$${((it.amountCents || 0) / 100).toFixed(2)}</td></tr>`).join('')
+    : `<tr><td>${escHtml(inv.title)}</td><td class="r">$${(inv.amountCents / 100).toFixed(2)}</td></tr>`;
+  const w = window.open('', '_blank'); if (!w) { showNotif('Allow pop-ups to print the invoice.'); return; }
+  const when = new Date(inv.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  const due = inv.dueAt ? new Date(inv.dueAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : null;
+  w.document.write(`<html><head><title>Invoice #${inv.id}</title><style>body{font-family:system-ui,sans-serif;padding:40px;color:#111;max-width:640px;margin:0 auto;}h1{font-size:22px;margin:0;}.muted{color:#666;font-size:13px;}.head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;}table{width:100%;border-collapse:collapse;margin-top:18px;}td,th{border-bottom:1px solid #ddd;padding:9px 4px;text-align:left;font-size:14px;}.r{text-align:right;}.total td{font-weight:700;border-bottom:none;font-size:16px;}.badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700;background:#e8f6ec;color:#137333;}.badge.unpaid{background:#fdeeee;color:#b00020;}</style></head><body>
+    <div class="head"><div><h1>Invoice #${inv.id}</h1><div class="muted">${escHtml(when)}${due ? ' · Due ' + escHtml(due) : ''}</div></div>
+    <span class="badge ${inv.status === 'paid' ? '' : 'unpaid'}">${inv.status === 'paid' ? 'PAID' : (inv.status === 'overdue' ? 'OVERDUE' : 'UNPAID')}</span></div>
+    <div class="muted"><b style="color:#111;">From</b> ${escHtml(inv.issuer.name)} (@${escHtml(inv.issuer.username)})</div>
+    <div class="muted" style="margin-top:4px;"><b style="color:#111;">Billed to</b> ${escHtml(inv.customer.name)} (@${escHtml(inv.customer.username)})</div>
+    ${inv.note ? `<div class="muted" style="margin-top:10px;">${escHtml(inv.note)}</div>` : ''}
+    <table><thead><tr><th>${escHtml(inv.title)}</th><th class="r">Amount</th></tr></thead><tbody>${rows}
+    <tr class="total"><td>Total</td><td class="r">$${(inv.amountCents / 100).toFixed(2)}</td></tr></tbody></table>
+    <p class="muted" style="margin-top:26px;">Issued via Atwe.</p>
+    <script>window.onload=function(){window.print();}<\/script></body></html>`);
+  w.document.close();
 }
 // Issuer: record that this invoice was settled outside Atwe (cash/bank). A pure
 // bookkeeping mark — no wallet money moves.
