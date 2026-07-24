@@ -15156,7 +15156,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="My QR code">
     <button class="sheet-close" onclick="closeOverlay('qrView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title" style="margin:0 0 12px;">Your QR code</div>
-    <div id="qrBody"></div>
+    <div id="myQrBody"></div>
   </div>
 </div>
 
@@ -16641,7 +16641,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1492'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1493'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -37018,9 +37018,28 @@ async function acRedeemPoints() {
 }
 
 /* ── QR connect (share my profile / scan to open one) ── */
+// Save your profile QR as an image (native share sheet where files are supported
+// — e.g. save to Photos on iOS — else a direct download), so it can be printed on
+// a card, a poster or a shop window.
+async function acSaveMyQr() {
+  const d = AC._qr; if (!d || !d.dataUrl) return;
+  const name = 'atwe-qr-' + (d.username || 'profile') + '.png';
+  try {
+    const blob = await (await fetch(d.dataUrl)).blob();
+    const file = (typeof File !== 'undefined') ? new File([blob], name, { type: 'image/png' }) : null;
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: '@' + d.username + ' on Atwe' }); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    showNotif('QR code saved.');
+  } catch (e) { showNotif('Could not save the QR code.'); }
+}
 async function acOpenMyQR() {
   showOverlay('qrView');
-  const b = document.getElementById('qrBody'); if (!b) return;
+  const b = document.getElementById('myQrBody'); if (!b) return;
   b.innerHTML = acSkelRows(2);
   try {
     const d = await API.req('GET', '/api/me/qr'); AC._qr = d;
@@ -37029,6 +37048,7 @@ async function acOpenMyQR() {
       <div class="qr-name">@${escHtml(d.username)}</div>
       <div class="ac-disc-sub" style="text-align:center;margin:2px 0 12px;">Have someone scan this to open your profile.</div>
       <button class="ac-pill-btn" style="width:100%;" onclick="acCopyText(${jsAttr(d.link)},'Profile link copied')">Copy link</button>
+      <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acSaveMyQr()">⬇ Save / share image</button>
       <button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acOpenQrScan()"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-inline-end:6px;"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="3" y1="12" x2="21" y2="12"/></svg>Scan a code</button>
     </div>`;
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load your QR code.') + '</div>'; }
