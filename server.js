@@ -20533,6 +20533,37 @@ app.get('/api/events/:id/ics', auth.requireAuth, async (req, res) => {
     res.send(lines.join('\r\n'));
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not export the event.' }); }
 });
+// Appointment → .ics (party-only): drop a booking into Apple/Google/Outlook
+// calendars, mirroring the events export. The other party's name rides in the
+// summary; the service duration (when the business still lists it) sets the end.
+app.get('/api/appointments/:id/ics', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const a = (await db.query(
+      `SELECT a.id, a.business_id, a.customer_id, a.service, a.when_at, a.note, a.status,
+              b.name AS business_name, c.name AS customer_name,
+              (SELECT duration_min FROM business_services s WHERE s.business_id = a.business_id AND s.name = a.service LIMIT 1) AS duration_min
+         FROM appointments a JOIN users b ON b.id = a.business_id JOIN users c ON c.id = a.customer_id
+        WHERE a.id = $1`, [id])).rows[0];
+    if (!a || (a.business_id !== req.user.id && a.customer_id !== req.user.id)) return res.status(404).json({ error: 'Appointment not found.' });
+    if (a.status === 'cancelled' || a.status === 'declined') return res.status(400).json({ error: 'That appointment isn’t happening — nothing to add.' });
+    const mins = Number(a.duration_min) > 0 ? Number(a.duration_min) : 60;
+    const other = a.business_id === req.user.id ? a.customer_name : a.business_name;
+    const lines = [
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Atwe//Appointments//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+      'BEGIN:VEVENT', `UID:atwe-appt-${a.id}@atwe.com`, `DTSTAMP:${icsStamp(new Date())}`,
+      `DTSTART:${icsStamp(a.when_at)}`, `DTEND:${icsStamp(new Date(new Date(a.when_at).getTime() + mins * 60000))}`,
+      `SUMMARY:${icsEscape(a.service + ' — with ' + other)}`,
+      a.note ? `DESCRIPTION:${icsEscape(a.note)}` : null,
+      a.status === 'requested' ? 'STATUS:TENTATIVE' : 'STATUS:CONFIRMED',
+      'END:VEVENT', 'END:VCALENDAR',
+    ].filter(Boolean);
+    res.set('Content-Type', 'text/calendar; charset=utf-8');
+    res.set('Content-Disposition', `attachment; filename="atwe-appointment-${a.id}.ics"`);
+    res.send(lines.join('\r\n'));
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not export the appointment.' }); }
+});
 // Update status: the business confirms/declines; either side cancels.
 app.patch('/api/appointments/:id', auth.requireAuth, blockImpersonation, async (req, res) => {
   const id = routeId(req.params.id);
