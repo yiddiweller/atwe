@@ -21013,6 +21013,7 @@ app.patch('/api/events/:id', auth.requireAuth, async (req, res) => {
     if (req.body.location !== undefined) { sets.push(`location = $${i++}`); vals.push((req.body.location || '').trim().slice(0, 300) || null); }
     if (req.body.priceCents !== undefined) { sets.push(`price_cents = $${i++}`); vals.push(Math.min(Math.max(Math.round(Number(req.body.priceCents) || 0), 0), 100000)); }
     if (req.body.capacity !== undefined) { const cap = (req.body.capacity === '' || req.body.capacity === null) ? null : Math.min(Math.max(1, Math.round(Number(req.body.capacity) || 0)), 1000000); sets.push(`capacity = $${i++}`); vals.push(cap); }
+    if (req.body.cover !== undefined) { const cv = cleanImage(req.body.cover); if (cv === undefined) return res.status(400).json({ error: 'That cover image could not be attached.' }); sets.push(`cover = $${i++}`); vals.push(cv); }
     if (!sets.length) { const { rows } = await db.query(EVENTS_SELECT + 'WHERE e.id = $2', [req.user.id, id]); return res.json({ event: mapEvent(rows[0]) }); }
     vals.push(id);
     await db.query(`UPDATE events SET ${sets.join(', ')} WHERE id = $${i}`, vals);
