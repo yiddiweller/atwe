@@ -8933,6 +8933,10 @@ body.reduce-motion .xp-ai::after{animation:none;}
 .rev-response{margin-top:10px;padding:9px 12px;background:var(--s3);border-radius:10px;font-size:13.5px;color:var(--t2);}
 .rev-response b{display:block;color:var(--t1);font-size:12.5px;margin-bottom:3px;}
 .rev-resp-date{margin-top:4px;font-size:11.5px;color:var(--t3);}
+/* Private "note to self" box on someone's profile — amber = information, viewer-only. */
+.prof-mynote{margin-top:10px;background:rgba(255,187,0,.10);border-radius:12px;padding:9px 12px;font-size:12.5px;color:var(--t3);cursor:pointer;}
+.prof-mynote b{color:var(--amber);font-size:12px;}
+.prof-mynote div{color:var(--t1);font-size:13.5px;margin-top:3px;white-space:pre-wrap;}
 /* Appointment status chip */
 .appt-status{margin-inline-start:auto;flex:0 0 auto;font-size:11px;font-weight:700;padding:3px 9px;border-radius:var(--r-pill);background:var(--s3);color:var(--t2);}
 .appt-status.confirmed{background:rgba(48,209,88,.16);color:var(--green);}
@@ -13890,6 +13894,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <button class="as-item" onclick="acBmkMoveFromMenu()"><svg viewBox="0 0 24 24"><path d="M6 4h12a1 1 0 0 1 1 1v15.5a.5.5 0 0 1-.78.42L12 17l-6.22 3.92A.5.5 0 0 1 5 20.5V5a1 1 0 0 1 1-1z"/></svg> <span>Save to folder</span></button>
     <button class="as-item" onclick="paScheduleCall()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15.05 5A5 5 0 0 1 19 8.95M15.05 1A9 9 0 0 1 23 8.94m-1 7.98v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg> <span>Schedule a call</span></button>
     <button class="as-item" onclick="paMoney()"><svg viewBox="0 0 24 24"><path d="M21 4 3 11l6 2.5L11 20z"/><path d="M21 4 11 14"/></svg> <span>Send money</span></button>
+    <button class="as-item" onclick="paPrivateNote()"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h4"/></svg> <span>Private note</span></button>
     <button class="as-item" onclick="paTip()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M14.5 9.3a2.6 2.6 0 0 0-2.5-1.6c-1.5 0-2.6.8-2.6 2 0 2.8 5.4 1.5 5.4 4.4 0 1.3-1.2 2.2-2.8 2.2a2.8 2.8 0 0 1-2.7-1.7"/><path d="M12 6.4v1.3M12 16.3v1.3"/></svg> <span>Send a tip</span></button>
     <button class="as-item" onclick="paInvoice()"><svg viewBox="0 0 24 24"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M15 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M9 13h6M9 17h4"/></svg> <span>Send an invoice</span></button>
     <button class="as-item" onclick="paQuote()"><svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg> <span>Send a quote</span></button>
@@ -14083,6 +14088,17 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <input class="jp-in" id="vacMsg" maxlength="200" placeholder="Message for shoppers (e.g. Back on 3 August)" autocomplete="off"/>
     </div>
     <button class="ac-pill-btn accent jp-submit" style="margin-top:12px;" onclick="acVacSave()">Save</button>
+  </div>
+</div>
+
+<!-- Private note about a person (only you ever see it) -->
+<div class="overlay hidden" id="privateNoteView" onclick="if(event.target===this)closeOverlay('privateNoteView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Private note">
+    <button class="sheet-close" onclick="closeOverlay('privateNoteView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Private note</div>
+    <div class="ac-disc-sub" id="privateNoteWho" style="margin:0 0 12px;"></div>
+    <textarea class="jp-in" id="privateNoteIn" maxlength="500" rows="4" placeholder="e.g. Met at the trade expo — interested in bulk orders. Follow up in May."></textarea>
+    <button class="ac-pill-btn accent jp-submit" style="margin-top:12px;" onclick="acPrivateNoteSave()">Save</button>
   </div>
 </div>
 
@@ -16826,7 +16842,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1540'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1541'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -33313,6 +33329,7 @@ function acRenderProfile(d, mine) {
       ${acProfNote(u)}
       ${u.bio ? `<div class="ac-prof-bio">${acLinkifyPost(u.bio)}</div>` : ''}
       ${acProfMeta(u)}
+      ${!mine && d.myNote ? `<div class="prof-mynote" onclick="acPrivateNoteOpen()" role="button" aria-label="Edit your private note"><b>📝 Note to self</b> · only you can see this<div>${escHtml(d.myNote)}</div></div>` : ''}
       ${acTrustChip(d.trustScore)}
       ${acProfMore(u)}
       ${acProfileCtaPill(u, mine)}
@@ -33794,6 +33811,33 @@ async function acSendTip(payWith) {
 }
 /* ─── Wallet — peer-to-peer money (send to a @username) ─── */
 function paMoney() { const a = AC._paAuthor; closeOverlay('postActions'); if (a) acOpenSendMoney(a.id, a.name, a.username); }
+// ── Private note about a person (only YOU ever see it) ──
+function paPrivateNote() {
+  const a = AC._paAuthor; closeOverlay('postActions');
+  if (a) acPrivateNoteOpen(a.id, a.name);
+}
+function acPrivateNoteOpen(id, name) {
+  // From the profile note box, fall back to the open profile's person.
+  const pu = AC._profData && AC._profData.user;
+  AC._pnoteId = id || (pu && pu.id); AC._pnoteName = name || (pu && pu.name) || '';
+  if (!AC._pnoteId) return;
+  const cur = (!id && AC._profData) ? (AC._profData.myNote || '') : ((AC._profData && pu && pu.id === AC._pnoteId) ? (AC._profData.myNote || '') : '');
+  document.getElementById('privateNoteWho').textContent = 'About ' + AC._pnoteName + ' — they never see it, and nobody is told it exists.';
+  document.getElementById('privateNoteIn').value = cur;
+  showOverlay('privateNoteView');
+  setTimeout(() => document.getElementById('privateNoteIn').focus(), 60);
+}
+async function acPrivateNoteSave() {
+  const note = (document.getElementById('privateNoteIn').value || '').trim().slice(0, 500);
+  try {
+    await API.req('PUT', '/api/contacts/' + AC._pnoteId + '/note', { note });
+    if (AC._profData && AC._profData.user && AC._profData.user.id === AC._pnoteId) AC._profData.myNote = note || null;
+    closeOverlay('privateNoteView');
+    showNotif(note ? 'Note saved — just for you.' : 'Note removed.');
+    // Re-render the open profile so the note box appears/updates in place.
+    if (AC._profData && AC._profData.user && AC._profData.user.id === AC._pnoteId) acRenderProfile(AC._profData, false);
+  } catch (e) { showNotif(e.message || 'Could not save the note.'); }
+}
 function acMoneyFmt(c) { return '$' + (Math.abs(c) / 100).toFixed(2); }
 // A per-action idempotency key — reused across retries of the same payment, then
 // regenerated on success so the next action is a distinct transaction.
