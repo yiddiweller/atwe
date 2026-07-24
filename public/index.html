@@ -16795,7 +16795,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1525'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1526'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -26415,6 +26415,11 @@ function acSyncTabTitle() {
   const total = (AC._tabMsgUnread || 0) + (AC._notifUnread || 0);
   const t = total > 0 ? `(${total > 99 ? '99+' : total}) Atwe` : 'Atwe';
   if (document.title !== t) document.title = t;
+  // Installed-app icon badge (iOS 16.4+/Android/desktop PWA): the same unread
+  // total as the tab title, on the home-screen icon. No-op where unsupported.
+  try {
+    if ('setAppBadge' in navigator) { if (total > 0) navigator.setAppBadge(total).catch(() => {}); else navigator.clearAppBadge().catch(() => {}); }
+  } catch (_) {}
 }
 function setNotifBadge(n) {
   AC._notifUnread = n || 0;
