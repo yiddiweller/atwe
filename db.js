@@ -388,6 +388,8 @@ async function initSchema() {
   //    UTC offset in minutes (local = UTC + offset), captured client-side so the
   //    server can evaluate the window without its own timezone.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dnd_enabled BOOLEAN NOT NULL DEFAULT false;`);
+  // One-tap push snooze ("Pause for 1h/8h/24h") — suppresses push alerts until it lapses.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS snooze_until TIMESTAMPTZ;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dnd_start_min INTEGER NOT NULL DEFAULT 1320;`); // 22:00
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dnd_end_min INTEGER NOT NULL DEFAULT 420;`);   // 07:00
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dnd_tz_offset INTEGER NOT NULL DEFAULT 0;`);

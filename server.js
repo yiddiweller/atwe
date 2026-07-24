@@ -1804,10 +1804,11 @@ async function sendPushForNotif(userId, actorId, type) {
   const verb = PUSH_VERBS[type];
   if (!verb) return; // only push the user-facing, actionable types
   if (!push.isConfigured()) return;
-  // Quiet hours: suppress the push banner/sound during the window (the in-app
+  // Quiet hours or an active snooze: suppress the push banner/sound (the in-app
   // notification is still created by notify() — only the alert is muted).
   try {
-    const d = (await db.query('SELECT dnd_enabled, dnd_start_min, dnd_end_min, dnd_tz_offset FROM users WHERE id = $1', [userId])).rows[0];
+    const d = (await db.query('SELECT dnd_enabled, dnd_start_min, dnd_end_min, dnd_tz_offset, (snooze_until IS NOT NULL AND snooze_until > now()) AS snoozed FROM users WHERE id = $1', [userId])).rows[0];
+    if (d && d.snoozed) return;
     if (userInDnd(d)) return;
   } catch {}
   let actorName = 'Someone';
@@ -3598,11 +3599,25 @@ app.put('/api/account-privacy', auth.requireAuth, async (req, res) => {
 // (every muteable category, defaulting ON when not explicitly turned off).
 app.get('/api/notification-prefs', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT notif_prefs, cart_reminders_off FROM users WHERE id = $1', [req.user.id]);
+    const { rows } = await db.query('SELECT notif_prefs, cart_reminders_off, CASE WHEN snooze_until > now() THEN snooze_until END AS snooze_until FROM users WHERE id = $1', [req.user.id]);
     const saved = (rows[0] && rows[0].notif_prefs) || {};
     const categories = NOTIF_CATEGORIES.map((c) => ({ key: c.key, label: c.label, on: saved[c.key] !== false }));
-    res.json({ categories, cartRemindersOff: !!(rows[0] && rows[0].cart_reminders_off) });
+    res.json({ categories, cartRemindersOff: !!(rows[0] && rows[0].cart_reminders_off), snoozeUntil: (rows[0] && rows[0].snooze_until) || null });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load notification settings.' }); }
+});
+// One-tap push snooze: pause push alerts for 1/8/24 hours (0 clears). In-app
+// notifications keep landing — only the device banner/sound is held.
+const SNOOZE_HOURS = [1, 8, 24];
+app.post('/api/push/snooze', auth.requireAuth, async (req, res) => {
+  const hours = parseInt(req.body.hours, 10);
+  if (hours !== 0 && !SNOOZE_HOURS.includes(hours)) return res.status(400).json({ error: 'Pick 1, 8 or 24 hours (0 turns it off).' });
+  try {
+    const { rows } = await db.query(
+      `UPDATE users SET snooze_until = ${hours === 0 ? 'NULL' : "now() + ($2 || ' hours')::interval"} WHERE id = $1 RETURNING snooze_until`,
+      hours === 0 ? [req.user.id] : [req.user.id, hours]
+    );
+    res.json({ ok: true, snoozeUntil: (rows[0] && rows[0].snooze_until) || null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the snooze.' }); }
 });
 // PUT merges a partial { prefs: { likes:false, ... } } map (unknown keys ignored).
 app.put('/api/notification-prefs', auth.requireAuth, async (req, res) => {
