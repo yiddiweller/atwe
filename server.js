@@ -10954,9 +10954,16 @@ app.get('/api/social/bookmarks', auth.requireAuth, async (req, res) => {
       const fid = parseInt(req.query.folder, 10);
       if (Number.isInteger(fid)) { params.push(fid); folderClause = ` AND bk.folder_id = $${params.length}`; }
     }
+    // Search within saved posts (X-style "Search Bookmarks") — injection-safe ILIKE.
+    let qClause = '';
+    const q = (req.query.q || '').toString().trim().slice(0, 80);
+    if (q.length >= 2) {
+      params.push('%' + q.replace(/[%_\\]/g, (c) => '\\' + c) + '%');
+      qClause = ` AND p.body ILIKE $${params.length}`;
+    }
     const { rows } = await db.query(
       POSTS_SELECT + `JOIN post_bookmarks bk ON bk.post_id = p.id AND bk.user_id = $1
-       WHERE p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)${folderClause}
+       WHERE p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)${folderClause}${qClause}
        ORDER BY bk.created_at DESC LIMIT 100`,
       params
     );
