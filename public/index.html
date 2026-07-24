@@ -16344,7 +16344,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1420'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1421'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24178,7 +24178,9 @@ function acRenderCourse(c) {
     action = `<div class="q-actions"><button class="ac-pill-btn accent" onclick="acLessonFormOpen(${c.id})">＋ Add lesson</button><button class="ac-pill-btn" onclick="acCourseFormOpen(${c.id})">Edit</button></div>
       <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acToggleCoursePublish()">${c.published ? 'Unpublish' : 'Publish course'}</button>`;
   } else if (c.enrolled) {
-    action = `<div class="crs-prog"><div class="crs-prog-bar"><span style="width:${c.progress || 0}%"></span></div><div class="crs-prog-lbl">${c.doneCount || 0} / ${lessons.length} complete · ${c.progress || 0}%</div></div>`;
+    const done = lessons.length > 0 && (c.progress || 0) >= 100;
+    action = `<div class="crs-prog"><div class="crs-prog-bar"><span style="width:${c.progress || 0}%"></span></div><div class="crs-prog-lbl">${c.doneCount || 0} / ${lessons.length} complete · ${c.progress || 0}%</div></div>
+      ${done ? `<button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="acCourseCertificate()">🎓 Get your certificate</button>` : ''}`;
   } else {
     const covered = c.priceCents ? acCanPayBalance(c.priceCents) : true;
     action = `<button class="ac-pill-btn accent" style="width:100%;" onclick="acEnrollCourse()">${c.priceCents ? 'Enroll · ' + price : 'Enroll free'}</button>${(c.priceCents && !covered) ? '<div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;color:var(--red);">Top up your wallet to enroll.</div>' : ''}`;
@@ -24194,6 +24196,34 @@ function acRenderCourse(c) {
     ${action}
     <div class="crs-curric-h">Curriculum</div>
     ${curriculum}`;
+}
+// Completion certificate (Udemy/Coursera-style): a clean printable award page —
+// learner, course, instructor, date, Atwe mark. Print → Save as PDF.
+function acCourseCertificate() {
+  const c = AC._crsCur; if (!c || (c.progress || 0) < 100) return;
+  const w = window.open('', '_blank'); if (!w) { showNotif('Allow pop-ups to view your certificate.'); return; }
+  const learner = (S.user && S.user.name) || 'Student';
+  const when = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  w.document.write(`<html><head><title>Certificate · ${escHtml(c.title)}</title><style>
+    body{font-family:Georgia,'Times New Roman',serif;background:#fff;color:#111;display:flex;align-items:center;justify-content:center;min-height:96vh;margin:0;}
+    .cert{width:720px;max-width:92vw;border:3px double #111;padding:56px 48px;text-align:center;}
+    .mark{font-family:system-ui,sans-serif;font-weight:800;font-size:20px;letter-spacing:-.02em;}
+    .small{font-family:system-ui,sans-serif;font-size:11.5px;letter-spacing:.22em;text-transform:uppercase;color:#666;margin-top:26px;}
+    .who{font-size:34px;margin:14px 0 4px;}
+    .line{width:220px;border-bottom:1px solid #bbb;margin:0 auto 18px;}
+    .course{font-size:21px;font-style:italic;margin:12px 0 4px;}
+    .meta{font-family:system-ui,sans-serif;font-size:13px;color:#555;margin-top:26px;}
+    @media print{body{min-height:auto;}}
+  </style></head><body><div class="cert">
+    <div class="mark">Atwe</div>
+    <div class="small">Certificate of completion</div>
+    <div class="who">${escHtml(learner)}</div>
+    <div class="line"></div>
+    <div class="small" style="margin-top:6px;">has successfully completed</div>
+    <div class="course">${escHtml(c.title)}</div>
+    <div class="meta">Instructor: ${escHtml(c.creator && c.creator.name || '')} · ${(c.lessons || []).length} lessons · Completed ${escHtml(when)}</div>
+  </div><script>window.onload=function(){window.print();}<\/script></body></html>`);
+  w.document.close();
 }
 async function acEnrollCourse() {
   const c = AC._crsCur; if (!c) return;
