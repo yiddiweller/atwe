@@ -17270,6 +17270,23 @@ app.get('/api/listings/:id', auth.requireAuth, async (req, res) => {
     // "More from this seller" — a few other active listings by the same seller.
     const more = await db.query(`${LISTING_SELECT} WHERE p.business_id = $1 AND p.active = true AND p.id <> $2 ORDER BY p.created_at DESC LIMIT 8`, [l.business_id, id]);
     listing.moreFromSeller = more.rows.map(mapListing);
+    // "Similar items" — the cross-seller shelf (Amazon "similar to this item"):
+    // same catalog category when the seller set one, else the same kind. Other
+    // sellers only (the same-seller shelf is above), blocks-aware, best first.
+    try {
+      const params = [id, l.business_id, req.user.id];
+      let match;
+      if ((l.category || '').trim()) { params.push(l.category.trim()); match = `lower(p.category) = lower($${params.length})`; }
+      else { params.push(l.kind || 'physical'); match = `p.kind = $${params.length}`; }
+      const sim = await db.query(
+        `${LISTING_SELECT} WHERE p.active = true AND p.id <> $1 AND p.business_id <> $2 AND p.business_id <> $3
+           AND NOT u.deactivated AND NOT u.is_demo AND ${match}
+           AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $3 AND b.blocked_id = p.business_id) OR (b.blocker_id = p.business_id AND b.blocked_id = $3))
+         ORDER BY (SELECT COALESCE(AVG(rating), 0) FROM product_reviews pr WHERE pr.product_id = p.id) DESC, p.created_at DESC LIMIT 8`,
+        params
+      );
+      listing.similar = sim.rows.map(mapListing);
+    } catch (e) { listing.similar = []; }
     res.json({ listing });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the listing.' }); }
 });

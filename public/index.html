@@ -16795,7 +16795,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1524'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1525'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -34798,6 +34798,9 @@ async function acOpenListing(id) {
     const shareBtn = `<button class="mkt-save mkt-share" onclick="acShareListing(${l.id})" aria-label="Share listing"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/></svg></button>`;
     const moreSeller = (l.moreFromSeller && l.moreFromSeller.length)
       ? `<div class="co-sec-h" style="margin-top:18px;">More from ${escHtml(l.seller.name)}</div><div class="mkt-more">${l.moreFromSeller.map(m => `<div class="mkt-more-card" onclick="acOpenListing(${m.id})"><div class="mkt-more-img" style="background-image:url('${(m.images && m.images[0]) || m.image || ''}')"></div><div class="mkt-more-name">${escHtml(m.name)}</div><div class="mkt-more-price">$${((m.priceFromCents || m.priceCents) / 100).toFixed(2)}</div></div>`).join('')}</div>` : '';
+    // Cross-seller shelf: similar items from OTHER sellers (same category/kind).
+    const similar = (l.similar && l.similar.length)
+      ? `<div class="co-sec-h" style="margin-top:18px;">Similar items</div><div class="mkt-more">${l.similar.map(m => `<div class="mkt-more-card" onclick="acOpenListing(${m.id})"><div class="mkt-more-img" style="background-image:url('${(m.images && m.images[0]) || m.image || ''}')"></div><div class="mkt-more-name">${escHtml(m.name)}</div><div class="mkt-more-price">$${((m.priceFromCents || m.priceCents) / 100).toFixed(2)}${m.compareAtCents ? ` <s style="color:var(--t3);font-weight:600;">$${(m.compareAtCents / 100).toFixed(2)}</s>` : ''}</div><div class="mkt-more-name" style="color:var(--t3);font-weight:500;">${escHtml(m.seller.name)}</div></div>`).join('')}</div>` : '';
     // Desktop (Engine spec): gallery LEFT / details RIGHT side by side (.lv-top is a
     // 2-col grid ≥1000px, a plain vertical stack on mobile — same content, no JS change).
     body.innerHTML = `<div class="lv-top">
@@ -34819,7 +34822,7 @@ async function acOpenListing(id) {
     </div>
       <div id="prodReviews" style="margin-top:16px;"></div>
       <div id="prodQA" style="margin-top:16px;"></div>
-      ${moreSeller}`;
+      ${moreSeller}${similar}`;
     if (imgs.length > 1) acBindGallery();
     acLoadProductReviews(l.id);
     acLoadProductQA(l.id);
