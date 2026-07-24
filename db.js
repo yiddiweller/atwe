@@ -2718,6 +2718,10 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS event_rsvps_user_idx ON event_rsvps(user_id);`);
+  // Event reminders: once per going-RSVP, flipped by the flusher shortly before start.
+  await query(`ALTER TABLE event_rsvps ADD COLUMN IF NOT EXISTS reminded BOOLEAN NOT NULL DEFAULT false;`);
+  // Event notifs (rsvp/update/reminder) deep-link to the event.
+  await query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS event_id INTEGER REFERENCES events(id) ON DELETE CASCADE;`);
 
   // Newsletters (LinkedIn-style): a creator runs a publication; people subscribe;
   // each issue is an article that notifies subscribers.
