@@ -15268,6 +15268,8 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   <div class="aimp-sep"></div>
   <button class="aimp-item" role="menuitem" onclick="acChatMenuPick('starred')"><svg viewBox="0 0 24 24"><polygon points="12 2.5 14.7 8.6 21.5 9.3 16.5 13.9 17.9 20.6 12 17.1 6.1 20.6 7.5 13.9 2.5 9.3 9.3 8.6"/></svg><span>Starred messages</span></button>
   <div class="aimp-sep"></div>
+  <button class="aimp-item" role="menuitem" onclick="acChatMenuPick('readall')"><svg viewBox="0 0 24 24"><path d="M18 6 7 17l-4-4"/><path d="M22 8.5 13.5 17"/></svg><span>Mark all as read</span></button>
+  <div class="aimp-sep"></div>
   <button class="aimp-item" role="menuitem" id="chatMenuArchived" onclick="acChatMenuPick('archived')"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg><span>Archived</span><span class="aimp-count" id="chatMenuArchivedN"></span></button>
   <div class="aimp-sep"></div>
   <!-- "Unread only" now lives as its own tab in the Beam tab row — hidden here to avoid duplication. -->
@@ -16547,7 +16549,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1467'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1468'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -30034,10 +30036,22 @@ function acChatMenuPick(which) {
   acCloseChatMenu();
   if (which === 'search') acToggleChatSearch();
   else if (which === 'starred') acOpenStarred();
+  else if (which === 'readall') acMarkAllChatsRead();
   else if (which === 'archived') acEnterArchived();
   else if (which === 'lastseen') acToggleLastSeen();
   else if (which === 'automsg') acOpenAutoMessages();
   else acToggleUnreadFilter();
+}
+// Mark every conversation read at once, then refresh the list + unread badges.
+async function acMarkAllChatsRead() {
+  try {
+    await API.req('POST', '/api/atchat/read-all', {});
+    (AC.conversations || []).forEach((c) => { c.unread = 0; });
+    (AC.groupsList || []).forEach((g) => { g.unread = 0; });
+    if (typeof acRenderChats === 'function') acRenderChats();
+    acRefreshUnread();
+    showNotif('All chats marked as read.');
+  } catch (e) { showNotif(e.message || 'Could not mark all read.'); }
 }
 // WhatsApp-style Last seen & online toggle. ON = share your last seen/online
 // ('everyone'); OFF = hide it ('nobody') — which, reciprocally, also hides everyone
