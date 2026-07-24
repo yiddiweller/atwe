@@ -1770,6 +1770,7 @@ const PUSH_VERBS = {
   creator_sub: 'subscribed to you', tip: 'sent you a tip', appt_request: 'requested an appointment',
   appt_rescheduled: 'proposed a new appointment time',
   appt_reminder: 'has an appointment with you soon',
+  event_spot: 'a spot opened up — you’re in!',
   stock_low: 'is running low — only a few left',
   stock_out: 'has sold out',
   call_reminder: 'has a call with you soon',
@@ -14095,6 +14096,7 @@ const EVENTS_SELECT = `
          u.name AS host_name, u.username AS host_username, u.avatar AS host_avatar, u.verified AS host_verified, u.account_type AS host_type,
          (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id = e.id AND r.status = 'going')::int AS going,
          (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id = e.id AND r.status = 'interested')::int AS interested,
+         (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id = e.id AND r.status = 'waitlist')::int AS waitlisted,
          (SELECT status FROM event_rsvps r WHERE r.event_id = e.id AND r.user_id = $1) AS my_rsvp,
          (SELECT paid FROM event_rsvps r WHERE r.event_id = e.id AND r.user_id = $1) AS my_paid,
          (e.host_id = $1) AS mine
@@ -14109,7 +14111,7 @@ function mapEvent(r) {
     capacity: (r.capacity === null || r.capacity === undefined) ? null : r.capacity,
     spotsLeft: (r.capacity === null || r.capacity === undefined) ? null : Math.max(0, r.capacity - (r.going || 0)),
     full: (r.capacity === null || r.capacity === undefined) ? false : (r.going || 0) >= r.capacity,
-    going: r.going || 0, interested: r.interested || 0, myRsvp: r.my_rsvp || null, myPaid: !!r.my_paid, mine: !!r.mine,
+    going: r.going || 0, interested: r.interested || 0, waitlisted: r.waitlisted || 0, myRsvp: r.my_rsvp || null, myPaid: !!r.my_paid, mine: !!r.mine,
     host: { id: r.host_id, name: r.host_name, username: r.host_username, avatar: r.host_avatar || null, verified: !!r.host_verified, business: r.host_type === 'business' },
   };
 }
@@ -20465,7 +20467,7 @@ app.delete('/api/events/:id', auth.requireAuth, async (req, res) => {
 app.post('/api/events/:id/rsvp', auth.requireAuth, blockImpersonation, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid event id.' });
-  const status = ['going', 'interested'].includes(req.body.status) ? req.body.status : 'going';
+  const status = ['going', 'interested', 'waitlist'].includes(req.body.status) ? req.body.status : 'going';
   try {
     const e = await db.query('SELECT host_id, price_cents, title, capacity FROM events WHERE id = $1', [id]);
     if (!e.rows[0]) return res.status(404).json({ error: 'That event is no longer available.' });
@@ -20478,7 +20480,7 @@ app.post('/api/events/:id/rsvp', auth.requireAuth, blockImpersonation, async (re
       const already = await db.query("SELECT 1 FROM event_rsvps WHERE event_id = $1 AND user_id = $2 AND status = 'going'", [id, req.user.id]);
       if (!already.rows[0]) {
         const cnt = await db.query("SELECT COUNT(*)::int AS n FROM event_rsvps WHERE event_id = $1 AND status = 'going'", [id]);
-        if (cnt.rows[0].n >= e.rows[0].capacity) return res.status(400).json({ error: 'This event is full.', full: true });
+        if (cnt.rows[0].n >= e.rows[0].capacity) return res.status(400).json({ error: 'This event is full.', full: true, canWaitlist: true });
       }
     }
     // Ticketed event: "going" needs a paid ticket (non-host). "Interested" is free.
@@ -20556,10 +20558,29 @@ app.delete('/api/events/:id/rsvp', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid event id.' });
   try {
-    await db.query('DELETE FROM event_rsvps WHERE event_id = $1 AND user_id = $2', [id, req.user.id]);
+    const gone = await db.query("DELETE FROM event_rsvps WHERE event_id = $1 AND user_id = $2 RETURNING status", [id, req.user.id]);
     res.json({ ok: true });
+    // Freeing a SEAT (not an "interested"/waitlist row) promotes the person who
+    // has waited longest — fire-and-forget, after responding.
+    if (gone.rows[0] && gone.rows[0].status === 'going') promoteFromWaitlist(id).catch(() => {});
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update your RSVP.' }); }
 });
+// Move the longest-waiting person off an event's waitlist into a real seat, if
+// the event now has room. Claim-first so two freed seats can't promote the same
+// person twice, and only for free events (a ticketed seat must still be paid for).
+async function promoteFromWaitlist(eventId) {
+  try {
+    const e = (await db.query('SELECT host_id, capacity, price_cents, title FROM events WHERE id = $1', [eventId])).rows[0];
+    if (!e || e.capacity == null || (e.price_cents || 0) > 0) return;
+    const cnt = (await db.query("SELECT COUNT(*)::int AS n FROM event_rsvps WHERE event_id = $1 AND status = 'going'", [eventId])).rows[0].n;
+    if (cnt >= e.capacity) return;
+    const up = await db.query(
+      `UPDATE event_rsvps SET status = 'going' WHERE event_id = $1 AND user_id = (
+         SELECT user_id FROM event_rsvps WHERE event_id = $1 AND status = 'waitlist' ORDER BY created_at LIMIT 1
+       ) AND status = 'waitlist' RETURNING user_id`, [eventId]);
+    if (up.rows[0]) notify(up.rows[0].user_id, e.host_id, 'event_spot', null, null, null, null, eventId);
+  } catch (_) { /* best-effort */ }
+}
 // Attendee list (going first, then interested).
 app.get('/api/events/:id/attendees', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
