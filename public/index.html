@@ -16598,7 +16598,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1479'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1480'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -35415,14 +35415,37 @@ async function acLoadOrders() {
   const body = document.getElementById('ordersBody'); body.innerHTML = acSkelRows(3);
   try {
     const { orders } = await API.req('GET', '/api/orders?scope=' + AC._ordScope);
-    body.innerHTML = orders.length ? orders.map(o => {
+    AC._orders = orders || []; AC._ordFilter = 'all';
+    acRenderOrders();
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+// Status filter chips over the loaded orders (client-side).
+const _ORD_FILTERS = [
+  ['all', 'All', () => true],
+  ['active', 'Active', (o) => ['pending', 'paid', 'escrow', 'disputed'].includes(o.status)],
+  ['shipped', 'Shipped', (o) => !!o.shippedAt && !o.deliveredAt],
+  ['done', 'Done', (o) => ['fulfilled', 'delivered', 'released'].includes(o.status)],
+  ['cancelled', 'Cancelled', (o) => ['cancelled', 'refunded'].includes(o.status)],
+];
+function acOrdFilter(k) { AC._ordFilter = k; acRenderOrders(); }
+function acRenderOrders() {
+  const body = document.getElementById('ordersBody'); if (!body) return;
+  const orders = AC._orders || [];
+  if (!orders.length) { body.innerHTML = `<div class="ac-empty" style="padding:26px;">${AC._ordScope === 'seller' ? 'No sales yet.' : 'You haven’t ordered anything yet.'}</div>`; return; }
+  const f = AC._ordFilter || 'all';
+  const def = _ORD_FILTERS.find(([k]) => k === f) || _ORD_FILTERS[0];
+  // Only offer chips that would show something (All always).
+  const chips = _ORD_FILTERS.filter(([k, , fn]) => k === 'all' || orders.some(fn))
+    .map(([k, l]) => `<button class="wf-chip ${f === k ? 'on' : ''}" onclick="acOrdFilter('${k}')">${l}</button>`).join('');
+  const list = orders.filter(def[2]);
+  body.innerHTML = `<div class="wf-chips" style="margin-bottom:8px;">${chips}</div>`
+    + (list.length ? list.map(o => {
       const who = AC._ordScope === 'seller' ? o.buyer : o.seller;
       const n = o.items.reduce((s, i) => s + i.qty, 0);
       return `<div class="ac-item" onclick="acOpenOrder(${o.id})">${acAvatarHtml(who.name, who.avatar)}
         <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${n} item${n === 1 ? '' : 's'} · $${(o.totalCents / 100).toFixed(2)}</span>${acOrdStatusChip(o.status)}</div>
           <div class="ac-item-last">${AC._ordScope === 'seller' ? 'From ' : 'Sold by '}${escHtml(who.name)}</div></div></div>`;
-    }).join('') : `<div class="ac-empty" style="padding:26px;">${AC._ordScope === 'seller' ? 'No sales yet.' : 'You haven’t ordered anything yet.'}</div>`;
-  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+    }).join('') : '<div class="ac-empty" style="padding:20px;">Nothing in this view.</div>');
 }
 async function acOpenOrder(id) {
   AC._ordId = id; showOverlay('orderView');
