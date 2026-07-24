@@ -6476,6 +6476,11 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 /* Marketplace — post-style listing cards */
 .user-avatar.sm{width:34px;height:34px;}
 .mkt-card{background:var(--s1);border:none;border-radius:16px;overflow:hidden;margin-bottom:12px;}
+/* Wallet history filter chips */
+.wf-chips{display:flex;gap:8px;margin:2px 0 10px;overflow-x:auto;scrollbar-width:none;}
+.wf-chips::-webkit-scrollbar{display:none;}
+.wf-chip{flex:0 0 auto;background:var(--s2);border:none;border-radius:var(--r-pill);color:var(--t2);font-size:13px;font-weight:600;padding:7px 14px;cursor:pointer;font-family:inherit;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
+.wf-chip.on{background:var(--accent-dim);color:var(--accent);}
 /* Recently visited profiles row (Engine empty state) */
 .rp-head{display:flex;align-items:center;justify-content:space-between;margin:10px 10px 6px;}
 .rp-title{font-size:14px;font-weight:800;color:var(--t1);}
@@ -16393,7 +16398,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1425'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1426'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -32603,11 +32608,29 @@ async function acLoadWallet() {
     const bal = document.getElementById('walletBal'); if (bal) bal.textContent = acMoneyFmt(balanceCents);
     acLoadPots();
     acWalletReqCount();
-    const h = document.getElementById('walletHistory'); if (!h) return;
-    if (!transactions.length) { h.innerHTML = '<div class="ac-empty" style="padding:20px;">No transactions yet. Add money or send some to a friend.</div>'; return; }
-    h.innerHTML = transactions.map(acWalletRow).join('');
+    AC._walletTx = transactions || [];
+    AC._walletFilter = 'all';
+    acRenderWalletHistory();
   } catch (e) { const h = document.getElementById('walletHistory'); if (h) h.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load your wallet.') + '</div>'; }
 }
+// History filter chips (Cash-App-style): All · Received · Sent · Top-ups. Pure
+// client-side over the loaded ledger — "Sent" = any outflow (sends, purchases,
+// cash-outs), "Received" = any inflow that isn't a top-up.
+function acRenderWalletHistory() {
+  const h = document.getElementById('walletHistory'); if (!h) return;
+  const tx = AC._walletTx || [];
+  if (!tx.length) { h.innerHTML = '<div class="ac-empty" style="padding:20px;">No transactions yet. Add money or send some to a friend.</div>'; return; }
+  const f = AC._walletFilter || 'all';
+  const match = (t) => f === 'all' ? true
+    : f === 'in' ? (t.deltaCents >= 0 && t.kind !== 'topup')
+    : f === 'out' ? (t.deltaCents < 0)
+    : (t.kind === 'topup');
+  const list = tx.filter(match);
+  const chip = (k, l) => `<button class="wf-chip ${f === k ? 'on' : ''}" onclick="acWalletFilter('${k}')">${l}</button>`;
+  h.innerHTML = `<div class="wf-chips">${chip('all', 'All')}${chip('in', 'Received')}${chip('out', 'Sent')}${chip('topup', 'Top-ups')}</div>`
+    + (list.length ? list.map(acWalletRow).join('') : '<div class="ac-empty" style="padding:18px;">Nothing in this view yet.</div>');
+}
+function acWalletFilter(k) { AC._walletFilter = k; acRenderWalletHistory(); }
 // Show a "N to pay" count on the wallet's Money-requests row (pending incoming).
 async function acWalletReqCount() {
   const sub = document.getElementById('walletReqSub'); if (!sub) return;
