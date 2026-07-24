@@ -1715,8 +1715,19 @@ const NOTIF_FILTERS = [
 const NOTIF_FILTER_KEYS = new Set(NOTIF_FILTERS.map((f) => f.key));
 const NEW_ACCOUNT_DAYS = 7;
 
+// Types silenced by a per-post notification mute — social noise about the post
+// only; money/message types never route through this.
+const POST_MUTE_TYPES = new Set(['like', 'reply', 'repost', 'quote', 'mention', 'tagged']);
 async function notify(userId, actorId, type, postId, feedId, groupId, productId, eventId) {
   if (!userId || userId === actorId) return;
+  // "Turn off notifications for this post": drop social notifs about a post the
+  // recipient muted. Fail-open — a lookup error must never eat a notification.
+  if (postId && POST_MUTE_TYPES.has(type)) {
+    try {
+      const m = await db.query('SELECT 1 FROM post_notif_mutes WHERE user_id = $1 AND post_id = $2', [userId, postId]);
+      if (m.rowCount) return;
+    } catch (e) { /* fail open */ }
+  }
   // Respect the recipient's per-category preferences + quality filters (muteable
   // social categories only). Fail-open on any lookup error.
   const cat = NOTIF_TYPE_CAT[type];
@@ -9725,6 +9736,34 @@ app.delete('/api/social/posts/:id/pin', auth.requireAuth, async (req, res) => {
     await db.query('UPDATE users SET pinned_post_id = NULL WHERE id = $1 AND pinned_post_id = $2', [req.user.id, id]);
     res.json({ ok: true, pinned: false });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not unpin the post.' }); }
+});
+// "Turn off notifications for this post" (X-style): silences likes/replies/
+// reposts about ONE post — for YOUR notification stream only; nothing else
+// changes and nobody is told. Toggle with POST (on) / DELETE (off).
+app.post('/api/social/posts/:id/mute-notifs', auth.requireAuth, rateLimit(60, 60000, 'post-nmute'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  try {
+    const p = (await db.query('SELECT id FROM posts WHERE id = $1', [id])).rows[0];
+    if (!p) return res.status(404).json({ error: 'Post not found.' });
+    await db.query('INSERT INTO post_notif_mutes (user_id, post_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [req.user.id, id]);
+    res.json({ ok: true, muted: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+app.delete('/api/social/posts/:id/mute-notifs', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  try {
+    await db.query('DELETE FROM post_notif_mutes WHERE user_id = $1 AND post_id = $2', [req.user.id, id]);
+    res.json({ ok: true, muted: false });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+// The ids you've muted — loaded once so menus can show the right toggle label.
+app.get('/api/social/muted-post-notifs', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT post_id FROM post_notif_mutes WHERE user_id = $1 LIMIT 500', [req.user.id]);
+    res.json({ postIds: rows.map((r) => r.post_id) });
+  } catch (err) { res.json({ postIds: [] }); }
 });
 
 /* ═══════════════════════════════════════════════
