@@ -16454,7 +16454,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1448'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1449'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -33036,7 +33036,9 @@ function acMoneyReqRow(r, scope) {
   if (r.status === 'pending' && scope === 'incoming') {
     action = `<div class="mr-acts"><button class="ac-pill-btn accent" onclick="acPayMoneyRequest(${r.id})">Pay ${amt}</button><button class="ac-pill-btn" onclick="acDeclineMoneyRequest(${r.id})">Decline</button></div>`;
   } else if (r.status === 'pending' && scope === 'outgoing') {
-    action = `<div class="mr-acts"><button class="ac-pill-btn" onclick="acCancelMoneyRequest(${r.id})">Cancel request</button></div>`;
+    // Venmo-style nudge — shown until used, then hidden for the 1-day cooldown.
+    const remind = r.canRemind ? `<button class="ac-pill-btn accent" onclick="acRemindMoneyRequest(${r.id}, this)">Remind</button>` : '';
+    action = `<div class="mr-acts">${remind}<button class="ac-pill-btn" onclick="acCancelMoneyRequest(${r.id})">Cancel request</button></div>`;
   }
   const statusLbl = r.status === 'paid' ? '<span class="mr-badge paid">Paid</span>'
     : r.status === 'declined' ? '<span class="mr-badge">Declined</span>'
@@ -33048,8 +33050,17 @@ function acMoneyReqRow(r, scope) {
       <div class="mr-amt">${amt}${statusLbl}</div></div>
     ${action}</div>`;
 }
+// Nudge the payer about a pending request (server caps it at one a day).
+async function acRemindMoneyRequest(id, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    await API.req('POST', '/api/wallet/requests/' + id + '/remind', {});
+    showNotif('Reminder sent.');
+    acLoadMoneyRequests('outgoing');
+  } catch (e) { if (btn) btn.disabled = false; showNotif(e.message || 'Could not send the reminder.'); }
+}
 async function acPayMoneyRequest(id) {
-  if (!(await appConfirm('Pay this request from your wallet balance?'))) return;
+  if (!(await appConfirm({ title: 'Pay this request?', message: 'Paid from your wallet balance.', confirmText: 'Pay', danger: false }))) return;
   try {
     const r = await API.req('POST', '/api/wallet/requests/' + id + '/pay', {});
     if (r.already) { showNotif('That request is no longer pending.'); }

@@ -1282,6 +1282,8 @@ async function initSchema() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS money_requests_payer_idx ON money_requests(payer_id) WHERE status = 'pending';`);
   await query(`CREATE INDEX IF NOT EXISTS money_requests_requester_idx ON money_requests(requester_id);`);
+  // Requester "Remind" nudge cooldown (~1/day) — nudge only, no money movement.
+  await query(`ALTER TABLE money_requests ADD COLUMN IF NOT EXISTS last_reminded_at TIMESTAMPTZ;`);
   // Geo coordinates for "near me" discovery (businesses/services set their own; optional).
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;`);
