@@ -16599,6 +16599,25 @@ app.get('/api/my-listings', auth.requireAuth, async (req, res) => {
     res.json({ products: rows.map((r) => mapProduct(r, { owner: true })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your listings.' }); }
 });
+// Duplicate a listing (Etsy/Shopify staple): a full copy of your own product —
+// name + " (copy)", HIDDEN until published (active=false), never pinned. Stock,
+// shipping, variants, details and digital content all carry over.
+app.post('/api/products/:id/duplicate', auth.requireAuth, rateLimit(20, 60000, 'prod-dup'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const p = (await db.query('SELECT * FROM products WHERE id = $1', [id])).rows[0];
+    if (!p) return res.status(404).json({ error: 'Listing not found.' });
+    if (p.business_id !== req.user.id) return res.status(403).json({ error: 'You can only duplicate your own listings.' });
+    const name = (p.name + ' (copy)').slice(0, 120);
+    const r = await db.query(
+      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, pinned)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,false,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,false) RETURNING id`,
+      [req.user.id, name, p.description, p.price_cents, p.image, p.images, p.kind, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants ? JSON.stringify(p.variants) : null, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs ? JSON.stringify(p.specs) : null, p.rental_period, p.category]
+    );
+    res.status(201).json({ ok: true, id: r.rows[0].id, name });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not duplicate the listing.' }); }
+});
 // Pin / unpin a listing to the top of the storefront (one pinned per seller).
 app.post('/api/products/:id/pin', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
