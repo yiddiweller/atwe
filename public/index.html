@@ -16472,7 +16472,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1455'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1456'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -34642,7 +34642,7 @@ function acGroupedProductGrid(products, owner) {
 function acProductCard(p, owner) {
   const img = p.image ? `<div class="shop-img" style="background-image:url('${p.image}')"></div>` : `<div class="shop-img noimg"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>`;
   const action = owner
-    ? `<span style="display:flex;gap:6px;flex-wrap:wrap;"><button class="shop-buy" onclick="event.stopPropagation();acProductFormOpen(${p.id})">Edit</button><button class="shop-buy ${p.pinned ? 'pin-on' : ''}" onclick="event.stopPropagation();acPinProduct(${p.id},${p.pinned ? 'false' : 'true'})">${p.pinned ? '📌 Unpin' : '📌 Pin'}</button><button class="shop-buy" onclick="event.stopPropagation();acDuplicateProduct(${p.id})">Duplicate</button>${p.active ? `<button class="shop-buy" onclick="event.stopPropagation();acAdCreateFor(${p.id})">Advertise</button>` : ''}</span>`
+    ? `<span style="display:flex;gap:6px;flex-wrap:wrap;"><button class="shop-buy" onclick="event.stopPropagation();acProductFormOpen(${p.id})">Edit</button>${!p.hasVariants ? `<button class="shop-buy" onclick="event.stopPropagation();acMarkSold(${p.id},${p.soldOut ? 'false' : 'true'})">${p.soldOut ? 'Mark available' : 'Mark sold'}</button>` : ''}<button class="shop-buy ${p.pinned ? 'pin-on' : ''}" onclick="event.stopPropagation();acPinProduct(${p.id},${p.pinned ? 'false' : 'true'})">${p.pinned ? '📌 Unpin' : '📌 Pin'}</button><button class="shop-buy" onclick="event.stopPropagation();acDuplicateProduct(${p.id})">Duplicate</button>${p.active ? `<button class="shop-buy" onclick="event.stopPropagation();acAdCreateFor(${p.id})">Advertise</button>` : ''}</span>`
     : (p.hasVariants
       ? `<button class="shop-buy accent" onclick="event.stopPropagation();acOpenListing(${p.id})">Choose options</button>`
       : `<button class="shop-buy accent" onclick="event.stopPropagation();acAddToCart(${p.id})">Add to cart</button>`);
@@ -34653,6 +34653,20 @@ function acProductCard(p, owner) {
       <div class="shop-meta"><span class="shop-price">${p.hasVariants ? 'from $' + (p.priceFromCents / 100).toFixed(2) : '$' + (p.priceCents / 100).toFixed(2)}</span><span class="shop-kind">${_PROD_KIND[p.kind] || ''}</span>${p.reviewCount ? `<span class="shop-kind">★ ${p.rating} (${p.reviewCount})</span>` : ''}${p.needsShipping && p.stock !== null ? (p.soldOut ? '<span class="stock-badge out">Sold out</span>' : p.stock <= 5 ? `<span class="stock-badge low">Only ${p.stock} left</span>` : `<span class="shop-kind">${p.stock} in stock</span>`) : ''}${p.active ? '' : '<span class="shop-off">Hidden</span>'}</div></div>
     ${action}
   </div>`;
+}
+// One-tap "Mark as sold" (Facebook-Marketplace-style): stock → 0, so the listing
+// shows Sold out everywhere and buying is blocked. Marking available restores
+// untracked (unlimited) stock — a seller who counts inventory edits the listing
+// instead. Variant listings manage stock per-variant in the form, so no quick toggle.
+async function acMarkSold(id, sold) {
+  try {
+    await API.req('PATCH', '/api/products/' + id, { stock: sold ? 0 : null });
+    showNotif(sold ? 'Marked as sold.' : 'Back available — edit the listing if you track a stock count.');
+    const sv = document.getElementById('sellView');
+    if (sv && !sv.classList.contains('hidden') && typeof acLoadSell === 'function') acLoadSell();
+    const sf = document.getElementById('storefrontView');
+    if (sf && !sf.classList.contains('hidden') && AC._sf) acOpenStorefront(AC._sf);
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
 }
 // Duplicate a listing: a hidden copy ("<name> (copy)") ready to edit + publish.
 async function acDuplicateProduct(id) {
