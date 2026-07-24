@@ -3188,6 +3188,8 @@ async function initSchema() {
   // Business hours (Google-Business style): a 7-element JSONB array, index 0=Monday …
   // 6=Sunday, each { closed: bool, open: 'HH:MM', close: 'HH:MM' }. NULL = not set.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS business_hours JSONB;`);
+  // Free-text note under the hours schedule ("Closed Dec 25 · Holiday hours may differ").
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS hours_note TEXT;`);
   // Auto-messages (WhatsApp-Business style): a business can auto-send a one-time
   // "greeting" to a new/long-absent customer, and/or an "away" reply while they
   // can't respond personally. `away_schedule` = 'always' (whenever away is on) or
