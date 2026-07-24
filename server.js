@@ -434,7 +434,7 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
       const uid = parseInt(m.user_id, 10), eid = parseInt(m.event_id, 10);
       if (Number.isInteger(uid) && Number.isInteger(eid)) {
         await db.query(`INSERT INTO event_rsvps (event_id, user_id, status, paid) VALUES ($1,$2,'going',true) ON CONFLICT (event_id, user_id) DO UPDATE SET status = 'going', paid = true`, [eid, uid]);
-        notify((await db.query('SELECT host_id FROM events WHERE id = $1', [eid])).rows[0]?.host_id, uid, 'event_rsvp');
+        notify((await db.query('SELECT host_id FROM events WHERE id = $1', [eid])).rows[0]?.host_id, uid, 'event_rsvp', null, null, null, null, eid);
       }
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'newsletter_sub') {
       const s = event.data.object, m = s.metadata || {};
@@ -1691,7 +1691,7 @@ const NOTIF_CATEGORIES = [
   { key: 'posts',        label: 'Posts from people you follow',   types: ['post'] },
   { key: 'connections',  label: 'Connections',                    types: ['connection_request', 'connection_accepted'] },
   { key: 'endorsements', label: 'Endorsements & recommendations', types: ['endorsement', 'rec_received', 'rec_request'] },
-  { key: 'events',       label: 'Events',                         types: ['event_rsvp', 'event_update'] },
+  { key: 'events',       label: 'Events',                         types: ['event_rsvp', 'event_update', 'event_reminder'] },
   { key: 'newsletters',  label: 'Newsletters',                    types: ['newsletter_issue'] },
   { key: 'updates',      label: 'Profile & network updates',      types: ['profile_update'] },
 ];
@@ -1711,7 +1711,7 @@ const NOTIF_FILTERS = [
 const NOTIF_FILTER_KEYS = new Set(NOTIF_FILTERS.map((f) => f.key));
 const NEW_ACCOUNT_DAYS = 7;
 
-async function notify(userId, actorId, type, postId, feedId, groupId, productId) {
+async function notify(userId, actorId, type, postId, feedId, groupId, productId, eventId) {
   if (!userId || userId === actorId) return;
   // Respect the recipient's per-category preferences + quality filters (muteable
   // social categories only). Fail-open on any lookup error.
@@ -1740,7 +1740,7 @@ async function notify(userId, actorId, type, postId, feedId, groupId, productId)
     } catch (_) { /* fail-open: deliver if the lookup fails */ }
   }
   try {
-    await db.query('INSERT INTO notifications (user_id, actor_id, type, post_id, feed_id, group_id, product_id) VALUES ($1, $2, $3, $4, $5, $6, $7)', [userId, actorId, type, postId || null, feedId || null, groupId || null, productId || null]);
+    await db.query('INSERT INTO notifications (user_id, actor_id, type, post_id, feed_id, group_id, product_id, event_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)', [userId, actorId, type, postId || null, feedId || null, groupId || null, productId || null, eventId || null]);
     rtPush(userId, 'notif', { type });
     sendPushForNotif(userId, actorId, type).catch(() => {}); // best-effort web push
   } catch (e) { /* notifications are best-effort */ }
@@ -1753,7 +1753,7 @@ const PUSH_VERBS = {
   chat_request: 'wants to chat with you', mention: 'mentioned you', quote: 'quoted your post',
   job_application: 'applied to your job', connection_request: 'wants to connect',
   connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills',
-  event_rsvp: 'is going to your event', rec_received: 'recommended you',
+  event_rsvp: 'is going to your event', event_reminder: 'an event you’re going to starts soon', rec_received: 'recommended you',
   creator_sub: 'subscribed to you', tip: 'sent you a tip', appt_request: 'requested an appointment',
   order_shipped: 'shipped your order', order_delivered: 'marked your order delivered',
   return_label_ready: 'sent you a prepaid return label',
@@ -20014,7 +20014,7 @@ app.patch('/api/events/:id', auth.requireAuth, async (req, res) => {
     await db.query(`UPDATE events SET ${sets.join(', ')} WHERE id = $${i}`, vals);
     // Tell attendees the event changed.
     const att = await db.query('SELECT user_id FROM event_rsvps WHERE event_id = $1 AND user_id <> $2', [id, req.user.id]);
-    for (const a of att.rows) notify(a.user_id, req.user.id, 'event_update');
+    for (const a of att.rows) notify(a.user_id, req.user.id, 'event_update', null, null, null, null, id);
     const { rows } = await db.query(EVENTS_SELECT + 'WHERE e.id = $2', [req.user.id, id]);
     res.json({ event: mapEvent(rows[0]) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the event.' }); }
@@ -20063,16 +20063,32 @@ app.post('/api/events/:id/rsvp', auth.requireAuth, blockImpersonation, async (re
           return res.json({ url: session.url });
         }
         await db.query(`INSERT INTO event_rsvps (event_id, user_id, status, paid) VALUES ($1,$2,'going',true) ON CONFLICT (event_id, user_id) DO UPDATE SET status='going', paid=true`, [id, req.user.id]); // demo: instant ticket
-        notify(e.rows[0].host_id, req.user.id, 'event_rsvp');
+        notify(e.rows[0].host_id, req.user.id, 'event_rsvp', null, null, null, null, id);
         return res.json({ ok: true, status: 'going' });
       }
     }
     const existed = await db.query('SELECT 1 FROM event_rsvps WHERE event_id = $1 AND user_id = $2', [id, req.user.id]);
     await db.query('INSERT INTO event_rsvps (event_id, user_id, status) VALUES ($1,$2,$3) ON CONFLICT (event_id, user_id) DO UPDATE SET status = $3', [id, req.user.id, status]);
-    if (!existed.rows[0]) notify(e.rows[0].host_id, req.user.id, 'event_rsvp');
+    if (!existed.rows[0]) notify(e.rows[0].host_id, req.user.id, 'event_rsvp', null, null, null, null, id);
     res.json({ ok: true, status });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not RSVP.' }); }
 });
+// Event reminders: shortly before an event starts, ping every going attendee once
+// (host excluded — notify() drops self-notifies). The guarded UPDATE claims each
+// RSVP so overlapping ticks can never double-remind.
+async function flushEventReminders() {
+  if (!db.isConfigured()) return 0;
+  const { rows } = await db.query(
+    `UPDATE event_rsvps r SET reminded = true
+       FROM events e
+      WHERE e.id = r.event_id AND r.status = 'going' AND NOT r.reminded
+        AND e.starts_at > now() AND e.starts_at <= now() + interval '60 minutes'
+      RETURNING r.user_id, e.id AS event_id, e.host_id`);
+  for (const r of rows) { try { await notify(r.user_id, r.host_id, 'event_reminder', null, null, null, null, r.event_id); } catch (_) {} }
+  return rows.length;
+}
+registerJob('event_reminders', 'Event reminders', 5 * 60000);
+setInterval(trackJob('event_reminders', flushEventReminders), 5 * 60000).unref?.();
 // Withdraw RSVP.
 app.delete('/api/events/:id/rsvp', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
@@ -21159,15 +21175,16 @@ app.patch('/api/feeds/:id', auth.requireAuth, async (req, res) => {
 app.get('/api/notifications', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT n.id, n.type, n.post_id, n.feed_id, n.group_id, n.job_id, n.product_id, n.read, n.created_at,
+      `SELECT n.id, n.type, n.post_id, n.feed_id, n.group_id, n.job_id, n.product_id, n.event_id, n.read, n.created_at,
               u.id AS actor_id, u.name AS actor_name, u.username AS actor_username, u.avatar AS actor_avatar,
               u.account_type AS actor_type, u.verified AS actor_verified,
-              p.body AS post_body, j.title AS job_title, pr.name AS product_name
+              p.body AS post_body, j.title AS job_title, pr.name AS product_name, ev.title AS event_title
        FROM notifications n
        JOIN users u ON u.id = n.actor_id
        LEFT JOIN posts p ON p.id = n.post_id
        LEFT JOIN jobs j ON j.id = n.job_id
        LEFT JOIN products pr ON pr.id = n.product_id
+       LEFT JOIN events ev ON ev.id = n.event_id
        WHERE n.user_id = $1
        ORDER BY n.created_at DESC LIMIT 60`,
       [req.user.id]
@@ -21176,8 +21193,8 @@ app.get('/api/notifications', auth.requireAuth, async (req, res) => {
     res.json({
       unread,
       notifications: rows.map((r) => ({
-        id: r.id, type: r.type, postId: r.post_id || null, feedId: r.feed_id || null, groupId: r.group_id || null, jobId: r.job_id || null, productId: r.product_id || null, read: r.read, created_at: r.created_at,
-        postBody: r.post_body || null, jobTitle: r.job_title || null, productName: r.product_name || null,
+        id: r.id, type: r.type, postId: r.post_id || null, feedId: r.feed_id || null, groupId: r.group_id || null, jobId: r.job_id || null, productId: r.product_id || null, eventId: r.event_id || null, read: r.read, created_at: r.created_at,
+        postBody: r.post_body || null, jobTitle: r.job_title || null, productName: r.product_name || null, eventTitle: r.event_title || null,
         actor: { id: r.actor_id, name: r.actor_name, username: r.actor_username, avatar: r.actor_avatar || null, accountType: r.actor_type === 'business' ? 'business' : 'personal', verified: !!r.actor_verified },
       })),
     });
