@@ -7122,9 +7122,13 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .ac-sg-foot{padding-inline-start:var(--feed-gutter);}
 .ac-sg-scroll{display:flex;gap:11px;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scroll-padding-inline-start:var(--feed-gutter);scrollbar-width:none;padding:4px var(--feed-gutter) 8px;}
 .ac-sg-scroll::-webkit-scrollbar{display:none;}
-.ac-sgc{flex:0 0 auto;width:248px;scroll-snap-align:start;background:var(--bg-2);border:none;border-radius:16px;overflow:hidden;cursor:pointer;transition:background var(--t-fast) var(--ease);}
+.ac-sgc{position:relative;flex:0 0 auto;width:248px;scroll-snap-align:start;background:var(--bg-2);border:none;border-radius:16px;overflow:hidden;cursor:pointer;transition:background var(--t-fast) var(--ease);}
 @media(hover:hover){.ac-sgc:hover{background:var(--s3);}}
 .ac-sgc-cover{height:72px;background:var(--s2);background-size:cover;background-position:center;}
+/* Per-card "not interested" ✕ (top-right of a who-to-follow card) */
+.ac-sgc-x{position:absolute;top:7px;right:7px;z-index:2;width:24px;height:24px;border:none;border-radius:50%;background:rgba(0,0,0,.5);display:grid;place-items:center;cursor:pointer;padding:0;}
+.ac-sgc-x svg{width:13px;height:13px;fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round;}
+.ac-sgc-x:active{transform:scale(.9);}
 .ac-sgc-cover[data-grad="0"]{background-image:linear-gradient(135deg,var(--accent),var(--s4));}
 .ac-sgc-cover[data-grad="1"]{background-image:linear-gradient(135deg,var(--accent),var(--s3));}
 .ac-sgc-cover[data-grad="2"]{background-image:linear-gradient(135deg,var(--s4),var(--accent));}
@@ -16551,7 +16555,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1469'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1470'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -29835,12 +29839,15 @@ async function acFeedSuggestModule() {
     catch { users = []; }
     AC._whoToFollow = users;
   }
+  const dismissed = acDismissedSuggest();
+  users = users.filter(u => !dismissed.has(u.id));
   if (!users.length) return '';
   users.forEach(u => { AC._authors = AC._authors || {}; AC._authors[u.id] = u; });
   const cards = users.slice(0, 10).map(u => {
     const cover = u.banner ? ` style="background-image:url(${jsAttr(u.banner)})"` : ` data-grad="${u.id % 6}"`;
     const bio = u.headline ? escHtml(u.headline) : '';
-    return `<div class="ac-sgc" onclick="acGoProfile(${jsAttr(u.username)})">
+    return `<div class="ac-sgc" data-sgid="${u.id}" onclick="acGoProfile(${jsAttr(u.username)})">
+      <button class="ac-sgc-x" onclick="event.stopPropagation();acDismissSuggestOne(${u.id},this)" aria-label="Not interested"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       <div class="ac-sgc-cover"${cover}></div>
       <div class="ac-sgc-av">${acAvatarHtml(u.name, u.avatar, 'user-avatar ac-sgc-avimg', acIsBiz(u))}</div>
       <div class="ac-sgc-row">
@@ -29861,6 +29868,30 @@ async function acFeedSuggestModule() {
   </div>`;
 }
 function acIsFollowing(id) { return !!(AC._followingIds && AC._followingIds.has(id)); }
+// Per-card "not interested" on a who-to-follow suggestion (X-style ✕): device-
+// persistent so a dismissed person doesn't keep resurfacing across reloads.
+function acDismissedSuggest() {
+  if (!AC._dismSuggest) {
+    let arr = [];
+    try { arr = JSON.parse(localStorage.getItem('atwe_dism_suggest') || '[]'); } catch (_) {}
+    AC._dismSuggest = new Set(Array.isArray(arr) ? arr : []);
+  }
+  return AC._dismSuggest;
+}
+function acDismissSuggestOne(id, btn) {
+  const set = acDismissedSuggest(); set.add(id);
+  try { localStorage.setItem('atwe_dism_suggest', JSON.stringify([...set].slice(-300))); } catch (_) {}
+  AC._whoToFollow = (AC._whoToFollow || []).filter(u => u.id !== id);
+  const card = btn.closest('.ac-sgc');
+  if (card) {
+    card.style.transition = 'opacity .16s var(--ease)'; card.style.opacity = '0';
+    setTimeout(() => {
+      const scroll = card.parentElement; card.remove();
+      // If the row is now empty, drop the whole module.
+      if (scroll && !scroll.querySelector('.ac-sgc')) scroll.closest('.ac-wtf')?.remove();
+    }, 160);
+  }
+}
 // "You might also like" — accounts similar to the profile being viewed (co-followers).
 // Lazy-loaded when a non-own profile opens; reuses the who-to-follow card.
 async function acLoadSimilarAccounts(username) {
