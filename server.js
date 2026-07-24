@@ -12181,6 +12181,33 @@ app.get('/api/jobs/:id', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the job.' }); }
 });
 
+// "Similar jobs" (LinkedIn/Indeed-style): other open roles like this one — scored by
+// same industry + title-word overlap, featured-first then newest. Blocks-aware.
+app.get('/api/jobs/:id/similar', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id); const me = req.user.id;
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid job id.' });
+  try {
+    const base = (await db.query('SELECT title, industry FROM jobs WHERE id = $1', [id])).rows[0];
+    if (!base) return res.status(404).json({ error: 'Job not found.' });
+    // A few significant title words (skip tiny stop-words) drive the overlap score.
+    const tokens = String(base.title || '').toLowerCase().split(/[^a-z0-9+#]+/)
+      .filter((w) => w.length >= 3 && !['and', 'the', 'for', 'with'].includes(w)).slice(0, 4);
+    const params = [me, id];
+    let score = base.industry ? `(CASE WHEN j.industry = $${params.push(base.industry)} THEN 2 ELSE 0 END)` : '0';
+    for (const t of tokens) score += ` + (CASE WHEN j.title ILIKE $${params.push('%' + t + '%')} THEN 1 ELSE 0 END)`;
+    const { rows } = await db.query(
+      `SELECT ${JOB_COLS}, (SELECT COUNT(*)::int FROM job_applications a WHERE a.job_id = j.id) AS applicants, (${score}) AS sim
+       ${JOB_FROM}
+       WHERE j.id <> $2 AND (u.id IS NULL OR (NOT u.deactivated
+         AND u.id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+         AND u.id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)))
+         AND (${score}) > 0
+       ORDER BY (j.featured_until IS NOT NULL AND j.featured_until > now()) DESC, sim DESC, j.created_at DESC
+       LIMIT 6`, params);
+    res.json({ jobs: rows.map((j) => mapJob(j, me)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load similar jobs.' }); }
+});
+
 // Delete a job (poster or admin).
 app.delete('/api/jobs/:id', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);

@@ -8408,6 +8408,15 @@ body.light .ac-job-tag.featured{color:var(--accent);}
 .rep-row.on .rep-radio{border-color:var(--accent);}
 .rep-row.on .rep-radio::after{content:'';position:absolute;inset:4px;border-radius:999px;background:var(--accent);}
 .ac-job-report{margin-top:16px;text-align:center;font-size:13px;color:var(--t3);cursor:pointer;padding:8px;}
+/* Similar jobs under the job detail */
+.simjob-head{font-size:14px;font-weight:800;color:var(--t1);margin:18px 2px 8px;}
+.simjob-row{display:flex;align-items:center;gap:10px;width:100%;background:var(--s1);border:none;border-radius:14px;padding:12px 14px;margin-bottom:8px;cursor:pointer;text-align:start;font-family:inherit;}
+.simjob-main{flex:1;min-width:0;}
+.simjob-title{font-size:14.5px;font-weight:700;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.simjob-feat{color:var(--amber);font-size:12px;}
+.simjob-sub{font-size:12.5px;color:var(--t3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.simjob-chev{width:16px;height:16px;flex-shrink:0;fill:none;stroke:var(--t3);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.simjob-row:active{transform:scale(.99);}
 .ac-job-report:active{color:var(--red);}
 .ac-prof-mutual{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--t3);margin-top:8px;}
 /* "X viewed your profile this week" stat (own profile) */
@@ -16321,7 +16330,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1412'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1413'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24937,9 +24946,27 @@ async function acOpenJob(id) {
       ${job.description ? `<div class="ac-job-desc">${escHtml(job.description)}</div>` : '<div class="ac-job-desc" style="color:var(--t3);">No description provided.</div>'}
       ${(!job.mine && job.applied && job.applicationStatus && job.applicationStatus !== 'applied') ? `<div class="ac-job-appstatus st-${job.applicationStatus}">Your application: <b>${_statusLabel(job.applicationStatus)}</b></div>` : ''}
       <div class="ac-job-actions">${actions}</div>
+      ${job.mine ? '' : '<div id="jobSimilar"></div>'}
       ${job.mine ? '' : `<div class="ac-job-report" onclick="acOpenReport('job',${job.id},${jsAttr(job.title)})">Report this job</div>`}`;
     if (job.industry) acLoadSalaryInsight(job.id);
+    if (!job.mine) acLoadSimilarJobs(job.id);
   } catch { body.innerHTML = '<div class="ac-empty">Could not load the job.</div>'; }
+}
+// "Similar jobs" under the job detail — small cards that swap the open job in place.
+async function acLoadSimilarJobs(id) {
+  const box = document.getElementById('jobSimilar'); if (!box) return;
+  try {
+    const { jobs } = await API.req('GET', '/api/jobs/' + id + '/similar');
+    if (!jobs || !jobs.length) { box.innerHTML = ''; return; }
+    const rows = jobs.map(j => `<button class="simjob-row" onclick="acOpenJob(${j.id})">
+        <div class="simjob-main">
+          <div class="simjob-title">${escHtml(j.title)}${j.featured ? ' <span class="simjob-feat">★</span>' : ''}</div>
+          <div class="simjob-sub">${escHtml([j.company || (j.poster && j.poster.name), j.location, j.remote ? 'Remote' : null].filter(Boolean).join(' · '))}</div>
+        </div>
+        <svg class="simjob-chev" viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg>
+      </button>`).join('');
+    box.innerHTML = `<div class="simjob-head">Similar jobs</div>${rows}`;
+  } catch { box.innerHTML = ''; }
 }
 // Easy Apply: attach one of your resumes + an optional cover note (which Atwe AI
 // can write for you, tailored to the job).
