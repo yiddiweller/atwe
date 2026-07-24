@@ -5492,6 +5492,38 @@ app.get('/api/atchat/scheduled', auth.requireAuth, async (req, res) => {
     })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load scheduled messages.' }); }
 });
+// Edit a scheduled message before it sends (sender only) — the text, the time,
+// or both. The single guarded UPDATE is atomic against the flusher: once the
+// message has been delivered (row deleted), the edit cleanly 404s instead of
+// silently "editing" something that already went out.
+app.patch('/api/atchat/scheduled/:id', auth.requireAuth, rateLimit(30, 60000, 'msg-sched-edit'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const sets = [], params = [];
+  if (req.body.body !== undefined) {
+    const body = (req.body.body || '').trim();
+    if (!body) return res.status(400).json({ error: 'The message can’t be empty.' });
+    if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
+    params.push(body); sets.push(`body = $${params.length}`);
+  }
+  if (req.body.sendAt !== undefined) {
+    const when = new Date(req.body.sendAt);
+    if (isNaN(when.getTime())) return res.status(400).json({ error: 'Pick a valid date and time.' });
+    if (when.getTime() < Date.now() + 30000) return res.status(400).json({ error: 'Pick a time at least a minute from now.' });
+    if (when.getTime() > Date.now() + SCHEDULE_MAX_MS) return res.status(400).json({ error: 'That’s too far in the future.' });
+    params.push(when.toISOString()); sets.push(`send_at = $${params.length}`);
+  }
+  if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
+  try {
+    params.push(id, req.user.id);
+    const r = await db.query(
+      `UPDATE scheduled_messages SET ${sets.join(', ')} WHERE id = $${params.length - 1} AND sender_id = $${params.length} RETURNING id, body, send_at`,
+      params
+    );
+    if (!r.rowCount) return res.status(404).json({ error: 'That message was already sent or cancelled.' });
+    res.json({ ok: true, id: r.rows[0].id, body: r.rows[0].body, sendAt: r.rows[0].send_at });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update it.' }); }
+});
 // Cancel a scheduled message (sender only).
 app.delete('/api/atchat/scheduled/:id', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
