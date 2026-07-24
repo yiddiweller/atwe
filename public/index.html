@@ -6505,6 +6505,9 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .rp-cell{flex:0 0 auto;width:64px;background:none;border:none;padding:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;}
 .rp-cell .user-avatar{width:56px;height:56px;}
 .rp-name{font-size:12px;color:var(--t2);max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* Double-tap heart burst */
+.dbl-heart{position:fixed;z-index:2000;font-size:34px;pointer-events:none;transform:translate(-50%,-50%) scale(.4);animation:dblHeart .65s cubic-bezier(.2,.85,.3,1.1) forwards;}
+@keyframes dblHeart{20%{transform:translate(-50%,-50%) scale(1.25);opacity:1;}100%{transform:translate(-50%,-110%) scale(1);opacity:0;}}
 /* Who-reacted rows (chat reactions sheet) */
 .mrx-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 4px;border-bottom:1px solid var(--bg);}
 .mrx-row.mine{cursor:pointer;}
@@ -16434,7 +16437,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1439'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1440'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -44857,6 +44860,7 @@ function acRenderThread() {
   el.classList.remove('sliding'); el.style.setProperty('--slidemag', '0px'); // never re-render stuck off-centre
   _bindThreadLongPress(el);
   _bindThreadSwipeTime(el);
+  _bindThreadDblTap(el);
   _bindVoiceNotes(el);
   el.classList.toggle('chat-private', acChatExportBlocked()); // hide download affordances on a privacy-locked chat
   acHydrateVoiceTranscripts(); // auto-fill AI transcript captions under voice notes
@@ -45053,6 +45057,39 @@ function _bindGlide(sheet) {
     if (hit) { e.preventDefault(); hit.click(); }
   }, { passive: false });
   sheet.addEventListener('touchcancel', () => { down = false; clearIn(); }, { passive: true });
+}
+// Double-tap a bubble to ❤️ it (iMessage/WhatsApp-style quick reaction) — toggles
+// the heart via the normal react path, with a small heart-burst on the bubble.
+// Deleted/pending/hidden bubbles are skipped; bound once per thread container.
+function _bindThreadDblTap(el) {
+  if (el._dblTapBound) return; el._dblTapBound = true;
+  const react = (bubble) => {
+    const mid = parseInt(bubble.getAttribute('data-mid'), 10);
+    if (!Number.isInteger(mid)) return;
+    const m = (AC.messages || []).find((x) => x.id === mid);
+    if (!m || m.deleted || m.pending || m.hidden) return;
+    // Burst BEFORE the re-render (acReact re-renders the thread).
+    try {
+      const r = bubble.getBoundingClientRect();
+      const h = document.createElement('div'); h.className = 'dbl-heart'; h.textContent = '❤️';
+      h.style.left = (r.left + r.width / 2) + 'px'; h.style.top = (r.top + r.height / 2) + 'px';
+      document.body.appendChild(h); setTimeout(() => h.remove(), 700);
+    } catch (_) {}
+    acReact(mid, '❤️');
+  };
+  // Desktop double-click.
+  el.addEventListener('dblclick', (e) => { const b = e.target.closest('.msg-bubble[data-mid]'); if (b) { e.preventDefault(); react(b); } });
+  // Touch double-tap: two quick taps on the SAME bubble, minimal movement.
+  let lastTap = 0, lastMid = null;
+  el.addEventListener('touchend', (e) => {
+    if (e.touches.length) return;
+    const b = e.target.closest && e.target.closest('.msg-bubble[data-mid]');
+    if (!b) { lastMid = null; return; }
+    const mid = b.getAttribute('data-mid');
+    const now = Date.now();
+    if (mid === lastMid && now - lastTap < 300) { e.preventDefault(); react(b); lastMid = null; }
+    else { lastMid = mid; lastTap = now; }
+  });
 }
 function _bindThreadLongPress(el) {
   if (!el || el._lpBound) return;
