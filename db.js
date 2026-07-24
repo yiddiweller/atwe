@@ -3120,6 +3120,10 @@ async function initSchema() {
   // Distinct from `deactivated` (hibernate, which hides the profile entirely).
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS paused BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pause_message TEXT;`);
+  // Custom status (Slack/Discord-style): an emoji + short message that can auto-clear.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS status_emoji TEXT;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS status_text TEXT;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS status_expires_at TIMESTAMPTZ;`);
   // Admin-created "system" accounts (e.g. @support): username + password, no real
   // email, sign in by username. Flagged so they're excluded from self-serve password
   // reset (the admin manages their password from the dashboard instead).

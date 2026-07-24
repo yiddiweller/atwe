@@ -5519,6 +5519,23 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
 .mc-cs-ic{width:44px;height:44px;border-radius:12px;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .mc-cs-ic svg{width:22px;height:22px;}
 .mc-cs-when{font-size:13px;color:var(--t2);font-weight:600;margin-top:1px;}
+/* ── Custom status ── */
+.me-status{display:flex;align-items:center;gap:10px;width:100%;padding:12px 16px;margin:0 0 14px;background:var(--s1);border:none;border-radius:var(--r-md,16px);cursor:pointer;color:var(--t1);text-align:left;transition:transform var(--t-fast) var(--ease);}
+.me-status:active{transform:scale(.99);}
+.me-status-em{font-size:19px;line-height:1;flex-shrink:0;}
+.me-status-tx{font-size:14.5px;font-weight:600;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.me-status-tx.me-status-empty{color:var(--t3);font-weight:500;}
+.ac-prof-status{display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:5px 12px;border-radius:999px;background:var(--s2);font-size:13.5px;font-weight:600;color:var(--t1);}
+.ac-prof-status-em{font-size:15px;line-height:1;}
+.ac-prof-status-set{color:var(--t3);cursor:pointer;}
+.status-row{display:flex;gap:10px;margin-top:6px;}
+.status-emoji-in{width:56px;flex-shrink:0;text-align:center;background:var(--s2);border:none;border-radius:12px;color:var(--t1);font-size:22px;padding:10px 0;outline:none;}
+.status-text-in{flex:1;min-width:0;background:var(--s2);border:none;border-radius:12px;color:var(--t1);font:inherit;font-size:15px;padding:10px 14px;outline:none;}
+.status-text-in::placeholder{color:var(--t4);}
+.status-presets{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
+.status-preset{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:999px;background:var(--s2);color:var(--t1);font-size:13px;font-weight:600;padding:7px 13px;cursor:pointer;}
+.status-preset .sp-em{font-size:15px;line-height:1;}
+@media(hover:hover){.status-preset:hover{background:var(--s3);}}
 .ac-prodtag.ac-prodtag-multi{padding-left:10px;}
 .ac-prodtag-row{align-items:center;gap:12px;}
 .cpc-thumb{width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;}
@@ -11837,6 +11854,23 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Custom status -->
+<div class="overlay hidden" id="statusSheet" onclick="if(event.target===this)closeOverlay('statusSheet')">
+  <div class="rs-sheet" role="dialog" aria-modal="true" aria-label="Set a status">
+    <div class="rs-grab"></div>
+    <div class="rs-title">Set a status</div>
+    <div class="status-row">
+      <input id="statusEmoji" class="status-emoji-in" maxlength="4" placeholder="😊" aria-label="Status emoji"/>
+      <input id="statusText" class="status-text-in" maxlength="100" placeholder="What's your status?" autocomplete="off" aria-label="Status message"/>
+    </div>
+    <div id="statusPresets" class="status-presets"></div>
+    <div class="deal-label">Clear after</div>
+    <div class="deal-chips" id="statusDur"></div>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:14px;" onclick="acSaveStatus()">Save status</button>
+    <button class="ac-pill-btn" id="statusClearBtn" style="width:100%;margin-top:8px;" onclick="acClearStatus()">Clear status</button>
+  </div>
+</div>
+
 <!-- Schedule a call (pick a time) -->
 <div class="overlay hidden" id="callScheduleSheet" onclick="if(event.target===this)closeOverlay('callScheduleSheet')">
   <div class="rs-sheet" role="dialog" aria-modal="true" aria-label="Schedule a call">
@@ -16100,7 +16134,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1399'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1400'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -16247,7 +16281,7 @@ async function onAuthSuccess(token, user) {
   API.setToken(token);
   S.token = token;
   S.guest = false;
-  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null , inquiryEnabled: !!user.inquiryEnabled, inquiryIntro: user.inquiryIntro || null };
+  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null , inquiryEnabled: !!user.inquiryEnabled, inquiryIntro: user.inquiryIntro || null, status: user.status || null };
   S.plan  = user.plan || 'free';
   Accounts.upsert(token, user);
   try { await loadFromServer(); } catch {}
@@ -27096,6 +27130,12 @@ function acGoProfileHub() {
         </div>
         <svg class="me-hero-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
       </button>`;
+    // Custom status (Slack/Discord-style) — quick to set from the hub.
+    { const st = u.status; html += `<button class="me-status" onclick="acStatusOpen()">
+        <span class="me-status-em">${st ? (st.emoji || '💬') : '😊'}</span>
+        <span class="me-status-tx ${st ? '' : 'me-status-empty'}">${st ? escHtml(st.text || '') : 'Set a status'}</span>
+        <svg class="me-hero-go" viewBox="0 0 24 24" style="margin-inline-start:auto;"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>`; }
     // Wallet card sits directly under the identity header (design blueprint).
     html += `<button class="me-wallet" onclick="acOpenWallet()">
         <div class="me-wallet-head"><span class="me-wallet-cap">Atwe Wallet</span><svg class="me-wallet-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
@@ -31612,6 +31652,7 @@ function acRenderProfile(d, mine) {
         <div style="min-width:0"><div style="font-weight:700;color:var(--t1);font-size:14px">This account is currently away</div><div style="color:var(--t2);font-size:13.5px;margin-top:2px;white-space:pre-wrap;word-break:break-word">${u.pauseMessage ? escHtml(u.pauseMessage) : 'Temporarily unavailable — they’ll be back soon.'}</div></div>
       </div>` : ''}
       ${u.headline ? `<div class="ac-prof-headline">${escHtml(u.headline)}</div>` : ''}
+      ${u.status ? `<div class="ac-prof-status"${mine ? ' onclick="acStatusOpen()" style="cursor:pointer;"' : ''}><span class="ac-prof-status-em">${u.status.emoji || '💬'}</span>${u.status.text ? `<span>${escHtml(u.status.text)}</span>` : ''}</div>` : (mine ? `<div class="ac-prof-status ac-prof-status-set" onclick="acStatusOpen()"><span class="ac-prof-status-em">😊</span><span>Set a status</span></div>` : '')}
       ${(!mine && d.mutualConnections) ? `<div class="ac-prof-mutual"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>${d.mutualConnections} mutual connection${d.mutualConnections === 1 ? '' : 's'}</div>` : ''}
       ${!mine ? acFollowedByLine({ followedBy: d.followedBy, followedByCount: d.followedByCount }) : ''}
       ${acProfNote(u)}
@@ -33333,6 +33374,38 @@ function acRenderScheduledCall(c) {
 async function acCallSchedRespond(accept) { const c = AC._csView; if (!c) return; try { await API.req('POST', '/api/calls/scheduled/' + c.id + '/respond', { accept }); showNotif(accept ? 'Call confirmed! It’s in your agenda.' : 'Invitation declined.'); acOpenScheduledCall(c.id); } catch (e) { showNotif(e.message || 'Could not respond.'); } }
 async function acCallSchedCancel() { const c = AC._csView; if (!c) return; try { await API.req('POST', '/api/calls/scheduled/' + c.id + '/cancel', {}); showNotif('Call cancelled.'); closeOverlay('callScheduleView'); } catch (e) { showNotif(e.message || 'Could not cancel.'); } }
 function acCallSchedJoin() { const c = AC._csView; if (!c) return; closeOverlay('callScheduleView'); startCall(c.media, { id: c.with.id, name: c.with.name, username: c.with.username }); }
+// ── Custom status (emoji + short message, optional auto-clear) ──
+const _STATUS_PRESETS = [
+  { emoji: '🎯', text: 'Open to work' }, { emoji: '🔨', text: 'Building something new' },
+  { emoji: '🤝', text: 'Open to collaborate' }, { emoji: '☕', text: 'Available to chat' },
+  { emoji: '🌴', text: 'Away' }, { emoji: '🎧', text: 'Focusing' },
+];
+const _STATUS_DURATIONS = [{ h: 0, l: "Don't clear" }, { h: 1, l: '1 hour' }, { h: 4, l: '4 hours' }, { h: 24, l: 'Today' }, { h: 168, l: 'This week' }];
+let _statusHours = 0;
+function acStatusOpen() {
+  const st = S.user && S.user.status;
+  document.getElementById('statusEmoji').value = st ? (st.emoji || '') : '';
+  document.getElementById('statusText').value = st ? (st.text || '') : '';
+  _statusHours = 0;
+  document.getElementById('statusPresets').innerHTML = _STATUS_PRESETS.map((p) => `<button class="status-preset" onclick="acStatusPreset('${p.emoji}',${jsAttr(p.text)})"><span class="sp-em">${p.emoji}</span><span>${escHtml(p.text)}</span></button>`).join('');
+  document.getElementById('statusDur').innerHTML = _STATUS_DURATIONS.map((d) => `<button class="deal-chip ${_statusHours === d.h ? 'on' : ''}" onclick="acStatusDur(${d.h})">${d.l}</button>`).join('');
+  document.getElementById('statusClearBtn').style.display = st ? '' : 'none';
+  showOverlay('statusSheet');
+}
+function acStatusPreset(emoji, text) { document.getElementById('statusEmoji').value = emoji; document.getElementById('statusText').value = text; }
+function acStatusDur(h) { _statusHours = h; document.querySelectorAll('#statusDur .deal-chip').forEach((b, i) => b.classList.toggle('on', _STATUS_DURATIONS[i].h === h)); }
+async function acSaveStatus() {
+  const emoji = document.getElementById('statusEmoji').value.trim();
+  const text = document.getElementById('statusText').value.trim();
+  if (!emoji && !text) return showNotif('Add an emoji or a short message.');
+  try { const r = await API.req('POST', '/api/status', { emoji, text, hours: _statusHours }); if (S.user) S.user.status = r.status; closeOverlay('statusSheet'); showNotif('Status updated.'); _acRefreshMeStatus(); }
+  catch (e) { showNotif(e.message || 'Could not set your status.'); }
+}
+async function acClearStatus() {
+  try { await API.req('DELETE', '/api/status'); if (S.user) S.user.status = null; closeOverlay('statusSheet'); showNotif('Status cleared.'); _acRefreshMeStatus(); }
+  catch (e) { showNotif(e.message || 'Could not clear your status.'); }
+}
+function _acRefreshMeStatus() { if (_appTab === 'profile' && !document.getElementById('acMeScreen').classList.contains('hidden')) acGoProfileHub(); }
 // Download an event as an .ics calendar file (the route is bearer-gated + returns
 // text/calendar, so fetch raw text rather than via the JSON wrapper).
 async function acEventIcs(id) {
@@ -47319,7 +47392,7 @@ const _bootDone = (async function boot() {
     if (user) {
       S.token = API.token();
       S.guest = false;
-      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null , inquiryEnabled: !!user.inquiryEnabled, inquiryIntro: user.inquiryIntro || null };
+      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null , inquiryEnabled: !!user.inquiryEnabled, inquiryIntro: user.inquiryIntro || null, status: user.status || null };
       S.plan  = user.plan || 'free';
       Accounts.upsert(API.token(), user);
       try { await loadFromServer(); } catch {}
