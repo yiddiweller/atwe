@@ -6543,6 +6543,7 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .mkt-price{font-size:17px;font-weight:800;color:var(--t1);}
 /* ── Shop v2: ratings, stock, shipping, addresses, checkout, reviews, order timeline ── */
 .mkt-rating{display:flex;align-items:center;gap:6px;color:var(--t3);font-size:13px;font-weight:600;margin:3px 0;cursor:pointer;}
+.mkt-sold{display:inline-block;font-size:12.5px;font-weight:700;color:var(--t2);background:var(--s2);border-radius:var(--r-pill);padding:3px 10px;margin:3px 0 2px;}
 .mkt-rating.sm{font-size:12px;}
 .ac-stars{display:inline-flex;gap:1px;}
 .ac-stars svg{width:14px;height:14px;fill:var(--b3);}
@@ -16406,7 +16407,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1429'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1430'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -33569,6 +33570,8 @@ async function acOpenListing(id) {
     // Shipping line + rating.
     const shipLine = l.needsShipping ? `<div class="mkt-ship">${l.shipFree ? '🚚 Free shipping' : '🚚 + $' + (l.shipFeeCents / 100).toFixed(2) + ' shipping'}</div>` : '';
     const ratingLine = l.reviewCount ? `<div class="mkt-rating" onclick="document.getElementById('prodReviews').scrollIntoView({behavior:'smooth'})">${acStars(l.rating)}<span>${l.rating} · ${l.reviewCount} review${l.reviewCount === 1 ? '' : 's'}</span></div>` : '';
+    // Social proof: units sold (paid-state orders) — "N sold", eBay/Amazon-style.
+    const soldLine = l.soldCount ? `<div class="mkt-sold">${l.soldCount >= 100 ? '100+' : l.soldCount} sold</div>` : '';
     // Variant picker (when the product has options).
     const vpick = l.hasVariants ? `<div class="vpick-h">Options</div><div class="vpick" id="mktVpick">${l.variants.map(v => `<button class="vchip${v.soldOut ? ' out' : ''}" ${v.soldOut ? 'disabled' : `onclick="acPickVariant(${v.id})"`}>${escHtml(v.label)}${v.priceCents !== l.priceCents ? ` · $${(v.priceCents / 100).toFixed(2)}` : ''}</button>`).join('')}</div>` : '';
     const heart = own ? '' : `<button class="mkt-save ${l.saved ? 'on' : ''}" id="mktSaveBtn" onclick="acToggleSave(${l.id},this)" aria-label="Save"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg></button>`;
@@ -33585,6 +33588,7 @@ async function acOpenListing(id) {
         </div>
         <div class="jp-title" style="margin:8px 0 2px;">${escHtml(l.name)}</div>
         ${ratingLine}
+        ${soldLine}
         ${vpick}
         <div id="mktBuyArea">${acRenderListingBuy(l, own)}</div>
         ${l.description ? `<div class="mkt-detail-desc">${escHtml(l.description)}</div>` : ''}
