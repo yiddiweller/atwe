@@ -5720,6 +5720,49 @@ app.post('/api/atchat/share/product', auth.requireAuth, async (req, res) => {
     res.json({ ok: true, messageId: ins.rows[0].id });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not share the product.' }); }
 });
+// "Offer to savers" (Poshmark/Depop-style): a seller sends everyone who saved a
+// product a time-limited discount + a deal DM card. Reuses coupons + wishlist + DMs,
+// so money still only moves at normal, already-tested checkout with a validated code.
+const DEAL_HOURS = [24, 48, 72];
+app.post('/api/products/:id/offer-savers', auth.requireAuth, rateLimit(10, 3600000, 'offer-savers'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid product id.' });
+  const pct = Math.round(Number(req.body.discountPct));
+  if (!(pct >= 10 && pct <= 70)) return res.status(400).json({ error: 'A deal must be 10–70% off.' });
+  const hours = DEAL_HOURS.includes(Number(req.body.hours)) ? Number(req.body.hours) : 24;
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const p = (await db.query(`${LISTING_SELECT} WHERE p.id = $1`, [id])).rows[0];
+    if (!p || p.business_id !== req.user.id) return res.status(404).json({ error: 'Listing not found.' });
+    const l = mapListing(p);
+    if (!l.active) return res.status(400).json({ error: 'Reactivate the listing before sending a deal.' });
+    if (l.hasVariants) return res.status(400).json({ error: 'Deals aren’t available on listings with size/colour options yet.' });
+    // Wishlisters (exclude the seller, blocked either way, deactivated). Capped.
+    const savers = (await db.query(
+      `SELECT sp.user_id FROM saved_products sp JOIN users u ON u.id = sp.user_id
+       WHERE sp.product_id = $1 AND sp.user_id <> $2 AND NOT u.deactivated
+         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = sp.user_id AND b.blocked_id = $2) OR (b.blocker_id = $2 AND b.blocked_id = sp.user_id))
+       LIMIT 200`, [id, req.user.id])).rows.map((r) => r.user_id);
+    if (!savers.length) return res.json({ ok: true, savers: 0 });
+    // A unique deal coupon (percent, capped to the audience, expiring with the deal).
+    const gen = () => 'DEAL' + Array.from({ length: 6 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join('');
+    const exp = new Date(Date.now() + hours * 3600 * 1000).toISOString();
+    let code = null;
+    for (let i = 0; i < 3 && !code; i++) {
+      const c = gen();
+      const r = await db.query(
+        `INSERT INTO coupons (seller_id, code, kind, value, min_order_cents, max_uses, expires_at)
+         VALUES ($1,$2,'percent',$3,0,$4,$5) ON CONFLICT (seller_id, lower(code)) DO NOTHING RETURNING id`,
+        [req.user.id, c, pct, savers.length, exp]);
+      if (r.rows[0]) code = c;
+    }
+    if (!code) return res.status(500).json({ error: 'Could not create the deal. Please try again.' });
+    const dealCents = Math.round((l.priceCents || 0) * (100 - pct) / 100);
+    const meta = { t: 'deal', productId: l.id, name: l.name, image: l.image, priceCents: l.priceCents, dealCents, discountPct: pct, code, expiresAt: exp };
+    for (const uid of savers) { await pushMetaCard(req.user.id, uid, meta).catch(() => {}); notify(uid, req.user.id, 'deal', null, null, null, id); }
+    res.json({ ok: true, savers: savers.length, code, discountPct: pct });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the deal.' }); }
+});
 const BROADCAST_MAX_MEMBERS = 256;
 async function ownsBroadcast(id, uid) {
   const r = await db.query('SELECT 1 FROM broadcast_lists WHERE id = $1 AND owner_id = $2', [id, uid]);
