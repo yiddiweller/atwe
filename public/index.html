@@ -10268,6 +10268,12 @@ body.reduce-motion .notif-detail{transition:none;}
 .notif-list .notif-row.unread{background:transparent;}
 .notif-ava-wrap{position:relative;flex-shrink:0;}
 .notif-ava-wrap .user-avatar{width:46px;height:46px;font-size:18px;}
+/* Grouped notification ("A and 3 others"): up to 3 stacked, overlapping avatars.
+   A bg-coloured ring separates each from the one beneath; sized so the stack's
+   footprint matches the single 46px avatar and rows stay one height. */
+.notif-ava-stack{display:flex;align-items:center;min-width:46px;}
+.notif-ava-stack .user-avatar{width:36px;height:36px;font-size:14px;box-shadow:0 0 0 2px var(--bg);}
+.notif-ava-stack .user-avatar + .user-avatar{margin-left:-12px;}
 .notif-row .notif-text{font-size:14.5px;line-height:1.4;color:var(--t2);}
 .notif-row .notif-text b{color:var(--t1);font-weight:700;}
 /* Only the extra right-margin nudge is context-specific here (text continues right
@@ -16457,7 +16463,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1452'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1453'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25943,11 +25949,54 @@ function acRenderNotifList() {
   // Only offer tabs that would show something (All always).
   const tabs = _NOTIF_TABS.filter(([k, , types]) => k === 'all' || all.some((n) => types.includes(n.type)));
   const bar = tabs.length > 1 ? `<div class="ntf-tabs">${tabs.map(([k, l]) => `<button class="ntf-tab ${tab === k ? 'on' : ''}" onclick="acNotifTab('${k}')">${l}</button>`).join('')}</div>` : '';
-  el.innerHTML = bar + (list.length
-    ? list.map((n, i) => notifRow(n, i)).join('')
+  const grouped = acGroupNotifs(list);
+  el.innerHTML = bar + (grouped.length
+    ? grouped.map((n, i) => (n._group ? acNotifGroupRow(n) : notifRow(n, i))).join('')
     : '<div class="ac-empty" style="padding:26px;">Nothing here yet.</div>');
 }
 function acNotifTab(k) { AC._notifTab = k; acRenderNotifList(); }
+// X-style aggregation: same-type notifications on the same target collapse into
+// one row ("Alice and 3 others liked your post"), positioned at the newest
+// occurrence. Only high-volume social types group; everything else stays 1:1.
+function acGroupNotifs(list) {
+  const keyOf = (n) => {
+    if (!n.actor) return null;
+    if (n.type === 'follow') return 'follow';
+    if ((n.type === 'like' || n.type === 'repost') && n.postId) return n.type + ':' + n.postId;
+    if (n.type === 'feed_like' && (n.feedId || n.postId)) return 'feed_like:' + (n.feedId || n.postId);
+    return null;
+  };
+  const out = [], groups = new Map();
+  for (const n of list) {
+    const k = keyOf(n);
+    if (!k) { out.push(n); continue; }
+    let g = groups.get(k);
+    if (!g) { g = { _group: true, type: n.type, rows: [] }; groups.set(k, g); out.push(g); } // sits at the newest occurrence (list is newest-first)
+    g.rows.push(n);
+  }
+  return out.map((x) => (x._group && x.rows.length === 1 ? x.rows[0] : x));
+}
+function acNotifGroupRow(g) {
+  const newest = g.rows[0];
+  const seen = new Set(), actors = [];
+  for (const r of g.rows) { const a = r.actor; if (a && !seen.has(a.id)) { seen.add(a.id); actors.push(a); } }
+  const lead = actors[0] || {};
+  const others = actors.length - 1;
+  const verb = { like: 'liked your post', repost: 'reposted your post', follow: 'followed you', feed_like: 'liked your video' }[g.type] || 'interacted with you';
+  const unread = g.rows.some((r) => !r.read);
+  const stack = actors.slice(0, 3).map((a) => acAvatarHtml(a.name, a.avatar, 'user-avatar', acIsBiz(a))).join('');
+  // Same destination the newest row would use (post for likes/reposts, profile for follows).
+  const go = g.type === 'follow' ? `appTab('home');acGoProfile('${lead.username}')`
+    : newest.postId ? `appTab('home');acOpenPostView(${newest.postId})`
+    : `appTab('home');acGoProfile('${lead.username}')`;
+  const names = others > 0 ? `<b>${escHtml(lead.name)}</b> and ${others} other${others === 1 ? '' : 's'}` : `<b>${escHtml(lead.name)}</b>`;
+  const snip = newest.postBody ? `<div class="notif-snip">${escHtml(newest.postBody.slice(0, 80))}</div>` : '';
+  return `<div class="ac-item notif-row ${unread ? 'unread' : ''}" onclick="closeOverlay('notifOverlay');${go}">
+    <div class="notif-ava-wrap"><div class="notif-ava-stack">${stack}</div></div>
+    <div class="ac-item-main"><div class="notif-text">${names} ${verb} · <span class="notif-time">${acTime(newest.created_at)}</span></div>${snip}</div>
+    ${unread ? '<span class="notif-dot"></span>' : ''}
+  </div>`;
+}
 // A notification detail sub-page (slides in over the list; back returns to the list).
 // Used for system alerts with no destination (e.g. a new sign-in) — actionable
 // notifications navigate straight to their content instead.
