@@ -18851,6 +18851,40 @@ async function flushReengagement() {
 }
 // Every 6h; the per-member cooldown is what actually bounds frequency.
 registerJob('reengagement', 'Re-engagement push', 6*60*60*1000); setInterval(trackJob('reengagement', flushReengagement), 6 * 60 * 60 * 1000).unref?.();
+// Weekly shop summary (Etsy/Shopify-style): once a week, a business with any
+// activity gets "Your week: N orders · $X · Y new followers". Quiet weeks are
+// stamped and skipped — no empty brag mails. Numbers ride the push body; the
+// in-app row deep-links to Sales & analytics.
+async function flushWeeklySummary() {
+  if (!db.isConfigured()) return 0;
+  const { rows } = await db.query(
+    `SELECT u.id,
+            (SELECT COUNT(*)::int FROM orders o WHERE o.seller_id = u.id AND o.status IN ('paid','fulfilled','delivered','released','escrow','disputed') AND o.created_at > now() - interval '7 days') AS orders,
+            (SELECT COALESCE(SUM(o.total_cents),0)::bigint FROM orders o WHERE o.seller_id = u.id AND o.status IN ('paid','fulfilled','delivered','released','escrow','disputed') AND o.created_at > now() - interval '7 days') AS revenue,
+            (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = u.id AND f.created_at > now() - interval '7 days') AS new_followers
+       FROM users u
+      WHERE u.account_type = 'business' AND NOT COALESCE(u.deactivated, false) AND COALESCE(u.is_demo, false) = false
+        AND (u.last_week_summary_at IS NULL OR u.last_week_summary_at < now() - interval '7 days')
+      LIMIT 200`);
+  let sent = 0;
+  for (const b of rows) {
+    // Stamp first — quiet weeks wait for next week without being rescanned all day.
+    await db.query('UPDATE users SET last_week_summary_at = now() WHERE id = $1', [b.id]).catch(() => {});
+    if (!b.orders && !b.new_followers) continue;
+    try {
+      await db.query("INSERT INTO notifications (user_id, actor_id, type, meta_num) VALUES ($1, $1, 'week_summary', $2)", [b.id, b.orders]);
+      rtPush(b.id, 'notif', { type: 'week_summary' });
+      const bits = [];
+      if (b.orders) bits.push(`${b.orders} order${b.orders === 1 ? '' : 's'} · $${(Number(b.revenue) / 100).toFixed(2)}`);
+      if (b.new_followers) bits.push(`${b.new_followers} new follower${b.new_followers === 1 ? '' : 's'}`);
+      pushToUser(b.id, { title: 'Your week on Atwe', body: bits.join(' · '), url: '/', tag: 'week-summary' }).catch(() => {});
+      sent++;
+    } catch (e) { /* per-business best-effort */ }
+  }
+  return sent;
+}
+const WEEK_SUMMARY_MS = parseInt(process.env.WEEK_SUMMARY_MS, 10) || 6 * 60 * 60 * 1000;
+registerJob('week_summary', 'Weekly shop summary', WEEK_SUMMARY_MS); setInterval(trackJob('week_summary', flushWeeklySummary), WEEK_SUMMARY_MS).unref?.();
 
 // Checkout quote: preview shipping options + sales tax for a ship-to BEFORE paying.
 // Read-only; mirrors the order routes' math so the totals match what's charged.

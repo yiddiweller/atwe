@@ -16825,7 +16825,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1538'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1539'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -26645,6 +26645,15 @@ function notifRow(n, i) {
   // product_ad_review, an actual admin action) this doesn't attribute it to them.
   // Stock alerts are system events about YOUR OWN listing (actor = you), so they
   // show the Atwe mark rather than reading as "you interacted with you".
+  // Weekly shop summary — a system digest for businesses; taps to Sales & analytics.
+  if (n.type === 'week_summary') {
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');acOpenShopAnalytics()">
+      <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
+      <div class="ac-item-main"><div class="notif-text"><b>Your week in your shop</b>${n.metaNum ? ` — ${n.metaNum} order${n.metaNum === 1 ? '' : 's'}` : ''} · <span class="notif-time">${acTime(n.created_at)}</span></div>
+        <div class="notif-snip">Tap for the full picture — sales, orders and top products.</div></div>
+      ${n.read ? '' : '<span class="notif-dot"></span>'}
+    </div>`;
+  }
   // Follower milestone — a system celebration (the Atwe mark, no actor):
   // tapping opens YOUR followers list to enjoy the view.
   if (n.type === 'follower_milestone') {
