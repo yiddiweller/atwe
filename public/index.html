@@ -4304,8 +4304,7 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 /* Flex-centre each emoji glyph so it sits perfectly even in the circle (no manual
    nudge — that over-corrected some emoji and left others off-centre). */
 .msg-reax span{display:flex;align-items:center;justify-content:center;line-height:1;transform:translateY(0.5px);} /* emoji glyphs sit a hair high — nudge to centre */
-.msg-reax{cursor:default;}
-.msg-reax.mine{cursor:pointer;}
+.msg-reax{cursor:pointer;} /* always tappable → who-reacted sheet */
 /* Reaction-badge menu — a small horizontal pill: Change | Remove (icon over label). */
 .reax-menu{position:fixed;display:flex;align-items:stretch;gap:2px;
   background:var(--menu-bg);backdrop-filter:var(--menu-blur);-webkit-backdrop-filter:var(--menu-blur);
@@ -6477,6 +6476,12 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 /* Marketplace — post-style listing cards */
 .user-avatar.sm{width:34px;height:34px;}
 .mkt-card{background:var(--s1);border:none;border-radius:16px;overflow:hidden;margin-bottom:12px;}
+/* Who-reacted rows (chat reactions sheet) */
+.mrx-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 4px;border-bottom:1px solid var(--bg);}
+.mrx-row.mine{cursor:pointer;}
+.mrx-who{font-size:15px;font-weight:600;color:var(--t1);}
+.mrx-hint{font-size:12px;color:var(--t3);font-weight:400;margin-top:1px;}
+.mrx-emoji{font-size:22px;}
 /* Chat media gallery grid */
 .cm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:2px 0;}
 .cm-cell{position:relative;aspect-ratio:1;border:none;padding:0;background:var(--s1);cursor:pointer;overflow:hidden;}
@@ -12678,6 +12683,15 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <div class="notif-list" id="pinsListBody"></div>
   </div>
 </div>
+<!-- Who reacted to a chat message (WhatsApp-style reactions sheet) -->
+<div class="overlay hidden" id="msgReactionsView" onclick="if(event.target===this)closeOverlay('msgReactionsView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Reactions">
+    <button class="sheet-close" onclick="closeOverlay('msgReactionsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Reactions</div>
+    <div id="msgReactionsList"></div>
+  </div>
+</div>
+
 <!-- Chat media gallery (all photos & videos in the open chat) -->
 <div class="overlay hidden" id="chatMediaView">
   <div class="notif-card" role="dialog" aria-modal="true" aria-label="Media">
@@ -16371,7 +16385,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1423'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1424'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -40891,6 +40905,40 @@ function acOpenChatMedia() {
   showOverlay('chatMediaView');
 }
 function acChatMediaJump(mid) { closeOverlay('chatMediaView'); acJumpToPinned(mid); }
+/* ── Who reacted (chat bubbles): tap the reaction chip → everyone's reaction.
+   Names resolve from the DM pair or the loaded group-member list; your own row
+   removes your reaction on tap (WhatsApp-style). ── */
+function _acReactorName(uid) {
+  const id = parseInt(uid, 10);
+  if (S.user && id === S.user.id) return 'You';
+  if (AC.mode !== 'group' && AC.peer && id === AC.peer.id) return AC.peer.name || '@' + (AC.peer.username || '');
+  const m = (AC.members || []).find((x) => x.id === id);
+  if (m) return m.name || '@' + (m.username || '');
+  const a = AC._authors && AC._authors[id];
+  return (a && a.name) || 'Member';
+}
+function acMsgReactionsOpen(mid) {
+  const m = (AC.messages || []).find((x) => x.id === mid);
+  if (!m || !m.reactions) return;
+  const entries = Object.entries(m.reactions).filter(([, e]) => e);
+  if (!entries.length) return;
+  const meKey = String(S.user && S.user.id);
+  const rows = entries
+    .sort(([a], [b]) => (a === meKey ? -1 : b === meKey ? 1 : 0)) // you first
+    .map(([uid, emoji]) => {
+      const mine = uid === meKey;
+      return `<div class="mrx-row${mine ? ' mine' : ''}"${mine ? ` onclick="acMsgReactionsRemove(${mid})"` : ''}>
+        <div class="mrx-who">${escHtml(_acReactorName(uid))}${mine ? '<div class="mrx-hint">Tap to remove</div>' : ''}</div>
+        <span class="mrx-emoji">${escHtml(emoji)}</span>
+      </div>`;
+    }).join('');
+  document.getElementById('msgReactionsList').innerHTML = rows;
+  showOverlay('msgReactionsView');
+}
+function acMsgReactionsRemove(mid) {
+  closeOverlay('msgReactionsView');
+  acRemoveReact(mid);
+}
 // Mute / unmute cart-recovery reminders from THIS shop (per-shop opt-out).
 async function acToggleShopReminders() {
   if (!AC.peer || !AC.peer.id) return;
@@ -44468,7 +44516,7 @@ function acRenderThread() {
     const reaxVals = (!isDeleted && m.reactions && typeof m.reactions === 'object') ? Object.values(m.reactions).filter(Boolean) : [];
     const reaxDistinct = [...new Set(reaxVals)];
     const iReacted = !isDeleted && m.reactions && m.reactions[String(S.user?.id)]; // the Change/Remove menu only manages MY reaction
-    const reaxHtml = reaxDistinct.length ? `<div class="msg-reax${reaxDistinct.length === 1 ? ' one' : ''}${iReacted ? ' mine' : ''}"${iReacted ? ` onclick="event.stopPropagation();acReactBadgeMenu(${m.id}, this)"` : ''}>${reaxDistinct.map(e => `<span>${escHtml(e)}</span>`).join('')}</div>` : '';
+    const reaxHtml = reaxDistinct.length ? `<div class="msg-reax${reaxDistinct.length === 1 ? ' one' : ''}${iReacted ? ' mine' : ''}" onclick="event.stopPropagation();acMsgReactionsOpen(${m.id})">${reaxDistinct.map(e => `<span>${escHtml(e)}</span>`).join('')}</div>` : '';
     const starHtml = (!isDeleted && m.starred) ? '<span class="msg-star"><svg viewBox="0 0 24 24"><polygon points="12 2 14.9 8.6 22 9.2 16.6 13.9 18.2 21 12 17.3 5.8 21 7.4 13.9 2 9.2 9.1 8.6"/></svg></span>' : '';
     const editedHtml = (!isDeleted && !concealed && m.edited) ? '<span class="msg-edited">edited</span>' : '';
     const fwdLabel = (!isDeleted && !concealed && m.forwarded) ? '<span class="msg-fwd"><svg viewBox="0 0 24 24"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>Forwarded</span>' : '';
