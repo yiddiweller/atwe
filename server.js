@@ -6655,7 +6655,12 @@ app.get('/api/atchat/groups', auth.requireAuth, async (req, res) => {
               lm.meta->>'t' AS last_meta,
               lm.sender_name AS last_sender, (lm.sender_id = $1) AS last_mine,
               (SELECT COUNT(*)::int FROM at_group_messages x
-                 WHERE x.group_id = g.id AND x.created_at > me.last_read_at AND x.sender_id <> $1) AS unread
+                 WHERE x.group_id = g.id AND x.created_at > me.last_read_at AND x.sender_id <> $1) AS unread,
+              -- WhatsApp-style: were YOU @mentioned (or @everyone'd) since you last read?
+              EXISTS(SELECT 1 FROM at_group_messages x JOIN users me2 ON me2.id = $1
+                 WHERE x.group_id = g.id AND x.created_at > me.last_read_at AND x.sender_id <> $1
+                   AND x.deleted_all IS NOT TRUE
+                   AND (x.body ILIKE '%@' || me2.username || '%' OR x.body ILIKE '%@everyone%')) AS mentioned
        FROM at_group_members me
        JOIN at_groups g ON g.id = me.group_id
        LEFT JOIN LATERAL (
