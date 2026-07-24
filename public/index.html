@@ -6943,6 +6943,7 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .biz-hours{margin:2px 0 14px;}
 .biz-hours-row{display:flex;justify-content:space-between;font-size:14px;color:var(--t2);padding:5px 2px;border-bottom:1px solid var(--b1);}
 .biz-hours-row.today{font-weight:700;color:var(--t1);}
+.biz-hours-note{font-size:13px;color:var(--t3);padding:7px 2px 2px;}
 .pf-hours{display:flex;flex-direction:column;gap:6px;}
 .pf-hour-row{display:flex;align-items:center;gap:8px;font-size:13px;}
 .pf-hour-day{width:34px;font-weight:700;color:var(--t1);}
@@ -15465,6 +15466,8 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <div class="pf-hint">A green badge links visitors straight to your open roles. Post jobs first so it has somewhere to point.</div>
         <div class="pf-sec-label">Business hours</div>
         <div class="pf-hours" id="pfHours"></div>
+        <input class="pf-finput" id="pfHoursNote" maxlength="120" placeholder="Hours note (optional) — e.g. Closed Dec 25" autocomplete="off"/>
+        <div class="pf-hint">A short note shown under your hours — holidays, seasonal changes, walk-ins.</div>
         <div class="pf-sec-label">Location (for “near me”)</div>
         <div class="pf-geo" id="pfGeoRow">
           <button type="button" class="ac-pill-btn" id="pfGeoBtn" onclick="acPfUseLocation()">📍 Use my current location</button>
@@ -16454,7 +16457,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1449'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1450'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -16601,7 +16604,7 @@ async function onAuthSuccess(token, user) {
   API.setToken(token);
   S.token = token;
   S.guest = false;
-  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, pronouns: user.pronouns || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null , inquiryEnabled: !!user.inquiryEnabled, inquiryIntro: user.inquiryIntro || null, hiring: !!user.hiring, status: user.status || null };
+  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, pronouns: user.pronouns || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, hoursNote: user.hoursNote || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null , inquiryEnabled: !!user.inquiryEnabled, inquiryIntro: user.inquiryIntro || null, hiring: !!user.hiring, status: user.status || null };
   S.plan  = user.plan || 'free';
   Accounts.upsert(token, user);
   try { await loadFromServer(); } catch {}
@@ -32534,7 +32537,8 @@ function acBizHoursHtml(d, mine) {
   const badge = openNow ? '<span class="biz-hours-badge open">Open now</span>' : '<span class="biz-hours-badge closed">Closed now</span>';
   const rows = h.map((day, i) => `<div class="biz-hours-row ${i === di ? 'today' : ''}"><span>${_DAYNAMES[i]}</span><span>${day && !day.closed && day.open ? day.open + ' – ' + day.close : 'Closed'}</span></div>`).join('');
   const edit = mine ? `<button class="ac-link-btn" onclick="openProfileEdit()">Edit</button>` : '';
-  return `<div class="ac-section-row"><span class="ac-prof-head">Hours ${badge}</span>${edit}</div><div class="biz-hours">${rows}</div>`;
+  const note = d.user.hoursNote ? `<div class="biz-hours-note">${escHtml(d.user.hoursNote)}</div>` : '';
+  return `<div class="ac-section-row"><span class="ac-prof-head">Hours ${badge}</span>${edit}</div><div class="biz-hours">${rows}${note}</div>`;
 }
 /* ─── Business Q&A ─── */
 async function acLoadBizQA(bizId, mine) {
@@ -46886,7 +46890,7 @@ function openProfileEdit(focusUsername) {
   // Business hours editor — only for business accounts.
   const isBiz = acIsBiz(S.user);
   document.getElementById('pfHoursSec').classList.toggle('hidden', !isBiz);
-  if (isBiz) { renderPfHours(S.user?.businessHours); _pfGeo = (S.user?.lat != null && S.user?.lng != null) ? { lat: S.user.lat, lng: S.user.lng } : undefined; acRenderPfGeo(); }
+  if (isBiz) { renderPfHours(S.user?.businessHours); const hn = document.getElementById('pfHoursNote'); if (hn) hn.value = S.user?.hoursNote || ''; _pfGeo = (S.user?.lat != null && S.user?.lng != null) ? { lat: S.user.lat, lng: S.user.lng } : undefined; acRenderPfGeo(); }
   { const cta = document.getElementById('pfCta'); if (cta) cta.value = S.user?.profileCta || ''; }
   { const iq = document.getElementById('pfInquiry'); if (iq) iq.checked = !!S.user?.inquiryEnabled; const ii = document.getElementById('pfInquiryIntro'); if (ii) ii.value = S.user?.inquiryIntro || ''; }
   { const hi = document.getElementById('pfHiring'); if (hi) hi.checked = !!S.user?.hiring; }
@@ -46984,7 +46988,7 @@ async function saveProfile() {
     note: document.getElementById('pfNote').value.trim(),
     socials,
   };
-  if (acIsBiz(S.user)) { payload.businessHours = readPfHours(); payload.profileCta = document.getElementById('pfCta')?.value || null; payload.inquiryEnabled = !!document.getElementById('pfInquiry')?.checked; payload.inquiryIntro = document.getElementById('pfInquiryIntro')?.value || ''; payload.hiring = !!document.getElementById('pfHiring')?.checked; }
+  if (acIsBiz(S.user)) { payload.businessHours = readPfHours(); payload.hoursNote = document.getElementById('pfHoursNote')?.value || ''; payload.profileCta = document.getElementById('pfCta')?.value || null; payload.inquiryEnabled = !!document.getElementById('pfInquiry')?.checked; payload.inquiryIntro = document.getElementById('pfInquiryIntro')?.value || ''; payload.hiring = !!document.getElementById('pfHiring')?.checked; }
   // Geo: only send when changed (new point or explicit clear). Both keys go together.
   if (acIsBiz(S.user) && _pfGeo !== undefined) { payload.lat = _pfGeo ? _pfGeo.lat : null; payload.lng = _pfGeo ? _pfGeo.lng : null; }
   if (_pendingAvatar !== undefined) payload.avatar = _pendingAvatar;
@@ -47005,6 +47009,7 @@ async function saveProfile() {
     S.user.note = user.note || null;
     S.user.socials = user.socials || {};
     if ('businessHours' in payload) S.user.businessHours = payload.businessHours;
+    if ('hoursNote' in payload) S.user.hoursNote = payload.hoursNote.trim() || null;
     if ('profileCta' in payload) S.user.profileCta = user.profileCta || null;
     if ('hiring' in payload) S.user.hiring = payload.hiring;
     if ('inquiryEnabled' in payload) { S.user.inquiryEnabled = payload.inquiryEnabled; S.user.inquiryIntro = payload.inquiryIntro || null; }
@@ -48753,7 +48758,7 @@ const _bootDone = (async function boot() {
     if (user) {
       S.token = API.token();
       S.guest = false;
-      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, pronouns: user.pronouns || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null , inquiryEnabled: !!user.inquiryEnabled, inquiryIntro: user.inquiryIntro || null, hiring: !!user.hiring, status: user.status || null };
+      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, pronouns: user.pronouns || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, hoursNote: user.hoursNote || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null , inquiryEnabled: !!user.inquiryEnabled, inquiryIntro: user.inquiryIntro || null, hiring: !!user.hiring, status: user.status || null };
       S.plan  = user.plan || 'free';
       Accounts.upsert(API.token(), user);
       try { await loadFromServer(); } catch {}
