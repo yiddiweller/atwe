@@ -6476,6 +6476,11 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 /* Marketplace — post-style listing cards */
 .user-avatar.sm{width:34px;height:34px;}
 .mkt-card{background:var(--s1);border:none;border-radius:16px;overflow:hidden;margin-bottom:12px;}
+/* Notification filter tabs */
+.ntf-tabs{display:flex;gap:8px;padding:4px var(--feed-gutter) 10px;overflow-x:auto;scrollbar-width:none;}
+.ntf-tabs::-webkit-scrollbar{display:none;}
+.ntf-tab{flex:0 0 auto;background:var(--s2);border:none;border-radius:var(--r-pill);color:var(--t2);font-size:13px;font-weight:600;padding:7px 14px;cursor:pointer;font-family:inherit;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
+.ntf-tab.on{background:var(--accent-dim);color:var(--accent);}
 /* Wallet history filter chips */
 .wf-chips{display:flex;gap:8px;margin:2px 0 10px;overflow-x:auto;scrollbar-width:none;}
 .wf-chips::-webkit-scrollbar{display:none;}
@@ -16398,7 +16403,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1426'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1427'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25780,12 +25785,36 @@ function openNotifications() {
     try {
       const { notifications } = await API.req('GET', '/api/notifications');
       AC._notifs = notifications;       // detail page looks rows up here by their stable id
-      el.innerHTML = notifications.length ? notifications.map((n, i) => notifRow(n, i)).join('') : '<div class="ac-empty">No notifications yet.</div>';
+      AC._notifTab = 'all';
+      acRenderNotifList();
       API.req('POST', '/api/notifications/read').catch(() => {});
       setNotifBadge(0);
     } catch (e) { acErr(el, 'openNotifications()'); }
   });
 }
+// Filter tabs over the loaded notifications (X-style All / Mentions…): each tab is
+// a type-group; tabs only show when there's something to filter.
+const _NOTIF_TABS = [
+  ['all', 'All', null],
+  ['social', 'Replies & likes', ['like', 'reply', 'repost', 'mention', 'quote', 'follow', 'tagged', 'coauthor', 'story_reply', 'story_react', 'story_answer', 'feed_like', 'feed_comment']],
+  ['jobs', 'Jobs', ['job_application', 'job_match', 'app_reviewed', 'app_shortlisted', 'app_hired', 'app_rejected', 'referral_request', 'connection_request', 'connection_accepted', 'endorsement']],
+  ['money', 'Money', ['money_received', 'money_request', 'money_request_paid', 'money_request_declined', 'order', 'order_fulfilled', 'order_shipped', 'order_delivered', 'invoice', 'invoice_paid', 'tip', 'payment', 'escrow_released', 'escrow_refunded', 'refund_approved', 'refund_declined', 'split_request', 'split_paid', 'pool_contribution', 'gift_received', 'affiliate', 'referral']],
+];
+function acRenderNotifList() {
+  const el = document.getElementById('notifList'); if (!el) return;
+  const all = AC._notifs || [];
+  if (!all.length) { el.innerHTML = '<div class="ac-empty">No notifications yet.</div>'; return; }
+  const tab = AC._notifTab || 'all';
+  const def = _NOTIF_TABS.find(([k]) => k === tab) || _NOTIF_TABS[0];
+  const list = def[2] ? all.filter((n) => def[2].includes(n.type)) : all;
+  // Only offer tabs that would show something (All always).
+  const tabs = _NOTIF_TABS.filter(([k, , types]) => k === 'all' || all.some((n) => types.includes(n.type)));
+  const bar = tabs.length > 1 ? `<div class="ntf-tabs">${tabs.map(([k, l]) => `<button class="ntf-tab ${tab === k ? 'on' : ''}" onclick="acNotifTab('${k}')">${l}</button>`).join('')}</div>` : '';
+  el.innerHTML = bar + (list.length
+    ? list.map((n, i) => notifRow(n, i)).join('')
+    : '<div class="ac-empty" style="padding:26px;">Nothing here yet.</div>');
+}
+function acNotifTab(k) { AC._notifTab = k; acRenderNotifList(); }
 // A notification detail sub-page (slides in over the list; back returns to the list).
 // Used for system alerts with no destination (e.g. a new sign-in) — actionable
 // notifications navigate straight to their content instead.
