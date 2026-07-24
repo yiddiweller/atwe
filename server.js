@@ -1770,6 +1770,7 @@ const PUSH_VERBS = {
   connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills',
   event_rsvp: 'is going to your event', event_reminder: 'an event you’re going to starts soon', rec_received: 'recommended you',
   creator_sub: 'subscribed to you', tip: 'sent you a tip', review_reply: 'responded to your review',
+  invoice_reminder: 'sent a reminder — an invoice is waiting',
   appt_request: 'requested an appointment',
   appt_rescheduled: 'proposed a new appointment time',
   appt_reminder: 'has an appointment with you soon',
@@ -15824,12 +15825,13 @@ function mapInvoice(r, me) {
   return {
     id: r.id, title: r.title, items: Array.isArray(r.items) ? r.items : [], amountCents: r.amount_cents,
     note: r.note || null, dueAt: r.due_at || null, status: invoiceStatus(r), createdAt: r.created_at, paidAt: r.paid_at || null, paidOutside: !!r.paid_outside,
+    lastRemindedAt: r.last_reminded_at || null,
     mine: r.issuer_id === me, // I issued it (vs I'm the customer)
     issuer: { id: r.issuer_id, name: r.issuer_name, username: r.issuer_username, avatar: r.issuer_avatar || null },
     customer: { id: r.customer_id, name: r.customer_name, username: r.customer_username, avatar: r.customer_avatar || null },
   };
 }
-const INVOICE_SELECT = `SELECT i.id, i.issuer_id, i.customer_id, i.title, i.items, i.amount_cents, i.note, i.due_at, i.status, i.created_at, i.paid_at, i.paid_outside,
+const INVOICE_SELECT = `SELECT i.id, i.issuer_id, i.customer_id, i.title, i.items, i.amount_cents, i.note, i.due_at, i.status, i.created_at, i.paid_at, i.paid_outside, i.last_reminded_at,
   iu.name AS issuer_name, iu.username AS issuer_username, iu.avatar AS issuer_avatar,
   cu.name AS customer_name, cu.username AS customer_username, cu.avatar AS customer_avatar
   FROM invoices i JOIN users iu ON iu.id = i.issuer_id JOIN users cu ON cu.id = i.customer_id`;
@@ -15985,6 +15987,46 @@ app.post('/api/invoices/:id/cancel', auth.requireAuth, async (req, res) => {
     rtPush(r.rows[0].customer_id, 'invoice', { id, status: 'cancelled' });
     res.json({ ok: true, status: 'cancelled' });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel.' }); }
+});
+// Nudge an unpaid invoice (issuer only) — throttled to once per 24h per invoice.
+// The claim is atomic (the UPDATE both checks and stamps the cooldown), so a
+// double-tap can never send two reminders. The customer gets a notification and
+// the invoice card is re-dropped into the chat so it surfaces at the bottom.
+app.post('/api/invoices/:id/remind', auth.requireAuth, rateLimit(30, 60000, 'invoice-remind'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query(
+      `UPDATE invoices SET last_reminded_at = now()
+        WHERE id = $1 AND issuer_id = $2 AND status = 'sent'
+          AND (last_reminded_at IS NULL OR last_reminded_at < now() - interval '24 hours')
+        RETURNING customer_id, title, amount_cents`,
+      [id, req.user.id]
+    );
+    if (!r.rowCount) {
+      // Say WHY it didn't send: not yours / already settled / still cooling down.
+      const inv = (await db.query('SELECT issuer_id, status, last_reminded_at FROM invoices WHERE id = $1', [id])).rows[0];
+      if (!inv || inv.issuer_id !== req.user.id) return res.status(404).json({ error: 'Invoice not found.' });
+      if (inv.status !== 'sent') return res.status(400).json({ error: 'Only an unpaid invoice can be reminded.' });
+      const hrs = Math.max(1, Math.ceil(24 - (Date.now() - new Date(inv.last_reminded_at).getTime()) / 3600000));
+      return res.status(429).json({ error: `Already reminded — you can nudge again in about ${hrs}h.`, coolingDown: true });
+    }
+    const { customer_id, title, amount_cents } = r.rows[0];
+    notify(customer_id, req.user.id, 'invoice_reminder');
+    // Re-surface the pay card at the bottom of the thread (DM-privacy-aware).
+    try {
+      if (!(await dmAllowed(req.user.id, customer_id))) throw new Error('dm-not-allowed');
+      const meta = { t: 'invoice', id, title, amountCents: amount_cents };
+      const m = await db.query(
+        `INSERT INTO at_messages (sender_id, recipient_id, body, meta) VALUES ($1,$2,$3,$4) RETURNING id, created_at`,
+        [req.user.id, customer_id, '', JSON.stringify(meta)]
+      );
+      const msg = { id: m.rows[0].id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null, created_at: m.rows[0].created_at, reply_to: null, forwarded: false, meta };
+      rtPush(customer_id, 'msg', { kind: 'dm', peerId: req.user.id, message: { ...msg, mine: false } });
+      rtPush(req.user.id, 'msg', { kind: 'dm', peerId: customer_id, message: { ...msg, mine: true } });
+    } catch (e) { /* the reminder notification still landed */ }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the reminder.' }); }
 });
 
 /* ═══════════════════════════════════════════════

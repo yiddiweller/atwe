@@ -2746,6 +2746,8 @@ async function initSchema() {
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancelled_by INTEGER;`);
   // Invoice settled outside Atwe (cash/bank) — a bookkeeping mark, no wallet money moved.
   await query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS paid_outside BOOLEAN NOT NULL DEFAULT false;`);
+  // Payment reminders on an unpaid invoice — throttled to one per 24h per invoice.
+  await query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS last_reminded_at TIMESTAMPTZ;`);
   // ~1h-before reminders for confirmed appointments + scheduled calls (both parties).
   await query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reminded BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE scheduled_calls ADD COLUMN IF NOT EXISTS reminded BOOLEAN NOT NULL DEFAULT false;`);
