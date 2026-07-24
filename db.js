@@ -1559,6 +1559,9 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS product_reviews_product_idx ON product_reviews(product_id);`);
   // Photos/video attached to a product review (data URLs; images + an optional clip).
   await query(`ALTER TABLE product_reviews ADD COLUMN IF NOT EXISTS media TEXT[] NOT NULL DEFAULT '{}';`);
+  // Seller response (Amazon-style "Response from the seller") — one per review, editable.
+  await query(`ALTER TABLE product_reviews ADD COLUMN IF NOT EXISTS response TEXT;`);
+  await query(`ALTER TABLE product_reviews ADD COLUMN IF NOT EXISTS response_at TIMESTAMPTZ;`);
   // Two-way reviews: a seller rates the BUYER after an order completes (mirrors
   // product_reviews). Feeds the unified trust score. One per order.
   await query(`

@@ -1767,7 +1767,8 @@ const PUSH_VERBS = {
   job_application: 'applied to your job', connection_request: 'wants to connect',
   connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills',
   event_rsvp: 'is going to your event', event_reminder: 'an event you’re going to starts soon', rec_received: 'recommended you',
-  creator_sub: 'subscribed to you', tip: 'sent you a tip', appt_request: 'requested an appointment',
+  creator_sub: 'subscribed to you', tip: 'sent you a tip', review_reply: 'responded to your review',
+  appt_request: 'requested an appointment',
   appt_rescheduled: 'proposed a new appointment time',
   appt_reminder: 'has an appointment with you soon',
   event_spot: 'a spot opened up — you’re in!',
@@ -19550,7 +19551,7 @@ app.get('/api/products/:id/reviews', auth.requireAuth, async (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   try {
     const { rows } = await db.query(
-      `SELECT r.id, r.rating, r.body, r.media, r.created_at, r.reviewer_id, u.name AS rn, u.username AS ru, u.avatar AS ra, u.verified AS rv,
+      `SELECT r.id, r.rating, r.body, r.media, r.response, r.response_at, r.created_at, r.reviewer_id, u.name AS rn, u.username AS ru, u.avatar AS ra, u.verified AS rv,
               (SELECT COUNT(*) FROM product_review_helpful h WHERE h.review_id = r.id) AS helpful_count,
               EXISTS(SELECT 1 FROM product_review_helpful h WHERE h.review_id = r.id AND h.user_id = $2) AS helpful_by_me
        FROM product_reviews r JOIN users u ON u.id = r.reviewer_id WHERE r.product_id = $1
@@ -19558,10 +19559,15 @@ app.get('/api/products/:id/reviews', auth.requireAuth, async (req, res) => {
     const sum = (await db.query('SELECT COUNT(*)::int AS count, COALESCE(ROUND(AVG(rating)::numeric,1),0) AS avg FROM product_reviews WHERE product_id = $1', [id])).rows[0];
     const reviews = rows.map((r) => ({ id: r.id, rating: r.rating, body: r.body || '', media: Array.isArray(r.media) ? r.media : [], createdAt: r.created_at, mine: r.reviewer_id === req.user.id,
       helpfulCount: Number(r.helpful_count || 0), helpfulByMe: !!r.helpful_by_me,
+      response: r.response || null, responseAt: r.response_at || null,
       reviewer: { id: r.reviewer_id, name: r.rn, username: r.ru, avatar: r.ra || null, verified: !!r.rv } }));
     const mine = reviews.find((r) => r.mine) || null;
     const purchased = await hasPurchased(req.user.id, id);
-    res.json({ reviews, summary: { count: sum.count, avg: Number(sum.avg) }, canReview: purchased && !mine, purchased, mine });
+    // Can the viewer answer reviews here? The owner, or a team member with the
+    // `reviews` permission — the same rule business-review responses use.
+    const prod = (await db.query('SELECT business_id FROM products WHERE id = $1', [id])).rows[0];
+    const canRespond = prod ? await canActAs(req.user.id, prod.business_id, 'reviews') : false;
+    res.json({ reviews, summary: { count: sum.count, avg: Number(sum.avg) }, canReview: purchased && !mine, purchased, mine, canRespond });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load reviews.' }); }
 });
 // Leave / update a product review (verified buyers only).
@@ -19609,6 +19615,23 @@ app.post('/api/products/reviews/:id/helpful', auth.requireAuth, async (req, res)
     const count = Number((await db.query('SELECT COUNT(*) AS c FROM product_review_helpful WHERE review_id = $1', [rid])).rows[0].c);
     res.json({ ok: true, helpfulCount: count, helpfulByMe: on });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+// Seller response to a product review (Amazon's "Response from the seller").
+// One response per review, editable; saving empty text removes it. Allowed for
+// the owner or a team member with the `reviews` permission — the exact rule
+// business-review responses already use. The reviewer is notified.
+app.post('/api/products/reviews/:id/respond', auth.requireAuth, rateLimit(30, 60000, 'prod-rev-resp'), async (req, res) => {
+  const rid = routeId(req.params.id);
+  if (!Number.isInteger(rid)) return res.status(400).json({ error: 'Invalid id.' });
+  const response = (req.body.response || '').toString().trim().slice(0, 2000) || null;
+  try {
+    const r = (await db.query('SELECT r.reviewer_id, p.business_id FROM product_reviews r JOIN products p ON p.id = r.product_id WHERE r.id = $1', [rid])).rows[0];
+    if (!r) return res.status(404).json({ error: 'Review not found.' });
+    if (!(await canActAs(req.user.id, r.business_id, 'reviews'))) return res.status(403).json({ error: 'You don’t have permission to respond for this seller.' });
+    await db.query('UPDATE product_reviews SET response = $1, response_at = CASE WHEN $1::text IS NULL THEN NULL ELSE now() END WHERE id = $2', [response, rid]);
+    if (response) notify(r.reviewer_id, r.business_id, 'review_reply');
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save your response.' }); }
 });
 // Two-way reviews: a seller rates the BUYER after an order completes. One per order;
 // feeds the buyer's unified trust score. Order must be in a completed state.
