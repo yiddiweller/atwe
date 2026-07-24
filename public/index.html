@@ -7197,6 +7197,9 @@ body.light .ac-pdot{background:var(--accent);}
   border-top:1px solid var(--b2);background:var(--bg-1,#0d0d0d);}
 /* Hashtags + mentions in post text */
 .ac-tag{color:var(--accent);cursor:pointer;}
+/* Inside your own accent-filled bubble, an accent-coloured tag is invisible
+   (blue-on-blue) — render tags there in the bubble's own text colour, bolded. */
+.msg-row.me .msg-bubble .ac-tag{color:var(--accent-tint);font-weight:700;text-decoration:underline;text-underline-offset:2px;}
 @media(hover:hover){.ac-tag:hover{text-decoration:underline;}}
 /* In-post links — blue + tappable, X/Instagram-style */
 .ac-link{color:var(--accent);text-decoration:none;word-break:break-word;}
@@ -16472,7 +16475,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1456'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1457'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -30291,7 +30294,10 @@ function acLinkifyPost(text) {
   });
   let h = escHtml(s);
   h = h.replace(/#([\p{L}\p{N}_]{1,50})/gu, (m, t) => `<span class="ac-tag" onclick="event.stopPropagation();acOpenHashtag('${t.toLowerCase()}')">#${t}</span>`);
-  h = h.replace(/(^|[^\w@/])@([a-zA-Z0-9_]{2,30})/g, (m, pre, u) => `${pre}<span class="ac-tag" onclick="event.stopPropagation();acGoProfile('${u}')">@${u}</span>`);
+  // @everyone (a group-wide ping, not a profile) highlights without a profile link.
+  h = h.replace(/(^|[^\w@/])@([a-zA-Z0-9_]{2,30})/g, (m, pre, u) => (u.toLowerCase() === 'everyone'
+    ? `${pre}<span class="ac-tag">@${u}</span>`
+    : `${pre}<span class="ac-tag" onclick="event.stopPropagation();acGoProfile('${u}')">@${u}</span>`));
   // $CASHTAG (stock/crypto ticker) — letters only so "$5" prices aren't linked.
   // Function replacer keeps the literal "$" from being read as a replacement pattern.
   h = h.replace(/(^|[^\w$])\$([A-Za-z]{1,6})(?![A-Za-z0-9])/g, (m, pre, t) => `${pre}<span class="ac-tag" onclick="event.stopPropagation();acOpenCashtag('${t.toUpperCase()}')">$${t.toUpperCase()}</span>`);

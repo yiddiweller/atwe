@@ -6847,6 +6847,7 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
       // DON'T get a per-message notif like a DM, so this is how a mention reaches them).
       // A silent send stays quiet — deliver live, but skip the mention pings.
       if (body && req.body.silent !== true) {
+        const pinged = new Set();
         const handles = extractMentions(body);
         if (handles.length) {
           try {
@@ -6855,8 +6856,19 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
                WHERE gm.group_id = $1 AND lower(u.username) = ANY($2) AND u.id <> $3`,
               [gid, handles, req.user.id]
             );
-            for (const row of mem.rows) notify(row.id, req.user.id, 'mention', null, null, gid);
+            for (const row of mem.rows) { pinged.add(row.id); notify(row.id, req.user.id, 'mention', null, null, gid); }
           } catch (_) { /* mentions are best-effort */ }
+        }
+        // @everyone (Telegram-style, ADMIN-only): ping every member. Standalone
+        // token match, deduped against anyone already @named individually.
+        if (/(^|\s)@everyone\b/i.test(body)) {
+          try {
+            if (await isGroupAdmin(gid, req.user.id)) {
+              for (const id of await groupMemberIds(gid, req.user.id)) {
+                if (!pinged.has(id)) notify(id, req.user.id, 'mention', null, null, gid);
+              }
+            }
+          } catch (_) { /* best-effort */ }
         }
       }
     }
