@@ -8363,7 +8363,12 @@ body.light .ac-job-tag.featured{color:var(--accent);}
 .ac-appl-status.st-shortlisted{background:rgba(48,209,88,.16);color:var(--green);}
 .ac-appl-status.st-hired{background:var(--accent);color:var(--accent-tint);}
 .ac-appl-status.st-rejected{background:var(--rose-bg,rgba(255,0,51,.14));color:var(--red);}
-.ac-appl-acts{display:flex;align-items:center;gap:8px;margin:9px 0 2px 53px;}
+.ac-appl-acts{display:flex;align-items:center;gap:8px;margin:9px 0 2px 53px;flex-wrap:wrap;}
+/* Private hiring note (poster-only) */
+.apl-note-btn.has{color:var(--accent);}
+.apl-note-box{margin:8px 0 4px 53px;}
+.apl-note-in{width:100%;background:var(--s2);border:none;border-radius:14px;color:var(--t1);font-size:14px;font-family:inherit;padding:10px 12px;resize:vertical;min-height:64px;outline:none;}
+.apl-note-save{margin-top:8px;padding:8px 18px;flex:0 0 auto;width:auto;}
 .ac-appl-sel{flex:0 0 auto;font-size:13px;font-weight:600;border:none;background:var(--s1);color:var(--t1);border-radius:10px;padding:7px 10px;cursor:pointer;}
 .ac-appl-sel.st-shortlisted{border-color:var(--green);color:var(--green);}
 .ac-appl-sel.st-hired{border-color:var(--accent);color:var(--accent);}
@@ -16330,7 +16335,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1413'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1414'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25198,8 +25203,33 @@ function acApplicantRow(jobId, a) {
     ${sel ? '' : `<div class="ac-appl-acts">
       <select class="ac-appl-sel st-${a.status}" onchange="acSetApplicantStatus(${jobId},${a.id},this.value,this)">${opts}</select>
       <button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 14px;" onclick="closeOverlay('jobApplicants');acOpenChat(${a.id})">Message</button>
+      <button class="ac-pill-btn apl-note-btn ${a.hiringNote ? 'has' : ''}" style="flex:0 0 auto;padding:7px 14px;" onclick="acToggleApplNote(${a.id})">${a.hiringNote ? '📝 Note ·' : '📝 Note'}</button>
+    </div>
+    <div class="apl-note-box hidden" id="aplNoteBox_${a.id}">
+      <textarea class="apl-note-in" id="aplNoteIn_${a.id}" maxlength="2000" rows="3" placeholder="Private note — only you and your team see this.">${escHtml(a.hiringNote || '')}</textarea>
+      <button class="ac-pill-btn accent apl-note-save" onclick="acSaveApplNote(${jobId},${a.id},this)">Save note</button>
     </div>`}
   </div>`;
+}
+// Private hiring note per applicant (poster-only, never shown to the candidate).
+function acToggleApplNote(uid) {
+  const box = document.getElementById('aplNoteBox_' + uid); if (!box) return;
+  const open = box.classList.toggle('hidden') === false;
+  if (open) setTimeout(() => document.getElementById('aplNoteIn_' + uid)?.focus(), 60);
+}
+async function acSaveApplNote(jobId, uid, btn) {
+  const note = (document.getElementById('aplNoteIn_' + uid)?.value || '').trim();
+  const lbl = btn.textContent; btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await API.req('PUT', '/api/jobs/' + jobId + '/applicants/' + uid + '/note', { note });
+    const a = (AC._applicants || []).find((x) => x.id === uid); if (a) a.hiringNote = note || null;
+    document.getElementById('aplNoteBox_' + uid)?.classList.add('hidden');
+    // Refresh the row's Note button state without a full re-render.
+    const card = document.querySelector(`.ac-appl[data-uid="${uid}"] .apl-note-btn`);
+    if (card) { card.classList.toggle('has', !!note); card.textContent = note ? '📝 Note ·' : '📝 Note'; }
+    showNotif(note ? 'Note saved.' : 'Note removed.');
+  } catch (e) { showNotif(e.message || 'Could not save the note.'); }
+  finally { btn.disabled = false; btn.textContent = lbl; }
 }
 async function acSetApplicantStatus(jobId, uid, status, sel) {
   const prev = sel.dataset.prev || 'applied';
