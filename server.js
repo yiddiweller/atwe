@@ -1782,7 +1782,7 @@ const PUSH_VERBS = {
   story_mention: 'mentioned you in their Daily',
   job_application: 'applied to your job', connection_request: 'wants to connect',
   connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills',
-  event_rsvp: 'is going to your event', event_reminder: 'an event you’re going to starts soon', rec_received: 'recommended you',
+  event_rsvp: 'is going to your event', event_reminder: 'an event you’re going to starts soon', event_comment: 'commented on your event', rec_received: 'recommended you',
   creator_sub: 'subscribed to you', tip: 'sent you a tip', review_reply: 'responded to your review',
   invoice_reminder: 'sent a reminder — an invoice is waiting',
   split_reminder: 'sent a reminder — your share of a split is waiting',
@@ -20880,6 +20880,53 @@ app.get('/api/events/:id/ics', auth.requireAuth, async (req, res) => {
     res.set('Content-Disposition', `attachment; filename="atwe-event-${e.id}.ics"`);
     res.send(lines.join('\r\n'));
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not export the event.' }); }
+});
+/* ─── Event discussion (FB-events-style): a flat public thread per event ─── */
+app.get('/api/events/:id/comments', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid event id.' });
+  try {
+    const ev = (await db.query('SELECT id, host_id FROM events WHERE id = $1', [id])).rows[0];
+    if (!ev) return res.status(404).json({ error: 'Event not found.' });
+    const { rows } = await db.query(
+      `SELECT c.id, c.body, c.created_at, u.id AS uid, u.name, u.username, u.avatar, u.verified, u.account_type
+         FROM event_comments c JOIN users u ON u.id = c.user_id
+        WHERE c.event_id = $1 AND NOT u.deactivated
+          AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $2 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = $2))
+        ORDER BY c.created_at ASC LIMIT 300`, [id, req.user.id]);
+    res.json({ comments: rows.map((c) => ({
+      id: c.id, body: c.body, createdAt: c.created_at, mine: c.uid === req.user.id, hostCan: ev.host_id === req.user.id,
+      author: { id: c.uid, name: c.name, username: c.username, avatar: mediaRef(c.avatar, 'avatar', c.uid), verified: !!c.verified, accountType: c.account_type === 'business' ? 'business' : 'personal', isHost: c.uid === ev.host_id },
+    })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the discussion.' }); }
+});
+app.post('/api/events/:id/comments', auth.requireAuth, rateLimit(30, 60000, 'event-comment'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid event id.' });
+  const body = (req.body.body || '').toString().trim().slice(0, 1000);
+  if (!body) return res.status(400).json({ error: 'Write something first.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const ev = (await db.query('SELECT id, host_id FROM events WHERE id = $1', [id])).rows[0];
+    if (!ev) return res.status(404).json({ error: 'Event not found.' });
+    if (await blockedEither(req.user.id, ev.host_id)) return res.status(403).json({ error: 'You can’t comment on this event.' });
+    const ins = await db.query('INSERT INTO event_comments (event_id, user_id, body) VALUES ($1,$2,$3) RETURNING id, created_at', [id, req.user.id, body]);
+    notify(ev.host_id, req.user.id, 'event_comment', null, null, null, null, id);
+    res.status(201).json({ ok: true, id: ins.rows[0].id, createdAt: ins.rows[0].created_at });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post your comment.' }); }
+});
+// Delete: the commenter, or the event host moderating their own event's thread.
+app.delete('/api/events/comments/:id', auth.requireAuth, async (req, res) => {
+  const cid = routeId(req.params.id);
+  if (!Number.isInteger(cid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query(
+      `DELETE FROM event_comments c USING events e
+        WHERE c.id = $1 AND e.id = c.event_id AND (c.user_id = $2 OR e.host_id = $2) RETURNING c.id`,
+      [cid, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete it.' }); }
 });
 // Appointment → .ics (party-only): drop a booking into Apple/Google/Outlook
 // calendars, mirroring the events export. The other party's name rides in the
