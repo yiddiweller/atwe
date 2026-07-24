@@ -13987,6 +13987,17 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Closing the composer with unfinished text: Save draft / Discard / keep editing -->
+<div class="overlay hidden" id="composeCloseSheet" onclick="if(event.target===this)closeOverlay('composeCloseSheet')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Unfinished post">
+    <div class="jp-title">Save this post as a draft?</div>
+    <div class="ac-disc-sub" style="margin:0 0 14px;">You can pick it up later from Drafts in the composer.</div>
+    <button class="ac-pill-btn accent jp-submit" onclick="acComposeSaveAndLeave(this)">Save draft</button>
+    <button class="ac-pill-btn jp-submit" style="margin-top:8px;color:var(--red);" onclick="acComposeLeave()">Discard</button>
+    <button class="ac-pill-btn jp-submit" style="margin-top:8px;" onclick="closeOverlay('composeCloseSheet')">Keep editing</button>
+  </div>
+</div>
+
 <!-- Image description (ALT chip on a post image) -->
 <div class="overlay hidden" id="altTextView" onclick="if(event.target===this)closeOverlay('altTextView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Image description">
@@ -16598,7 +16609,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1481'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1482'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -31490,9 +31501,31 @@ function acScheduleValue() {
   return d.toISOString();
 }
 async function acPostComposeBack() {
-  const hasDraft = !!document.getElementById('acPostText').value.trim() || _acHasMedia() || acPollValues().length >= 2;
+  const text = document.getElementById('acPostText').value.trim();
+  const hasDraft = !!text || _acHasMedia() || acPollValues().length >= 2;
+  // X-style: closing with typed TEXT offers Save draft (drafts store text only, so
+  // media/poll-only composes keep the plain discard confirm; edits never draft).
+  if (hasDraft && text && !AC._postEditId) { showOverlay('composeCloseSheet'); return; }
   if (hasDraft && !(await appConfirm({ title: 'Discard post?', message: 'You have an unfinished post. If you leave now, it won’t be saved.', confirmText: 'Discard' }))) return;
+  acComposeLeave();
+}
+function acComposeLeave() {
+  closeOverlay('composeCloseSheet');
   if (AC._postFeedCtx) acOpenFeed(AC._postFeedCtx); else if (AC._postCircleCtx) acOpenCircle(AC._postCircleCtx); else acGoHome();
+}
+// "Save draft" on close: persist the text, then leave (dot + manager pick it up).
+async function acComposeSaveAndLeave(btn) {
+  const body = document.getElementById('acPostText').value.trim();
+  if (!body) { acComposeLeave(); return; }
+  if (btn) btn.disabled = true;
+  try {
+    if (AC._draftId) await API.req('PUT', '/api/social/drafts/' + AC._draftId, { body });
+    else await API.req('POST', '/api/social/drafts', { body });
+    AC._draftId = null;
+    showNotif('Draft saved.');
+    acSyncDraftDot();
+  } catch (e) { showNotif(e.message || 'Could not save the draft.'); if (btn) { btn.disabled = false; return; } }
+  acComposeLeave();
 }
 // Build the "share to" chips: your feed + the circles you belong to.
 async function acRenderPostTargets(circleId) {
