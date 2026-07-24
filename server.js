@@ -127,6 +127,53 @@ function requireFeature(key) {
   };
 }
 
+// ── Content blocklists — admin-managed banned words + link/domain blacklist ──
+// An EXPLICIT list (unlike the fuzzy AI/heuristic auto-flagger): a post whose text
+// contains a banned word, or links to a blacklisted domain, is blocked outright at
+// create/edit time with a clear message. Stored in app_settings ('moderation_lists'),
+// cached here, loaded on boot — same pattern as feature flags / ranking weights.
+const MODLISTS_KEY = 'moderation_lists';
+let _blockTerms = [];   // lowercased banned words / phrases
+let _blockDomains = []; // lowercased bare domains (e.g. "spam.example")
+function normalizeModLists(v) {
+  const src = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+  const terms = (Array.isArray(src.terms) ? src.terms : [])
+    .map((t) => String(t || '').trim().toLowerCase()).filter((t) => t.length >= 2 && t.length <= 60);
+  const domains = (Array.isArray(src.domains) ? src.domains : [])
+    .map((d) => String(d || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, ''))
+    .filter((d) => /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d));
+  return { terms: [...new Set(terms)].slice(0, 1000), domains: [...new Set(domains)].slice(0, 1000) };
+}
+function applyModLists(v) { const n = normalizeModLists(v); _blockTerms = n.terms; _blockDomains = n.domains; return n; }
+// Returns a reason ('blocked-term' | 'blocked-link') if `text` hits the lists, else null.
+function blockedContentReason(text) {
+  const t = (text || '').toLowerCase();
+  if (!t.trim()) return null;
+  for (const term of _blockTerms) {
+    if (/\s/.test(term)) { if (t.includes(term)) return 'blocked-term'; } // phrase: substring
+    else { // single word: match on non-alphanumeric boundaries so "ass" ≠ "grass"
+      const re = new RegExp('(^|[^a-z0-9])' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^a-z0-9]|$)', 'i');
+      if (re.test(t)) return 'blocked-term';
+    }
+  }
+  if (_blockDomains.length) {
+    const re = /(?:https?:\/\/)?(?:www\.)?([a-z0-9-]+(?:\.[a-z0-9-]+)+)/gi;
+    let m;
+    while ((m = re.exec(t)) !== null) {
+      const host = m[1].toLowerCase();
+      for (const d of _blockDomains) if (host === d || host.endsWith('.' + d)) return 'blocked-link';
+    }
+  }
+  return null;
+}
+// Reject a post whose text is blocklisted. Returns true if it responded (caller must return).
+function rejectIfBlocked(res, text) {
+  const r = blockedContentReason(text);
+  if (!r) return false;
+  res.status(400).json({ blocked: true, error: r === 'blocked-link' ? 'That link isn’t allowed here.' : 'Your post contains a word that isn’t allowed here. Please edit it and try again.' });
+  return true;
+}
+
 // ── Feature Controls: the admin "Feature Controls" page (module-level kill
 // switches). Same model as FEATURE_FLAGS (default ON; off only when explicitly
 // false; fail-open) but its own app_settings store so the two don't collide.
@@ -9094,6 +9141,7 @@ app.post('/api/social/thread', auth.requireAuth, rateLimit(15, 60000, 'thread'),
     if (images === undefined) return res.status(400).json({ error: 'Those images could not be attached.' });
     const image = images.length ? images[0] : null;
     if (!body && !image) return res.status(400).json({ error: 'Every post in the thread needs text or an image.' });
+    if (rejectIfBlocked(res, body)) return; // admin keyword / link-domain blocklist
     prepared.push({ body, image, images });
   }
   try {
@@ -9928,6 +9976,7 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), re
   const hasPoll = pollOpts.length >= 2 && (req.body.parentId == null || req.body.parentId === '');
   if (!body && !image && !media.data && !hasPoll && (req.body.quoteId == null || req.body.quoteId === '')) return res.status(400).json({ error: 'Your post is empty.' });
   if (body.length > 2000) return res.status(400).json({ error: 'Post is too long (2000 chars max).' });
+  if (rejectIfBlocked(res, body)) return; // admin keyword / link-domain blocklist
   let parentId = null;
   if (req.body.parentId != null && req.body.parentId !== '') {
     parentId = parseInt(req.body.parentId, 10);
@@ -10112,6 +10161,7 @@ app.patch('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
   const body = (req.body.body || '').trim();
   if (body.length > 2000) return res.status(400).json({ error: 'Post is too long (2000 chars max).' });
+  if (rejectIfBlocked(res, body)) return; // admin keyword / link-domain blocklist
   try {
     const cur = await db.query('SELECT user_id, image, media, created_at, scheduled_at FROM posts WHERE id = $1', [id]);
     const p = cur.rows[0];
@@ -12350,6 +12400,19 @@ app.put('/api/admin/feature-flags', auth.requireAdmin, async (req, res) => {
     adminAudit(req, 'feature.flags', 'settings', 'feature_flags', { flags: next });
     res.json({ flags: next });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save feature flags.' }); }
+});
+// Admin: content blocklists (moderation scope). Get / replace the banned-word +
+// link-domain lists; the cache is swapped so the very next post-create enforces them.
+app.get('/api/admin/moderation-lists', auth.requirePerm('moderation'), (_req, res) => {
+  res.json({ terms: _blockTerms, domains: _blockDomains });
+});
+app.put('/api/admin/moderation-lists', auth.requirePerm('moderation'), async (req, res) => {
+  try {
+    const n = applyModLists({ terms: req.body.terms, domains: req.body.domains });
+    if (db.isConfigured()) await db.setSetting(MODLISTS_KEY, n);
+    adminAudit(req, 'moderation.lists', 'settings', MODLISTS_KEY, { terms: n.terms.length, domains: n.domains.length });
+    res.json({ terms: n.terms, domains: n.domains });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the lists.' }); }
 });
 // Feature Controls — the module-level kill-switch page. GET returns current state +
 // the catalog (key/label/cat); PUT merges a partial {controls:{key:bool}} over the
@@ -22978,6 +23041,7 @@ db.init()
   .then(() => { if (db.isConfigured()) return db.getSetting(DEMO_KEY).then((v) => { _demoMode = !!v; }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(RANKING_KEY).then((v) => { _rankingWeights = normalizeRankingWeights(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(FLAGS_KEY).then((v) => { _featureFlags = normalizeFeatureFlags(v); }).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return db.getSetting(MODLISTS_KEY).then((v) => applyModLists(v)).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(CONTROLS_KEY).then((v) => { _featureControls = normalizeControls(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) console.log('🗄️   Schema + settings ready.'); })
   .catch((err) => console.error('Post-init setup failed:', err.message));
