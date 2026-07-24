@@ -15751,13 +15751,13 @@ function invoiceStatus(r) {
 function mapInvoice(r, me) {
   return {
     id: r.id, title: r.title, items: Array.isArray(r.items) ? r.items : [], amountCents: r.amount_cents,
-    note: r.note || null, dueAt: r.due_at || null, status: invoiceStatus(r), createdAt: r.created_at, paidAt: r.paid_at || null,
+    note: r.note || null, dueAt: r.due_at || null, status: invoiceStatus(r), createdAt: r.created_at, paidAt: r.paid_at || null, paidOutside: !!r.paid_outside,
     mine: r.issuer_id === me, // I issued it (vs I'm the customer)
     issuer: { id: r.issuer_id, name: r.issuer_name, username: r.issuer_username, avatar: r.issuer_avatar || null },
     customer: { id: r.customer_id, name: r.customer_name, username: r.customer_username, avatar: r.customer_avatar || null },
   };
 }
-const INVOICE_SELECT = `SELECT i.id, i.issuer_id, i.customer_id, i.title, i.items, i.amount_cents, i.note, i.due_at, i.status, i.created_at, i.paid_at,
+const INVOICE_SELECT = `SELECT i.id, i.issuer_id, i.customer_id, i.title, i.items, i.amount_cents, i.note, i.due_at, i.status, i.created_at, i.paid_at, i.paid_outside,
   iu.name AS issuer_name, iu.username AS issuer_username, iu.avatar AS issuer_avatar,
   cu.name AS customer_name, cu.username AS customer_username, cu.avatar AS customer_avatar
   FROM invoices i JOIN users iu ON iu.id = i.issuer_id JOIN users cu ON cu.id = i.customer_id`;
@@ -15889,6 +15889,21 @@ app.post('/api/invoices/:id/pay', auth.requireAuth, blockImpersonation, async (r
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not pay the invoice.' }); }
 });
 // Cancel an invoice (issuer only, while unpaid).
+// Issuer records that an invoice was settled OUTSIDE Atwe (cash, bank transfer).
+// Flips it paid WITHOUT moving any wallet money — a bookkeeping mark, flagged so
+// it never reads as an in-app payment.
+app.post('/api/invoices/:id/mark-paid', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query(
+      "UPDATE invoices SET status = 'paid', paid_at = now(), paid_outside = true WHERE id = $1 AND issuer_id = $2 AND status = 'sent' RETURNING customer_id",
+      [id, req.user.id]);
+    if (!r.rowCount) return res.status(400).json({ error: 'That invoice can’t be marked paid.' });
+    rtPush(r.rows[0].customer_id, 'invoice', { id, status: 'paid' });
+    res.json({ ok: true, status: 'paid', paidOutside: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the invoice.' }); }
+});
 app.post('/api/invoices/:id/cancel', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
