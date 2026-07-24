@@ -14627,6 +14627,10 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   <button class="aimp-item" role="menuitem" onclick="acFeedAiPick('catchup')"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Catch me up</span></button>
 </div>
 
+<!-- Send-button hold menu (Telegram-style: Send silently / Schedule) -->
+<div class="ai-menu-scrim hidden" id="sendMenuScrim" onclick="acSendMenuClose()"></div>
+<div class="ai-menu-pop hidden" id="sendMenuPop" role="menu" aria-label="Send options"></div>
+
 <!-- Chat tools popover — the small Apple-style menu the chat-tab ⋯ opens (Search / Starred / Unread only) -->
 <div class="ai-menu-scrim hidden" id="chatMenuScrim" onclick="acCloseChatMenu()"></div>
 <div class="ai-menu-pop hidden" id="chatMenuPop" role="menu" aria-label="Chat tools">
@@ -15886,7 +15890,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1390'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1391'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -42877,6 +42881,7 @@ function acEnsureMsgRendered(id) {
 }
 function acRenderThread() {
   const el = document.getElementById('acThread');
+  acBindSendMenu(); // hold-to-send-silently (bound once)
   acApplyWallpaper(); // per-conversation wallpaper
   const isGroup = AC.mode === 'group';
   if (!AC.messages.length) {
@@ -43306,7 +43311,42 @@ function acMsgTime(d) {
   } catch { return ''; }
 }
 
-async function acSend() {
+// Hold the send button → Telegram-style options (Send without sound / Schedule).
+let _sendPress = null, _sendMenuBound = false, _sendMenuJustOpened = false;
+function acBindSendMenu() {
+  if (_sendMenuBound) return;
+  const btn = document.getElementById('acSendBtn'); if (!btn) return;
+  _sendMenuBound = true;
+  const pt = (e) => (e.touches && e.touches[0]) ? e.touches[0] : e;
+  const start = (e) => {
+    const t = pt(e);
+    _sendPress = { opened: false, x: t.clientX || 0, y: t.clientY || 0 };
+    _sendPress.timer = setTimeout(() => { if (!_sendPress) return; _sendPress.opened = true; _sendMenuJustOpened = true; acSendMenuOpen(btn); if (navigator.vibrate) { try { navigator.vibrate(8); } catch {} } }, 380);
+  };
+  const move = (e) => { if (!_sendPress) return; const t = pt(e); if (Math.abs((t.clientX || 0) - _sendPress.x) > 10 || Math.abs((t.clientY || 0) - _sendPress.y) > 10) { clearTimeout(_sendPress.timer); _sendPress = null; } };
+  const end = (e) => { if (!_sendPress) return; clearTimeout(_sendPress.timer); if (_sendPress.opened) { e.preventDefault(); e.stopPropagation(); } _sendPress = null; setTimeout(() => { _sendMenuJustOpened = false; }, 60); };
+  btn.addEventListener('touchstart', start, { passive: true });
+  btn.addEventListener('touchmove', move, { passive: true });
+  btn.addEventListener('touchend', end);
+  btn.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse') start(e); });
+  btn.addEventListener('pointerup', (e) => { if (e.pointerType === 'mouse') end(e); });
+  btn.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+function acSendMenuOpen(btn) {
+  const pop = document.getElementById('sendMenuPop'), scrim = document.getElementById('sendMenuScrim'); if (!pop || !scrim) return;
+  pop.innerHTML = [
+    `<button class="aimp-item" role="menuitem" onclick="acSendMenuClose();acSend({silent:true})"><svg viewBox="0 0 24 24"><path d="M18.63 13A17.9 17.9 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><line x1="1" y1="1" x2="23" y2="23"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Send without sound</span></button>`,
+    `<div class="aimp-sep"></div>`,
+    `<button class="aimp-item" role="menuitem" onclick="acSendMenuClose();acScheduleMsgOpen()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg><span>Schedule message</span></button>`,
+  ].join('');
+  scrim.classList.remove('hidden'); pop.classList.remove('hidden');
+  _acAnchorPopover(btn, pop);
+}
+function acSendMenuClose() { document.getElementById('sendMenuPop')?.classList.add('hidden'); document.getElementById('sendMenuScrim')?.classList.add('hidden'); }
+
+async function acSend(opts) {
+  if (_sendMenuJustOpened && !opts) { _sendMenuJustOpened = false; return; } // a hold opened the menu
+  const silent = !!(opts && opts.silent); // Telegram-style: deliver without a ping
   const inp = document.getElementById('acInput');
   const body = (inp.value || '').trim();
   const isGroup = AC.mode === 'group';
@@ -43335,7 +43375,7 @@ async function acSend() {
     media_kind: (att && att.kind !== 'image') ? att.kind : null,
     media_name: att ? att.name : null,
     reply_to: replyTo, forwarded: fwd, viewOnce, secret,
-    _payload: Object.assign({ body, clientId: tmpId }, imgs ? { images: imgs } : (att ? (att.kind === 'image' ? { image: att.data } : { media: att.data, mediaName: att.name }) : {}), replyTo ? { replyTo } : {}, fwd ? { forwarded: true } : {}, viewOnce ? { viewOnce: true } : {}, secret ? { secret: true } : {}, (!isGroup && AC.threadId) ? { threadId: AC.threadId } : {}),
+    _payload: Object.assign({ body, clientId: tmpId }, imgs ? { images: imgs } : (att ? (att.kind === 'image' ? { image: att.data } : { media: att.data, mediaName: att.name }) : {}), replyTo ? { replyTo } : {}, fwd ? { forwarded: true } : {}, viewOnce ? { viewOnce: true } : {}, secret ? { secret: true } : {}, silent ? { silent: true } : {}, (!isGroup && AC.threadId) ? { threadId: AC.threadId } : {}),
     _target: isGroup ? { group: AC.groupId } : { peer: AC.peer.id, threadId: AC.threadId || null },
   };
   if (secret) { AC._secret = false; acRenderSecretBar(); } // one-shot: secret mode resets after sending
