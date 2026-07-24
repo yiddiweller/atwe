@@ -1149,6 +1149,7 @@ function publicUser(row) {
     paused: !!row.paused, // Pro "Away" mode — account temporarily unavailable
     pauseMessage: row.pause_message || null,
     storeBanner: row.store_banner || null,
+    freeShipOverCents: row.free_ship_over_cents || null,
     // Last seen & online visibility. WhatsApp-style reciprocity: a viewer who hides
     // their own ('nobody') can't see anyone else's either (enforced server-side +
     // gated client-side). 'everyone' (default) / 'connections' / 'nobody'.
@@ -3465,7 +3466,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, intro_seen, business_hours, hours_note, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, paused, pause_message, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off, store_banner, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, hiring, pronouns FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, intro_seen, business_hours, hours_note, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, paused, pause_message, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off, store_banner, free_ship_over_cents, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, hiring, pronouns FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -3890,6 +3891,8 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
   // Storefront announcement (Etsy-style): one short line pinned atop the shop
   // ("20% off this week", "Away until the 5th — orders ship after"). Empty clears.
   if ('storeBanner' in req.body) { vals.push((req.body.storeBanner || '').trim().slice(0, 140) || null); fields.push(`store_banner = $${vals.length}`); }
+  // Free shipping over $X (physical orders): 0/empty turns it off; $1-$1,000.
+  if ('freeShipOverCents' in req.body) { const c = Math.round(Number(req.body.freeShipOverCents) || 0); vals.push((c >= 100 && c <= 100000) ? c : null); fields.push(`free_ship_over_cents = $${vals.length}`); }
   // Contact / lead form (business): a toggle + an optional intro line.
   if ('inquiryEnabled' in req.body) { vals.push(req.body.inquiryEnabled === true); fields.push(`inquiry_enabled = $${vals.length}`); }
   if ('inquiryIntro' in req.body) { vals.push((req.body.inquiryIntro || '').trim().slice(0, 200) || null); fields.push(`inquiry_intro = $${vals.length}`); }
@@ -16384,7 +16387,7 @@ app.post('/api/offers/:id/checkout', auth.requireAuth, blockImpersonation, rateL
     if (await blockedEither(req.user.id, p.business_id)) return res.status(403).json({ error: 'You can’t order from this seller.' });
     const unitPrice = o.amount_cents;
     const items = [{ product_id: o.product_id, qty: 1, name: p.name, price_cents: unitPrice, kind: p.kind, stock: p.stock, ship_free: p.ship_free, ship_fee_cents: p.ship_fee_cents, pickup: p.pickup, pickup_location: p.pickup_location, variant_id: null, variant_label: null }];
-    const ship = await resolveShipping(req.user.id, req.body, items);
+    const ship = await resolveShipping(req.user.id, req.body, items, { sellerId: p.business_id, subtotalCents: unitPrice });
     if (!ship.ok) return res.status(400).json({ error: ship.error, needAddress: !!ship.needAddress });
     const rt = await applyRatesAndTax(req.body, ship, items, unitPrice);
     const total = unitPrice + rt.shippingCents + rt.taxCents;
@@ -16585,11 +16588,13 @@ function mapListing(r) {
   return Object.assign(mapProduct(r), {
     seller: { id: r.business_id, name: r.seller_name, username: r.seller_username, avatar: r.seller_avatar || null, accountType: r.seller_account_type === 'business' ? 'business' : 'personal', verified: !!r.seller_verified },
     createdAt: r.created_at,
+    // Seller-wide free-shipping threshold, advertised on the listing.
+    freeShipOverCents: Number(r.seller_free_ship_over) > 0 ? Number(r.seller_free_ship_over) : null,
   });
 }
 const LISTING_SELECT = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
   p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.compare_at_cents, ${RATING_COLS},
-  u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified
+  u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified, u.free_ship_over_cents AS seller_free_ship_over
   FROM products p JOIN users u ON u.id = p.business_id`;
 
 /* ─── Sponsored product ads (Amazon Sponsored Products / Etsy Ads-style) ───
@@ -17463,7 +17468,7 @@ app.get('/api/cart', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
       `SELECT c.product_id, c.qty, c.variant_id, p.name, p.price_cents, p.image, p.kind, p.active, p.business_id, p.stock, p.variants, p.ship_free, p.ship_fee_cents,
-              b.name AS biz_name, b.username AS biz_username, b.avatar AS biz_avatar, b.account_type AS biz_type
+              b.name AS biz_name, b.username AS biz_username, b.avatar AS biz_avatar, b.account_type AS biz_type, b.free_ship_over_cents
        FROM cart_items c JOIN products p ON p.id = c.product_id JOIN users b ON b.id = p.business_id
        WHERE c.user_id = $1 ORDER BY p.business_id, c.created_at`,
       [req.user.id]
@@ -17473,7 +17478,7 @@ app.get('/api/cart', auth.requireAuth, async (req, res) => {
     const bySeller = new Map();
     for (const r of rows) {
       if (!r.active) continue; // a since-deactivated product drops out
-      if (!bySeller.has(r.business_id)) bySeller.set(r.business_id, { seller: { id: r.business_id, name: r.biz_name, username: r.biz_username, avatar: r.biz_avatar || null, accountType: r.biz_type === 'business' ? 'business' : 'personal' }, items: [], totalCents: 0, shippingCents: 0, needsShipping: false });
+      if (!bySeller.has(r.business_id)) bySeller.set(r.business_id, { seller: { id: r.business_id, name: r.biz_name, username: r.biz_username, avatar: r.biz_avatar || null, accountType: r.biz_type === 'business' ? 'business' : 'personal' }, items: [], totalCents: 0, shippingCents: 0, needsShipping: false, freeShipOverCents: Number(r.free_ship_over_cents) > 0 ? Number(r.free_ship_over_cents) : null });
       const g = bySeller.get(r.business_id);
       // Resolve the chosen variant (if any) for its price, label and stock.
       let unitPrice = r.price_cents, variantLabel = null, lineStock = r.stock;
@@ -17487,6 +17492,12 @@ app.get('/api/cart', auth.requireAuth, async (req, res) => {
       g.items.push({ productId: r.product_id, variantId: r.variant_id || null, variantLabel, name: r.name, priceCents: unitPrice, image: r.image || null, kind: r.kind, qty: r.qty, soldOut });
       g.totalCents += unitPrice * r.qty;
       if (r.kind === 'physical') { g.needsShipping = true; if (r.ship_free === false) g.shippingCents += r.ship_fee_cents || 0; }
+    }
+    // Seller free-shipping threshold: met → shipping zeroes (matching checkout math,
+    // which compares the pre-discount merchandise subtotal).
+    for (const g of bySeller.values()) {
+      g.freeShipMet = !!(g.freeShipOverCents && g.totalCents >= g.freeShipOverCents);
+      if (g.freeShipMet) g.shippingCents = 0;
     }
     res.json({ carts: [...bySeller.values()] });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your cart.' }); }
@@ -18071,7 +18082,7 @@ app.post('/api/splits/:id/remind', auth.requireAuth, rateLimit(30, 60000, 'split
 // shipping = sum of each physical line's flat fee (free lines add 0). Resolves the
 // ship-to from a saved address (addressId) or an inline one (shipAddress, optionally
 // saved). Returns { ok, needsShipping, shippingCents, addr } | { ok:false, error, needAddress }.
-async function resolveShipping(userId, body, items) {
+async function resolveShipping(userId, body, items, opts) {
   const needsShipping = items.some((it) => it.kind === 'physical');
   if (!needsShipping) return { ok: true, needsShipping: false, shippingCents: 0, addr: null };
   // Local pickup: the buyer chose pickup AND every physical item offers it → no
@@ -18080,7 +18091,15 @@ async function resolveShipping(userId, body, items) {
     const loc = items.map((it) => it.pickup_location).filter(Boolean)[0] || null;
     return { ok: true, needsShipping: false, shippingCents: 0, addr: null, pickup: true, pickupLocation: loc };
   }
-  const shippingCents = items.reduce((s, it) => s + (it.kind === 'physical' && it.ship_free === false ? (it.ship_fee_cents || 0) : 0), 0);
+  let shippingCents = items.reduce((s, it) => s + (it.kind === 'physical' && it.ship_free === false ? (it.ship_fee_cents || 0) : 0), 0);
+  // Seller free-shipping threshold ("free over $50"): when the caller passes the
+  // seller + the order subtotal and it clears the seller's bar, shipping is $0.
+  if (shippingCents > 0 && opts && opts.sellerId && Number(opts.subtotalCents) > 0) {
+    try {
+      const t = (await db.query('SELECT free_ship_over_cents FROM users WHERE id = $1', [opts.sellerId])).rows[0];
+      if (t && Number(t.free_ship_over_cents) > 0 && Number(opts.subtotalCents) >= Number(t.free_ship_over_cents)) shippingCents = 0;
+    } catch (e) { /* threshold is a perk — on a lookup error the flat fee stands */ }
+  }
   if (body.addressId) {
     const a = (await db.query('SELECT * FROM addresses WHERE id = $1 AND user_id = $2', [parseInt(body.addressId, 10), userId])).rows[0];
     if (!a) return { ok: false, error: 'That shipping address was not found.', needAddress: true };
@@ -18609,7 +18628,7 @@ app.post('/api/checkout/quote', auth.requireAuth, async (req, res) => {
       const cp = await resolveCoupon(sellerId, req.body.couponCode, subtotal, req.user.id);
       if (!cp.error) discountCents = cp.discountCents || 0;
     }
-    const ship = await resolveShipping(req.user.id, req.body, items);
+    const ship = await resolveShipping(req.user.id, req.body, items, { sellerId, subtotalCents: subtotal });
     if (!ship.ok && ship.needAddress) {
       // No ship-to yet: still report whether tax/rates exist so the client can prompt.
       return res.json({ subtotalCents: subtotal, discountCents, shippingCents: 0, taxCents: 0, totalCents: subtotal - discountCents, needsShipping: true, needAddress: true, shippingOptions: [], taxConfigured: shiptax.taxConfigured(), ratesConfigured: shiptax.ratesConfigured() });
@@ -18664,7 +18683,7 @@ app.post('/api/orders', auth.requireAuth, blockImpersonation, rateLimit(20, 6000
     const subtotal = items.reduce((s, r) => s + r.price_cents * r.qty, 0);
     if (subtotal <= 0) return res.status(400).json({ error: 'Order total must be greater than zero.' });
     // Shipping + ship-to (physical items only); then total = subtotal + shipping.
-    const ship = await resolveShipping(req.user.id, req.body, items);
+    const ship = await resolveShipping(req.user.id, req.body, items, { sellerId, subtotalCents: subtotal });
     if (!ship.ok) return res.status(400).json({ error: ship.error, needAddress: !!ship.needAddress });
     // Coupon (optional): discount comes off the subtotal; shipping is still added.
     const cp = await resolveCoupon(sellerId, req.body.couponCode, subtotal, req.user.id);
@@ -18742,7 +18761,7 @@ app.post('/api/orders/buy', auth.requireAuth, blockImpersonation, rateLimit(20, 
     const unitPrice = rv.variant ? rv.variant.priceCents : p.price_cents;
     const items = [{ product_id: productId, qty, name: p.name, price_cents: unitPrice, kind: p.kind, stock: p.stock, ship_free: p.ship_free, ship_fee_cents: p.ship_fee_cents, pickup: p.pickup, pickup_location: p.pickup_location, variant_id: rv.variant ? rv.variant.id : null, variant_label: rv.variant ? rv.variant.label : null }];
     const subtotal = unitPrice * qty;
-    const ship = await resolveShipping(req.user.id, req.body, items);
+    const ship = await resolveShipping(req.user.id, req.body, items, { sellerId: p.business_id, subtotalCents: subtotal });
     if (!ship.ok) return res.status(400).json({ error: ship.error, needAddress: !!ship.needAddress });
     const cp = await resolveCoupon(p.business_id, req.body.couponCode, subtotal, req.user.id);
     if (cp.error) return res.status(400).json({ error: cp.error, couponError: true });
@@ -19301,7 +19320,7 @@ app.post('/api/bundles/:id/buy', auth.requireAuth, blockImpersonation, rateLimit
     const items = comps.map((c) => ({ product_id: c.product_id, qty: c.qty, name: c.name, price_cents: c.price_cents, kind: c.kind, stock: c.stock, ship_free: c.ship_free, ship_fee_cents: c.ship_fee_cents, variant_id: null, variant_label: null }));
     const retail = items.reduce((s, r) => s + r.price_cents * r.qty, 0);
     const discount = Math.max(0, retail - b.price_cents);
-    const ship = await resolveShipping(req.user.id, req.body, items);
+    const ship = await resolveShipping(req.user.id, req.body, items, { sellerId: b.seller_id, subtotalCents: b.price_cents });
     if (!ship.ok) return res.status(400).json({ error: ship.error, needAddress: !!ship.needAddress });
     const rt = await applyRatesAndTax(req.body, ship, items, b.price_cents);
     const total = b.price_cents + rt.shippingCents + rt.taxCents;
