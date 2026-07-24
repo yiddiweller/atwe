@@ -16696,7 +16696,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1507'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1508'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -38471,9 +38471,11 @@ async function acLoadAppointments() {
       const other = incoming ? a.customer : a.business;
       let actions = '';
       const resched = `<button class="ac-pill-btn" onclick="acApptReschedOpen(${a.id},${jsAttr(a.whenAt)})">Reschedule</button>`;
-      if (a.status === 'requested' && incoming) actions = `<div class="rec-actions"><button class="ac-pill-btn accent" onclick="acApptAct(${a.id},'confirmed')">Confirm</button>${resched}<button class="ac-pill-btn" onclick="acApptAct(${a.id},'declined')">Decline</button></div>`;
-      else if (a.status === 'confirmed' && incoming) actions = `<div class="rec-actions"><button class="ac-pill-btn accent" onclick="acApptAct(${a.id},'completed')">Mark completed${a.depositStatus === 'held' ? ' · release deposit' : ''}</button>${resched}<button class="ac-pill-btn" style="color:var(--red);" onclick="acApptAct(${a.id},'cancelled')">Cancel</button></div>`;
-      else if (a.status === 'requested' || a.status === 'confirmed') actions = `<div class="rec-actions">${resched}<button class="ac-pill-btn" style="color:var(--red);" onclick="acApptAct(${a.id},'cancelled')">Cancel</button></div>`;
+      // Live (requested/confirmed) appointments export to the phone's calendar.
+      const cal = `<button class="ac-pill-btn" onclick="acApptIcs(${a.id})">📅 Add to calendar</button>`;
+      if (a.status === 'requested' && incoming) actions = `<div class="rec-actions"><button class="ac-pill-btn accent" onclick="acApptAct(${a.id},'confirmed')">Confirm</button>${resched}${cal}<button class="ac-pill-btn" onclick="acApptAct(${a.id},'declined')">Decline</button></div>`;
+      else if (a.status === 'confirmed' && incoming) actions = `<div class="rec-actions"><button class="ac-pill-btn accent" onclick="acApptAct(${a.id},'completed')">Mark completed${a.depositStatus === 'held' ? ' · release deposit' : ''}</button>${resched}${cal}<button class="ac-pill-btn" style="color:var(--red);" onclick="acApptAct(${a.id},'cancelled')">Cancel</button></div>`;
+      else if (a.status === 'requested' || a.status === 'confirmed') actions = `<div class="rec-actions">${resched}${cal}<button class="ac-pill-btn" style="color:var(--red);" onclick="acApptAct(${a.id},'cancelled')">Cancel</button></div>`;
       const dep = a.depositCents ? `<span class="appt-dep ${a.depositStatus}">🛡️ Deposit $${(a.depositCents / 100).toFixed(2)} ${_DEP_LBL[a.depositStatus] || ''}</span>` : '';
       return `<div class="rec-card">
         <div class="rec-head" onclick="acGoProfile(${jsAttr(other.username)})">${acAvatarHtml(other.name, other.avatar, '', incoming ? false : true)}
@@ -38482,6 +38484,18 @@ async function acLoadAppointments() {
         ${a.note ? `<div class="rec-body">${escHtml(a.note)}</div>` : ''}${dep ? `<div class="rec-body" style="padding-top:4px;">${dep}</div>` : ''}${actions}</div>`;
     }).join('');
   } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load.</div>'; }
+}
+// Download an appointment as a calendar file (mirrors acEventIcs).
+async function acApptIcs(id) {
+  try {
+    const headers = {}; const t = API.token(); if (t) headers.Authorization = 'Bearer ' + t;
+    const res = await fetch('/api/appointments/' + id + '/ics', { headers });
+    if (!res.ok) throw new Error('Could not export the appointment.');
+    const blob = new Blob([await res.text()], { type: 'text/calendar' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'atwe-appointment-' + id + '.ics';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    showNotif('Added to your downloads — open it to add to your calendar.');
+  } catch (e) { showNotif(e.message || 'Could not export the appointment.'); }
 }
 async function acApptAct(id, status) {
   try { await API.req('PATCH', '/api/appointments/' + id, { status }); showNotif(status === 'confirmed' ? 'Confirmed.' : status === 'declined' ? 'Declined — any deposit refunded.' : status === 'completed' ? 'Completed — deposit released to you.' : 'Cancelled — any deposit refunded.'); acLoadAppointments(); acRefreshBalance && acRefreshBalance(); }
