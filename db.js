@@ -2721,6 +2721,22 @@ async function initSchema() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS appointments_biz_idx ON appointments(business_id, when_at);`);
   await query(`CREATE INDEX IF NOT EXISTS appointments_cust_idx ON appointments(customer_id, when_at);`);
+  // Scheduled peer calls ("book a call for later") — a 1:1 call planned for a future
+  // time (distinct from business-service appointments): propose → accept → confirmed.
+  await query(`
+    CREATE TABLE IF NOT EXISTS scheduled_calls (
+      id           SERIAL PRIMARY KEY,
+      organizer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      invitee_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      when_at      TIMESTAMPTZ NOT NULL,
+      media        TEXT NOT NULL DEFAULT 'video',
+      title        TEXT,
+      status       TEXT NOT NULL DEFAULT 'proposed',
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS scheduled_calls_org_idx ON scheduled_calls(organizer_id, when_at);`);
+  await query(`CREATE INDEX IF NOT EXISTS scheduled_calls_inv_idx ON scheduled_calls(invitee_id, when_at);`);
   // Booking deposits (held in escrow): a service can require a refundable deposit; the
   // appointment snapshots the amount + its escrow state (none/held/released/refunded).
   await query(`ALTER TABLE business_services ADD COLUMN IF NOT EXISTS deposit_cents INTEGER NOT NULL DEFAULT 0;`);
