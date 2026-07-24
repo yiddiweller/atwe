@@ -5338,6 +5338,11 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.08);}
 .ac-post .user-avatar{width:46px;height:46px;font-size:17px;flex-shrink:0;cursor:pointer;}
 .ac-post-idcol{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}
 .ac-post-body{margin-top:9px;}
+/* Long feed posts clamp to ~10 lines with a "Show more" toggle (X/FB-style). */
+.ac-post-text.clamp .apt-inner{display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;}
+.ac-post-text.clamp.open .apt-inner{display:block;-webkit-line-clamp:unset;overflow:visible;}
+.apt-more{background:none;border:none;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;padding:5px 0 0;font-family:inherit;}
+.apt-more:active{opacity:.6;}
 /* Media: wide fills the width; narrow is constrained + indented under the name. */
 .ac-post-img{display:block;margin-top:10px;max-width:100%;max-height:560px;object-fit:cover;border-radius:16px;border:none;}
 .ac-post-img.ac-img-wide{width:100%;}
@@ -16527,7 +16532,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1461'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1462'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -29263,6 +29268,23 @@ function acRenderNotes(notes) {
   }).join('');
 }
 
+// Feed post body with X/FB-style "Show more" on long text. Purely presentational
+// and char-heuristic (no per-card layout measurement — the feed is memory-
+// sensitive): a long body renders clamped to ~10 lines with a Show more toggle.
+// Only the FEED card clamps; the post-detail view renders the full body.
+const POST_CLAMP_CHARS = 400;
+function acPostTextHtml(p) {
+  const body = p.body || '';
+  const linkified = acLinkifyPost(body);
+  const long = body.length > POST_CLAMP_CHARS || (body.match(/\n/g) || []).length >= 7;
+  if (!long) return `<div class="ac-post-text">${linkified}</div>`;
+  return `<div class="ac-post-text clamp"><div class="apt-inner">${linkified}</div><button class="apt-more" onclick="event.stopPropagation();acPostToggleMore(this)">Show more</button></div>`;
+}
+function acPostToggleMore(btn) {
+  const box = btn.closest('.ac-post-text'); if (!box) return;
+  const open = box.classList.toggle('open');
+  btn.textContent = open ? 'Show less' : 'Show more';
+}
 function acPostCard(p) {
   const isArticle = !!(p.articleTitle && !p.locked);
   const img = isArticle ? '' : acProdTagWrap(p, acPostMedia(p, true)); // articles show a cover teaser instead
@@ -29298,7 +29320,7 @@ function acPostCard(p) {
         : `<div class="ac-post-locked" onclick="event.stopPropagation();acGoProfile('${h}')"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>${p.minTierLevel > 0 ? 'Higher-tier subscribers only. Upgrade to unlock' : 'Subscriber-only post. Subscribe to unlock'}</span></div>`) : ''}
       ${(p.tagged && p.tagged.length && !p.locked) ? `<div class="ac-post-tagged"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>with ${p.tagged.slice(0, 3).map(t => `<b onclick="event.stopPropagation();acGoProfile(${jsAttr(t.username || '')})">@${escHtml(t.username || t.name)}</b>`).join(', ')}${p.tagged.length > 3 ? ' and ' + (p.tagged.length - 3) + ' more' : ''}</div>` : ''}
       ${isArticle ? acArticleTeaser(p) : ''}
-      ${p.body && !p.locked && !isArticle ? `<div class="ac-post-text">${acLinkifyPost(p.body)}</div>${acShowTranslate(p) ? `<button class="ac-translate" onclick="event.stopPropagation();acTranslatePost(${p.id}, this)">Translate post</button>` : ''}` : ''}
+      ${p.body && !p.locked && !isArticle ? `${acPostTextHtml(p)}${acShowTranslate(p) ? `<button class="ac-translate" onclick="event.stopPropagation();acTranslatePost(${p.id}, this)">Translate post</button>` : ''}` : ''}
       ${img}
       ${acQuoteHtml(p.quote)}
       ${acPollHtml(p)}
