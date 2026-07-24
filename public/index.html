@@ -5873,6 +5873,8 @@ body.reduce-motion .ac-react-bar,body.reduce-motion .ac-rb-btn{animation:none;}
 /* @mention autocomplete */
 .ac-mention-box{margin:4px 0 6px;background:var(--s1);border:none;border-radius:12px;overflow:hidden;max-height:240px;overflow-y:auto;}
 .ac-mention-item{display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;background:none;border:none;border-bottom:1px solid var(--b1);cursor:pointer;text-align:start;}
+/* Hashtag-autocomplete row icon: a # disc where the avatar would sit */
+.ac-tagac-ic{width:34px;height:34px;flex-shrink:0;border-radius:50%;background:var(--s3);color:var(--accent);display:grid;place-items:center;font-size:17px;font-weight:800;}
 .ac-mention-item:last-child{border-bottom:none;}
 .ac-mention-item:hover{background:var(--s2);}
 .ac-mention-item .user-avatar{width:34px;height:34px;flex:0 0 auto;}
@@ -15762,7 +15764,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <div class="ac-postbody">
         <div class="ac-compose-row">
           <div class="ac-compose-av" id="acComposeAv"></div>
-          <textarea id="acPostText" placeholder="Write a post..." aria-label="Write a post" maxlength="2000" oninput="acPostInput();acMentionInput(this)"></textarea>
+          <textarea id="acPostText" placeholder="Write a post..." aria-label="Write a post" maxlength="2000" oninput="acPostInput();acMentionInput(this);acTagInput(this)"></textarea>
         </div>
         <div class="ac-mention-box hidden" id="acMentionBox"></div>
         <div id="acPostQuote"></div>
@@ -16555,7 +16557,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1471'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1472'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -31513,6 +31515,45 @@ function acMentionPick(username) {
   acMentionClose(); acPostInput();
 }
 function acMentionClose() { const box = document.getElementById('acMentionBox'); if (box) { box.classList.add('hidden'); box.innerHTML = ''; } AC._mentionTok = null; }
+/* ── #hashtag autocomplete (post composer) — mirrors the @mention one, backed by
+      a prefix search over how often each tag has actually been used. ── */
+let _tagT = null;
+function acTagToken(ta) {
+  const pos = ta.selectionStart || 0;
+  const left = ta.value.slice(0, pos);
+  const m = /(^|[\s(])#([\p{L}\p{N}_]{1,50})$/u.exec(left);
+  if (!m) return null;
+  return { query: m[2], start: pos - m[2].length - 1, end: pos };
+}
+function acTagInput(ta) {
+  const tok = acTagToken(ta);
+  if (!tok) { acTagClose(); return; }
+  AC._tagTok = tok;
+  clearTimeout(_tagT);
+  _tagT = setTimeout(() => acTagFetch(tok.query), 160);
+}
+async function acTagFetch(q) {
+  try {
+    const { tags } = await API.req('GET', '/api/social/hashtag-search?q=' + encodeURIComponent(q));
+    const box = document.getElementById('acMentionBox'); if (!box) return;
+    if (!tags || !tags.length) { acTagClose(); return; }
+    box.innerHTML = tags.map((t) => `<button class="ac-mention-item" onmousedown="event.preventDefault();acTagPick(${jsAttr(t.tag)})">
+      <span class="ac-tagac-ic">#</span>
+      <span class="ac-mention-meta"><span class="ac-mention-name">#${escHtml(t.tag)}</span><span class="ac-mention-handle">${t.count} post${t.count === 1 ? '' : 's'}</span></span>
+    </button>`).join('');
+    box.classList.remove('hidden');
+  } catch { acTagClose(); }
+}
+function acTagPick(tag) {
+  const ta = document.getElementById('acPostText'); const tok = AC._tagTok; if (!ta || !tok) return;
+  const before = ta.value.slice(0, tok.start), after = ta.value.slice(tok.end);
+  const insert = '#' + tag + ' ';
+  ta.value = before + insert + after;
+  const caret = (before + insert).length;
+  ta.focus(); ta.setSelectionRange(caret, caret);
+  acTagClose(); acPostInput();
+}
+function acTagClose() { if (!AC._tagTok) return; AC._tagTok = null; const box = document.getElementById('acMentionBox'); if (box && !AC._mentionTok) { box.classList.add('hidden'); box.innerHTML = ''; } }
 // ── @mention autocomplete for the CHAT composer (#acInput), mirroring the post
 //    composer above. Same search endpoint; inserts @handle at the caret. ──
 let _chatMentionT = null;
