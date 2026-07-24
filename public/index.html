@@ -5355,6 +5355,34 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.08);}
 .ac-compose-prodchip .cpc-price{font-size:13px;font-weight:700;color:var(--accent);}
 .ac-compose-prodchip .cpc-x{background:none;border:none;color:var(--t3);cursor:pointer;padding:4px;display:flex;}
 .ac-compose-prodchip .cpc-x svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
+/* ── Celebration posts (occasion banner + composer chip + picker) ── */
+/* Card banner: a solid tinted strip, no outline, rounded to sit inside the card body. */
+.occ-banner{display:flex;align-items:center;gap:10px;margin:2px 0 10px;padding:11px 14px;border-radius:14px;
+  background:var(--accent-dim);}
+.occ-banner.st-green{background:var(--green-bg,rgba(136,255,0,.14));}
+.occ-banner.st-amber{background:var(--amber-bg,rgba(255,187,0,.14));}
+.occ-banner-em{font-size:20px;line-height:1;flex-shrink:0;}
+.occ-banner-txt{font-size:14.5px;font-weight:700;color:var(--t1);}
+.occ-banner.st-green .occ-banner-txt,.occ-banner.st-amber .occ-banner-txt{color:var(--t1);}
+/* Composer chip (shows the chosen occasion). */
+.occ-chip{display:flex;align-items:center;gap:9px;margin:10px 0 0;padding:9px 12px;border-radius:var(--r-md);background:var(--accent-dim);}
+.occ-chip.st-green{background:var(--green-bg,rgba(136,255,0,.14));}
+.occ-chip.st-amber{background:var(--amber-bg,rgba(255,187,0,.14));}
+.occ-chip-em{font-size:17px;line-height:1;}
+.occ-chip-lbl{flex:1;min-width:0;font-size:13.5px;font-weight:700;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.occ-chip-x{background:none;border:none;color:var(--t3);cursor:pointer;padding:4px;display:flex;flex-shrink:0;}
+.occ-chip-x svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
+.ac-post-toolbar .msg-attach.on{background:var(--accent-dim);color:var(--accent);}
+/* Picker sheet rows. */
+#occList{display:flex;flex-direction:column;}
+.occ-pick{display:flex;align-items:center;gap:13px;width:100%;padding:13px 6px;background:none;border:none;cursor:pointer;text-align:left;color:var(--t1);}
+.occ-pick .occ-emoji{font-size:22px;line-height:1;width:30px;text-align:center;flex-shrink:0;}
+.occ-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}
+.occ-lbl{font-size:15px;font-weight:700;color:var(--t1);}
+.occ-sub{font-size:12.5px;color:var(--t3);}
+.occ-check{width:22px;text-align:center;color:var(--accent);font-weight:800;font-size:16px;flex-shrink:0;}
+.occ-pick.on .occ-lbl{color:var(--accent);}
+.occ-clear{width:100%;margin-top:8px;padding:12px;border:none;border-radius:var(--r-pill);background:var(--s2);color:var(--red);font-size:14px;font-weight:600;cursor:pointer;}
 .ac-prodtag.ac-prodtag-multi{padding-left:10px;}
 .ac-prodtag-row{align-items:center;gap:12px;}
 .cpc-thumb{width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;}
@@ -11632,6 +11660,15 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<div class="overlay hidden" id="occasionSheet" onclick="if(event.target===this)closeOverlay('occasionSheet')">
+  <div class="rs-sheet" role="dialog" aria-modal="true" aria-label="Celebrate an occasion">
+    <div class="rs-grab"></div>
+    <div class="rs-title">Celebrate an occasion</div>
+    <div id="occList"></div>
+    <div id="occClear"></div>
+  </div>
+</div>
+
 <div class="overlay hidden" id="imgViewer">
   <div class="iv-top">
     <button class="iv-x" onclick="closeImageViewer()" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -14974,6 +15011,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         </div>
         <div class="ac-mention-box hidden" id="acMentionBox"></div>
         <div id="acPostQuote"></div>
+        <div id="acOccasionChip"></div>
         <div id="acPostProdChip"></div>
         <div class="msg-imgprev" id="acPostImgPrev" style="padding:0;"></div>
         <div class="ac-alt-row hidden" id="acPostAltRow" style="margin-top:8px;">
@@ -15058,6 +15096,9 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         </button>
         <button class="msg-attach" id="acTagProductBtn" onclick="acTagProductOpen()" aria-label="Tag a product">
           <svg viewBox="0 0 24 24"><path d="M20.6 13.4 12 22l-9-9V4a1 1 0 0 1 1-1h8.6z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
+        </button>
+        <button class="msg-attach" id="acCelebrateBtn" onclick="acOccasionOpen()" aria-label="Celebrate an occasion">
+          <svg viewBox="0 0 24 24"><path d="M2 22l4.5-11 6.5 6.5z"/><line x1="14" y1="2" x2="14" y2="5"/><line x1="20" y1="8" x2="17" y2="8"/><path d="M13 4.5c1.5 0 2 1.5 3.5 1.5"/><path d="M18.5 11c0 1.5 1.5 2 1.5 3.5"/></svg>
         </button>
         <button class="msg-attach" id="acDraftsBtn" onclick="acOpenDrafts()" aria-label="Drafts">
           <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
@@ -15743,7 +15784,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1387'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1388'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -27961,6 +28002,7 @@ function acPostCard(p) {
       </div>
     </div>
     <div class="ac-post-body">
+      ${(!p.locked && p.occasion) ? acOccasionBanner(p.occasion) : ''}
       ${(p.circles && p.circles.length) ? `<div class="ac-post-circle" onclick="event.stopPropagation();acOpenCircle(${p.circles[0].id})">in circle@${escHtml(p.circles[0].username)}</div>` : ''}
       ${p.locked ? (p.ppvLocked || p.ppvCents
         ? `<div class="ac-post-locked" onclick="event.stopPropagation();acUnlockPost(${p.id})"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Unlock this post for $${((p.ppvCents || 0) / 100).toFixed(2)}</span></div>`
@@ -29331,6 +29373,46 @@ function acRemoveProdTag(id) {
   if (document.getElementById('prodTagSheet') && !document.getElementById('prodTagSheet').classList.contains('hidden')) acRenderProdTagPicker();
 }
 function acClearProdTag() { AC._postProducts = []; acRenderPostProdChip(); }
+
+// ── Celebration posts (LinkedIn-style "celebrate an occasion") ────────────────
+// Picking an occasion tags the post; its card renders a festive banner. The set
+// mirrors the server whitelist POST_OCCASIONS.
+const POST_OCCASIONS = [
+  { id: 'new_role', emoji: '💼', label: 'New role', sub: 'Started a new position', kind: 'accent' },
+  { id: 'work_anniversary', emoji: '🎉', label: 'Work anniversary', sub: 'Celebrating years at work', kind: 'accent' },
+  { id: 'certification', emoji: '📜', label: 'Certification', sub: 'Earned a certification', kind: 'green' },
+  { id: 'education', emoji: '🎓', label: 'Education', sub: 'An education milestone', kind: 'accent' },
+  { id: 'launch', emoji: '🚀', label: 'Launch', sub: 'Launched something new', kind: 'green' },
+  { id: 'new_business', emoji: '🏢', label: 'New business', sub: 'Opened a business', kind: 'green' },
+  { id: 'milestone', emoji: '🏆', label: 'Milestone', sub: 'Reached a milestone', kind: 'amber' },
+];
+function acOccasionMeta(id) { return POST_OCCASIONS.find((o) => o.id === id) || null; }
+function acOccasionOpen() {
+  document.getElementById('occList').innerHTML = POST_OCCASIONS.map((o) => `<button class="occ-pick ${AC._postOccasion === o.id ? 'on' : ''}" onclick="acOccasionPick('${o.id}')">
+      <span class="occ-emoji">${o.emoji}</span><span class="occ-txt"><span class="occ-lbl">${o.label}</span><span class="occ-sub">${o.sub}</span></span>
+      <span class="occ-check">${AC._postOccasion === o.id ? '✓' : ''}</span></button>`).join('');
+  document.getElementById('occClear').innerHTML = AC._postOccasion ? '<button class="occ-clear" onclick="acOccasionClear()">Remove celebration</button>' : '';
+  showOverlay('occasionSheet');
+}
+function acOccasionPick(id) {
+  AC._postOccasion = (AC._postOccasion === id) ? null : id;
+  acRenderOccasionChip();
+  closeOverlay('occasionSheet');
+}
+function acOccasionClear() { AC._postOccasion = null; acRenderOccasionChip(); closeOverlay('occasionSheet'); }
+// The festive banner shown at the top of a celebration post's card.
+function acOccasionBanner(id) {
+  const o = acOccasionMeta(id); if (!o) return '';
+  return `<div class="occ-banner st-${o.kind}"><span class="occ-banner-em">${o.emoji}</span><span class="occ-banner-txt">Celebrating ${o.id === 'work_anniversary' ? 'a work anniversary' : o.id === 'new_role' ? 'a new role' : o.id === 'new_business' ? 'a new business' : o.label.toLowerCase()}</span></div>`;
+}
+function acRenderOccasionChip() {
+  const box = document.getElementById('acOccasionChip'); if (!box) return;
+  const o = acOccasionMeta(AC._postOccasion);
+  const btn = document.getElementById('acCelebrateBtn');
+  if (btn) btn.classList.toggle('on', !!o);
+  if (!o) { box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="occ-chip st-${o.kind}"><span class="occ-chip-em">${o.emoji}</span><span class="occ-chip-lbl">Celebrating: ${escHtml(o.label)}</span><button class="occ-chip-x" onclick="acOccasionClear()" aria-label="Remove celebration"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>`;
+}
 // Render the tagged-product chips into whichever composer chip container is present
 // (post / story / reel all share AC._postProducts + the same picker).
 function acRenderPostProdChip() {
@@ -29582,6 +29664,7 @@ function acOpenPost(circleId) {
   if (cav && S.user) cav.innerHTML = acAvatarHtml(S.user.name, S.user.avatar, 'user-avatar', acIsBiz(S.user));
   _acPostAtt = null; _acPostImgs = []; _acPostGif = null;
   AC._postProducts = []; acRenderPostProdChip();
+  AC._postOccasion = null; acRenderOccasionChip(); // fresh occasion per composer open
   acSetPostEditMode(false);
   AC._postCircleCtx = (typeof circleId === 'number') ? circleId : null;
   AC._postFeedCtx = null;
@@ -30180,6 +30263,7 @@ async function acSubmitPost() {
   if (AC._postTagged && AC._postTagged.length) payload.taggedIds = AC._postTagged.map(u => u.id);
   if (AC._postCoAuth && AC._postCoAuth.length) payload.coAuthorIds = AC._postCoAuth.map(u => u.id);
   if ((AC._postProducts || []).length) payload.productIds = AC._postProducts.map((p) => p.id); // tagged products → chip / quick-buy on media
+  if (AC._postOccasion && !AC._quoteId && AC._postToMain !== false) payload.occasion = AC._postOccasion; // celebration banner
   const loc = acLocationValue(); if (loc) payload.location = loc;
   const sched = acScheduleValue(); if (sched) payload.scheduledAt = sched;
   try {
@@ -30356,6 +30440,7 @@ function acPostFocusCard(p) {
       </div>
       ${del}
     </div>
+    ${(!p.locked && p.occasion) ? acOccasionBanner(p.occasion) : ''}
     ${p.body ? `<div class="ac-pf-text">${acLinkifyPost(p.body)}</div>` : ''}
     ${img}
     ${acQuoteHtml(p.quote)}
