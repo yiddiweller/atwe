@@ -11760,6 +11760,16 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Mute duration picker (snooze) -->
+<div class="overlay hidden" id="muteSheet" onclick="if(event.target===this)closeOverlay('muteSheet')">
+  <div class="rs-sheet" role="dialog" aria-modal="true" aria-label="Mute">
+    <div class="rs-grab"></div>
+    <div class="rs-title" id="muteSheetTitle">Mute</div>
+    <div class="note-hint">They won't be told. It quietly lifts when the time's up.</div>
+    <div id="muteDurList"></div>
+  </div>
+</div>
+
 <!-- Long-form article composer -->
 <div class="overlay hidden" id="articleComposer">
   <div class="art-comp" role="dialog" aria-modal="true" aria-label="Write an article">
@@ -12374,6 +12384,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <div class="notif-head">
       <span class="notif-title" id="hashtagTitle">#tag</span>
       <button class="ac-pill-btn" id="hashtagFollowBtn" style="flex:0 0 auto;padding:6px 14px;margin-inline-start:auto;display:none;" onclick="acToggleHashtagFollow()">Follow</button>
+      <button class="ac-icon-btn" id="hashtagMuteBtn" style="flex:0 0 auto;" onclick="acMuteHashtag()" aria-label="Mute this topic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6.5 9H3v6h3.5L11 19z"/><path d="M22 9.5l-5 5M17 9.5l5 5"/></svg></button>
       <button class="sheet-close" onclick="closeOverlay('hashtagView')" aria-label="Close">
         <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
@@ -15931,7 +15942,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1392'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1393'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -20008,7 +20019,7 @@ async function acOpenMutedAccounts() {
     const { muted } = await API.req('GET', '/api/social/muted');
     AC._mutedIds = AC._mutedIds || new Set(); muted.forEach(u => AC._mutedIds.add(u.id));
     el.innerHTML = muted.length
-      ? muted.map(u => `<div class="ac-item">${acAvatarHtml(u.name, u.avatar)}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</span></div><div class="ac-item-last">@${escHtml(u.username)}</div></div><button class="ac-join-btn" onclick="acUnmuteUser(${u.id},this)">Unmute</button></div>`).join('')
+      ? muted.map(u => `<div class="ac-item">${acAvatarHtml(u.name, u.avatar)}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</span></div><div class="ac-item-last">@${escHtml(u.username)}${acMuteUntil(u.expiresAt)}</div></div><button class="ac-join-btn" onclick="acUnmuteUser(${u.id},this)">Unmute</button></div>`).join('')
       : '<div class="ac-empty" style="padding:34px 16px;">You haven’t muted anyone.</div>';
   } catch (e) { acErr(el, 'acOpenMutedAccounts()'); }
 }
@@ -20034,19 +20045,15 @@ async function acRenderMutedWords() {
   try {
     const { keywords } = await API.req('GET', '/api/social/muted-keywords');
     el.innerHTML = keywords.length
-      ? keywords.map(k => `<div class="ac-item"><div class="ac-item-main"><div class="ac-item-name">${escHtml(k.word)}</div></div><button class="ac-exp-del" onclick="acDeleteMutedWord(${k.id},this)" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>`).join('')
+      ? keywords.map(k => `<div class="ac-item"><div class="ac-item-main"><div class="ac-item-name">${escHtml(k.word)}${k.expiresAt ? `<span style="color:var(--t3);font-weight:400;font-size:12.5px;">${acMuteUntil(k.expiresAt)}</span>` : ''}</div></div><button class="ac-exp-del" onclick="acDeleteMutedWord(${k.id},this)" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>`).join('')
       : '<div class="ac-empty" style="padding:30px 16px;">No muted words yet.</div>';
   } catch (e) { acErr(el, 'acRenderMutedWords()'); }
 }
-async function acAddMutedWord() {
+function acAddMutedWord() {
   const input = document.getElementById('muteWordInput');
   const word = input.value.trim();
   if (!word) return;
-  try {
-    await API.req('POST', '/api/social/muted-keywords', { word });
-    input.value = '';
-    acRenderMutedWords();
-  } catch (e) { showNotif(e.message || 'Could not mute that word.'); }
+  acMuteOpen({ kind: 'word', word, label: '“' + word + '”' }); // pick a duration
 }
 async function acDeleteMutedWord(id, btn) {
   btn.disabled = true;
@@ -29359,6 +29366,10 @@ async function acOpenHashtag(tag) {
     acSetHashtagFollow(!!following);
     body.innerHTML = (posts && posts.length) ? posts.map(acPostCard).join('') : '<div class="ac-empty" style="padding:30px;">No posts with #' + escHtml(tag) + ' yet.</div>';
   } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load.</div>'; }
+}
+function acMuteHashtag() {
+  const tag = AC._hashtag; if (!tag) return;
+  acMuteOpen({ kind: 'word', word: '#' + tag, label: '#' + tag });
 }
 function acSetHashtagFollow(on) {
   AC._hashtagFollowing = on;
@@ -40261,11 +40272,47 @@ async function paMute() {
   AC._mutedIds = AC._mutedIds || new Set();
   const muted = AC._mutedIds.has(a.id);
   closeOverlay('postActions');
+  if (muted) { // unmuting is immediate
+    try { await API.req('DELETE', '/api/social/mute/' + a.id); AC._mutedIds.delete(a.id); showNotif('Unmuted @' + a.username); if (typeof acLoadFeed === 'function' && document.getElementById('acFeed')) acLoadFeed(); }
+    catch (e) { showNotif(e.message || 'Could not update.'); }
+    return;
+  }
+  acMuteOpen({ kind: 'account', id: a.id, label: '@' + a.username }); // pick a duration (X/FB-style snooze)
+}
+// ── Mute duration picker (snooze: 1 day / 1 week / 30 days / Forever) ──
+const _SNOOZE_DURATIONS = [{ d: 1, l: 'For 1 day' }, { d: 7, l: 'For 1 week' }, { d: 30, l: 'For 30 days' }, { d: 0, l: 'Forever' }];
+function acMuteOpen(ctx) {
+  AC._muteCtx = ctx;
+  const t = document.getElementById('muteSheetTitle'); if (t) t.textContent = 'Mute ' + ctx.label;
+  document.getElementById('muteDurList').innerHTML = _SNOOZE_DURATIONS.map((o) =>
+    `<button class="occ-pick" onclick="acMutePick(${o.d})"><span class="occ-txt"><span class="occ-lbl">${o.l}</span></span></button>`).join('');
+  showOverlay('muteSheet');
+}
+function _muteDurLabel(days) { return days === 0 ? 'until you turn it off' : (days === 1 ? 'for 1 day' : days === 7 ? 'for 1 week' : 'for 30 days'); }
+async function acMutePick(days) {
+  const ctx = AC._muteCtx; if (!ctx) return;
+  closeOverlay('muteSheet');
   try {
-    if (muted) { await API.req('DELETE', '/api/social/mute/' + a.id); AC._mutedIds.delete(a.id); showNotif('Unmuted @' + a.username); }
-    else { await API.req('POST', '/api/social/mute/' + a.id); AC._mutedIds.add(a.id); showNotif('Muted @' + a.username + '. Their posts won’t show in your feed.'); }
+    if (ctx.kind === 'account') {
+      await API.req('POST', '/api/social/mute/' + ctx.id, { days });
+      AC._mutedIds = AC._mutedIds || new Set(); AC._mutedIds.add(ctx.id);
+      showNotif('Muted ' + ctx.label + ' ' + _muteDurLabel(days) + '.');
+    } else {
+      await API.req('POST', '/api/social/muted-keywords', { word: ctx.word, days });
+      showNotif('Muted “' + ctx.word + '” ' + _muteDurLabel(days) + '.');
+      const mw = document.getElementById('mutedWordsOverlay');
+      if (mw && !mw.classList.contains('hidden')) { const inp = document.getElementById('muteWordInput'); if (inp) inp.value = ''; acRenderMutedWords(); }
+    }
+    const mo = document.getElementById('mutedOverlay');
+    if (ctx.kind === 'account' && mo && !mo.classList.contains('hidden')) acOpenMutedAccounts();
     if (typeof acLoadFeed === 'function' && document.getElementById('acFeed')) acLoadFeed();
-  } catch (e) { showNotif(e.message || 'Could not update.'); }
+  } catch (e) { showNotif(e.message || 'Could not mute.'); }
+}
+// "Muted until <date>" chip for the manager lists (empty = forever).
+function acMuteUntil(expiresAt) {
+  if (!expiresAt) return '';
+  const d = new Date(expiresAt);
+  return ` · until ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
 }
 function acOpenPostActions(anchor, id, postId) { acOpenUserActions(anchor, id, true, postId); }
 // Search a profile's posts — opens the Posts search scoped to that person via the

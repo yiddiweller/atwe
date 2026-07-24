@@ -1781,6 +1781,10 @@ async function initSchema() {
     );
   `);
   await query(`CREATE UNIQUE INDEX IF NOT EXISTS muted_keywords_unique_idx ON muted_keywords(user_id, lower(word));`);
+  // Snooze: a mute can be temporary. expires_at NULL = muted forever; a past
+  // expiry auto-lifts (the feed filter only applies non-expired mutes).
+  await query(`ALTER TABLE post_mutes ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;`);
+  await query(`ALTER TABLE muted_keywords ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;`);
   // "Not interested" — a per-post negative signal. The post is hidden from the
   // viewer's feeds, and the viewer's hidden-author tally down-ranks that author.
   await query(`
