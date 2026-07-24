@@ -6709,7 +6709,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     );
     if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
     const members = await db.query(
-      `SELECT u.id, u.name, u.username, u.avatar, u.verified, m.role FROM at_group_members m
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified, m.role, m.last_read_at FROM at_group_members m
        JOIN users u ON u.id = m.user_id WHERE m.group_id = $1
        ORDER BY (u.id = $2) DESC, (m.role = 'admin') DESC, m.joined_at`,
       [gid, g.rows[0].created_by]
@@ -6745,7 +6745,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       requests,
       lastRead,
       live: ls ? liveStreamPublic(ls) : null,
-      members: members.rows.map((m) => ({ id: m.id, name: m.name, username: m.username, avatar: m.avatar || null, verified: !!m.verified, isOwner: m.id === g.rows[0].created_by, isAdmin: m.id === g.rows[0].created_by || m.role === 'admin' })),
+      members: members.rows.map((m) => ({ id: m.id, name: m.name, username: m.username, avatar: m.avatar || null, verified: !!m.verified, isOwner: m.id === g.rows[0].created_by, isAdmin: m.id === g.rows[0].created_by || m.role === 'admin', lastReadAt: m.last_read_at || null })),
       messages: msgs.rows.map((m) => mediaRefMsg({
         id: m.id, body: m.body, image: m.image || null,
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,

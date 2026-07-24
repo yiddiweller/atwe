@@ -16442,7 +16442,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1443'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1444'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -44876,6 +44876,13 @@ function acRenderThread() {
     // Only a failed send keeps a line (so it stays tap-to-retry).
     let status = '';
     if (winStart + i === lastMineIdx && m.failed) status = `<div class="msg-status failed" onclick="acRetrySend('${m.id}')">Failed. Tap to retry</div>`;
+    // Group "Seen by N" (Telegram-style) under my most recent message: counts the
+    // members (not me) whose last_read_at has passed this message's timestamp.
+    else if (winStart + i === lastMineIdx && AC.mode === 'group' && !m.pending && !m.failed && m.created_at) {
+      const others = (AC.members || []).filter((x) => x.id !== (S.user && S.user.id));
+      const seen = others.filter((x) => x.lastReadAt && new Date(x.lastReadAt) >= new Date(m.created_at)).length;
+      if (seen > 0) status = `<div class="msg-status">${seen === others.length && others.length > 0 ? 'Seen by everyone' : 'Seen by ' + seen}</div>`;
+    }
     // Secret (self-destruct) indicator: a flame + (once seen) a live countdown.
     const secretHtml = (!isDeleted && !concealed && m.secret)
       ? `<span class="msg-secret"${m.expiresAt ? ` data-exp="${escHtml(m.expiresAt)}"` : ''}><svg viewBox="0 0 24 24"><path d="M12 2c1 4 4 5 4 9a4 4 0 0 1-8 0c0-1.5 .7-2.5 .7-2.5S9 11 10 11s1-3 2-9z"/></svg>${m.expiresAt ? '<span class="ms-cd">' + acSecretLeft(m.expiresAt) + '</span>' : 'Secret'}</span>`
