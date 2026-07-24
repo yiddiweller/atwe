@@ -6505,6 +6505,9 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .rp-cell{flex:0 0 auto;width:64px;background:none;border:none;padding:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;}
 .rp-cell .user-avatar{width:56px;height:56px;}
 .rp-name{font-size:12px;color:var(--t2);max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* Group invite QR */
+.gi-qr{display:flex;justify-content:center;margin:2px 0 12px;}
+.gi-qr img{width:210px;height:210px;border-radius:18px;background:#fff;padding:10px;display:block;}
 /* Double-tap heart burst */
 .dbl-heart{position:fixed;z-index:2000;font-size:34px;pointer-events:none;transform:translate(-50%,-50%) scale(.4);animation:dblHeart .65s cubic-bezier(.2,.85,.3,1.1) forwards;}
 @keyframes dblHeart{20%{transform:translate(-50%,-50%) scale(1.25);opacity:1;}100%{transform:translate(-50%,-110%) scale(1);opacity:0;}}
@@ -16437,7 +16440,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1441'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1442'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -38705,6 +38708,14 @@ async function acGroupRemoveMember(uid) {
 }
 // ── Group invite link (WhatsApp-style) ──
 function acInviteUrl(code) { return location.origin + '/?joingroup=' + code; }
+// Fill the invite QR (WhatsApp-style: scan to join). Server renders the PNG.
+async function acLoadGroupInviteQr() {
+  const box = document.getElementById('giQr'); if (!box) return;
+  try {
+    const { qr } = await API.req('GET', '/api/atchat/groups/' + AC.groupId + '/invite-qr');
+    box.innerHTML = `<img src="${qr}" alt="Group invite QR code"/>`;
+  } catch { box.innerHTML = ''; }
+}
 async function acOpenGroupInvite() {
   if (!AC.group) return;
   showOverlay('groupInviteView');
@@ -38722,11 +38733,13 @@ function acRenderGroupInvite() {
   if (r.code) {
     const url = acInviteUrl(r.code);
     body.innerHTML = `
+      <div class="gi-qr" id="giQr"></div>
       <div class="gi-link-box">${escHtml(url)}</div>
       <button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="acCopyInvite(${jsAttr(url)})">Copy link</button>
       <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acShareInvite(${jsAttr(url)})">Share link</button>
       ${r.isAdmin ? `<div class="ev-rsvp-row" style="margin-top:10px;"><button onclick="acRotateInvite()"><svg viewBox="0 0 24 24"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.8-3.4L23 10M1 14l4.7 4.4A9 9 0 0 0 20.5 15"/></svg>Reset link</button><button onclick="acRevokeInvite()" style="color:var(--red);"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Revoke link</button></div>` : ''}
       <div class="gi-link-note">Anyone with this link can join the group.</div>`;
+    acLoadGroupInviteQr(); // fill the QR (server-rendered PNG data URL)
   } else {
     body.innerHTML = r.isAdmin
       ? `<div class="ac-empty" style="padding:14px 0;">No invite link yet.</div>

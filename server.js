@@ -7509,6 +7509,20 @@ app.get('/api/atchat/groups/:id/invite', auth.requireAuth, async (req, res) => {
     res.json({ code: g.rows[0].invite_code || null, isAdmin: await isGroupAdmin(gid, req.user.id) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the invite link.' }); }
 });
+// Invite QR: the group's join link as a scannable code (member-visible once a link
+// exists — same visibility as the link itself; admins create/rotate via POST).
+app.get('/api/atchat/groups/:id/invite-qr', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  try {
+    if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+    const g = (await db.query('SELECT invite_code FROM at_groups WHERE id = $1', [gid])).rows[0];
+    if (!g || !g.invite_code) return res.status(404).json({ error: 'No invite link yet — create one first.', noLink: true });
+    const link = `${process.env.APP_URL || 'http://localhost:3000'}/?joingroup=${g.invite_code}`;
+    const qr = await QRCode.toDataURL(link, { margin: 1, width: 480, color: { dark: '#000000', light: '#FFFFFF' } });
+    res.json({ qr, link });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build the QR code.' }); }
+});
 // Create (or rotate) the invite link — admin only.
 app.post('/api/atchat/groups/:id/invite', auth.requireAuth, async (req, res) => {
   const gid = routeId(req.params.id);
