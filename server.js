@@ -4687,6 +4687,24 @@ app.get('/api/contacts', auth.requireAuth, async (req, res) => {
     res.json({ contacts: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: mediaRef(u.avatar, 'avatar', u.id), verified: !!u.verified, accountType: u.account_type === 'business' ? 'business' : 'personal' })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load contacts.' }); }
 });
+// A private note about a person (LinkedIn-style CRM-lite): "met at the expo,
+// interested in bulk orders". Owner-scoped on the contacts row — the person
+// never sees it and is never told it exists. Empty clears it.
+app.put('/api/contacts/:id/note', auth.requireAuth, rateLimit(60, 60000, 'contact-note'), async (req, res) => {
+  const other = routeId(req.params.id);
+  if (!Number.isInteger(other) || other === req.user.id) return res.status(400).json({ error: 'Invalid user.' });
+  const note = (req.body.note || '').toString().trim().slice(0, 500) || null;
+  try {
+    const u = (await db.query('SELECT id FROM users WHERE id = $1 AND username IS NOT NULL', [other])).rows[0];
+    if (!u) return res.status(404).json({ error: 'User not found.' });
+    await db.query(
+      `INSERT INTO contacts (owner_id, contact_id, notes) VALUES ($1,$2,$3)
+       ON CONFLICT (owner_id, contact_id) DO UPDATE SET notes = $3`,
+      [req.user.id, other, note]
+    );
+    res.json({ ok: true, note });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the note.' }); }
+});
 // Rename a chat (WhatsApp-contact-style): YOUR private name for a person, shown
 // only to you in Beam (chat list + open thread). Empty clears it — back to their
 // real name. Stored on the owner-scoped contacts row; never visible to them.
@@ -9179,7 +9197,13 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       counts.rows[0].connections = null;
       mutualConnections = 0;
     }
+    // The VIEWER's private note about this person (never shown to anyone else).
+    let myNote = null;
+    if (t.id !== req.user.id) {
+      try { myNote = (await db.query('SELECT notes FROM contacts WHERE owner_id = $1 AND contact_id = $2', [req.user.id, t.id])).rows[0]?.notes || null; } catch (e) {}
+    }
     res.json({
+      myNote,
       businessJobs, businessPeople, mutualConnections, reviewSummary, trustScore, followedBy, followedByCount,
       user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, pronouns: t.pronouns || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone', profileCta: ['book', 'order', 'message'].includes(t.profile_cta) ? t.profile_cta : null, joinedAt: t.created_at || null, paused: !!t.paused, pauseMessage: t.paused ? (t.pause_message || null) : null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null, specialHours: Array.isArray(t.special_hours) ? t.special_hours : [], hoursNote: t.hours_note || null, shopPaused: !!t.shop_paused, shopPauseMessage: t.shop_paused ? (t.shop_pause_message || null) : null, storeBanner: t.store_banner || null, hiring: !!t.hiring, inquiryEnabled: !!t.inquiry_enabled, inquiryIntro: t.inquiry_intro || null, status: userStatus(t), affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: t.aff_business_username || null } : null },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
