@@ -21745,6 +21745,25 @@ app.post('/api/notifications/read', auth.requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) { res.json({ ok: false }); }
 });
+// Empty your own notification list. These rows are alerts, not records — nothing
+// else in the app points at them — so a delete is safe and needs no tombstone.
+// `scope=read` keeps anything still unread; the default clears the lot. Always
+// scoped to the caller, so one member can never clear another's.
+app.delete('/api/notifications', auth.requireAuth, async (req, res) => {
+  const readOnly = String(req.query.scope || 'all') === 'read';
+  try {
+    const { rowCount } = await db.query(
+      readOnly
+        ? 'DELETE FROM notifications WHERE user_id = $1 AND read = true'
+        : 'DELETE FROM notifications WHERE user_id = $1',
+      [req.user.id]
+    );
+    res.json({ ok: true, cleared: rowCount, scope: readOnly ? 'read' : 'all' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
 
 /* ═══════════════════════════════════════════════
    SEARCH  —  people + posts

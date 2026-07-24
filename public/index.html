@@ -1414,18 +1414,19 @@ body.reduce-motion .ai-menu-pop{animation-duration:.01s;}
 .aimp-item:active{background:var(--s1);}
 @media(hover:hover){.aimp-item:hover{background:var(--s1);}}
 .aimp-sep{height:1px;background:var(--b1);margin:2px 10px;}
+.aimp-item.danger{color:var(--red);}   /* destructive rows are red — the only colour that means "this removes things" */
 .aimp-check{margin-inline-start:auto;display:none;align-items:center;color:var(--accent);}
 .aimp-check svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.4;}
 .aimp-item.on .aimp-check{display:flex;}
 /* The top ⋯ menus (Home AI helpers / Beam tools) + the profile menu share the BOTTOM
    NAV's exact material — same dark tint, same light blur, same thin hairline — and the
    same rounded corners, so they read as one family with the nav (founder request). */
-#aiMenuPop,#chatMenuPop,#profileMenu{
+#aiMenuPop,#chatMenuPop,#notifMenuPop,#profileMenu{
   background:rgba(18,18,21,.90);
   -webkit-backdrop-filter:blur(2px) saturate(150%);backdrop-filter:blur(2px) saturate(150%);
   border:1px solid rgba(255,255,255,.05);border-radius:20px;
 }
-body.light #aiMenuPop,body.light #chatMenuPop,body.light #profileMenu{
+body.light #aiMenuPop,body.light #chatMenuPop,body.light #notifMenuPop,body.light #profileMenu{
   background:rgba(255,255,255,.82);border-color:var(--b3);
 }
 /* Pin indicator on a pinned conversation row. */
@@ -10372,6 +10373,13 @@ body.reduce-motion .notif-detail{transition:none;}
 .notif-back svg{width:23px;height:23px;stroke:currentColor;stroke-width:2.2;fill:none;}
 .notif-back:active{transform:scale(.9);}
 .notif-title{font-size:20px;font-weight:800;letter-spacing:-.02em;}
+/* The ⋯ tools trigger sits plain on the background (no box) at the head's far end —
+   same 34px target as the back arrow, same muted dots as the Beam/Home tab ⋯. */
+.notif-more{margin-inline-start:auto;width:34px;height:34px;display:flex;align-items:center;justify-content:center;
+  background:none;border:none;cursor:pointer;border-radius:50%;-webkit-tap-highlight-color:transparent;
+  transition:transform var(--t-fast) var(--ease);}
+.notif-more svg{width:20px;height:20px;fill:var(--t2);stroke:none;}
+.notif-more:active{transform:scale(.9);}
 .notif-list{overflow-y:auto;-webkit-overflow-scrolling:touch;}
 /* X-style rows: gutter-aligned, no divider lines, no heavy block. */
 .notif-list .notif-row{position:relative;display:flex;align-items:flex-start;gap:12px;padding:13px var(--feed-gutter);cursor:pointer;transition:background var(--t-fast) var(--ease);}
@@ -15391,6 +15399,14 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   <button class="aimp-item hidden" role="menuitem" id="chatMenuAutoMsg" onclick="acChatMenuPick('automsg')"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 10h.01M12 10h.01M16 10h.01"/></svg><span>Auto-messages</span></button>
 </div>
 
+<!-- Notification tools popover — the ⋯ in the Notifications header (settings / clear the list) -->
+<div class="ai-menu-scrim hidden" id="notifMenuScrim" onclick="acCloseNotifMenu()"></div>
+<div class="ai-menu-pop hidden" id="notifMenuPop" role="menu" aria-label="Notification options">
+  <button class="aimp-item" role="menuitem" onclick="acNotifMenuPick('settings')"><svg viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 0 1 12 0c0 4.5 2 5.5 2 5.5H4s2-1 2-5.5"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></svg><span>Notification settings</span></button>
+  <div class="aimp-sep" id="notifMenuClearSep"></div>
+  <button class="aimp-item danger" role="menuitem" id="notifMenuClear" onclick="acNotifMenuPick('clear')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg><span>Clear all notifications</span></button>
+</div>
+
 
 <!-- Gift-card ⋯ menu — the small Apple-style popover the card's dots open -->
 <div class="ai-menu-scrim hidden" id="giftCardScrim" onclick="acCloseGiftCardMenu()"></div>
@@ -15504,6 +15520,9 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
       <span class="notif-title">Notifications</span>
+      <button class="notif-more" id="notifMoreBtn" onclick="acOpenNotifMenu(event)" aria-label="Notification options" aria-haspopup="menu">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>
+      </button>
     </div>
     <div class="notif-list" id="notifList"></div>
     <!-- Detail page: slides in over the list; its own back arrow returns to the list. -->
@@ -16664,7 +16683,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1500'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1501'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -30144,7 +30163,7 @@ function _hideMenuSrcBtn(btn) {
     const obs = new MutationObserver(muts => {
       for (const m of muts) { if (m.target.classList && m.target.classList.contains('hidden')) { _restoreMenuSrcBtn(); return; } }
     });
-    ['aiMenuPop', 'chatMenuPop', 'contactsMorePop', 'giftCardPop', 'authQrMenu', 'alMorePop', 'profileMenu']
+    ['aiMenuPop', 'chatMenuPop', 'notifMenuPop', 'contactsMorePop', 'giftCardPop', 'authQrMenu', 'alMorePop', 'profileMenu']
       .forEach(id => { const el = document.getElementById(id); if (el) obs.observe(el, { attributes: true, attributeFilter: ['class'] }); });
   }
 }
@@ -30254,6 +30273,52 @@ function acChatMenuPick(which) {
   else if (which === 'lastseen') acToggleLastSeen();
   else if (which === 'automsg') acOpenAutoMessages();
   else acToggleUnreadFilter();
+}
+// The Notifications header ⋯ opens the same Apple-style popover the other tools
+// menus use: jump straight to your notification settings, or empty the list.
+function acOpenNotifMenu(e) {
+  if (e) { e.stopPropagation(); }
+  const btn = document.getElementById('notifMoreBtn');
+  const pop = document.getElementById('notifMenuPop');
+  const scrim = document.getElementById('notifMenuScrim');
+  if (!btn || !pop || !scrim) return;
+  if (!pop.classList.contains('hidden')) { acCloseNotifMenu(); return; } // toggle
+  const any = (AC._notifs || []).length > 0;   // nothing to clear on an empty list
+  document.getElementById('notifMenuClear')?.classList.toggle('hidden', !any);
+  document.getElementById('notifMenuClearSep')?.classList.toggle('hidden', !any);
+  scrim.classList.remove('hidden');
+  pop.classList.remove('hidden');
+  _acAnchorPopover(btn, pop);
+}
+function acCloseNotifMenu() {
+  _animateMenuPopClose(document.getElementById('notifMenuPop'), document.getElementById('notifMenuScrim'));
+}
+function acNotifMenuPick(which) {
+  acCloseNotifMenu();
+  if (which === 'settings') {
+    closeOverlay('notifOverlay');
+    openSettings();
+    setTimeout(() => setNav('notifications'), 0);   // let the hub finish drawing, then slide into the page
+  } else acClearNotifs();
+}
+// Empty the notification list for good. These are alerts, not records — nothing
+// else in the app points at them — so it's a plain delete, asked for in red first.
+async function acClearNotifs() {
+  if (!(AC._notifs || []).length) return;
+  const ok = await appConfirm({
+    title: 'Clear all notifications?',
+    message: 'This empties your notification list. You can’t undo it.',
+    confirmText: 'Clear all', danger: true,
+  });
+  if (!ok) return;
+  try {
+    await API.req('DELETE', '/api/notifications');
+    AC._notifs = [];
+    AC._notifTab = 'all';
+    acRenderNotifList();
+    setNotifBadge(0);
+    showNotif('Notifications cleared.');
+  } catch (e) { showNotif(e.message || 'Could not clear notifications.'); }
 }
 // Mark every conversation read at once, then refresh the list + unread badges.
 async function acMarkAllChatsRead() {
