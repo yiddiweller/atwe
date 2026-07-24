@@ -5240,7 +5240,9 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
         ? { ...msg, mine: false, image: null, images: [], media: null, viewed: false }
         : { ...msg, mine: false };
       rtPush(other, 'msg', { kind: 'dm', peerId: req.user.id, message: delivered });
-      notify(other, req.user.id, 'message', null);
+      // Silent send (Telegram-style): deliver the message live + keep it unread, but
+      // skip the push/bell so the recipient's phone stays quiet.
+      if (req.body.silent !== true) notify(other, req.user.id, 'message', null);
       maybeAutoReply(other, req.user.id).catch(() => {});
     }
     res.json({ message: { ...msg, mine: true } });
@@ -6719,7 +6721,8 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
       for (const id of await groupMemberIds(gid, req.user.id)) rtPush(id, 'msg', out);
       // @mention notifications: a group member you @named gets pinged (in a group you
       // DON'T get a per-message notif like a DM, so this is how a mention reaches them).
-      if (body) {
+      // A silent send stays quiet — deliver live, but skip the mention pings.
+      if (body && req.body.silent !== true) {
         const handles = extractMentions(body);
         if (handles.length) {
           try {
