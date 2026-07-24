@@ -1111,6 +1111,7 @@ function publicUser(row) {
     pronouns: row.pronouns || null,
     socials: (row.socials && typeof row.socials === 'object' && !Array.isArray(row.socials)) ? row.socials : {},
     businessHours: Array.isArray(row.business_hours) ? row.business_hours : null,
+    specialHours: Array.isArray(row.special_hours) ? row.special_hours : [],
     hoursNote: row.hours_note || null,
     hiring: !!row.hiring,
     greetingEnabled: !!row.greeting_enabled,
@@ -3477,7 +3478,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, intro_seen, business_hours, hours_note, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, paused, pause_message, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off, store_banner, free_ship_over_cents, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, hiring, pronouns FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, intro_seen, business_hours, special_hours, hours_note, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, paused, pause_message, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off, store_banner, free_ship_over_cents, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, hiring, pronouns FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -3807,6 +3808,33 @@ function normalizeBusinessHours(raw) {
   }
   return JSON.stringify(days);
 }
+// Special / holiday hours: dated exceptions to the weekly schedule — a closed
+// day, or different times for that one date. ≤20 entries, deduped by date.
+function normalizeSpecialHours(raw) {
+  if (!Array.isArray(raw)) return '[]';
+  const time = (t) => (/^([01]?\d|2[0-3]):[0-5]\d$/.test(String(t || '')) ? String(t) : null);
+  const seen = new Set(), out = [];
+  for (const e of raw) {
+    if (!e || !/^\d{4}-\d{2}-\d{2}$/.test(String(e.date || '')) || seen.has(e.date)) continue;
+    seen.add(e.date);
+    if (e.closed) { out.push({ date: e.date, closed: true }); }
+    else {
+      const open = time(e.open), close = time(e.close);
+      if (open && close && close > open) out.push({ date: e.date, open, close });
+    }
+    if (out.length >= 20) break;
+  }
+  out.sort((a, b) => a.date < b.date ? -1 : 1);
+  return JSON.stringify(out);
+}
+// The exception (if any) covering a local date — 'YYYY-MM-DD' in server wall-clock,
+// the same basis businessOpenNow/buildOpenSlots already use.
+function specialFor(specialHours, dateObj) {
+  if (!Array.isArray(specialHours) || !specialHours.length) return null;
+  const p = (n) => String(n).padStart(2, '0');
+  const key = `${dateObj.getFullYear()}-${p(dateObj.getMonth() + 1)}-${p(dateObj.getDate())}`;
+  return specialHours.find((e) => e && e.date === key) || null;
+}
 app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
   const name = (req.body.name || '').trim();
   const username = (req.body.username || '').trim();
@@ -3885,6 +3913,8 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
     vals.push(normalizeBusinessHours(req.body.businessHours));
     fields.push(`business_hours = $${vals.length}`);
   }
+  // Holiday / special hours: dated exceptions to the weekly schedule.
+  if ('specialHours' in req.body) { vals.push(normalizeSpecialHours(req.body.specialHours)); fields.push(`special_hours = $${vals.length}`); }
   if ('hoursNote' in req.body) { vals.push((req.body.hoursNote || '').trim().slice(0, 120) || null); fields.push(`hours_note = $${vals.length}`); }
   // "We're hiring" flag (business accounts) — surfaces a green banner + badge linking
   // to the business's open roles. A no-op for personal accounts (never shown).
@@ -5161,10 +5191,13 @@ const AUTO_AWAY_COOLDOWN_MS = 12 * 60 * 60 * 1000; // 12h — long enough that a
 // Is a business currently open, per its 7-element Mon..Sun business_hours, on the
 // server's wall clock (same basis as the booking-slot generator)? Returns
 // true / false, or null when hours aren't set (caller decides the fallback).
-function businessOpenNow(hours) {
+function businessOpenNow(hours, specialHours) {
   if (!Array.isArray(hours) || hours.length !== 7) return null;
   const now = new Date();
-  const d = hours[(now.getDay() + 6) % 7]; // JS 0=Sun → our 6; 1=Mon → 0
+  // A dated exception (holiday hours) overrides today's weekly row entirely.
+  let d = hours[(now.getDay() + 6) % 7]; // JS 0=Sun → our 6; 1=Mon → 0
+  const sp = specialFor(specialHours, now);
+  if (sp) d = sp.closed ? { closed: true } : { open: sp.open, close: sp.close };
   if (!d || d.closed || !d.open || !d.close) return false;
   const toMin = (s) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(s)); return m ? (+m[1]) * 60 + (+m[2]) : null; };
   const o = toMin(d.open), c = toMin(d.close);
@@ -5176,7 +5209,7 @@ async function maybeAutoReply(businessId, customerId) {
   if (businessId === customerId) return;
   try {
     const b = (await db.query(
-      'SELECT account_type, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, business_hours FROM users WHERE id = $1',
+      'SELECT account_type, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, business_hours, special_hours FROM users WHERE id = $1',
       [businessId]
     )).rows[0];
     if (!b || b.account_type !== 'business') return;
@@ -5212,7 +5245,7 @@ async function maybeAutoReply(businessId, customerId) {
       // closed. If open right now, stay quiet (they can answer live). With no hours
       // set (open === null), fall through and send — the schedule can't be applied.
       const outsideOnly = b.away_schedule === 'outside_hours';
-      if (!outsideOnly || businessOpenNow(Array.isArray(b.business_hours) ? b.business_hours : null) !== true) {
+      if (!outsideOnly || businessOpenNow(Array.isArray(b.business_hours) ? b.business_hours : null, b.special_hours) !== true) {
         await send('away', b.away_message);
       }
     }
@@ -8984,7 +9017,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query(`SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, profile_cta, pinned_post_id, sub_price_cents, sub_blurb, created_at, deactivated, paused, pause_message, connections_visible, business_hours, hours_note, shop_paused, shop_pause_message, store_banner, hiring, pronouns, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, (SELECT username FROM users bu WHERE bu.id = users.aff_business_id) AS aff_business_username FROM users WHERE lower(username) = lower($1)`, [handle]);
+    const u = await db.query(`SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, profile_cta, pinned_post_id, sub_price_cents, sub_blurb, created_at, deactivated, paused, pause_message, connections_visible, business_hours, special_hours, hours_note, shop_paused, shop_pause_message, store_banner, hiring, pronouns, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, (SELECT username FROM users bu WHERE bu.id = users.aff_business_id) AS aff_business_username FROM users WHERE lower(username) = lower($1)`, [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     // A hibernated (deactivated) account's profile is hidden from everyone but the owner.
@@ -9111,7 +9144,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     }
     res.json({
       businessJobs, businessPeople, mutualConnections, reviewSummary, trustScore, followedBy, followedByCount,
-      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, pronouns: t.pronouns || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone', profileCta: ['book', 'order', 'message'].includes(t.profile_cta) ? t.profile_cta : null, joinedAt: t.created_at || null, paused: !!t.paused, pauseMessage: t.paused ? (t.pause_message || null) : null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null, hoursNote: t.hours_note || null, shopPaused: !!t.shop_paused, shopPauseMessage: t.shop_paused ? (t.shop_pause_message || null) : null, storeBanner: t.store_banner || null, hiring: !!t.hiring, inquiryEnabled: !!t.inquiry_enabled, inquiryIntro: t.inquiry_intro || null, status: userStatus(t), affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: t.aff_business_username || null } : null },
+      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, pronouns: t.pronouns || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone', profileCta: ['book', 'order', 'message'].includes(t.profile_cta) ? t.profile_cta : null, joinedAt: t.created_at || null, paused: !!t.paused, pauseMessage: t.paused ? (t.pause_message || null) : null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null, specialHours: Array.isArray(t.special_hours) ? t.special_hours : [], hoursNote: t.hours_note || null, shopPaused: !!t.shop_paused, shopPauseMessage: t.shop_paused ? (t.shop_pause_message || null) : null, storeBanner: t.store_banner || null, hiring: !!t.hiring, inquiryEnabled: !!t.inquiry_enabled, inquiryIntro: t.inquiry_intro || null, status: userStatus(t), affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: t.aff_business_username || null } : null },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       education: edu.rows.map(mapEducation),
       certifications: certs.rows.map(mapCertification),
@@ -14437,7 +14470,7 @@ app.get('/api/businesses/directory', auth.requireAuth, async (req, res) => {
       orderBy = 'dist_km ASC';
     }
     const { rows } = await db.query(
-      `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.categories, u.account_type, u.business_verify_status, u.headline, u.business_hours,
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.categories, u.account_type, u.business_verify_status, u.headline, u.business_hours, u.special_hours,
               (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = u.id) AS followers,
               (SELECT COUNT(*)::int FROM jobs j WHERE j.posted_by = u.id) AS jobs,
               (SELECT ROUND(AVG(br.rating)::numeric, 1) FROM business_reviews br WHERE br.business_id = u.id) AS rating,
@@ -14451,7 +14484,7 @@ app.get('/api/businesses/directory', auth.requireAuth, async (req, res) => {
       followers: u.followers, jobs: u.jobs,
       distanceKm: u.dist_km != null ? Math.round(u.dist_km * 10) / 10 : null,
       rating: u.rating != null ? Number(u.rating) : null, reviewCount: u.review_count || 0,
-      openNow: businessOpenNow(u.business_hours), // true / false / null (no hours set)
+      openNow: businessOpenNow(u.business_hours, u.special_hours), // true / false / null (no hours set)
     })), near: !!near });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the directory.' }); }
 });
@@ -20381,14 +20414,18 @@ app.delete('/api/business/services/:id', auth.requireAuth, async (req, res) => {
 // Times are wall-clock in the server's timezone (the app doesn't store per-business
 // tz); the client renders them in the viewer's locale. Soft system — capped at 200.
 const SLOT_LEAD_MS = 60 * 60 * 1000; // don't offer a slot starting within the next hour
-function buildOpenSlots(hours, durationMin, takenMs, days) {
+function buildOpenSlots(hours, durationMin, takenMs, days, specialHours) {
   const out = [];
   if (!Array.isArray(hours) || !(durationMin > 0)) return out;
   const lead = Date.now() + SLOT_LEAD_MS;
   const base = new Date(); base.setHours(0, 0, 0, 0);
   for (let d = 0; d < days && out.length < 200; d++) {
     const day = new Date(base); day.setDate(base.getDate() + d);
-    const h = hours[(day.getDay() + 6) % 7]; // our week starts Monday
+    let h = hours[(day.getDay() + 6) % 7]; // our week starts Monday
+    // Holiday hours: a dated exception replaces that day's weekly row —
+    // closed drops the whole day's slots, custom times reshape them.
+    const sp = specialFor(specialHours, day);
+    if (sp) h = sp.closed ? { closed: true } : { open: sp.open, close: sp.close };
     if (!h || h.closed || !h.open || !h.close) continue;
     const [oh, om] = String(h.open).split(':').map(Number);
     const [ch, cm] = String(h.close).split(':').map(Number);
@@ -20413,7 +20450,7 @@ app.get('/api/business/:id/slots', auth.requireAuth, async (req, res) => {
   const serviceId = parseInt(req.query.serviceId, 10);
   const days = Math.min(Math.max(parseInt(req.query.days, 10) || 14, 1), 30);
   try {
-    const b = (await db.query('SELECT account_type, business_hours FROM users WHERE id = $1', [id])).rows[0];
+    const b = (await db.query('SELECT account_type, business_hours, special_hours FROM users WHERE id = $1', [id])).rows[0];
     if (!b || b.account_type !== 'business') return res.status(400).json({ error: 'Not a business account.' });
     const svc = Number.isInteger(serviceId)
       ? (await db.query('SELECT id, name, duration_min FROM business_services WHERE id = $1 AND business_id = $2', [serviceId, id])).rows[0]
@@ -20425,7 +20462,7 @@ app.get('/api/business/:id/slots', auth.requireAuth, async (req, res) => {
     const taken = (await db.query(
       "SELECT when_at FROM appointments WHERE business_id = $1 AND status IN ('requested','confirmed','completed') AND when_at >= now() AND when_at < now() + ($2 || ' days')::interval",
       [id, String(days)])).rows.map((r) => new Date(r.when_at).getTime());
-    const slots = buildOpenSlots(hours, svc.duration_min, taken, days);
+    const slots = buildOpenSlots(hours, svc.duration_min, taken, days, b.special_hours);
     res.json({ slots, serviceId: svc.id, serviceName: svc.name, durationMin: svc.duration_min });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load open times.' }); }
 });
@@ -22277,7 +22314,7 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
     // retired — a business is a real Atwe account now).
     if (scope === 'businesses' || scope === 'companies') {
       const r = await db.query(
-        `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.categories, u.account_type, u.headline, u.business_verify_status, u.business_hours,
+        `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.categories, u.account_type, u.headline, u.business_verify_status, u.business_hours, u.special_hours,
                 (SELECT ROUND(AVG(br.rating)::numeric, 1) FROM business_reviews br WHERE br.business_id = u.id) AS rating,
                 (SELECT COUNT(*)::int FROM business_reviews br WHERE br.business_id = u.id) AS review_count
          FROM users u WHERE u.account_type = 'business' AND u.username IS NOT NULL AND NOT u.deactivated AND (
@@ -22291,7 +22328,7 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
       );
       return res.json({ businesses: r.rows.map((u) => Object.assign(mapSearchUser(u), {
         rating: u.rating != null ? Number(u.rating) : null, reviewCount: u.review_count || 0,
-        openNow: businessOpenNow(u.business_hours), // true / false / null
+        openNow: businessOpenNow(u.business_hours, u.special_hours), // true / false / null
       })) });
     }
     // Shop scope: marketplace listings (items / services) matched by name/description.

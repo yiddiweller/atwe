@@ -2761,6 +2761,8 @@ async function initSchema() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS store_banner TEXT;`);
   // Seller free-shipping threshold in cents (null = off): "free shipping over $X".
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS free_ship_over_cents INTEGER;`);
+  // Special / holiday hours: dated exceptions to the weekly schedule.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS special_hours JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS shop_pause_message TEXT;`);
   // Why a pending order was cancelled (+ who), so the other party sees the reason.
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancel_reason TEXT;`);
