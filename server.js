@@ -1061,6 +1061,12 @@ function verifyState(row) {
     ageDays: Math.floor(ageDays),
   };
 }
+// Custom status (emoji + text), honoring auto-clear — null when unset or expired.
+function userStatus(row) {
+  if (!row || (!row.status_emoji && !row.status_text)) return null;
+  if (row.status_expires_at && new Date(row.status_expires_at) <= new Date()) return null;
+  return { emoji: row.status_emoji || '💬', text: row.status_text || '' };
+}
 function publicUser(row) {
   return {
     id: row.id,
@@ -1091,6 +1097,7 @@ function publicUser(row) {
     cartRemindersOff: !!row.cart_reminders_off,
     inquiryEnabled: !!row.inquiry_enabled,
     inquiryIntro: row.inquiry_intro || null,
+    status: userStatus(row),
     lat: row.lat != null ? Number(row.lat) : null,
     lng: row.lng != null ? Number(row.lng) : null,
     dob: row.dob ? new Date(row.dob).toISOString().slice(0, 10) : null,
@@ -3407,7 +3414,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, business_hours, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, paused, pause_message, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, business_hours, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, paused, pause_message, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -3809,6 +3816,7 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
   if ('awayEnabled' in req.body) { vals.push(req.body.awayEnabled === true); fields.push(`away_enabled = $${vals.length}`); }
   if ('awayMessage' in req.body) { vals.push((req.body.awayMessage || '').trim().slice(0, 500) || null); fields.push(`away_message = $${vals.length}`); }
   if ('awaySchedule' in req.body) { vals.push(req.body.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always'); fields.push(`away_schedule = $${vals.length}`); }
+  // Custom status is set via its own route (/api/status), not the profile whitelist.
   // Contact / lead form (business): a toggle + an optional intro line.
   if ('inquiryEnabled' in req.body) { vals.push(req.body.inquiryEnabled === true); fields.push(`inquiry_enabled = $${vals.length}`); }
   if ('inquiryIntro' in req.body) { vals.push((req.body.inquiryIntro || '').trim().slice(0, 200) || null); fields.push(`inquiry_intro = $${vals.length}`); }
@@ -3884,6 +3892,25 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
+});
+
+// Custom status (emoji + short message, optional auto-clear).
+app.post('/api/status', auth.requireAuth, rateLimit(20, 60000, 'status'), async (req, res) => {
+  const emoji = (req.body.emoji || '').toString().trim().slice(0, 8) || null;
+  const text = (req.body.text || '').toString().trim().slice(0, 100) || null;
+  if (!emoji && !text) return res.status(400).json({ error: 'Add an emoji or a short message.' });
+  const hours = [1, 4, 24, 168].includes(Number(req.body.hours)) ? Number(req.body.hours) : 0;
+  const expSql = hours > 0 ? `now() + interval '${hours} hours'` : 'NULL';
+  try {
+    await db.query(`UPDATE users SET status_emoji = $1, status_text = $2, status_expires_at = ${expSql} WHERE id = $3`, [emoji, text, req.user.id]);
+    res.json({ ok: true, status: { emoji: emoji || '💬', text: text || '' } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not set your status.' }); }
+});
+app.delete('/api/status', auth.requireAuth, async (req, res) => {
+  try {
+    await db.query('UPDATE users SET status_emoji = NULL, status_text = NULL, status_expires_at = NULL WHERE id = $1', [req.user.id]);
+    res.json({ ok: true, status: null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not clear your status.' }); }
 });
 
 // Erase ALL of the user's history — posts, comments, DMs, group messages, AI
@@ -8454,7 +8481,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query(`SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, profile_cta, pinned_post_id, sub_price_cents, sub_blurb, created_at, deactivated, paused, pause_message, connections_visible, business_hours, inquiry_enabled, inquiry_intro, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, (SELECT username FROM users bu WHERE bu.id = users.aff_business_id) AS aff_business_username FROM users WHERE lower(username) = lower($1)`, [handle]);
+    const u = await db.query(`SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, profile_cta, pinned_post_id, sub_price_cents, sub_blurb, created_at, deactivated, paused, pause_message, connections_visible, business_hours, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, (SELECT username FROM users bu WHERE bu.id = users.aff_business_id) AS aff_business_username FROM users WHERE lower(username) = lower($1)`, [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     // A hibernated (deactivated) account's profile is hidden from everyone but the owner.
@@ -8580,7 +8607,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     }
     res.json({
       businessJobs, businessPeople, mutualConnections, reviewSummary, trustScore, followedBy, followedByCount,
-      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone', profileCta: ['book', 'order', 'message'].includes(t.profile_cta) ? t.profile_cta : null, joinedAt: t.created_at || null, paused: !!t.paused, pauseMessage: t.paused ? (t.pause_message || null) : null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null, inquiryEnabled: !!t.inquiry_enabled, inquiryIntro: t.inquiry_intro || null, affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: t.aff_business_username || null } : null },
+      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone', profileCta: ['book', 'order', 'message'].includes(t.profile_cta) ? t.profile_cta : null, joinedAt: t.created_at || null, paused: !!t.paused, pauseMessage: t.paused ? (t.pause_message || null) : null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null, inquiryEnabled: !!t.inquiry_enabled, inquiryIntro: t.inquiry_intro || null, status: userStatus(t), affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: t.aff_business_username || null } : null },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       education: edu.rows.map(mapEducation),
       certifications: certs.rows.map(mapCertification),
