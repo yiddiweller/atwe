@@ -7157,6 +7157,32 @@ async function pushMetaUpd(row, gid, uid, mid, meta) {
   }
 }
 
+// Who voted (WhatsApp-style "view votes"): the poll's votes with names resolved.
+// Same visibility rule as the poll itself — DM party or group member only.
+app.get('/api/atchat/poll/:id/voters', auth.requireAuth, async (req, res) => {
+  const mid = routeId(req.params.id);
+  if (!Number.isInteger(mid)) return res.status(400).json({ error: 'Invalid id.' });
+  const gid = req.query.group ? parseInt(req.query.group, 10) : null;
+  try {
+    const found = await loadMetaMsg(mid, gid, req.user.id, 'poll');
+    if (!found) return res.status(404).json({ error: 'Poll not found.' });
+    const meta = found.row.meta;
+    const votes = meta.votes || {};
+    const ids = [...new Set(Object.keys(votes).filter((k) => (votes[k] || []).length).map(Number))];
+    let users = [];
+    if (ids.length) {
+      const { rows } = await db.query('SELECT id, name, username, avatar, verified, account_type FROM users WHERE id = ANY($1)', [ids]);
+      users = rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: mediaRef(u.avatar, 'avatar', u.id), verified: !!u.verified, accountType: u.account_type === 'business' ? 'business' : 'personal' }));
+    }
+    const byId = new Map(users.map((u) => [u.id, u]));
+    // Per option: the people who chose it (a multi-answer voter appears under each).
+    const options = (meta.opts || []).map((o) => ({
+      i: o.i, text: o.text,
+      voters: ids.filter((id) => (votes[String(id)] || []).includes(o.i)).map((id) => byId.get(id)).filter(Boolean),
+    }));
+    res.json({ q: meta.q, multi: !!meta.multi, options, totalVoters: ids.length });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the votes.' }); }
+});
 // Cast / change / clear a vote on a poll. body: { group?, option } (option may be
 // a single index or an array when the poll allows multiple answers).
 app.post('/api/atchat/poll/:id/vote', auth.requireAuth, rateLimit(80, 60000, 'poll-vote'), async (req, res) => {
