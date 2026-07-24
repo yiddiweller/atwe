@@ -1881,6 +1881,16 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS post_hides_author_idx ON post_hides(user_id, author_id);`);
+  // "Turn off notifications for this post" (X-style): the author mutes the
+  // like/reply/repost noise about ONE post without muting anything else.
+  await query(`
+    CREATE TABLE IF NOT EXISTS post_notif_mutes (
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      post_id    INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, post_id)
+    );
+  `);
   // Recent searches — both a "recent searches" affordance and a soft interest signal.
   await query(`
     CREATE TABLE IF NOT EXISTS search_history (
