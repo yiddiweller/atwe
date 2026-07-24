@@ -13902,6 +13902,23 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Schedule an interview with an applicant (rides the scheduled-call flow) -->
+<div class="overlay hidden" id="interviewSheet" onclick="if(event.target===this)closeOverlay('interviewSheet')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Schedule an interview">
+    <button class="sheet-close" onclick="closeOverlay('interviewSheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="ivwTitle">Schedule an interview</div>
+    <div class="ac-disc-sub" id="ivwSub" style="margin:0 0 12px;"></div>
+    <div class="ac-disc-sub" style="margin:0 0 4px;">When</div>
+    <input class="jp-in" id="ivwWhen" type="datetime-local"/>
+    <div class="ac-disc-sub" style="margin:10px 0 4px;">How</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;">
+      <button class="ac-pill-btn" id="ivwVideo" style="flex:1;" onclick="acIvwMedia('video')">Video call</button>
+      <button class="ac-pill-btn" id="ivwAudio" style="flex:1;" onclick="acIvwMedia('audio')">Voice call</button>
+    </div>
+    <button class="ac-pill-btn accent jp-submit" onclick="acInterviewSend(this)">Send invite</button>
+  </div>
+</div>
+
 <!-- Wallet transaction detail (tap a history row) -->
 <div class="overlay hidden" id="walletTxView" onclick="if(event.target===this)closeOverlay('walletTxView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Transaction details">
@@ -16497,7 +16514,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1459'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1460'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25387,7 +25404,7 @@ async function acOpenApplicants(id) {
   document.getElementById('jaTitle').textContent = 'Applicants';
   try {
     const { title, applicants } = await API.req('GET', '/api/jobs/' + id + '/applicants');
-    AC._applicants = applicants;
+    AC._applicants = applicants; AC._applJobTitle = title || '';
     document.getElementById('jaTitle').textContent = (applicants.length || 'No') + ' applicant' + (applicants.length === 1 ? '' : 's') + (title ? ' · ' + title : '');
     if (!applicants.length) { body.innerHTML = '<div class="ac-empty">No one has applied yet.<br/>Applicants will show up here.</div>'; return; }
     acRenderApplicantList(id);
@@ -25495,6 +25512,7 @@ function acApplicantRow(jobId, a) {
     ${sel ? '' : `<div class="ac-appl-acts">
       <select class="ac-appl-sel st-${a.status}" onchange="acSetApplicantStatus(${jobId},${a.id},this.value,this)">${opts}</select>
       <button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 14px;" onclick="closeOverlay('jobApplicants');acOpenChat(${a.id})">Message</button>
+      <button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 14px;" onclick="acInterviewOpen(${a.id})">Interview</button>
       <button class="ac-pill-btn apl-note-btn ${a.hiringNote ? 'has' : ''}" style="flex:0 0 auto;padding:7px 14px;" onclick="acToggleApplNote(${a.id})">${a.hiringNote ? '📝 Note ·' : '📝 Note'}</button>
     </div>
     <div class="apl-note-box hidden" id="aplNoteBox_${a.id}">
@@ -25502,6 +25520,40 @@ function acApplicantRow(jobId, a) {
       <button class="ac-pill-btn accent apl-note-save" onclick="acSaveApplNote(${jobId},${a.id},this)">Save note</button>
     </div>`}
   </div>`;
+}
+// Schedule an interview with an applicant — a titled scheduled CALL invite
+// (the existing propose→accept flow): the candidate gets the invite card in
+// their DMs, accepts or declines, and a confirmed call is joinable in-app.
+function acInterviewOpen(uid) {
+  const a = (AC._applicants || []).find((x) => x.id === uid); if (!a) return;
+  AC._ivw = { to: uid, media: 'video' };
+  document.getElementById('ivwSub').textContent = 'With ' + (a.name || '@' + a.username) + (AC._applJobTitle ? ' · ' + AC._applJobTitle : '');
+  // Default: tomorrow at 10:00, local time.
+  const d = new Date(Date.now() + 24 * 3600 * 1000); d.setHours(10, 0, 0, 0);
+  const pad = (n) => String(n).padStart(2, '0');
+  document.getElementById('ivwWhen').value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  acIvwMedia('video');
+  showOverlay('interviewSheet');
+}
+function acIvwMedia(m) {
+  if (AC._ivw) AC._ivw.media = m;
+  document.getElementById('ivwVideo')?.classList.toggle('accent', m === 'video');
+  document.getElementById('ivwAudio')?.classList.toggle('accent', m === 'audio');
+}
+async function acInterviewSend(btn) {
+  const s = AC._ivw; if (!s) return;
+  const when = new Date(document.getElementById('ivwWhen').value);
+  if (isNaN(when.getTime())) { showNotif('Pick a date and time.'); return; }
+  btn.disabled = true;
+  try {
+    await API.req('POST', '/api/calls/schedule', {
+      to: s.to, whenAt: when.toISOString(), media: s.media,
+      title: 'Interview' + (AC._applJobTitle ? ' — ' + AC._applJobTitle : ''),
+    });
+    closeOverlay('interviewSheet');
+    showNotif('Interview invite sent — they’ll accept or suggest another time.');
+  } catch (e) { showNotif(e.message || 'Could not send the invite.'); }
+  btn.disabled = false;
 }
 // Private hiring note per applicant (poster-only, never shown to the candidate).
 function acToggleApplNote(uid) {
