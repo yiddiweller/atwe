@@ -535,6 +535,10 @@ async function initSchema() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
+  // In-app "Report a problem / Send feedback": a category (bug/idea/question/other)
+  // and a small meta blob (app build + platform) attached to a support request.
+  await query(`ALTER TABLE support_requests ADD COLUMN IF NOT EXISTS category TEXT;`);
+  await query(`ALTER TABLE support_requests ADD COLUMN IF NOT EXISTS meta JSONB;`);
 
   // App-wide settings (key → JSON value). Used for the site lock / private-test
   // gate (whether the site is locked, until when, and the tester access code).

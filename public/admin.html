@@ -481,6 +481,11 @@
   .sup-email{font-size:12px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .sup-date{font-size:11.5px;color:var(--t4);margin-left:auto;white-space:nowrap;flex-shrink:0;}
   .sup-msg{font-size:13.5px;line-height:1.55;color:var(--t1);white-space:pre-wrap;word-break:break-word;}
+  .sup-cat{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:2px 8px;border-radius:999px;background:var(--s3);color:var(--t2);}
+  .sup-cat-bug{background:rgba(255,0,51,.15);color:#ff6b81;}
+  .sup-cat-idea{background:rgba(0,136,255,.15);color:var(--accent);}
+  .sup-cat-question{background:rgba(255,187,0,.15);color:#ffbb00;}
+  .sup-meta{font-size:11.5px;color:var(--t3);margin-top:6px;}
   .sup-acts{display:flex;gap:8px;margin-top:10px;}
   .auto-flag{font-size:11px;font-weight:700;color:var(--amber);background:rgba(255,204,0,.16);padding:1px 8px;border-radius:8px;margin-left:6px;}
   .sla-badge{font-size:11px;font-weight:700;color:var(--green);background:rgba(136,255,0,.14);padding:1px 8px;border-radius:8px;margin-left:6px;}
@@ -3263,10 +3268,12 @@ function renderSupportList(){
     <div class="sup-item">
       <div class="sup-top">
         <span class="sup-from">${esc(r.user_name || 'Guest')}${r.user_username ? ' · @' + esc(r.user_username) : ''}</span>
+        ${r.category ? `<span class="sup-cat sup-cat-${esc(r.category)}">${esc(r.category)}</span>` : ''}
         <span class="sup-email">${esc(r.email)}</span>
         <span class="sup-date">${fmtDateTime(r.created_at)}</span>
       </div>
       <div class="sup-msg">${esc(r.message)}</div>
+      ${r.meta && (r.meta.build || r.meta.platform) ? `<div class="sup-meta">${r.meta.build ? 'build ' + esc(r.meta.build) : ''}${r.meta.build && r.meta.platform ? ' · ' : ''}${r.meta.platform ? esc(r.meta.platform) : ''}</div>` : ''}
       <div class="sup-acts">
         <a class="act" href="mailto:${esc(r.email)}">Reply by email</a>
         ${r.user_id ? `<button class="act" onclick="messageFromSupport(${r.user_id})">Message in app</button>` : ''}
