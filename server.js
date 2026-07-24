@@ -8080,7 +8080,7 @@ async function recomputeNoteStatus(noteId) {
   } catch (e) { /* best-effort */ }
 }
 const POSTS_SELECT = `
-  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.media_name, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only, p.min_tier_level, p.image_alt, p.ppv_cents, p.occasion, p.article_title,
+  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.media_name, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only, p.min_tier_level, p.image_alt, p.ppv_cents, p.occasion, p.article_title, p.pinned_reply_id,
          (p.promoted_until IS NOT NULL AND p.promoted_until > now()) AS promoted,
          (p.subscribers_only = false OR p.user_id = $1 OR EXISTS(SELECT 1 FROM creator_subs cs LEFT JOIN creator_tiers ct ON ct.id = cs.tier_id WHERE cs.creator_id = p.user_id AND cs.subscriber_id = $1 AND cs.status = 'active' AND (cs.period_end IS NULL OR cs.period_end > now()) AND COALESCE(ct.level, 0) >= p.min_tier_level)) AS sub_ok,
          (COALESCE(p.ppv_cents,0) = 0 OR p.user_id = $1 OR EXISTS(SELECT 1 FROM post_unlocks pu WHERE pu.post_id = p.id AND pu.user_id = $1)) AS ppv_ok,
@@ -8241,7 +8241,7 @@ function mapPost(r) {
     tagged: Array.isArray(r.tags) ? r.tags.filter((t) => t.kind === 'tag').map(({ kind, ...u }) => u) : [],
     coAuthors: Array.isArray(r.tags) ? r.tags.filter((t) => t.kind === 'author').map(({ kind, ...u }) => u) : [],
     editedAt: r.edited_at || null, promoted: !!r.promoted, occasion: r.occasion || null,
-    articleTitle: r.article_title || null, note: r.note || null,
+    articleTitle: r.article_title || null, note: r.note || null, pinnedReplyId: r.pinned_reply_id || null,
     products: tagProductsFrom(r), product: (tagProductsFrom(r)[0] || null),
     parentId: r.parent_id || null, location: r.location || null,
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
@@ -10030,15 +10030,16 @@ app.get('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
       );
       if (!vis.rowCount) return res.status(404).json({ error: 'Post not found.' });
     }
+    const pinnedId = post.rows[0].pinned_reply_id || 0;
     const replies = await db.query(
-      POSTS_SELECT + 'WHERE p.parent_id = $2 ORDER BY p.created_at ASC LIMIT 200',
-      [req.user.id, id]
+      POSTS_SELECT + 'WHERE p.parent_id = $2 ORDER BY (p.id = $3) DESC, p.created_at ASC LIMIT 200',
+      [req.user.id, id, pinnedId]
     );
     const mapped = mapPost(post.rows[0]);
     // Whether this viewer is allowed to reply (gates the reply box client-side;
     // the create-post route enforces it authoritatively).
     mapped.canReply = await canReplyTo(mapped.author.id, mapped.replyScope, mapped.body, req.user.id);
-    res.json({ post: mapped, replies: replies.rows.map(mapPost) });
+    res.json({ post: mapped, replies: replies.rows.map(mapPost).map((r) => ({ ...r, pinned: r.id === pinnedId })) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -10402,6 +10403,29 @@ app.delete('/api/social/posts/:id/like', auth.requireAuth, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
+});
+// Pin / unpin a reply to the top of a post's comments (post author only, one at a time).
+app.post('/api/social/posts/:id/pin-reply', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  const replyId = routeId(req.body.replyId);
+  if (!Number.isInteger(id) || !Number.isInteger(replyId)) return res.status(400).json({ error: 'Invalid ids.' });
+  try {
+    const post = (await db.query('SELECT user_id FROM posts WHERE id = $1', [id])).rows[0];
+    if (!post) return res.status(404).json({ error: 'Post not found.' });
+    if (post.user_id !== req.user.id) return res.status(403).json({ error: 'Only the author can pin a comment.' });
+    const reply = (await db.query('SELECT 1 FROM posts WHERE id = $1 AND parent_id = $2', [replyId, id])).rows[0];
+    if (!reply) return res.status(404).json({ error: 'That reply isn’t on this post.' });
+    await db.query('UPDATE posts SET pinned_reply_id = $1 WHERE id = $2', [replyId, id]);
+    res.json({ ok: true, pinnedReplyId: replyId });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not pin the comment.' }); }
+});
+app.delete('/api/social/posts/:id/pin-reply', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  try {
+    await db.query('UPDATE posts SET pinned_reply_id = NULL WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+    res.json({ ok: true, pinnedReplyId: null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not unpin.' }); }
 });
 // Who reacted to a post (the reactions breakdown modal) — grouped counts + reactor list.
 app.get('/api/social/posts/:id/reactions', auth.requireAuth, async (req, res) => {

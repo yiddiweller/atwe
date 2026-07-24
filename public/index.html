@@ -5499,6 +5499,9 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
 .ac-docprev .ac-doc-ic{color:var(--accent);display:flex;}
 .ac-docprev .ac-doc-ic svg{width:22px;height:22px;}
 .ac-docprev .ac-doc-name{flex:1;min-width:0;font-size:14px;font-weight:600;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* Pinned comment tag */
+.ac-pinned-tag{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--t3);margin:0 0 8px 2px;}
+.ac-pinned-tag svg{width:14px;height:14px;}
 .ac-prodtag.ac-prodtag-multi{padding-left:10px;}
 .ac-prodtag-row{align-items:center;gap:12px;}
 .cpc-thumb{width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;}
@@ -13399,6 +13402,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <button class="as-item hidden" id="paPostshotBtn" onclick="acPostshot(AC._paPostId)"><svg viewBox="0 0 24 24"><path d="M4 8h3l1.4-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.3"/></svg> <span>Postshot</span></button>
     <button class="as-item hidden" id="paNotInterestedBtn" onclick="paNotInterested()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12h7"/></svg> <span>Not interested in this post</span></button>
     <button class="as-item hidden" id="paReactionsBtn" onclick="closeOverlay('postActions');acOpenReactions(AC._paPostId)"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg> <span>See who reacted</span></button>
+    <button class="as-item hidden" id="paPinCommentBtn" onclick="acPinReplyTap(AC._paPostId)"><svg viewBox="0 0 24 24"><path d="M9 4h6M10 4l-.7 6.5-2.3 2v1.5h10V12.5l-2.3-2L14 4"/><path d="M12 16v4.5"/></svg> <span id="paPinCommentLabel">Pin comment</span></button>
     <button class="as-item hidden" id="paAddContextBtn" onclick="closeOverlay('postActions');acAddNoteOpen(AC._paPostId)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="16" x2="12" y2="11"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> <span>Add context</span></button>
     <button class="as-item" onclick="paMute()"><svg viewBox="0 0 24 24"><path d="M11 5 6.5 9H3v6h3.5L11 19z"/><path d="M22 9.5l-5 5M17 9.5l5 5"/></svg> <span id="paMuteLabel">Mute</span></button>
     <button class="as-item danger" onclick="paBlock()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/></svg> <span id="paBlockLabel">Block</span></button>
@@ -13427,6 +13431,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <button class="as-item" onclick="acOwnPostAct('edit')"><svg viewBox="0 0 24 24"><path d="M13 20h8"/><path d="M16.5 4.5a2 2 0 0 1 2.9 2.8L8 18.7l-3.7 1 1-3.6z"/></svg> <span>Edit post</span></button>
     <button class="as-item" onclick="acBmkMoveFromOwn()"><svg viewBox="0 0 24 24"><path d="M6 4h12a1 1 0 0 1 1 1v15.5a.5.5 0 0 1-.78.42L12 17l-6.22 3.92A.5.5 0 0 1 5 20.5V5a1 1 0 0 1 1-1z"/></svg> <span>Save to folder</span></button>
     <button class="as-item" id="ownPinBtn" onclick="acOwnPostAct('pin')"><svg viewBox="0 0 24 24"><path d="M9 4h6M10 4l-.7 6.5-2.3 2v1.5h10V12.5l-2.3-2L14 4"/><path d="M12 16v4.5"/></svg> <span id="ownPinLabel">Pin to your profile</span></button>
+    <button class="as-item hidden" id="ownPinCommentBtn" onclick="acPinReplyTap(AC._ownPostId)"><svg viewBox="0 0 24 24"><path d="M9 4h6M10 4l-.7 6.5-2.3 2v1.5h10V12.5l-2.3-2L14 4"/><path d="M12 16v4.5"/></svg> <span id="ownPinCommentLabel">Pin comment</span></button>
     <button class="as-item" onclick="closeOverlay('ownPostActions');acReplyScopeMenu(AC._ownPostId)"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg> <span>Who can reply</span></button>
     <button class="as-item" onclick="acPostInfoFrom('own')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5"/><path d="M12 7.6h.01"/></svg> <span>Info</span></button>
     <button class="as-item" onclick="acOpenPostAnalytics()"><svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7 20v-5M12 20V8M17 20v-8"/></svg> <span>View analytics</span></button>
@@ -16054,7 +16059,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1397'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1398'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -28430,6 +28435,7 @@ function acPostCard(p) {
   const promoted = p.promoted ? `<div class="ac-promoted"><svg viewBox="0 0 24 24"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>Ad</div>` : '';
   return `<div class="ac-post" data-postid="${p.id}" data-replyscope="${p.replyScope || 'everyone'}" onclick="acPostTap(event,${p.id})">
     ${promoted}${rb}
+    ${p.pinned ? '<div class="ac-pinned-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6M10 4l-.7 6.5-2.3 2v1.5h10V12.5l-2.3-2L14 4"/><path d="M12 16v4.5"/></svg>Pinned by author</div>' : ''}
     <div class="ac-post-top">
       <div class="ac-post-av" onclick="event.stopPropagation();acGoProfile('${h}')">${acAvatarHtml(p.author.name, p.author.avatar, 'user-avatar', acIsBiz(p.author))}</div>
       <div class="ac-post-idcol">
@@ -30031,8 +30037,27 @@ function acOwnPostMenu(anchor, id) {
     const pinned = AC._pinnedPostId === id;
     document.getElementById('ownPinLabel').textContent = pinned ? 'Unpin from your profile' : 'Pin to your profile';
   }
+  _acSyncPinComment('ownPinCommentBtn', 'ownPinCommentLabel', id, p);
   showOverlay('ownPostActions');
   if (typeof acAnchorMenu === 'function' && anchor) acAnchorMenu(anchor);
+}
+// Show a "Pin comment"/"Unpin comment" row when the viewer is the parent post's
+// author and `id` is a reply to the post open in the detail view.
+function _acSyncPinComment(btnId, labelId, id, p) {
+  const btn = document.getElementById(btnId); if (!btn) return;
+  const parent = AC._postData && AC._postData.post;
+  const canPin = !!(parent && parent.mine && p && p.parentId === parent.id);
+  btn.classList.toggle('hidden', !canPin);
+  if (canPin) document.getElementById(labelId).textContent = (parent.pinnedReplyId === id) ? 'Unpin comment' : 'Pin comment';
+}
+function acPinReplyTap(replyId) {
+  closeOverlay('ownPostActions'); closeOverlay('postActions');
+  const parent = AC._postData && AC._postData.post; if (!parent) return;
+  const pinned = parent.pinnedReplyId === replyId;
+  const req = pinned ? API.req('DELETE', '/api/social/posts/' + parent.id + '/pin-reply')
+    : API.req('POST', '/api/social/posts/' + parent.id + '/pin-reply', { replyId });
+  req.then(() => { showNotif(pinned ? 'Comment unpinned.' : 'Comment pinned to the top.'); acLoadPostView(parent.id); })
+    .catch((e) => showNotif(e.message || 'Could not update.'));
 }
 function acOwnPostAct(which) {
   const id = AC._ownPostId;
@@ -40507,6 +40532,7 @@ function acOpenUserActions(anchor, id, showFollow, postId) {
   if (acxBtn) acxBtn.classList.toggle('hidden', AC._paPostId == null); // "Add context" applies to a post
   const rxBtn = document.getElementById('paReactionsBtn');
   if (rxBtn) rxBtn.classList.toggle('hidden', AC._paPostId == null); // "See who reacted" applies to a post
+  _acSyncPinComment('paPinCommentBtn', 'paPinCommentLabel', AC._paPostId, acFindPost(AC._paPostId)); // "Pin comment" (parent author only)
   const psBtn = document.getElementById('paPostshotBtn');
   if (psBtn) psBtn.classList.toggle('hidden', AC._paPostId == null); // Postshot needs a post
   const infoBtn = document.getElementById('paInfoBtn');
