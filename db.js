@@ -3177,6 +3177,8 @@ async function initSchema() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS away_enabled BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS away_message TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS away_schedule TEXT NOT NULL DEFAULT 'always';`);
+  // "We're hiring" flag (business accounts) — shows a green banner/badge → open roles.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS hiring BOOLEAN NOT NULL DEFAULT false;`);
   // Pro "Pause / Away" mode: a Pro member marks their whole account temporarily
   // unavailable (moving, on a break, etc.). The profile stays reachable but shows an
   // "unavailable" banner + an optional message so visitors know what's going on.
