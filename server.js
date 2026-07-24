@@ -12273,7 +12273,7 @@ app.get('/api/jobs/:id/applicants', auth.requireAuth, async (req, res) => {
     if (!req.user.is_admin && !(await canActAs(req.user.id, j.rows[0].posted_by, 'jobs'))) return res.status(403).json({ error: 'Only the job poster can see applicants.' });
     const screening = Array.isArray(j.rows[0].screening) ? j.rows[0].screening : [];
     const { rows } = await db.query(
-      `SELECT a.note, a.created_at, a.status, a.resume_title, a.resume_data, a.answers, u.id, u.name, u.username, u.avatar, u.verified, u.note AS profile_note, u.headline, u.account_type,
+      `SELECT a.note, a.created_at, a.status, a.resume_title, a.resume_data, a.answers, a.hiring_notes, u.id, u.name, u.username, u.avatar, u.verified, u.note AS profile_note, u.headline, u.account_type,
               EXISTS(SELECT 1 FROM saved_candidates sc WHERE sc.owner_id = $2 AND sc.candidate_id = u.id) AS saved
        FROM job_applications a JOIN users u ON u.id = a.user_id
        WHERE a.job_id = $1 ORDER BY (a.status = 'shortlisted') DESC, a.created_at DESC LIMIT 200`,
@@ -12286,7 +12286,7 @@ app.get('/api/jobs/:id/applicants', auth.requireAuth, async (req, res) => {
         const ans = u.answers || null;
         // Pair each screening question with this applicant's answer for the poster.
         const answers = screening.length ? screening.map((q) => ({ id: q.id, text: q.text, value: ans && ans[q.id] != null ? ans[q.id] : null })) : [];
-        return { id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, note: u.note || null, profileNote: u.profile_note || null, headline: u.headline || null, accountType: u.account_type === 'business' ? 'business' : 'personal', status: u.status || 'applied', saved: !!u.saved, applied_at: u.created_at, resumeTitle: u.resume_title || null, resume: u.resume_data || null, answers, meets: screening.some((q) => q.required) ? answersMeet(screening, ans) : null };
+        return { id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, note: u.note || null, profileNote: u.profile_note || null, headline: u.headline || null, accountType: u.account_type === 'business' ? 'business' : 'personal', status: u.status || 'applied', saved: !!u.saved, applied_at: u.created_at, resumeTitle: u.resume_title || null, resume: u.resume_data || null, answers, hiringNote: u.hiring_notes || null, meets: screening.some((q) => q.required) ? answersMeet(screening, ans) : null };
       }),
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load applicants.' }); }
@@ -12459,6 +12459,21 @@ app.patch('/api/jobs/:id/applicants/:uid', auth.requireAuth, async (req, res) =>
     }
     res.json({ ok: true, status });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+// Private hiring note on an applicant (poster/team only; the candidate NEVER sees it —
+// it's only ever returned by the poster-gated applicants list above).
+app.put('/api/jobs/:id/applicants/:uid/note', auth.requireAuth, rateLimit(60, 60000, 'apl-note'), async (req, res) => {
+  const id = routeId(req.params.id), uid = routeId(req.params.uid);
+  if (!Number.isInteger(id) || !Number.isInteger(uid)) return res.status(400).json({ error: 'Invalid request.' });
+  const note = (req.body.note || '').toString().trim().slice(0, 2000) || null;
+  try {
+    const j = await db.query('SELECT posted_by FROM jobs WHERE id = $1', [id]);
+    if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
+    if (!req.user.is_admin && !(await canActAs(req.user.id, j.rows[0].posted_by, 'jobs'))) return res.status(403).json({ error: 'Only the job poster can add notes.' });
+    const r = await db.query('UPDATE job_applications SET hiring_notes = $1 WHERE job_id = $2 AND user_id = $3', [note, id, uid]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Application not found.' });
+    res.json({ ok: true, note });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the note.' }); }
 });
 // Bulk move several applicants to a status at once (poster only). Notifies each
 // candidate of a real decision (everything but 'applied').
