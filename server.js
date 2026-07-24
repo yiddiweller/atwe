@@ -4637,6 +4637,24 @@ app.get('/api/contacts', auth.requireAuth, async (req, res) => {
     res.json({ contacts: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: mediaRef(u.avatar, 'avatar', u.id), verified: !!u.verified, accountType: u.account_type === 'business' ? 'business' : 'personal' })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load contacts.' }); }
 });
+// Rename a chat (WhatsApp-contact-style): YOUR private name for a person, shown
+// only to you in Beam (chat list + open thread). Empty clears it — back to their
+// real name. Stored on the owner-scoped contacts row; never visible to them.
+app.put('/api/contacts/:id/nickname', auth.requireAuth, rateLimit(30, 60000, 'contact-nick'), async (req, res) => {
+  const other = routeId(req.params.id);
+  if (!Number.isInteger(other) || other === req.user.id) return res.status(400).json({ error: 'Invalid user.' });
+  const nickname = (req.body.nickname || '').toString().trim().slice(0, 40) || null;
+  try {
+    const u = (await db.query('SELECT id FROM users WHERE id = $1 AND username IS NOT NULL', [other])).rows[0];
+    if (!u) return res.status(404).json({ error: 'User not found.' });
+    await db.query(
+      `INSERT INTO contacts (owner_id, contact_id, nickname) VALUES ($1,$2,$3)
+       ON CONFLICT (owner_id, contact_id) DO UPDATE SET nickname = $3`,
+      [req.user.id, other, nickname]
+    );
+    res.json({ ok: true, nickname });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the name.' }); }
+});
 
 // List the signed-in user's conversations (latest message + unread count each).
 app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
@@ -4658,6 +4676,7 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
            FROM dm_threads dt WHERE dt.a = $1 OR dt.b = $1
        )
        SELECT partner.id, partner.name, partner.username, partner.avatar,
+              nk.nickname,
               t.thread_id, dt.title AS thread_title,
               lm.body AS last_body, (lm.image IS NOT NULL) AS last_image, lm.media_kind AS last_media_kind,
               lm.meta->>'t' AS last_meta,
@@ -4668,6 +4687,7 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
        FROM pairs t
        JOIN users partner ON partner.id = t.peer_id AND partner.username IS NOT NULL
        LEFT JOIN dm_threads dt ON dt.id = t.thread_id
+       LEFT JOIN contacts nk ON nk.owner_id = $1 AND nk.contact_id = t.peer_id
        LEFT JOIN at_cleared cl ON cl.user_id = $1 AND cl.other_id = t.peer_id
        LEFT JOIN LATERAL (
          SELECT body, image, media_kind, meta, deleted_all, ($1 = ANY(hidden_for)) AS hidden, created_at, sender_id, read_at FROM at_messages m
@@ -5088,7 +5108,9 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
       }
     } catch (e) { /* permission extras are best-effort */ }
     res.json({
-      peer: { id: peer.id, name: peer.name, username: peer.username, avatar: mediaRef(peer.avatar, 'avatar', peer.id), accountType: peer.account_type === 'business' ? 'business' : 'personal' },
+      peer: { id: peer.id, name: peer.name, username: peer.username, avatar: mediaRef(peer.avatar, 'avatar', peer.id), accountType: peer.account_type === 'business' ? 'business' : 'personal',
+        // Your private name for them (chat rename) — only ever shown to YOU.
+        nickname: (await db.query('SELECT nickname FROM contacts WHERE owner_id = $1 AND contact_id = $2', [req.user.id, other])).rows[0]?.nickname || null },
       canMessage, request, incomingRequest, connectGated, thread,
       disappearing: await dmDisappearSeconds(req.user.id, other),
       messages: rows.map((m) => {

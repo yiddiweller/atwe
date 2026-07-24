@@ -14032,6 +14032,17 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Rename a chat: your private name for this person (only you see it) -->
+<div class="overlay hidden" id="renameChatView" onclick="if(event.target===this)closeOverlay('renameChatView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Rename this chat">
+    <button class="sheet-close" onclick="closeOverlay('renameChatView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Rename this chat</div>
+    <div class="ac-disc-sub" id="renameChatReal" style="margin:0 0 12px;"></div>
+    <input class="jp-in" id="renameChatIn" maxlength="40" placeholder="e.g. Mom, Plumber Dave, Landlord" autocomplete="off"/>
+    <button class="ac-pill-btn accent jp-submit" style="margin-top:12px;" onclick="acRenameChatSave()">Save</button>
+  </div>
+</div>
+
 <!-- Storefront announcement: one short line pinned atop the shop -->
 <div class="overlay hidden" id="storeBannerView" onclick="if(event.target===this)closeOverlay('storeBannerView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Shop announcement">
@@ -16711,7 +16722,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1512'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1513'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -41341,7 +41352,7 @@ function acRenderChats() {
     dms = dms.filter(x => has('dm', x.c.id)); grps = grps.filter(x => has('group', x.g.id));
   }
   if (q) { // search by name / @username / conversation title
-    dms = dms.filter(x => ((x.c.name || '') + ' ' + (x.c.username || '') + ' ' + (x.c.thread_title || '')).toLowerCase().includes(q));
+    dms = dms.filter(x => ((x.c.name || '') + ' ' + (x.c.nickname || '') + ' ' + (x.c.username || '') + ' ' + (x.c.thread_title || '')).toLowerCase().includes(q));
     grps = grps.filter(x => ((x.g.name || '') + ' ' + (x.g.username || '')).toLowerCase().includes(q));
   }
   // Calls fold into "All" but never into the unread-only / search / archived views.
@@ -41478,11 +41489,12 @@ function acChatRowDM(c) {
     ? `<span class="ac-ticks${c.last_read ? ' seen' : ''}" aria-label="${c.last_read ? 'Seen' : 'Sent'}">${EYE}</span>` : '';
   const lastHtml = draft ? `<span class="ac-draft">Draft:</span> ${escHtml(draft)}` : ticks + escHtml(last);
   const lastPlain = draft ? ('Draft: ' + draft) : last;
+  const shown = c.nickname || c.name;    // your private rename wins (only you see it)
   return `<div class="ac-item ${on ? 'online' : ''} ${unread && !muted ? 'unread' : ''} ${pinned ? 'ac-pinned' : ''}" data-uid="${c.id}" data-tid="${tid == null ? '' : tid}" onclick="acDmRowTap(${c.id},${tk})">
     <div class="ac-item-inner">
-      <div class="ac-ava-wrap" onclick="event.stopPropagation();${c.username ? `acGoProfile('${c.username}')` : ''}">${acAvatarHtml(c.name, c.avatar)}<span class="ac-online-dot"></span></div>
+      <div class="ac-ava-wrap" onclick="event.stopPropagation();${c.username ? `acGoProfile('${c.username}')` : ''}">${acAvatarHtml(shown, c.avatar)}<span class="ac-online-dot"></span></div>
       <div class="ac-item-main">
-        <div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}${isSelf ? ' <span class="ac-self-you">(You)</span>' : ''}</span>${threadTag}${muted ? '<span class="ac-mute-ic" title="Muted"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-9.33-5"/><path d="M6 9v5l-3 3h13"/><line x1="3" y1="3" x2="21" y2="21"/></svg></span>' : ''}${pinned ? AC_PIN_IC : ''}</div>
+        <div class="ac-item-top"><span class="ac-item-name">${escHtml(shown)}${isSelf ? ' <span class="ac-self-you">(You)</span>' : ''}</span>${threadTag}${muted ? '<span class="ac-mute-ic" title="Muted"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-9.33-5"/><path d="M6 9v5l-3 3h13"/><line x1="3" y1="3" x2="21" y2="21"/></svg></span>' : ''}${pinned ? AC_PIN_IC : ''}</div>
         <div class="ac-item-last">${lastHtml}</div>
       </div>
       <div class="ac-item-right">
@@ -41716,7 +41728,7 @@ function acSeedThreadHeader(kind, id) {
     const self = id === S.user?.id;
     const seed = (AC.conversations || []).find(c => c.id === id)
       || (self ? { name: S.user?.name, avatar: S.user?.avatar, username: S.user?.username } : null);
-    nameEl.textContent = seed ? (seed.name + (self ? ' (You)' : '')) : '';
+    nameEl.textContent = seed ? ((seed.nickname || seed.name) + (self ? ' (You)' : '')) : '';
     ava.className = 'user-avatar ac-peer-ava'; ava.style.removeProperty('--avatar'); ava.innerHTML = '';
     if (seed) renderAvatar(ava, seed.name, seed.avatar || null);
     if (self) handleEl.textContent = 'Message yourself';
@@ -41859,7 +41871,7 @@ function acApplyDmData(id, d, firstPaint, fromCache) {
     const _fu = AC.messages.find(m => !m.mine && !m.read_at);
     if (_fu && AC.messages.indexOf(_fu) > 0) AC._unreadDivId = _fu.id;
   }
-  document.getElementById('acPeerName').textContent = d.peer.name + (d.peer.id === S.user?.id ? ' (You)' : '');
+  document.getElementById('acPeerName').textContent = (d.peer.nickname || d.peer.name) + (d.peer.id === S.user?.id ? ' (You)' : '');
   AC._showHandle = false; acUpdatePeerPresence(); // subline = last seen / online; tap name → @username
   const ava = document.getElementById('acPeerAvatar');
   ava.className = 'user-avatar ac-peer-ava'; ava.style.removeProperty('--avatar'); ava.innerHTML = '';
@@ -42453,6 +42465,28 @@ function acHeadName() {
   AC._showHandle = !AC._showHandle;
   acUpdatePeerPresence();
 }
+// ── Rename a chat: your private name for this person (only YOU ever see it) ──
+function acRenameChatOpen() {
+  if (!AC.peer) return;
+  const inp = document.getElementById('renameChatIn');
+  document.getElementById('renameChatReal').textContent = 'Their real name stays ' + (AC.peer.name || '') + ' — only you see the new one.';
+  if (inp) inp.value = AC.peer.nickname || '';
+  showOverlay('renameChatView');
+  setTimeout(() => inp && inp.focus(), 60);
+}
+async function acRenameChatSave() {
+  if (!AC.peer) return;
+  const nickname = (document.getElementById('renameChatIn').value || '').trim().slice(0, 40);
+  try {
+    await API.req('PUT', '/api/contacts/' + AC.peer.id + '/nickname', { nickname });
+    AC.peer.nickname = nickname || null;
+    document.getElementById('acPeerName').textContent = (nickname || AC.peer.name) + (AC.peer.id === S.user?.id ? ' (You)' : '');
+    const row = (AC.conversations || []).find(c => c.id === AC.peer.id); if (row) row.nickname = nickname || null;
+    closeOverlay('renameChatView');
+    showNotif(nickname ? 'Renamed — just for you.' : 'Back to their real name.');
+    acLoadChats && acLoadChats();        // refresh the list so the row matches
+  } catch (e) { showNotif(e.message || 'Could not save the name.'); }
+}
 /* ── Header ⋯ menu (per-conversation options) ── */
 function acThreadMenu(btn) {
   const sheet = document.getElementById('acHeadMenuSheet');
@@ -42511,6 +42545,7 @@ function acThreadMenu(btn) {
       + `<button class="mm-item" onclick="acHeadAct('search')">${IC.search}<span class="mm-label">Search in chat</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('media')">${IC.media}<span class="mm-label">Media</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('select')">${IC.select}<span class="mm-label">Select messages</span></button>`
+      + (self ? '' : `<button class="mm-item" onclick="acHeadAct('rename')"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg><span class="mm-label">Rename this chat</span></button>`)
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('threads')">${IC.threads}<span class="mm-label">See all conversations</span></button>`)
       + `<button class="mm-item" onclick="acHeadAct('scheduled')">${IC.scheduled}<span class="mm-label">Scheduled messages</span></button>`
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('label')">${IC.label}<span class="mm-label">Label chat</span></button>`)
@@ -42541,6 +42576,7 @@ function acHeadAct(a) {
     else if (a === 'report') acReportPeer();
     else if (a === 'select') acStartSelect();
     else if (a === 'cartmute') acToggleShopReminders();
+    else if (a === 'rename' && AC.peer) acRenameChatOpen();
     else if (a === 'threads' && AC.peer) acOpenThreadPicker(AC.peer.id);
     else if (a === 'ai') acChatAi();
     else if (a === 'search') acThreadSearchOpen();
