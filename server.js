@@ -14622,6 +14622,9 @@ function mapMoneyRequest(r, meId) {
     id: r.id, amountCents: r.amount_cents, note: r.note || null, status: r.status,
     createdAt: r.created_at, resolvedAt: r.resolved_at || null,
     iAmRequester: r.requester_id === meId,
+    // Requester can nudge a pending request at most once a day.
+    canRemind: r.requester_id === meId && r.status === 'pending'
+      && (!r.last_reminded_at || (Date.now() - new Date(r.last_reminded_at).getTime()) > 24 * 3600 * 1000),
     requester: other({ id: r.requester_id, name: r.requester_name, username: r.requester_username, avatar: r.requester_avatar, account_type: r.requester_type }),
     payer: other({ id: r.payer_id, name: r.payer_name, username: r.payer_username, avatar: r.payer_avatar, account_type: r.payer_type }),
   };
@@ -14720,6 +14723,29 @@ app.post('/api/wallet/requests/:id/decline', auth.requireAuth, async (req, res) 
     notify(upd.rows[0].requester_id, req.user.id, 'money_request_declined');
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not decline the request.' }); }
+});
+// Remind the payer about a pending request I sent (Venmo-style nudge). A pure
+// re-notification — NO money moves — capped at one reminder per day, enforced
+// atomically in the UPDATE so overlapping taps can't double-notify.
+app.post('/api/wallet/requests/:id/remind', auth.requireAuth, rateLimit(20, 60000, 'wallet-request-remind'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const mr = (await db.query('SELECT requester_id, payer_id, status, last_reminded_at FROM money_requests WHERE id = $1', [id])).rows[0];
+    if (!mr || mr.requester_id !== req.user.id) return res.status(404).json({ error: 'Request not found.' });
+    if (mr.status !== 'pending') return res.status(400).json({ error: 'This request is no longer pending.' });
+    // Claim the cooldown window first — the guarded UPDATE is what enforces 1/day.
+    const claim = await db.query(
+      `UPDATE money_requests SET last_reminded_at = now()
+       WHERE id = $1 AND requester_id = $2 AND status = 'pending'
+         AND (last_reminded_at IS NULL OR last_reminded_at < now() - interval '24 hours')
+       RETURNING payer_id`,
+      [id, req.user.id]
+    );
+    if (!claim.rowCount) return res.status(400).json({ error: 'You can remind them once a day. Try again tomorrow.', tooSoon: true });
+    notify(claim.rows[0].payer_id, req.user.id, 'money_request');
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the reminder.' }); }
 });
 // Cancel a request I sent (requester) — status → cancelled.
 app.post('/api/wallet/requests/:id/cancel', auth.requireAuth, async (req, res) => {
