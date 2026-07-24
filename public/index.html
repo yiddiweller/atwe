@@ -16803,7 +16803,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1529'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1530'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -36149,6 +36149,10 @@ async function acOpenOrder(id) {
     const digital = digItems.length ? `<div class="dig-deliver"><div class="dig-deliver-h">⚡ Your digital delivery</div>${digItems.map(it => `<div class="dig-item"><div class="dig-item-name">${escHtml(it.name)}</div><div class="dig-item-content">${acLinkifyPost(it.digitalContent)}</div></div>`).join('')}</div>` : '';
     // Receipt: any order that actually charged (everything but pending/cancelled).
     if (!['pending', 'cancelled'].includes(o.status)) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acOrderReceipt()">🧾 Receipt</button>`;
+    // One-tap line to the other party (Amazon "Contact seller" / Etsy "Message"):
+    // opens the existing DM thread — the order card is already in it from purchase.
+    { const other = o.mine ? o.buyer : o.seller;
+      if (other && other.id) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="closeOverlay('ordersView');closeOverlay('orderView');appTab('chat');acOpenChat(${other.id})">💬 Message ${o.mine ? 'the buyer' : 'the seller'}${other.name ? ' · ' + escHtml(other.name) : ''}</button>`; }
     // Archive is a personal tidy-up: only once the order is finished either way.
     if (['fulfilled', 'delivered', 'released', 'cancelled', 'refunded'].includes(o.status)) {
       action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acArchiveOrder(${o.id}, ${o.archived ? 'false' : 'true'})">${o.archived ? '↩ Restore to orders' : '🗄 Archive'}</button>`;
