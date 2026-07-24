@@ -2741,6 +2741,8 @@ async function initSchema() {
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS seller_archived BOOLEAN NOT NULL DEFAULT false;`);
   // Shop vacation mode: listings stay visible but can't be bought while away.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS shop_paused BOOLEAN NOT NULL DEFAULT false;`);
+  // Storefront announcement line (Etsy-style), shown atop the shop.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS store_banner TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS shop_pause_message TEXT;`);
   // Why a pending order was cancelled (+ who), so the other party sees the reason.
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancel_reason TEXT;`);
