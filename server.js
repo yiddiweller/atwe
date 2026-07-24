@@ -1906,12 +1906,13 @@ app.post('/api/rt/typing', auth.requireAuth, async (req, res) => {
   try {
     const me = await chatIdentity(req.user.id);
     const from = { id: req.user.id, name: me ? me.name : '' };
+    const kind = req.body.kind === 'recording' ? 'recording' : 'typing'; // "recording audio…" rides the same relay
     if (Number.isInteger(groupId)) {
       if (await isGroupMember(groupId, req.user.id)) {
-        for (const id of await groupMemberIds(groupId, req.user.id)) rtPush(id, 'typing', { from, groupId });
+        for (const id of await groupMemberIds(groupId, req.user.id)) rtPush(id, 'typing', { from, groupId, kind });
       }
     } else if (Number.isInteger(to)) {
-      rtPush(to, 'typing', { from, groupId: null });
+      rtPush(to, 'typing', { from, groupId: null, kind });
     }
   } catch {}
   res.json({ ok: true });
@@ -3444,7 +3445,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, business_hours, hours_note, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, paused, pause_message, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, hiring, pronouns FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, intro_seen, business_hours, hours_note, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, paused, pause_message, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, hiring, pronouns FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
