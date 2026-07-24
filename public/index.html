@@ -13790,9 +13790,10 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
 
 <!-- Post a job -->
 <div class="overlay hidden" id="jobPost" onclick="if(event.target===this)closeOverlay('jobPost')">
-  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Post a job">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Post a job" oninput="acJobDraftSave()">
     <button class="sheet-close" onclick="closeOverlay('jobPost')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title">Post a job</div>
+    <div class="ac-disc-sub hidden" id="jpDraftHint" style="margin:0 0 8px;">Draft restored — pick up where you left off. <button class="ac-link-btn" style="padding:0;" onclick="acJobDraftDiscard()">Start fresh</button></div>
     <select class="jp-in jp-sel" id="jpAsCompany" onchange="acJobAsCompanyChange()" style="display:none;width:100%;"><option value="">Post as yourself</option></select>
     <input class="jp-in" id="jpTitle" type="text" placeholder="Job title (e.g. Site Foreman)" maxlength="120"/>
     <input class="jp-in" id="jpCompany" type="text" placeholder="Company (optional)" maxlength="120"/>
@@ -16770,7 +16771,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1520'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1521'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25993,6 +25994,28 @@ async function acDeleteJob(id) {
   try { await API.req('DELETE', '/api/jobs/' + id); closeOverlay('jobView'); showNotif('Listing removed.'); acJobsRefresh(); }
   catch (e) { showNotif(e.message || 'Could not delete.'); }
 }
+// ── Job-post draft autosave: the half-filled form survives closing the sheet,
+// a reload, even the app being killed. Cleared once the job actually posts. ──
+const _JOB_DRAFT_FIELDS = ['jpTitle', 'jpCompany', 'jpLocation', 'jpDesc', 'jpPayMin', 'jpPayMax', 'jpHours', 'jpIndustry', 'jpType', 'jpCloses'];
+let _jobDraftT = null;
+function acJobDraftSave() {
+  clearTimeout(_jobDraftT);
+  _jobDraftT = setTimeout(() => {
+    const d = {};
+    _JOB_DRAFT_FIELDS.forEach(id => { const e = document.getElementById(id); if (e && e.value) d[id] = e.value; });
+    if (document.getElementById('jpRemote')?.checked) d.remote = true;
+    const sc = (AC._jpScreening || []).filter(q => (q.text || '').trim());
+    if (sc.length) d.screening = sc;
+    // Nothing typed → no draft (so an untouched open/close never leaves one).
+    if (!Object.keys(d).length) { localStorage.removeItem('atwe_job_draft'); return; }
+    try { localStorage.setItem('atwe_job_draft', JSON.stringify(d)); } catch (_) {}
+  }, 400);
+}
+function acJobDraftDiscard() {
+  localStorage.removeItem('atwe_job_draft');
+  document.getElementById('jpDraftHint')?.classList.add('hidden');
+  acPostJobOpen();
+}
 async function acPostJobOpen(companyId) {
   showOverlay('jobPost');
   ['jpTitle', 'jpCompany', 'jpLocation', 'jpDesc', 'jpPayMin', 'jpPayMax', 'jpHours'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
@@ -26009,6 +26032,18 @@ async function acPostJobOpen(companyId) {
   // A business account posting → prefill the company field with its own name.
   const co = document.getElementById('jpCompany');
   if (co) { co.style.display = ''; co.value = (S.user && S.user.accountType === 'business') ? (S.user.name || '') : ''; }
+  // Restore a saved draft (typed earlier, sheet closed, app reloaded — anything).
+  const hint = document.getElementById('jpDraftHint');
+  if (hint) hint.classList.add('hidden');
+  try {
+    const d = JSON.parse(localStorage.getItem('atwe_job_draft') || 'null');
+    if (d && typeof d === 'object') {
+      _JOB_DRAFT_FIELDS.forEach(id => { if (d[id] != null) { const e = document.getElementById(id); if (e) e.value = d[id]; } });
+      if (d.remote) document.getElementById('jpRemote').checked = true;
+      if (Array.isArray(d.screening) && d.screening.length) { AC._jpScreening = d.screening; acScreenRender(); }
+      if (hint) hint.classList.remove('hidden');
+    }
+  } catch (_) {}
   document.getElementById('jpSubmit').disabled = false;
   setTimeout(() => document.getElementById('jpTitle')?.focus(), 60);
 }
@@ -26032,7 +26067,7 @@ async function acSubmitJob() {
   if (closes) { const d = new Date(closes + 'T23:59:59'); if (!isNaN(d.getTime())) body.closesAt = d.toISOString(); }
   const screening = (AC._jpScreening || []).filter(q => (q.text || '').trim());
   if (screening.length) body.screening = screening;
-  try { await API.req('POST', '/api/jobs', body); closeOverlay('jobPost'); showNotif('Job posted!'); _searchScope = 'jobs'; acRenderSearchScopes(); acLoadJobs(''); }
+  try { await API.req('POST', '/api/jobs', body); localStorage.removeItem('atwe_job_draft'); closeOverlay('jobPost'); showNotif('Job posted!'); _searchScope = 'jobs'; acRenderSearchScopes(); acLoadJobs(''); }
   catch (e) {
     btn.disabled = false; showNotif(e.message || 'Could not post the job.');
     if (/upgrade|atwe pro/i.test(e.message || '')) { closeOverlay('jobPost'); if (typeof openPlans === 'function') setTimeout(openPlans, 400); } // free-tier cap → offer Pro
