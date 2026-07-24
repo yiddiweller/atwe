@@ -16555,7 +16555,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1470'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1471'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -40045,7 +40045,9 @@ function acStoryShow(si) {
       : '';
   } else if (it.mine) {
     const hlBtn = it.kind === 'post' ? '' : `<button class="story-hl-btn" onclick="acStoryHighlight()" aria-label="Add to highlight"><svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>`;
-    foot.innerHTML = `<button class="story-views-btn" onclick="acStoryViewers(${it.id})" aria-label="See who viewed your Daily"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>${it.viewCount || 0}</button>${hlBtn}<button class="story-del" onclick="acStoryDelete(${it.id})" aria-label="Delete Daily"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>`;
+    // Save your own photo/video Daily to your device (text/shared-post have no media file).
+    const dlBtn = (it.kind === 'image' || it.kind === 'video') ? `<button class="story-hl-btn" onclick="event.stopPropagation();acStoryDownload()" aria-label="Save to device"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>` : '';
+    foot.innerHTML = `<button class="story-views-btn" onclick="acStoryViewers(${it.id})" aria-label="See who viewed your Daily"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>${it.viewCount || 0}</button>${hlBtn}${dlBtn}<button class="story-del" onclick="acStoryDelete(${it.id})" aria-label="Delete Daily"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>`;
   } else {
     // Reply + quick-react bar (IG/WhatsApp-status style). Interacting pauses the story.
     foot.innerHTML = `<div class="story-reply" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
@@ -40150,6 +40152,26 @@ async function acStoryMoreMenu() {
     } catch (e) { showNotif(e.message || 'Could not update.'); }
   }
   acStoryResume();
+}
+// Save your own current photo/video Daily to the device. Fetches the media
+// (works for both signed media URLs and data URLs) → downloads / native-shares.
+async function acStoryDownload() {
+  const sv = AC._sv; const it = sv && sv.items[sv.si];
+  if (!it || !it.media) return;
+  const ext = it.kind === 'video' ? 'mp4' : 'jpg';
+  const name = 'atwe-daily-' + (it.id || Date.now()) + '.' + ext;
+  try {
+    const res = await fetch(it.media);
+    const blob = await res.blob();
+    const file = (typeof File !== 'undefined') ? new File([blob], name, { type: blob.type }) : null;
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file] }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    showNotif('Saved.');
+  } catch (e) { showNotif('Could not save this Daily.'); }
 }
 async function acStoryDelete(id) {
   const sv = AC._sv; if (sv) clearTimeout(sv.timer);
