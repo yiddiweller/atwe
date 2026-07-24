@@ -5148,8 +5148,8 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
   transition:all var(--t-fast) var(--ease);}
 .cf-cancel{background:var(--s2);color:var(--t1);}
 .cf-cancel:hover{background:var(--s3);}
-.cf-ok{background:var(--accent);color:var(--accent-tint);}
-.cf-ok.danger{background:var(--red);}
+.cf-ok{background:var(--primary);color:var(--on-primary);}
+.cf-ok.danger{background:var(--red);color:#fff;}
 .cf-ok:hover{filter:brightness(1.1);}
 /* "Delete message" sheet — same Glide-menu look (frosted-black glass rows),
    popped up next to where Delete was tapped (iPhone-style), not centered. */
@@ -16454,7 +16454,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1447'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1448'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25061,6 +25061,26 @@ async function acToggleSaveJobDetail(id) {
   catch (e) { showNotif(e.message || 'Could not save.'); }
 }
 function acJobsRefresh() { acLoadJobs(document.getElementById('tbSearchInput')?.value || ''); }
+// Repost a job (owner): a FRESH posting with the same details — new date, zero
+// applicants, boost/deadline not carried. The original stays until you delete it.
+async function acRepostJob(id) {
+  const ok = await appConfirm({
+    title: 'Repost this job?',
+    message: 'This creates a fresh posting with the same details — new date, applicants start at zero. The original post stays until you delete it.',
+    confirmText: 'Repost',
+    danger: false,
+  });
+  if (!ok) return;
+  try {
+    const r = await API.req('POST', '/api/jobs/' + id + '/repost', {});
+    showNotif('Job reposted.');
+    acJobsRefresh();
+    if (r && r.id) acOpenJob(r.id); // land on the fresh posting
+  } catch (e) {
+    if (e.body && e.body.upgrade) { showNotif(e.message); if (typeof openPlans === 'function') setTimeout(openPlans, 400); } // free-tier cap → offer Pro
+    else showNotif(e.message || 'Could not repost.');
+  }
+}
 async function acOpenJob(id) {
   showOverlay('jobView');
   acSetPath('/job/' + id); // shareable + reload-safe job URL
@@ -25082,6 +25102,7 @@ async function acOpenJob(id) {
         <button class="ac-pill-btn" style="flex:0 0 auto;" onclick="acOpenJobAnalytics(${job.id})">📊 Insights</button>
         ${boost}
         <button class="ac-pill-btn" style="flex:0 0 auto;" onclick="acShareJob(${job.id})">↗ Share</button>
+        <button class="ac-pill-btn" style="flex:0 0 auto;" onclick="acRepostJob(${job.id})">↻ Repost</button>
         <button class="ac-pill-btn ac-job-savebtn" style="flex:0 0 auto;color:var(--red);" onclick="acDeleteJob(${job.id})">Delete</button>
       </div>`;
     } else {
@@ -27320,7 +27341,7 @@ function acCircleEdit() {
 }
 async function acRequestCircleDeletion() {
   const c = AC._circle; if (!c || c.official) return;
-  if (!(await appConfirm({ title: 'Request deletion?', message: 'This sends a request to the Atwe team to review. The circle stays active until they decide.', confirmText: 'Send request' }))) return;
+  if (!(await appConfirm({ title: 'Request deletion?', message: 'This sends a request to the Atwe team to review. The circle stays active until they decide.', confirmText: 'Send request', danger: false }))) return;
   const btn = document.getElementById('acCircleDelBtn'); btn.disabled = true;
   try {
     await API.req('POST', '/api/circles/' + c.id + '/delete-request', {});
@@ -34922,7 +34943,7 @@ async function acReturnSubmit() {
   catch (e) { showNotif(e.message || 'Could not request the return.'); }
 }
 async function acReturnResolve(action) {
-  if (action === 'approve' && !(await appConfirm({ title: 'Approve return?', message: 'The buyer will be refunded the order total and the items restocked.', confirmText: 'Approve & refund' }))) return;
+  if (action === 'approve' && !(await appConfirm({ title: 'Approve return?', message: 'The buyer will be refunded the order total and the items restocked.', confirmText: 'Approve & refund', danger: false }))) return;
   try { await API.req('PATCH', '/api/orders/' + AC._ordId + '/return', { action }); showNotif(action === 'approve' ? 'Refunded.' : 'Return declined.'); acRefreshBalance(); acOpenOrder(AC._ordId); }
   catch (e) { showNotif(e.message || 'Could not update.'); }
 }
@@ -36207,7 +36228,7 @@ async function acRedeemPoints() {
   const pts = Math.floor(d.pointsBalance / d.pointsPerDollar) * d.pointsPerDollar;
   if (pts < d.minRedeem) { showNotif('Not enough points yet.'); return; }
   const cents = Math.floor(pts / d.pointsPerDollar) * 100;
-  if (!(await appConfirm({ title: 'Redeem points?', message: 'Redeem ' + pts.toLocaleString() + ' points for ' + acMoney(cents) + ' of wallet credit?', confirmText: 'Redeem' }))) return;
+  if (!(await appConfirm({ title: 'Redeem points?', message: 'Redeem ' + pts.toLocaleString() + ' points for ' + acMoney(cents) + ' of wallet credit?', confirmText: 'Redeem', danger: false }))) return;
   try {
     const r = await API.req('POST', '/api/loyalty/redeem', { points: pts });
     showNotif('Redeemed! ' + acMoney(r.creditedCents) + ' added to your wallet.');
@@ -36290,7 +36311,7 @@ function acHandleScannedQr(data) {
 /* ── Device-link: approve a scanned login code (existing logged-in device) ── */
 function acOpenLinkScan() { acOpenQrScan('link'); }
 async function acConfirmLinkDevice(code) {
-  const ok = await appConfirm({ title: 'Link a new device?', message: 'This will sign a new device in to your Atwe account. Only do this for a device you own, scanning Atwe’s own login screen.', confirmText: 'Link device' });
+  const ok = await appConfirm({ title: 'Link a new device?', message: 'This will sign a new device in to your Atwe account. Only do this for a device you own, scanning Atwe’s own login screen.', confirmText: 'Link device', danger: false });
   if (!ok) return;
   try {
     await API.req('POST', '/api/auth/link/approve', { code });
@@ -37313,7 +37334,7 @@ async function acBookSlot(iso) {
   if (!service) { showNotif('Choose a service first.'); return; }
   if (AC._bookDeposit > 0 && !acCanPayBalance(AC._bookDeposit)) { showNotif('Add money to your wallet to cover the deposit.'); return; }
   const when = new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-  if (!(await appConfirm({ title: 'Book this time?', message: service + ' · ' + when + (AC._bookDeposit > 0 ? ' · $' + (AC._bookDeposit / 100).toFixed(2) + ' deposit held' : ''), confirmText: 'Book' }))) return;
+  if (!(await appConfirm({ title: 'Book this time?', message: service + ' · ' + when + (AC._bookDeposit > 0 ? ' · $' + (AC._bookDeposit / 100).toFixed(2) + ' deposit held' : ''), confirmText: 'Book', danger: false }))) return;
   try {
     const r = await API.req('POST', '/api/business/' + AC._bookBiz + '/appointments', { service, serviceId: AC._bookSvcId || undefined, whenAt: iso, slot: true });
     closeOverlay('bookSheet');
@@ -38672,6 +38693,7 @@ async function acToggleAnnouncementMode() {
     title: next ? 'Turn on announcement mode?' : 'Turn off announcement mode?',
     message: next ? 'Only admins will be able to post. Members can read and react.' : 'Everyone in the group will be able to post again.',
     confirmText: next ? 'Turn on' : 'Turn off',
+    danger: false,
   });
   if (!ok) return;
   try {
@@ -39674,7 +39696,7 @@ async function acStoryMoreMenu() {
   const ok = await appConfirm({
     title: muted ? ('Unmute ' + first + '’s Daily?') : ('Mute ' + first + '’s Daily?'),
     message: muted ? 'Their Daily will appear in your tray again.' : 'You won’t see their Daily in your tray. You can unmute anytime.',
-    confirmText: muted ? 'Unmute' : 'Mute',
+    confirmText: muted ? 'Unmute' : 'Mute', danger: false,
   });
   if (ok) {
     try {

@@ -12271,6 +12271,34 @@ app.delete('/api/jobs/:id', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the job.' }); }
 });
 
+// Repost a job (LinkedIn-style): a FRESH posting with the same details — new
+// date, no applicants, no boost carried over, deadline reset. The original
+// stays untouched (delete it separately if it's done). Same free-business cap
+// as posting new, and saved-search alerts fire like any new job.
+app.post('/api/jobs/:id/repost', auth.requireAuth, rateLimit(20, 60000, 'job-post'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid job id.' });
+  try {
+    const j = (await db.query('SELECT * FROM jobs WHERE id = $1', [id])).rows[0];
+    if (!j) return res.status(404).json({ error: 'Job not found.' });
+    if (j.posted_by !== req.user.id) return res.status(403).json({ error: 'You can only repost your own jobs.' });
+    const meRow = (await db.query('SELECT plan, account_type FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+    if (meRow.account_type === 'business' && meRow.plan !== 'pro') {
+      const cnt = (await db.query('SELECT COUNT(*)::int AS n FROM jobs WHERE posted_by = $1', [req.user.id])).rows[0].n;
+      if (cnt >= BUSINESS_FREE_JOB_CAP) {
+        return res.status(402).json({ error: `Free accounts can post up to ${BUSINESS_FREE_JOB_CAP} jobs. Upgrade to Atwe Pro for unlimited postings.`, upgrade: true });
+      }
+    }
+    const { rows } = await db.query(
+      `INSERT INTO jobs (posted_by, title, company, location, industry, type, remote, description, salary_min, salary_max, salary_period, hours, screening)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
+      [req.user.id, j.title, j.company, j.location, j.industry, j.type, j.remote, j.description, j.salary_min, j.salary_max, j.salary_period, j.hours, JSON.stringify(j.screening || [])]
+    );
+    res.status(201).json({ id: rows[0].id });
+    notifyJobMatch({ id: rows[0].id, title: j.title, company: j.company, location: j.location, industry: j.industry, type: j.type, remote: j.remote, description: j.description }, req.user.id);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not repost the job.' }); }
+});
+
 // Apply to a job (idempotent) — notifies the poster.
 app.post('/api/jobs/:id/apply', auth.requireAuth, rateLimit(40, 60000, 'job-apply'), async (req, res) => {
   const id = routeId(req.params.id);
