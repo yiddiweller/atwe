@@ -7411,6 +7411,7 @@ body.light .ac-post-toolbar .msg-attach:active{background:rgba(0,0,0,.1);}
 .ac-prof-name-txt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
 .ac-prof-handle{font-size:14px;color:var(--t3);margin-bottom:2px;}
 .ac-prof-pron{color:var(--t3);}
+.ac-pm-map{color:var(--accent);text-decoration:none;}
 .ac-prof-bio{font-size:14.5px;color:var(--t1);line-height:1.5;margin:8px 0 2px;white-space:pre-wrap;word-break:break-word;}
 /* Status note pill ("Open to work", "Hiring", …) */
 .ac-prof-note{display:inline-flex;align-items:center;gap:7px;margin:10px 0 2px;padding:5px 13px;border-radius:var(--r-pill);
@@ -16433,7 +16434,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1438'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1439'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24140,7 +24141,7 @@ function acRenderEvent(e) {
   const body = document.getElementById('eventViewBody');
   const where = e.online
     ? (e.location ? `<a href="${escHtml(e.location)}" target="_blank" rel="noopener">${escHtml(e.location)}</a>` : 'Online event')
-    : escHtml(e.location || 'In person');
+    : (e.location ? `${escHtml(e.location)} <a href="${acMapsUrl(e.location)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Get directions</a>` : 'In person');
   const whereIc = e.online
     ? '<svg viewBox="0 0 24 24"><rect x="2" y="5" width="14" height="14" rx="3"/><path d="M22 8l-6 4 6 4z"/></svg>'
     : '<svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>';
@@ -32089,9 +32090,12 @@ function pickSocial(key) {
 }
 // Profile meta line: location + website (website opens in a new tab; the
 // server guarantees it's an http(s) URL).
+// Open a free-text address/place in the phone's maps (Google Maps universal link
+// — iOS hands it to Apple/Google Maps, Android to Maps, desktop opens the site).
+function acMapsUrl(q) { return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(String(q || '')); }
 function acProfMeta(u) {
   const bits = [];
-  if (u.location) bits.push(`<span class="ac-pm"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>${escHtml(u.location)}</span>`);
+  if (u.location) bits.push(`<span class="ac-pm"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>${u.accountType === 'business' ? `<a class="ac-pm-map" href="${acMapsUrl(u.location)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escHtml(u.location)}</a>` : escHtml(u.location)}</span>`);
   if (u.website) {
     const label = escHtml(u.website.replace(/^https?:\/\//i, '').replace(/\/$/, ''));
     // Ensure the href is absolute so a legacy bare-domain entry doesn't resolve
@@ -34833,7 +34837,7 @@ async function acOpenOrder(id) {
       <div class="inv-head"><span class="mc-inv-ic">${o.escrow ? '<svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>'}</span>
         <div><div class="jp-title" style="padding:0;">Order #${o.id}${o.escrow ? ' · Protected' : ''}</div>${acOrdStatusChip(o.status)}</div></div>
       <div class="inv-parties">${o.mine ? 'From ' : 'Sold by '}<b>${escHtml(other.name)}</b> @${escHtml(other.username)}</div>
-      ${o.pickup ? `<div class="ord-shipto"><div class="co-sec-h">Local pickup</div><div class="addr-lines">Collect in person${o.pickupLocation ? ' · ' + escHtml(o.pickupLocation) : ''}. Coordinate the time in chat.</div></div>` : ''}
+      ${o.pickup ? `<div class="ord-shipto"><div class="co-sec-h">Local pickup</div><div class="addr-lines">Collect in person${o.pickupLocation ? ' · ' + escHtml(o.pickupLocation) + ` · <a class="ac-pm-map" href="${acMapsUrl(o.pickupLocation)}" target="_blank" rel="noopener">Get directions</a>` : ''}. Coordinate the time in chat.</div></div>` : ''}
       ${shipBlock}
       ${totals}
       ${digital}
