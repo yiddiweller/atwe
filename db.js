@@ -1702,6 +1702,8 @@ async function initSchema() {
   // Pinned listing: the seller features ONE product at the top of their storefront.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS condition TEXT;`); // new | like_new | good | fair (physical resale)
+  // "Was" price (compare-at, Shopify-style) — shown struck through when > price.
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS compare_at_cents INTEGER;`);
   await query(`
     CREATE TABLE IF NOT EXISTS product_subscriptions (
       id            SERIAL PRIMARY KEY,
