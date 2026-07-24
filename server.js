@@ -14605,8 +14605,17 @@ app.get('/api/wallet', auth.requireAuth, async (req, res) => {
         WHERE w.user_id = $1 ORDER BY w.created_at DESC, w.id DESC LIMIT 60`,
       [req.user.id]
     );
+    // This calendar month's totals (server-side — the 60-row history window
+    // could undercount a busy month if summed client-side).
+    const mo = (await db.query(
+      `SELECT COALESCE(SUM(CASE WHEN delta_cents > 0 THEN delta_cents END), 0)::int AS in_c,
+              COALESCE(SUM(CASE WHEN delta_cents < 0 THEN -delta_cents END), 0)::int AS out_c
+         FROM wallet_tx WHERE user_id = $1 AND created_at >= date_trunc('month', now())`,
+      [req.user.id]
+    )).rows[0] || { in_c: 0, out_c: 0 };
     res.json({
       balanceCents: me.balance_cents || 0,
+      month: { inCents: mo.in_c, outCents: mo.out_c },
       transactions: tx.rows.map((r) => ({
         id: r.id, kind: r.kind, deltaCents: r.delta_cents, balanceAfter: r.balance_after,
         note: r.note || null, createdAt: r.created_at,
