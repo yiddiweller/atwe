@@ -16437,7 +16437,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1440'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1441'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25327,12 +25327,38 @@ async function acRankApplicants(id) {
 function acRenderApplicantList(id) {
   const filtered = acApplFiltered();
   const chips = acApplFilterDefs().map(([k, l, n]) => `<button class="ja-fchip ${AC._applFilter === k ? 'on' : ''}" onclick="acApplFilter('${k}')">${l}${n != null ? ' ' + n : ''}</button>`).join('');
-  const tools = `<div class="ja-tools"><div class="ja-filters">${chips}</div><button class="ja-select-btn ja-rank-btn" id="jaRankBtn" onclick="acRankApplicants(${id})">✨ Rank</button><button class="ja-select-btn ${AC._applSelMode ? 'on' : ''}" onclick="acApplToggleSelectMode()">${AC._applSelMode ? 'Done' : 'Select'}</button></div>`;
+  const tools = `<div class="ja-tools"><div class="ja-filters">${chips}</div><button class="ja-select-btn ja-rank-btn" id="jaRankBtn" onclick="acRankApplicants(${id})">✨ Rank</button><button class="ja-select-btn" onclick="acApplicantsCsv()" aria-label="Export CSV">⬇ CSV</button><button class="ja-select-btn ${AC._applSelMode ? 'on' : ''}" onclick="acApplToggleSelectMode()">${AC._applSelMode ? 'Done' : 'Select'}</button></div>`;
   const list = filtered.length ? filtered.map((a) => acApplicantRow(id, a)).join('') : '<div class="ac-empty" style="padding:24px;">No applicants in this view.</div>';
   const bar = AC._applSelMode ? `<div class="ja-bulkbar"><span class="ja-bulk-n">${(AC._applSel || new Set()).size} selected</span><select id="jaBulkStatus" class="ac-jf-sel">${_APPLICANT_STATUSES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:8px 16px;" onclick="acApplBulkApply(${id})">Apply</button></div>` : '';
   document.getElementById('jaBody').innerHTML = tools + '<div id="jaList">' + list + '</div>' + bar;
 }
 function acApplFilter(k) { AC._applFilter = k; acRenderApplicantList(AC._applicantsJob); }
+// Export the applicant list as a CSV (hiring teams share/track offline). Includes
+// status, fit score (if ranked), screening answers and any private note.
+function acApplicantsCsv() {
+  const apps = AC._applicants || [];
+  if (!apps.length) { showNotif('No applicants to export.'); return; }
+  const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const hasAnswers = apps.some((a) => a.answers && a.answers.length);
+  const head = ['Name', 'Username', 'Applied', 'Status', 'Meets requirements', 'AI fit %', 'Cover note', 'Private note'];
+  if (hasAnswers) head.push('Screening answers');
+  const rows = [head.map(q).join(',')];
+  for (const a of apps) {
+    const row = [
+      a.name, '@' + (a.username || ''), new Date(a.applied_at).toISOString().slice(0, 10),
+      _statusLabel(a.status), a.meets === true ? 'Yes' : a.meets === false ? 'No' : '',
+      a.aiScore != null ? a.aiScore : '', a.note || '', a.hiringNote || '',
+    ];
+    if (hasAnswers) row.push((a.answers || []).map((x) => x.text + ': ' + (x.value != null ? x.value : '—')).join(' | '));
+    rows.push(row.map(q).join(','));
+  }
+  const blob = new Blob(['﻿' + rows.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'atwe-applicants-' + (AC._applicantsJob || 'job') + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  showNotif('Applicant list exported.');
+}
 function acApplToggleSelectMode() { AC._applSelMode = !AC._applSelMode; AC._applSel = new Set(); acRenderApplicantList(AC._applicantsJob); }
 function acApplToggleSel(uid) { AC._applSel = AC._applSel || new Set(); if (AC._applSel.has(uid)) AC._applSel.delete(uid); else AC._applSel.add(uid); acRenderApplicantList(AC._applicantsJob); }
 async function acApplBulkApply(id) {
