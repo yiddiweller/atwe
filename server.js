@@ -1539,7 +1539,13 @@ function cleanMeta(meta) {
       ? meta.opts.map((o) => metaStr(o && typeof o === 'object' ? o.text : o, 100)).filter(Boolean).slice(0, 10).map((text, i) => ({ i, text }))
       : [];
     if (!q || opts.length < 2) return undefined;
-    return { t: 'poll', q, multi: !!meta.multi, opts, votes: {} };
+    // Optional auto-end: a future end time (≤30 days out). Past/garbage → no timer.
+    let endsAt = null;
+    if (meta.endsAt) {
+      const d = new Date(meta.endsAt);
+      if (!isNaN(d.getTime()) && d.getTime() > Date.now() && d.getTime() < Date.now() + 30 * 864e5) endsAt = d.toISOString();
+    }
+    return { t: 'poll', q, multi: !!meta.multi, opts, votes: {}, ...(endsAt ? { endsAt } : {}) };
   }
   if (t === 'event') {
     const title = metaStr(meta.title, 120);
@@ -7261,6 +7267,14 @@ app.post('/api/atchat/poll/:id/vote', auth.requireAuth, rateLimit(80, 60000, 'po
     if (!found) return res.status(404).json({ error: 'Poll not found.' });
     const meta = found.row.meta;
     if (meta.closed) return res.status(400).json({ error: 'This poll has ended.', closed: true });
+    // Auto-end: a timed poll whose time has passed closes LAZILY on the first vote
+    // attempt — persisted + fanned out so everyone's card flips to Final results.
+    if (meta.endsAt && new Date(meta.endsAt).getTime() <= Date.now()) {
+      meta.closed = true;
+      await db.query(`UPDATE ${found.table} SET meta = $1 WHERE id = $2`, [JSON.stringify(meta), mid]).catch(() => {});
+      await pushMetaUpd(found.row, gid, uid, mid, meta).catch(() => {});
+      return res.status(400).json({ error: 'This poll has ended.', closed: true });
+    }
     const valid = new Set(meta.opts.map((o) => o.i));
     let chosen = (Array.isArray(req.body.option) ? req.body.option : [req.body.option])
       .map((n) => parseInt(n, 10)).filter((n) => valid.has(n));
