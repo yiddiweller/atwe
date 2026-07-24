@@ -9565,6 +9565,25 @@ app.get('/api/social/scheduled', auth.requireAuth, async (req, res) => {
     res.json({ posts: rows.map((p) => ({ id: p.id, body: p.body || '', hasImage: !!p.image, mediaKind: p.media_kind || null, scheduledAt: p.scheduled_at })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load scheduled posts.' }); }
 });
+// Reschedule a still-pending scheduled post (author-only). created_at moves
+// with it — a scheduled post's created_at IS its go-live time (feeds gate on it).
+app.patch('/api/social/scheduled/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  const when = new Date(req.body.scheduledAt);
+  if (isNaN(when.getTime())) return res.status(400).json({ error: 'Pick a valid date and time.' });
+  if (when.getTime() < Date.now() + 2 * 60000) return res.status(400).json({ error: 'Pick a time at least a couple of minutes from now.' });
+  if (when.getTime() > Date.now() + 365 * 24 * 3600 * 1000) return res.status(400).json({ error: 'That’s too far in the future.' });
+  try {
+    const r = await db.query(
+      `UPDATE posts SET scheduled_at = $1, created_at = $1
+        WHERE id = $2 AND user_id = $3 AND scheduled_at IS NOT NULL AND scheduled_at > now() RETURNING id`,
+      [when.toISOString(), id, req.user.id]
+    );
+    if (!r.rowCount) return res.status(404).json({ error: 'Scheduled post not found — it may have already gone live.' });
+    res.json({ ok: true, scheduledAt: when.toISOString() });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not reschedule.' }); }
+});
 app.post('/api/social/drafts', auth.requireAuth, rateLimit(60, 60000, 'draft'), async (req, res) => {
   const body = (req.body.body || '').toString().slice(0, 2000);
   if (!body.trim()) return res.status(400).json({ error: 'Nothing to save.' });
