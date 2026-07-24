@@ -8261,6 +8261,19 @@ app.get('/api/stories', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load stories.' }); }
 });
 // A user's active stories (in order), with my seen flag per item. Author sees view counts.
+// Your Daily archive: everything you've posted whose 24h ran out — private to
+// you. (Registered BEFORE /:userId so "archive" isn't read as a user id.)
+app.get('/api/stories/archive', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT s.*, (SELECT COUNT(*)::int FROM story_views v WHERE v.story_id = s.id) AS view_count
+         FROM stories s WHERE s.user_id = $1 AND s.expires_at <= now()
+        ORDER BY s.created_at DESC LIMIT 100`,
+      [req.user.id]
+    );
+    res.json({ stories: rows.map((s) => mapStory(s, req.user.id)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your archive.' }); }
+});
 app.get('/api/stories/:userId', auth.requireAuth, async (req, res) => {
   const me = req.user.id;
   const uid = routeId(req.params.userId);
@@ -8461,7 +8474,9 @@ app.delete('/api/stories/mute/:userId', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not unmute.' }); }
 });
 // Light periodic sweep of expired stories (reads already filter them out).
-setInterval(() => { db.query('DELETE FROM stories WHERE expires_at < now()').catch(() => {}); }, 600000).unref?.();
+// Expired Dailies are KEPT for the author's private archive (reads all filter
+// expires_at > now(), so nobody else ever sees them). Pruned after ~400 days.
+setInterval(() => { db.query("DELETE FROM stories WHERE expires_at < now() - interval '400 days'").catch(() => {}); }, 600000).unref?.();
 
 /* ─── Close Friends (private story audience) ─── */
 // My close-friends list (each with profile basics).
