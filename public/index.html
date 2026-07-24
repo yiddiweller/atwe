@@ -16795,7 +16795,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1526'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1527'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -22241,7 +22241,7 @@ function acMsgMenu(id, btn) {
   if (scroll && canReact) {
     const cur = (mm && mm.reactions && mm.reactions[String(S.user?.id)]) || null;
     scroll.innerHTML = _REAX_EMOJIS.map(e =>
-      `<button class="mm-reax-btn${e === cur ? ' on' : ''}" onclick="acReact(${id},'${e}')">${e}</button>`).join('');
+      `<button class="mm-reax-btn${e === cur ? ' on' : ''}" onclick="acMsgReactSet(${id},'${e}')">${e}</button>`).join('');
     scroll.scrollLeft = 0;
   }
   _glideClearHl();
@@ -22272,7 +22272,7 @@ function _positionMenuStack(rect) {
 }
 function closeMsgMenu() { _glideClearHl(); _restoreMenuOrig(); closeOverlay('msgMenu'); }
 // React to a message with an emoji (toggles off if you tap the same one again).
-async function acReact(id, emoji) {
+async function acMsgReactSet(id, emoji) { // CHAT reaction (renamed: a later post-react fn also used the name acReact and silently shadowed this one)
   closeMsgMenu();
   const m = (AC.messages || []).find(x => x.id === id);
   if (!m) return;
@@ -22609,7 +22609,7 @@ function emojiPick(emoji) {
   // current reaction, keep it (don't let acReact's toggle clear it).
   const m = (AC.messages || []).find(x => x.id === id);
   if (m && m.reactions && m.reactions[String(S.user?.id)] === emoji) return;
-  acReact(id, emoji);
+  acMsgReactSet(id, emoji);
 }
 function mmAction(act) {
   const id = _msgMenuId;
@@ -46815,9 +46815,16 @@ function _bindGlide(sheet) {
 // Deleted/pending/hidden bubbles are skipped; bound once per thread container.
 function _bindThreadDblTap(el) {
   if (el._dblTapBound) return; el._dblTapBound = true;
+  let _lastFireMid = null, _lastFireAt = 0;
   const react = (bubble) => {
     const mid = parseInt(bubble.getAttribute('data-mid'), 10);
     if (!Number.isInteger(mid)) return;
+    // One gesture = one toggle: the browser can deliver a double-tap BOTH as our
+    // touchend pair AND as a synthesized dblclick — without this guard the two
+    // fires toggle the heart straight back off (a real bug caught in testing).
+    const now = Date.now();
+    if (mid === _lastFireMid && now - _lastFireAt < 600) return;
+    _lastFireMid = mid; _lastFireAt = now;
     const m = (AC.messages || []).find((x) => x.id === mid);
     if (!m || m.deleted || m.pending || m.hidden) return;
     // Burst BEFORE the re-render (acReact re-renders the thread).
@@ -46827,7 +46834,7 @@ function _bindThreadDblTap(el) {
       h.style.left = (r.left + r.width / 2) + 'px'; h.style.top = (r.top + r.height / 2) + 'px';
       document.body.appendChild(h); setTimeout(() => h.remove(), 700);
     } catch (_) {}
-    acReact(mid, '❤️');
+    acMsgReactSet(mid, '❤️');
   };
   // Desktop double-click.
   el.addEventListener('dblclick', (e) => { const b = e.target.closest('.msg-bubble[data-mid]'); if (b) { e.preventDefault(); react(b); } });
