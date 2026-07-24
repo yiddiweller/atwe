@@ -2468,12 +2468,44 @@ function renderInvestigateView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
     <div class="panel">
+      <h3>Blocked words &amp; links</h3>
+      <div class="sub">Any new post that contains one of these words, or links to one of these domains, is blocked the moment someone tries to post it — with a clear message asking them to edit. One entry per line. Words match whole words (so "ass" won't catch "grass"); a domain also covers its subdomains.</div>
+      <div class="ann-grid">
+        <label class="ann-f"><span>Blocked words / phrases</span><textarea id="blkTerms" rows="7" placeholder="scam&#10;free crypto&#10;…" style="background:var(--s1);border:1px solid var(--b1);border-radius:12px;color:var(--t1);padding:10px 12px;font:inherit;font-size:14px;resize:vertical;"></textarea></label>
+        <label class="ann-f"><span>Blocked link domains</span><textarea id="blkDomains" rows="7" placeholder="spam-site.com&#10;bad.example&#10;…" style="background:var(--s1);border:1px solid var(--b1);border-radius:12px;color:var(--t1);padding:10px 12px;font:inherit;font-size:14px;resize:vertical;"></textarea></label>
+      </div>
+      <div class="custom-row" style="margin-top:12px;"><button class="act" id="blkSaveBtn" onclick="saveBlocklists()">Save lists</button><span class="muted" id="blkCount" style="align-self:center;font-size:12px;"></span></div>
+    </div>
+    <div class="panel">
       <h3>Investigate</h3>
       <div class="sub">Search across all people, posts and listings — for abuse investigations or a legal/data request. Tap a person to open their account.</div>
       <input class="in" id="invQ" placeholder="Search name, @username, email, post text, listing…" oninput="invSearch(this.value)" style="max-width:460px;margin-bottom:10px;"/>
       <div class="tf-ranges" style="flex-wrap:wrap;margin-bottom:6px;">${INV_TYPES.map(([k,l])=>`<button class="tf-r ${INV_TYPE===k?'on':''}" onclick="invSetType('${k}')">${l}</button>`).join('')}</div>
       <div id="invBody"><div class="muted" style="padding:12px 2px;font-size:13px;">Type at least 2 characters to search.</div></div>
     </div>`;
+  loadBlocklists();
+}
+async function loadBlocklists(){
+  try {
+    const d = await api('GET', '/api/admin/moderation-lists');
+    const t = document.getElementById('blkTerms'), dm = document.getElementById('blkDomains');
+    if (t) t.value = (d.terms||[]).join('\n');
+    if (dm) dm.value = (d.domains||[]).join('\n');
+    const c = document.getElementById('blkCount'); if (c) c.textContent = (d.terms||[]).length + ' words · ' + (d.domains||[]).length + ' domains';
+  } catch (e){ /* leave empty */ }
+}
+async function saveBlocklists(){
+  const split = s => (s||'').split('\n').map(x=>x.trim()).filter(Boolean);
+  const terms = split((document.getElementById('blkTerms')||{}).value);
+  const domains = split((document.getElementById('blkDomains')||{}).value);
+  try {
+    const d = await api('PUT', '/api/admin/moderation-lists', { terms, domains });
+    const c = document.getElementById('blkCount'); if (c) c.textContent = (d.terms||[]).length + ' words · ' + (d.domains||[]).length + ' domains';
+    // Reflect the server's normalized/deduped result back into the boxes.
+    document.getElementById('blkTerms').value = (d.terms||[]).join('\n');
+    document.getElementById('blkDomains').value = (d.domains||[]).join('\n');
+    notify('Blocklists saved.');
+  } catch (e){ notify(e.message); }
 }
 function invSetType(t){ INV_TYPE = t; document.querySelectorAll('#content .tf-r').forEach(b=>b.classList.toggle('on', b.textContent===(INV_TYPES.find(x=>x[0]===t)||[])[1])); invSearch((document.getElementById('invQ')||{}).value||''); }
 function invSearch(v){ clearTimeout(_invT); _invT = setTimeout(()=>invRun(v.trim()), 300); }
