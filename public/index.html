@@ -16335,7 +16335,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1415'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1416'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -34519,6 +34519,8 @@ async function acOpenOrder(id) {
     // Digital auto-delivery: instant access content for the buyer (paid orders only).
     const digItems = (o.items || []).filter(it => it.digitalContent);
     const digital = digItems.length ? `<div class="dig-deliver"><div class="dig-deliver-h">⚡ Your digital delivery</div>${digItems.map(it => `<div class="dig-item"><div class="dig-item-name">${escHtml(it.name)}</div><div class="dig-item-content">${acLinkifyPost(it.digitalContent)}</div></div>`).join('')}</div>` : '';
+    // Receipt: any order that actually charged (everything but pending/cancelled).
+    if (!['pending', 'cancelled'].includes(o.status)) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acOrderReceipt()">🧾 Receipt</button>`;
     body.innerHTML = `
       <div class="inv-head"><span class="mc-inv-ic">${o.escrow ? '<svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>'}</span>
         <div><div class="jp-title" style="padding:0;">Order #${o.id}${o.escrow ? ' · Protected' : ''}</div>${acOrdStatusChip(o.status)}</div></div>
@@ -36785,6 +36787,46 @@ async function acLabelBuy() {
   }
 }
 // Printable packing slip (ship-to + items) for the seller.
+// Printable order receipt (buyer + seller) — itemized lines, totals, payment state.
+// Opens a print window (same pattern as the packing slip); Save as PDF from there.
+function acOrderReceipt() {
+  const o = AC._ordCur; if (!o) return;
+  const w = window.open('', '_blank'); if (!w) { showNotif('Allow pop-ups to view the receipt.'); return; }
+  const money = (c) => '$' + ((c || 0) / 100).toFixed(2);
+  const items = (o.items || []).map(it => `<tr><td>${it.qty}× ${escHtml(it.name)}${it.variantLabel ? ' — ' + escHtml(it.variantLabel) : ''}</td><td class="r">${money(it.priceCents * it.qty)}</td></tr>`).join('');
+  const line = (k, v, cls) => v ? `<tr class="${cls || ''}"><td>${k}</td><td class="r">${v}</td></tr>` : '';
+  const statusLabel = { paid: 'Paid', fulfilled: 'Paid · Fulfilled', escrow: 'Paid · Buyer protection', released: 'Paid · Completed', disputed: 'Paid · In dispute', refunded: 'Refunded' }[o.status] || 'Paid';
+  const when = new Date(o.created_at || Date.now()).toLocaleString(undefined, { year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  w.document.write(`<html><head><title>Receipt · Order #${o.id}</title><style>
+    body{font-family:system-ui,sans-serif;padding:36px;color:#111;max-width:560px;margin:0 auto;}
+    .brand{font-size:22px;font-weight:800;letter-spacing:-.02em;}
+    .muted{color:#666;font-size:13px;}
+    h1{font-size:17px;margin:18px 0 2px;}
+    table{width:100%;border-collapse:collapse;margin-top:14px;}
+    td{padding:8px 2px;border-bottom:1px solid #eee;font-size:14px;}
+    td.r{text-align:end;white-space:nowrap;}
+    tr.total td{font-weight:800;font-size:15.5px;border-bottom:none;border-top:2px solid #111;}
+    tr.disc td{color:#1a7f37;}
+    .tag{display:inline-block;background:#f2f2f2;border-radius:999px;padding:3px 12px;font-size:12.5px;font-weight:700;margin-top:6px;}
+  </style></head><body>
+    <div class="brand">Atwe</div>
+    <div class="muted">Receipt</div>
+    <h1>Order #${o.id}</h1>
+    <div class="muted">${escHtml(when)}</div>
+    <div class="tag">${statusLabel}</div>
+    <div class="muted" style="margin-top:12px;">Sold by <b>${escHtml(o.seller.name)}</b> (@${escHtml(o.seller.username)})${o.buyer ? ` · Buyer <b>${escHtml(o.buyer.name)}</b> (@${escHtml(o.buyer.username)})` : ''}</div>
+    <table><tbody>${items}
+      ${line('Subtotal', money(o.subtotalCents != null ? o.subtotalCents : o.totalCents))}
+      ${line('Discount' + (o.couponCode ? ' (' + escHtml(o.couponCode) + ')' : ''), o.discountCents ? '−' + money(o.discountCents) : '', 'disc')}
+      ${line('Shipping', o.needsShipping || o.shippingCents ? (o.shippingCents ? money(o.shippingCents) : 'Free') : '')}
+      ${line('Tax', o.taxCents ? money(o.taxCents) : '')}
+      <tr class="total"><td>Total</td><td class="r">${money(o.totalCents)}</td></tr>
+    </tbody></table>
+    ${o.pickup ? `<p class="muted">Local pickup${o.pickupLocation ? ' · ' + escHtml(o.pickupLocation) : ''}</p>` : ''}
+    <p class="muted" style="margin-top:22px;">Thank you for shopping on Atwe. Keep this receipt for your records.</p>
+    <script>window.onload=function(){window.print();}<\/script></body></html>`);
+  w.document.close();
+}
 function acPackingSlip() {
   const o = AC._ordCur; if (!o || !o.shipTo) return;
   const items = o.items.map(it => `<tr><td>${it.qty}</td><td>${escHtml(it.name)}</td></tr>`).join('');
