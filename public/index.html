@@ -16342,7 +16342,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1418'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1419'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24923,6 +24923,7 @@ async function acOpenJob(id) {
         <button class="ac-pill-btn accent" style="flex:1;min-width:130px;" onclick="acOpenApplicants(${job.id})">View applicants${n ? ' (' + n + ')' : ''}</button>
         <button class="ac-pill-btn" style="flex:0 0 auto;" onclick="acOpenJobAnalytics(${job.id})">📊 Insights</button>
         ${boost}
+        <button class="ac-pill-btn" style="flex:0 0 auto;" onclick="acShareJob(${job.id})">↗ Share</button>
         <button class="ac-pill-btn ac-job-savebtn" style="flex:0 0 auto;color:var(--red);" onclick="acDeleteJob(${job.id})">Delete</button>
       </div>`;
     } else {
@@ -24930,7 +24931,8 @@ async function acOpenJob(id) {
         ? `<button class="ac-pill-btn" style="flex:1;" onclick="acWithdrawJob(${job.id})">Withdraw</button>`
         : `<button class="ac-pill-btn accent" style="flex:1;" onclick="acApplyJob(${job.id})">Apply now</button>`;
       const sb = `<button class="ac-pill-btn ac-job-savebtn ${job.saved ? 'on' : ''}" style="flex:0 0 auto;" onclick="acToggleSaveJobDetail(${job.id})">${job.saved ? '★ Saved' : '☆ Save'}</button>`;
-      actions = `<div style="display:flex;gap:9px;">${primary}${sb}</div>`;
+      const sh = `<button class="ac-pill-btn" style="flex:0 0 auto;" onclick="acShareJob(${job.id})" aria-label="Share job">↗</button>`;
+      actions = `<div style="display:flex;gap:9px;">${primary}${sb}${sh}</div>`;
     }
     const pay = acSalaryLabel(job, false);
     const detailRow = (ic, label, val) => val ? `<div class="ac-jd-row"><span class="ac-jd-ic">${ic}</span><div><div class="ac-jd-k">${label}</div><div class="ac-jd-v">${escHtml(val)}</div></div></div>` : '';
@@ -24963,6 +24965,19 @@ async function acOpenJob(id) {
     if (job.industry) acLoadSalaryInsight(job.id);
     if (!job.mine) acLoadSimilarJobs(job.id);
   } catch { body.innerHTML = '<div class="ac-empty">Could not load the job.</div>'; }
+}
+// Share a job: native share sheet when available; otherwise send it into a Beam
+// chat via the forward picker (text + deep link). Recruiters share their own
+// openings; seekers pass roles to friends.
+async function acShareJob(id) {
+  const j = (AC._job && AC._job.id === id) ? AC._job : {};
+  const url = location.origin + '/job/' + id;
+  const label = (j.title || 'Open role') + (j.company ? ' at ' + j.company : '');
+  if (navigator.share) {
+    try { await navigator.share({ title: label, text: label + ' — hiring on Atwe', url }); return; }
+    catch (e) { if (e && e.name === 'AbortError') return; /* else fall through */ }
+  }
+  acFeedForwardOpen('“' + label + '” — open role on Atwe: ' + url);
 }
 // "Similar jobs" under the job detail — small cards that swap the open job in place.
 async function acLoadSimilarJobs(id) {
