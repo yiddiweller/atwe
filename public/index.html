@@ -16433,7 +16433,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1434'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1435'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -30091,6 +30091,18 @@ function acLinkifyPost(text) {
   h = h.replace(/(^|[^\w$])\$([A-Za-z]{1,6})(?![A-Za-z0-9])/g, (m, pre, t) => `${pre}<span class="ac-tag" onclick="event.stopPropagation();acOpenCashtag('${t.toUpperCase()}')">$${t.toUpperCase()}</span>`);
   h = h.replace(/qZurlZq(\d+)qZurlZq/g, (m, i) => urls[+i] || '');
   return h;
+}
+// WhatsApp-style chat formatting: *bold* _italic_ ~strike~ — applied ONLY to chat
+// bubbles, on top of the normal linkify. Runs tag-aware (only text between tags is
+// transformed) so URLs/handles with underscores are never mangled.
+function acChatFmt(text) {
+  let h = acLinkifyPost(text);
+  if (!/[*_~]/.test(h)) return h;
+  const fmt = (seg) => seg
+    .replace(/\*([^*\n]{1,300}?)\*/g, '<b>$1</b>')
+    .replace(/(^|[\s.,!?(])_([^_\n]{1,300}?)_(?=$|[\s.,!?)])/g, '$1<i>$2</i>')
+    .replace(/~([^~\n]{1,300}?)~/g, '<s>$1</s>');
+  return h.split(/(<[^>]+>)/).map((part, i) => (i % 2 === 0 ? fmt(part) : part)).join('');
 }
 // Lightweight language guess (script + Latin stop-word vote) — used to show the
 // "Translate" button ONLY when a post isn't already in the reader's language (X-style).
@@ -44695,7 +44707,7 @@ function acRenderThread() {
       : concealed
       ? '<span class="msg-hidden"><svg class="mh-eye" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>Tap to show</span>'
       : ((hasMeta && m.meta.t === 'storyreply') ? '' /* the card already shows the reply text */
-        : (m.body ? (hasMedia ? '<span class="bub-cap">' + acLinkifyPost(m.body) + '</span>' : acLinkifyPost(m.body)) : ''));
+        : (m.body ? (hasMedia ? '<span class="bub-cap">' + acChatFmt(m.body) + '</span>' : acChatFmt(m.body)) : ''));
     const fresh = AC._seen && !AC._seen.has(m.id);
     if (AC._seen) AC._seen.add(m.id);
     // Emoji-only messages render big with no bubble (and no status line).
@@ -44853,8 +44865,8 @@ function acAppendMessage(m) {
   const reaxVals = (m.reactions && typeof m.reactions === 'object') ? Object.values(m.reactions).filter(Boolean) : [];
   const reaxDistinct = [...new Set(reaxVals)];
   const iReacted = m.reactions && m.reactions[String(S.user?.id)];
-  const reaxHtml = reaxDistinct.length ? `<div class="msg-reax${reaxDistinct.length === 1 ? ' one' : ''}${iReacted ? ' mine' : ''}"${iReacted ? ` onclick="event.stopPropagation();acReactBadgeMenu(${m.id}, this)"` : ''}>${reaxDistinct.map(e => `<span>${escHtml(e)}</span>`).join('')}</div>` : '';
-  const inner = `${fwdLabel}${acLinkifyPost(m.body)}${editedHtml}`;
+  const reaxHtml = reaxDistinct.length ? `<div class="msg-reax${reaxDistinct.length === 1 ? ' one' : ''}${iReacted ? ' mine' : ''}" onclick="event.stopPropagation();acMsgReactionsOpen(${m.id})">${reaxDistinct.map(e => `<span>${escHtml(e)}</span>`).join('')}</div>` : '';
+  const inner = `${fwdLabel}${acChatFmt(m.body)}${editedHtml}`;
   const rowHtml = `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}" data-mid="${m.id}">${inner}</div>${reaxHtml}${starHtml}</div><span class="msg-slidetime">${sideTime}</span></div>`;
   SC.measure();
   const atBottom = SC.max <= 0 || SC.pinBottom || (SC.max - SC.y < 16);
