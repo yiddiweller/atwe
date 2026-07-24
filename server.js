@@ -16758,7 +16758,23 @@ app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
       `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.pinned DESC, p.created_at DESC LIMIT 200`,
       [bid]
     );
-    res.json({ products: rows.map((r) => mapProduct(r, { owner })), owner });
+    const products = rows.map((r) => mapProduct(r, { owner }));
+    // Bestseller (Etsy-style): the shop's most-sold item(s) get a badge — earned,
+    // never bought. Needs at least 3 units sold and 2+ items in the shop so a
+    // single-listing shop or a one-off sale can't wear it.
+    try {
+      if (products.filter((p) => p.active).length >= 2) {
+        const sold = (await db.query(
+          `SELECT oi.product_id, SUM(oi.qty)::int AS units FROM order_items oi JOIN orders o ON o.id = oi.order_id
+            WHERE o.seller_id = $1 AND o.status IN ('paid','fulfilled','delivered','released','escrow','disputed')
+            GROUP BY oi.product_id ORDER BY SUM(oi.qty) DESC`, [bid])).rows;
+        const top = sold[0];
+        if (top && top.units >= 3) {
+          for (const p of products) if (sold.some((s) => s.product_id === p.id && s.units === top.units)) p.bestseller = true;
+        }
+      }
+    } catch (e) { /* the badge is a perk — never block the shop */ }
+    res.json({ products, owner });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load products.' }); }
 });
 // A listing for the marketplace / search: a product + its seller (so a card can
