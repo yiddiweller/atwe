@@ -6414,6 +6414,8 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .shop-img.noimg svg{width:32px;height:32px;stroke:var(--t3);stroke-width:1.6;fill:none;}
 .shop-info{padding:9px 11px 4px;flex:1;}
 .shop-name{font-size:14px;font-weight:600;color:var(--t1);line-height:1.25;}
+.shop-featured{display:inline-block;margin-left:7px;font-size:10.5px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;background:var(--accent-dim);color:var(--accent);border-radius:999px;padding:2px 8px;vertical-align:1px;}
+.shop-buy.pin-on{color:var(--accent);}
 .shop-meta{display:flex;align-items:center;gap:7px;margin-top:3px;}
 .shop-price{font-size:14px;font-weight:800;color:var(--t1);}
 .shop-kind{font-size:11px;color:var(--t3);background:var(--s2);border-radius:var(--r-pill);padding:1px 7px;}
@@ -16335,7 +16337,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1416'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1417'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -34148,16 +34150,29 @@ function acGroupedProductGrid(products, owner) {
 function acProductCard(p, owner) {
   const img = p.image ? `<div class="shop-img" style="background-image:url('${p.image}')"></div>` : `<div class="shop-img noimg"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>`;
   const action = owner
-    ? `<span style="display:flex;gap:6px;"><button class="shop-buy" onclick="event.stopPropagation();acProductFormOpen(${p.id})">Edit</button>${p.active ? `<button class="shop-buy" onclick="event.stopPropagation();acAdCreateFor(${p.id})">Advertise</button>` : ''}</span>`
+    ? `<span style="display:flex;gap:6px;flex-wrap:wrap;"><button class="shop-buy" onclick="event.stopPropagation();acProductFormOpen(${p.id})">Edit</button><button class="shop-buy ${p.pinned ? 'pin-on' : ''}" onclick="event.stopPropagation();acPinProduct(${p.id},${p.pinned ? 'false' : 'true'})">${p.pinned ? '📌 Unpin' : '📌 Pin'}</button>${p.active ? `<button class="shop-buy" onclick="event.stopPropagation();acAdCreateFor(${p.id})">Advertise</button>` : ''}</span>`
     : (p.hasVariants
       ? `<button class="shop-buy accent" onclick="event.stopPropagation();acOpenListing(${p.id})">Choose options</button>`
       : `<button class="shop-buy accent" onclick="event.stopPropagation();acAddToCart(${p.id})">Add to cart</button>`);
+  const featured = (!owner && p.pinned) ? '<span class="shop-featured">📌 Featured</span>' : '';
   return `<div class="shop-card${p.active ? '' : ' inactive'}">
     ${img}
-    <div class="shop-info"><div class="shop-name">${escHtml(p.name)}</div>
+    <div class="shop-info"><div class="shop-name">${escHtml(p.name)}${featured}</div>
       <div class="shop-meta"><span class="shop-price">${p.hasVariants ? 'from $' + (p.priceFromCents / 100).toFixed(2) : '$' + (p.priceCents / 100).toFixed(2)}</span><span class="shop-kind">${_PROD_KIND[p.kind] || ''}</span>${p.reviewCount ? `<span class="shop-kind">★ ${p.rating} (${p.reviewCount})</span>` : ''}${p.needsShipping && p.stock !== null ? (p.soldOut ? '<span class="stock-badge out">Sold out</span>' : p.stock <= 5 ? `<span class="stock-badge low">Only ${p.stock} left</span>` : `<span class="shop-kind">${p.stock} in stock</span>`) : ''}${p.active ? '' : '<span class="shop-off">Hidden</span>'}</div></div>
     ${action}
   </div>`;
+}
+// Pin/unpin a listing to the top of the storefront (one featured per shop).
+async function acPinProduct(id, pin) {
+  try {
+    await API.req('POST', '/api/products/' + id + '/pin', { pin });
+    showNotif(pin ? 'Pinned to the top of your store.' : 'Unpinned.');
+    // Refresh whichever owner surface is open (Sell view / own storefront).
+    const sv = document.getElementById('sellView');
+    if (sv && !sv.classList.contains('hidden') && typeof acLoadSell === 'function') acLoadSell();
+    const sf = document.getElementById('storefrontView');
+    if (sf && !sf.classList.contains('hidden') && AC._sf && typeof acOpenStorefront === 'function') acOpenStorefront(AC._sf);
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
 }
 async function acAddToCart(productId) {
   // If the open listing has variants, add the chosen one (require a pick first).

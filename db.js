@@ -1681,6 +1681,8 @@ async function initSchema() {
   // sections on the storefront — restaurant menus (Starters/Mains/Drinks), retail
   // collections, etc. null = "Other" / ungrouped.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS category TEXT;`);
+  // Pinned listing: the seller features ONE product at the top of their storefront.
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT false;`);
   await query(`
     CREATE TABLE IF NOT EXISTS product_subscriptions (
       id            SERIAL PRIMARY KEY,
