@@ -6467,6 +6467,15 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 /* Marketplace — post-style listing cards */
 .user-avatar.sm{width:34px;height:34px;}
 .mkt-card{background:var(--s1);border:none;border-radius:16px;overflow:hidden;margin-bottom:12px;}
+/* Recently viewed products — horizontal jump-back row */
+.rv-head{display:flex;align-items:center;justify-content:space-between;margin:2px 2px 8px;}
+.rv-title{font-size:14px;font-weight:800;color:var(--t1);}
+.rv-scroll{display:flex;gap:10px;overflow-x:auto;overflow-y:hidden;padding-bottom:12px;margin-bottom:6px;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+.rv-scroll::-webkit-scrollbar{display:none;}
+.rv-card{flex:0 0 auto;width:104px;background:var(--s1);border:none;border-radius:14px;padding:8px;cursor:pointer;text-align:start;display:flex;flex-direction:column;gap:5px;}
+.rv-img{width:100%;height:88px;border-radius:9px;background:var(--s3) center/cover no-repeat;display:block;}
+.rv-name{font-size:12.5px;color:var(--t1);line-height:1.25;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+.rv-price{font-size:13px;font-weight:700;color:var(--t1);}
 .mkt-head{display:flex;align-items:center;gap:9px;padding:10px 12px 8px;cursor:pointer;}
 .mkt-head-main{display:flex;flex-direction:column;min-width:0;}
 .mkt-seller{font-size:14px;font-weight:700;color:var(--t1);display:flex;align-items:center;gap:4px;}
@@ -14316,6 +14325,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <input class="mkt-fprice" id="mktMaxP" type="number" min="0" placeholder="Max $" aria-label="Maximum price" oninput="acMktFilterDebounced()"/>
       <label class="mkt-fstock"><input type="checkbox" id="mktInStock" onchange="acLoadMarketplace()"/> In stock</label>
     </div>
+    <div id="mktRecent"></div>
     <div id="mktBody"></div>
   </div>
 </div>
@@ -16247,7 +16257,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1405'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1406'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -33185,7 +33195,26 @@ async function acRunAiShop() {
 }
 
 // Marketplace browse surface.
-function acOpenMarketplace() { AC._mktKind = ''; AC._mktQ = ''; const s = document.getElementById('mktSearch'); if (s) s.value = ''; showOverlay('marketplaceView'); acLoadMarketplace(); }
+function acOpenMarketplace() { AC._mktKind = ''; AC._mktQ = ''; const s = document.getElementById('mktSearch'); if (s) s.value = ''; showOverlay('marketplaceView'); acLoadRecentlyViewed(); acLoadMarketplace(); }
+// Recently viewed products — a horizontal jump-back row, shown only while browsing
+// (no active search). Amazon/eBay style; private to the viewer.
+async function acLoadRecentlyViewed() {
+  const box = document.getElementById('mktRecent'); if (!box) return;
+  try {
+    const { listings } = await API.req('GET', '/api/recently-viewed');
+    if (!listings || !listings.length) { box.innerHTML = ''; return; }
+    const cards = listings.map(l => `<button class="rv-card" onclick="acOpenListing(${l.id})">
+        <span class="rv-img" style="${l.image ? `background-image:url('${l.image}')` : ''}"></span>
+        <span class="rv-name">${escHtml(l.name)}</span>
+        <span class="rv-price">${l.hasVariants ? 'from $' + (l.priceFromCents / 100).toFixed(2) : '$' + (l.priceCents / 100).toFixed(2)}</span>
+      </button>`).join('');
+    box.innerHTML = `<div class="rv-head"><span class="rv-title">Recently viewed</span><button class="ac-link-btn" onclick="acClearRecentlyViewed()">Clear</button></div><div class="rv-scroll">${cards}</div>`;
+  } catch { box.innerHTML = ''; }
+}
+async function acClearRecentlyViewed() {
+  try { await API.req('DELETE', '/api/recently-viewed'); const box = document.getElementById('mktRecent'); if (box) box.innerHTML = ''; }
+  catch (e) { showNotif(e.message || 'Could not clear.'); }
+}
 function acMktKind(kind) {
   AC._mktKind = kind;
   document.querySelectorAll('#mktKindTabs .ac-jv').forEach(b => b.classList.toggle('on', (b.dataset.kind || '') === kind));
@@ -33212,6 +33241,8 @@ async function acLoadMarketplace() {
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load the marketplace.') + '</div>'; }
   // Offer to save the current query (≥2 chars) for new-listing alerts.
   const sb = document.getElementById('mktSaveSearch'); if (sb) sb.style.display = (AC._mktQ && AC._mktQ.length >= 2) ? '' : 'none';
+  // Recently viewed only shows while browsing (no active search/kind filter).
+  const rv = document.getElementById('mktRecent'); if (rv) rv.style.display = (AC._mktQ || AC._mktKind) ? 'none' : '';
 }
 // Save the current marketplace query (+ kind) as an alert.
 async function acSaveMktSearch() {
