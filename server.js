@@ -9289,7 +9289,22 @@ app.post('/api/social/follow/:id', auth.requireAuth, rateLimit(120, 60000, 'foll
       'INSERT INTO follows (follower_id, following_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING following_id',
       [req.user.id, target]
     );
-    if (f.rowCount) notify(target, req.user.id, 'follow', null);
+    if (f.rowCount) {
+      notify(target, req.user.id, 'follow', null);
+      // Milestone moment (LinkedIn/X-style): landing EXACTLY on a threshold fires
+      // one system notification to the account being followed. Firing only on the
+      // exact count means it can't repeat — dropping below and re-crossing would
+      // land on the same number, and the row for it already exists, which is fine
+      // (a duplicate celebration is harmless and rare).
+      try {
+        const n = Number((await db.query('SELECT COUNT(*)::int AS n FROM follows WHERE following_id = $1', [target])).rows[0].n);
+        if ([10, 50, 100, 500, 1000, 5000, 10000, 50000, 100000].includes(n)) {
+          await db.query("INSERT INTO notifications (user_id, actor_id, type, meta_num) VALUES ($1, $1, 'follower_milestone', $2)", [target, n]);
+          rtPush(target, 'notif', { type: 'follower_milestone' });
+          pushToUser(target, { title: 'Atwe', body: `🎉 You just reached ${n.toLocaleString()} followers!`, url: '/', tag: 'milestone' }).catch(() => {});
+        }
+      } catch (e) { /* the follow itself must never fail on a celebration */ }
+    }
     res.json({ ok: true, following: true });
   } catch (err) {
     console.error(err);
@@ -22245,7 +22260,7 @@ app.patch('/api/feeds/:id', auth.requireAuth, async (req, res) => {
 app.get('/api/notifications', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT n.id, n.type, n.post_id, n.feed_id, n.group_id, n.job_id, n.product_id, n.event_id, n.read, n.created_at,
+      `SELECT n.id, n.type, n.post_id, n.feed_id, n.group_id, n.job_id, n.product_id, n.event_id, n.meta_num, n.read, n.created_at,
               u.id AS actor_id, u.name AS actor_name, u.username AS actor_username, u.avatar AS actor_avatar,
               u.account_type AS actor_type, u.verified AS actor_verified,
               p.body AS post_body, j.title AS job_title, pr.name AS product_name, ev.title AS event_title
@@ -22263,7 +22278,7 @@ app.get('/api/notifications', auth.requireAuth, async (req, res) => {
     res.json({
       unread,
       notifications: rows.map((r) => ({
-        id: r.id, type: r.type, postId: r.post_id || null, feedId: r.feed_id || null, groupId: r.group_id || null, jobId: r.job_id || null, productId: r.product_id || null, eventId: r.event_id || null, read: r.read, created_at: r.created_at,
+        id: r.id, type: r.type, postId: r.post_id || null, feedId: r.feed_id || null, groupId: r.group_id || null, jobId: r.job_id || null, productId: r.product_id || null, eventId: r.event_id || null, metaNum: r.meta_num || null, read: r.read, created_at: r.created_at,
         postBody: r.post_body || null, jobTitle: r.job_title || null, productName: r.product_name || null, eventTitle: r.event_title || null,
         actor: { id: r.actor_id, name: r.actor_name, username: r.actor_username, avatar: r.actor_avatar || null, accountType: r.actor_type === 'business' ? 'business' : 'personal', verified: !!r.actor_verified },
       })),
