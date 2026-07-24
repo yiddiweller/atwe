@@ -6520,6 +6520,12 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .wf-chips::-webkit-scrollbar{display:none;}
 .wf-chip{flex:0 0 auto;background:var(--s2);border:none;border-radius:var(--r-pill);color:var(--t2);font-size:13px;font-weight:600;padding:7px 14px;cursor:pointer;font-family:inherit;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
 .wf-chip.on{background:var(--accent-dim);color:var(--accent);}
+/* Sell-view sort chips (reuse the wallet-filter chip look) */
+.sell-sortbar{display:flex;gap:7px;overflow-x:auto;padding:2px 0 12px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.sell-sortbar::-webkit-scrollbar{display:none;}
+.sell-sortchip{flex:0 0 auto;background:var(--s2);border:none;border-radius:var(--r-pill);color:var(--t2);font-size:13px;font-weight:600;padding:7px 14px;cursor:pointer;font-family:inherit;}
+.sell-sortchip.on{background:var(--accent-dim);color:var(--accent);}
+.sell-sortchip:active{transform:scale(.96);}
 /* Recently visited profiles row (Engine empty state) */
 .rp-head{display:flex;align-items:center;justify-content:space-between;margin:10px 10px 6px;}
 .rp-title{font-size:14px;font-weight:800;color:var(--t1);}
@@ -16532,7 +16538,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1463'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1464'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -34578,8 +34584,25 @@ async function acLoadSell() {
     const { products } = await API.req('GET', '/api/my-listings');
     AC._shopProducts = products;
     if (!products.length) { body.innerHTML = '<div class="ac-empty" style="padding:22px;">You’re not selling anything yet. Tap “New listing” to start.</div>'; return; }
-    body.innerHTML = `<div class="shop-grid">${products.map(p => acProductCard(p, true)).join('')}</div>`;
+    acRenderSellGrid();
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load your listings.') + '</div>'; }
+}
+// Sort your own listings (Newest = server order · Price ↑/↓ · Name · Sold out last).
+const _SELL_SORTS = [['new', 'Newest'], ['price_asc', 'Price ↑'], ['price_desc', 'Price ↓'], ['name', 'Name'], ['sold', 'Sold out']];
+function acSellSort(k) { AC._sellSort = k; acRenderSellGrid(); }
+function acRenderSellGrid() {
+  const body = document.getElementById('sellBody'); if (!body) return;
+  const base = AC._shopProducts || [];
+  const k = AC._sellSort || 'new';
+  const priceOf = (p) => (p.priceFromCents || p.priceCents || 0);
+  let list = base.slice();
+  if (k === 'price_asc') list.sort((a, b) => priceOf(a) - priceOf(b));
+  else if (k === 'price_desc') list.sort((a, b) => priceOf(b) - priceOf(a));
+  else if (k === 'name') list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  else if (k === 'sold') list.sort((a, b) => (a.soldOut ? 1 : 0) - (b.soldOut ? 1 : 0)); // in-stock first
+  // 'new' keeps the server's newest-first order.
+  const chips = `<div class="sell-sortbar">${_SELL_SORTS.map(([v, l]) => `<button class="sell-sortchip ${k === v ? 'on' : ''}" onclick="acSellSort('${v}')">${l}</button>`).join('')}</div>`;
+  body.innerHTML = chips + `<div class="shop-grid">${list.map(p => acProductCard(p, true)).join('')}</div>`;
 }
 
 /* ═══════════════════════════════════════════════
