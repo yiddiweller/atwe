@@ -7732,18 +7732,49 @@ app.delete('/api/communities/:id/groups/:gid', auth.requireAuth, async (req, res
 /* ═══════════════════════════════════════════════
    STORIES / STATUS  —  ephemeral 24h updates (shown to your followers)
 ═══════════════════════════════════════════════ */
-const STORY_KINDS = ['image', 'video', 'text']; // photo, video (with audio), or text-on-gradient
+const STORY_KINDS = ['image', 'video', 'text', 'post']; // photo, video (with audio), text-on-gradient, or a re-shared post card
 // Story videos use the same ~3.5MB ceiling as feed/reels clips. Base64 inflates the
 // payload ~4/3, so a 3.6MB binary arrives as ~4.8M chars; keep the char cap above
 // that (with headroom) so the client's 3.5MB limit isn't falsely rejected here.
 const STORY_VIDEO_MAX_CHARS = 5_200_000; // ~3.8 MB binary once base64-decoded
 function mapStory(s, me) {
+  let sharedPost = null;
+  // A kind='post' story carries a re-shared post card (from the SQL json column, or
+  // attached in the create route). A deleted post → shared_post_id null → no card.
+  if (s.kind === 'post' && s.shared_post) {
+    const sp = s.shared_post;
+    sharedPost = {
+      id: sp.id, body: sp.body || null, image: mediaRef(sp.image, 'post', sp.id),
+      author: { id: sp.author_id, name: sp.author_name, username: sp.author_username,
+        avatar: sp.author_avatar || null, accountType: sp.author_account_type === 'business' ? 'business' : 'personal',
+        verified: !!sp.author_verified },
+    };
+  }
   return {
     id: s.id, kind: s.kind, media: mediaRef(s.media, 'story', s.id), caption: s.caption || null, bg: s.bg || null,
     createdAt: s.created_at, expiresAt: s.expires_at,
     mine: s.user_id === me, seen: !!s.seen, viewCount: s.view_count != null ? Number(s.view_count) : undefined,
     audience: s.audience === 'close' ? 'close' : 'all',
+    sharedPost,
     products: tagProductsFrom(s),
+  };
+}
+// Fetch a re-sharable post's card fields (author + body + image). Returns null when the
+// post is gone/not shareable so a 'post' story degrades to an empty card gracefully.
+async function loadStorySharedCard(postId) {
+  const { rows } = await db.query(
+    `SELECT p.id, p.body, p.image, u.id AS author_id, u.name AS author_name, u.username AS author_username,
+            u.avatar AS author_avatar, u.account_type AS author_account_type, u.verified AS author_verified
+       FROM posts p JOIN users u ON u.id = p.user_id WHERE p.id = $1`,
+    [postId]
+  );
+  if (!rows[0]) return null;
+  const sp = rows[0];
+  return {
+    id: sp.id, body: sp.body || null, image: mediaRef(sp.image, 'post', sp.id),
+    author: { id: sp.author_id, name: sp.author_name, username: sp.author_username,
+      avatar: sp.author_avatar || null, accountType: sp.author_account_type === 'business' ? 'business' : 'personal',
+      verified: !!sp.author_verified },
   };
 }
 // Post a story (photo or text). Visible for 24h to your followers.
@@ -7755,7 +7786,25 @@ app.post('/api/stories', auth.requireAuth, rateLimit(30, 60000, 'story-post'), r
   const bg = (req.body.bg || '').toString().slice(0, 24) || null;
   const audience = req.body.audience === 'close' ? 'close' : 'all';
   let media = null;
-  if (kind === 'image') {
+  let sharedPostId = null;
+  if (kind === 'post') {
+    // Re-share an existing post as a Story card. Only a visible, top-level, non-paywalled
+    // post the sharer can actually see may be shared (own, or public main-feed).
+    sharedPostId = parseInt(req.body.sharedPostId, 10);
+    if (!Number.isInteger(sharedPostId)) return res.status(400).json({ error: 'Nothing to share.' });
+    const p = (await db.query(
+      'SELECT user_id, parent_id, to_main, subscribers_only, COALESCE(ppv_cents,0) AS ppv_cents FROM posts WHERE id = $1',
+      [sharedPostId]
+    )).rows[0];
+    if (!p) return res.status(404).json({ error: 'That post is no longer available.' });
+    const own = p.user_id === req.user.id;
+    if (!own) {
+      if (await blockedEither(req.user.id, p.user_id)) return res.status(403).json({ error: 'Not available.' });
+      if (p.parent_id != null || !p.to_main || p.subscribers_only || p.ppv_cents > 0) {
+        return res.status(400).json({ error: "This post can't be shared to a Story." });
+      }
+    }
+  } else if (kind === 'image') {
     media = cleanImage(req.body.media);
     if (media === undefined || !media) return res.status(400).json({ error: 'Add a photo for your story.' });
   } else if (kind === 'video') {
@@ -7775,8 +7824,8 @@ app.post('/api/stories', auth.requireAuth, rateLimit(30, 60000, 'story-post'), r
     // Tagged products (≤5 of the poster's OWN active products) on a story.
     const taggedProductIds = await validateOwnProductIds(req.user.id, req.body.productIds);
     const r = await db.query(
-      'INSERT INTO stories (user_id, kind, media, caption, bg, audience) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, user_id, kind, media, caption, bg, audience, created_at, expires_at',
-      [req.user.id, kind, media, caption, bg, audience]
+      'INSERT INTO stories (user_id, kind, media, caption, bg, audience, shared_post_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, user_id, kind, media, caption, bg, audience, shared_post_id, created_at, expires_at',
+      [req.user.id, kind, media, caption, bg, audience, sharedPostId]
     );
     if (taggedProductIds.length) await saveContentProductTags('story', r.rows[0].id, taggedProductIds);
     // Refresh the open clients of the audience: all followers, or — for a close-
@@ -7787,6 +7836,7 @@ app.post('/api/stories', auth.requireAuth, rateLimit(30, 60000, 'story-post'), r
     for (const f of aud.rows) rtPush(f.follower_id, 'story', { type: 'new', userId: req.user.id });
     const story = mapStory(r.rows[0], req.user.id);
     if (taggedProductIds.length) story.products = await loadContentTagProducts('story', r.rows[0].id);
+    if (kind === 'post' && sharedPostId) story.sharedPost = await loadStorySharedCard(sharedPostId);
     res.status(201).json({ story });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post your story.' }); }
 });
@@ -7830,8 +7880,12 @@ app.get('/api/stories/:userId', auth.requireAuth, async (req, res) => {
       if (!f.rowCount) return res.status(403).json({ error: 'Follow them to see their story.' });
     }
     const { rows } = await db.query(
-      `SELECT s.id, s.user_id, s.kind, s.media, s.caption, s.bg, s.audience, s.created_at, s.expires_at,
+      `SELECT s.id, s.user_id, s.kind, s.media, s.caption, s.bg, s.audience, s.created_at, s.expires_at, s.shared_post_id,
               (sv.viewer_id IS NOT NULL) AS seen,
+              (SELECT json_build_object('id', sp.id, 'body', sp.body, 'image', sp.image, 'author_id', spu.id,
+                       'author_name', spu.name, 'author_username', spu.username, 'author_avatar', spu.avatar,
+                       'author_account_type', spu.account_type, 'author_verified', spu.verified)
+                 FROM posts sp JOIN users spu ON spu.id = sp.user_id WHERE sp.id = s.shared_post_id) AS shared_post,
               (SELECT json_agg(json_build_object('id', tpr.id, 'name', tpr.name, 'price_cents', tpr.price_cents, 'image', tpr.image, 'active', tpr.active, 'stock', tpr.stock, 'variants', tpr.variants) ORDER BY cpt.position, cpt.id)
                  FROM content_product_tags cpt JOIN products tpr ON tpr.id = cpt.product_id
                 WHERE cpt.content_kind = 'story' AND cpt.content_id = s.id) AS tagged_products,

@@ -6231,6 +6231,18 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .st-pick-vid{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;}
 .story-text{width:100%;height:100%;display:grid;place-items:center;padding:36px;text-align:center;}
 .story-text span{color:#fff;font-size:26px;font-weight:700;line-height:1.3;word-break:break-word;}
+/* Add-a-post-to-Daily: preview stage + the shared-post card (also used full-screen in the viewer) */
+.a2d-stage{border-radius:18px;overflow:hidden;aspect-ratio:9/14;max-height:46vh;display:grid;place-items:center;padding:22px;margin:4px 0 12px;}
+.story-post{width:100%;height:100%;display:grid;place-items:center;padding:26px;}
+.story-post-card,.a2d-card{width:100%;max-width:340px;background:var(--s1);border-radius:22px;padding:15px;text-align:start;box-shadow:0 8px 30px rgba(0,0,0,.28);}
+.story-post-card{cursor:pointer;}
+.spc-head{display:flex;align-items:center;gap:9px;margin-bottom:10px;}
+.spc-head .user-avatar{width:34px;height:34px;font-size:14px;}
+.spc-name{font-size:14px;font-weight:700;color:var(--t1);display:inline-flex;align-items:center;line-height:1.15;}
+.spc-handle{font-size:12px;color:var(--t3);}
+.spc-body{font-size:14.5px;line-height:1.5;color:var(--t1);white-space:pre-wrap;overflow:hidden;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;}
+.spc-img{width:100%;border-radius:14px;margin-top:10px;max-height:260px;object-fit:cover;display:block;}
+.spc-tap{margin-top:11px;font-size:12.5px;color:var(--accent);font-weight:700;}
 .story-cap{position:absolute;left:0;right:0;bottom:64px;z-index:3;padding:0 16px;pointer-events:none;}
 .story-cap-in{background:rgba(0,0,0,.55);color:#fff;font-size:15px;padding:8px 12px;border-radius:12px;display:inline-block;text-shadow:0 1px 2px rgba(0,0,0,.5);}
 /* Shoppable story: a tagged-product pill (its own pointer-events, since .story-cap is inert). */
@@ -13479,6 +13491,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <button class="as-item" onclick="paInvoice()"><svg viewBox="0 0 24 24"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M15 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M9 13h6M9 17h4"/></svg> <span>Send an invoice</span></button>
     <button class="as-item" onclick="paQuote()"><svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg> <span>Send a quote</span></button>
     <button class="as-item" onclick="paShare()"><svg viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="18.5" r="2.6"/><path d="M8.3 10.8l7.4-4M8.3 13.2l7.4 4"/></svg> <span id="paShareLabel">Share</span></button>
+    <button class="as-item" onclick="acAddPostToStory(AC._paPostId)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg> <span>Add to your Daily</span></button>
     <button class="as-item" onclick="acCopyPostLink(AC._paPostId)"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.5-1.5"/></svg> <span>Copy link</span></button>
     <button class="as-item hidden" id="paInfoBtn" onclick="acPostInfoFrom('other')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5"/><path d="M12 7.6h.01"/></svg> <span>Info</span></button>
     <button class="as-item hidden" id="paPostshotBtn" onclick="acPostshot(AC._paPostId)"><svg viewBox="0 0 24 24"><path d="M4 8h3l1.4-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.3"/></svg> <span>Postshot</span></button>
@@ -13519,6 +13532,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <button class="as-item" onclick="acOpenPostAnalytics()"><svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7 20v-5M12 20V8M17 20v-8"/></svg> <span>View analytics</span></button>
     <button class="as-item" onclick="acPromotePost()"><svg viewBox="0 0 24 24"><path d="M3 10v4a1 1 0 0 0 1 1h3l5 4V5L7 9H4a1 1 0 0 0-1 1z"/><path d="M16.5 9a3.5 3.5 0 0 1 0 6"/><path d="M19 6.5a7 7 0 0 1 0 11"/></svg> <span>Advertise this post</span></button>
     <button class="as-item" onclick="acPostshot(AC._ownPostId)"><svg viewBox="0 0 24 24"><path d="M4 8h3l1.4-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.3"/></svg> <span>Postshot</span></button>
+    <button class="as-item" onclick="acAddPostToStory(AC._ownPostId)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg> <span>Add to your Daily</span></button>
     <button class="as-item" onclick="acCopyPostLink(AC._ownPostId)"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.5-1.5"/></svg> <span>Copy link</span></button>
     <button class="as-item danger" onclick="acOwnPostAct('delete')"><svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M10 11v6M14 11v6"/></svg> <span>Delete post</span></button>
     <button class="as-cancel" onclick="closeOverlay('ownPostActions')">Cancel</button>
@@ -13925,6 +13939,22 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <div id="stProdChip"></div>
     <button class="ac-compose-prodadd" style="margin-top:8px;" onclick="acTagProductOpen()" type="button">＋ Tag products</button>
     <button class="ac-pill-btn accent jp-submit" id="stPostBtn" onclick="acStoryPost()">Share to Daily</button>
+  </div>
+</div>
+
+<!-- Add a post to your Daily (re-share a post as a Story card) -->
+<div class="overlay hidden" id="addToDaily" onclick="if(event.target===this)closeOverlay('addToDaily')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Add to your Daily">
+    <button class="sheet-close" onclick="closeOverlay('addToDaily')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Add to your Daily</div>
+    <div class="a2d-stage" id="a2dStage"><div class="a2d-card" id="a2dCard"></div></div>
+    <div class="story-bg-row" id="a2dBgRow"></div>
+    <!-- Audience: all followers, or just close friends -->
+    <div class="st-aud-row">
+      <button class="st-aud on" id="a2dAudAll" onclick="acA2dAud('all')"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>Followers</button>
+      <button class="st-aud" id="a2dAudClose" onclick="acA2dAud('close')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="8.5 12 11 14.5 15.5 9.5"/></svg>Close friends</button>
+    </div>
+    <button class="ac-pill-btn accent jp-submit" id="a2dPostBtn" onclick="acDoAddToStory()">Share to Daily</button>
   </div>
 </div>
 
@@ -16150,7 +16180,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1402'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1403'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -38162,6 +38192,62 @@ async function acStoryPickImg(e) {
 function acStoryTextSync() {}
 function acStoryBgPick(id) { AC._stBg = id; document.querySelectorAll('#stBgRow .story-bg').forEach(b => b.classList.toggle('on', b.dataset.bg === id)); document.getElementById('stTextPrev').style.background = _storyBgCss(id); }
 function acStoryAud(a) { AC._stAud = a === 'close' ? 'close' : 'all'; document.getElementById('stAudAll').classList.toggle('on', AC._stAud === 'all'); document.getElementById('stAudClose').classList.toggle('on', AC._stAud === 'close'); }
+
+// ── Add a post to your Daily (re-share a post as a Story card) ──
+// Shared HTML for the post card, used in both the compose preview and the viewer.
+function acSharedPostCardHtml(sp, tappable) {
+  if (!sp || !sp.author) return `<div class="a2d-card"><div class="spc-body" style="color:var(--t3)">This post is no longer available.</div></div>`;
+  const a = sp.author;
+  const img = sp.image ? `<img class="spc-img" src="${sp.image}" alt="" loading="lazy" decoding="async"/>` : '';
+  const body = sp.body ? `<div class="spc-body">${acLinkifyPost(escHtml(sp.body))}</div>` : '';
+  const tapLine = tappable ? `<div class="spc-tap">View post →</div>` : '';
+  const cls = tappable ? 'story-post-card' : 'a2d-card';
+  const onclick = tappable ? ` onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()" onclick="acStoryOpenSharedPost(${sp.id})"` : '';
+  return `<div class="${cls}"${onclick}>
+    <div class="spc-head">${acAvatarHtml(a.name, a.avatar, 'user-avatar', a.accountType === 'business')}
+      <div style="min-width:0"><div class="spc-name">${escHtml(a.name)}${vbadge(acIsVerified(a))}</div><div class="spc-handle">@${escHtml(a.username || '')}</div></div>
+    </div>${body}${img}${tapLine}</div>`;
+}
+async function acAddPostToStory(postId) {
+  if (!postId) return;
+  closeOverlay('postActions'); closeOverlay('ownPostActions');
+  // Resolve the post's card fields from cache or the server.
+  let p = (AC._postCache && AC._postCache[postId]) || acFindPost(postId);
+  let sp;
+  if (p) {
+    sp = { id: p.id, body: p.body || null, image: (p.images && p.images[0]) || p.image || null,
+      author: { name: p.author && p.author.name, username: p.author && p.author.username,
+        avatar: p.author && p.author.avatar, accountType: p.author && p.author.accountType, verified: p.author && p.author.verified } };
+  } else {
+    try { const d = await API.req('GET', '/api/social/posts/' + postId); const q = d.post; sp = { id: q.id, body: q.body, image: (q.images && q.images[0]) || q.image || null, author: q.author }; }
+    catch (e) { showNotif(e.message || 'Could not load that post.'); return; }
+  }
+  if (!sp.author) { showNotif("This post can't be shared."); return; }
+  AC._a2d = { postId, bg: 'g6', aud: 'all', sp };
+  showOverlay('addToDaily');
+  document.getElementById('a2dBgRow').innerHTML = _STORY_BGS.map(b => `<button class="story-bg ${b.id === 'g6' ? 'on' : ''}" data-bg="${b.id}" style="background:${b.css}" onclick="acA2dBg('${b.id}')" aria-label="Background"></button>`).join('');
+  document.getElementById('a2dAudAll').classList.add('on'); document.getElementById('a2dAudClose').classList.remove('on');
+  acA2dRender();
+}
+function acA2dRender() {
+  const a = AC._a2d; if (!a) return;
+  document.getElementById('a2dStage').style.background = _storyBgCss(a.bg);
+  document.getElementById('a2dCard').outerHTML = acSharedPostCardHtml(a.sp, false).replace(/^<div class="a2d-card"/, '<div class="a2d-card" id="a2dCard"');
+}
+function acA2dBg(id) { const a = AC._a2d; if (!a) return; a.bg = id; document.querySelectorAll('#a2dBgRow .story-bg').forEach(b => b.classList.toggle('on', b.dataset.bg === id)); document.getElementById('a2dStage').style.background = _storyBgCss(id); }
+function acA2dAud(x) { const a = AC._a2d; if (!a) return; a.aud = x === 'close' ? 'close' : 'all'; document.getElementById('a2dAudAll').classList.toggle('on', a.aud === 'all'); document.getElementById('a2dAudClose').classList.toggle('on', a.aud === 'close'); }
+async function acDoAddToStory() {
+  const a = AC._a2d; if (!a) return;
+  const btn = document.getElementById('a2dPostBtn'); const lbl = btn.textContent; btn.disabled = true; btn.textContent = 'Sharing…';
+  try {
+    await API.req('POST', '/api/stories', { kind: 'post', sharedPostId: a.postId, bg: a.bg, audience: a.aud });
+    closeOverlay('addToDaily');
+    showNotif('Added to your Daily');
+    if (typeof acLoadStoryTray === 'function') acLoadStoryTray();
+  } catch (e) { showNotif(e.message || 'Could not add to your Daily.'); btn.disabled = false; btn.textContent = lbl; }
+}
+function acStoryOpenSharedPost(postId) { acStoryClose(); if (postId) acOpenPostView(postId); }
+
 // ── Close Friends manager ──
 async function acOpenCloseFriends() {
   document.getElementById('cfSearch').value = '';
@@ -38446,6 +38532,7 @@ function acStoryShow(si) {
   // Body.
   const bodyEl = document.getElementById('storyBody');
   if (it.kind === 'text') bodyEl.innerHTML = `<div class="story-text" style="background:${_storyBgCss(it.bg)}"><span>${escHtml(it.caption || '')}</span></div>`;
+  else if (it.kind === 'post') bodyEl.innerHTML = `<div class="story-post" style="background:${_storyBgCss(it.bg)}">${acSharedPostCardHtml(it.sharedPost, true)}</div>`;
   else if (it.kind === 'video') bodyEl.innerHTML = `<video class="story-vid" id="storyVid" src="${it.media}" autoplay playsinline></video><button class="story-sound" id="storySoundBtn" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()" onclick="event.stopPropagation();acStoryToggleSound()" aria-label="Toggle sound">${_storyMuted ? FEED_SND_OFF : FEED_SND_ON}</button>`;
   else bodyEl.innerHTML = `<img class="story-img" src="${it.media}" alt=""/>`;
   // Caption (for media) + any tagged products (shoppable story).
@@ -38460,7 +38547,8 @@ function acStoryShow(si) {
       ? `<button class="story-views-btn" onclick="acOpenHighlightManage(${sv.highlightId})"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Edit highlight</button>`
       : '';
   } else if (it.mine) {
-    foot.innerHTML = `<button class="story-views-btn" onclick="acStoryViewers(${it.id})" aria-label="See who viewed your Daily"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>${it.viewCount || 0}</button><button class="story-hl-btn" onclick="acStoryHighlight()" aria-label="Add to highlight"><svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button><button class="story-del" onclick="acStoryDelete(${it.id})" aria-label="Delete Daily"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>`;
+    const hlBtn = it.kind === 'post' ? '' : `<button class="story-hl-btn" onclick="acStoryHighlight()" aria-label="Add to highlight"><svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>`;
+    foot.innerHTML = `<button class="story-views-btn" onclick="acStoryViewers(${it.id})" aria-label="See who viewed your Daily"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>${it.viewCount || 0}</button>${hlBtn}<button class="story-del" onclick="acStoryDelete(${it.id})" aria-label="Delete Daily"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>`;
   } else {
     // Reply + quick-react bar (IG/WhatsApp-status style). Interacting pauses the story.
     foot.innerHTML = `<div class="story-reply" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">

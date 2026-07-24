@@ -934,6 +934,10 @@ async function initSchema() {
   // Close Friends: a private story audience. A story with audience='close' is shown
   // only to people on the author's close-friends list (IG green-ring style).
   await query(`ALTER TABLE stories ADD COLUMN IF NOT EXISTS audience TEXT NOT NULL DEFAULT 'all';`);
+  // "Add a post to your Story" (IG/X-style): a kind='post' story re-shares an existing
+  // post as a tappable card. shared_post_id references it; ON DELETE SET NULL so a
+  // deleted post leaves a harmless empty share rather than breaking the story.
+  await query(`ALTER TABLE stories ADD COLUMN IF NOT EXISTS shared_post_id INTEGER REFERENCES posts(id) ON DELETE SET NULL;`);
   await query(`
     CREATE TABLE IF NOT EXISTS close_friends (
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
