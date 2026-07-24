@@ -6476,6 +6476,14 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 /* Marketplace — post-style listing cards */
 .user-avatar.sm{width:34px;height:34px;}
 .mkt-card{background:var(--s1);border:none;border-radius:16px;overflow:hidden;margin-bottom:12px;}
+/* Recently visited profiles row (Engine empty state) */
+.rp-head{display:flex;align-items:center;justify-content:space-between;margin:10px 10px 6px;}
+.rp-title{font-size:14px;font-weight:800;color:var(--t1);}
+.rp-scroll{display:flex;gap:14px;overflow-x:auto;overflow-y:hidden;padding:2px 10px 12px;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+.rp-scroll::-webkit-scrollbar{display:none;}
+.rp-cell{flex:0 0 auto;width:64px;background:none;border:none;padding:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;}
+.rp-cell .user-avatar{width:56px;height:56px;}
+.rp-name{font-size:12px;color:var(--t2);max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 /* Who-reacted rows (chat reactions sheet) */
 .mrx-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 4px;border-bottom:1px solid var(--bg);}
 .mrx-row.mine{cursor:pointer;}
@@ -16385,7 +16393,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1424'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1425'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25501,6 +25509,22 @@ function acSearchSuggest(q) {
 }
 let _searchLogT;
 // Recent searches — shown on the empty search page; tap to re-run, or clear.
+/* ── Recently visited profiles (device-local): quick jump-back row on Engine ── */
+function _recentProfiles() { try { return JSON.parse(localStorage.getItem('atwe_recent_profiles') || '[]'); } catch { return []; } }
+function acRecordProfileVisit(u) {
+  if (!u || !u.username) return;
+  const arr = _recentProfiles().filter((x) => x.username !== u.username);
+  arr.unshift({ username: u.username, name: u.name || u.username, avatar: u.avatar || null, biz: u.accountType === 'business', verified: !!u.verified });
+  try { localStorage.setItem('atwe_recent_profiles', JSON.stringify(arr.slice(0, 12))); } catch {}
+}
+function acRenderRecentProfiles() {
+  const box = document.getElementById('acRecentProfiles'); if (!box) return;
+  const arr = _recentProfiles();
+  if (!arr.length) { box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="rp-head"><span class="rp-title">Recently visited</span><button class="ac-link-btn" onclick="acClearRecentProfiles()">Clear</button></div>
+    <div class="rp-scroll">${arr.map((u) => `<button class="rp-cell" onclick="acGoProfile(${jsAttr(u.username)})">${acAvatarHtml(u.name, u.avatar, 'user-avatar', u.biz)}<span class="rp-name">${escHtml((u.name || '').split(' ')[0])}</span></button>`).join('')}</div>`;
+}
+function acClearRecentProfiles() { try { localStorage.removeItem('atwe_recent_profiles'); } catch {} acRenderRecentProfiles(); }
 async function acLoadRecentSearches() {
   const c = document.getElementById('acRecentSearches'); if (!c) return;
   try {
@@ -25532,7 +25556,7 @@ function acDoSearch(q) {
   if (_searchScope === 'companies') { if (!q) acLoadCompanies(''); else _searchT = setTimeout(() => acLoadCompanies(q), 250); return; }
   if (_searchScope === 'services') { if (!q) acLoadServices(''); else _searchT = setTimeout(() => acLoadServices(q), 250); return; } // services show even with no query
   if (!q && _searchScope === 'posts') { el.innerHTML = acPostSearchHelp(); return; }
-  if (!q) { el.innerHTML = '<div id="acRecentSearches" class="xp-recent"></div>' + acSearchDiscover(); acLoadRecentSearches(); acLoadTrending(); acLoadNearYou(); return; }
+  if (!q) { el.innerHTML = '<div id="acRecentProfiles"></div><div id="acRecentSearches" class="xp-recent"></div>' + acSearchDiscover(); acRenderRecentProfiles(); acLoadRecentSearches(); acLoadTrending(); acLoadNearYou(); return; }
   _searchT = setTimeout(async () => {
     try {
       const d = await API.req('GET', '/api/search?scope=' + _searchScope + '&q=' + encodeURIComponent(q));
@@ -32027,6 +32051,7 @@ function acRenderProfile(d, mine) {
   }
   if (mine) AC._pinnedPostId = d.pinnedPost ? d.pinnedPost.id : null;
   AC._profileUser = u; // stash for "I work here" + post-job-as-this-business
+  if (!mine) acRecordProfileVisit(u); // device-local "Recently visited" row on Engine
   if (!mine) AC._connState = Object.assign(AC._connState || {}, { [u.id]: d.connectionState || 'none' });
   // Slim action row: own profile = Edit + ⋯; others = Follow + ⋯. Everything else
   // (view feed / share / search posts; connect / notify / message / money / …) lives
