@@ -6050,6 +6050,19 @@ body.reduce-motion .ac-react-bar,body.reduce-motion .ac-rb-btn{animation:none;}
 .cashout-note{font-size:12.5px;color:var(--t3);background:var(--s2);border-radius:11px;padding:9px 11px;margin:4px 0 8px;line-height:1.4;}
 .cashout-note.ok{color:var(--money);background:var(--money-bg);}
 .wtx{display:flex;align-items:center;gap:11px;padding:11px 2px;border-bottom:1px solid var(--b1);}
+/* Transaction detail sheet (tap a ledger row) — Cash-App-style record */
+.wtxd-amt{font-size:34px;font-weight:800;letter-spacing:-.5px;text-align:center;margin:14px 0 2px;}
+.wtxd-amt.cr{color:var(--green);}
+.wtxd-label{text-align:center;color:var(--t2);font-size:14.5px;margin-bottom:14px;}
+.wtxd-peer{display:flex;align-items:center;gap:10px;background:var(--s1);border-radius:16px;padding:11px 13px;margin-bottom:10px;cursor:pointer;}
+.wtxd-peer-name{font-weight:700;font-size:14.5px;}
+.wtxd-peer-user{color:var(--t3);font-size:13px;}
+.wtxd-note{background:var(--s1);border-radius:16px;padding:11px 13px;font-size:14px;color:var(--t2);margin-bottom:10px;}
+.wtxd-rows{background:var(--s1);border-radius:16px;padding:4px 13px;}
+.wtxd-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;font-size:13.5px;border-bottom:1px solid var(--bg);}
+.wtxd-row:last-child{border-bottom:none;}
+.wtxd-row span:first-child{color:var(--t3);}
+.wtxd-row span:last-child{font-weight:600;text-align:right;}
 .wtx-ic{flex:0 0 auto;width:38px;height:38px;border-radius:11px;display:grid;place-items:center;}
 .wtx-ic svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.9;fill:none;}
 .wtx-ic.cr{background:var(--money-bg);color:var(--money);}
@@ -13888,6 +13901,14 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Wallet transaction detail (tap a history row) -->
+<div class="overlay hidden" id="walletTxView" onclick="if(event.target===this)closeOverlay('walletTxView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Transaction details">
+    <button class="sheet-close" onclick="closeOverlay('walletTxView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="walletTxBody"></div>
+  </div>
+</div>
+
 <!-- Move money in/out of a pot -->
 <div class="overlay hidden" id="potMoveView" onclick="if(event.target===this)closeOverlay('potMoveView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Move money">
@@ -16475,7 +16496,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1457'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1458'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -33045,9 +33066,35 @@ function acWalletRow(t) {
     ? '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H5"/><circle cx="16.5" cy="12.5" r="1.3"/></svg>'
     : '<svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
   const sub = t.note ? escHtml(t.note) : when;
-  return `<div class="wtx"><span class="wtx-ic ${credit ? 'cr' : 'db'}">${ic}</span>
+  return `<div class="wtx" onclick="acOpenWalletTx(${t.id})" style="cursor:pointer;"><span class="wtx-ic ${credit ? 'cr' : 'db'}">${ic}</span>
     <div class="wtx-main"><div class="wtx-title">${escHtml(title)}</div><div class="wtx-sub">${sub}</div></div>
     <div class="wtx-amt ${credit ? 'cr' : 'db'}">${credit ? '+' : '−'}${acMoneyFmt(t.deltaCents)}</div></div>`;
+}
+// Cash-App-style transaction detail: tap a ledger row → the full record —
+// amount, who, note, exact time, running balance and the ledger reference.
+const _WTX_LABELS = { topup: 'Added money', cashout: 'Cashed out to bank', receive: 'Money received', send: 'Money sent', pot_in: 'Moved into a pot', pot_out: 'Moved out of a pot', escrow_hold: 'Held for a protected order', escrow_release: 'Protected order released', escrow_refund: 'Protected order refunded', deposit_hold: 'Booking deposit held', shipping_label: 'Shipping label', return_label: 'Return label', handle: 'Handle purchase', order: 'Order', tip: 'Tip', gift_card: 'Gift card' };
+function acOpenWalletTx(id) {
+  const t = (AC._walletTx || []).find((x) => x.id === id); if (!t) return;
+  const credit = t.deltaCents >= 0;
+  const label = _WTX_LABELS[t.kind] || (t.kind || 'Transaction').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+  let when = acTime(t.createdAt);
+  try { const d = new Date(t.createdAt); when = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch (_) {}
+  const peer = t.peer ? `<div class="wtxd-peer" onclick="closeOverlay('walletTxView');closeOverlay('walletView');acGoProfile('${t.peer.username}')">
+      ${acAvatarHtml(t.peer.name, t.peer.avatar, 'user-avatar sm', t.peer.accountType === 'business')}
+      <div><div class="wtxd-peer-name">${escHtml(t.peer.name || '')}</div><div class="wtxd-peer-user">@${escHtml(t.peer.username || '')}</div></div>
+    </div>` : '';
+  const row = (k, v) => `<div class="wtxd-row"><span>${k}</span><span>${v}</span></div>`;
+  document.getElementById('walletTxBody').innerHTML = `
+    <div class="wtxd-amt ${credit ? 'cr' : ''}">${credit ? '+' : '−'}${acMoneyFmt(t.deltaCents)}</div>
+    <div class="wtxd-label">${escHtml(label)}</div>
+    ${peer}
+    ${t.note ? `<div class="wtxd-note">${escHtml(t.note)}</div>` : ''}
+    <div class="wtxd-rows">
+      ${row('Date', escHtml(when))}
+      ${t.balanceAfter != null ? row('Balance after', acMoneyFmt(t.balanceAfter)) : ''}
+      ${row('Reference', '#' + t.id)}
+    </div>`;
+  showOverlay('walletTxView');
 }
 // Open the send sheet pre-targeting a person (from a profile / chat / action sheet).
 function acOpenSendMoney(id, name, username) {
