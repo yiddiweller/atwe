@@ -1759,6 +1759,8 @@ const PUSH_VERBS = {
   event_rsvp: 'is going to your event', event_reminder: 'an event you’re going to starts soon', rec_received: 'recommended you',
   creator_sub: 'subscribed to you', tip: 'sent you a tip', appt_request: 'requested an appointment',
   appt_rescheduled: 'proposed a new appointment time',
+  appt_reminder: 'has an appointment with you soon',
+  call_reminder: 'has a call with you soon',
   order_shipped: 'shipped your order', order_delivered: 'marked your order delivered',
   return_label_ready: 'sent you a prepaid return label',
   restock: 'restocked an item you saved',
@@ -20392,6 +20394,36 @@ async function flushEventReminders() {
 }
 registerJob('event_reminders', 'Event reminders', 5 * 60000);
 setInterval(trackJob('event_reminders', flushEventReminders), 5 * 60000).unref?.();
+// Reminders ~1h before a CONFIRMED appointment (both parties) and a confirmed
+// scheduled call (both parties). Same claim-first UPDATE pattern as events, so
+// overlapping ticks can never double-remind.
+async function flushApptReminders() {
+  if (!db.isConfigured()) return 0;
+  let n = 0;
+  const appts = await db.query(
+    `UPDATE appointments SET reminded = true
+      WHERE status = 'confirmed' AND NOT reminded
+        AND when_at > now() AND when_at <= now() + interval '60 minutes'
+      RETURNING id, business_id, customer_id`);
+  for (const a of appts.rows) {
+    try { await notify(a.customer_id, a.business_id, 'appt_reminder'); } catch (_) {}
+    try { await notify(a.business_id, a.customer_id, 'appt_reminder'); } catch (_) {}
+  }
+  n += appts.rowCount;
+  const calls = await db.query(
+    `UPDATE scheduled_calls SET reminded = true
+      WHERE status = 'confirmed' AND NOT reminded
+        AND when_at > now() AND when_at <= now() + interval '60 minutes'
+      RETURNING id, organizer_id, invitee_id`);
+  for (const c of calls.rows) {
+    try { await notify(c.invitee_id, c.organizer_id, 'call_reminder'); } catch (_) {}
+    try { await notify(c.organizer_id, c.invitee_id, 'call_reminder'); } catch (_) {}
+  }
+  n += calls.rowCount;
+  return n;
+}
+registerJob('appt_reminders', 'Appointment & call reminders', 5 * 60000);
+setInterval(trackJob('appt_reminders', flushApptReminders), 5 * 60000).unref?.();
 // Withdraw RSVP.
 app.delete('/api/events/:id/rsvp', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
