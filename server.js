@@ -8109,7 +8109,7 @@ async function recomputeNoteStatus(noteId) {
   } catch (e) { /* best-effort */ }
 }
 const POSTS_SELECT = `
-  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.media_name, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only, p.min_tier_level, p.image_alt, p.ppv_cents, p.occasion, p.article_title, p.pinned_reply_id,
+  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.media_name, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only, p.min_tier_level, p.image_alt, p.ppv_cents, p.occasion, p.article_title, p.pinned_reply_id, p.poll_ends_at,
          (p.promoted_until IS NOT NULL AND p.promoted_until > now()) AS promoted,
          (p.subscribers_only = false OR p.user_id = $1 OR EXISTS(SELECT 1 FROM creator_subs cs LEFT JOIN creator_tiers ct ON ct.id = cs.tier_id WHERE cs.creator_id = p.user_id AND cs.subscriber_id = $1 AND cs.status = 'active' AND (cs.period_end IS NULL OR cs.period_end > now()) AND COALESCE(ct.level, 0) >= p.min_tier_level)) AS sub_ok,
          (COALESCE(p.ppv_cents,0) = 0 OR p.user_id = $1 OR EXISTS(SELECT 1 FROM post_unlocks pu WHERE pu.post_id = p.id AND pu.user_id = $1)) AS ppv_ok,
@@ -8233,7 +8233,8 @@ function mapPost(r) {
   let poll = null;
   if (r.poll_options && r.poll_options.length) {
     const total = r.poll_options.reduce((s, o) => s + o.votes, 0);
-    poll = { options: r.poll_options, total, myVote: r.my_vote || null };
+    const closed = !!(r.poll_ends_at && new Date(r.poll_ends_at) <= new Date());
+    poll = { options: r.poll_options, total, myVote: r.my_vote || null, endsAt: r.poll_ends_at || null, closed };
   }
   // A locked post the viewer can't access — subscriber-only (no active sub) or
   // pay-per-view (not unlocked). Ship a placeholder with no body/media/poll so the
@@ -10089,6 +10090,8 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), re
   // Poll options (2–4) — top-level posts only.
   const pollOpts = (Array.isArray(req.body.poll) ? req.body.poll : []).map((x) => String(x || '').trim()).filter(Boolean).slice(0, 4);
   const hasPoll = pollOpts.length >= 2 && (req.body.parentId == null || req.body.parentId === '');
+  // Poll duration (LinkedIn-style): 1 / 3 / 7 / 14 days (default 7). Closes voting.
+  const pollDays = [1, 3, 7, 14].includes(Number(req.body.pollDays)) ? Number(req.body.pollDays) : 7;
   // Long-form article: a headline (top-level posts only) turns this into an article,
   // whose body may be much longer than a normal post.
   const articleTitle = (req.body.parentId == null || req.body.parentId === '')
@@ -10210,8 +10213,8 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), re
     // Celebration: an occasion tag on a top-level post gives its card a festive banner.
     const occasion = (parentId == null && POST_OCCASIONS.includes(req.body.occasion)) ? req.body.occasion : null;
     const ins = await db.query(
-      `INSERT INTO posts (user_id, body, image, images, media, media_kind, media_name, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope, subscribers_only, image_alt, ppv_cents, min_tier_level, product_id, occasion, article_title)
-       VALUES ($1, $2, $3, $4, $5, $6, $20, $7, $8, $9, COALESCE($10::timestamptz, now()), $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING id`,
+      `INSERT INTO posts (user_id, body, image, images, media, media_kind, media_name, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope, subscribers_only, image_alt, ppv_cents, min_tier_level, product_id, occasion, article_title, poll_ends_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $20, $7, $8, $9, COALESCE($10::timestamptz, now()), $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, ${hasPoll ? `now() + interval '${pollDays} days'` : 'NULL'}) RETURNING id`,
       [req.user.id, body, image, images.length > 1 ? images : null, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId, replyScope, subscribersOnly, imageAlt, ppvCents, minTierLevel, productId, occasion, articleTitle, media.name]
     );
     const postId = ins.rows[0].id;
@@ -11449,6 +11452,11 @@ app.post('/api/social/posts/:id/vote', auth.requireAuth, async (req, res) => {
     if (!(await requireHandle(req, res))) return;
     const o = await db.query('SELECT 1 FROM post_poll_options WHERE id = $1 AND post_id = $2', [optionId, id]);
     if (!o.rows[0]) return res.status(404).json({ error: 'That poll is no longer available.' });
+    // A poll stops accepting votes once its duration elapses — results become final.
+    const pc = await db.query('SELECT poll_ends_at FROM posts WHERE id = $1', [id]);
+    if (pc.rows[0] && pc.rows[0].poll_ends_at && new Date(pc.rows[0].poll_ends_at) <= new Date()) {
+      return res.status(400).json({ error: 'This poll has closed.' });
+    }
     await db.query('INSERT INTO post_poll_votes (post_id, user_id, option_id) VALUES ($1, $2, $3) ON CONFLICT (post_id, user_id) DO NOTHING', [id, req.user.id, optionId]);
     const { rows } = await db.query(POSTS_SELECT + 'WHERE p.id = $2', [req.user.id, id]);
     res.json({ post: mapPost(rows[0]) });

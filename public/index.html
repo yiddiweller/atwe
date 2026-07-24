@@ -1189,6 +1189,9 @@ body.light #acPostSched{color-scheme:light;}
 .ac-poll-edit-bar{display:flex;align-items:center;justify-content:space-between;}
 .ac-poll-add{background:none;border:none;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;padding:4px 0;}
 .ac-poll-rm{background:none;border:none;color:var(--t3);font-size:13.5px;cursor:pointer;padding:4px 0;}
+.ac-poll-dur{display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px solid var(--b2);}
+.ac-poll-dur-lbl{font-size:13.5px;color:var(--t2);font-weight:600;}
+.ac-poll-dur-sel{background:var(--s1);border:none;color:var(--t1);font-size:13.5px;font-weight:600;padding:7px 10px;border-radius:10px;cursor:pointer;}
 #acPollBtn.on{color:var(--accent);}
 /* Poll inside a post */
 .ac-poll{display:flex;flex-direction:column;gap:7px;margin:8px 0 2px;}
@@ -1198,6 +1201,8 @@ body.light #acPostSched{color-scheme:light;}
 button.ac-poll-opt:hover{background:var(--accent-dim);border-color:var(--accent);}
 .ac-poll-opt.voted{cursor:default;border-color:var(--b2);font-weight:500;}
 .ac-poll-opt.voted.mine{font-weight:700;}
+.ac-poll-opt.voted.win{font-weight:700;}
+.ac-poll-opt.voted.win .ac-poll-txt::after{content:'✓';margin-left:6px;color:var(--accent);font-weight:700;}
 .ac-poll-fill{position:absolute;left:0;top:0;bottom:0;background:var(--accent-dim);z-index:0;border-radius:var(--r-pill);transition:width var(--t-slow) var(--ease);}
 .ac-poll-opt.voted.mine .ac-poll-fill{background:var(--accent);opacity:.32;}
 .ac-poll-txt,.ac-poll-pct{position:relative;z-index:1;}
@@ -15386,6 +15391,15 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
             <button class="ac-poll-add" id="acPollAdd" onclick="acPollAddOption()">＋ Add option</button>
             <button class="ac-poll-rm" onclick="acTogglePoll()">Remove poll</button>
           </div>
+          <div class="ac-poll-dur">
+            <span class="ac-poll-dur-lbl">Poll length</span>
+            <select class="ac-poll-dur-sel" id="acPollDur" aria-label="Poll length">
+              <option value="1">1 day</option>
+              <option value="3">3 days</option>
+              <option value="7" selected>1 week</option>
+              <option value="14">2 weeks</option>
+            </select>
+          </div>
         </div>
       </div>
       <!-- Where to share: your feed + any of your circles -->
@@ -16134,7 +16148,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1400'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1401'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -28570,15 +28584,29 @@ function acLocHtml(p) {
   return `<div class="ac-post-loc"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>${escHtml(p.location)}</div>`;
 }
 // Poll inside a post — clickable options before you vote, result bars after.
+function acPollTimeLeft(endsAt) {
+  if (!endsAt) return '';
+  const ms = new Date(endsAt) - new Date();
+  if (ms <= 0) return 'Final results';
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60) return mins + 'm left';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h left';
+  const days = Math.floor(hrs / 24);
+  return days + 'd left';
+}
 function acPollHtml(p) {
   if (!p.poll) return '';
-  const poll = p.poll, voted = poll.myVote != null, total = poll.total || 0;
+  const poll = p.poll, closed = !!poll.closed, voted = poll.myVote != null || closed, total = poll.total || 0;
+  const winner = closed && total ? poll.options.reduce((a, b) => (b.votes > a.votes ? b : a), poll.options[0]).id : null;
   const opts = poll.options.map(o => {
     const pct = total ? Math.round(o.votes / total * 100) : 0;
-    if (voted) return `<div class="ac-poll-opt voted ${poll.myVote === o.id ? 'mine' : ''}"><div class="ac-poll-fill" style="width:${pct}%"></div><span class="ac-poll-txt">${escHtml(o.text)}</span><span class="ac-poll-pct">${pct}%</span></div>`;
+    if (voted) return `<div class="ac-poll-opt voted ${poll.myVote === o.id ? 'mine' : ''} ${winner === o.id ? 'win' : ''}"><div class="ac-poll-fill" style="width:${pct}%"></div><span class="ac-poll-txt">${escHtml(o.text)}</span><span class="ac-poll-pct">${pct}%</span></div>`;
     return `<button class="ac-poll-opt" onclick="event.stopPropagation();acVotePoll(${p.id},${o.id},this)">${escHtml(o.text)}</button>`;
   }).join('');
-  return `<div class="ac-poll" onclick="event.stopPropagation()">${opts}<div class="ac-poll-total">${total} vote${total === 1 ? '' : 's'}</div></div>`;
+  const left = poll.endsAt ? acPollTimeLeft(poll.endsAt) : '';
+  const meta = total + ' vote' + (total === 1 ? '' : 's') + (left ? ' · ' + left : '');
+  return `<div class="ac-poll" onclick="event.stopPropagation()">${opts}<div class="ac-poll-total">${meta}</div></div>`;
 }
 function acVotePoll(postId, optionId, btn) {
   API.req('POST', '/api/social/posts/' + postId + '/vote', { optionId })
@@ -30408,6 +30436,7 @@ function acResetPoll() {
   document.getElementById('acPollOpts').innerHTML =
     '<input class="ac-poll-in" maxlength="80" placeholder="Choice 1" oninput="acPostInput()"/>' +
     '<input class="ac-poll-in" maxlength="80" placeholder="Choice 2" oninput="acPostInput()"/>';
+  const dur = document.getElementById('acPollDur'); if (dur) dur.value = '7';
   document.getElementById('acPollBtn').classList.remove('on');
 }
 function acTogglePoll() {
@@ -30962,7 +30991,7 @@ async function acSubmitPost() {
   else if (_acPostGif) payload.gifUrl = _acPostGif;
   const altVal = (document.getElementById('acPostAlt')?.value || '').trim();
   if (_acPostImgs.length && altVal) payload.imageAlt = altVal;
-  if (poll.length >= 2) payload.poll = poll;
+  if (poll.length >= 2) { payload.poll = poll; payload.pollDays = parseInt(document.getElementById('acPollDur')?.value, 10) || 7; }
   if (AC._quoteId) payload.quoteId = AC._quoteId;
   if (AC._replyScope && AC._replyScope !== 'everyone') payload.replyScope = AC._replyScope;
   if (AC._subOnly && AC._postToMain !== false && !(AC._postSel && AC._postSel.size)) {
