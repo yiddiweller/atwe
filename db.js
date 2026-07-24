@@ -1586,6 +1586,8 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS saved_market_searches_user_idx ON saved_market_searches(user_id);`);
+  // Per-search alert switch (on by default — matches the old always-alert behaviour).
+  await query(`ALTER TABLE saved_market_searches ADD COLUMN IF NOT EXISTS notify BOOLEAN NOT NULL DEFAULT true;`);
   // Affiliate / creator commissions: any user can generate a referral link for a
   // product; a purchase through it credits them a % of the sale (from the seller's
   // proceeds). `affiliate_links` maps a code → (promoter, product); `affiliate_earnings`

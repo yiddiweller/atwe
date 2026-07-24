@@ -16664,7 +16664,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1499'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1500'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -34598,8 +34598,9 @@ async function acOpenSavedSearches() {
   const body = document.getElementById('savedSearchBody'); body.innerHTML = acSkelRows(2);
   try {
     const { searches } = await API.req('GET', '/api/saved-market-searches');
-    body.innerHTML = (searches && searches.length) ? searches.map(s => `<div class="ac-item" style="cursor:default;">
-        <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">“${escHtml(s.q)}”</span></div><div class="ac-item-last">${s.kind ? (_PROD_KIND[s.kind] || s.kind) : 'Any type'}</div></div>
+    body.innerHTML = (searches && searches.length) ? searches.map(s => `<div class="ac-item" style="cursor:default;" data-ssid="${s.id}">
+        <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">“${escHtml(s.q)}”</span></div><div class="ac-item-last"><span class="ss-alert-state">${s.notify ? 'Alerts on' : 'Alerts off'}</span> · ${s.kind ? (_PROD_KIND[s.kind] || s.kind) : 'Any type'}</div></div>
+        <button class="ac-ss-bell ${s.notify ? 'on' : ''}" onclick="acToggleMarketAlert(${s.id},this)" aria-label="${s.notify ? 'Turn alerts off' : 'Turn alerts on'}">${s.notify ? _BELL_ON : _BELL_OFF}</button>
         <button class="ac-join-btn" onclick="acDeleteSavedSearch(${s.id},this)">Remove</button></div>`).join('')
       : '<div class="ac-empty" style="padding:26px;">No saved searches yet. Search the marketplace and tap “Save this search”.</div>';
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">Could not load.</div>'; }
@@ -34607,6 +34608,19 @@ async function acOpenSavedSearches() {
 async function acDeleteSavedSearch(id, btn) {
   try { await API.req('DELETE', '/api/saved-market-searches/' + id); const row = btn && btn.closest('.ac-item'); if (row) row.remove(); }
   catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
+// Mute / unmute a saved marketplace search (keeps the search, stops the pings).
+async function acToggleMarketAlert(id, btn) {
+  const on = !btn.classList.contains('on');
+  try {
+    await API.req('PATCH', '/api/saved-market-searches/' + id, { notify: on });
+    btn.classList.toggle('on', on);
+    btn.innerHTML = on ? _BELL_ON : _BELL_OFF;
+    btn.setAttribute('aria-label', on ? 'Turn alerts off' : 'Turn alerts on');
+    const st = btn.closest('.ac-item')?.querySelector('.ss-alert-state');
+    if (st) st.textContent = on ? 'Alerts on' : 'Alerts off';
+    showNotif(on ? 'Alerts on for this search.' : 'Alerts off — the search is saved.');
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
 }
 /* ─── Affiliate / creator commissions ─── */
 async function acGetAffiliateLink(productId) {
