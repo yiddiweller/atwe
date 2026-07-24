@@ -14513,6 +14513,20 @@ app.post('/api/loyalty/redeem', auth.requireAuth, rateLimit(20, 60000, 'loyalty-
 // A QR code encoding the member's profile deep link (/<username>) — others scan it
 // to jump straight to the profile (and connect/follow). Generated server-side (the
 // `qrcode` dep) as a data URL; scanning is client-side via the vendored jsQR.
+// QR for a payment link (owner-only) — print it / show it at a counter so a
+// customer scans to pay in person (Venmo/PayPal-QR style).
+app.get('/api/payment-links/:id/qr', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid link.' });
+  try {
+    const l = (await db.query('SELECT code, amount_cents, note FROM payment_links WHERE id = $1 AND user_id = $2', [id, req.user.id])).rows[0];
+    if (!l) return res.status(404).json({ error: 'Payment link not found.' });
+    const origin = (process.env.APP_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+    const link = `${origin}/?paylink=${encodeURIComponent(l.code)}`;
+    const dataUrl = await QRCode.toDataURL(link, { width: 360, margin: 1, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } });
+    res.json({ link, dataUrl, amountCents: l.amount_cents, note: l.note || null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not generate the QR code.' }); }
+});
 app.get('/api/me/qr', auth.requireAuth, async (req, res) => {
   try {
     const u = (await db.query('SELECT username, name FROM users WHERE id = $1', [req.user.id])).rows[0];
