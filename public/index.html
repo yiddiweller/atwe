@@ -6477,6 +6477,8 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 /* Marketplace — post-style listing cards */
 .user-avatar.sm{width:34px;height:34px;}
 .mkt-card{background:var(--s1);border:none;border-radius:16px;overflow:hidden;margin-bottom:12px;}
+/* "typing…" live preview on a chat-list row */
+.ac-typing-prev{color:var(--accent);font-weight:600;}
 /* Search-within-Collections bar */
 .bmk-search-wrap{display:flex;align-items:center;gap:9px;background:var(--s1);border-radius:var(--r-pill);padding:10px 15px;margin:10px var(--feed-gutter) 2px;}
 .bmk-search-wrap svg{width:16px;height:16px;flex-shrink:0;fill:none;stroke:var(--t3);stroke-width:2;stroke-linecap:round;}
@@ -16342,7 +16344,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1419'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1420'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -40540,12 +40542,34 @@ let _typers = {}; // id -> { name, timer }
 function rtOnTyping(d) {
   if (d.from && d.from.id === S.user?.id) return; // never show your own typing (self-chat)
   if (!d.from) return;
+  acListTyping(d); // WhatsApp-style "typing…" preview on the chat-list row (any screen)
   const relevant = (d.groupId != null) ? rtThreadOpen('group', d.groupId) : rtThreadOpen('dm', d.from.id);
   if (!relevant) return;
   const id = d.from.id;
   if (_typers[id]) clearTimeout(_typers[id].timer);
   _typers[id] = { name: d.from.name || '', timer: setTimeout(() => { delete _typers[id]; acRenderTyping(); }, 4000) };
   acRenderTyping();
+}
+// Swap a chat-list row's last-message preview for a live "typing…" while the other
+// side types (restored after a beat of silence). Keyed per row so several chats can
+// show it at once; a re-render simply drops the swap (state lives in the DOM).
+const _listTypers = {};
+function acListTyping(d) {
+  const key = d.groupId != null ? 'g' + d.groupId : 'd' + d.from.id;
+  const sel = d.groupId != null ? `#acListScreen .ac-item[data-gid="${d.groupId}"]` : `#acListScreen .ac-item[data-uid="${d.from.id}"]`;
+  const row = document.querySelector(sel); if (!row) return;
+  const prev = row.querySelector('.ac-item-last'); if (!prev) return;
+  if (!_listTypers[key]) _listTypers[key] = { html: prev.innerHTML };
+  else clearTimeout(_listTypers[key].timer);
+  const who = (d.groupId != null && d.from.name) ? escHtml(d.from.name.split(' ')[0]) + ' is typing…' : 'typing…';
+  prev.innerHTML = `<span class="ac-typing-prev">${who}</span>`;
+  _listTypers[key].timer = setTimeout(() => {
+    const r = document.querySelector(sel);
+    const p = r && r.querySelector('.ac-item-last');
+    // Only restore if our "typing…" is still what's showing (a list re-render wins).
+    if (p && p.querySelector('.ac-typing-prev')) p.innerHTML = _listTypers[key].html;
+    delete _listTypers[key];
+  }, 4000);
 }
 // Render the typing indicator as the LAST row of the open thread, so the dots sit
 // UNDER the latest message instead of covering it. The row is kept out of the
