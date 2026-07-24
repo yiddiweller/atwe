@@ -7383,6 +7383,9 @@ body.light .ac-adcard{box-shadow:0 4px 16px rgba(15,20,25,.07);}
 .ac-trend-n{font-size:11.5px;color:var(--t3);}
 
 /* New-post composer */
+/* Note-to-seller input in the checkout sheet */
+.co-note{margin:10px 0 2px;}
+.co-note .co-promo-in{width:100%;box-sizing:border-box;}
 /* ALT chip on post images that carry a description (X-style) */
 .ac-img-wrap{position:relative;}
 .ac-alt-badge{position:absolute;right:10px;bottom:10px;background:rgba(0,0,0,.72);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:800;letter-spacing:.4px;padding:3px 7px;cursor:pointer;font-family:inherit;}
@@ -16609,7 +16612,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1482'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1483'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -36055,7 +36058,7 @@ async function acDeleteAddress(id) {
 /* ── Checkout (address-aware) ── */
 // ctx: { mode:'buy'|'cart', productId|sellerId, qty, name, subtotalCents, shippingCents, needsShipping }
 async function acOpenCheckout(ctx) {
-  AC._co = ctx; AC._coAddrId = null; AC._coCoupon = null; AC._coDiscount = 0; AC._coQuote = null; AC._coRateId = null; AC._coPickup = false;
+  AC._co = ctx; AC._coAddrId = null; AC._coCoupon = null; AC._coDiscount = 0; AC._coQuote = null; AC._coRateId = null; AC._coPickup = false; AC._coNote = '';
   AC._coGiftCards = []; AC._coSource = null;
   showOverlay('checkoutView');
   const b = document.getElementById('checkoutBody'); b.innerHTML = acSkelRows(3);
@@ -36123,6 +36126,8 @@ function acRenderCheckout() {
     ${AC._coCoupon ? `<div class="co-promo-on"><span>✓ Code <b>${escHtml(AC._coCoupon.code)}</b> applied</span><button class="ac-link-btn" onclick="acClearCoupon()">Remove</button></div>`
       : `<div class="co-promo-row"><input id="coPromoIn" class="co-promo-in" placeholder="Promo code" autocapitalize="characters" autocomplete="off" onkeydown="if(event.key==='Enter')acApplyCoupon()"><button class="ac-pill-btn" id="coPromoBtn" onclick="acApplyCoupon()">Apply</button></div>
       <div id="coPromoErr" class="co-promo-err"></div>`}</div>` : '';
+  // Etsy-style optional note to the seller (kept across re-renders via AC._coNote).
+  const noteRow = `<div class="co-note"><input id="coNoteIn" class="co-promo-in" maxlength="500" placeholder="Note to seller (optional)" autocomplete="off" value="${escHtml(AC._coNote || '')}" oninput="AC._coNote = this.value"></div>`;
   const summary = `<div class="co-summary">
     <div class="co-line"><span>Subtotal</span><span>${acMoney(subtotalCents)}</span></div>
     ${discount ? `<div class="co-line disc"><span>${AC._coCoupon ? 'Discount (' + escHtml(AC._coCoupon.code) + ')' : (c.fixedDiscount ? 'Bundle discount' : 'Discount')}</span><span>−${acMoney(discount)}</span></div>` : ''}
@@ -36160,7 +36165,7 @@ function acRenderCheckout() {
     ${bal ? `<button class="ac-pill-btn pay-prot" style="width:100%;margin-top:8px;" ${canPay ? '' : 'disabled'} onclick="acCheckoutPay('escrow')"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-inline-end:5px;"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>Buy with protection</button>
     <div class="esc-note"><span class="esc-dot"></span>With protection, your money is held in escrow and released when you confirm delivery.</div>` : ''}
     ${(c.needsShipping && !pickupMode && !AC._coAddrId) ? '<div class="ac-disc-sub" style="margin-top:8px;text-align:center;">Add a shipping address to continue.</div>' : ''}`;
-  b.innerHTML = `${c.name ? `<div class="co-item">${escHtml(c.name)}${c.qty > 1 ? ' × ' + c.qty : ''}</div>` : ''}${fulfill}${addrBlock}${rateBlock}${promo}${summary}${pay}`;
+  b.innerHTML = `${c.name ? `<div class="co-item">${escHtml(c.name)}${c.qty > 1 ? ' × ' + c.qty : ''}</div>` : ''}${fulfill}${addrBlock}${rateBlock}${promo}${noteRow}${summary}${pay}`;
 }
 // Switch checkout between shipping and local pickup.
 function acSetFulfillment(mode) { AC._coPickup = (mode === 'pickup'); if (acQuoteActive() && !AC._coPickup) acRefreshQuote(); else acRenderCheckout(); }
@@ -37642,6 +37647,7 @@ async function acCheckoutPay(payWith, giftCardId) {
   else if (c.needsShipping) body.addressId = AC._coAddrId;
   if (!pickupMode && AC._coRateId) body.shipRateId = AC._coRateId;
   if (AC._coCoupon) body.couponCode = AC._coCoupon.code;
+  if (AC._coNote && AC._coNote.trim()) body.note = AC._coNote.trim().slice(0, 500); // note to seller
   if (payWith === 'balance') { body.payWith = 'balance'; if (giftCardId) body.giftCardId = giftCardId; }
   else if (payWith === 'escrow') body.protected = true;
   try {
