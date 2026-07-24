@@ -1748,6 +1748,18 @@ async function notify(userId, actorId, type, postId, feedId, groupId, productId,
   } catch (e) { /* notifications are best-effort */ }
 }
 
+// A SYSTEM alert addressed to the user themselves (e.g. "your item sold out").
+// notify() deliberately drops self-notifications, so these go in directly; the
+// client renders them with the Atwe mark rather than an actor avatar.
+async function notifySelf(userId, type, productId) {
+  if (!userId) return;
+  try {
+    await db.query('INSERT INTO notifications (user_id, actor_id, type, product_id) VALUES ($1, $1, $2, $3)', [userId, type, productId || null]);
+    rtPush(userId, 'notif', { type });
+    sendPushForNotif(userId, userId, type).catch(() => {});
+  } catch (e) { /* best-effort */ }
+}
+
 // Short server-side verb map for push bodies (mirrors the client's notif copy).
 const PUSH_VERBS = {
   like: 'liked your post', reply: 'replied to your post', follow: 'followed you',
@@ -1760,6 +1772,8 @@ const PUSH_VERBS = {
   creator_sub: 'subscribed to you', tip: 'sent you a tip', appt_request: 'requested an appointment',
   appt_rescheduled: 'proposed a new appointment time',
   appt_reminder: 'has an appointment with you soon',
+  stock_low: 'is running low — only a few left',
+  stock_out: 'has sold out',
   call_reminder: 'has a call with you soon',
   order_shipped: 'shipped your order', order_delivered: 'marked your order delivered',
   return_label_ready: 'sent you a prepaid return label',
@@ -17868,10 +17882,28 @@ async function resolveShipping(userId, body, items) {
 // guarded UPDATE; variant-level stock lives in products.variants JSONB and is decremented
 // under a row lock (read-modify-write FOR UPDATE) so concurrent buys can't oversell. The
 // whole reservation runs in one transaction so a shortfall on any line rolls all back.
+// Heads-up to a seller when a sale takes a tracked item to its last few units
+// (or to zero). Fires once per crossing — a further sale at the same low level
+// won't re-notify, because the threshold is only crossed on the way down.
+const LOW_STOCK_AT = 3;
+function notifyLowStock(rows) {
+  for (const r of rows || []) {
+    try {
+      if (r.stock == null) continue;
+      const before = r.stock + (r.qty || 0);
+      // Sold out: only on the sale that actually emptied it.
+      if (r.stock === 0) { if (before > 0) notifySelf(r.business_id, 'stock_out', r.id); continue; }
+      // Running low: only on the sale that crossed the threshold, so repeated
+      // sales while already low don't nag.
+      if (r.stock <= LOW_STOCK_AT && before > LOW_STOCK_AT) notifySelf(r.business_id, 'stock_low', r.id);
+    } catch (_) { /* best-effort */ }
+  }
+}
 async function applyStock(items) {
   const tracked = (items || []).filter(it => it.variant_id != null || (it.stock !== null && it.stock !== undefined));
   if (!tracked.length) return { ok: true };
   const client = await db.getPool().connect();
+  const lowAfter = []; // post-commit rows for the low-stock heads-up
   try {
     await client.query('BEGIN');
     for (const it of tracked) {
@@ -17886,11 +17918,13 @@ async function applyStock(items) {
           await client.query('UPDATE products SET variants = $2 WHERE id = $1', [it.product_id, JSON.stringify(variants)]);
         }
       } else {
-        const r = await client.query('UPDATE products SET stock = stock - $2 WHERE id = $1 AND stock >= $2 RETURNING id', [it.product_id, it.qty]);
+        const r = await client.query('UPDATE products SET stock = stock - $2 WHERE id = $1 AND stock >= $2 RETURNING id, stock, business_id, name', [it.product_id, it.qty]);
         if (!r.rowCount) { await client.query('ROLLBACK'); return { ok: false, error: `“${it.name}” is out of stock.` }; }
+        lowAfter.push({ ...r.rows[0], qty: it.qty });
       }
     }
     await client.query('COMMIT');
+    notifyLowStock(lowAfter); // fire-and-forget, after the stock is really committed
     return { ok: true };
   } catch (e) { await client.query('ROLLBACK').catch(() => {}); console.error(e); return { ok: false, error: 'Could not reserve stock.' }; }
   finally { client.release(); }
