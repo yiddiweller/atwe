@@ -19406,6 +19406,91 @@ app.get('/api/dashboard', auth.requireAuth, async (req, res) => {
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your dashboard.' }); }
 });
+// ── Scheduled peer calls ("book a call for later") ──
+const SCHED_CALL_JOIN_WINDOW_MS = 10 * 60 * 1000; // "Join" appears ±10 min of the time
+function scheduledCallView(row, meId) {
+  const isOrg = row.organizer_id === meId;
+  const other = isOrg
+    ? { id: row.invitee_id, name: row.inv_name, username: row.inv_username, avatar: row.inv_avatar || null }
+    : { id: row.organizer_id, name: row.org_name, username: row.org_username, avatar: row.org_avatar || null };
+  const t = new Date(row.when_at).getTime();
+  const canJoin = row.status === 'confirmed' && Math.abs(Date.now() - t) <= SCHED_CALL_JOIN_WINDOW_MS;
+  return { id: row.id, whenAt: row.when_at, media: row.media, title: row.title || null, status: row.status, isOrganizer: isOrg, canJoin, with: other };
+}
+const SCHED_CALL_SELECT = `SELECT sc.*, o.name AS org_name, o.username AS org_username, o.avatar AS org_avatar,
+  iv.name AS inv_name, iv.username AS inv_username, iv.avatar AS inv_avatar
+  FROM scheduled_calls sc JOIN users o ON o.id = sc.organizer_id JOIN users iv ON iv.id = sc.invitee_id`;
+// Propose a call at a future time.
+app.post('/api/calls/schedule', auth.requireAuth, rateLimit(20, 60000, 'call-sched'), async (req, res) => {
+  const to = routeId(req.body.to);
+  if (!Number.isInteger(to)) return res.status(400).json({ error: 'Invalid person.' });
+  if (to === req.user.id) return res.status(400).json({ error: 'You can’t schedule a call with yourself.' });
+  const media = req.body.media === 'audio' ? 'audio' : 'video';
+  const title = (req.body.title || '').toString().trim().slice(0, 120) || null;
+  const when = new Date(req.body.whenAt);
+  if (isNaN(when.getTime())) return res.status(400).json({ error: 'Pick a valid date and time.' });
+  if (when.getTime() < Date.now() + 5 * 60000) return res.status(400).json({ error: 'Pick a time at least a few minutes from now.' });
+  if (when.getTime() > Date.now() + 365 * 24 * 3600 * 1000) return res.status(400).json({ error: 'That’s too far in the future.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const peer = (await db.query('SELECT username FROM users WHERE id = $1 AND username IS NOT NULL AND NOT deactivated', [to])).rows[0];
+    if (!peer) return res.status(404).json({ error: 'Person not found.' });
+    if (!(await dmAllowed(req.user.id, to))) return res.status(403).json({ error: 'You can’t message this person.' });
+    const ins = await db.query('INSERT INTO scheduled_calls (organizer_id, invitee_id, when_at, media, title) VALUES ($1,$2,$3,$4,$5) RETURNING id', [req.user.id, to, when.toISOString(), media, title]);
+    const meRow = await chatIdentity(req.user.id);
+    await pushMetaCard(req.user.id, to, { t: 'callschedule', callId: ins.rows[0].id, whenAt: when.toISOString(), media, title, organizerName: meRow ? meRow.name : '' }).catch(() => {});
+    notify(to, req.user.id, 'call_scheduled', null);
+    res.status(201).json({ id: ins.rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not schedule the call.' }); }
+});
+// Live detail (either party only).
+app.get('/api/calls/scheduled/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const row = (await db.query(SCHED_CALL_SELECT + ' WHERE sc.id = $1', [id])).rows[0];
+    if (!row || (row.organizer_id !== req.user.id && row.invitee_id !== req.user.id)) return res.status(404).json({ error: 'Not found.' });
+    res.json({ call: scheduledCallView(row, req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the call.' }); }
+});
+// Invitee accepts / declines.
+app.post('/api/calls/scheduled/:id/respond', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const accept = req.body.accept === true;
+  try {
+    const row = (await db.query('SELECT organizer_id, invitee_id, status FROM scheduled_calls WHERE id = $1', [id])).rows[0];
+    if (!row || row.invitee_id !== req.user.id) return res.status(404).json({ error: 'Not found.' });
+    if (row.status !== 'proposed') return res.status(400).json({ error: 'This call has already been ' + row.status + '.' });
+    await db.query('UPDATE scheduled_calls SET status = $1 WHERE id = $2', [accept ? 'confirmed' : 'declined', id]);
+    notify(row.organizer_id, req.user.id, accept ? 'call_confirmed' : 'call_declined', null);
+    res.json({ ok: true, status: accept ? 'confirmed' : 'declined' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not respond.' }); }
+});
+// Either party cancels.
+app.post('/api/calls/scheduled/:id/cancel', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const row = (await db.query('SELECT organizer_id, invitee_id, status FROM scheduled_calls WHERE id = $1', [id])).rows[0];
+    if (!row || (row.organizer_id !== req.user.id && row.invitee_id !== req.user.id)) return res.status(404).json({ error: 'Not found.' });
+    if (['declined', 'cancelled'].includes(row.status)) return res.json({ ok: true, status: row.status });
+    await db.query('UPDATE scheduled_calls SET status = $1 WHERE id = $2', ['cancelled', id]);
+    const other = row.organizer_id === req.user.id ? row.invitee_id : row.organizer_id;
+    notify(other, req.user.id, 'call_cancelled', null);
+    res.json({ ok: true, status: 'cancelled' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel.' }); }
+});
+// My upcoming scheduled calls (both directions).
+app.get('/api/calls/scheduled', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      SCHED_CALL_SELECT + ` WHERE (sc.organizer_id = $1 OR sc.invitee_id = $1) AND sc.status IN ('proposed','confirmed') AND sc.when_at > now() - interval '2 hours' ORDER BY sc.when_at ASC LIMIT 100`,
+      [req.user.id]);
+    res.json({ calls: rows.map((r) => scheduledCallView(r, req.user.id)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your calls.' }); }
+});
+
 app.get('/api/agenda', auth.requireAuth, async (req, res) => {
   const me = req.user.id;
   try {
@@ -19422,10 +19507,20 @@ app.get('/api/agenda', auth.requireAuth, async (req, res) => {
        LEFT JOIN event_rsvps r ON r.event_id = e.id AND r.user_id = $1
        WHERE e.starts_at > now() - interval '2 hours' AND (e.host_id = $1 OR r.user_id = $1)
        ORDER BY e.starts_at ASC LIMIT 200`, [me]);
+    const calls = await db.query(
+      `SELECT sc.id, sc.when_at, sc.media, sc.title, sc.status, sc.organizer_id, sc.invitee_id,
+              o.name AS org_name, o.username AS org_username, iv.name AS inv_name, iv.username AS inv_username
+       FROM scheduled_calls sc JOIN users o ON o.id = sc.organizer_id JOIN users iv ON iv.id = sc.invitee_id
+       WHERE (sc.organizer_id = $1 OR sc.invitee_id = $1) AND sc.status IN ('proposed','confirmed') AND sc.when_at > now() - interval '2 hours'
+       ORDER BY sc.when_at ASC LIMIT 200`, [me]);
     const items = [];
     for (const a of appts.rows) {
       const other = a.business_id === me ? { name: a.cust_name, username: a.cust_username } : { name: a.biz_name, username: a.biz_username };
       items.push({ type: 'appointment', id: a.id, title: a.service || 'Appointment', when: a.when_at, status: a.status, with: other });
+    }
+    for (const c of calls.rows) {
+      const other = c.organizer_id === me ? { name: c.inv_name, username: c.inv_username } : { name: c.org_name, username: c.org_username };
+      items.push({ type: 'call', id: c.id, title: c.title || ((c.media === 'audio' ? 'Voice' : 'Video') + ' call'), when: c.when_at, status: c.status, media: c.media, with: other });
     }
     for (const e of events.rows) {
       items.push({ type: 'event', id: e.id, title: e.title, when: e.starts_at, end: e.ends_at || null, online: !!e.online, location: e.location || null, hosting: !!e.hosting, rsvp: e.rsvp_status || null, with: { name: e.host_name } });
