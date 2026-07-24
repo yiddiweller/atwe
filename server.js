@@ -8015,6 +8015,8 @@ app.delete('/api/quick-replies/:id', auth.requireAuth, async (req, res) => {
 // Celebration-post occasions (LinkedIn-style): a whitelist so the client can only
 // set a known occasion tag on a top-level post.
 const POST_OCCASIONS = ['new_role', 'work_anniversary', 'certification', 'education', 'launch', 'new_business', 'milestone'];
+// Post reactions (LinkedIn-style). 'like' is the default/back-compat reaction.
+const POST_REACTIONS = ['like', 'celebrate', 'love', 'insightful', 'funny', 'support'];
 const POSTS_SELECT = `
   SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only, p.min_tier_level, p.image_alt, p.ppv_cents, p.occasion,
          (p.promoted_until IS NOT NULL AND p.promoted_until > now()) AS promoted,
@@ -8026,6 +8028,8 @@ const POSTS_SELECT = `
             'businessId', u.aff_business_id,
             'businessUsername', (SELECT bu.username FROM users bu WHERE bu.id = u.aff_business_id)) END AS author_affiliation,
          (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)::int AS likes,
+         (SELECT reaction FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = $1) AS my_reaction,
+         (SELECT json_object_agg(reaction, c) FROM (SELECT reaction, COUNT(*)::int AS c FROM post_likes WHERE post_id = p.id GROUP BY reaction) rc) AS reaction_counts,
          (SELECT COUNT(*) FROM posts r WHERE r.parent_id = p.id)::int AS replies,
          (SELECT COUNT(*) FROM post_reposts rp WHERE rp.post_id = p.id)::int AS reposts,
          (SELECT COUNT(*) FROM post_views pv WHERE pv.post_id = p.id)::int AS views,
@@ -8173,6 +8177,7 @@ function mapPost(r) {
     products: tagProductsFrom(r), product: (tagProductsFrom(r)[0] || null),
     parentId: r.parent_id || null, location: r.location || null,
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
+    myReaction: r.liked ? (r.my_reaction || 'like') : null, reactions: r.reaction_counts || null,
     reposts: r.reposts || 0, reposted: !!r.reposted, repostedBy: r.reposted_by || null,
     views: r.views || 0, bookmarked: !!r.bookmarked, quote,
     replyScope: r.reply_scope || 'everyone',
@@ -10284,10 +10289,15 @@ app.post('/api/social/posts/:id/like', auth.requireAuth, async (req, res) => {
     if (ownerId !== req.user.id && await blockedEither(req.user.id, ownerId)) {
       return res.status(403).json({ error: 'You can’t like this post.' });
     }
-    const r = await db.query('INSERT INTO post_likes (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING post_id', [id, req.user.id]);
+    const reaction = POST_REACTIONS.includes(req.body.reaction) ? req.body.reaction : 'like';
+    // Upsert the reaction: a new reaction inserts, a changed one updates in place.
+    const r = await db.query(
+      'INSERT INTO post_likes (post_id, user_id, reaction) VALUES ($1, $2, $3) ON CONFLICT (post_id, user_id) DO UPDATE SET reaction = EXCLUDED.reaction RETURNING (xmax = 0) AS inserted',
+      [id, req.user.id, reaction]);
     const c = await db.query('SELECT COUNT(*)::int AS likes FROM post_likes WHERE post_id = $1', [id]);
-    if (r.rowCount) notify(ownerId, req.user.id, 'like', id); // newly liked — notify the author
-    res.json({ ok: true, liked: true, likes: c.rows[0].likes });
+    const rc = await db.query('SELECT json_object_agg(reaction, cnt) AS m FROM (SELECT reaction, COUNT(*)::int cnt FROM post_likes WHERE post_id = $1 GROUP BY reaction) x', [id]);
+    if (r.rows[0] && r.rows[0].inserted) notify(ownerId, req.user.id, 'like', id); // newly reacted — notify the author once
+    res.json({ ok: true, liked: true, reaction, likes: c.rows[0].likes, reactions: rc.rows[0].m || null });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -10299,7 +10309,8 @@ app.delete('/api/social/posts/:id/like', auth.requireAuth, async (req, res) => {
   try {
     await db.query('DELETE FROM post_likes WHERE post_id = $1 AND user_id = $2', [id, req.user.id]);
     const c = await db.query('SELECT COUNT(*)::int AS likes FROM post_likes WHERE post_id = $1', [id]);
-    res.json({ ok: true, liked: false, likes: c.rows[0].likes });
+    const rc = await db.query('SELECT json_object_agg(reaction, cnt) AS m FROM (SELECT reaction, COUNT(*)::int cnt FROM post_likes WHERE post_id = $1 GROUP BY reaction) x', [id]);
+    res.json({ ok: true, liked: false, reaction: null, likes: c.rows[0].likes, reactions: rc.rows[0].m || null });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });

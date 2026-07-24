@@ -5591,6 +5591,28 @@ body.reduce-motion #acFeed{animation:none!important;}
 .ac-like.on svg{fill:var(--rose);stroke:var(--rose);}
 .ac-like:active svg{transform:scale(1.25);}
 @media(hover:hover){.ac-like:hover{color:var(--rose);}}
+/* Reactions: an emoji replaces the heart when a non-like reaction is chosen. */
+.ac-like .ac-react-emoji{font-size:17px;line-height:1;display:inline-flex;align-items:center;transition:transform var(--t-fast) var(--ease);}
+.ac-like:active .ac-react-emoji{transform:scale(1.25);}
+.ac-like.react-celebrate{color:var(--green);}
+.ac-like.react-love{color:var(--red);}
+.ac-like.react-insightful,.ac-like.react-funny{color:var(--amber);}
+.ac-like.react-support{color:var(--purple);}
+@media(hover:hover){.ac-like.react-celebrate:hover,.ac-like.react-love:hover,.ac-like.react-insightful:hover,.ac-like.react-funny:hover,.ac-like.react-support:hover{color:inherit;}}
+.ac-react-cluster{display:inline-flex;align-items:center;margin-left:-2px;}
+.ac-react-cluster .ac-rc-em{font-size:13px;line-height:1;margin-left:-3px;}
+.ac-react-cluster .ac-rc-em:first-child{margin-left:0;}
+/* Floating reaction bar (frosted menu material, pops above the like button). */
+.ac-react-bar{position:fixed;z-index:4000;display:flex;gap:2px;padding:6px 8px;border-radius:999px;
+  background:var(--menu-bg);backdrop-filter:blur(var(--menu-blur,20px)) saturate(1.6);-webkit-backdrop-filter:blur(var(--menu-blur,20px)) saturate(1.6);
+  box-shadow:var(--menu-shadow,0 8px 30px rgba(0,0,0,.4));animation:acReactBarIn .16s var(--ease) both;}
+@keyframes acReactBarIn{from{opacity:0;transform:translateY(6px) scale(.9);}to{opacity:1;transform:none;}}
+.ac-rb-btn{background:none;border:none;cursor:pointer;padding:4px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  animation:acRbEmIn .22s var(--ease) both;transition:transform var(--t-fast) var(--ease);}
+.ac-rb-btn:active,.ac-rb-btn:hover{transform:scale(1.32) translateY(-2px);}
+.ac-rb-em{font-size:28px;line-height:1;}
+@keyframes acRbEmIn{from{opacity:0;transform:translateY(8px) scale(.5);}to{opacity:1;transform:none;}}
+body.reduce-motion .ac-react-bar,body.reduce-motion .ac-rb-btn{animation:none;}
 /* Repost button (mirrors like; blue when on) */
 .ac-repost{display:flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;color:var(--t3);
   font-size:13px;font-weight:600;transition:color var(--t-fast) var(--ease);padding:8px 0;margin:-8px 0;}
@@ -15784,7 +15806,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1388'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1389'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -21981,7 +22003,7 @@ function acIvRenderActions(postId) {
   if (!p) { bar.classList.add('hidden'); bar.innerHTML = ''; return; }
   bar.innerHTML =
     `<button class="iv-reply" onclick="event.stopPropagation();acIvReply()" aria-label="Reply"><svg viewBox="0 0 24 24"><path d="M12 2.6C6.4 2.6 1.9 6.5 1.9 11.4c0 2.6 1.28 5 3.4 6.6-.12 1.4-.62 2.86-1.6 3.95a.55.55 0 0 0 .5.92c1.98-.3 3.56-1 4.76-1.78 1 .3 2.05.46 3.14.46 5.6 0 10.1-3.9 10.1-8.8S17.6 2.6 12 2.6Z"/></svg><span>${p.replies || ''}</span></button>` +
-    `<button class="iv-like${p.liked ? ' on' : ''}" onclick="event.stopPropagation();acToggleLike(this,${p.id})" aria-pressed="${p.liked ? 'true' : 'false'}" aria-label="${p.liked ? 'Unlike' : 'Like'}"><svg viewBox="0 0 24 24"><path d="M12 21.3l-1.45-1.32C5.4 15.3 2 12.2 2 8.4 2 5.4 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.4 22 8.4c0 3.8-3.4 6.9-8.55 11.59L12 21.3Z"/></svg><span class="ac-like-n">${p.likes || ''}</span></button>` +
+    `<button class="iv-like${p.liked ? ' on' : ''}" data-pid="${p.id}" onclick="event.stopPropagation();acToggleLike(this,${p.id})" aria-pressed="${p.liked ? 'true' : 'false'}" aria-label="${p.liked ? 'Unlike' : 'Like'}"><svg viewBox="0 0 24 24"><path d="M12 21.3l-1.45-1.32C5.4 15.3 2 12.2 2 8.4 2 5.4 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.4 22 8.4c0 3.8-3.4 6.9-8.55 11.59L12 21.3Z"/></svg><span class="ac-like-n">${p.likes || ''}</span></button>` +
     `<span class="iv-views" aria-label="${p.views || 0} views"><svg viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5C21.27 7.61 17 4.5 12 4.5Zm0 12a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Zm0-6.7a2.2 2.2 0 1 0 0 4.4 2.2 2.2 0 0 0 0-4.4Z"/></svg><span>${acCompact(p.views || 0)}</span></span>`;
   bar.classList.remove('hidden');
 }
@@ -28024,10 +28046,7 @@ function acPostCard(p) {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
           <span class="ac-rp-n ac-act-n">${p.reposts || ''}</span>
         </button>
-        <button class="ac-like ${p.liked ? 'on' : ''}" onclick="event.stopPropagation();acToggleLike(this,${p.id})" aria-pressed="${p.liked ? 'true' : 'false'}" aria-label="${p.liked ? 'Unlike' : 'Like'}">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>
-          <span class="ac-like-n ac-act-n">${p.likes || ''}</span>
-        </button>
+        ${acLikeBtn(p, true)}
         <span class="ac-views" aria-label="${p.views || 0} views"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg><span class="ac-act-n">${acCompact(p.views || 0)}</span></span>
         <button class="ac-bookmark ${p.bookmarked ? 'on' : ''}" onclick="event.stopPropagation();acToggleBookmark(this,${p.id})" aria-pressed="${p.bookmarked ? 'true' : 'false'}" aria-label="${p.bookmarked ? 'Remove from Collections' : 'Save to Collections'}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
@@ -28742,25 +28761,125 @@ async function acLoadSuggestions(containerId) {
       </div>`).join('');
   } catch { c.innerHTML = ''; }
 }
+// ── Post reactions (LinkedIn-style: tap = quick Like, long-press/hover = pick) ──
+const POST_REACTS = [
+  { id: 'like', emoji: '👍', label: 'Like' },
+  { id: 'celebrate', emoji: '🎉', label: 'Celebrate' },
+  { id: 'love', emoji: '❤️', label: 'Love' },
+  { id: 'insightful', emoji: '💡', label: 'Insightful' },
+  { id: 'funny', emoji: '😄', label: 'Funny' },
+  { id: 'support', emoji: '🫶', label: 'Support' },
+];
+function acReactMeta(id) { return POST_REACTS.find((r) => r.id === id) || null; }
+const _LIKE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>';
+// A small aggregate cluster (top distinct reaction emojis) — shown only once a
+// post has a NON-like reaction, so plain-liked posts look exactly as before.
+function acReactCluster(p) {
+  const rc = p && p.reactions; if (!rc) return '';
+  const keys = Object.keys(rc).filter((k) => rc[k] > 0);
+  if (!keys.some((k) => k !== 'like')) return '';
+  const top = keys.sort((a, b) => rc[b] - rc[a]).slice(0, 3).map(acReactMeta).filter(Boolean);
+  return `<span class="ac-react-cluster">${top.map((r) => `<span class="ac-rc-em">${r.emoji}</span>`).join('')}</span>`;
+}
+// The like/react button — shared by the feed card and the post-detail card.
+function acLikeBtn(p, stop) {
+  if (!window._acReactBound) acBindReactions();
+  const rx = (p.myReaction && p.myReaction !== 'like') ? acReactMeta(p.myReaction) : null;
+  const icon = rx ? `<span class="ac-react-emoji">${rx.emoji}</span>` : _LIKE_SVG;
+  const cls = 'ac-like' + (p.liked ? ' on' : '') + (rx ? ' react-' + p.myReaction : '');
+  const stopc = stop ? 'event.stopPropagation();' : '';
+  const lbl = p.liked ? 'Change or remove your reaction' : 'Like — long-press for reactions';
+  return `<button class="${cls}" data-pid="${p.id}" data-react="${p.myReaction || ''}" onclick="${stopc}acToggleLike(this,${p.id})" aria-pressed="${p.liked ? 'true' : 'false'}" aria-label="${lbl}">${icon}${acReactCluster(p)}<span class="ac-like-n ac-act-n">${p.likes || ''}</span></button>`;
+}
+// Apply a reaction (or null = none) to every rendered like button for this post.
+function acApplyReaction(pid, reaction, likes) {
+  document.querySelectorAll('.ac-like[data-pid="' + pid + '"], .iv-like[data-pid="' + pid + '"]').forEach((btn) => {
+    const on = !!reaction;
+    btn.classList.toggle('on', on);
+    btn.setAttribute('aria-pressed', String(on));
+    const n = btn.querySelector('.ac-like-n'); if (n && likes != null) n.textContent = likes > 0 ? likes : '';
+    if (!btn.classList.contains('ac-like')) return; // the image-viewer heart stays a plain heart
+    btn.className = btn.className.replace(/\breact-\w+\b/g, '').replace(/\s+/g, ' ').trim();
+    if (reaction && reaction !== 'like') btn.classList.add('react-' + reaction);
+    btn.setAttribute('data-react', reaction || '');
+    const rx = (reaction && reaction !== 'like') ? acReactMeta(reaction) : null;
+    const iconHtml = rx ? `<span class="ac-react-emoji">${rx.emoji}</span>` : _LIKE_SVG;
+    const old = btn.querySelector(':scope > svg, :scope > .ac-react-emoji');
+    if (old) old.outerHTML = iconHtml;
+  });
+}
+let _reactBarJustOpened = false, _rpress = null, _hoverT = null;
 async function acToggleLike(btn, id) {
+  if (_reactBarJustOpened) { _reactBarJustOpened = false; return; } // a long-press opened the reaction bar
   const wasOn = btn.classList.contains('on');
-  const nEl = btn.querySelector('.ac-like-n');
-  const cur = parseInt(nEl.textContent || '0', 10) || 0;
-  btn.classList.toggle('on', !wasOn);
-  btn.setAttribute('aria-pressed', String(!wasOn));
-  btn.setAttribute('aria-label', !wasOn ? 'Unlike' : 'Like');
-  if (!wasOn && !document.body.classList.contains('reduce-motion')) { btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop'); setTimeout(() => btn.classList.remove('pop'), 450); } // small blue pulse on like
-  nEl.textContent = (wasOn ? cur - 1 : cur + 1) > 0 ? (wasOn ? cur - 1 : cur + 1) : '';
-  try {
-    const r = await API.req(wasOn ? 'DELETE' : 'POST', '/api/social/posts/' + id + '/like');
-    btn.classList.toggle('on', r.liked);
-    btn.setAttribute('aria-pressed', String(!!r.liked));
-    btn.setAttribute('aria-label', r.liked ? 'Unlike' : 'Like');
-    nEl.textContent = r.likes > 0 ? r.likes : '';
-  } catch {
-    btn.classList.toggle('on', wasOn);
-    nEl.textContent = cur > 0 ? cur : '';
+  const prevReact = btn.getAttribute('data-react') || 'like';
+  const cur = parseInt((btn.querySelector('.ac-like-n') || {}).textContent || '0', 10) || 0;
+  if (wasOn) {
+    acApplyReaction(id, null, cur - 1);
+    try { const r = await API.req('DELETE', '/api/social/posts/' + id + '/like'); acApplyReaction(id, null, r.likes); acReactSyncCache(id, r); }
+    catch { acApplyReaction(id, prevReact, cur); }
+  } else {
+    acApplyReaction(id, 'like', cur + 1);
+    if (!document.body.classList.contains('reduce-motion')) { btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop'); setTimeout(() => btn.classList.remove('pop'), 450); }
+    try { const r = await API.req('POST', '/api/social/posts/' + id + '/like', { reaction: 'like' }); acApplyReaction(id, r.reaction, r.likes); acReactSyncCache(id, r); }
+    catch { acApplyReaction(id, null, cur); }
   }
+}
+async function acReact(pid, reaction) {
+  acReactBarClose();
+  const btn = document.querySelector('.ac-like[data-pid="' + pid + '"]');
+  const wasOn = btn && btn.classList.contains('on');
+  const prevReact = btn ? (btn.getAttribute('data-react') || '') : '';
+  const cur = btn ? (parseInt((btn.querySelector('.ac-like-n') || {}).textContent || '0', 10) || 0) : 0;
+  const optCount = wasOn ? cur : cur + 1;
+  acApplyReaction(pid, reaction, optCount);
+  if (btn && !document.body.classList.contains('reduce-motion')) { btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop'); setTimeout(() => btn.classList.remove('pop'), 450); }
+  try { const r = await API.req('POST', '/api/social/posts/' + pid + '/like', { reaction }); acApplyReaction(pid, r.reaction, r.likes); acReactSyncCache(pid, r); }
+  catch { acApplyReaction(pid, wasOn ? (prevReact || 'like') : null, cur); }
+}
+function acReactSyncCache(pid, r) {
+  const p = AC._postCache && AC._postCache[pid];
+  if (p) { p.liked = !!r.liked; p.myReaction = r.reaction || null; p.likes = r.likes; p.reactions = r.reactions || null; }
+}
+// The floating reaction bar (frosted, above the button).
+function acReactBarOpen(btn, pid) {
+  acReactBarClose();
+  const bar = document.createElement('div');
+  bar.className = 'ac-react-bar'; bar.id = 'acReactBar';
+  bar.innerHTML = POST_REACTS.map((r, i) => `<button class="ac-rb-btn" style="animation-delay:${i * 26}ms" title="${r.label}" aria-label="${r.label}" onclick="event.stopPropagation();acReact(${pid},'${r.id}')"><span class="ac-rb-em">${r.emoji}</span></button>`).join('');
+  document.body.appendChild(bar);
+  const rect = btn.getBoundingClientRect();
+  bar.style.top = Math.max(8, rect.top - bar.offsetHeight - 8) + 'px';
+  let left = rect.left + rect.width / 2 - bar.offsetWidth / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - bar.offsetWidth - 8));
+  bar.style.left = left + 'px';
+  setTimeout(() => document.addEventListener('pointerdown', _acReactOutside, true), 0);
+}
+function _acReactOutside(e) { if (!(e.target.closest && e.target.closest('#acReactBar'))) acReactBarClose(); }
+function acReactBarClose() { const b = document.getElementById('acReactBar'); if (b) b.remove(); document.removeEventListener('pointerdown', _acReactOutside, true); clearTimeout(_hoverT); }
+// Bind long-press (touch) + hover (desktop) on any like button to open the bar.
+function acBindReactions() {
+  if (window._acReactBound) return; window._acReactBound = true;
+  document.addEventListener('pointerdown', (e) => {
+    const btn = e.target.closest && e.target.closest('.ac-like[data-pid]'); if (!btn) return;
+    const pid = +btn.getAttribute('data-pid');
+    _rpress = { btn, pid, x: e.clientX || 0, y: e.clientY || 0, opened: false };
+    _rpress.timer = setTimeout(() => { if (!_rpress) return; _rpress.opened = true; _reactBarJustOpened = true; acReactBarOpen(btn, pid); if (navigator.vibrate) { try { navigator.vibrate(8); } catch {} } }, 370);
+  }, true);
+  document.addEventListener('pointermove', (e) => { if (_rpress && (Math.abs((e.clientX || 0) - _rpress.x) > 10 || Math.abs((e.clientY || 0) - _rpress.y) > 10)) { clearTimeout(_rpress.timer); _rpress = null; } }, true);
+  document.addEventListener('pointerup', (e) => { if (!_rpress) return; clearTimeout(_rpress.timer); if (_rpress.opened) { e.preventDefault(); e.stopPropagation(); } _rpress = null; setTimeout(() => { _reactBarJustOpened = false; }, 60); }, true);
+  document.addEventListener('pointercancel', () => { if (_rpress) { clearTimeout(_rpress.timer); _rpress = null; } }, true);
+  // Desktop hover-to-reveal.
+  document.addEventListener('mouseover', (e) => {
+    if (!window.matchMedia || !matchMedia('(hover:hover)').matches) return;
+    const btn = e.target.closest && e.target.closest('.ac-like[data-pid]'); if (!btn) return;
+    clearTimeout(_hoverT); _hoverT = setTimeout(() => acReactBarOpen(btn, +btn.getAttribute('data-pid')), 320);
+  });
+  document.addEventListener('mouseout', (e) => {
+    const to = e.relatedTarget;
+    if (to && to.closest && (to.closest('#acReactBar') || to.closest('.ac-like[data-pid]'))) return;
+    clearTimeout(_hoverT);
+  });
 }
 // Quote embed \u2014 flat (no box), tap to open the quoted post.
 function acQuoteHtml(q) {
@@ -30457,10 +30576,7 @@ function acPostFocusCard(p) {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
         <span class="ac-rp-n">${p.reposts || ''}</span>
       </button>
-      <button class="ac-like ${p.liked ? 'on' : ''}" onclick="acToggleLike(this,${p.id})" aria-pressed="${p.liked ? 'true' : 'false'}" aria-label="${p.liked ? 'Unlike' : 'Like'}">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>
-        <span class="ac-like-n">${p.likes || ''}</span>
-      </button>
+      ${acLikeBtn(p, false)}
       <button class="ac-bookmark ${p.bookmarked ? 'on' : ''}" onclick="acToggleBookmark(this,${p.id})" aria-pressed="${p.bookmarked ? 'true' : 'false'}" aria-label="${p.bookmarked ? 'Remove from Collections' : 'Save to Collections'}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
       </button>
