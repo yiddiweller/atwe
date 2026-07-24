@@ -17944,6 +17944,7 @@ function mapOrder(o, items, me) {
     id: o.id, status: o.status, totalCents: o.total_cents, subtotalCents: subtotal, shippingCents: o.shipping_cents || 0, taxCents: o.tax_cents || 0,
     discountCents: o.discount_cents || 0, couponCode: o.coupon_code || null,
     note: o.note || null, createdAt: o.created_at, paidAt: o.paid_at || null,
+    cancelReason: o.cancel_reason ? (ORDER_CANCEL_LABELS[o.cancel_reason] || null) : null, cancelNote: o.cancel_note || null, cancelledByMe: o.cancelled_by != null && o.cancelled_by === me,
     mine: o.seller_id === me, // I'm the seller (vs the buyer)
     escrow: !!o.escrow, autoReleaseAt: o.auto_release_at || null, releasedAt: o.released_at || null,
     disputeReason: o.dispute_reason || null, disputedByMe: o.disputed_by === me,
@@ -17961,7 +17962,7 @@ function mapOrder(o, items, me) {
     items: (items || []).map((it) => ({ productId: it.product_id || null, name: it.name, priceCents: it.price_cents, qty: it.qty, variantLabel: it.variant_label || null })),
   };
 }
-const ORDER_SELECT = `SELECT o.id, o.buyer_id, o.seller_id, o.total_cents, o.status, o.note, o.created_at, o.paid_at,
+const ORDER_SELECT = `SELECT o.id, o.buyer_id, o.seller_id, o.total_cents, o.status, o.note, o.created_at, o.paid_at, o.cancel_reason, o.cancel_note, o.cancelled_by,
   o.escrow, o.auto_release_at, o.released_at, o.dispute_reason, o.disputed_by,
   o.discount_cents, o.coupon_code,
   o.shipping_cents, o.tax_cents, o.needs_shipping, o.pickup, o.pickup_location, o.ship_name, o.ship_phone, o.ship_line1, o.ship_line2, o.ship_city, o.ship_region, o.ship_postal, o.ship_country,
@@ -18795,6 +18796,13 @@ app.post('/api/webhooks/shippo', async (req, res) => {
   } catch (e) { console.error('shippo webhook error:', e.message); }
 });
 // Cancel: the buyer while still pending, or the seller before fulfilment.
+// Why an order was cancelled (whitelisted; anything else → free-text note only).
+const ORDER_CANCEL_REASONS = ['changed_mind', 'found_cheaper', 'ordered_by_mistake', 'too_slow', 'out_of_stock', 'cant_fulfil', 'other'];
+const ORDER_CANCEL_LABELS = {
+  changed_mind: 'Changed my mind', found_cheaper: 'Found it cheaper elsewhere',
+  ordered_by_mistake: 'Ordered by mistake', too_slow: 'Taking too long',
+  out_of_stock: 'Item is out of stock', cant_fulfil: 'Can’t fulfil this order', other: 'Other',
+};
 app.post('/api/orders/:id/cancel', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
@@ -18811,7 +18819,13 @@ app.post('/api/orders/:id/cancel', auth.requireAuth, async (req, res) => {
         : 'This order is already paid and can’t be cancelled.';
       return res.status(400).json({ error: msg });
     }
-    const r = await db.query("UPDATE orders SET status = 'cancelled' WHERE id = $1 AND status = 'pending' RETURNING id", [id]);
+    // Optional reason (whitelisted) + a free-text note — recorded so the other
+    // party knows WHY, and so a seller can spot a pattern in cancellations.
+    const reason = ORDER_CANCEL_REASONS.includes(req.body.reason) ? req.body.reason : null;
+    const note = (req.body.note || '').toString().trim().slice(0, 300) || null;
+    const r = await db.query(
+      "UPDATE orders SET status = 'cancelled', cancel_reason = $2, cancel_note = $3, cancelled_by = $4 WHERE id = $1 AND status = 'pending' RETURNING id",
+      [id, reason, note, req.user.id]);
     if (!r.rowCount) return res.status(400).json({ error: 'That order can’t be cancelled.' });
     // Put the reserved stock back (untracked products are skipped inside restoreStock).
     const its = (await db.query('SELECT product_id, qty, variant_id FROM order_items WHERE order_id = $1', [id])).rows;

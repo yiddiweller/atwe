@@ -6430,6 +6430,9 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .inv-meta-row{font-size:13px;color:var(--t3);text-align:center;margin-bottom:10px;}
 .inv-paid-note{text-align:center;color:var(--green);font-weight:700;padding:10px;}
 .inv-outside-note{color:var(--t3);font-weight:500;font-size:12.5px;margin-top:4px;}
+/* Cancellation reason on a cancelled order */
+.ord-cancel-box{background:var(--s1);border-radius:14px;padding:12px 14px;margin-top:10px;font-size:13.5px;color:var(--t2);}
+.ord-cancel-note{color:var(--t3);margin-top:5px;}
 /* Quotes / estimates — itemized proposal form + detail */
 .q-lines-lbl,.q-field-lbl{font-size:12.5px;font-weight:600;color:var(--t2);margin:12px 2px 6px;display:block;}
 .q-line{display:grid;grid-template-columns:1fr 92px 30px;gap:7px;align-items:center;margin-bottom:7px;}
@@ -13993,6 +13996,18 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Cancel an order: pick a reason (the other party sees it) -->
+<div class="overlay hidden" id="cancelOrderView" onclick="if(event.target===this)closeOverlay('cancelOrderView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Cancel order">
+    <button class="sheet-close" onclick="closeOverlay('cancelOrderView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Why are you cancelling?</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">The other person will see this on the order.</div>
+    <div class="co-rates" id="cancelReasons"></div>
+    <input class="jp-in" id="cancelNote" maxlength="300" placeholder="Add a note (optional)" autocomplete="off" style="margin-top:10px;"/>
+    <button class="ac-pill-btn jp-submit" style="color:var(--red);margin-top:10px;" onclick="acCancelOrderSubmit(this)">Cancel this order</button>
+  </div>
+</div>
+
 <!-- Payment-link QR (scan to pay in person) -->
 <div class="overlay hidden" id="payLinkQrView" onclick="if(event.target===this)closeOverlay('payLinkQrView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Payment QR code">
@@ -16626,7 +16641,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1491'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1492'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -35649,6 +35664,7 @@ async function acOpenOrder(id) {
       ${totals}
       ${digital}
       ${o.note ? `<div class="ev-desc">“${escHtml(o.note)}”</div>` : ''}
+      ${(o.status === 'cancelled' && o.cancelReason) ? `<div class="ord-cancel-box"><b>Cancelled${o.cancelledByMe ? ' by you' : ''}</b> · ${escHtml(o.cancelReason)}${o.cancelNote ? `<div class="ord-cancel-note">“${escHtml(o.cancelNote)}”</div>` : ''}</div>` : ''}
       ${banner}
       ${retBlock}
       ${action}`;
@@ -35658,10 +35674,33 @@ async function acFulfillOrder() {
   try { await API.req('POST', '/api/orders/' + AC._ordId + '/fulfill'); showNotif('Marked fulfilled.'); acOpenOrder(AC._ordId); }
   catch (e) { showNotif(e.message || 'Could not update.'); }
 }
-async function acCancelOrder() {
-  if (!(await appConfirm({ title: 'Cancel order?', message: 'This order will be cancelled.', confirmText: 'Cancel order', danger: true }))) return;
-  try { await API.req('POST', '/api/orders/' + AC._ordId + '/cancel'); showNotif('Order cancelled.'); acOpenOrder(AC._ordId); }
-  catch (e) { showNotif(e.message || 'Could not cancel.'); }
+// Cancelling asks WHY first (the other party sees the reason on the order).
+// Buyers and sellers get different reason lists.
+const _CANCEL_REASONS_BUYER = [['changed_mind', 'Changed my mind'], ['found_cheaper', 'Found it cheaper elsewhere'], ['ordered_by_mistake', 'Ordered by mistake'], ['too_slow', 'Taking too long'], ['other', 'Other']];
+const _CANCEL_REASONS_SELLER = [['out_of_stock', 'Item is out of stock'], ['cant_fulfil', 'Can’t fulfil this order'], ['other', 'Other']];
+function acCancelOrder() {
+  const o = AC._ordCur;
+  const seller = !!(o && o.mine); // `mine` = I'm the seller on this order
+  AC._cancelReason = null;
+  const list = seller ? _CANCEL_REASONS_SELLER : _CANCEL_REASONS_BUYER;
+  document.getElementById('cancelReasons').innerHTML = list.map(([v, l]) =>
+    `<button class="co-rate" data-r="${v}" onclick="acPickCancelReason('${v}')"><span class="co-rate-main"><span class="co-rate-name">${escHtml(l)}</span></span></button>`).join('');
+  document.getElementById('cancelNote').value = '';
+  showOverlay('cancelOrderView');
+}
+function acPickCancelReason(v) {
+  AC._cancelReason = v;
+  document.querySelectorAll('#cancelReasons .co-rate').forEach((b) => b.classList.toggle('on', b.dataset.r === v));
+}
+async function acCancelOrderSubmit(btn) {
+  if (!AC._cancelReason) { showNotif('Pick a reason.'); return; }
+  btn.disabled = true;
+  try {
+    await API.req('POST', '/api/orders/' + AC._ordId + '/cancel', { reason: AC._cancelReason, note: (document.getElementById('cancelNote').value || '').trim() });
+    closeOverlay('cancelOrderView');
+    showNotif('Order cancelled.');
+    acOpenOrder(AC._ordId);
+  } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not cancel.'); }
 }
 // Returns: buyer requests; seller approves (refund) / declines.
 function acReturnOpen() { document.getElementById('returnReason').value = ''; showOverlay('returnView'); }
