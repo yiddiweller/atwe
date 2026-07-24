@@ -9197,6 +9197,47 @@ app.get('/api/social/suggestions', auth.requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Could not load suggestions.' });
   }
 });
+// "You might also like" — accounts similar to a profile you're viewing (X-style).
+// Primary signal: co-followers (people who follow the target also follow the candidate),
+// ranked by shared-follower count; falls back to same-type popular accounts.
+app.get('/api/social/similar/:username', auth.requireAuth, async (req, res) => {
+  const me = req.user.id;
+  const uname = String(req.params.username || '').replace(/^@/, '').trim();
+  if (!uname) return res.status(400).json({ error: 'Invalid profile.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const t = (await db.query('SELECT id, account_type FROM users WHERE lower(username) = lower($1) AND NOT deactivated', [uname])).rows[0];
+    if (!t) return res.json({ users: [] });
+    const target = t.id;
+    const limit = Math.min(12, Math.max(1, parseInt(req.query.limit, 10) || 6));
+    const base = `u.id, u.name, u.username, u.avatar, u.banner, u.verified, u.headline, u.account_type, u.business_verify_status,
+        (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = u.id) AS followers`;
+    // Eligible = has a handle, not me, not the target, not already followed by me, not blocked either way.
+    const eligible = `u.username IS NOT NULL AND u.id <> $1 AND u.id <> $2 AND NOT u.deactivated
+        AND NOT EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $1 AND f.following_id = u.id)
+        AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $1 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = $1))`;
+    const co = await db.query(
+      `SELECT ${base},
+              (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = u.id AND f.follower_id IN (SELECT follower_id FROM follows WHERE following_id = $2)) AS shared,
+              ${FOLLOWED_BY_SQL('u.id')} AS followed_by
+         FROM users u
+        WHERE ${eligible}
+          AND EXISTS (SELECT 1 FROM follows f WHERE f.following_id = u.id AND f.follower_id IN (SELECT follower_id FROM follows WHERE following_id = $2))
+        ORDER BY shared DESC, u.verified DESC, followers DESC, u.created_at DESC
+        LIMIT $3`, [me, target, limit]);
+    let rows = co.rows;
+    if (rows.length < limit) {
+      // Fallback: same account type, popular, not already in the list.
+      const have = new Set(rows.map((r) => r.id));
+      const fill = await db.query(
+        `SELECT ${base}, 0 AS shared, NULL::json AS followed_by FROM users u
+          WHERE ${eligible} AND u.account_type = $4
+          ORDER BY u.verified DESC, followers DESC, u.created_at DESC LIMIT $3`, [me, target, limit * 3, t.account_type]);
+      for (const r of fill.rows) { if (rows.length >= limit) break; if (!have.has(r.id)) { rows.push(r); have.add(r.id); } }
+    }
+    res.json({ users: rows.map(mapSuggestUser) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load similar accounts.' }); }
+});
 
 // Block / unblock. Blocking also drops the follow relationship both ways and
 // removes any post-notify subscriptions between the two.
