@@ -7354,6 +7354,18 @@ body.light .ac-adcard{box-shadow:0 4px 16px rgba(15,20,25,.07);}
 .ac-trend-n{font-size:11.5px;color:var(--t3);}
 
 /* New-post composer */
+/* Composer character-count ring (X-style): grey progress → amber under 100 left
+   (remaining count shown inside) → red under 20. Sits just before the Post pill. */
+.pc-ring{position:relative;width:26px;height:26px;flex-shrink:0;margin-right:10px;display:grid;place-items:center;}
+.pc-ring svg{position:absolute;inset:0;width:26px;height:26px;transform:rotate(-90deg);}
+.pc-ring circle{fill:none;stroke-width:2.4;}
+.pc-ring .pc-bg{stroke:var(--s3);}
+.pc-ring .pc-fg{stroke:var(--t3);stroke-linecap:round;transition:stroke var(--t-fast) var(--ease);}
+.pc-ring.warn .pc-fg{stroke:var(--amber);}
+.pc-ring.over .pc-fg{stroke:var(--red);}
+.pc-n{font-size:9px;font-weight:700;color:var(--t3);position:relative;}
+.pc-ring.warn .pc-n{color:var(--amber);}
+.pc-ring.over .pc-n{color:var(--red);}
 .ac-post-btn{background:var(--primary);color:var(--on-primary);border:none;border-radius:var(--r-pill);padding:7px 18px;
   font-size:14px;font-weight:700;cursor:pointer;flex-shrink:0;transition:background var(--t-fast) var(--ease),filter var(--t-fast) var(--ease);}
 .ac-post-btn:disabled{opacity:.5;}
@@ -15716,6 +15728,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
           <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
         <div class="ac-headtitle"><div class="ac-title" id="acPostTitle">New post</div></div>
+        <span class="pc-ring hidden" id="pcRing" aria-hidden="true"><svg viewBox="0 0 24 24"><circle class="pc-bg" cx="12" cy="12" r="9"/><circle class="pc-fg" cx="12" cy="12" r="9"/></svg><span class="pc-n" id="pcN"></span></span>
         <button class="ac-post-btn" id="acPostBtn" onclick="acSubmitPost()">Post</button>
       </div>
       <div class="ac-postbody">
@@ -16514,7 +16527,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1460'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1461'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -31332,6 +31345,25 @@ function acPostInput() {
   const btn = document.getElementById('acPostBtn');
   btn.disabled = !has;
   btn.textContent = acScheduleValue() ? 'Schedule' : 'Post';
+  acPostCountRing();
+}
+// X-style character-count ring next to Post: appears once you type, fills as the
+// 2000-char limit nears — amber under 100 left (count shown), red under 20.
+const POST_CHAR_MAX = 2000;
+function acPostCountRing() {
+  const ring = document.getElementById('pcRing'); if (!ring) return;
+  const len = (document.getElementById('acPostText')?.value || '').length;
+  ring.classList.toggle('hidden', len === 0);
+  if (!len) return;
+  const left = POST_CHAR_MAX - len;
+  const C = 2 * Math.PI * 9; // ring circumference (r=9 in a 24 viewBox)
+  const frac = Math.min(1, len / POST_CHAR_MAX);
+  const fg = ring.querySelector('.pc-fg');
+  if (fg) { fg.style.strokeDasharray = C.toFixed(2); fg.style.strokeDashoffset = (C * (1 - frac)).toFixed(2); }
+  ring.classList.toggle('warn', left <= 100 && left > 20);
+  ring.classList.toggle('over', left <= 20);
+  const n = document.getElementById('pcN');
+  if (n) n.textContent = left <= 100 ? String(left) : '';
 }
 /* ── @mention autocomplete (post composer) ── */
 let _mentionT = null;
