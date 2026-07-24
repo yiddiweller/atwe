@@ -14049,6 +14049,15 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Customers: everyone who has bought from you -->
+<div class="overlay hidden" id="customersView" onclick="if(event.target===this)closeOverlay('customersView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Customers">
+    <button class="sheet-close" onclick="closeOverlay('customersView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Customers</div>
+    <div id="customersBody"></div>
+  </div>
+</div>
+
 <!-- Free shipping over $X (seller-wide) -->
 <div class="overlay hidden" id="freeShipView" onclick="if(event.target===this)closeOverlay('freeShipView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Free shipping">
@@ -16740,7 +16749,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1515'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1516'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -37700,6 +37709,7 @@ async function acOpenStoreManage() {
     ${row(SI.megaphone, 'Sponsored ads', 'Pay per click for a "Sponsored" search slot', 'closeOverlay(\'storeManageView\');acOpenProductAds()')}
     ${row(SI.receipt, 'Orders', pending ? pending + ' to fulfil' : 'Manage and ship orders', 'closeOverlay(\'storeManageView\');acOpenOrders(\'seller\')', pending || '')}
     ${row(SI.chart, 'Sales & analytics', 'Revenue, orders and top products', 'closeOverlay(\'storeManageView\');acOpenShopAnalytics()')}
+    ${row(SI.store, 'Customers', 'Everyone who has bought from you', 'closeOverlay(\'storeManageView\');acOpenCustomers()')}
     ${row(SI.megaphone, 'Cart recovery', 'Win back abandoned carts via Beam', 'closeOverlay(\'storeManageView\');acOpenCartRecovery()')}
     ${row(SI.wallet, 'Wallet & payouts', 'Your balance and cash-out', 'closeOverlay(\'storeManageView\');acOpenWallet()')}
     ${row(SI.megaphone, 'Announcement', (S.user && S.user.storeBanner) ? '“' + escHtml(S.user.storeBanner.slice(0, 42)) + (S.user.storeBanner.length > 42 ? '…' : '') + '”' : 'One line pinned atop your shop', 'acOpenStoreBanner()')}
@@ -37707,6 +37717,25 @@ async function acOpenStoreManage() {
     ${row(SI.store, 'Vacation mode', 'Pause new orders while you’re away', 'acOpenVacation()')}
   </div>`;
   });
+}
+// ── Customers (Shopify-lite): everyone who has paid you, ranked by spend ──
+async function acOpenCustomers() {
+  showOverlay('customersView');
+  const b = document.getElementById('customersBody'); b.innerHTML = acSkelRows(4);
+  try {
+    const { customers } = await API.req('GET', '/api/shop/customers');
+    if (!customers.length) { b.innerHTML = '<div class="ac-empty" style="padding:26px;">No customers yet — they’ll appear here after their first paid order.</div>'; return; }
+    const total = customers.reduce((s, c) => s + c.spentCents, 0);
+    b.innerHTML = `<div class="ac-disc-sub" style="margin:0 0 10px;">${customers.length} customer${customers.length === 1 ? '' : 's'} · $${(total / 100).toFixed(2)} all-time</div>` +
+      customers.map(c => `<div class="ac-item" onclick="closeOverlay('customersView');acGoProfile(${jsAttr(c.username)})">
+        ${acAvatarHtml(c.name, c.avatar, 'user-avatar', c.accountType === 'business')}
+        <div class="ac-item-main">
+          <div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}${vbadge(acIsVerified(c))}</span></div>
+          <div class="ac-item-last">${c.orders} order${c.orders === 1 ? '' : 's'} · $${(c.spentCents / 100).toFixed(2)} · last ${acTime(c.lastAt)}</div>
+        </div>
+        <button class="ac-post-more" onclick="event.stopPropagation();closeOverlay('customersView');appTab('chat');acOpenChat(${c.id})" aria-label="Message"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+      </div>`).join('');
+  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
 // ── Free shipping over $X (seller-wide) ──
 function acOpenFreeShip() {

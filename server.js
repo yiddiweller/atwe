@@ -17500,6 +17500,27 @@ app.get('/api/cart', auth.requireAuth, async (req, res) => {
     res.json({ carts: [...bySeller.values()] });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your cart.' }); }
 });
+// Your customers (Shopify/Square-lite): every distinct buyer who has PAID you,
+// with how many orders, what they've spent in total, and when they last bought.
+// Paid states only — a pending checkout isn't a customer yet.
+app.get('/api/shop/customers', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.account_type,
+              COUNT(*)::int AS orders, SUM(o.total_cents)::bigint AS spent_cents, MAX(o.created_at) AS last_at
+         FROM orders o JOIN users u ON u.id = o.buyer_id
+        WHERE o.seller_id = $1 AND o.status IN ('paid','fulfilled','delivered','released','escrow','disputed')
+        GROUP BY u.id, u.name, u.username, u.avatar, u.verified, u.account_type
+        ORDER BY SUM(o.total_cents) DESC, MAX(o.created_at) DESC LIMIT 200`,
+      [req.user.id]
+    );
+    res.json({ customers: rows.map((u) => ({
+      id: u.id, name: u.name, username: u.username, avatar: mediaRef(u.avatar, 'avatar', u.id),
+      verified: !!u.verified, accountType: u.account_type === 'business' ? 'business' : 'personal',
+      orders: u.orders, spentCents: Number(u.spent_cents || 0), lastAt: u.last_at,
+    })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your customers.' }); }
+});
 // Add / set the quantity of a product in the cart (qty 0 removes it).
 app.post('/api/cart', auth.requireAuth, async (req, res) => {
   const productId = parseInt(req.body.productId, 10);
