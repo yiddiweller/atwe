@@ -16598,7 +16598,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1480'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1481'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -42763,6 +42763,34 @@ function acMuteUntil(expiresAt) {
   return ` · until ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
 }
 function acOpenPostActions(anchor, id, postId) { acOpenUserActions(anchor, id, true, postId); }
+// Long-press a feed post card → its ⋯ actions sheet (mobile). Movement or an
+// early release cancels; presses that start on interactive elements (buttons,
+// links, tags, media, the engagement row) are left to their own behaviour.
+function acBindPostLongPress(root) {
+  if (!root || root._plpBound) return; root._plpBound = true;
+  let timer = null, sx = 0, sy = 0;
+  const clear = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  root.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) { clear(); return; }
+    const t = e.target;
+    if (t.closest && t.closest('button, a, .ac-tag, .ac-post-actions, video, input, textarea')) return;
+    const card = t.closest && t.closest('.ac-post[data-postid]'); if (!card) return;
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+    clear();
+    timer = setTimeout(() => {
+      timer = null;
+      if (navigator.vibrate) { try { navigator.vibrate(12); } catch (_) {} }
+      card.querySelector('.ac-post-more')?.click(); // exact same path as tapping ⋯
+    }, 480);
+  }, { passive: true });
+  root.addEventListener('touchmove', (e) => {
+    if (!timer) return;
+    const t = e.touches[0];
+    if (Math.abs(t.clientX - sx) > 8 || Math.abs(t.clientY - sy) > 8) clear();
+  }, { passive: true });
+  root.addEventListener('touchend', clear, { passive: true });
+  root.addEventListener('touchcancel', clear, { passive: true });
+}
 // Search a profile's posts — opens the Posts search scoped to that person via the
 // `from:` operator; the user then types keywords to narrow it.
 function acSearchUserPosts(username) {
@@ -48738,6 +48766,7 @@ function scrollHideInit() {
   _resolveNavGap();
   if (NAV_MORPH) document.body.classList.add('nav-morph');
   document.querySelectorAll('.ac-list').forEach(el => el.addEventListener('scroll', _onListScroll, { passive: true }));
+  acBindPostLongPress(document.getElementById('acFeed')); // hold a post card → its ⋯ menu
   window.addEventListener('scroll', _onWinScroll, { passive: true }); // page-scroll (pgscroll) mode
   // The nav darkness is pure CSS now (tracks Safari's bar via 100dvh natively), so there are
   // NO per-scroll/resize JS listeners for it — that's what keeps scrolling at 60fps.
