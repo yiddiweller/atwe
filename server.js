@@ -16596,6 +16596,10 @@ app.get('/api/listings/:id', auth.requireAuth, async (req, res) => {
     if (!l || (!l.active && l.business_id !== req.user.id)) return res.status(404).json({ error: 'That listing is no longer available.' });
     const listing = mapListing(l);
     listing.saved = (await db.query('SELECT 1 FROM saved_products WHERE user_id = $1 AND product_id = $2', [req.user.id, id])).rowCount > 0;
+    // Social proof: units sold across paid-state orders ("N sold", Amazon/eBay-style).
+    listing.soldCount = Number((await db.query(
+      `SELECT COALESCE(SUM(oi.qty), 0) AS n FROM order_items oi JOIN orders o ON o.id = oi.order_id
+        WHERE oi.product_id = $1 AND o.status IN ('paid','fulfilled','delivered','released','escrow','disputed')`, [id])).rows[0].n);
     // Record a "recently viewed" (not for your own listing) — best-effort, never blocks.
     if (l.business_id !== req.user.id) {
       db.query('INSERT INTO recent_product_views (user_id, product_id) VALUES ($1,$2) ON CONFLICT (user_id, product_id) DO UPDATE SET viewed_at = now()', [req.user.id, id]).catch(() => {});
