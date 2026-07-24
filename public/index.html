@@ -16623,7 +16623,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1486'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1487'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -36663,11 +36663,12 @@ async function acLoadSplits() {
     }).join('');
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
-function acSplitCreateOpen() {
+function acSplitCreateOpen(prefill) {
   AC._splitPeople = []; showOverlay('splitCreate');
   document.getElementById('splitTitle').value = ''; document.getElementById('splitTotal').value = '';
   document.getElementById('splitPeopleIn').value = ''; document.getElementById('splitSearchResults').innerHTML = '';
   acSplitRenderChips(); acSplitPreview();
+  if (prefill && prefill.id) acSplitAddPerson(prefill); // e.g. opened from a chat → the peer starts on the split
 }
 let _splitT;
 function acSplitSearch() {
@@ -41999,6 +42000,7 @@ function acThreadMenu(btn) {
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('label')">${IC.label}<span class="mm-label">Label chat</span></button>`)
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('disappear')">${IC.disappear}<span class="mm-label">Disappearing messages${AC.disappearing ? ' · ' + acDisLabel(AC.disappearing) : ''}</span></button>`)
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('money')">${IC.money}<span class="mm-label">Send money</span></button>`)
+      + (self ? '' : `<button class="mm-item" onclick="acHeadAct('split')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18"/><path d="M7.5 8.5h3M13.5 15.5h3"/></svg><span class="mm-label">Split a bill</span></button>`)
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('invoice')">${IC.invoice}<span class="mm-label">Send an invoice</span></button>`)
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('quote')">${IC.quote}<span class="mm-label">Send a quote</span></button>`)
       + `<button class="mm-item" onclick="acHeadAct('wallpaper')">${IC.wallpaper}<span class="mm-label">Wallpaper</span></button>`
@@ -42035,6 +42037,7 @@ function acHeadAct(a) {
     else if (a === 'invoice' && AC.peer) acInvoiceCreateOpen(AC.peer.id, AC.peer.name);
     else if (a === 'quote' && AC.peer) acQuoteCreateOpen(AC.peer.id, AC.peer.name);
     else if (a === 'money' && AC.peer) acOpenSendMoney(AC.peer.id, AC.peer.name, AC.peer.username);
+    else if (a === 'split' && AC.peer) acSplitCreateOpen({ id: AC.peer.id, name: AC.peer.name, username: AC.peer.username, avatar: AC.peer.avatar || null, accountType: AC.peer.accountType });
   }, 60);
 }
 /* ── Chat media gallery (WhatsApp-style "Media" in the ⋯ menu) ──
