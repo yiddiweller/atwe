@@ -8018,7 +8018,7 @@ const POST_OCCASIONS = ['new_role', 'work_anniversary', 'certification', 'educat
 // Post reactions (LinkedIn-style). 'like' is the default/back-compat reaction.
 const POST_REACTIONS = ['like', 'celebrate', 'love', 'insightful', 'funny', 'support'];
 const POSTS_SELECT = `
-  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only, p.min_tier_level, p.image_alt, p.ppv_cents, p.occasion,
+  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only, p.min_tier_level, p.image_alt, p.ppv_cents, p.occasion, p.article_title,
          (p.promoted_until IS NOT NULL AND p.promoted_until > now()) AS promoted,
          (p.subscribers_only = false OR p.user_id = $1 OR EXISTS(SELECT 1 FROM creator_subs cs LEFT JOIN creator_tiers ct ON ct.id = cs.tier_id WHERE cs.creator_id = p.user_id AND cs.subscriber_id = $1 AND cs.status = 'active' AND (cs.period_end IS NULL OR cs.period_end > now()) AND COALESCE(ct.level, 0) >= p.min_tier_level)) AS sub_ok,
          (COALESCE(p.ppv_cents,0) = 0 OR p.user_id = $1 OR EXISTS(SELECT 1 FROM post_unlocks pu WHERE pu.post_id = p.id AND pu.user_id = $1)) AS ppv_ok,
@@ -8174,6 +8174,7 @@ function mapPost(r) {
     tagged: Array.isArray(r.tags) ? r.tags.filter((t) => t.kind === 'tag').map(({ kind, ...u }) => u) : [],
     coAuthors: Array.isArray(r.tags) ? r.tags.filter((t) => t.kind === 'author').map(({ kind, ...u }) => u) : [],
     editedAt: r.edited_at || null, promoted: !!r.promoted, occasion: r.occasion || null,
+    articleTitle: r.article_title || null,
     products: tagProductsFrom(r), product: (tagProductsFrom(r)[0] || null),
     parentId: r.parent_id || null, location: r.location || null,
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
@@ -9982,8 +9983,14 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), re
   // Poll options (2–4) — top-level posts only.
   const pollOpts = (Array.isArray(req.body.poll) ? req.body.poll : []).map((x) => String(x || '').trim()).filter(Boolean).slice(0, 4);
   const hasPoll = pollOpts.length >= 2 && (req.body.parentId == null || req.body.parentId === '');
+  // Long-form article: a headline (top-level posts only) turns this into an article,
+  // whose body may be much longer than a normal post.
+  const articleTitle = (req.body.parentId == null || req.body.parentId === '')
+    ? ((req.body.articleTitle || '').toString().trim().slice(0, 200) || null) : null;
   if (!body && !image && !media.data && !hasPoll && (req.body.quoteId == null || req.body.quoteId === '')) return res.status(400).json({ error: 'Your post is empty.' });
-  if (body.length > 2000) return res.status(400).json({ error: 'Post is too long (2000 chars max).' });
+  if (articleTitle && !body) return res.status(400).json({ error: 'An article needs some body text.' });
+  const bodyMax = articleTitle ? 25000 : 2000;
+  if (body.length > bodyMax) return res.status(400).json({ error: articleTitle ? 'Article is too long (25,000 chars max).' : 'Post is too long (2000 chars max).' });
   if (rejectIfBlocked(res, body)) return; // admin keyword / link-domain blocklist
   let parentId = null;
   if (req.body.parentId != null && req.body.parentId !== '') {
@@ -10097,9 +10104,9 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), re
     // Celebration: an occasion tag on a top-level post gives its card a festive banner.
     const occasion = (parentId == null && POST_OCCASIONS.includes(req.body.occasion)) ? req.body.occasion : null;
     const ins = await db.query(
-      `INSERT INTO posts (user_id, body, image, images, media, media_kind, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope, subscribers_only, image_alt, ppv_cents, min_tier_level, product_id, occasion)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamptz, now()), $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING id`,
-      [req.user.id, body, image, images.length > 1 ? images : null, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId, replyScope, subscribersOnly, imageAlt, ppvCents, minTierLevel, productId, occasion]
+      `INSERT INTO posts (user_id, body, image, images, media, media_kind, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope, subscribers_only, image_alt, ppv_cents, min_tier_level, product_id, occasion, article_title)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamptz, now()), $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING id`,
+      [req.user.id, body, image, images.length > 1 ? images : null, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId, replyScope, subscribersOnly, imageAlt, ppvCents, minTierLevel, productId, occasion, articleTitle]
     );
     const postId = ins.rows[0].id;
     if (quoteOwner != null) notify(quoteOwner, req.user.id, 'quote', postId);

@@ -5383,6 +5383,56 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.08);}
 .occ-check{width:22px;text-align:center;color:var(--accent);font-weight:800;font-size:16px;flex-shrink:0;}
 .occ-pick.on .occ-lbl{color:var(--accent);}
 .occ-clear{width:100%;margin-top:8px;padding:12px;border:none;border-radius:var(--r-pill);background:var(--s2);color:var(--red);font-size:14px;font-weight:600;cursor:pointer;}
+
+/* ── Long-form articles ── */
+/* Feed teaser (solid card, no outline, cover on top). */
+.art-teaser{margin:4px 0 2px;background:var(--s2);border-radius:16px;overflow:hidden;cursor:pointer;transition:background var(--t-fast) var(--ease);}
+@media(hover:hover){.art-teaser:hover{background:var(--s3);}}
+.art-teaser-cover{width:100%;aspect-ratio:16/9;background-size:cover;background-position:center;background-color:var(--s3);}
+.art-teaser-body{padding:13px 15px 15px;}
+.art-teaser-kicker{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:5px;}
+.art-teaser-title{font-size:18px;font-weight:800;line-height:1.25;color:var(--t1);}
+.art-teaser-snip{font-size:14px;color:var(--t3);line-height:1.45;margin-top:6px;}
+.art-teaser-cta{margin-top:10px;font-size:13.5px;font-weight:700;color:var(--accent);}
+/* Composer (full-screen writing surface). */
+#articleComposer{padding:0;align-items:stretch;justify-content:stretch;}
+.art-comp{width:100%;max-width:720px;margin:0 auto;background:var(--bg);display:flex;flex-direction:column;height:100%;}
+.art-comp-top{display:flex;align-items:center;gap:12px;padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 10px;position:sticky;top:0;background:var(--bg);z-index:2;}
+.art-comp-top .art-comp-title{flex:1;font-size:16px;font-weight:700;color:var(--t1);}
+.art-comp-top .msg-back svg{width:22px;height:22px;stroke:currentColor;stroke-width:2;fill:none;}
+.art-comp-body{flex:1;overflow-y:auto;padding:6px 18px calc(env(safe-area-inset-bottom,0px) + 40px);display:flex;flex-direction:column;}
+.art-cover{width:100%;aspect-ratio:16/9;border-radius:16px;background:var(--s2);background-size:cover;background-position:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--t3);cursor:pointer;position:relative;margin-bottom:16px;}
+.art-cover svg{width:30px;height:30px;stroke:currentColor;stroke-width:1.7;fill:none;}
+.art-cover span{font-size:13.5px;font-weight:600;}
+.art-cover.has{color:transparent;}
+.art-cover-x{position:absolute;top:10px;right:10px;width:32px;height:32px;border-radius:50%;border:none;background:rgba(0,0,0,.55);color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.art-title-in{width:100%;border:none;background:none;color:var(--t1);font-size:26px;font-weight:800;line-height:1.2;padding:6px 0;outline:none;}
+.art-title-in::placeholder{color:var(--t4);}
+.art-body-in{width:100%;flex:1;min-height:300px;border:none;background:none;color:var(--t1);font-size:17px;line-height:1.7;padding:10px 0 0;outline:none;resize:none;font-family:inherit;}
+.art-body-in::placeholder{color:var(--t4);}
+/* Reader. */
+#articleReader{padding:0;align-items:stretch;justify-content:stretch;background:var(--bg);}
+.art-reader{width:100%;background:var(--bg);display:flex;flex-direction:column;height:100%;}
+.art-r-top{position:sticky;top:0;z-index:3;padding:calc(env(safe-area-inset-top,0px) + 8px) 12px 8px;background:linear-gradient(var(--bg),transparent);pointer-events:none;}
+.art-r-top .msg-back{pointer-events:auto;width:38px;height:38px;border-radius:50%;background:var(--s2);display:flex;align-items:center;justify-content:center;border:none;color:var(--t1);cursor:pointer;}
+.art-r-top .msg-back svg{width:20px;height:20px;stroke:currentColor;stroke-width:2.2;fill:none;}
+.art-reader-scroll{flex:1;overflow-y:auto;}
+/* A cover slides up behind the translucent top bar for a hero look; without one,
+   the title flows normally below the bar (no overlap). */
+.art-r-cover{width:100%;aspect-ratio:16/9;background-size:cover;background-position:center;background-color:var(--s3);margin-top:-54px;}
+.art-r-inner{max-width:680px;margin:0 auto;padding:22px 22px calc(env(safe-area-inset-bottom,0px) + 60px);}
+.art-r-title{font-size:30px;font-weight:800;line-height:1.2;color:var(--t1);margin:6px 0 16px;}
+.art-r-byline{display:flex;align-items:center;gap:11px;margin-bottom:22px;}
+.art-r-av{cursor:pointer;}.art-r-av .user-avatar{width:44px;height:44px;}
+.art-r-who{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.art-r-name{font-size:15px;font-weight:700;color:var(--t1);cursor:pointer;display:inline-flex;align-items:center;}
+.art-r-meta{font-size:13px;color:var(--t3);}
+.art-r-content{font-size:17.5px;line-height:1.75;color:var(--t1);}
+.art-r-content p{margin:0 0 1.15em;}
+.art-r-content a{color:var(--accent);}
+.art-r-actions{margin-top:26px;padding-top:16px;border-top:0.5px solid var(--b2);max-width:none;}
+body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
+.art-loading{padding:60px 20px;text-align:center;color:var(--t3);font-size:15px;}
 .ac-prodtag.ac-prodtag-multi{padding-left:10px;}
 .ac-prodtag-row{align-items:center;gap:12px;}
 .cpc-thumb{width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;}
@@ -11691,6 +11741,33 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Long-form article composer -->
+<div class="overlay hidden" id="articleComposer">
+  <div class="art-comp" role="dialog" aria-modal="true" aria-label="Write an article">
+    <div class="art-comp-top">
+      <button class="msg-back" onclick="closeOverlay('articleComposer')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <span class="art-comp-title">Write an article</span>
+      <button class="ac-post-btn" id="artPublishBtn" onclick="acPublishArticle()">Publish</button>
+    </div>
+    <div class="art-comp-body">
+      <input type="file" id="artCoverFile" accept="image/*" class="hidden" onchange="acArtCover(event)"/>
+      <div class="art-cover" id="artCover" onclick="document.getElementById('artCoverFile').click()"></div>
+      <input id="artTitle" class="art-title-in" placeholder="Title" maxlength="200" aria-label="Article title"/>
+      <textarea id="artBody" class="art-body-in" placeholder="Write your article…" maxlength="25000" aria-label="Article body"></textarea>
+    </div>
+  </div>
+</div>
+
+<!-- Article reader -->
+<div class="overlay hidden" id="articleReader">
+  <div class="art-reader" role="dialog" aria-modal="true" aria-label="Article">
+    <div class="art-r-top">
+      <button class="msg-back" onclick="acCloseArticle()" aria-label="Close"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+    </div>
+    <div class="art-reader-scroll" id="artReaderBody"></div>
+  </div>
+</div>
+
 <div class="overlay hidden" id="imgViewer">
   <div class="iv-top">
     <button class="iv-x" onclick="closeImageViewer()" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -15122,6 +15199,9 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <button class="msg-attach" id="acCelebrateBtn" onclick="acOccasionOpen()" aria-label="Celebrate an occasion">
           <svg viewBox="0 0 24 24"><path d="M2 22l4.5-11 6.5 6.5z"/><line x1="14" y1="2" x2="14" y2="5"/><line x1="20" y1="8" x2="17" y2="8"/><path d="M13 4.5c1.5 0 2 1.5 3.5 1.5"/><path d="M18.5 11c0 1.5 1.5 2 1.5 3.5"/></svg>
         </button>
+        <button class="msg-attach" id="acArticleBtn" onclick="acOpenArticleComposer((document.getElementById('acPostText')||{}).value||'')" aria-label="Write a long-form article">
+          <svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z" fill="none"/><line x1="7" y1="8" x2="17" y2="8"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="7" y1="16" x2="13" y2="16"/></svg>
+        </button>
         <button class="msg-attach" id="acDraftsBtn" onclick="acOpenDrafts()" aria-label="Drafts">
           <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         </button>
@@ -15806,7 +15886,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1389'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1390'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -27998,8 +28078,106 @@ function acQuickBuyAddCart() {
 }
 function acQuickBuyFull() { const l = AC._qbListing; if (!l) return; closeOverlay('quickBuySheet'); acOpenListing(l.id); }
 function acQuickBuyViewSeller() { const l = AC._qbListing; if (!l || !l.seller || !l.seller.username) return; closeOverlay('quickBuySheet'); acGoProfile(l.seller.username); }
+// ── Long-form articles ────────────────────────────────────────────────────────
+function acReadingTime(body) {
+  const w = (body || '').trim().split(/\s+/).filter(Boolean).length;
+  return Math.max(1, Math.round(w / 200));
+}
+// The feed teaser card for an article (cover · kicker · headline · snippet · Read).
+function acArticleTeaser(p) {
+  const mins = acReadingTime(p.body);
+  const plain = (p.body || '').replace(/\s+/g, ' ').trim();
+  const snippet = plain.length > 150 ? escHtml(plain.slice(0, 150)) + '…' : escHtml(plain);
+  const cover = p.image ? `<div class="art-teaser-cover" style="background-image:url('${jsAttr(p.image)}')"></div>` : '';
+  return `<div class="art-teaser" onclick="event.stopPropagation();acOpenArticle(${p.id})">
+    ${cover}
+    <div class="art-teaser-body">
+      <div class="art-teaser-kicker">Article · ${mins} min read</div>
+      <div class="art-teaser-title">${escHtml(p.articleTitle)}</div>
+      ${snippet ? `<div class="art-teaser-snip">${snippet}</div>` : ''}
+      <div class="art-teaser-cta">Read article</div>
+    </div>
+  </div>`;
+}
+async function acOpenArticle(id) {
+  showOverlay('articleReader');
+  const el = document.getElementById('artReaderBody');
+  if (el) el.innerHTML = '<div class="art-loading">Loading…</div>';
+  let p = AC._postCache && AC._postCache[id];
+  try { const r = await API.req('GET', '/api/social/posts/' + id); if (r && r.post) p = r.post; } catch (e) { /* fall back to cache */ }
+  if (!p) { if (el) el.innerHTML = '<div class="art-loading">This article isn’t available.</div>'; return; }
+  AC._article = p; AC._postCache = AC._postCache || {}; AC._postCache[p.id] = p;
+  acRenderArticle(p);
+}
+function acRenderArticle(p) {
+  const el = document.getElementById('artReaderBody'); if (!el) return;
+  const a = p.author, mins = acReadingTime(p.body);
+  const cover = p.image ? `<div class="art-r-cover" style="background-image:url('${jsAttr(p.image)}')"></div>` : '';
+  const paras = (p.body || '').split(/\n{2,}/).map((par) => par.trim()).filter(Boolean)
+    .map((par) => `<p>${acLinkifyPost(par).replace(/\n/g, '<br/>')}</p>`).join('');
+  el.innerHTML = `
+    ${cover}
+    <div class="art-r-inner">
+      <h1 class="art-r-title">${escHtml(p.articleTitle)}</h1>
+      <div class="art-r-byline">
+        <div class="art-r-av" onclick="acCloseArticle();acGoProfile('${a.username}')">${acAvatarHtml(a.name, a.avatar, 'user-avatar', acIsBiz(a))}</div>
+        <div class="art-r-who"><span class="art-r-name" onclick="acCloseArticle();acGoProfile('${a.username}')">${escHtml(a.name)}${vbadge(acIsVerified(a))}</span><span class="art-r-meta">${acFullTime(p.created_at)} · ${mins} min read</span></div>
+      </div>
+      <div class="art-r-content">${paras}</div>
+      <div class="art-r-actions ac-post-actions">
+        ${acLikeBtn(p, false)}
+        <button class="ac-reply" onclick="acCloseArticle();acOpenPostView(${p.id})" aria-label="Comment"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg><span class="ac-act-n">${p.replies || ''}</span></button>
+        <button class="ac-bookmark ${p.bookmarked ? 'on' : ''}" onclick="acToggleBookmark(this,${p.id})" aria-label="Save"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
+      </div>
+    </div>`;
+}
+function acCloseArticle() { closeOverlay('articleReader'); }
+// Article composer.
+let _artCover = null;
+function acOpenArticleComposer(carryText) {
+  if (!(S.user && S.user.username)) { showNotif('Sign in to write an article.'); return; }
+  _artCover = null;
+  const t = document.getElementById('artTitle'), bd = document.getElementById('artBody');
+  if (t) t.value = ''; if (bd) bd.value = (carryText || '');
+  acArtCoverClear();
+  showOverlay('articleComposer');
+  setTimeout(() => { const el = document.getElementById('artTitle'); if (el) el.focus(); }, 120);
+}
+function acArtCover(e) {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  downscaleImage(f, (dataUrl) => {
+    _artCover = dataUrl;
+    const c = document.getElementById('artCover');
+    if (c) { c.style.backgroundImage = `url('${_artCover}')`; c.classList.add('has'); c.innerHTML = '<button class="art-cover-x" onclick="event.stopPropagation();acArtCoverClear()" aria-label="Remove cover">✕</button>'; }
+  }, 1600);
+  e.target.value = '';
+}
+function acArtCoverClear() {
+  _artCover = null;
+  const c = document.getElementById('artCover'); if (!c) return;
+  c.style.backgroundImage = ''; c.classList.remove('has');
+  c.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg><span>Add a cover image</span>';
+}
+async function acPublishArticle() {
+  const title = (document.getElementById('artTitle').value || '').trim();
+  const body = (document.getElementById('artBody').value || '').trim();
+  if (!title) return showNotif('Give your article a title.');
+  if (!body) return showNotif('Write the article body.');
+  const btn = document.getElementById('artPublishBtn'); const lbl = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Publishing…';
+  try {
+    const payload = { articleTitle: title, body };
+    if (_artCover) payload.image = _artCover;
+    await API.req('POST', '/api/social/posts', payload);
+    closeOverlay('articleComposer');
+    showNotif('Article published!');
+    appTab('home'); acSetFeed('foryou');
+  } catch (e) { showNotif(e.message || 'Could not publish the article.'); btn.disabled = false; btn.textContent = lbl; }
+}
+
 function acPostCard(p) {
-  const img = acProdTagWrap(p, acPostMedia(p, true));
+  const isArticle = !!(p.articleTitle && !p.locked);
+  const img = isArticle ? '' : acProdTagWrap(p, acPostMedia(p, true)); // articles show a cover teaser instead
   AC._authors = AC._authors || {};
   AC._authors[p.author.id] = p.author;
   AC._postCache = AC._postCache || {};
@@ -28030,7 +28208,8 @@ function acPostCard(p) {
         ? `<div class="ac-post-locked" onclick="event.stopPropagation();acUnlockPost(${p.id})"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Unlock this post for $${((p.ppvCents || 0) / 100).toFixed(2)}</span></div>`
         : `<div class="ac-post-locked" onclick="event.stopPropagation();acGoProfile('${h}')"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>${p.minTierLevel > 0 ? 'Higher-tier subscribers only. Upgrade to unlock' : 'Subscriber-only post. Subscribe to unlock'}</span></div>`) : ''}
       ${(p.tagged && p.tagged.length && !p.locked) ? `<div class="ac-post-tagged"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>with ${p.tagged.slice(0, 3).map(t => `<b onclick="event.stopPropagation();acGoProfile(${jsAttr(t.username || '')})">@${escHtml(t.username || t.name)}</b>`).join(', ')}${p.tagged.length > 3 ? ' and ' + (p.tagged.length - 3) + ' more' : ''}</div>` : ''}
-      ${p.body && !p.locked ? `<div class="ac-post-text">${acLinkifyPost(p.body)}</div>${acShowTranslate(p) ? `<button class="ac-translate" onclick="event.stopPropagation();acTranslatePost(${p.id}, this)">Translate post</button>` : ''}` : ''}
+      ${isArticle ? acArticleTeaser(p) : ''}
+      ${p.body && !p.locked && !isArticle ? `<div class="ac-post-text">${acLinkifyPost(p.body)}</div>${acShowTranslate(p) ? `<button class="ac-translate" onclick="event.stopPropagation();acTranslatePost(${p.id}, this)">Translate post</button>` : ''}` : ''}
       ${img}
       ${acQuoteHtml(p.quote)}
       ${acPollHtml(p)}
