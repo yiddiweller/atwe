@@ -4602,6 +4602,8 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .mc-opt-text{position:relative;flex:1;font-size:14px;font-weight:500;line-height:1.25;}
 .mc-opt-n{position:relative;font-size:12.5px;font-weight:700;opacity:.7;flex-shrink:0;}
 .mc-total{font-size:11.5px;opacity:.6;padding:9px 4px 2px;}
+/* An ended poll's options are results only — no pointer, slightly settled. */
+.mc-opt.ended{cursor:default;opacity:.92;}
 /* Tappable "View votes" total (WhatsApp-style) — inherits the bubble's text colour. */
 .mc-total-tap{display:block;background:none;border:none;color:inherit;font-family:inherit;cursor:pointer;opacity:.85;font-weight:700;text-align:start;width:100%;}
 /* Who-voted sheet: option header + voter rows */
@@ -16763,7 +16765,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1517'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1518'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -47355,22 +47357,25 @@ function acMetaCard(m) {
     Object.values(votes).forEach(arr => { if (arr && arr.length) { voters++; arr.forEach(i => { counts[i] = (counts[i] || 0) + 1; }); } });
     const maxC = Math.max(1, ...meta.opts.map(o => counts[o.i] || 0));
     const chk = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
+    const ended = !!meta.closed;
     const rows = meta.opts.map(o => {
       const c = counts[o.i] || 0;
       const chosen = mine.indexOf(o.i) !== -1;
       const w = Math.round((c / maxC) * 100);
-      return `<div class="mc-opt${chosen ? ' chosen' : ''}"${live ? ` onclick="event.stopPropagation();acPollVote(${m.id}, ${o.i})"` : ''}>
+      return `<div class="mc-opt${chosen ? ' chosen' : ''}${ended ? ' ended' : ''}"${(live && !ended) ? ` onclick="event.stopPropagation();acPollVote(${m.id}, ${o.i})"` : ''}>
         <span class="mc-fill" style="width:${w}%"></span>
         <span class="mc-radio">${chk}</span>
         <span class="mc-opt-text">${escHtml(o.text)}</span>
         <span class="mc-opt-n">${c || ''}</span>
       </div>`;
     }).join('');
-    const sub = meta.multi ? 'Select one or more' : 'Select one';
+    const sub = ended ? 'Final results' : (meta.multi ? 'Select one or more' : 'Select one');
     const total = `${voters} ${voters === 1 ? 'vote' : 'votes'}`;
     // WhatsApp-style: once anyone has voted, the total taps through to "who voted".
     const totalHtml = (live && voters) ? `<button class="mc-total mc-total-tap" onclick="event.stopPropagation();acPollWho(${m.id})">${total} · View votes</button>` : `<div class="mc-total">${total}</div>`;
-    return `<div class="meta-card mc-poll"><div class="mc-poll-q">${escHtml(meta.q)}</div><div class="mc-poll-sub">${sub}</div>${rows}${totalHtml}</div>`;
+    // Creator can end voting early — one-way, shows "Final results" for everyone.
+    const endBtn = (live && !ended && m.mine) ? `<button class="mc-total mc-total-tap" onclick="event.stopPropagation();acPollClose(${m.id})">End poll</button>` : '';
+    return `<div class="meta-card mc-poll"><div class="mc-poll-q">${escHtml(meta.q)}</div><div class="mc-poll-sub">${sub}</div>${rows}${totalHtml}${endBtn}</div>`;
   }
   if (meta.t === 'event') {
     const d = new Date(meta.at);
@@ -47568,6 +47573,18 @@ function acContactOpen(id) {
   if (c.phone) { window.location.href = 'tel:' + c.phone.replace(/[^\d+]/g, ''); return; }
   if (c.email) { window.location.href = 'mailto:' + c.email; return; }
   showNotif(c.name);
+}
+// End a poll early (creator): confirm, then everyone's card flips to Final results.
+async function acPollClose(msgId) {
+  const ok = await appConfirm({ title: 'End this poll?', message: 'Voting stops and everyone sees the final results. This can’t be undone.', confirmText: 'End poll', danger: false });
+  if (!ok) return;
+  try {
+    const body = AC.mode === 'group' && AC.groupId ? { group: AC.groupId } : {};
+    const r = await API.req('POST', '/api/atchat/poll/' + msgId + '/close', body);
+    const msg = (AC.messages || []).find(x => x.id === msgId);
+    if (msg && r.meta) { msg.meta = r.meta; acRenderThread(); }
+    showNotif('Poll ended.');
+  } catch (e) { showNotif(e.message || 'Could not end the poll.'); }
 }
 // "View votes" (WhatsApp-style): who picked what, per option.
 async function acPollWho(msgId) {

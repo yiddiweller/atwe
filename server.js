@@ -7181,6 +7181,24 @@ app.get('/api/atchat/poll/:id/voters', auth.requireAuth, async (req, res) => {
     res.json({ q: meta.q, multi: !!meta.multi, options, totalVoters: ids.length });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the votes.' }); }
 });
+// End a poll early (WhatsApp-style, creator only): voting stops, the card shows
+// final results for everyone. One-way — a closed poll stays closed.
+app.post('/api/atchat/poll/:id/close', auth.requireAuth, rateLimit(30, 60000, 'poll-close'), async (req, res) => {
+  const mid = routeId(req.params.id);
+  if (!Number.isInteger(mid)) return res.status(400).json({ error: 'Invalid id.' });
+  const gid = req.body.group ? routeId(req.body.group) : null;
+  try {
+    const found = await loadMetaMsg(mid, gid, req.user.id, 'poll');
+    if (!found) return res.status(404).json({ error: 'Poll not found.' });
+    if (found.row.sender_id !== req.user.id) return res.status(403).json({ error: 'Only whoever started the poll can end it.' });
+    const meta = found.row.meta;
+    if (meta.closed) return res.json({ ok: true, meta });   // already ended — a repeat tap is a no-op
+    meta.closed = true;
+    await db.query(`UPDATE ${found.table} SET meta = $1 WHERE id = $2`, [JSON.stringify(meta), mid]);
+    await pushMetaUpd(found.row, gid, req.user.id, mid, meta);
+    res.json({ ok: true, meta });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not end the poll.' }); }
+});
 // Cast / change / clear a vote on a poll. body: { group?, option } (option may be
 // a single index or an array when the poll allows multiple answers).
 app.post('/api/atchat/poll/:id/vote', auth.requireAuth, rateLimit(80, 60000, 'poll-vote'), async (req, res) => {
@@ -7193,6 +7211,7 @@ app.post('/api/atchat/poll/:id/vote', auth.requireAuth, rateLimit(80, 60000, 'po
     const found = await loadMetaMsg(mid, gid, uid, 'poll');
     if (!found) return res.status(404).json({ error: 'Poll not found.' });
     const meta = found.row.meta;
+    if (meta.closed) return res.status(400).json({ error: 'This poll has ended.', closed: true });
     const valid = new Set(meta.opts.map((o) => o.i));
     let chosen = (Array.isArray(req.body.option) ? req.body.option : [req.body.option])
       .map((n) => parseInt(n, 10)).filter((n) => valid.has(n));
