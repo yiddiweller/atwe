@@ -4611,6 +4611,13 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 /* Who-voted sheet: option header + voter rows */
 .pw-opt{font-size:13px;font-weight:800;color:var(--t2);margin:14px 0 4px;display:flex;justify-content:space-between;}
 .pw-none{font-size:12.5px;color:var(--t3);padding:4px 0;}
+/* Daily-archive thumbnail grid */
+.sa-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.sa-cell{position:relative;aspect-ratio:9/14;border:none;border-radius:12px;overflow:hidden;background:var(--s2);cursor:pointer;padding:0;}
+.sa-cell img,.sa-cell video{width:100%;height:100%;object-fit:cover;display:block;}
+.sa-txt{display:flex;align-items:center;justify-content:center;width:100%;height:100%;color:#fff;font-size:12px;font-weight:700;padding:8px;box-sizing:border-box;text-align:center;}
+.sa-date{position:absolute;left:6px;bottom:6px;font-size:10.5px;font-weight:700;color:#fff;background:rgba(0,0,0,.55);border-radius:8px;padding:2px 7px;}
+.sa-views{position:absolute;right:6px;bottom:6px;font-size:10.5px;font-weight:700;color:#fff;background:rgba(0,0,0,.55);border-radius:8px;padding:2px 7px;}
 /* Event */
 .mc-event{min-width:236px;}
 .mc-ev-top{display:flex;gap:12px;align-items:center;}
@@ -14061,6 +14068,15 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Daily archive: your own expired Dailies (private) -->
+<div class="overlay hidden" id="storyArchiveView" onclick="if(event.target===this)closeOverlay('storyArchiveView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Daily archive">
+    <button class="sheet-close" onclick="closeOverlay('storyArchiveView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Daily archive</div>
+    <div id="storyArchiveBody"></div>
+  </div>
+</div>
+
 <!-- Poll: who voted (per option) -->
 <div class="overlay hidden" id="pollWhoView" onclick="if(event.target===this)closeOverlay('pollWhoView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Poll votes">
@@ -16779,7 +16795,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1523'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1524'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -28340,6 +28356,7 @@ function acGoProfileHub() {
     // Library
     html += '<div class="me-catlabel">Library</div><div class="me-group">';
     html += item('Collections', _ME_IC.bmk, "acOpenCollections()", null);
+    html += item('Daily archive', _ME_IC.clock || _ME_IC.bmk, "acOpenStoryArchive()", null);
     html += item('Lists', _ME_IC.list, "acOpenLists()", null);
     html += item('Orders', _ME_IC.orders, "acOpenOrders('buyer')", null);
     html += item('Cart', _ME_IC.cart, "acOpenCart()", null);
@@ -40678,6 +40695,34 @@ async function acCfRemove(id) {
 }
 // ── Highlights ──
 // From the story viewer (own current story) → save it to a highlight.
+// ── Daily archive: your own expired Dailies (private — nobody else ever sees them) ──
+async function acOpenStoryArchive() {
+  showOverlay('storyArchiveView');
+  const b = document.getElementById('storyArchiveBody'); b.innerHTML = acSkelRows(3);
+  try {
+    const { stories } = await API.req('GET', '/api/stories/archive');
+    AC._svArchive = stories || [];
+    if (!stories.length) { b.innerHTML = '<div class="ac-empty" style="padding:26px;">Nothing here yet — Dailies land in your archive after their 24 hours.</div>'; return; }
+    b.innerHTML = '<div class="ac-disc-sub" style="margin:0 0 10px;">Only you can see these. Add any to a highlight to put it back on your profile.</div>' +
+      '<div class="sa-grid">' + stories.map((s, i) => {
+        const when = new Date(s.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' });
+        const face = s.kind === 'text'
+          ? `<span class="sa-txt" style="background:${escHtml(s.bg || 'var(--s3)')}">${escHtml((s.caption || 'Aa').slice(0, 40))}</span>`
+          : (s.kind === 'video' ? `<video src="${s.media}" preload="metadata" muted playsinline></video>` : `<img src="${s.media}" alt="" loading="lazy" decoding="async"/>`);
+        return `<button class="sa-cell" onclick="acOpenArchiveItem(${i})">${face}<span class="sa-date">${when}</span>${s.viewCount ? `<span class="sa-views">${s.viewCount} 👁</span>` : ''}</button>`;
+      }).join('') + '</div>';
+  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load your archive.') + '</div>'; }
+}
+// View an archived Daily full-screen (highlight-style viewer: no seen/reply),
+// keeping mine=true so the bookmark → Add-to-highlight still works.
+function acOpenArchiveItem(i) {
+  const list = AC._svArchive || []; if (!list.length) return;
+  const user = { id: S.user?.id || 0, name: 'Your archive', username: S.user?.username || '', avatar: S.user?.avatar || null, accountType: 'personal' };
+  const items = list.map(s => ({ id: s.id, kind: s.kind, media: s.media, caption: s.caption, bg: s.bg, mine: true }));
+  AC._sv = { groups: [{ user, _items: items }], gi: 0, si: i, items, timer: null, highlight: true, archive: true };
+  showOverlay('storyViewer');
+  acStoryShow(i);
+}
 async function acStoryHighlight() {
   const sv = AC._sv; if (!sv) return; const it = sv.items[sv.si]; if (!it || !it.mine) return;
   AC._hlStoryId = it.id;
@@ -41015,7 +41060,7 @@ function acStoryShow(si) {
   document.getElementById('storyBars').innerHTML = sv.items.map((_, i) =>
     `<div class="story-bar"><div class="story-bar-fill" style="width:${i < si ? 100 : 0}%"></div></div>`).join('');
   // Header.
-  document.getElementById('storyHeadUser').innerHTML = `${acAvatarHtml(g.user.name, g.user.avatar, 'user-avatar sm', g.user.accountType === 'business')}<div><div class="story-h-name">${escHtml(g.user.name)}${vbadge(acIsVerified(g.user))}</div><div class="story-h-time">${sv.highlight ? 'Highlight' : acTime(it.createdAt)}</div></div>`;
+  document.getElementById('storyHeadUser').innerHTML = `${acAvatarHtml(g.user.name, g.user.avatar, 'user-avatar sm', g.user.accountType === 'business')}<div><div class="story-h-name">${escHtml(g.user.name)}${vbadge(acIsVerified(g.user))}</div><div class="story-h-time">${sv.archive ? 'From your archive' : (sv.highlight ? 'Highlight' : acTime(it.createdAt))}</div></div>`;
   // The ⋯ (mute) menu shows only on someone else's Daily (not your own, not highlights).
   const moreBtn = document.getElementById('storyMoreBtn'); if (moreBtn) moreBtn.style.display = (!it.mine && !sv.highlight) ? 'flex' : 'none';
   // Body.
@@ -41030,7 +41075,12 @@ function acStoryShow(si) {
   capEl.innerHTML = capTxt + acStoryMentionChips(it) + acStoryProdTag(it) + acStoryLinkChip(it) + acStoryPollHtml(it) + acStoryQHtml(it);
   // Footer: own → viewers + delete; others → empty.
   const foot = document.getElementById('storyFoot');
-  if (sv.highlight) {
+  if (sv.archive) {
+    // Archive playback (your own expired Daily): add it to a highlight to bring
+    // it back to your profile, or save the file. No seen/reply — it's history.
+    const dl = (it.kind === 'image' || it.kind === 'video') ? `<button class="story-hl-btn" onclick="event.stopPropagation();acStoryDownload()" aria-label="Save to device"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>` : '';
+    foot.innerHTML = `<button class="story-views-btn" onclick="acStoryHighlight()"><svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>Add to highlight</button>${dl}`;
+  } else if (sv.highlight) {
     // Highlight playback: no seen/reply. Own highlight gets an Edit button.
     foot.innerHTML = sv.highlightMine
       ? `<button class="story-views-btn" onclick="acOpenHighlightManage(${sv.highlightId})"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Edit highlight</button>`
