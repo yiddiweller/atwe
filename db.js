@@ -2354,6 +2354,8 @@ async function initSchema() {
   await query(`ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS resume_data JSONB;`);
   // Screening questions (employer knockouts) + the applicant's answers.
   await query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS screening JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  // Application deadline: applications close at this time (null = open-ended).
+  await query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS closes_at TIMESTAMPTZ;`);
   await query(`ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS answers JSONB;`);
   // Private hiring notes: the poster's own note on an applicant (never shown to the candidate).
   await query(`ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS hiring_notes TEXT;`);
