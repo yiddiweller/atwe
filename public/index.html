@@ -8796,6 +8796,13 @@ body.reduce-motion .xp-ai::after{animation:none;}
 .ev-badge.live{background:var(--green);color:var(--on-green);}
 /* Event detail */
 .ev-detail-when{display:flex;align-items:center;gap:9px;color:var(--t1);font-size:14px;font-weight:600;margin:10px 0 4px;}
+/* Event cover: the picker tile in the form + the hero on the detail. */
+.ev-cover-pick{margin-top:8px;height:110px;border-radius:14px;background:var(--s2);display:flex;align-items:center;justify-content:center;
+  color:var(--t3);font-size:13.5px;font-weight:700;cursor:pointer;background-size:cover;background-position:center;}
+.ev-cover-pick.has-img{color:transparent;}
+.ev-cover{height:150px;border-radius:16px;background-size:cover;background-position:center;margin:2px 0 12px;cursor:pointer;}
+/* Cover thumb on the event list card. */
+.ev-card-cover{width:54px;height:54px;border-radius:12px;background-size:cover;background-position:center;flex:0 0 auto;}
 .ev-detail-when svg{width:18px;height:18px;stroke:var(--accent);stroke-width:2;fill:none;flex-shrink:0;}
 .ev-detail-where{display:flex;align-items:center;gap:9px;color:var(--t2);font-size:13.5px;margin:4px 0;}
 .ev-detail-where svg{width:18px;height:18px;stroke:var(--accent);stroke-width:2;fill:none;flex-shrink:0;}
@@ -13473,6 +13480,8 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <textarea class="jp-in jp-ta" id="evDesc" rows="4" placeholder="What's the event about? Who's it for?" maxlength="4000"></textarea>
     <input class="jp-in" id="evPrice" type="number" min="0" max="1000" placeholder="Ticket price ($, 0 = free)"/>
     <input class="jp-in" id="evCapacity" type="number" min="1" max="1000000" step="1" placeholder="Capacity / max attendees (blank = unlimited)"/>
+    <div class="ev-cover-pick" id="evCoverPick" onclick="document.getElementById('evCoverFile').click()" role="button" aria-label="Add a cover photo">＋ Add a cover photo</div>
+    <input type="file" id="evCoverFile" accept="image/*" class="hidden" onchange="acEvPickCover(event)"/>
     <button class="ac-pill-btn accent jp-submit" id="evSaveBtn" onclick="acEventSave()">Create event</button>
   </div>
 </div>
@@ -16806,7 +16815,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1532'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1533'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24479,7 +24488,7 @@ async function acLoadEvents() {
       const d = new Date(e.startsAt);
       const live = d.getTime() <= Date.now() && (!e.endsAt || new Date(e.endsAt).getTime() > Date.now());
       return `<div class="ev-card" onclick="acOpenEvent(${e.id})">
-        <div class="ev-date"><div class="evd-m">${d.toLocaleDateString(undefined, { month: 'short' })}</div><div class="evd-d">${d.getDate()}</div></div>
+        ${e.cover ? `<div class="ev-card-cover" style="background-image:url('${e.cover}')"></div>` : `<div class="ev-date"><div class="evd-m">${d.toLocaleDateString(undefined, { month: 'short' })}</div><div class="evd-d">${d.getDate()}</div></div>`}
         <div class="ev-cmain">
           <div class="ev-ctitle">${escHtml(e.title)}${live ? '<span class="ev-badge live">LIVE</span>' : ''}</div>
           <div class="ev-cmeta">${acEvWhen(e.startsAt)} · ${e.online ? 'Online' : escHtml(e.location || 'In person')}</div>
@@ -24489,8 +24498,20 @@ async function acLoadEvents() {
     }).join('');
   } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load events.</div>'; }
 }
+// Event cover photo: picked → downscaled → previewed on the picker tile.
+function acEvPickCover(e) {
+  const f = (e.target.files || [])[0];
+  if (f) downscaleImage(f, (d) => { AC._evCover = d; acEvRenderCover(); }, 1280);
+  e.target.value = '';
+}
+function acEvRenderCover() {
+  const el = document.getElementById('evCoverPick'); if (!el) return;
+  if (AC._evCover) { el.style.backgroundImage = `url('${AC._evCover}')`; el.classList.add('has-img'); el.textContent = ''; }
+  else { el.style.backgroundImage = ''; el.classList.remove('has-img'); el.textContent = '＋ Add a cover photo'; }
+}
 function acEventNew() {
   AC._evEditId = null;
+  AC._evCover = null; acEvRenderCover();
   document.getElementById('evCreateTitle').textContent = 'Create an event';
   document.getElementById('evSaveBtn').textContent = 'Create event';
   document.getElementById('evFormTitle').value = '';
@@ -24524,6 +24545,7 @@ async function acEventSave() {
     location: document.getElementById('evLocation').value.trim(),
     priceCents: Math.round((parseFloat(document.getElementById('evPrice').value) || 0) * 100),
     capacity: document.getElementById('evCapacity').value.trim() === '' ? '' : Math.max(1, parseInt(document.getElementById('evCapacity').value, 10) || 1),
+    cover: AC._evCover || null,
   };
   const btn = document.getElementById('evSaveBtn'); const lbl = btn.textContent; btn.disabled = true; btn.textContent = 'Saving…';
   try {
@@ -24573,6 +24595,7 @@ function acRenderEvent(e) {
     ? `<div class="ev-detail-where"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>${e.full ? '<b style="color:var(--red);">Full</b> · ' + e.capacity + ' capacity' : e.spotsLeft + ' of ' + e.capacity + ' spots left'}${e.waitlisted ? ' · ' + e.waitlisted + ' waiting' : ''}</div>`
     : '';
   body.innerHTML = `
+    ${e.cover ? `<div class="ev-cover" style="background-image:url('${e.cover}')" onclick="openImageViewer('${e.cover}', this)"></div>` : ''}
     <div class="jp-title" style="padding-inline-end:30px;">${escHtml(e.title)}</div>
     <div class="ev-detail-when"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2.5" x2="8" y2="6"/><line x1="16" y1="2.5" x2="16" y2="6"/></svg>${acEvWhen(e.startsAt)}${e.endsAt ? ' – ' + acEvWhen(e.endsAt) : ''}</div>
     <div class="ev-detail-where">${whereIc}${where}</div>
@@ -24617,6 +24640,7 @@ async function acEvtRsvp(status) {
 function acEventEdit() {
   const e = AC._evCur; if (!e) return;
   AC._evEditId = e.id;
+  AC._evCover = e.cover || null; acEvRenderCover();
   document.getElementById('evCreateTitle').textContent = 'Edit event';
   document.getElementById('evSaveBtn').textContent = 'Save changes';
   document.getElementById('evFormTitle').value = e.title || '';
@@ -24637,6 +24661,7 @@ function acEventEdit() {
 function acEventDuplicate() {
   const e = AC._evCur; if (!e) return;
   AC._evEditId = null;                    // a CREATE, never an edit of the original
+  AC._evCover = e.cover || null; acEvRenderCover();
   document.getElementById('evCreateTitle').textContent = 'Duplicate event';
   document.getElementById('evSaveBtn').textContent = 'Create event';
   document.getElementById('evFormTitle').value = e.title || '';
