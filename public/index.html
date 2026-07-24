@@ -1268,7 +1268,8 @@ body.light{
 .as-name{font-size:14.5px;font-weight:800;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .as-handle{font-size:12px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .as-item{display:flex;align-items:center;gap:12px;padding:11px 12px;border:none;background:none;color:var(--t1);
-  font-size:15px;font-weight:500;cursor:pointer;border-radius:11px;text-align:start;width:100%;
+  /* Matching corners (§4): container is 16px radius + 4px padding, so a row's press-highlight radius = 16 − 4 = 12px to hug the corner. */
+  font-size:15px;font-weight:500;cursor:pointer;border-radius:12px;text-align:start;width:100%;
   transition:background var(--t-fast) var(--ease);}
 .as-item:active{background:var(--menu-hl);}
 @media(hover:hover){.as-item:hover{background:var(--menu-hl);}}
@@ -5473,7 +5474,8 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
 .mc-deal .mc-deal-code{font-size:12.5px;color:var(--t3);margin-top:4px;}
 .mc-deal .mc-deal-code b{color:var(--t1);letter-spacing:.04em;}
 /* ── Business leads (contact-form inbox) ── */
-.lead-card{background:var(--s1);border-radius:16px;padding:14px;margin-bottom:12px;}
+/* Matching corners (design rule §4): card radius = Reply pill radius (15px) + 14px padding gap = 29px, so the box hugs the pill in its corner. */
+.lead-card{background:var(--s1);border-radius:29px;padding:14px;margin-bottom:12px;}
 .lead-card.lead-new{background:var(--s2);}
 .lead-head{display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:9px;}
 .lead-head .user-avatar{width:38px;height:38px;}
@@ -16148,7 +16150,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1401'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1402'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
