@@ -16923,6 +16923,9 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
     const maxP = Math.round(Number(req.query.maxPrice) * 100); if (Number.isFinite(maxP) && maxP > 0) { params.push(maxP); conds.push(`p.price_cents <= $${params.length}`); }
     const minR = Number(req.query.minRating); if (Number.isFinite(minR) && minR > 0) { params.push(minR); conds.push(`(SELECT COALESCE(AVG(rating),0) FROM product_reviews pr WHERE pr.product_id = p.id) >= $${params.length}`); }
     if (req.query.inStock === 'true') conds.push(`(p.stock IS NULL OR p.stock > 0)`);
+    // "On sale" — a genuine markdown only: compare-at above the live price, and
+    // no variants (their compare-at is never shown, so it can't count as a sale).
+    if (req.query.sale === 'true') conds.push(`(p.compare_at_cents IS NOT NULL AND p.compare_at_cents > p.price_cents AND (p.variants IS NULL OR p.variants = '[]'::jsonb))`);
     // Sort: Best Match (default, blends relevance/quality/velocity/recency) or a
     // single flat column. Only 'best' needs an extra query param (text relevance).
     const FLAT_SORTS = { new: 'p.created_at DESC', price_asc: 'p.price_cents ASC', price_desc: 'p.price_cents DESC',

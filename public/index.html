@@ -14827,6 +14827,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <input class="mkt-fprice" id="mktMinP" type="number" min="0" placeholder="Min $" aria-label="Minimum price" oninput="acMktFilterDebounced()"/>
       <input class="mkt-fprice" id="mktMaxP" type="number" min="0" placeholder="Max $" aria-label="Maximum price" oninput="acMktFilterDebounced()"/>
       <label class="mkt-fstock"><input type="checkbox" id="mktInStock" onchange="acLoadMarketplace()"/> In stock</label>
+      <label class="mkt-fstock"><input type="checkbox" id="mktSale" onchange="acLoadMarketplace()"/> On sale</label>
     </div>
     <div id="mktRecent"></div>
     <div id="mktBody"></div>
@@ -16802,7 +16803,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1528'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1529'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -34920,6 +34921,7 @@ async function acLoadMarketplace() {
     const minP = (document.getElementById('mktMinP') || {}).value; if (minP) qs.push('minPrice=' + encodeURIComponent(minP));
     const maxP = (document.getElementById('mktMaxP') || {}).value; if (maxP) qs.push('maxPrice=' + encodeURIComponent(maxP));
     if ((document.getElementById('mktInStock') || {}).checked) qs.push('inStock=true');
+    if ((document.getElementById('mktSale') || {}).checked) qs.push('sale=true');
     const { listings } = await API.req('GET', '/api/marketplace' + (qs.length ? '?' + qs.join('&') : ''));
     body.innerHTML = (listings && listings.length) ? listings.map(acListingCard).join('') : '<div class="ac-empty" style="padding:26px;">No items match. Try clearing filters.</div>';
     acPadObserve(body); // start tracking impressions for any sponsored cards just rendered
