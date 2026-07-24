@@ -7128,6 +7128,16 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .cart-item-price{font-size:13px;color:var(--t3);}
 /* "Save for later" / "Move to cart" text actions on cart + saved rows */
 .cart-savelater{font-size:12px;padding:2px 0;text-align:start;}
+/* "Get your shop ready" setup checklist (Manage store). */
+.shop-setup{background:var(--s1);border-radius:16px;padding:13px 14px;margin-bottom:12px;}
+.shop-setup-h{font-size:14.5px;font-weight:800;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;}
+.shop-setup-n{font-size:12px;font-weight:700;color:var(--t3);}
+.shop-setup-row{display:flex;align-items:center;gap:11px;width:100%;background:none;border:none;color:var(--t1);font-family:inherit;font-size:14px;font-weight:600;padding:9px 2px;cursor:pointer;text-align:start;}
+.shop-setup-row.done{color:var(--t3);text-decoration:line-through;cursor:default;}
+.shop-setup-chk{width:22px;height:22px;border-radius:50%;background:var(--s3);flex:0 0 auto;display:flex;align-items:center;justify-content:center;}
+.shop-setup-row.done .shop-setup-chk{background:rgba(48,209,88,.18);}
+.shop-setup-chk svg{width:13px;height:13px;fill:none;stroke:var(--green);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;}
+.shop-setup-row .iset-chev{margin-inline-start:auto;}
 /* Free-shipping nudge per seller group (green when earned — money colour). */
 .cart-freeship{font-size:12.5px;font-weight:600;color:var(--t2);margin:2px 0 6px;}
 .cart-freeship.met{color:var(--green);font-weight:700;}
@@ -16815,7 +16825,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1536'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1537'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -37908,9 +37918,10 @@ async function acOpenStoreManage() {
   showOverlay('storeManageView');
   const b = document.getElementById('storeManageBody'); if (!b) return;
   b.innerHTML = acSkelRows(3);
-  let count = 0, pending = 0;
-  try { const { products } = await API.req('GET', '/api/my-listings'); count = (products || []).length; } catch {}
+  let count = 0, pending = 0, hasPhoto = false, payoutsReady = false;
+  try { const { products } = await API.req('GET', '/api/my-listings'); count = (products || []).length; hasPhoto = (products || []).some(p => p.image); } catch {}
   try { const { orders } = await API.req('GET', '/api/orders?scope=seller'); pending = (orders || []).filter(o => o.status === 'paid' || o.status === 'escrow').length; } catch {}
+  try { const cs = await API.req('GET', '/api/wallet/cashout-status'); payoutsReady = !!(cs && (cs.payoutsEnabled || !cs.configured)); } catch {}
   const isBiz = acIsBiz(S.user);
   const chev = '<svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>';
   const SI = {
@@ -37927,7 +37938,23 @@ async function acOpenStoreManage() {
     <span class="iset-ic">${icon}</span>
     <div class="iset-main"><div class="iset-label">${title}</div><div class="iset-sub">${sub}</div></div>
     ${badge ? `<span class="sm-count">${badge}</span>` : ''}${chev}</button>`;
-  b.innerHTML = `<div class="iset-group">
+  // "Get your shop ready" (Etsy/Shopify-style): checkable steps computed from
+  // real state. Vanishes once everything's done — no nagging a finished shop.
+  const steps = [
+    { done: count > 0, label: 'Add your first product', go: "closeOverlay('storeManageView');acProductFormOpen()" },
+    { done: hasPhoto, label: 'Give a product a photo', go: "closeOverlay('storeManageView');acOpenSell()" },
+    ...(isBiz ? [{ done: !!(S.user && S.user.businessHours), label: 'Set your business hours', go: "closeOverlay('storeManageView');openProfileEdit()" }] : []),
+    { done: payoutsReady, label: 'Set up your payout bank', go: "closeOverlay('storeManageView');acOpenCashout()" },
+  ];
+  const todo = steps.filter(s => !s.done).length;
+  const setup = todo ? `<div class="shop-setup">
+      <div class="shop-setup-h">Get your shop ready <span class="shop-setup-n">${steps.length - todo} of ${steps.length}</span></div>
+      ${steps.map(s => `<button class="shop-setup-row ${s.done ? 'done' : ''}" ${s.done ? 'disabled' : `onclick="${s.go}"`}>
+        <span class="shop-setup-chk">${s.done ? '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>' : ''}</span>
+        <span>${s.label}</span>${s.done ? '' : '<svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>'}
+      </button>`).join('')}
+    </div>` : '';
+  b.innerHTML = setup + `<div class="iset-group">
     ${isBiz ? row(SI.store, 'View storefront', 'See your store the way buyers do', "closeOverlay('storeManageView');acOpenMyStorefront()") : ''}
     ${row(SI.box, 'Products', count ? count + ' listing' + (count === 1 ? '' : 's') : 'Add items or services to sell', 'closeOverlay(\'storeManageView\');acOpenSell()')}
     ${row(SI.gift, 'Bundles', 'Group products into a saver price', 'closeOverlay(\'storeManageView\');acOpenBundles()')}
