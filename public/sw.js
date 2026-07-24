@@ -1,4 +1,4 @@
-const CACHE = 'atwe-v1525';
+const CACHE = 'atwe-v1526';
 // The app shell ('/', '/index.html') is cached at runtime by the network-first
 // navigation handler, not precached — precaching '/' on install would request a
 // gated navigation and could consume a one-time site-lock pass.
@@ -29,6 +29,10 @@ self.addEventListener('push', e => {
     badge: '/icon-192.png',
     data: { url: data.url || '/' },
   };
+  // App-icon badge while the app is closed: a push means "something unread" —
+  // no exact count travels in the payload, so mark the icon (the app corrects
+  // it to the real number the next time it opens). No-op where unsupported.
+  try { if ('setAppBadge' in self.navigator) self.navigator.setAppBadge().catch(() => {}); } catch (_) {}
   e.waitUntil(self.registration.showNotification(title, options));
 });
 
