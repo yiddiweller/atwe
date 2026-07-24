@@ -7754,8 +7754,16 @@ function mapStory(s, me) {
     mine: s.user_id === me, seen: !!s.seen, viewCount: s.view_count != null ? Number(s.view_count) : undefined,
     audience: s.audience === 'close' ? 'close' : 'all',
     sharedPost,
+    link: s.link_url ? { url: s.link_url, label: s.link_label || null } : null,
     products: tagProductsFrom(s),
   };
+}
+// Normalize + validate a Daily link: prepend https:// if schemeless, http(s) only.
+function cleanStoryLink(u) {
+  u = String(u || '').trim().slice(0, 600);
+  if (!u) return null;
+  if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+  try { const p = new URL(u); return (p.protocol === 'http:' || p.protocol === 'https:') ? p.href : null; } catch { return null; }
 }
 // Fetch a re-sharable post's card fields (author + body + image). Returns null when the
 // post is gone/not shareable so a 'post' story degrades to an empty card gracefully.
@@ -7783,6 +7791,13 @@ app.post('/api/stories', auth.requireAuth, rateLimit(30, 60000, 'story-post'), r
   const caption = (req.body.caption || '').toString().trim().slice(0, 300) || null;
   const bg = (req.body.bg || '').toString().slice(0, 24) || null;
   const audience = req.body.audience === 'close' ? 'close' : 'all';
+  const linkUrl = cleanStoryLink(req.body.linkUrl);
+  // Label defaults to the link's hostname (sans www.) when the sharer didn't set one.
+  let linkLabel = null;
+  if (linkUrl) {
+    linkLabel = (req.body.linkLabel || '').toString().trim().slice(0, 30) || null;
+    if (!linkLabel) { try { linkLabel = new URL(linkUrl).hostname.replace(/^www\./, ''); } catch { linkLabel = null; } }
+  }
   let media = null;
   let sharedPostId = null;
   if (kind === 'post') {
@@ -7822,8 +7837,8 @@ app.post('/api/stories', auth.requireAuth, rateLimit(30, 60000, 'story-post'), r
     // Tagged products (≤5 of the poster's OWN active products) on a story.
     const taggedProductIds = await validateOwnProductIds(req.user.id, req.body.productIds);
     const r = await db.query(
-      'INSERT INTO stories (user_id, kind, media, caption, bg, audience, shared_post_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, user_id, kind, media, caption, bg, audience, shared_post_id, created_at, expires_at',
-      [req.user.id, kind, media, caption, bg, audience, sharedPostId]
+      'INSERT INTO stories (user_id, kind, media, caption, bg, audience, shared_post_id, link_url, link_label) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, user_id, kind, media, caption, bg, audience, shared_post_id, link_url, link_label, created_at, expires_at',
+      [req.user.id, kind, media, caption, bg, audience, sharedPostId, linkUrl, linkLabel]
     );
     if (taggedProductIds.length) await saveContentProductTags('story', r.rows[0].id, taggedProductIds);
     // Refresh the open clients of the audience: all followers, or — for a close-
@@ -7878,7 +7893,7 @@ app.get('/api/stories/:userId', auth.requireAuth, async (req, res) => {
       if (!f.rowCount) return res.status(403).json({ error: 'Follow them to see their story.' });
     }
     const { rows } = await db.query(
-      `SELECT s.id, s.user_id, s.kind, s.media, s.caption, s.bg, s.audience, s.created_at, s.expires_at, s.shared_post_id,
+      `SELECT s.id, s.user_id, s.kind, s.media, s.caption, s.bg, s.audience, s.created_at, s.expires_at, s.shared_post_id, s.link_url, s.link_label,
               (sv.viewer_id IS NOT NULL) AS seen,
               (SELECT json_build_object('id', sp.id, 'body', sp.body, 'image', sp.image, 'author_id', spu.id,
                        'author_name', spu.name, 'author_username', spu.username, 'author_avatar', spu.avatar,

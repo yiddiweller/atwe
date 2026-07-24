@@ -938,6 +938,10 @@ async function initSchema() {
   // post as a tappable card. shared_post_id references it; ON DELETE SET NULL so a
   // deleted post leaves a harmless empty share rather than breaking the story.
   await query(`ALTER TABLE stories ADD COLUMN IF NOT EXISTS shared_post_id INTEGER REFERENCES posts(id) ON DELETE SET NULL;`);
+  // Link sticker (IG-style): a Daily can carry one tappable link (URL + short label)
+  // that viewers tap to open — great for businesses driving traffic.
+  await query(`ALTER TABLE stories ADD COLUMN IF NOT EXISTS link_url TEXT;`);
+  await query(`ALTER TABLE stories ADD COLUMN IF NOT EXISTS link_label TEXT;`);
   await query(`
     CREATE TABLE IF NOT EXISTS close_friends (
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

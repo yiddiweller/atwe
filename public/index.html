@@ -6245,6 +6245,14 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .spc-tap{margin-top:11px;font-size:12.5px;color:var(--accent);font-weight:700;}
 .story-cap{position:absolute;left:0;right:0;bottom:64px;z-index:3;padding:0 16px;pointer-events:none;}
 .story-cap-in{background:rgba(0,0,0,.55);color:#fff;font-size:15px;padding:8px 12px;border-radius:12px;display:inline-block;text-shadow:0 1px 2px rgba(0,0,0,.5);}
+/* Daily link sticker — composer box + the tappable viewer chip */
+.st-link-box{margin-top:2px;}
+.st-link-rm{background:none;border:none;color:var(--t3);font-size:13px;cursor:pointer;padding:8px 0 0;}
+.story-link-wrap{position:absolute;left:0;right:0;bottom:120px;z-index:3;display:flex;justify-content:center;padding:0 16px;pointer-events:none;}
+.story-link-chip{pointer-events:auto;display:inline-flex;align-items:center;gap:8px;max-width:80%;background:rgba(255,255,255,.94);color:#111114;font-size:14.5px;font-weight:700;padding:11px 18px;border-radius:var(--r-pill);cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.3);}
+.story-link-chip svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;}
+.story-link-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.story-link-chip:active{transform:scale(.96);}
 /* Shoppable story: a tagged-product pill (its own pointer-events, since .story-cap is inert). */
 .story-prodtag{pointer-events:auto;display:inline-flex;align-items:center;gap:8px;margin-top:10px;max-width:100%;
   background:rgba(255,255,255,.96);color:#111;border:none;border-radius:var(--r-pill);padding:9px 14px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.4);}
@@ -13930,6 +13938,13 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <div class="story-bg-row" id="stBgRow"></div>
     </div>
     <input class="jp-in" id="stCaption" type="text" maxlength="300" placeholder="Add a caption (optional)" style="margin-top:8px;"/>
+    <!-- Link sticker: one tappable link on the Daily (great for businesses) -->
+    <button class="ac-compose-prodadd" id="stLinkAddBtn" style="margin-top:8px;" onclick="acStoryLinkToggle(true)" type="button">＋ Add a link</button>
+    <div class="st-link-box hidden" id="stLinkBox">
+      <input class="jp-in" id="stLinkUrl" type="url" inputmode="url" maxlength="600" placeholder="Paste a link (https://…)" style="margin-top:8px;"/>
+      <input class="jp-in" id="stLinkLabel" type="text" maxlength="30" placeholder="Button text (optional, e.g. Shop now)" style="margin-top:8px;"/>
+      <button class="st-link-rm" onclick="acStoryLinkToggle(false)" type="button">Remove link</button>
+    </div>
     <!-- Audience: all followers, or just close friends -->
     <div class="st-aud-row">
       <button class="st-aud on" id="stAudAll" onclick="acStoryAud('all')"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>Followers</button>
@@ -16180,7 +16195,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1403'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1404'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -38162,6 +38177,7 @@ function acOpenStoryComposer() {
   document.getElementById('stBgRow').innerHTML = _STORY_BGS.map(b => `<button class="story-bg ${b.id === 'g1' ? 'on' : ''}" data-bg="${b.id}" style="background:${b.css}" onclick="acStoryBgPick('${b.id}')"></button>`).join('');
   document.getElementById('stTextPrev').style.background = _storyBgCss('g1');
   AC._postProducts = []; acRenderPostProdChip(); // fresh product tags per composer open
+  acStoryLinkToggle(false); // fresh (collapsed, cleared) link sticker per open
   acStoryTab('photo');
   showOverlay('storyCompose');
 }
@@ -38192,6 +38208,13 @@ async function acStoryPickImg(e) {
 function acStoryTextSync() {}
 function acStoryBgPick(id) { AC._stBg = id; document.querySelectorAll('#stBgRow .story-bg').forEach(b => b.classList.toggle('on', b.dataset.bg === id)); document.getElementById('stTextPrev').style.background = _storyBgCss(id); }
 function acStoryAud(a) { AC._stAud = a === 'close' ? 'close' : 'all'; document.getElementById('stAudAll').classList.toggle('on', AC._stAud === 'all'); document.getElementById('stAudClose').classList.toggle('on', AC._stAud === 'close'); }
+// Daily link sticker: reveal/hide the URL+label inputs (clears them on hide).
+function acStoryLinkToggle(on) {
+  document.getElementById('stLinkBox').classList.toggle('hidden', !on);
+  document.getElementById('stLinkAddBtn').classList.toggle('hidden', on);
+  if (!on) { document.getElementById('stLinkUrl').value = ''; document.getElementById('stLinkLabel').value = ''; }
+  else setTimeout(() => document.getElementById('stLinkUrl').focus(), 60);
+}
 
 // ── Add a post to your Daily (re-share a post as a Story card) ──
 // Shared HTML for the post card, used in both the compose preview and the viewer.
@@ -38474,6 +38497,11 @@ async function acStoryPost() {
   }
   if (AC._stAud === 'close') body.audience = 'close';
   if ((AC._postProducts || []).length) body.productIds = AC._postProducts.map((p) => p.id);
+  // Link sticker (if the box is open and a URL was entered).
+  if (!document.getElementById('stLinkBox').classList.contains('hidden')) {
+    const lu = (document.getElementById('stLinkUrl').value || '').trim();
+    if (lu) { body.linkUrl = lu; const ll = (document.getElementById('stLinkLabel').value || '').trim(); if (ll) body.linkLabel = ll; }
+  }
   if (btn) { btn.disabled = true; btn.textContent = 'Sharing…'; }
   try {
     await API.req('POST', '/api/stories', body);
@@ -38501,6 +38529,20 @@ async function acStoryEnterGroup(gi, si) {
   } catch (e) { sv.items = []; }
   if (!sv.items.length) return acStoryEnterGroup(gi + (si === 'last' ? -1 : 1), si); // skip empty/expired
   acStoryShow(si === 'last' ? sv.items.length - 1 : 0);
+}
+// The Daily link sticker: a tappable chip that opens the sharer's link (pointer-guarded
+// so tapping it doesn't advance the story). URL is kept off the DOM attr for safety.
+function acStoryLinkChip(it) {
+  if (!it.link || !it.link.url) return '';
+  AC._storyLinks = AC._storyLinks || {};
+  AC._storyLinks[it.id] = it.link.url;
+  const label = escHtml(it.link.label || 'Open link');
+  const guard = 'onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()"';
+  return `<div class="story-link-wrap"><button class="story-link-chip" ${guard} onclick="event.stopPropagation();acStoryOpenLink(${it.id})"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.5-1.5"/></svg><span>${label}</span></button></div>`;
+}
+function acStoryOpenLink(storyId) {
+  const url = AC._storyLinks && AC._storyLinks[storyId];
+  if (url) window.open(url, '_blank', 'noopener');
 }
 // A tagged-product pill on a story (above the caption; pointer-guarded so tapping it
 // doesn't advance/pause the story).
@@ -38538,7 +38580,7 @@ function acStoryShow(si) {
   // Caption (for media) + any tagged products (shoppable story).
   const capEl = document.getElementById('storyCap');
   const capTxt = (it.kind !== 'text' && it.caption) ? `<div class="story-cap-in">${escHtml(it.caption)}</div>` : '';
-  capEl.innerHTML = capTxt + acStoryProdTag(it);
+  capEl.innerHTML = capTxt + acStoryProdTag(it) + acStoryLinkChip(it);
   // Footer: own → viewers + delete; others → empty.
   const foot = document.getElementById('storyFoot');
   if (sv.highlight) {
