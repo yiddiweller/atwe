@@ -2753,6 +2753,17 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS event_rsvps_user_idx ON event_rsvps(user_id);`);
+  // Event discussion (FB-events-style): a flat public comment thread per event.
+  await query(`
+    CREATE TABLE IF NOT EXISTS event_comments (
+      id         SERIAL PRIMARY KEY,
+      event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body       TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS event_comments_event_idx ON event_comments(event_id, created_at);`);
   // Event reminders: once per going-RSVP, flipped by the flusher shortly before start.
   await query(`ALTER TABLE event_rsvps ADD COLUMN IF NOT EXISTS reminded BOOLEAN NOT NULL DEFAULT false;`);
   // Per-side order archiving (tidy the list without deleting anything).
