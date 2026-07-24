@@ -2778,6 +2778,9 @@ async function initSchema() {
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancel_reason TEXT;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancel_note TEXT;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancelled_by INTEGER;`);
+  // Gift orders: hide prices on the packing slip + an optional gift note.
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS gift BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS gift_note TEXT;`);
   // Invoice settled outside Atwe (cash/bank) — a bookkeeping mark, no wallet money moved.
   await query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS paid_outside BOOLEAN NOT NULL DEFAULT false;`);
   // Payment reminders on an unpaid invoice — throttled to one per 24h per invoice.
