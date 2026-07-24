@@ -16926,6 +16926,9 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
     // "On sale" — a genuine markdown only: compare-at above the live price, and
     // no variants (their compare-at is never shown, so it can't count as a sale).
     if (req.query.sale === 'true') conds.push(`(p.compare_at_cents IS NOT NULL AND p.compare_at_cents > p.price_cents AND (p.variants IS NULL OR p.variants = '[]'::jsonb))`);
+    // "Free shipping" — physical items the seller ships free (non-physical items
+    // have no shipping at all, so they qualify too).
+    if (req.query.freeShip === 'true') conds.push(`(p.kind <> 'physical' OR p.ship_free = true)`);
     // Sort: Best Match (default, blends relevance/quality/velocity/recency) or a
     // single flat column. Only 'best' needs an extra query param (text relevance).
     const FLAT_SORTS = { new: 'p.created_at DESC', price_asc: 'p.price_cents ASC', price_desc: 'p.price_cents DESC',
