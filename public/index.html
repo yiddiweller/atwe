@@ -16815,7 +16815,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1533'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1534'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -26602,6 +26602,16 @@ function notifRow(n, i) {
   // product_ad_review, an actual admin action) this doesn't attribute it to them.
   // Stock alerts are system events about YOUR OWN listing (actor = you), so they
   // show the Atwe mark rather than reading as "you interacted with you".
+  // Follower milestone — a system celebration (the Atwe mark, no actor):
+  // tapping opens YOUR followers list to enjoy the view.
+  if (n.type === 'follower_milestone') {
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');acOpenFollowList(S.user && S.user.username, 'followers')">
+      <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
+      <div class="ac-item-main"><div class="notif-text">🎉 <b>You reached ${n.metaNum ? Number(n.metaNum).toLocaleString() : 'a new milestone in'} followers</b> · <span class="notif-time">${acTime(n.created_at)}</span></div>
+        <div class="notif-snip">Keep it going — post something for them.</div></div>
+      ${n.read ? '' : '<span class="notif-dot"></span>'}
+    </div>`;
+  }
   if (n.type === 'stock_low' || n.type === 'stock_out') {
     const out = n.type === 'stock_out';
     return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');${n.productId ? `acOpenListing(${n.productId})` : ''}">

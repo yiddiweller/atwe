@@ -2776,6 +2776,8 @@ async function initSchema() {
   await query(`ALTER TABLE scheduled_calls ADD COLUMN IF NOT EXISTS reminded BOOLEAN NOT NULL DEFAULT false;`);
   // Event notifs (rsvp/update/reminder) deep-link to the event.
   await query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS event_id INTEGER REFERENCES events(id) ON DELETE CASCADE;`);
+  // A number attached to a system notification (e.g. the follower-milestone count).
+  await query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS meta_num INTEGER;`);
 
   // Newsletters (LinkedIn-style): a creator runs a publication; people subscribe;
   // each issue is an article that notifies subscribers.
