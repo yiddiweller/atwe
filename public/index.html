@@ -5216,6 +5216,8 @@ body.reduce-motion #tbRefreshBeam.sweep::before{animation:none;}
   display:flex;align-items:center;justify-content:center;z-index:6;
   box-shadow:0 10px 30px rgba(0,0,0,.5);transition:transform var(--t-fast) var(--ease),filter var(--t-fast) var(--ease),bottom var(--t-slow) cubic-bezier(.33,0,.2,1);
   animation:popIn .18s var(--ease);}
+/* Draft-waiting dot on the compose FAB (accent, ringed against the FAB fill). */
+.fab-draft-dot{position:absolute;top:3px;right:3px;width:11px;height:11px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--bg);pointer-events:none;}
 .ac-fab:hover{transform:translateY(-1px) scale(1.04);filter:brightness(.96);}
 .ac-fab:active{transform:scale(.95);filter:brightness(.92);}
 .ac-fab svg{width:26px;height:26px;stroke:var(--on-primary);stroke-width:2.6;fill:none;stroke-linecap:round;}
@@ -16549,7 +16551,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1468'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1469'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -19623,6 +19625,7 @@ function initUI() {
   renderHistory();
   renderProjects();
   acRefreshUnread();
+  acSyncDraftDot();
   syncTopbar(_appTab);
   renderSbProfileTop();
 }
@@ -31871,7 +31874,7 @@ async function acSubmitPost() {
       if (AC._replyScope && AC._replyScope !== 'everyone') payload.replyScope = AC._replyScope;
       try {
         await API.req('POST', '/api/social/thread', payload);
-        if (AC._draftId) { API.req('DELETE', '/api/social/drafts/' + AC._draftId).catch(() => {}); AC._draftId = null; }
+        if (AC._draftId) { API.req('DELETE', '/api/social/drafts/' + AC._draftId).catch(() => {}); AC._draftId = null; } acSyncDraftDot();
         showNotif('Thread posted!');
         acGoHome();
       } catch (e) { showNotif(e.message || 'Could not post the thread.'); btn.disabled = false; btn.textContent = lbl; }
@@ -31907,7 +31910,7 @@ async function acSubmitPost() {
   const sched = acScheduleValue(); if (sched) payload.scheduledAt = sched;
   try {
     const res = await API.req('POST', '/api/social/posts', payload);
-    if (AC._draftId) { API.req('DELETE', '/api/social/drafts/' + AC._draftId).catch(() => {}); AC._draftId = null; }
+    if (AC._draftId) { API.req('DELETE', '/api/social/drafts/' + AC._draftId).catch(() => {}); AC._draftId = null; } acSyncDraftDot();
     const feedCtx = AC._postFeedCtx, circleCtx = AC._postCircleCtx;
     if (feedCtx) acOpenFeed(feedCtx);
     else if (circleCtx) acOpenCircle(circleCtx);
@@ -31990,6 +31993,24 @@ async function acOpenDrafts() {
     </div>`).join('') : '<div class="ac-empty" style="padding:20px;">No drafts saved.</div>';
   } catch (e) { list.innerHTML = '<div class="ac-empty" style="padding:20px;">Could not load drafts.</div>'; }
 }
+// Show a small dot on the compose FAB when you have saved drafts waiting, so a
+// half-written post isn't forgotten. Lazily refreshed (home open + draft changes).
+async function acSyncDraftDot() {
+  if (!isAccount()) return;
+  try {
+    const { drafts } = await API.req('GET', '/api/social/drafts');
+    const has = (drafts || []).length > 0;
+    // Dot whichever compose entry points exist (floating FAB + top-bar compose),
+    // so it shows wherever compose is reachable in the current layout.
+    ['acHomeFab', 'tbHomeCompose', 'tbBrandPlus'].forEach((id) => {
+      const el = document.getElementById(id); if (!el) return;
+      if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
+      let dot = el.querySelector('.fab-draft-dot');
+      if (has && !dot) { dot = document.createElement('span'); dot.className = 'fab-draft-dot'; dot.setAttribute('aria-hidden', 'true'); el.appendChild(dot); }
+      else if (!has && dot) dot.remove();
+    });
+  } catch (_) { /* best-effort */ }
+}
 async function acSaveCurrentDraft() {
   const body = document.getElementById('acPostText').value.trim();
   if (!body) { showNotif('Nothing to save.'); return; }
@@ -31997,7 +32018,7 @@ async function acSaveCurrentDraft() {
     if (AC._draftId) await API.req('PUT', '/api/social/drafts/' + AC._draftId, { body });
     else { const r = await API.req('POST', '/api/social/drafts', { body }); AC._draftId = r.id; }
     showNotif('Draft saved.');
-    acOpenDrafts();
+    acOpenDrafts(); acSyncDraftDot();
   } catch (e) { showNotif(e.message || 'Could not save the draft.'); }
 }
 function acLoadDraft(id) {
@@ -32015,7 +32036,7 @@ async function acDeleteDraft(id) {
   try {
     await API.req('DELETE', '/api/social/drafts/' + id);
     if (AC._draftId === id) AC._draftId = null;
-    acOpenDrafts();
+    acOpenDrafts(); acSyncDraftDot();
   } catch (e) { showNotif(e.message || 'Could not delete the draft.'); }
 }
 
