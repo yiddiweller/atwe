@@ -8293,8 +8293,12 @@ async function requireHandle(req, res) {
 }
 // Feed mute filter ($1 = viewer): drops muted authors + keyword-matching posts,
 // but never the viewer's own posts. Append to a feed WHERE clause.
-const MUTE_FILTER = ` AND p.user_id NOT IN (SELECT muted_id FROM post_mutes WHERE muter_id = $1)
-  AND (p.user_id = $1 OR NOT EXISTS(SELECT 1 FROM muted_keywords mk WHERE mk.user_id = $1 AND p.body ILIKE '%' || mk.word || '%'))`;
+const MUTE_FILTER = ` AND p.user_id NOT IN (SELECT muted_id FROM post_mutes WHERE muter_id = $1 AND (expires_at IS NULL OR expires_at > now()))
+  AND (p.user_id = $1 OR NOT EXISTS(SELECT 1 FROM muted_keywords mk WHERE mk.user_id = $1 AND (mk.expires_at IS NULL OR mk.expires_at > now()) AND p.body ILIKE '%' || mk.word || '%'))`;
+// Snooze durations for a temporary mute (X-style): 1 day / 1 week / 30 days.
+// 0 or anything else = forever (NULL expiry). Returns a safe SQL literal.
+const MUTE_DAYS = [1, 7, 30];
+function muteExpirySql(days) { const d = MUTE_DAYS.includes(Number(days)) ? Number(days) : 0; return d > 0 ? `now() + interval '${d} days'` : 'NULL'; }
 // Hides subscriber-only posts the viewer ($1) can't access from the public feeds
 // (they still appear as locked teasers on the creator's own profile).
 const SUBONLY_FEED_FILTER = ` AND (p.subscribers_only = false OR p.user_id = $1
@@ -8992,8 +8996,11 @@ app.post('/api/social/mute/:id', auth.requireAuth, async (req, res) => {
   try {
     const u = await db.query('SELECT 1 FROM users WHERE id = $1', [target]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
-    await db.query('INSERT INTO post_mutes (muter_id, muted_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, target]);
-    res.json({ ok: true, muted: true });
+    const { rows } = await db.query(
+      `INSERT INTO post_mutes (muter_id, muted_id, expires_at) VALUES ($1, $2, ${muteExpirySql(req.body.days)})
+       ON CONFLICT (muter_id, muted_id) DO UPDATE SET expires_at = EXCLUDED.expires_at RETURNING expires_at`,
+      [req.user.id, target]);
+    res.json({ ok: true, muted: true, expiresAt: rows[0] ? rows[0].expires_at : null });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not mute.' }); }
 });
 app.delete('/api/social/mute/:id', auth.requireAuth, async (req, res) => {
@@ -9008,10 +9015,11 @@ app.delete('/api/social/mute/:id', auth.requireAuth, async (req, res) => {
 app.get('/api/social/muted', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT u.id, u.name, u.username, u.avatar, u.verified FROM post_mutes m
-       JOIN users u ON u.id = m.muted_id WHERE m.muter_id = $1 ORDER BY m.created_at DESC`,
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified, m.expires_at FROM post_mutes m
+       JOIN users u ON u.id = m.muted_id
+       WHERE m.muter_id = $1 AND (m.expires_at IS NULL OR m.expires_at > now()) ORDER BY m.created_at DESC`,
       [req.user.id]);
-    res.json({ muted: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified })) });
+    res.json({ muted: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, expiresAt: u.expires_at || null })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load muted accounts.' }); }
 });
 // "Not interested" — a per-post negative signal (X-style). Hides the post from your
@@ -9055,8 +9063,9 @@ app.delete('/api/search/recent', auth.requireAuth, async (req, res) => {
 // Muted keywords.
 app.get('/api/social/muted-keywords', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT id, word FROM muted_keywords WHERE user_id = $1 ORDER BY created_at DESC', [req.user.id]);
-    res.json({ keywords: rows.map((r) => ({ id: r.id, word: r.word })) });
+    const { rows } = await db.query(
+      'SELECT id, word, expires_at FROM muted_keywords WHERE user_id = $1 AND (expires_at IS NULL OR expires_at > now()) ORDER BY created_at DESC', [req.user.id]);
+    res.json({ keywords: rows.map((r) => ({ id: r.id, word: r.word, expiresAt: r.expires_at || null })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load muted words.' }); }
 });
 app.post('/api/social/muted-keywords', auth.requireAuth, rateLimit(40, 60000, 'mute-word'), async (req, res) => {
@@ -9065,11 +9074,11 @@ app.post('/api/social/muted-keywords', auth.requireAuth, rateLimit(40, 60000, 'm
   try {
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM muted_keywords WHERE user_id = $1', [req.user.id]);
     if (cnt.rows[0].n >= 100) return res.status(400).json({ error: 'You’ve reached the maximum number of muted words.' });
+    // Re-muting a word updates its expiry (extend or shorten the snooze).
     const { rows } = await db.query(
-      `INSERT INTO muted_keywords (user_id, word) VALUES ($1, $2)
-       ON CONFLICT (user_id, lower(word)) DO NOTHING RETURNING id`, [req.user.id, word]);
-    if (!rows[0]) { const ex = await db.query('SELECT id FROM muted_keywords WHERE user_id = $1 AND lower(word) = lower($2)', [req.user.id, word]); return res.json({ id: ex.rows[0] && ex.rows[0].id, word }); }
-    res.status(201).json({ id: rows[0].id, word });
+      `INSERT INTO muted_keywords (user_id, word, expires_at) VALUES ($1, $2, ${muteExpirySql(req.body.days)})
+       ON CONFLICT (user_id, lower(word)) DO UPDATE SET expires_at = EXCLUDED.expires_at RETURNING id, expires_at`, [req.user.id, word]);
+    res.status(201).json({ id: rows[0].id, word, expiresAt: rows[0].expires_at || null });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not mute that word.' }); }
 });
 app.delete('/api/social/muted-keywords/:id', auth.requireAuth, async (req, res) => {
