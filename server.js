@@ -16126,8 +16126,11 @@ function mapProduct(p, opts) {
     category: (p.category || '').toString().trim() || null,
     // Pinned listing: featured at the top of the seller's storefront.
     pinned: p.pinned === true,
+    // Condition (physical resale): new | like_new | good | fair.
+    condition: PRODUCT_CONDITIONS.includes(p.condition) ? p.condition : null,
   };
 }
+const PRODUCT_CONDITIONS = ['new', 'like_new', 'good', 'fair'];
 // A business's products (active only for non-owners; the owner sees all + manages).
 app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
   const bid = routeId(req.params.id);
@@ -16135,7 +16138,7 @@ app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
   try {
     const owner = bid === req.user.id;
     const { rows } = await db.query(
-      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.pinned, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.pinned DESC, p.created_at DESC LIMIT 200`,
+      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.pinned DESC, p.created_at DESC LIMIT 200`,
       [bid]
     );
     res.json({ products: rows.map((r) => mapProduct(r, { owner })), owner });
@@ -16150,7 +16153,7 @@ function mapListing(r) {
   });
 }
 const LISTING_SELECT = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
-  p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, ${RATING_COLS},
+  p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, ${RATING_COLS},
   u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified
   FROM products p JOIN users u ON u.id = p.business_id`;
 
@@ -16230,7 +16233,7 @@ async function getSponsoredListings(viewerId, { q, kind }) {
     }
     const { rows } = await db.query(
       `SELECT pa.id AS ad_id, pa.bid_cents, pa.keywords, p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
-        p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, ${RATING_COLS},
+        p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, ${RATING_COLS},
         u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified
        FROM product_ads pa JOIN products p ON p.id = pa.product_id JOIN users u ON u.id = pa.seller_id
        WHERE ${conds.join(' AND ')} LIMIT 40`, params);
@@ -16609,7 +16612,7 @@ app.post('/api/admin/product-ads/:id/:action', auth.requirePerm('ads'), async (r
 // My own listings (any account) — for the Sell / manage surface.
 app.get('/api/my-listings', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.pinned, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.pinned DESC, p.created_at DESC LIMIT 300`, [req.user.id]);
+    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.pinned DESC, p.created_at DESC LIMIT 300`, [req.user.id]);
     res.json({ products: rows.map((r) => mapProduct(r, { owner: true })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your listings.' }); }
 });
@@ -16625,9 +16628,9 @@ app.post('/api/products/:id/duplicate', auth.requireAuth, rateLimit(20, 60000, '
     if (p.business_id !== req.user.id) return res.status(403).json({ error: 'You can only duplicate your own listings.' });
     const name = (p.name + ' (copy)').slice(0, 120);
     const r = await db.query(
-      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, pinned)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,false,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,false) RETURNING id`,
-      [req.user.id, name, p.description, p.price_cents, p.image, p.images, p.kind, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants ? JSON.stringify(p.variants) : null, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs ? JSON.stringify(p.specs) : null, p.rental_period, p.category]
+      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, pinned)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,false,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,false) RETURNING id`,
+      [req.user.id, name, p.description, p.price_cents, p.image, p.images, p.kind, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants ? JSON.stringify(p.variants) : null, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs ? JSON.stringify(p.specs) : null, p.rental_period, p.category, p.condition]
     );
     res.status(201).json({ ok: true, id: r.rows[0].id, name });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not duplicate the listing.' }); }
@@ -16823,12 +16826,14 @@ app.post('/api/products', auth.requireAuth, rateLimit(40, 60000, 'product-add'),
   const rentalPeriod = kind === 'rental' ? (RENTAL_PERIODS.includes(req.body.rentalPeriod) ? req.body.rentalPeriod : 'night') : null;
   // Catalog category / menu section (free text, groups the storefront).
   const category = (req.body.category || '').toString().trim().slice(0, 60) || null;
+  // Condition (physical resale, eBay-style) — whitelisted, physical/rental only.
+  const condition = (kind === 'physical' || kind === 'rental') && PRODUCT_CONDITIONS.includes(req.body.condition) ? req.body.condition : null;
   try {
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM products WHERE business_id = $1', [req.user.id]);
     if (cnt.rows[0].n >= 300) return res.status(400).json({ error: 'You’ve reached the maximum number of products.' });
     const { rows } = await db.query(
-      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category`,
-      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, pickup, pickupLocation, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct, amenities, JSON.stringify(specs), rentalPeriod, category]
+      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition`,
+      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, pickup, pickupLocation, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct, amenities, JSON.stringify(specs), rentalPeriod, category, condition]
     );
     if (rows[0].active !== false) notifyMarketMatch(rows[0]); // alert saved-search watchers
     res.status(201).json({ product: mapProduct(rows[0], { owner: true }) });
@@ -16861,6 +16866,7 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
   if ('specs' in req.body) { vals.push(JSON.stringify(cleanSpecs(req.body.specs))); fields.push(`specs = $${vals.length}`); }
   if ('rentalPeriod' in req.body) { vals.push(RENTAL_PERIODS.includes(req.body.rentalPeriod) ? req.body.rentalPeriod : null); fields.push(`rental_period = $${vals.length}`); }
   if ('category' in req.body) { vals.push((req.body.category || '').toString().trim().slice(0, 60) || null); fields.push(`category = $${vals.length}`); }
+  if ('condition' in req.body) { vals.push(PRODUCT_CONDITIONS.includes(req.body.condition) ? req.body.condition : null); fields.push(`condition = $${vals.length}`); }
   if (!fields.length) return res.json({ ok: true });
   try {
     // Snapshot the pre-edit state so we can detect a sold-out → in-stock flip and a price drop.
