@@ -8879,6 +8879,7 @@ body.reduce-motion .xp-ai::after{animation:none;}
 .rev-respond{margin-top:9px;background:var(--s3);border:none;color:var(--accent);border-radius:var(--r-pill);font-family:inherit;font-size:12.5px;font-weight:700;padding:5px 13px;cursor:pointer;}
 .rev-response{margin-top:10px;padding:9px 12px;background:var(--s3);border-radius:10px;font-size:13.5px;color:var(--t2);}
 .rev-response b{display:block;color:var(--t1);font-size:12.5px;margin-bottom:3px;}
+.rev-resp-date{margin-top:4px;font-size:11.5px;color:var(--t3);}
 /* Appointment status chip */
 .appt-status{margin-inline-start:auto;flex:0 0 auto;font-size:11px;font-weight:700;padding:3px 9px;border-radius:var(--r-pill);background:var(--s3);color:var(--t2);}
 .appt-status.confirmed{background:rgba(48,209,88,.16);color:var(--green);}
@@ -15347,6 +15348,18 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Respond to a review (seller) — shared by product reviews AND business reviews -->
+<div class="overlay hidden" id="revRespondView" onclick="if(event.target===this)closeOverlay('revRespondView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Respond to review">
+    <button class="sheet-close" onclick="closeOverlay('revRespondView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Respond to this review</div>
+    <div class="ac-disc-sub" style="margin:2px 0 10px;">Your answer shows publicly under the review, as the seller.</div>
+    <textarea class="jp-in" id="revRespondIn" maxlength="2000" rows="4" placeholder="Thank them, or set the record straight…"></textarea>
+    <button class="ac-pill-btn accent jp-submit" onclick="acRevRespondSave()">Save response</button>
+    <button class="ac-pill-btn hidden" id="revRespondRemove" style="width:100%;margin-top:8px;color:var(--red);" onclick="acRevRespondSave(true)">Remove response</button>
+  </div>
+</div>
+
 <!-- "Show me what matters" — personalized AI briefing + picks -->
 <!-- Advertise a post: pick a duration, then pay (Stripe or demo) -->
 <div class="overlay hidden" id="advertiseSheet" onclick="if(event.target===this)closeOverlay('advertiseSheet')">
@@ -16683,7 +16696,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1501'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1502'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -33421,12 +33434,9 @@ async function acDeleteReview(id) {
   try { await API.req('DELETE', '/api/business/reviews/' + id); showNotif('Removed.'); acOpenReviews(AC._revBizUser, AC._revBiz); }
   catch (e) { showNotif(e.message || 'Could not remove.'); }
 }
-async function acRespondReview(id) {
+function acRespondReview(id) {
   const r = (AC._revData.reviews || []).find(x => x.id === id);
-  const response = (prompt('Your response to this review:', (r && r.response) || '') || '').trim();
-  if (response === null) return;
-  try { await API.req('POST', '/api/business/reviews/' + id + '/respond', { response }); showNotif('Response saved.'); acOpenReviews(AC._revBizUser, AC._revBiz); }
-  catch (e) { showNotif(e.message || 'Could not save.'); }
+  acRevRespondOpen('business', id, (r && r.response) || '');
 }
 /* ─── Tips ─── */
 function paTip() { const a = AC._paAuthor; closeOverlay('postActions'); if (a) acOpenTip(a.id, a.name); }
@@ -38019,6 +38029,10 @@ function acRenderProductReviews() {
   // Flag a review (fake, abusive, off-topic) — goes to the same moderation queue
   // as every other report. Not on your own review, where Edit is the right action.
   const report = (r) => r.mine ? '' : `<button class="rev-helpful rev-report" onclick="acOpenReport('review',${r.id},${jsAttr('Review by ' + (r.reviewer.name || ''))})" aria-label="Report this review"><svg viewBox="0 0 24 24"><path d="M4 21V4h13l-1.5 4L17 12H4"/></svg><span class="rev-helpful-lbl">Report</span></button>`;
+  // Seller answers (Amazon-style): the response block under a review, and — for
+  // the seller / a team member with the reviews permission — a Respond action.
+  const response = (r) => r.response ? `<div class="rev-response"><b>Response from the seller</b><div>${escHtml(r.response)}</div>${r.responseAt ? `<div class="rev-resp-date">${acTime(r.responseAt)}</div>` : ''}</div>` : '';
+  const respond = (r) => (d.canRespond && !r.mine) ? `<button class="rev-helpful" onclick="acProdRevRespond(${r.id})"><svg viewBox="0 0 24 24"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg><span class="rev-helpful-lbl">${r.response ? 'Edit response' : 'Respond'}</span></button>` : '';
   const f = AC._revFilter || 'all';
   const match = (r) => f === 'all' ? true : f === 'media' ? (r.media && r.media.length > 0) : f === 'five' ? r.rating === 5 : r.rating <= 3;
   const list = (d.reviews || []).filter(match);
@@ -38029,12 +38043,39 @@ function acRenderProductReviews() {
   const items = (d.reviews || []).length
     ? (list.length ? list.map(r => `<div class="rev-row">
       <div class="rev-top">${acAvatarHtml(r.reviewer.name, r.reviewer.avatar, 'user-avatar sm')}<span class="rev-name">${escHtml(r.reviewer.name)}${vbadge(acIsVerified(r.reviewer))}</span><span class="rev-vp">Verified buyer</span></div>
-      <div class="rev-stars">${acStars(r.rating)}</div>${r.body ? `<div class="rev-body">${escHtml(r.body)}</div>` : ''}${revMedia(r)}<div class="rev-actions">${helpful(r)}${report(r)}</div></div>`).join('')
+      <div class="rev-stars">${acStars(r.rating)}</div>${r.body ? `<div class="rev-body">${escHtml(r.body)}</div>` : ''}${revMedia(r)}${response(r)}<div class="rev-actions">${helpful(r)}${respond(r)}${report(r)}</div></div>`).join('')
       : '<div class="ac-disc-sub" style="margin:6px 0;">No reviews match this filter.</div>')
     : '<div class="ac-disc-sub" style="margin:6px 0;">No reviews yet.</div>';
   box.innerHTML = `<div class="co-sec-h" style="display:flex;align-items:center;gap:8px;">Reviews ${d.summary.count ? acStars(d.summary.avg) + ` <span style="color:var(--t3);font-weight:600;">${d.summary.avg} · ${d.summary.count}</span>` : ''}</div>${write}${chips}${items}`;
 }
 function acRevFilter(k) { AC._revFilter = k; acRenderProductReviews(); }
+// ── Seller response to a review — one shared sheet for product AND business reviews ──
+// (Replaces the old browser prompt() on business reviews, which also had a real
+// bug: cancelling the prompt cleared an existing response instead of doing nothing.)
+function acRevRespondOpen(kind, id, current) {
+  AC._revResp = { kind, id };
+  document.getElementById('revRespondIn').value = current || '';
+  document.getElementById('revRespondRemove').classList.toggle('hidden', !current);
+  showOverlay('revRespondView');
+  setTimeout(() => document.getElementById('revRespondIn').focus(), 60);
+}
+function acProdRevRespond(id) {
+  const r = ((AC._prodRev && AC._prodRev.reviews) || []).find(x => x.id === id);
+  acRevRespondOpen('product', id, (r && r.response) || '');
+}
+async function acRevRespondSave(remove) {
+  const t = AC._revResp; if (!t) return;
+  const response = remove ? '' : document.getElementById('revRespondIn').value.trim();
+  if (!remove && !response) { showNotif('Write your response first.'); return; }
+  const url = t.kind === 'product' ? '/api/products/reviews/' + t.id + '/respond' : '/api/business/reviews/' + t.id + '/respond';
+  try {
+    await API.req('POST', url, { response });
+    closeOverlay('revRespondView');
+    showNotif(remove ? 'Response removed.' : 'Response posted.');
+    if (t.kind === 'product') { if (AC._prodRevId) acLoadProductReviews(AC._prodRevId); }
+    else acOpenReviews(AC._revBizUser, AC._revBiz);
+  } catch (e) { showNotif(e.message || 'Could not save.'); }
+}
 // Toggle "Helpful" on a product review (optimistic; updates the pill in place).
 async function acReviewHelpful(reviewId, btn) {
   const on = !btn.classList.contains('on');
