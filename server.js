@@ -16075,6 +16075,8 @@ function mapProduct(p, opts) {
     isRental: p.kind === 'rental',
     // Catalog category / menu section (groups products on the storefront).
     category: (p.category || '').toString().trim() || null,
+    // Pinned listing: featured at the top of the seller's storefront.
+    pinned: p.pinned === true,
   };
 }
 // A business's products (active only for non-owners; the owner sees all + manages).
@@ -16084,7 +16086,7 @@ app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
   try {
     const owner = bid === req.user.id;
     const { rows } = await db.query(
-      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.created_at DESC LIMIT 200`,
+      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.pinned, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.pinned DESC, p.created_at DESC LIMIT 200`,
       [bid]
     );
     res.json({ products: rows.map((r) => mapProduct(r, { owner })), owner });
@@ -16558,9 +16560,23 @@ app.post('/api/admin/product-ads/:id/:action', auth.requirePerm('ads'), async (r
 // My own listings (any account) — for the Sell / manage surface.
 app.get('/api/my-listings', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.created_at DESC LIMIT 300`, [req.user.id]);
+    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.pinned, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.pinned DESC, p.created_at DESC LIMIT 300`, [req.user.id]);
     res.json({ products: rows.map((r) => mapProduct(r, { owner: true })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your listings.' }); }
+});
+// Pin / unpin a listing to the top of the storefront (one pinned per seller).
+app.post('/api/products/:id/pin', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const pin = req.body.pin !== false;
+  try {
+    const p = (await db.query('SELECT business_id FROM products WHERE id = $1', [id])).rows[0];
+    if (!p) return res.status(404).json({ error: 'Listing not found.' });
+    if (p.business_id !== req.user.id) return res.status(403).json({ error: 'You can only pin your own listings.' });
+    if (pin) await db.query('UPDATE products SET pinned = false WHERE business_id = $1 AND pinned', [req.user.id]);
+    await db.query('UPDATE products SET pinned = $1 WHERE id = $2', [pin, id]);
+    res.json({ ok: true, pinned: pin });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
 });
 // A single listing (with seller) — the "view more" detail.
 app.get('/api/listings/:id', auth.requireAuth, async (req, res) => {
