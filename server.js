@@ -10396,6 +10396,22 @@ app.delete('/api/social/posts/:id/like', auth.requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
+// Who reacted to a post (the reactions breakdown modal) — grouped counts + reactor list.
+app.get('/api/social/posts/:id/reactions', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  try {
+    const { rows } = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.account_type, pl.reaction, pl.created_at
+       FROM post_likes pl JOIN users u ON u.id = pl.user_id
+       WHERE pl.post_id = $1
+         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = pl.user_id AND b.blocked_id = $2) OR (b.blocker_id = $2 AND b.blocked_id = pl.user_id))
+       ORDER BY pl.created_at DESC LIMIT 300`, [id, req.user.id]);
+    const counts = {};
+    for (const r of rows) counts[r.reaction] = (counts[r.reaction] || 0) + 1;
+    res.json({ counts, reactors: rows.map((r) => ({ id: r.id, name: r.name, username: r.username, avatar: mediaRef(r.avatar, 'avatar', r.id), verified: !!r.verified, accountType: r.account_type === 'business' ? 'business' : 'personal', reaction: r.reaction })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load reactions.' }); }
+});
 
 // ── Community notes ("readers added context") ──
 // Add a note to a post (not your own; one proposed note per user per post).
