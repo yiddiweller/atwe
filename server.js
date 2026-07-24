@@ -8082,7 +8082,7 @@ async function recomputeNoteStatus(noteId) {
   } catch (e) { /* best-effort */ }
 }
 const POSTS_SELECT = `
-  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only, p.min_tier_level, p.image_alt, p.ppv_cents, p.occasion, p.article_title,
+  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.media_name, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only, p.min_tier_level, p.image_alt, p.ppv_cents, p.occasion, p.article_title,
          (p.promoted_until IS NOT NULL AND p.promoted_until > now()) AS promoted,
          (p.subscribers_only = false OR p.user_id = $1 OR EXISTS(SELECT 1 FROM creator_subs cs LEFT JOIN creator_tiers ct ON ct.id = cs.tier_id WHERE cs.creator_id = p.user_id AND cs.subscriber_id = $1 AND cs.status = 'active' AND (cs.period_end IS NULL OR cs.period_end > now()) AND COALESCE(ct.level, 0) >= p.min_tier_level)) AS sub_ok,
          (COALESCE(p.ppv_cents,0) = 0 OR p.user_id = $1 OR EXISTS(SELECT 1 FROM post_unlocks pu WHERE pu.post_id = p.id AND pu.user_id = $1)) AS ppv_ok,
@@ -8237,7 +8237,7 @@ function mapPost(r) {
   return {
     id: r.id, body: r.body, image: mediaRef(rawImage, 'post-img', r.id),
     images: imgsRaw.map((x, i) => (x === rawImage) ? mediaRef(x, 'post-img', r.id) : mediaRef(x, 'post-imgs', r.id, i)),
-    media: mediaRef(r.media, 'post-media', r.id), mediaKind: r.media_kind || null, created_at: r.created_at,
+    media: mediaRef(r.media, 'post-media', r.id), mediaKind: r.media_kind || null, mediaName: r.media_name || null, created_at: r.created_at,
     subscribersOnly: !!r.subscribers_only, locked: false, minTierLevel: r.min_tier_level || 0, imageAlt: r.image_alt || null,
     ppvCents: r.ppv_cents > 0 ? r.ppv_cents : undefined,
     tagged: Array.isArray(r.tags) ? r.tags.filter((t) => t.kind === 'tag').map(({ kind, ...u }) => u) : [],
@@ -10057,7 +10057,7 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), re
   if (image === undefined) return res.status(400).json({ error: 'That image could not be attached.' });
   const media = mediaFromBody(req.body);
   if (media === undefined) return res.status(400).json({ error: 'That video could not be attached (unsupported type or too large — 16 MB max).' });
-  if (media.data && media.kind !== 'video') return res.status(400).json({ error: 'Only photos and videos can be posted.' });
+  if (media.data && media.kind !== 'video' && media.kind !== 'file') return res.status(400).json({ error: 'Only photos, videos and documents can be posted.' });
   // Poll options (2–4) — top-level posts only.
   const pollOpts = (Array.isArray(req.body.poll) ? req.body.poll : []).map((x) => String(x || '').trim()).filter(Boolean).slice(0, 4);
   const hasPoll = pollOpts.length >= 2 && (req.body.parentId == null || req.body.parentId === '');
@@ -10182,9 +10182,9 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), re
     // Celebration: an occasion tag on a top-level post gives its card a festive banner.
     const occasion = (parentId == null && POST_OCCASIONS.includes(req.body.occasion)) ? req.body.occasion : null;
     const ins = await db.query(
-      `INSERT INTO posts (user_id, body, image, images, media, media_kind, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope, subscribers_only, image_alt, ppv_cents, min_tier_level, product_id, occasion, article_title)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamptz, now()), $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING id`,
-      [req.user.id, body, image, images.length > 1 ? images : null, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId, replyScope, subscribersOnly, imageAlt, ppvCents, minTierLevel, productId, occasion, articleTitle]
+      `INSERT INTO posts (user_id, body, image, images, media, media_kind, media_name, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope, subscribers_only, image_alt, ppv_cents, min_tier_level, product_id, occasion, article_title)
+       VALUES ($1, $2, $3, $4, $5, $6, $20, $7, $8, $9, COALESCE($10::timestamptz, now()), $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING id`,
+      [req.user.id, body, image, images.length > 1 ? images : null, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId, replyScope, subscribersOnly, imageAlt, ppvCents, minTierLevel, productId, occasion, articleTitle, media.name]
     );
     const postId = ins.rows[0].id;
     if (quoteOwner != null) notify(quoteOwner, req.user.id, 'quote', postId);

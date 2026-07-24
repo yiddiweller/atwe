@@ -1865,6 +1865,8 @@ async function initSchema() {
   // Long-form articles: a headline. A post with a non-null article_title is an
   // "article" — its `body` holds the long-form content, `image` is the cover.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS article_title TEXT;`);
+  // Document posts: the original filename for a document attachment (media_kind='file').
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS media_name TEXT;`);
   await query(`
     CREATE TABLE IF NOT EXISTS post_unlocks (
       post_id    INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
