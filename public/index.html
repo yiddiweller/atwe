@@ -16698,7 +16698,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1510'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1511'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -34344,7 +34344,12 @@ function acRenderListingBuy(l, own) {
     : (needPick
       ? `<button class="ac-pill-btn" style="width:100%;margin-top:6px;" disabled>Select an option</button>`
       : (soldOut
-        ? `<button class="ac-pill-btn" style="width:100%;margin-top:6px;" disabled>Sold out</button>`
+        // Sold out isn't a dead end: the restock alert rides the Saved list —
+        // when the seller restocks, everyone watching gets told (existing flow).
+        ? `<button class="ac-pill-btn" style="width:100%;margin-top:6px;" disabled>Sold out</button>` +
+          (l.saved
+            ? `<button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--accent);" onclick="acRestockAlert(${l.id}, false)">🔔 We’ll tell you when it’s back · Turn off</button>`
+            : `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acRestockAlert(${l.id}, true)">🔔 Notify me when it’s back</button>`)
         : `<div class="mkt-detail-buy"><button class="ac-pill-btn" onclick="acAddToCart(${l.id})">Add to cart</button><button class="ac-pill-btn accent" onclick="acBuyNow(${l.id}, AC._listingCur)">Buy now · $${(unitPrice / 100).toFixed(2)}</button></div>`));
   // Subscribe & Save (physical, seller-enabled): recurring delivery from balance.
   const subRow = (!own && !soldOut && !needPick && l.subEnabled)
@@ -34581,6 +34586,15 @@ async function acShareListing(id) {
   acFeedForwardOpen('“' + label + '” — on Atwe: ' + url);
 }
 // Listing detail ("view more") — full card with a "Visit store" link for business sellers.
+// Back-in-stock alert on a sold-out listing: saves it to your Saved items (the
+// restock notification already watches that list), with honest on/off copy.
+async function acRestockAlert(id, on) {
+  try {
+    if (on) { await API.req('POST', '/api/saved-products/' + id, {}); showNotif('Done — we’ll message you when it’s back in stock.'); }
+    else { await API.req('DELETE', '/api/saved-products/' + id); showNotif('Alert turned off.'); }
+    acOpenListing(id);                   // re-render the buy area with the new state
+  } catch (e) { showNotif(e.message || 'Could not update the alert.'); }
+}
 async function acOpenListing(id) {
   showOverlay('listingView');
   acSetPath('/listing/' + id); // shareable + reload-safe listing URL
