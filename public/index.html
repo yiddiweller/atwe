@@ -4602,6 +4602,11 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .mc-opt-text{position:relative;flex:1;font-size:14px;font-weight:500;line-height:1.25;}
 .mc-opt-n{position:relative;font-size:12.5px;font-weight:700;opacity:.7;flex-shrink:0;}
 .mc-total{font-size:11.5px;opacity:.6;padding:9px 4px 2px;}
+/* Tappable "View votes" total (WhatsApp-style) — inherits the bubble's text colour. */
+.mc-total-tap{display:block;background:none;border:none;color:inherit;font-family:inherit;cursor:pointer;opacity:.85;font-weight:700;text-align:start;width:100%;}
+/* Who-voted sheet: option header + voter rows */
+.pw-opt{font-size:13px;font-weight:800;color:var(--t2);margin:14px 0 4px;display:flex;justify-content:space-between;}
+.pw-none{font-size:12.5px;color:var(--t3);padding:4px 0;}
 /* Event */
 .mc-event{min-width:236px;}
 .mc-ev-top{display:flex;gap:12px;align-items:center;}
@@ -14049,6 +14054,15 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Poll: who voted (per option) -->
+<div class="overlay hidden" id="pollWhoView" onclick="if(event.target===this)closeOverlay('pollWhoView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Poll votes">
+    <button class="sheet-close" onclick="closeOverlay('pollWhoView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Votes</div>
+    <div id="pollWhoBody"></div>
+  </div>
+</div>
+
 <!-- Customers: everyone who has bought from you -->
 <div class="overlay hidden" id="customersView" onclick="if(event.target===this)closeOverlay('customersView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Customers">
@@ -16749,7 +16763,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1516'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1517'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -47354,7 +47368,9 @@ function acMetaCard(m) {
     }).join('');
     const sub = meta.multi ? 'Select one or more' : 'Select one';
     const total = `${voters} ${voters === 1 ? 'vote' : 'votes'}`;
-    return `<div class="meta-card mc-poll"><div class="mc-poll-q">${escHtml(meta.q)}</div><div class="mc-poll-sub">${sub}</div>${rows}<div class="mc-total">${total}</div></div>`;
+    // WhatsApp-style: once anyone has voted, the total taps through to "who voted".
+    const totalHtml = (live && voters) ? `<button class="mc-total mc-total-tap" onclick="event.stopPropagation();acPollWho(${m.id})">${total} · View votes</button>` : `<div class="mc-total">${total}</div>`;
+    return `<div class="meta-card mc-poll"><div class="mc-poll-q">${escHtml(meta.q)}</div><div class="mc-poll-sub">${sub}</div>${rows}${totalHtml}</div>`;
   }
   if (meta.t === 'event') {
     const d = new Date(meta.at);
@@ -47552,6 +47568,21 @@ function acContactOpen(id) {
   if (c.phone) { window.location.href = 'tel:' + c.phone.replace(/[^\d+]/g, ''); return; }
   if (c.email) { window.location.href = 'mailto:' + c.email; return; }
   showNotif(c.name);
+}
+// "View votes" (WhatsApp-style): who picked what, per option.
+async function acPollWho(msgId) {
+  showOverlay('pollWhoView');
+  const b = document.getElementById('pollWhoBody'); b.innerHTML = acSkelRows(3);
+  try {
+    const q = AC.mode === 'group' && AC.groupId ? '?group=' + AC.groupId : '';
+    const d = await API.req('GET', '/api/atchat/poll/' + msgId + '/voters' + q);
+    b.innerHTML = `<div class="ac-disc-sub" style="margin:0 0 2px;">${escHtml(d.q)} · ${d.totalVoters} ${d.totalVoters === 1 ? 'vote' : 'votes'}</div>` +
+      d.options.map(o => `<div class="pw-opt"><span>${escHtml(o.text)}</span><span>${o.voters.length || ''}</span></div>` +
+        (o.voters.length
+          ? o.voters.map(u => `<div class="ac-item" style="padding:7px 0;" onclick="closeOverlay('pollWhoView');acGoProfile(${jsAttr(u.username)})">${acAvatarHtml(u.name, u.avatar, 'user-avatar sm', u.accountType === 'business')}<div class="ac-item-main"><div class="ac-item-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</div></div></div>`).join('')
+          : '<div class="pw-none">No votes yet</div>')
+      ).join('');
+  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load the votes.') + '</div>'; }
 }
 async function acPollVote(id, opt) {
   if (typeof id !== 'number') return; // optimistic (un-sent) poll has no real id yet
