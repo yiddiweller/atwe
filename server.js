@@ -1755,6 +1755,7 @@ const PUSH_VERBS = {
   connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills',
   event_rsvp: 'is going to your event', event_reminder: 'an event you’re going to starts soon', rec_received: 'recommended you',
   creator_sub: 'subscribed to you', tip: 'sent you a tip', appt_request: 'requested an appointment',
+  appt_rescheduled: 'proposed a new appointment time',
   order_shipped: 'shipped your order', order_delivered: 'marked your order delivered',
   return_label_ready: 'sent you a prepaid return label',
   restock: 'restocked an item you saved',
@@ -19960,6 +19961,27 @@ app.patch('/api/appointments/:id', auth.requireAuth, blockImpersonation, async (
     notify(other, req.user.id, status === 'confirmed' ? 'appt_confirmed' : status === 'declined' ? 'appt_declined' : status === 'completed' ? 'appt_confirmed' : 'appt_cancelled');
     res.json({ ok: true, status });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+// Reschedule an appointment (either party proposes a new time; no cancel + rebook).
+// A customer's proposal needs the business to re-confirm (status → requested); the
+// business moving its own calendar keeps it confirmed. Deposits stay held.
+app.post('/api/appointments/:id/reschedule', auth.requireAuth, blockImpersonation, rateLimit(30, 60000, 'appt-resched'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const when = new Date(req.body.whenAt || '');
+  if (isNaN(when.getTime())) return res.status(400).json({ error: 'Pick a date and time.' });
+  if (when.getTime() < Date.now() + 15 * 60000) return res.status(400).json({ error: 'Pick a time at least 15 minutes from now.' });
+  try {
+    const a = (await db.query('SELECT business_id, customer_id, status FROM appointments WHERE id = $1', [id])).rows[0];
+    if (!a) return res.status(404).json({ error: 'Not found.' });
+    const isBiz = a.business_id === req.user.id, isCust = a.customer_id === req.user.id;
+    if (!isBiz && !isCust) return res.status(403).json({ error: 'Not allowed.' });
+    if (!['requested', 'confirmed'].includes(a.status)) return res.status(400).json({ error: 'This appointment can no longer be rescheduled.' });
+    const newStatus = isBiz ? 'confirmed' : 'requested';
+    await db.query('UPDATE appointments SET when_at = $1, status = $2 WHERE id = $3', [when, newStatus, id]);
+    notify(isBiz ? a.customer_id : a.business_id, req.user.id, 'appt_rescheduled');
+    res.json({ ok: true, status: newStatus, whenAt: when.toISOString() });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not reschedule.' }); }
 });
 
 // List events: upcoming (default), mine (hosting), or attending.
