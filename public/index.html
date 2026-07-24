@@ -6753,6 +6753,11 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .rev-vp{font-size:10px;font-weight:700;color:var(--green);background:rgba(48,209,88,.13);padding:1px 7px;border-radius:7px;margin-inline-start:auto;}
 .rev-stars{margin:5px 0 3px;}
 .rev-body{font-size:14px;color:var(--t2);line-height:1.45;}
+.rev-actions{margin-top:9px;}
+.rev-helpful{display:inline-flex;align-items:center;gap:6px;background:var(--s2);border:none;border-radius:var(--r-pill);color:var(--t2);font-size:12.5px;font-weight:600;padding:6px 12px;cursor:pointer;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
+.rev-helpful svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.rev-helpful.on{background:var(--accent-dim);color:var(--accent);}
+.rev-helpful:active{transform:scale(.96);}
 .rev-mine{font-size:13px;color:var(--t2);display:flex;align-items:center;gap:8px;margin:8px 0;}
 .rev-star-pick{display:flex;gap:6px;justify-content:center;margin:6px 0;}
 .rev-star-btn{background:none;border:none;cursor:pointer;padding:2px;}
@@ -16257,7 +16262,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1406'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1407'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -36383,12 +36388,22 @@ async function acLoadProductReviews(id) {
       : (d.mine ? `<div class="rev-mine">Your review · ${acStars(d.mine.rating)} <button class="ac-link-btn" onclick="acWriteReviewOpen(${id})">Edit</button></div>`
         : (d.purchased ? '' : '<div class="ac-disc-sub" style="margin:6px 0;">Only verified buyers can review this product.</div>'));
     const revMedia = (r) => (r.media && r.media.length) ? `<div class="rev-media">${r.media.map(m => m.startsWith('data:video/') ? `<video class="rev-media-it" src="${m}" controls playsinline preload="metadata"></video>` : `<img class="rev-media-it" src="${m}" alt="" loading="lazy" onclick="openImageViewer('${m}', this)"/>`).join('')}</div>` : '';
+    const helpful = (r) => r.mine ? '' : `<button class="rev-helpful ${r.helpfulByMe ? 'on' : ''}" onclick="acReviewHelpful(${r.id},this)"><svg viewBox="0 0 24 24"><path d="M7 11v9M2 12a2 2 0 0 1 2-2h3v10H4a2 2 0 0 1-2-2z"/><path d="M7 11l3.5-7A2 2 0 0 1 14 5v3h4.5a2 2 0 0 1 2 2.4l-1.4 7A2 2 0 0 1 17 19H7"/></svg><span class="rev-helpful-lbl">Helpful${r.helpfulCount ? ' · ' + r.helpfulCount : ''}</span></button>`;
     const items = d.reviews.length ? d.reviews.map(r => `<div class="rev-row">
       <div class="rev-top">${acAvatarHtml(r.reviewer.name, r.reviewer.avatar, 'user-avatar sm')}<span class="rev-name">${escHtml(r.reviewer.name)}${vbadge(acIsVerified(r.reviewer))}</span><span class="rev-vp">Verified buyer</span></div>
-      <div class="rev-stars">${acStars(r.rating)}</div>${r.body ? `<div class="rev-body">${escHtml(r.body)}</div>` : ''}${revMedia(r)}</div>`).join('')
+      <div class="rev-stars">${acStars(r.rating)}</div>${r.body ? `<div class="rev-body">${escHtml(r.body)}</div>` : ''}${revMedia(r)}<div class="rev-actions">${helpful(r)}</div></div>`).join('')
       : '<div class="ac-disc-sub" style="margin:6px 0;">No reviews yet.</div>';
     box.innerHTML = `<div class="co-sec-h" style="display:flex;align-items:center;gap:8px;">Reviews ${d.summary.count ? acStars(d.summary.avg) + ` <span style="color:var(--t3);font-weight:600;">${d.summary.avg} · ${d.summary.count}</span>` : ''}</div>${write}${items}`;
   } catch { box.innerHTML = '<div class="co-sec-h">Reviews</div><div class="ac-disc-sub">Couldn’t load reviews. Pull to refresh.</div>'; }
+}
+// Toggle "Helpful" on a product review (optimistic; updates the pill in place).
+async function acReviewHelpful(reviewId, btn) {
+  const on = !btn.classList.contains('on');
+  try {
+    const r = await API.req('POST', '/api/products/reviews/' + reviewId + '/helpful', { on });
+    btn.classList.toggle('on', r.helpfulByMe);
+    const lbl = btn.querySelector('.rev-helpful-lbl'); if (lbl) lbl.textContent = 'Helpful' + (r.helpfulCount ? ' · ' + r.helpfulCount : '');
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
 }
 function acWriteReviewOpen(id) {
   AC._revPid = id; AC._revStars = (AC._prodRev && AC._prodRev.mine && AC._prodRev.mine.rating) || 0;

@@ -987,6 +987,14 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS recent_product_views_idx ON recent_product_views(user_id, viewed_at DESC);`);
+  // "Was this review helpful?" votes (Amazon-style) — one per (review, user).
+  await query(`
+    CREATE TABLE IF NOT EXISTS product_review_helpful (
+      review_id INTEGER NOT NULL REFERENCES product_reviews(id) ON DELETE CASCADE,
+      user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (review_id, user_id)
+    );
+  `);
   await query(`
     CREATE TABLE IF NOT EXISTS close_friends (
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
