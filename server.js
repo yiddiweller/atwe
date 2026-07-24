@@ -14734,6 +14734,44 @@ app.get('/api/wallet', auth.requireAuth, async (req, res) => {
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your wallet.' }); }
 });
+// Full wallet statement as a CSV (bookkeeping / taxes). Unlike the in-app history
+// (last 60 rows), this walks the ENTIRE ledger, oldest-first like a bank statement,
+// with the running balance. Text cells are quoted AND guarded against spreadsheet
+// formula injection (a note like "=CMD()" must never execute when opened in Excel).
+app.get('/api/wallet/export', auth.requireAuth, rateLimit(10, 60000, 'wallet-export'), async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT w.kind, w.delta_cents, w.balance_after, w.note, w.created_at,
+              u.name AS peer_name, u.username AS peer_username
+         FROM wallet_tx w LEFT JOIN users u ON u.id = w.peer_id
+        WHERE w.user_id = $1 ORDER BY w.created_at ASC, w.id ASC`,
+      [req.user.id]
+    );
+    const quote = (s) => '"' + s.replace(/"/g, '""') + '"';
+    // Free-text cells (names, notes) get the formula-injection guard; the number
+    // columns are OURS (signed decimals) and must stay real numbers for Excel.
+    const text = (v) => {
+      let s = String(v == null ? '' : v);
+      if (/^[=+\-@]/.test(s)) s = "'" + s;            // defuse a "=CMD()"-style note
+      return quote(s);
+    };
+    const typeOf = (r) => r.kind === 'topup' ? 'Top-up' : r.kind === 'cashout' ? 'Cash out' : (r.delta_cents >= 0 ? 'Received' : 'Sent');
+    const lines = [['Date', 'Type', 'With', 'Note', 'Amount (USD)', 'Balance (USD)'].map(quote).join(',')];
+    for (const r of rows) {
+      lines.push([
+        quote(new Date(r.created_at).toISOString().slice(0, 19).replace('T', ' ')),
+        quote(typeOf(r)),
+        text(r.peer_name ? r.peer_name + (r.peer_username ? ' (@' + r.peer_username + ')' : '') : ''),
+        text(r.note || ''),
+        quote((r.delta_cents / 100).toFixed(2)),
+        quote((Number(r.balance_after || 0) / 100).toFixed(2)),
+      ].join(','));
+    }
+    res.set('Content-Type', 'text/csv; charset=utf-8');
+    res.set('Content-Disposition', 'attachment; filename="atwe-statement-' + new Date().toISOString().slice(0, 10) + '.csv"');
+    res.send('﻿' + lines.join('\r\n'));               // BOM so Excel reads UTF-8 names right
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build your statement.' }); }
+});
 // Add money to your own balance (Stripe Checkout, or a demo grant without Stripe).
 app.post('/api/wallet/topup', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'wallet-topup'), requireFeature('wallet'), async (req, res) => {
   const amountCents = parseWalletAmount(req.body.amount);
