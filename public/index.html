@@ -16157,6 +16157,10 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
           <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
         <span class="ac-selbar-count" id="acSelCount">0 selected</span>
+        <button class="ac-selbar-act" id="acSelCopyBtn" onclick="acSelCopy()" disabled>
+          <svg viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span>Copy</span>
+        </button>
         <button class="ac-selbar-act" id="acSelHideBtn" onclick="acSelHide()" disabled>
           <svg viewBox="0 0 24 24"><path d="M9.9 4.24A9.1 9.1 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M6.6 6.6A18.6 18.6 0 0 0 1 12s4 8 11 8a9 9 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><line x1="2" y1="2" x2="22" y2="22"/></svg>
           <span>Hide</span>
@@ -16592,7 +16596,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1477'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1478'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -42437,7 +42441,19 @@ function acUpdateSelBar() {
   const n = AC._sel ? AC._sel.size : 0;
   const cnt = document.getElementById('acSelCount'); if (cnt) cnt.textContent = n === 1 ? '1 selected' : n + ' selected';
   const bar = document.getElementById('acSelBar');
-  ['acSelHideBtn', 'acSelDeleteBtn'].forEach(bid => { const b = document.getElementById(bid); if (b) b.disabled = n === 0; });
+  ['acSelHideBtn', 'acSelDeleteBtn', 'acSelCopyBtn'].forEach(bid => { const b = document.getElementById(bid); if (b) b.disabled = n === 0; });
+}
+// Copy the selected messages' text (chronological; sender-prefixed in groups,
+// WhatsApp-style). Media-only/deleted bubbles are skipped.
+async function acSelCopy() {
+  const ids = new Set(AC._sel || []); if (!ids.size) return;
+  const lines = (AC.messages || [])
+    .filter((m) => ids.has(m.id) && m.body && !m.deleted)
+    .map((m) => (AC.mode === 'group' && !m.mine && m.sender && m.sender.name) ? `${m.sender.name}: ${m.body}` : m.body);
+  if (!lines.length) { showNotif('Nothing to copy — only media was selected.'); return; }
+  try { await navigator.clipboard.writeText(lines.join('\n')); showNotif(lines.length === 1 ? 'Copied.' : lines.length + ' messages copied.'); }
+  catch (_) { showNotif('Could not copy.'); return; }
+  acExitSelect();
 }
 async function acSelHide() {
   const ids = [...(AC._sel || [])]; if (!ids.length) return;
