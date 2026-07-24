@@ -6527,6 +6527,11 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .wf-chips::-webkit-scrollbar{display:none;}
 .wf-chip{flex:0 0 auto;background:var(--s2);border:none;border-radius:var(--r-pill);color:var(--t2);font-size:13px;font-weight:600;padding:7px 14px;cursor:pointer;font-family:inherit;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
 .wf-chip.on{background:var(--accent-dim);color:var(--accent);}
+/* "This month" activity strip atop the wallet history (green in · plain out) */
+.wm-strip{display:flex;align-items:center;gap:12px;background:var(--s1);border-radius:14px;padding:10px 14px;margin-bottom:10px;font-size:13.5px;}
+.wm-lbl{color:var(--t3);font-weight:600;margin-inline-end:auto;}
+.wm-in{color:var(--green);font-weight:700;}
+.wm-out{color:var(--t1);font-weight:700;}
 /* Sell-view sort chips (reuse the wallet-filter chip look) */
 .sell-sortbar{display:flex;gap:7px;overflow-x:auto;padding:2px 0 12px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
 .sell-sortbar::-webkit-scrollbar{display:none;}
@@ -16557,7 +16562,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1472'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1473'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -33177,9 +33182,10 @@ async function acLoadWalletGiftCards() {
 }
 async function acLoadWallet() {
   try {
-    const { balanceCents, transactions } = await API.req('GET', '/api/wallet');
+    const { balanceCents, transactions, month } = await API.req('GET', '/api/wallet');
     AC._balance = balanceCents; if (S.user) S.user.balanceCents = balanceCents;
     const bal = document.getElementById('walletBal'); if (bal) bal.textContent = acMoneyFmt(balanceCents);
+    AC._walletMonth = month || null;
     acLoadPots();
     acWalletReqCount();
     AC._walletTx = transactions || [];
@@ -33193,7 +33199,13 @@ async function acLoadWallet() {
 function acRenderWalletHistory() {
   const h = document.getElementById('walletHistory'); if (!h) return;
   const tx = AC._walletTx || [];
-  if (!tx.length) { h.innerHTML = '<div class="ac-empty" style="padding:20px;">No transactions yet. Add money or send some to a friend.</div>'; return; }
+  // "This month" activity strip (Cash-App-style), server-computed so a busy
+  // month is never undercounted by the 60-row history window.
+  const mo = AC._walletMonth;
+  const moBar = (mo && (mo.inCents || mo.outCents))
+    ? `<div class="wm-strip"><span class="wm-lbl">${new Date().toLocaleDateString([], { month: 'long' })}</span><span class="wm-in">+${acMoneyFmt(mo.inCents)}</span><span class="wm-out">−${acMoneyFmt(mo.outCents)}</span></div>`
+    : '';
+  if (!tx.length) { h.innerHTML = moBar + '<div class="ac-empty" style="padding:20px;">No transactions yet. Add money or send some to a friend.</div>'; return; }
   const f = AC._walletFilter || 'all';
   const match = (t) => f === 'all' ? true
     : f === 'in' ? (t.deltaCents >= 0 && t.kind !== 'topup')
@@ -33201,7 +33213,7 @@ function acRenderWalletHistory() {
     : (t.kind === 'topup');
   const list = tx.filter(match);
   const chip = (k, l) => `<button class="wf-chip ${f === k ? 'on' : ''}" onclick="acWalletFilter('${k}')">${l}</button>`;
-  h.innerHTML = `<div class="wf-chips">${chip('all', 'All')}${chip('in', 'Received')}${chip('out', 'Sent')}${chip('topup', 'Top-ups')}<button class="wf-chip" onclick="acWalletCsv()" aria-label="Export CSV">⬇ CSV</button></div>`
+  h.innerHTML = moBar + `<div class="wf-chips">${chip('all', 'All')}${chip('in', 'Received')}${chip('out', 'Sent')}${chip('topup', 'Top-ups')}<button class="wf-chip" onclick="acWalletCsv()" aria-label="Export CSV">⬇ CSV</button></div>`
     + (list.length ? list.map(acWalletRow).join('') : '<div class="ac-empty" style="padding:18px;">Nothing in this view yet.</div>');
 }
 function acWalletFilter(k) { AC._walletFilter = k; acRenderWalletHistory(); }
