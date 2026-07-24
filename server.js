@@ -18472,12 +18472,12 @@ function resolveVariant(productRow, variantId) {
   return { ok: true, variant: { id: v.id, label: v.label, priceCents: (v.priceCents == null ? productRow.price_cents : v.priceCents), stock: v.stock == null ? null : v.stock } };
 }
 // Insert a pending order with its ship-to snapshot (immutable history the seller ships against).
-async function insertOrder({ buyerId, sellerId, total, note, shippingCents, taxCents, needsShipping, addr, discountCents, couponCode, pickup, pickupLocation, affiliateId, commissionCents }) {
+async function insertOrder({ buyerId, sellerId, total, note, shippingCents, taxCents, needsShipping, addr, discountCents, couponCode, pickup, pickupLocation, affiliateId, commissionCents, gift, giftNote }) {
   const a = addr || {};
   const { rows } = await db.query(
-    `INSERT INTO orders (buyer_id, seller_id, total_cents, note, shipping_cents, tax_cents, discount_cents, coupon_code, needs_shipping, pickup, pickup_location, affiliate_id, commission_cents, ship_name, ship_phone, ship_line1, ship_line2, ship_city, ship_region, ship_postal, ship_country)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING id`,
-    [buyerId, sellerId, total, note || null, shippingCents || 0, taxCents || 0, discountCents || 0, couponCode || null, !!needsShipping, !!pickup, pickupLocation || null, affiliateId || null, commissionCents || 0, a.full_name || null, a.phone || null, a.line1 || null, a.line2 || null, a.city || null, a.region || null, a.postal || null, a.country || null]
+    `INSERT INTO orders (buyer_id, seller_id, total_cents, note, shipping_cents, tax_cents, discount_cents, coupon_code, needs_shipping, pickup, pickup_location, affiliate_id, commission_cents, ship_name, ship_phone, ship_line1, ship_line2, ship_city, ship_region, ship_postal, ship_country, gift, gift_note)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23) RETURNING id`,
+    [buyerId, sellerId, total, note || null, shippingCents || 0, taxCents || 0, discountCents || 0, couponCode || null, !!needsShipping, !!pickup, pickupLocation || null, affiliateId || null, commissionCents || 0, a.full_name || null, a.phone || null, a.line1 || null, a.line2 || null, a.city || null, a.region || null, a.postal || null, a.country || null, gift === true, (giftNote || '').toString().trim().slice(0, 300) || null]
   );
   return rows[0].id;
 }
@@ -18512,6 +18512,7 @@ function mapOrder(o, items, me) {
     // Shipping: the ship-to snapshot is visible to BOTH parties (the seller must see it
     // to ship; the buyer to confirm it). Carrier/tracking appear once shipped.
     needsShipping: !!o.needs_shipping,
+    gift: !!o.gift, giftNote: o.gift_note || null,
     pickup: !!o.pickup, pickupLocation: o.pickup_location || null,
     shipTo: o.needs_shipping ? { name: o.ship_name, phone: o.ship_phone || null, line1: o.ship_line1, line2: o.ship_line2 || null, city: o.ship_city, region: o.ship_region || null, postal: o.ship_postal || null, country: o.ship_country || null } : null,
     carrier: o.carrier || null, tracking: o.tracking || null, shippedAt: o.shipped_at || null, deliveredAt: o.delivered_at || null,
@@ -18525,7 +18526,7 @@ function mapOrder(o, items, me) {
 }
 const ORDER_SELECT = `SELECT o.id, o.buyer_id, o.seller_id, o.total_cents, o.status, o.note, o.created_at, o.paid_at, o.cancel_reason, o.cancel_note, o.cancelled_by, o.buyer_archived, o.seller_archived,
   o.escrow, o.auto_release_at, o.released_at, o.dispute_reason, o.disputed_by,
-  o.discount_cents, o.coupon_code,
+  o.discount_cents, o.coupon_code, o.gift, o.gift_note,
   o.shipping_cents, o.tax_cents, o.needs_shipping, o.pickup, o.pickup_location, o.ship_name, o.ship_phone, o.ship_line1, o.ship_line2, o.ship_city, o.ship_region, o.ship_postal, o.ship_country,
   o.carrier, o.tracking, o.shipped_at, o.delivered_at, o.label_url, o.label_cost_cents,
   bu.name AS buyer_name, bu.username AS buyer_username, bu.avatar AS buyer_avatar,
@@ -18964,7 +18965,7 @@ app.post('/api/orders', auth.requireAuth, blockImpersonation, rateLimit(20, 6000
     const rt = await applyRatesAndTax(req.body, ship, items, taxable);
     const total = taxable + rt.shippingCents + rt.taxCents;
     const note = (req.body.note || '').toString().trim().slice(0, 500) || null;
-    const orderId = await insertOrder({ buyerId: req.user.id, sellerId, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null });
+    const orderId = await insertOrder({ buyerId: req.user.id, sellerId, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null, gift: req.body.gift === true, giftNote: req.body.giftNote });
     await attachCouponClaim(couponClaimId, orderId);
     for (const r of items) {
       await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty, variant_id, variant_label) VALUES ($1,$2,$3,$4,$5,$6,$7)', [orderId, r.product_id, r.name, r.price_cents, r.qty, r.variant_id, r.variant_label]);
@@ -19044,7 +19045,7 @@ app.post('/api/orders/buy', auth.requireAuth, blockImpersonation, rateLimit(20, 
     // Affiliate attribution: a purchase through someone's product link pays them a %.
     const affiliateId = await resolveAffiliate(req.body.affCode, productId, req.user.id, p.business_id);
     const commissionCents = affiliateId ? Math.round(subtotal * AFFILIATE_RATE_PCT / 100) : 0;
-    const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null, affiliateId, commissionCents });
+    const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null, affiliateId, commissionCents, gift: req.body.gift === true, giftNote: req.body.giftNote });
     await attachCouponClaim(couponClaimId, orderId);
     await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty, variant_id, variant_label) VALUES ($1,$2,$3,$4,$5,$6,$7)', [orderId, productId, p.name, unitPrice, qty, items[0].variant_id, items[0].variant_label]);
     const stk = await applyStock(items);
