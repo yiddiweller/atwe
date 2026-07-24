@@ -11616,6 +11616,21 @@ app.post('/api/admin/affiliations/:userId/revoke', auth.requirePerm('ads'), asyn
 });
 
 // Trending hashtags — top tags across recent public top-level posts (last 7 days).
+// Hashtag prefix search — powers the composer's #tag autocomplete. Ranked by
+// how often each matching tag has been used (all-time), ties alphabetical.
+app.get('/api/social/hashtag-search', auth.requireAuth, rateLimit(60, 60000, 'tag-search'), async (req, res) => {
+  const q = (req.query.q || '').toString().trim().replace(/^#/, '').toLowerCase();
+  if (!q || !/^[\p{L}\p{N}_]{1,50}$/u.test(q)) return res.json({ tags: [] });
+  try {
+    const esc = q.replace(/[%_\\]/g, '\\$&');
+    const { rows } = await db.query(
+      `SELECT tag, COUNT(DISTINCT post_id)::int AS count FROM post_hashtags
+       WHERE tag LIKE $1 GROUP BY tag ORDER BY count DESC, tag LIMIT 8`,
+      [esc + '%']
+    );
+    res.json({ tags: rows.map((r) => ({ tag: r.tag, count: r.count })) });
+  } catch (err) { res.json({ tags: [] }); }
+});
 app.get('/api/social/trending', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
