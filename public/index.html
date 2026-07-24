@@ -6508,6 +6508,11 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 /* Group invite QR */
 .gi-qr{display:flex;justify-content:center;margin:2px 0 12px;}
 .gi-qr img{width:210px;height:210px;border-radius:18px;background:#fff;padding:10px;display:block;}
+/* Business ice-breaker chips (empty DM with a business) */
+.biz-starters{display:flex;flex-direction:column;align-items:center;gap:9px;padding:26px 20px;}
+.biz-starters-h{font-size:13.5px;color:var(--t3);font-weight:600;margin-bottom:2px;}
+.biz-starter{background:var(--s1);border:none;border-radius:var(--r-pill);color:var(--t1);font-size:14.5px;font-weight:600;padding:11px 18px;cursor:pointer;font-family:inherit;max-width:100%;}
+.biz-starter:active{transform:scale(.97);background:var(--s2);}
 /* Double-tap heart burst */
 .dbl-heart{position:fixed;z-index:2000;font-size:34px;pointer-events:none;transform:translate(-50%,-50%) scale(.4);animation:dblHeart .65s cubic-bezier(.2,.85,.3,1.1) forwards;}
 @keyframes dblHeart{20%{transform:translate(-50%,-50%) scale(1.25);opacity:1;}100%{transform:translate(-50%,-110%) scale(1);opacity:0;}}
@@ -16449,7 +16454,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1445'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1446'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -44758,6 +44763,7 @@ function acRenderThread() {
     el.innerHTML = isGroup
       ? `<div class="ac-empty">No messages yet. Say hello to the group.</div>`
       : `<div class="ac-empty">Say hi to @${escHtml(AC.peer?.username || '')}.</div>`;
+    acBizStarterChips(el); // fresh DM with a business → suggested first messages (replaces the plain hint)
     if (Object.keys(_typers).length) acRenderTyping(); // keep the typing dots in an empty thread too
     return;
   }
@@ -45255,6 +45261,25 @@ function acSendMenuOpen(btn) {
 }
 function acSendMenuClose() { document.getElementById('sendMenuPop')?.classList.add('hidden'); document.getElementById('sendMenuScrim')?.classList.add('hidden'); }
 
+// Suggested first messages when opening an EMPTY DM with a business (WhatsApp-
+// Business-style ice-breakers): tap a chip → it sends as a normal message.
+const _BIZ_STARTERS = ['Hi! Is this available?', 'What are your hours?', 'Do you deliver?', 'Can I book an appointment?'];
+function acBizStarterChips(el) {
+  if (AC.mode === 'group' || !AC.peer || AC.peer.accountType !== 'business') return;
+  if ((AC.messages || []).length) return;                    // only a brand-new conversation
+  if (AC.canMessage === false) return;                        // request-gated → no chips
+  if (S.user && AC.peer.id === S.user.id) return;             // not on your own business
+  const hint = el.querySelector('.ac-empty'); if (hint) hint.remove(); // the chips card IS the empty state
+  const box = document.createElement('div');
+  box.className = 'biz-starters';
+  box.innerHTML = `<div class="biz-starters-h">Say hello to ${escHtml((AC.peer.name || '').split(' ')[0] || AC.peer.name)}</div>`
+    + _BIZ_STARTERS.map((t) => `<button class="biz-starter" onclick="acBizStarterSend(this)">${escHtml(t)}</button>`).join('');
+  el.appendChild(box);
+}
+function acBizStarterSend(btn) {
+  const inp = document.getElementById('acInput');
+  if (inp) { inp.value = btn.textContent; acSend(); }
+}
 async function acSend(opts) {
   if (_sendMenuJustOpened && !opts) { _sendMenuJustOpened = false; return; } // a hold opened the menu
   const silent = !!(opts && opts.silent); // Telegram-style: deliver without a ping
