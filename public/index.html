@@ -16815,7 +16815,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1534'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1535'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -22940,8 +22940,10 @@ function acMsgDelete(id) {
   const trash = '<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>';
   let html = '';
   // Your own live message can be removed for everyone (leaves a tombstone) or
-  // just for me. Someone else's message — and any tombstone — is "for me" only.
-  if (!m.deleted && m.mine) html += `<button class="mm-item danger" onclick="acDoDelete('everyone')">${trash}<span class="mm-label">Delete for everyone</span></button>`;
+  // just for me. Someone else's message — and any tombstone — is "for me" only,
+  // EXCEPT for group admins, who can moderate anyone's message out of the group.
+  const adminMod = AC.mode === 'group' && AC.group && AC.group.iAmAdmin && !m.mine;
+  if (!m.deleted && (m.mine || adminMod)) html += `<button class="mm-item danger" onclick="acDoDelete('everyone')">${trash}<span class="mm-label">${adminMod ? 'Remove for everyone (admin)' : 'Delete for everyone'}</span></button>`;
   html += `<button class="mm-item danger" onclick="acDoDelete('me')">${trash}<span class="mm-label">Delete for me</span></button>`;
   html += '<div class="mm-sep"></div>';
   html += '<button class="mm-item" onclick="closeMsgDelete()"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="mm-label">Cancel</span></button>';

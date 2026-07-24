@@ -7120,7 +7120,10 @@ app.delete('/api/atchat/groups/:id/messages/:mid', auth.requireAuth, async (req,
     const m = await groupMsgFor(gid, mid, req.user.id);
     if (!m) return res.json({ ok: true });
     if (scope === 'everyone') {
-      if (m.sender_id !== req.user.id) return res.status(403).json({ error: 'You can only delete your own messages for everyone.' });
+      // The sender — or a group admin (WhatsApp-style moderation) — can remove a
+      // message for everyone. Admins moderating keeps spam/abuse out of groups.
+      const canModerate = m.sender_id === req.user.id || (await isGroupAdmin(gid, req.user.id));
+      if (!canModerate) return res.status(403).json({ error: 'Only the sender or a group admin can delete this for everyone.' });
       await db.query(`UPDATE at_group_messages SET deleted_all = true, body = '', image = NULL, images = NULL, media = NULL, media_kind = NULL, media_name = NULL, meta = NULL, reactions = '{}' WHERE id = $1`, [mid]);
       fanGroup(gid, req.user.id, 'dm_deleted', { groupId: gid, id: mid });
     } else {
