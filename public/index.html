@@ -5432,7 +5432,26 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.08);}
 .art-r-content a{color:var(--accent);}
 .art-r-actions{margin-top:26px;padding-top:16px;border-top:0.5px solid var(--b2);max-width:none;}
 body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
-.art-loading{padding:60px 20px;text-align:center;color:var(--t3);font-size:15px;}
+.art-loading{padding:60px 20px;text-align:center;color:var(--t3);font-size:15px;line-height:1.5;}
+
+/* ── Community notes ("readers added context") — amber heads-up box, no outline ── */
+.ac-note{margin:8px 0 4px;padding:12px 14px;border-radius:14px;background:var(--amber-bg,rgba(255,187,0,.12));cursor:pointer;}
+.ac-note.shown{background:var(--green-bg,rgba(136,255,0,.12));}
+.ac-note-head{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;color:var(--t2);margin-bottom:6px;}
+.ac-note-head svg{width:16px;height:16px;stroke:var(--amber);fill:none;flex-shrink:0;}
+.ac-note.shown .ac-note-head svg{stroke:var(--green);}
+.ac-note-body{font-size:14.5px;line-height:1.5;color:var(--t1);white-space:pre-wrap;}
+.ac-note-src{display:inline-block;margin-top:6px;font-size:13px;font-weight:600;color:var(--accent);}
+.ac-note-foot{display:flex;align-items:center;gap:8px;margin-top:10px;}
+.ac-note-help{font-size:12.5px;color:var(--t3);}
+.ac-note-rate{border:none;border-radius:999px;background:var(--s2);color:var(--t2);font-size:12.5px;font-weight:700;padding:5px 14px;cursor:pointer;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
+.ac-note-rate.on{background:var(--accent);color:var(--accent-tint,#fff);}
+/* Notes view + add-context sheet */
+.notes-intro,.note-hint{font-size:13px;color:var(--t3);line-height:1.5;margin-bottom:14px;}
+#notesList .ac-note{cursor:default;}
+.note-input{width:100%;box-sizing:border-box;background:var(--s2);border:none;border-radius:14px;color:var(--t1);padding:12px 14px;font:inherit;font-size:15px;line-height:1.5;resize:vertical;outline:none;}
+.note-src-input{width:100%;box-sizing:border-box;background:var(--s2);border:none;border-radius:12px;color:var(--t1);padding:11px 14px;font:inherit;font-size:14px;outline:none;margin-top:10px;}
+.note-input::placeholder,.note-src-input::placeholder{color:var(--t4);}
 .ac-prodtag.ac-prodtag-multi{padding-left:10px;}
 .ac-prodtag-row{align-items:center;gap:12px;}
 .cpc-thumb{width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;}
@@ -11768,6 +11787,27 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Community notes: all notes on a post (read + rate) -->
+<div class="overlay hidden" id="notesView">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Readers added context">
+    <div class="msg-top"><button class="msg-back" onclick="closeOverlay('notesView')" aria-label="Close"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button><span class="ac-title">Readers added context</span></div>
+    <div class="notes-intro">Anyone can add context to a post. Context shows publicly once enough people rate it helpful.</div>
+    <div id="notesList"></div>
+  </div>
+</div>
+
+<!-- Community notes: add-context composer -->
+<div class="overlay hidden" id="noteSheet" onclick="if(event.target===this)closeOverlay('noteSheet')">
+  <div class="rs-sheet" role="dialog" aria-modal="true" aria-label="Add context">
+    <div class="rs-grab"></div>
+    <div class="rs-title">Add context</div>
+    <div class="note-hint">Add helpful, sourced context if this post could mislead people. Others will rate whether it's helpful.</div>
+    <textarea id="noteBody" class="note-input" maxlength="280" rows="4" placeholder="What should people know? Keep it neutral and factual."></textarea>
+    <input id="noteSrc" class="note-src-input" maxlength="500" placeholder="Source link (optional) — e.g. a trustworthy article" autocomplete="off"/>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="acSubmitNote()">Submit context</button>
+  </div>
+</div>
+
 <div class="overlay hidden" id="imgViewer">
   <div class="iv-top">
     <button class="iv-x" onclick="closeImageViewer()" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -13244,6 +13284,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <button class="as-item hidden" id="paInfoBtn" onclick="acPostInfoFrom('other')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5"/><path d="M12 7.6h.01"/></svg> <span>Info</span></button>
     <button class="as-item hidden" id="paPostshotBtn" onclick="acPostshot(AC._paPostId)"><svg viewBox="0 0 24 24"><path d="M4 8h3l1.4-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.3"/></svg> <span>Postshot</span></button>
     <button class="as-item hidden" id="paNotInterestedBtn" onclick="paNotInterested()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12h7"/></svg> <span>Not interested in this post</span></button>
+    <button class="as-item hidden" id="paAddContextBtn" onclick="closeOverlay('postActions');acAddNoteOpen(AC._paPostId)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="16" x2="12" y2="11"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> <span>Add context</span></button>
     <button class="as-item" onclick="paMute()"><svg viewBox="0 0 24 24"><path d="M11 5 6.5 9H3v6h3.5L11 19z"/><path d="M22 9.5l-5 5M17 9.5l5 5"/></svg> <span id="paMuteLabel">Mute</span></button>
     <button class="as-item danger" onclick="paBlock()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/></svg> <span id="paBlockLabel">Block</span></button>
     <button class="as-item danger" onclick="paReport()"><svg viewBox="0 0 24 24"><path d="M5 21V4"/><path d="M5 4.5s1.2-1 4-1 5 2 8 2c1.4 0 2-.4 2-.4v9s-.6.6-2 .6c-3 0-5-2-8-2s-4 1-4 1z"/></svg> <span id="paReportLabel">Report</span></button>
@@ -15890,7 +15931,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1391'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1392'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -28179,6 +28220,71 @@ async function acPublishArticle() {
   } catch (e) { showNotif(e.message || 'Could not publish the article.'); btn.disabled = false; btn.textContent = lbl; }
 }
 
+// ── Community notes ("readers added context") ──────────────────────────────────
+const _NOTE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="16" x2="12" y2="11"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
+// The public "readers added context" box under a post (only a shown note).
+function acNoteBox(p) {
+  const n = p && p.note; if (!n) return '';
+  const src = n.sourceUrl ? `<a class="ac-note-src" href="${jsAttr(n.sourceUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Source ↗</a>` : '';
+  const rated = n.myRating === true ? 'up' : (n.myRating === false ? 'down' : '');
+  return `<div class="ac-note" onclick="event.stopPropagation();acOpenNotes(${p.id})">
+    <div class="ac-note-head">${_NOTE_ICON}<span>Readers added context</span></div>
+    <div class="ac-note-body">${acLinkifyPost(n.body)}</div>${src}
+    <div class="ac-note-foot"><span class="ac-note-help">Is this helpful?</span>
+      <button class="ac-note-rate ${rated === 'up' ? 'on' : ''}" onclick="event.stopPropagation();acRateNote(${n.id},true,this)">Yes</button>
+      <button class="ac-note-rate ${rated === 'down' ? 'on' : ''}" onclick="event.stopPropagation();acRateNote(${n.id},false,this)">No</button>
+    </div>
+  </div>`;
+}
+async function acRateNote(noteId, helpful, btn) {
+  const foot = btn && btn.closest('.ac-note-foot');
+  if (foot) { foot.querySelectorAll('.ac-note-rate').forEach((b) => b.classList.remove('on')); btn.classList.add('on'); }
+  try { await API.req('POST', '/api/social/notes/' + noteId + '/rate', { helpful }); if (typeof announce === 'function') announce(helpful ? 'Marked helpful' : 'Feedback recorded'); }
+  catch (e) { showNotif(e.message || 'Could not rate the note.'); }
+}
+function acAddNoteOpen(postId) {
+  if (!(S.user && S.user.username)) { showNotif('Sign in to add context.'); return; }
+  AC._notePostId = postId;
+  const t = document.getElementById('noteBody'); if (t) t.value = '';
+  const s = document.getElementById('noteSrc'); if (s) s.value = '';
+  showOverlay('noteSheet');
+  setTimeout(() => document.getElementById('noteBody')?.focus(), 120);
+}
+async function acSubmitNote() {
+  const postId = AC._notePostId; if (!postId) return;
+  const body = (document.getElementById('noteBody').value || '').trim();
+  const src = (document.getElementById('noteSrc').value || '').trim();
+  if (body.length < 5) return showNotif('Please add a bit more context (5+ characters).');
+  try {
+    await API.req('POST', '/api/social/posts/' + postId + '/note', { body, sourceUrl: src });
+    closeOverlay('noteSheet'); showNotif('Context submitted — others can now rate it.');
+    if (AC._notesPost === postId && !document.getElementById('notesView').classList.contains('hidden')) acOpenNotes(postId, true);
+  } catch (e) { showNotif(e.message || 'Could not submit your note.'); }
+}
+async function acOpenNotes(postId, silent) {
+  AC._notesPost = postId;
+  if (!silent) showOverlay('notesView');
+  const el = document.getElementById('notesList');
+  if (el && !silent) el.innerHTML = '<div class="art-loading">Loading…</div>';
+  try { const { notes } = await API.req('GET', '/api/social/posts/' + postId + '/notes'); acRenderNotes(notes || []); }
+  catch (e) { if (el) el.innerHTML = '<div class="art-loading">Could not load notes.</div>'; }
+}
+function acRenderNotes(notes) {
+  const el = document.getElementById('notesList'); if (!el) return;
+  const mineExists = notes.some((n) => n.mine);
+  const addBtn = `<button class="ac-pill-btn accent" style="width:100%;margin-bottom:14px;" onclick="acAddNoteOpen(${AC._notesPost})">${mineExists ? 'Edit your note' : 'Add context'}</button>`;
+  if (!notes.length) { el.innerHTML = addBtn + '<div class="art-loading">No context yet.<br/>Add helpful, sourced context if this post could mislead.</div>'; return; }
+  el.innerHTML = addBtn + notes.map((n) => {
+    const shown = n.status === 'shown';
+    const rated = n.myRating === true ? 'up' : (n.myRating === false ? 'down' : '');
+    const src = n.sourceUrl ? `<a class="ac-note-src" href="${jsAttr(n.sourceUrl)}" target="_blank" rel="noopener">Source ↗</a>` : '';
+    const foot = n.mine
+      ? `<div class="ac-note-foot"><span class="ac-note-help">Your note · ${n.helpful}/${n.total} found it helpful</span></div>`
+      : `<div class="ac-note-foot"><span class="ac-note-help">Helpful?</span><button class="ac-note-rate ${rated === 'up' ? 'on' : ''}" onclick="acRateNote(${n.id},true,this)">Yes</button><button class="ac-note-rate ${rated === 'down' ? 'on' : ''}" onclick="acRateNote(${n.id},false,this)">No</button></div>`;
+    return `<div class="ac-note ${shown ? 'shown' : 'prop'}"><div class="ac-note-head">${_NOTE_ICON}<span>${shown ? 'Rated helpful' : 'Proposed context'}</span></div><div class="ac-note-body">${acLinkifyPost(n.body)}</div>${src}${foot}</div>`;
+  }).join('');
+}
+
 function acPostCard(p) {
   const isArticle = !!(p.articleTitle && !p.locked);
   const img = isArticle ? '' : acProdTagWrap(p, acPostMedia(p, true)); // articles show a cover teaser instead
@@ -28219,6 +28325,7 @@ function acPostCard(p) {
       ${acPollHtml(p)}
       ${acLocHtml(p)}
       ${(!p.locked && p.body && !AC._noCashCard) ? acCashCardHtml(acFirstCashtag(p.body)) : ''}
+      ${acNoteBox(p)}
       ${(p.replyScope && p.replyScope !== 'everyone') ? `<div class="ac-post-replynote"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg><span>${escHtml(acReplyScopeLabel(p.replyScope))}</span></div>` : ''}
       <div class="ac-post-actions">
         <button class="ac-reply" onclick="event.stopPropagation();acOpenPostView(${p.id})" aria-label="Reply">
@@ -30749,6 +30856,7 @@ function acPostFocusCard(p) {
     ${acPollHtml(p)}
     ${acLocHtml(p)}
     <div class="ac-pf-time">${acFullTime(p.created_at)}${p.editedAt ? ' · Edited' : ''}${p.views ? ` · <b>${acCompact(p.views)}</b> view${p.views === 1 ? '' : 's'}` : ''}</div>
+    ${acNoteBox(p)}
     ${(p.replyScope && p.replyScope !== 'everyone') ? `<div class="ac-pf-replynote"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>${escHtml(acReplyScopeLabel(p.replyScope))}</div>` : ''}
     <div class="ac-pf-actions">
       <button class="ac-reply" onclick="document.getElementById('acReplyInput').focus()" aria-label="Reply">
@@ -40108,6 +40216,8 @@ function acOpenUserActions(anchor, id, showFollow, postId) {
   AC._paPostId = (postId != null) ? postId : null; // "Not interested" / "Save to folder" only apply to a post
   const niBtn = document.getElementById('paNotInterestedBtn');
   if (niBtn) niBtn.classList.toggle('hidden', AC._paPostId == null);
+  const acxBtn = document.getElementById('paAddContextBtn');
+  if (acxBtn) acxBtn.classList.toggle('hidden', AC._paPostId == null); // "Add context" applies to a post
   const psBtn = document.getElementById('paPostshotBtn');
   if (psBtn) psBtn.classList.toggle('hidden', AC._paPostId == null); // Postshot needs a post
   const infoBtn = document.getElementById('paInfoBtn');

@@ -8018,6 +8018,19 @@ app.delete('/api/quick-replies/:id', auth.requireAuth, async (req, res) => {
 const POST_OCCASIONS = ['new_role', 'work_anniversary', 'certification', 'education', 'launch', 'new_business', 'milestone'];
 // Post reactions (LinkedIn-style). 'like' is the default/back-compat reaction.
 const POST_REACTIONS = ['like', 'celebrate', 'love', 'insightful', 'funny', 'support'];
+// Community notes: a note shows publicly once it clears a light consensus bar
+// (simplified for our scale — a net-helpful threshold, not X's cross-viewpoint model).
+const NOTE_MIN_RATINGS = 3;
+const NOTE_HELPFUL_RATIO = 0.67;
+// Recompute a note's shown/proposed status from its ratings (fire-and-forget).
+async function recomputeNoteStatus(noteId) {
+  try {
+    const c = (await db.query(
+      "SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE helpful)::int AS helpful FROM post_note_ratings WHERE note_id = $1", [noteId])).rows[0];
+    const shown = c.total >= NOTE_MIN_RATINGS && (c.helpful / c.total) >= NOTE_HELPFUL_RATIO;
+    await db.query('UPDATE post_notes SET status = $1 WHERE id = $2', [shown ? 'shown' : 'proposed', noteId]);
+  } catch (e) { /* best-effort */ }
+}
 const POSTS_SELECT = `
   SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only, p.min_tier_level, p.image_alt, p.ppv_cents, p.occasion, p.article_title,
          (p.promoted_until IS NOT NULL AND p.promoted_until > now()) AS promoted,
@@ -8031,6 +8044,11 @@ const POSTS_SELECT = `
          (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)::int AS likes,
          (SELECT reaction FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = $1) AS my_reaction,
          (SELECT json_object_agg(reaction, c) FROM (SELECT reaction, COUNT(*)::int AS c FROM post_likes WHERE post_id = p.id GROUP BY reaction) rc) AS reaction_counts,
+         (SELECT json_build_object('id', n.id, 'body', n.body, 'sourceUrl', n.source_url,
+             'helpful', (SELECT COUNT(*)::int FROM post_note_ratings r WHERE r.note_id = n.id AND r.helpful),
+             'myRating', (SELECT helpful FROM post_note_ratings r WHERE r.note_id = n.id AND r.user_id = $1))
+           FROM post_notes n WHERE n.post_id = p.id AND n.status = 'shown'
+           ORDER BY (SELECT COUNT(*) FROM post_note_ratings r WHERE r.note_id = n.id AND r.helpful) DESC, n.created_at ASC LIMIT 1) AS note,
          (SELECT COUNT(*) FROM posts r WHERE r.parent_id = p.id)::int AS replies,
          (SELECT COUNT(*) FROM post_reposts rp WHERE rp.post_id = p.id)::int AS reposts,
          (SELECT COUNT(*) FROM post_views pv WHERE pv.post_id = p.id)::int AS views,
@@ -8175,7 +8193,7 @@ function mapPost(r) {
     tagged: Array.isArray(r.tags) ? r.tags.filter((t) => t.kind === 'tag').map(({ kind, ...u }) => u) : [],
     coAuthors: Array.isArray(r.tags) ? r.tags.filter((t) => t.kind === 'author').map(({ kind, ...u }) => u) : [],
     editedAt: r.edited_at || null, promoted: !!r.promoted, occasion: r.occasion || null,
-    articleTitle: r.article_title || null,
+    articleTitle: r.article_title || null, note: r.note || null,
     products: tagProductsFrom(r), product: (tagProductsFrom(r)[0] || null),
     parentId: r.parent_id || null, location: r.location || null,
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
@@ -10327,6 +10345,64 @@ app.delete('/api/social/posts/:id/like', auth.requireAuth, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
+});
+
+// ── Community notes ("readers added context") ──
+// Add a note to a post (not your own; one proposed note per user per post).
+app.post('/api/social/posts/:id/note', auth.requireAuth, rateLimit(20, 60000, 'note-add'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  const body = (req.body.body || '').toString().trim().slice(0, 280);
+  if (body.length < 5) return res.status(400).json({ error: 'Please write a bit more context (5+ characters).' });
+  let src = (req.body.sourceUrl || '').toString().trim().slice(0, 500) || null;
+  if (src && !/^https?:\/\//i.test(src)) { if (/^[\w-]+(\.[\w-]+)+/.test(src)) src = 'https://' + src; else src = null; }
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const owner = (await db.query('SELECT user_id FROM posts WHERE id = $1', [id])).rows[0];
+    if (!owner) return res.status(404).json({ error: 'Post not found.' });
+    if (owner.user_id === req.user.id) return res.status(400).json({ error: 'You can’t add context to your own post.' });
+    if (await blockedEither(req.user.id, owner.user_id)) return res.status(403).json({ error: 'You can’t add context to this post.' });
+    const ins = await db.query(
+      `INSERT INTO post_notes (post_id, author_id, body, source_url) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (post_id, author_id) DO UPDATE SET body = EXCLUDED.body, source_url = EXCLUDED.source_url, status = 'proposed'
+       RETURNING id`, [id, req.user.id, body, src]);
+    res.status(201).json({ ok: true, id: ins.rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add your note.' }); }
+});
+// List a post's notes (to read + rate proposals). Newest-shown first, then by helpful.
+app.get('/api/social/posts/:id/notes', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  try {
+    const { rows } = await db.query(
+      `SELECT n.id, n.body, n.source_url, n.status, n.created_at, n.author_id = $2 AS mine,
+              u.name AS author_name, u.username AS author_username,
+              (SELECT COUNT(*)::int FROM post_note_ratings r WHERE r.note_id = n.id AND r.helpful) AS helpful,
+              (SELECT COUNT(*)::int FROM post_note_ratings r WHERE r.note_id = n.id) AS total,
+              (SELECT helpful FROM post_note_ratings r WHERE r.note_id = n.id AND r.user_id = $2) AS my_rating
+       FROM post_notes n JOIN users u ON u.id = n.author_id
+       WHERE n.post_id = $1
+       ORDER BY (n.status = 'shown') DESC, helpful DESC, n.created_at DESC LIMIT 30`, [id, req.user.id]);
+    res.json({ notes: rows.map((n) => ({ id: n.id, body: n.body, sourceUrl: n.source_url, status: n.status, mine: n.mine, helpful: n.helpful, total: n.total, myRating: n.my_rating, author: { name: n.author_name, username: n.author_username } })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load notes.' }); }
+});
+// Rate a note Helpful / Not helpful (upsert), then recompute whether it shows.
+app.post('/api/social/notes/:id/rate', auth.requireAuth, rateLimit(60, 60000, 'note-rate'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid note id.' });
+  const helpful = req.body.helpful === true;
+  try {
+    const n = (await db.query('SELECT author_id FROM post_notes WHERE id = $1', [id])).rows[0];
+    if (!n) return res.status(404).json({ error: 'Note not found.' });
+    if (n.author_id === req.user.id) return res.status(400).json({ error: 'You can’t rate your own note.' });
+    await db.query(
+      `INSERT INTO post_note_ratings (note_id, user_id, helpful) VALUES ($1, $2, $3)
+       ON CONFLICT (note_id, user_id) DO UPDATE SET helpful = EXCLUDED.helpful`, [id, req.user.id, helpful]);
+    await recomputeNoteStatus(id);
+    const c = (await db.query('SELECT COUNT(*) FILTER (WHERE helpful)::int AS helpful, COUNT(*)::int AS total FROM post_note_ratings WHERE note_id = $1', [id])).rows[0];
+    const st = (await db.query('SELECT status FROM post_notes WHERE id = $1', [id])).rows[0];
+    res.json({ ok: true, helpful: c.helpful, total: c.total, myRating: helpful, status: st ? st.status : 'proposed' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not rate the note.' }); }
 });
 
 // Repost / un-repost (X-style) — re-shares the post to your followers' feeds.
