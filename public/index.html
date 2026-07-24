@@ -7095,6 +7095,8 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .dig-item-name{font-size:13px;font-weight:600;color:var(--t1);margin-bottom:3px;}
 .dig-item-content{font-size:13.5px;color:var(--t2);line-height:1.5;word-break:break-word;white-space:pre-wrap;background:var(--s2);border-radius:9px;padding:8px 11px;user-select:all;}
 .cart-item-price{font-size:13px;color:var(--t3);}
+/* "Save for later" / "Move to cart" text actions on cart + saved rows */
+.cart-savelater{font-size:12px;padding:2px 0;text-align:start;}
 .cart-qty{display:flex;align-items:center;gap:10px;}
 .cart-qty button{width:26px;height:26px;border-radius:8px;border:none;background:var(--s2);color:var(--t1);font-size:16px;cursor:pointer;}
 .prod-img-pick{height:120px;border-radius:14px;border:1.5px dashed var(--b2);background:var(--s2);background-size:cover;background-position:center;display:grid;place-items:center;cursor:pointer;color:var(--t3);font-size:13px;}
@@ -16696,7 +16698,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1509'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1510'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -35478,17 +35480,60 @@ async function acOpenCart() {
   try {
     const { carts } = await API.req('GET', '/api/cart');
     AC._carts = carts;
-    if (!carts.length) { body.innerHTML = '<div class="ac-empty" style="padding:26px;">Your cart is empty.</div>'; return; }
-    body.innerHTML = carts.map(c => `
+    const cartHtml = !carts.length ? '<div class="ac-empty" style="padding:26px;">Your cart is empty.</div>' : carts.map(c => `
       <div class="cart-seller">${acAvatarHtml(c.seller.name, c.seller.avatar, 'user-avatar', c.seller.accountType === 'business')}<span>${escHtml(c.seller.name)}</span></div>
       ${c.items.map(it => `<div class="cart-item">
         ${it.image ? `<div class="cart-thumb" style="background-image:url('${it.image}')"></div>` : `<div class="cart-thumb noimg">${_MKT_BOX_SVG}</div>`}
-        <div class="cart-item-main"><div class="cart-item-name">${escHtml(it.name)}${it.variantLabel ? ` <span class="cart-var">${escHtml(it.variantLabel)}</span>` : ''}</div><div class="cart-item-price">$${(it.priceCents / 100).toFixed(2)}</div></div>
+        <div class="cart-item-main"><div class="cart-item-name">${escHtml(it.name)}${it.variantLabel ? ` <span class="cart-var">${escHtml(it.variantLabel)}</span>` : ''}</div><div class="cart-item-price">$${(it.priceCents / 100).toFixed(2)}</div>
+          <button class="ac-link-btn cart-savelater" onclick="acCartSaveLater(${it.productId},${it.variantId || 'null'})">Save for later</button></div>
         <div class="cart-qty"><button onclick="acCartQty(${it.productId},${it.qty - 1},${it.variantId || 'null'})" aria-label="Decrease quantity">−</button><span>${it.qty}</span><button onclick="acCartQty(${it.productId},${it.qty + 1},${it.variantId || 'null'})" aria-label="Increase quantity">+</button></div>
       </div>`).join('')}
       <button class="ac-pill-btn accent" style="width:100%;margin:6px 0 16px;" onclick="acCheckout(${c.seller.id})">Checkout · $${((c.totalCents + (c.shippingCents || 0)) / 100).toFixed(2)}${c.needsShipping && c.shippingCents ? ' <span style="opacity:.7;font-weight:600;">(incl. shipping)</span>' : ''}</button>
     `).join('');
+    body.innerHTML = cartHtml + '<div id="cartSavedSec"></div>';
+    acLoadCartSaved();
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+// ── "Saved for later" (Amazon-style): the section under the cart. Backed by the
+// same Saved-items list the heart uses, so nothing is stored twice. ──
+async function acCartSaveLater(productId, variantId) {
+  try {
+    await API.req('POST', '/api/saved-products/' + productId, {});                     // keep it
+    await API.req('POST', '/api/cart', variantId != null ? { productId, qty: 0, variantId } : { productId, qty: 0 }); // out of the cart
+    showNotif('Saved for later.');
+    acOpenCart(); acRefreshCartBadge();
+  } catch (e) { showNotif(e.message || 'Could not save it.'); }
+}
+async function acLoadCartSaved() {
+  const sec = document.getElementById('cartSavedSec'); if (!sec) return;
+  try {
+    const { listings } = await API.req('GET', '/api/saved-products');
+    if (!listings.length) { sec.innerHTML = ''; return; }
+    const inCart = new Set();
+    (AC._carts || []).forEach(c => c.items.forEach(it => inCart.add(it.productId)));
+    const rows = listings.filter(l => !inCart.has(l.id)).slice(0, 12);
+    if (!rows.length) { sec.innerHTML = ''; return; }
+    sec.innerHTML = `<div class="co-sec-h" style="margin-top:10px;">Saved for later</div>` + rows.map(l => `<div class="cart-item">
+      ${l.image ? `<div class="cart-thumb" style="background-image:url('${l.image}')"></div>` : `<div class="cart-thumb noimg">${_MKT_BOX_SVG}</div>`}
+      <div class="cart-item-main"><div class="cart-item-name">${escHtml(l.name)}</div><div class="cart-item-price">${l.soldOut ? 'Sold out' : '$' + (((l.hasVariants ? l.priceFromCents : l.priceCents) || 0) / 100).toFixed(2)}</div>
+        <span style="display:flex;gap:12px;">
+          ${l.soldOut ? '' : `<button class="ac-link-btn cart-savelater" onclick="acCartMoveBack(${l.id},${!!l.hasVariants})">Move to cart</button>`}
+          <button class="ac-link-btn cart-savelater" style="color:var(--t3);" onclick="acCartSavedRemove(${l.id})">Remove</button>
+        </span></div>
+    </div>`).join('');
+  } catch (e) { sec.innerHTML = ''; }
+}
+async function acCartMoveBack(productId, hasVariants) {
+  if (hasVariants) { closeOverlay('cartView'); acOpenListing(productId); showNotif('Choose your options to add it back.'); return; }
+  try {
+    await API.req('POST', '/api/cart', { productId, qty: 1 });
+    await API.req('DELETE', '/api/saved-products/' + productId).catch(() => {});      // it's in the cart now
+    acOpenCart(); acRefreshCartBadge();
+  } catch (e) { showNotif(e.message || 'Could not add it back.'); }
+}
+async function acCartSavedRemove(productId) {
+  try { await API.req('DELETE', '/api/saved-products/' + productId); acLoadCartSaved(); }
+  catch (e) { showNotif(e.message || 'Could not remove it.'); }
 }
 async function acCartQty(productId, qty, variantId) {
   const body = { productId, qty: Math.max(0, qty) };
