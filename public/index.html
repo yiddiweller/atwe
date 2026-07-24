@@ -4335,6 +4335,7 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .mi-label{flex:1;font-size:15px;font-weight:600;color:var(--t1);}
 .mi-time{font-size:13px;color:var(--t3);white-space:nowrap;}
 .mi-note{font-size:13px;color:var(--t3);text-align:center;padding:8px 0 4px;}
+.mi-subhead{font-size:12px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;padding:10px 0 2px;border-top:1px solid var(--b1);margin-top:6px;}
 .msg-star{display:flex;margin:2px 8px 0;width:max-content;}
 .msg-row.me .msg-star{align-self:flex-end;}
 .msg-row.team .msg-star{align-self:flex-start;}
@@ -16624,7 +16625,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1489'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1490'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -22018,7 +22019,7 @@ function acMsgMenu(id, btn) {
   show('mmStarItem', !isMine);
   // "Reply privately": only on a GROUP message from someone else — DM them 1:1.
   show('mmReplyPrivItem', AC.mode === 'group' && !isMine && !!(mm && mm.sender && mm.sender.id && mm.sender.id !== S.user?.id));
-  show('mmInfoItem', isMine && AC.mode !== 'group'); // delivery/seen info — your own DMs
+  show('mmInfoItem', isMine); // delivery/seen info — your own messages (groups: Read-by list)
   show('mmUnreactItem', !!(mm && mm.reactions && mm.reactions[String(S.user?.id)])); // only if I reacted
   // The Hide row flips to "Unhide" when the message is already concealed.
   const hideBtn = document.getElementById('mmHideItem');
@@ -22482,9 +22483,20 @@ function acMsgInfo(id) {
   const fmt = (d) => { try { const x = new Date(d); const day = (x.toDateString() === new Date().toDateString()) ? 'Today' : x.toLocaleDateString([], { month: 'short', day: 'numeric' }); return day + ' · ' + x.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch { return ''; } };
   const dbl = '<svg viewBox="0 0 24 24"><path d="M2 12.5l3.2 3.2L11 9"/><path d="M9 15.7L9.6 16.3l5.7-7"/></svg>';
   let rows = '';
-  if (m.read_at) rows += `<div class="mi-row"><span class="mi-ic seen">${dbl}</span><span class="mi-label">Seen</span><span class="mi-time">${fmt(m.read_at)}</span></div>`;
-  rows += `<div class="mi-row"><span class="mi-ic">${dbl}</span><span class="mi-label">Sent</span><span class="mi-time">${fmt(m.created_at)}</span></div>`;
-  if (!m.read_at) rows += `<div class="mi-note">Not seen yet</div>`;
+  if (AC.mode === 'group') {
+    // WhatsApp "Message info → Read by": members whose read marker has passed
+    // this message (from the loaded lastReadAt — no extra fetch).
+    rows += `<div class="mi-row"><span class="mi-ic">${dbl}</span><span class="mi-label">Sent</span><span class="mi-time">${fmt(m.created_at)}</span></div>`;
+    const readers = (AC.members || []).filter((x) => x.id !== S.user?.id && x.lastReadAt && new Date(x.lastReadAt) >= new Date(m.created_at));
+    if (readers.length) {
+      rows += `<div class="mi-subhead">Read by ${readers.length}</div>`
+        + readers.map((u) => `<div class="mi-row">${acAvatarHtml(u.name, u.avatar, 'user-avatar sm')}<span class="mi-label">${escHtml(u.name)}</span></div>`).join('');
+    } else rows += `<div class="mi-note">No one has read it yet</div>`;
+  } else {
+    if (m.read_at) rows += `<div class="mi-row"><span class="mi-ic seen">${dbl}</span><span class="mi-label">Seen</span><span class="mi-time">${fmt(m.read_at)}</span></div>`;
+    rows += `<div class="mi-row"><span class="mi-ic">${dbl}</span><span class="mi-label">Sent</span><span class="mi-time">${fmt(m.created_at)}</span></div>`;
+    if (!m.read_at) rows += `<div class="mi-note">Not seen yet</div>`;
+  }
   document.getElementById('msgInfoRows').innerHTML = rows;
   showOverlay('msgInfoOverlay');
 }
