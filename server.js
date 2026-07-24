@@ -16460,6 +16460,10 @@ app.get('/api/listings/:id', auth.requireAuth, async (req, res) => {
     if (!l || (!l.active && l.business_id !== req.user.id)) return res.status(404).json({ error: 'That listing is no longer available.' });
     const listing = mapListing(l);
     listing.saved = (await db.query('SELECT 1 FROM saved_products WHERE user_id = $1 AND product_id = $2', [req.user.id, id])).rowCount > 0;
+    // Record a "recently viewed" (not for your own listing) — best-effort, never blocks.
+    if (l.business_id !== req.user.id) {
+      db.query('INSERT INTO recent_product_views (user_id, product_id) VALUES ($1,$2) ON CONFLICT (user_id, product_id) DO UPDATE SET viewed_at = now()', [req.user.id, id]).catch(() => {});
+    }
     // "More from this seller" — a few other active listings by the same seller.
     const more = await db.query(`${LISTING_SELECT} WHERE p.business_id = $1 AND p.active = true AND p.id <> $2 ORDER BY p.created_at DESC LIMIT 8`, [l.business_id, id]);
     listing.moreFromSeller = more.rows.map(mapListing);
@@ -16489,6 +16493,17 @@ app.get('/api/saved-products', auth.requireAuth, async (req, res) => {
     const { rows } = await db.query(`${LISTING_SELECT} JOIN saved_products sp ON sp.product_id = p.id AND sp.user_id = $1 WHERE p.active = true ORDER BY sp.created_at DESC LIMIT 100`, [req.user.id]);
     res.json({ listings: rows.map((r) => Object.assign(mapListing(r), { saved: true })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your saved items.' }); }
+});
+// Recently viewed products (private, most-recent-first, active only, ≤20).
+app.get('/api/recently-viewed', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(`${LISTING_SELECT} JOIN recent_product_views rv ON rv.product_id = p.id AND rv.user_id = $1 WHERE p.active = true AND NOT u.deactivated ORDER BY rv.viewed_at DESC LIMIT 20`, [req.user.id]);
+    res.json({ listings: rows.map(mapListing) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load recently viewed.' }); }
+});
+app.delete('/api/recently-viewed', auth.requireAuth, async (req, res) => {
+  try { await db.query('DELETE FROM recent_product_views WHERE user_id = $1', [req.user.id]); res.json({ ok: true }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not clear.' }); }
 });
 app.post('/api/saved-products/:id', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);

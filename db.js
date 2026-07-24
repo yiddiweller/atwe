@@ -976,6 +976,17 @@ async function initSchema() {
       PRIMARY KEY (muter_id, muted_id)
     );
   `);
+  // Recently viewed products (Amazon/eBay-style): one row per (viewer, product),
+  // bumped to now() each time they open the listing, so a shopper can jump back.
+  await query(`
+    CREATE TABLE IF NOT EXISTS recent_product_views (
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      viewed_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, product_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS recent_product_views_idx ON recent_product_views(user_id, viewed_at DESC);`);
   await query(`
     CREATE TABLE IF NOT EXISTS close_friends (
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
