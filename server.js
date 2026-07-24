@@ -21180,7 +21180,23 @@ app.get('/api/courses', auth.requireAuth, async (req, res) => {
     }
     const { rows } = await db.query(COURSE_SELECT + ' ' + where + ' ORDER BY c.created_at DESC LIMIT 100', params);
     const enrolledIds = new Set((await db.query('SELECT course_id FROM course_enrollments WHERE user_id = $1', [req.user.id])).rows.map((r) => r.course_id));
-    res.json({ courses: rows.map((c) => mapCourse(c, req.user.id, { enrolled: enrolledIds.has(c.id) })) });
+    // My completed-lesson count per course, so a card can show a progress bar
+    // (one extra query for the whole list; done here rather than in COURSE_SELECT,
+    // whose other callers pass a COURSE id as $1, not a user id).
+    const doneBy = new Map();
+    if (enrolledIds.size) {
+      const dq = await db.query('SELECT course_id, COUNT(*)::int AS n FROM lesson_progress WHERE user_id = $1 GROUP BY course_id', [req.user.id]);
+      dq.rows.forEach((r) => doneBy.set(r.course_id, r.n));
+    }
+    res.json({ courses: rows.map((c) => {
+      const enrolled = enrolledIds.has(c.id);
+      const done = enrolled ? (doneBy.get(c.id) || 0) : 0;
+      const total = c.lesson_count || 0;
+      return mapCourse(c, req.user.id, {
+        enrolled,
+        ...(enrolled ? { doneCount: done, progress: total ? Math.round(done * 100 / total) : 0 } : {}),
+      });
+    }) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load courses.' }); }
 });
 // Create a course.
