@@ -16999,8 +16999,8 @@ app.delete('/api/saved-products/:id', auth.requireAuth, async (req, res) => {
 // listing notifies you. List / create / delete; capped per user.
 app.get('/api/saved-market-searches', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT id, q, kind, created_at FROM saved_market_searches WHERE user_id = $1 ORDER BY created_at DESC', [req.user.id]);
-    res.json({ searches: rows.map((r) => ({ id: r.id, q: r.q, kind: r.kind || null, createdAt: r.created_at })) });
+    const { rows } = await db.query('SELECT id, q, kind, notify, created_at FROM saved_market_searches WHERE user_id = $1 ORDER BY created_at DESC', [req.user.id]);
+    res.json({ searches: rows.map((r) => ({ id: r.id, q: r.q, kind: r.kind || null, notify: r.notify !== false, createdAt: r.created_at })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load.' }); }
 });
 app.post('/api/saved-market-searches', auth.requireAuth, rateLimit(30, 60000, 'mkt-search-save'), async (req, res) => {
@@ -17013,6 +17013,17 @@ app.post('/api/saved-market-searches', auth.requireAuth, rateLimit(30, 60000, 'm
     const r = await db.query('INSERT INTO saved_market_searches (user_id, q, kind) VALUES ($1,$2,$3) RETURNING id, q, kind, created_at', [req.user.id, q, kind]);
     res.status(201).json({ search: { id: r.rows[0].id, q: r.rows[0].q, kind: r.rows[0].kind || null, createdAt: r.rows[0].created_at } });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the search.' }); }
+});
+// Mute / unmute a saved marketplace search without deleting it.
+app.patch('/api/saved-market-searches/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const notify = req.body.notify !== false;
+  try {
+    const r = await db.query('UPDATE saved_market_searches SET notify = $1 WHERE id = $2 AND user_id = $3 RETURNING id', [notify, id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Saved search not found.' });
+    res.json({ ok: true, notify });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
 });
 app.delete('/api/saved-market-searches/:id', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
@@ -17050,6 +17061,7 @@ async function notifyMarketMatch(product) {
     const { rows } = await db.query(
       `SELECT DISTINCT s.user_id FROM saved_market_searches s
        WHERE s.user_id <> $1
+         AND s.notify = true
          AND (s.kind IS NULL OR s.kind = $2)
          AND $3 ILIKE '%' || s.q || '%'
          AND s.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
