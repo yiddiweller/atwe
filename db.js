@@ -1700,6 +1700,9 @@ async function initSchema() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS condition TEXT;`); // new | like_new | good | fair (physical resale)
   // "Was" price (compare-at, Shopify-style) — shown struck through when > price.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS compare_at_cents INTEGER;`);
+  // Processing time (Etsy-style "Ships in 1-3 days") — physical items.
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS processing_days_min INTEGER;`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS processing_days_max INTEGER;`);
   await query(`
     CREATE TABLE IF NOT EXISTS product_subscriptions (
       id            SERIAL PRIMARY KEY,
