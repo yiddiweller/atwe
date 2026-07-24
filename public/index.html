@@ -6878,6 +6878,7 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .mkt-card-save{width:30px;height:30px;top:8px;right:8px;}
 /* In the listing-detail modal the close button is top-right, so the save heart goes top-left. */
 .mkt-detail-imgwrap .mkt-save{left:10px;right:auto;}
+.mkt-detail-imgwrap .mkt-share{left:auto;right:10px;}
 .mkt-save svg,.mkt-card-save svg{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:2;}
 .mkt-save.on svg,.mkt-card-save.on svg{fill:var(--red);stroke:var(--red);}
 .mkt-qty{display:flex;align-items:center;justify-content:space-between;margin:10px 0;font-size:14px;color:var(--t2);}
@@ -16496,7 +16497,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1458'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1459'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -33897,6 +33898,18 @@ function acHandlePayErr(e, fallback) {
   if (e && e.body && e.body.insufficientBalance) { showNotif('Not enough wallet balance.'); acRefreshBalance(); return; }
   showNotif((e && e.message) || fallback || 'Payment failed.');
 }
+// Share a listing: native share sheet where available, else the in-app forward
+// picker (send it in a message) — same pattern as sharing a job or event.
+async function acShareListing(id) {
+  const l = (AC._listingCur && AC._listingCur.id === id) ? AC._listingCur : {};
+  const url = location.origin + '/listing/' + id;
+  const label = l.name || 'A listing';
+  if (navigator.share) {
+    try { await navigator.share({ title: label, text: label + ' — on Atwe', url }); return; }
+    catch (e) { if (e && e.name === 'AbortError') return; /* else fall through */ }
+  }
+  acFeedForwardOpen('“' + label + '” — on Atwe: ' + url);
+}
 // Listing detail ("view more") — full card with a "Visit store" link for business sellers.
 async function acOpenListing(id) {
   showOverlay('listingView');
@@ -33923,12 +33936,13 @@ async function acOpenListing(id) {
     // Variant picker (when the product has options).
     const vpick = l.hasVariants ? `<div class="vpick-h">Options</div><div class="vpick" id="mktVpick">${l.variants.map(v => `<button class="vchip${v.soldOut ? ' out' : ''}" ${v.soldOut ? 'disabled' : `onclick="acPickVariant(${v.id})"`}>${escHtml(v.label)}${v.priceCents !== l.priceCents ? ` · $${(v.priceCents / 100).toFixed(2)}` : ''}</button>`).join('')}</div>` : '';
     const heart = own ? '' : `<button class="mkt-save ${l.saved ? 'on' : ''}" id="mktSaveBtn" onclick="acToggleSave(${l.id},this)" aria-label="Save"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg></button>`;
+    const shareBtn = `<button class="mkt-save mkt-share" onclick="acShareListing(${l.id})" aria-label="Share listing"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/></svg></button>`;
     const moreSeller = (l.moreFromSeller && l.moreFromSeller.length)
       ? `<div class="co-sec-h" style="margin-top:18px;">More from ${escHtml(l.seller.name)}</div><div class="mkt-more">${l.moreFromSeller.map(m => `<div class="mkt-more-card" onclick="acOpenListing(${m.id})"><div class="mkt-more-img" style="background-image:url('${(m.images && m.images[0]) || m.image || ''}')"></div><div class="mkt-more-name">${escHtml(m.name)}</div><div class="mkt-more-price">$${((m.priceFromCents || m.priceCents) / 100).toFixed(2)}</div></div>`).join('')}</div>` : '';
     // Desktop (Engine spec): gallery LEFT / details RIGHT side by side (.lv-top is a
     // 2-col grid ≥1000px, a plain vertical stack on mobile — same content, no JS change).
     body.innerHTML = `<div class="lv-top">
-      <div class="mkt-detail-imgwrap">${img}${heart}</div>
+      <div class="mkt-detail-imgwrap">${img}${heart}${shareBtn}</div>
       <div class="lv-details">
         <div class="mkt-detail-head" onclick="closeOverlay('listingView');closeOverlay('marketplaceView');appTab('home');acGoProfile(${jsAttr(l.seller.username || '')})">
           ${acAvatarHtml(l.seller.name, l.seller.avatar, 'user-avatar sm', biz)}
