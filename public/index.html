@@ -5467,6 +5467,23 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
 .mc-deal .mc-deal-now{font-size:17px;font-weight:800;color:var(--t1);}
 .mc-deal .mc-deal-code{font-size:12.5px;color:var(--t3);margin-top:4px;}
 .mc-deal .mc-deal-code b{color:var(--t1);letter-spacing:.04em;}
+/* ── Business leads (contact-form inbox) ── */
+.lead-card{background:var(--s1);border-radius:16px;padding:14px;margin-bottom:12px;}
+.lead-card.lead-new{background:var(--s2);}
+.lead-head{display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:9px;}
+.lead-head .user-avatar{width:38px;height:38px;}
+.lead-who{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1;}
+.lead-name{font-size:14.5px;font-weight:700;color:var(--t1);display:inline-flex;align-items:center;}
+.lead-time{font-size:12px;color:var(--t3);}
+.lead-dot{width:9px;height:9px;border-radius:50%;background:var(--accent);flex-shrink:0;}
+.lead-msg{font-size:14.5px;line-height:1.5;color:var(--t1);white-space:pre-wrap;}
+.lead-contact{margin-top:8px;font-size:13px;color:var(--t2);}
+.lead-contact a{color:var(--accent);}
+.lead-actions{display:flex;gap:8px;margin-top:12px;}
+.lead-actions .ac-pill-btn{flex:0 0 auto;padding:7px 16px;}
+.pf-inq-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0 10px;cursor:pointer;}
+.pf-inq-row span{font-size:14px;color:var(--t1);}
+.pf-inq-row input{width:20px;height:20px;flex-shrink:0;accent-color:var(--accent);}
 .ac-prodtag.ac-prodtag-multi{padding-left:10px;}
 .ac-prodtag-row{align-items:center;gap:12px;}
 .cpc-thumb{width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0;}
@@ -11785,6 +11802,28 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Contact a business (lead form) -->
+<div class="overlay hidden" id="contactBizSheet" onclick="if(event.target===this)closeOverlay('contactBizSheet')">
+  <div class="rs-sheet" role="dialog" aria-modal="true" aria-label="Contact">
+    <div class="rs-grab"></div>
+    <div class="rs-title" id="inqTitle">Contact</div>
+    <div class="note-hint" id="inqIntro">Send a message and they’ll get back to you.</div>
+    <input id="inqEmail" class="note-src-input" type="email" inputmode="email" maxlength="160" placeholder="Your email" autocomplete="email" style="margin-top:0;"/>
+    <input id="inqPhone" class="note-src-input" type="tel" inputmode="tel" maxlength="40" placeholder="Your phone (optional)" autocomplete="tel"/>
+    <textarea id="inqMsg" class="note-input" rows="4" maxlength="2000" placeholder="How can they help you?" style="margin-top:10px;"></textarea>
+    <button class="ac-pill-btn accent" id="inqSendBtn" style="width:100%;margin-top:12px;" onclick="acSubmitInquiry()">Send message</button>
+  </div>
+</div>
+
+<!-- Business leads inbox -->
+<div class="overlay hidden" id="leadsView">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Leads">
+    <div class="msg-top"><button class="msg-back" onclick="closeOverlay('leadsView')" aria-label="Close"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button><span class="ac-title">Leads</span></div>
+    <div class="notes-intro">People who contacted you from your business profile.</div>
+    <div id="leadsList"></div>
+  </div>
+</div>
+
 <!-- Offer to savers: send a deal to shoppers who wishlisted a listing -->
 <div class="overlay hidden" id="offerSaversSheet" onclick="if(event.target===this)closeOverlay('offerSaversSheet')">
   <div class="rs-sheet" role="dialog" aria-modal="true" aria-label="Send a deal">
@@ -15014,6 +15053,10 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
           <option value="message">Message</option>
         </select>
         <div class="pf-hint">The one main action visitors see on your profile.</div>
+        <div class="pf-sec-label">Contact form</div>
+        <label class="pf-inq-row"><span>Show a “Contact” button on your profile</span><input type="checkbox" id="pfInquiry"/></label>
+        <input class="pf-finput" id="pfInquiryIntro" maxlength="200" placeholder="Intro line (optional) — e.g. Tell us about your project" autocomplete="off"/>
+        <div class="pf-hint">People send you a message + their contact details; you’ll see them in your Leads inbox.</div>
         <div class="pf-sec-label">Business hours</div>
         <div class="pf-hours" id="pfHours"></div>
         <div class="pf-sec-label">Location (for “near me”)</div>
@@ -15992,7 +16035,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1395'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1396'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -16139,7 +16182,7 @@ async function onAuthSuccess(token, user) {
   API.setToken(token);
   S.token = token;
   S.guest = false;
-  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null };
+  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null , inquiryEnabled: !!user.inquiryEnabled, inquiryIntro: user.inquiryIntro || null };
   S.plan  = user.plan || 'free';
   Accounts.upsert(token, user);
   try { await loadFromServer(); } catch {}
@@ -25303,7 +25346,7 @@ function notifRow(n, i) {
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
-  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item' };
+  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -25316,7 +25359,9 @@ function notifRow(n, i) {
   const isProduct = (n.type === 'restock' || n.type === 'sub_renewed' || n.type === 'sub_payment_failed' || n.type === 'sub_out_of_stock' || n.type === 'sub_paused' || n.type === 'price_drop' || n.type === 'market_match' || n.type === 'affiliate' || n.type === 'product_ad_review' || n.type === 'deal') && n.productId;
   const isTeam = n.type === 'team_invite' || n.type === 'team_joined';
   const isMoneyReq = n.type === 'money_request' || n.type === 'money_request_paid' || n.type === 'money_request_declined';
-  const go = isMoneyReq ? `acOpenMoneyRequests()`
+  const isInquiry = n.type === 'inquiry';
+  const go = isInquiry ? `acOpenLeads()`
+    : isMoneyReq ? `acOpenMoneyRequests()`
     : isMention ? (n.groupId ? `appTab('chat');acOpenGroup(${n.groupId})` : (n.postId ? `acOpenPostView(${n.postId})` : `acGoProfile('${a.username}')`))
     : isFeed ? `acOpenFeed(${n.feedId})`
     : isGroup ? (n.type === 'group_request' ? `appTab('chat');acOpenGroupRequests(${n.groupId})` : `appTab('chat');acOpenGroup(${n.groupId})`)
@@ -25331,7 +25376,7 @@ function notifRow(n, i) {
   const snip = isJob ? (n.jobTitle ? `<div class="notif-snip">${escHtml(n.jobTitle)}</div>` : '')
     : isProduct ? (n.productName ? `<div class="notif-snip">${escHtml(n.productName)}</div>` : '')
     : (!isFeed && !isGroup && !isChat && n.postBody) ? `<div class="notif-snip">${escHtml(n.postBody.slice(0, 80))}</div>` : '';
-  return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');${(isChat || isGroup || isJob || isConn || isEndorse || isRec || isProduct || isTeam || isMoneyReq || (isMention && n.groupId)) ? '' : "appTab('home');"}${go}">
+  return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');${(isChat || isGroup || isJob || isConn || isEndorse || isRec || isProduct || isTeam || isMoneyReq || isInquiry || (isMention && n.groupId)) ? '' : "appTab('home');"}${go}">
     <div class="notif-ava-wrap">${acAvatarHtml(a.name, a.avatar, 'user-avatar', acIsBiz(a))}</div>
     <div class="ac-item-main"><div class="notif-text"><b>${escHtml(a.name)}</b>${acIsVerified(a) ? vbadge(true) : ''}${acAffBadge(a)} ${verb} · <span class="notif-time">${acTime(n.created_at)}</span></div>${snip}</div>
     ${n.read ? '' : '<span class="notif-dot"></span>'}
@@ -31574,10 +31619,62 @@ function acBizSections(d, mine) {
   // Shop + Q&A are lazy-loaded after render (acLoadShop / acLoadBizQA).
   const bizArg = JSON.stringify({ id: d.user.id, name: d.user.name, username: d.user.username || '', avatar: d.user.avatar || '', headline: d.user.headline || '' }).replace(/"/g, '&quot;');
   const storeRow = `<div class="ac-section-row"><span class="ac-prof-head">Storefront</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 14px;" onclick="${mine ? 'acOpenStoreManage()' : 'acOpenStorefront(' + bizArg + ')'}">${mine ? 'Manage store' : 'Open store'}</button></div>`;
-  return acBizReviewBar(d, mine) + acBizHoursHtml(d, mine) + storeRow + `<div id="acShopBox"></div>` + bookRow + `<div class="ac-section-row"><span class="ac-prof-head">Jobs</span>${postBtn}</div>${jobsHtml}
+  // Contact / lead form: owner sees a leads inbox; a visitor sees a Contact button (when enabled).
+  const contactRow = mine
+    ? `<div class="ac-section-row"><span class="ac-prof-head">Leads</span><button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acOpenLeads()">Inbox</button></div>`
+    : (d.user.inquiryEnabled ? `<div class="ac-section-row"><span class="ac-prof-head">Contact</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 14px;" onclick="acContactBizOpen(${d.user.id}, ${jsAttr(d.user.name)}, ${jsAttr(d.user.inquiryIntro || '')})">Contact</button></div>` : '');
+  return acBizReviewBar(d, mine) + acBizHoursHtml(d, mine) + storeRow + `<div id="acShopBox"></div>` + bookRow + contactRow + `<div class="ac-section-row"><span class="ac-prof-head">Jobs</span>${postBtn}</div>${jobsHtml}
     <div class="ac-section-row"><span class="ac-prof-head">People here</span>${hereBtn}</div>${peopleHtml}
     <div class="ac-section-row" style="margin-top:14px;"><span class="ac-prof-head">Questions & answers</span></div><div id="acBizQA"></div>`;
 }
+// ── Contact / lead forms (business) ──
+function acContactBizOpen(bizId, name, intro) {
+  AC._inqBizId = bizId; AC._inqBizName = name;
+  document.getElementById('inqTitle').textContent = 'Contact ' + (name || 'business');
+  document.getElementById('inqIntro').textContent = intro || 'Send a message and they’ll get back to you.';
+  document.getElementById('inqEmail').value = (S.user && (S.user.contactEmail || S.user.email)) || '';
+  document.getElementById('inqPhone').value = (S.user && S.user.phone) || '';
+  document.getElementById('inqMsg').value = '';
+  showOverlay('contactBizSheet');
+  setTimeout(() => document.getElementById('inqMsg')?.focus(), 120);
+}
+async function acSubmitInquiry() {
+  const bizId = AC._inqBizId; if (!bizId) return;
+  const message = (document.getElementById('inqMsg').value || '').trim();
+  const email = (document.getElementById('inqEmail').value || '').trim();
+  const phone = (document.getElementById('inqPhone').value || '').trim();
+  if (message.length < 3) return showNotif('Please write a short message.');
+  const btn = document.getElementById('inqSendBtn'); const lbl = btn.textContent; btn.disabled = true; btn.textContent = 'Sending…';
+  try { await API.req('POST', '/api/business/' + bizId + '/inquiry', { email, phone, message }); closeOverlay('contactBizSheet'); showNotif('Message sent to ' + (AC._inqBizName || 'the business') + '. They’ll be in touch.'); }
+  catch (e) { showNotif(e.message || 'Could not send your message.'); btn.disabled = false; btn.textContent = lbl; }
+}
+async function acOpenLeads() {
+  showOverlay('leadsView');
+  const el = document.getElementById('leadsList'); if (el) el.innerHTML = acSkelRows(3);
+  try { const d = await API.req('GET', '/api/business/inquiries'); acRenderLeads(d.inquiries || []); }
+  catch (e) { if (el) el.innerHTML = '<div class="art-loading">Could not load your leads.</div>'; }
+}
+function acRenderLeads(list) {
+  const el = document.getElementById('leadsList'); if (!el) return;
+  if (!list.length) { el.innerHTML = '<div class="art-loading">No leads yet.<br/>When someone contacts you from your profile, they’ll show up here.</div>'; return; }
+  el.innerHTML = list.map((q) => {
+    const contact = [q.email ? `<a href="mailto:${escHtml(q.email)}" onclick="event.stopPropagation()">${escHtml(q.email)}</a>` : '', q.phone ? `<a href="tel:${escHtml(q.phone)}" onclick="event.stopPropagation()">${escHtml(q.phone)}</a>` : ''].filter(Boolean).join(' · ');
+    return `<div class="lead-card ${q.status === 'new' ? 'lead-new' : ''}">
+      <div class="lead-head" onclick="closeOverlay('leadsView');acGoProfile(${jsAttr(q.from.username || '')})">${acAvatarHtml(q.from.name, q.from.avatar, 'user-avatar', q.from.accountType === 'business')}<div class="lead-who"><span class="lead-name">${escHtml(q.from.name)}${vbadge(!!q.from.verified)}</span><span class="lead-time">${acTime(q.created_at)}</span></div>${q.status === 'new' ? '<span class="lead-dot"></span>' : ''}</div>
+      <div class="lead-msg">${escHtml(q.message)}</div>
+      ${contact ? `<div class="lead-contact">${contact}</div>` : ''}
+      <div class="lead-actions"><button class="ac-pill-btn accent" onclick="acLeadReply(${q.from.id})">Reply</button><button class="ac-pill-btn" onclick="acLeadArchive(${q.id},this)">Archive</button></div>
+    </div>`;
+  }).join('');
+  list.filter((q) => q.status === 'new').forEach((q) => API.req('PATCH', '/api/business/inquiries/' + q.id, { status: 'read' }).catch(() => {}));
+}
+function acLeadReply(fromId) { closeOverlay('leadsView'); acOpenChat(fromId); }
+async function acLeadArchive(id, btn) {
+  btn.disabled = true;
+  try { await API.req('PATCH', '/api/business/inquiries/' + id, { status: 'archived' }); const c = btn.closest('.lead-card'); if (c) c.remove(); const el = document.getElementById('leadsList'); if (el && !el.querySelector('.lead-card')) el.innerHTML = '<div class="art-loading">No leads yet.</div>'; }
+  catch (e) { btn.disabled = false; showNotif(e.message || 'Could not archive.'); }
+}
+
 const _DAYNAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 // Business hours block with a live "Open now / Closed" badge (viewer's local time).
 function acBizHoursHtml(d, mine) {
@@ -45188,6 +45285,7 @@ function openProfileEdit(focusUsername) {
   document.getElementById('pfHoursSec').classList.toggle('hidden', !isBiz);
   if (isBiz) { renderPfHours(S.user?.businessHours); _pfGeo = (S.user?.lat != null && S.user?.lng != null) ? { lat: S.user.lat, lng: S.user.lng } : undefined; acRenderPfGeo(); }
   { const cta = document.getElementById('pfCta'); if (cta) cta.value = S.user?.profileCta || ''; }
+  { const iq = document.getElementById('pfInquiry'); if (iq) iq.checked = !!S.user?.inquiryEnabled; const ii = document.getElementById('pfInquiryIntro'); if (ii) ii.value = S.user?.inquiryIntro || ''; }
   document.getElementById('unameWrap').classList.toggle('has-val', !!S.user?.username);
   const pfAv = document.getElementById('pfAvatar');
   pfAv.classList.toggle('biz', isBiz); // business → app-shaped avatar in the editor too
@@ -45281,7 +45379,7 @@ async function saveProfile() {
     note: document.getElementById('pfNote').value.trim(),
     socials,
   };
-  if (acIsBiz(S.user)) { payload.businessHours = readPfHours(); payload.profileCta = document.getElementById('pfCta')?.value || null; }
+  if (acIsBiz(S.user)) { payload.businessHours = readPfHours(); payload.profileCta = document.getElementById('pfCta')?.value || null; payload.inquiryEnabled = !!document.getElementById('pfInquiry')?.checked; payload.inquiryIntro = document.getElementById('pfInquiryIntro')?.value || ''; }
   // Geo: only send when changed (new point or explicit clear). Both keys go together.
   if (acIsBiz(S.user) && _pfGeo !== undefined) { payload.lat = _pfGeo ? _pfGeo.lat : null; payload.lng = _pfGeo ? _pfGeo.lng : null; }
   if (_pendingAvatar !== undefined) payload.avatar = _pendingAvatar;
@@ -47047,7 +47145,7 @@ const _bootDone = (async function boot() {
     if (user) {
       S.token = API.token();
       S.guest = false;
-      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null };
+      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null , inquiryEnabled: !!user.inquiryEnabled, inquiryIntro: user.inquiryIntro || null };
       S.plan  = user.plan || 'free';
       Accounts.upsert(API.token(), user);
       try { await loadFromServer(); } catch {}
