@@ -8507,6 +8507,19 @@ body.light .ac-job-tag.featured{color:var(--accent);}
 .ac-cand-star svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.8;fill:none;}
 .ac-cand-star.on{color:var(--amber);}
 .ac-cand-star.on svg{fill:var(--amber);stroke:var(--amber);}
+/* Candidate application timeline (Applied → Reviewed → Shortlisted → Hired) */
+.ajt{display:flex;align-items:flex-start;margin-top:14px;background:var(--s1);border-radius:14px;padding:14px 12px 12px;overflow-x:auto;}
+.ajt-step{display:flex;flex-direction:column;align-items:center;gap:6px;flex:0 0 auto;min-width:64px;}
+.ajt-step i{width:12px;height:12px;border-radius:50%;background:var(--s3);}
+.ajt-step.done i{background:var(--green);}
+.ajt-step.cur i{background:var(--accent);box-shadow:0 0 0 4px var(--accent-dim);}
+.ajt-step.rej i{background:var(--red);}
+.ajt-step b{font-size:11.5px;font-weight:600;color:var(--t3);white-space:nowrap;}
+.ajt-step.done b,.ajt-step.cur b{color:var(--t1);}
+.ajt-step.rej b{color:var(--red);}
+.ajt-bar{flex:1 1 22px;min-width:14px;height:2.5px;border-radius:2px;background:var(--s3);margin-top:5px;}
+.ajt-bar.on{background:var(--green);}
+.ajt-bar.on.rej{background:var(--red);}
 .ac-job-appstatus{margin-top:14px;font-size:14px;color:var(--t2);background:var(--s1);border-radius:12px;padding:11px 14px;text-align:center;}
 .ac-job-appstatus.st-shortlisted{background:rgba(48,209,88,.14);color:var(--green);}
 .ac-job-appstatus.st-hired{background:var(--accent-dim);color:var(--accent);}
@@ -16562,7 +16575,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1473'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1474'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25198,6 +25211,24 @@ async function acToggleSaveJobDetail(id) {
   catch (e) { showNotif(e.message || 'Could not save.'); }
 }
 function acJobsRefresh() { acLoadJobs(document.getElementById('tbSearchInput')?.value || ''); }
+// Candidate-side hiring-pipeline timeline (LinkedIn-style steps): Applied →
+// Reviewed → Shortlisted → Hired, with Rejected as a red terminal state at
+// however far the application got. "Reviewed"-skipping is tolerated (a poster
+// can shortlist straight from Applied — earlier steps still light up).
+function acApplTimeline(status) {
+  const steps = ['applied', 'reviewed', 'shortlisted', 'hired'];
+  const labels = { applied: 'Applied', reviewed: 'Reviewed', shortlisted: 'Shortlisted', hired: 'Hired' };
+  const rejected = status === 'rejected';
+  // Rejected shows progress through Reviewed (we don't know exactly where it stopped).
+  const at = rejected ? 1 : Math.max(0, steps.indexOf(status));
+  const nodes = steps.map((s, i) => {
+    if (rejected && i > at) return ''; // truncate the happy path after the last real step
+    const state = i < at ? 'done' : (i === at ? (rejected ? 'done' : 'cur') : '');
+    return `${i ? `<span class="ajt-bar ${i <= at ? 'on' : ''}"></span>` : ''}<span class="ajt-step ${state}"><i></i><b>${labels[s]}</b></span>`;
+  }).join('');
+  const end = rejected ? `<span class="ajt-bar on rej"></span><span class="ajt-step rej"><i></i><b>Not selected</b></span>` : '';
+  return `<div class="ajt" role="img" aria-label="Application status: ${rejected ? 'not selected' : (labels[status] || 'applied')}">${nodes}${end}</div>`;
+}
 // Repost a job (owner): a FRESH posting with the same details — new date, zero
 // applicants, boost/deadline not carried. The original stays until you delete it.
 async function acRepostJob(id) {
@@ -25276,7 +25307,7 @@ async function acOpenJob(id) {
       ${!job.mine ? `<button class="jm-btn" onclick="acOpenInterviewPrep(${job.id})"><svg viewBox="0 0 24 24" style="fill:var(--accent);"><path d="M12 2l1.9 4.6L18.5 9l-4.6 1.9L12 15.5 10.1 10.9 5.5 9l4.6-1.4z"/></svg> Prep for the interview. With Atwe AI</button>` : ''}
       ${job.poster ? `<div class="ac-job-poster" onclick="closeOverlay('jobView');acGoProfile('${job.poster.username}')">${acAvatarHtml(job.poster.name, job.poster.avatar, 'user-avatar', acIsBiz(job.poster))}<div style="min-width:0;"><div class="ac-item-name">${escHtml(job.poster.name)}</div><div class="ac-item-last">@${escHtml(job.poster.username)}${job.applicants ? ' · ' + job.applicants + ' applicant' + (job.applicants === 1 ? '' : 's') : ''}</div></div></div>` : ''}
       ${job.description ? `<div class="ac-job-desc">${escHtml(job.description)}</div>` : '<div class="ac-job-desc" style="color:var(--t3);">No description provided.</div>'}
-      ${(!job.mine && job.applied && job.applicationStatus && job.applicationStatus !== 'applied') ? `<div class="ac-job-appstatus st-${job.applicationStatus}">Your application: <b>${_statusLabel(job.applicationStatus)}</b></div>` : ''}
+      ${(!job.mine && job.applied) ? acApplTimeline(job.applicationStatus || 'applied') : ''}
       <div class="ac-job-actions">${actions}</div>
       ${job.mine ? '' : '<div id="jobSimilar"></div>'}
       ${job.mine ? '' : `<div class="ac-job-report" onclick="acOpenReport('job',${job.id},${jsAttr(job.title)})">Report this job</div>`}`;
