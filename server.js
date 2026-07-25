@@ -1369,6 +1369,7 @@ const MEDIA_KINDS = {
   'grp-meta-img':   { table: 'at_group_messages', col: 'meta', jsonKey: 'image' },
   'avatar':     { table: 'users',             col: 'avatar' },
   'banner':     { table: 'users',             col: 'banner' },
+  'prod-video': { table: 'products',          col: 'video'  },
 };
 function mediaSig(kind, id, idx) {
   return _vcrypto.createHmac('sha256', MEDIA_SECRET).update(kind + ':' + id + ':' + (idx || 0)).digest('hex').slice(0, 20);
@@ -16939,9 +16940,22 @@ function mapProduct(p, opts) {
     // Processing time ("Ships in 1–3 days") — physical only, seller-stated.
     processingDaysMin: (kind === 'physical' && typeof p.processing_days_min === 'number') ? p.processing_days_min : null,
     processingDaysMax: (kind === 'physical' && typeof p.processing_days_max === 'number') ? p.processing_days_max : null,
+    // Product video (Etsy-style, one per listing): served STRICTLY by streaming
+    // URL — selects carry only (video IS NOT NULL) AS has_video + video_ver, so
+    // multi-MB base64 never rides a list payload OR gets detoasted per row.
+    video: p.has_video ? `/api/media/prod-video/${p.id}/0/${mediaSig('prod-video', p.id, 0)}?v=${p.video_ver || 0}` : null,
   };
 }
 const PRODUCT_CONDITIONS = ['new', 'like_new', 'good', 'fair'];
+// Validate an optional product video: null clears it; a data URL must be a real
+// video (cleanMedia whitelist) under the story/feed size ceiling. undefined = bad.
+function cleanProductVideo(raw) {
+  if (raw == null || raw === '') return null;
+  const m = cleanMedia(raw);
+  if (!m || m.kind !== 'video') return undefined;
+  if (m.data.length > STORY_VIDEO_MAX_CHARS) return undefined;
+  return m.data;
+}
 // A business's products (active only for non-owners; the owner sees all + manages).
 app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
   const bid = routeId(req.params.id);
@@ -16949,7 +16963,7 @@ app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
   try {
     const owner = bid === req.user.id;
     const { rows } = await db.query(
-      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.pinned DESC, p.created_at DESC LIMIT 200`,
+      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.pinned DESC, p.created_at DESC LIMIT 200`,
       [bid]
     );
     const products = rows.map((r) => mapProduct(r, { owner }));
@@ -16982,7 +16996,7 @@ function mapListing(r) {
   });
 }
 const LISTING_SELECT = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
-  p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, ${RATING_COLS},
+  p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, ${RATING_COLS},
   u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified, u.free_ship_over_cents AS seller_free_ship_over
   FROM products p JOIN users u ON u.id = p.business_id`;
 
@@ -17062,7 +17076,7 @@ async function getSponsoredListings(viewerId, { q, kind }) {
     }
     const { rows } = await db.query(
       `SELECT pa.id AS ad_id, pa.bid_cents, pa.keywords, p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
-        p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, ${RATING_COLS},
+        p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, ${RATING_COLS},
         u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified
        FROM product_ads pa JOIN products p ON p.id = pa.product_id JOIN users u ON u.id = pa.seller_id
        WHERE ${conds.join(' AND ')} LIMIT 40`, params);
@@ -17447,7 +17461,7 @@ app.post('/api/admin/product-ads/:id/:action', auth.requirePerm('ads'), async (r
 // My own listings (any account) — for the Sell / manage surface.
 app.get('/api/my-listings', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.pinned DESC, p.created_at DESC LIMIT 300`, [req.user.id]);
+    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.pinned DESC, p.created_at DESC LIMIT 300`, [req.user.id]);
     res.json({ products: rows.map((r) => mapProduct(r, { owner: true })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your listings.' }); }
 });
@@ -17698,12 +17712,16 @@ app.post('/api/products', auth.requireAuth, rateLimit(40, 60000, 'product-add'),
   const compareAtCents = (() => { const c = Math.round(Number(req.body.compareAtCents) || 0); return (c > 0 && c <= 5000000) ? c : null; })();
   // Processing time ("Ships in 1–3 days", physical only): a 0–30-day range.
   const procDays = readProcessingDays(req.body, kind);
+  // Product video (one per listing, Etsy-style): must actually be a video, and
+  // capped at the same size ceiling as story/feed clips.
+  const video = cleanProductVideo(req.body.video);
+  if (video === undefined) return res.status(400).json({ error: 'That video could not be used — keep it under ~3.5 MB.' });
   try {
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM products WHERE business_id = $1', [req.user.id]);
     if (cnt.rows[0].n >= 300) return res.status(400).json({ error: 'You’ve reached the maximum number of products.' });
     const { rows } = await db.query(
-      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max`,
-      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, pickup, pickupLocation, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct, amenities, JSON.stringify(specs), rentalPeriod, category, condition, compareAtCents, procDays.min, procDays.max]
+      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, video, video_ver) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, (video IS NOT NULL) AS has_video, video_ver`,
+      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, pickup, pickupLocation, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct, amenities, JSON.stringify(specs), rentalPeriod, category, condition, compareAtCents, procDays.min, procDays.max, video, video ? 1 : 0]
     );
     if (rows[0].active !== false) notifyMarketMatch(rows[0]); // alert saved-search watchers
     res.status(201).json({ product: mapProduct(rows[0], { owner: true }) });
@@ -17743,12 +17761,18 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
   if ('rentalPeriod' in req.body) { vals.push(RENTAL_PERIODS.includes(req.body.rentalPeriod) ? req.body.rentalPeriod : null); fields.push(`rental_period = $${vals.length}`); }
   if ('category' in req.body) { vals.push((req.body.category || '').toString().trim().slice(0, 60) || null); fields.push(`category = $${vals.length}`); }
   if ('condition' in req.body) { vals.push(PRODUCT_CONDITIONS.includes(req.body.condition) ? req.body.condition : null); fields.push(`condition = $${vals.length}`); }
+  if ('video' in req.body) {
+    const v = cleanProductVideo(req.body.video);
+    if (v === undefined) return res.status(400).json({ error: 'That video could not be used — keep it under ~3.5 MB.' });
+    vals.push(v); fields.push(`video = $${vals.length}`);
+    fields.push(`video_ver = video_ver + 1`); // busts the immutable-cached streaming URL
+  }
   if (!fields.length) return res.json({ ok: true });
   try {
     // Snapshot the pre-edit state so we can detect a sold-out → in-stock flip and a price drop.
     const before = (await db.query('SELECT stock, variants, active, price_cents FROM products WHERE id = $1 AND business_id = $2', [id, req.user.id])).rows[0];
     vals.push(id, req.user.id);
-    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max`, vals);
+    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, (video IS NOT NULL) AS has_video, video_ver`, vals);
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
     const after = r.rows[0];
     // Back-in-stock alert: was sold-out (or hidden), now active + in stock → notify watchers.
