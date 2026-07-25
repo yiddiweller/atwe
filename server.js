@@ -1803,6 +1803,7 @@ const PUSH_VERBS = {
   sub_renewed: 'your subscription order is on its way', sub_payment_failed: 'couldn’t bill your subscription',
   sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription',
   sched_pay_failed: 'a scheduled payment couldn’t be sent',
+  rinv_paused: 'a recurring invoice was paused',
   payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review',
   ad_approved: 'approved your ad — it’s ready to pay', ad_rejected: 'reviewed your ad',
   aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation',
@@ -16332,6 +16333,143 @@ app.post('/api/invoices/:id/remind', auth.requireAuth, rateLimit(30, 60000, 'inv
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the reminder.' }); }
 });
+
+/* ─── Recurring invoices (QuickBooks/FreshBooks model) ───
+   The recurring thing is a SCHEDULE, not the invoice: each cycle spawns a normal
+   invoices row through the same insert + DM-card + notify path as a hand-sent
+   one, so pay / remind / mark-paid / cancel all work unchanged per issue. */
+const RINV_INTERVALS = PAY_INTERVALS; // 7 / 14 / 30 / 90 days — same cadences as standing payments
+function mapRecurringInvoice(r) {
+  return {
+    id: r.id, title: r.title, items: Array.isArray(r.items) ? r.items : [], amountCents: r.amount_cents,
+    note: r.note || null, intervalDays: r.interval_days, status: r.status, nextAt: r.next_at,
+    runs: r.runs, lastInvoiceId: r.last_invoice_id || null, createdAt: r.created_at,
+    customer: { id: r.customer_id, name: r.customer_name, username: r.customer_username, avatar: r.customer_avatar || null },
+  };
+}
+const RINV_SELECT = `SELECT s.*, cu.name AS customer_name, cu.username AS customer_username, cu.avatar AS customer_avatar
+  FROM recurring_invoices s JOIN users cu ON cu.id = s.customer_id`;
+// Issue one cycle of a schedule: re-check the pair is still valid, insert a
+// normal invoice, drop the pay card, notify. Returns the invoice id, or null
+// (having paused the schedule) when the relationship no longer allows billing.
+async function issueRecurringInvoice(s) {
+  const cust = (await db.query('SELECT id, username, deactivated FROM users WHERE id = $1', [s.customer_id])).rows[0];
+  const blocked = cust && cust.username && !cust.deactivated ? await blockedEither(s.issuer_id, s.customer_id) : true;
+  if (blocked) {
+    await db.query("UPDATE recurring_invoices SET status = 'paused' WHERE id = $1 AND status = 'active'", [s.id]);
+    notify(s.issuer_id, s.customer_id, 'rinv_paused');
+    return null;
+  }
+  const ins = await db.query(
+    `INSERT INTO invoices (issuer_id, customer_id, title, items, amount_cents, note) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+    [s.issuer_id, s.customer_id, s.title, s.items ? JSON.stringify(s.items) : null, s.amount_cents, s.note]
+  );
+  const id = ins.rows[0].id;
+  try {
+    if (!(await dmAllowed(s.issuer_id, s.customer_id))) throw new Error('dm-not-allowed');
+    const meta = { t: 'invoice', id, title: s.title, amountCents: s.amount_cents };
+    const m = await db.query(
+      `INSERT INTO at_messages (sender_id, recipient_id, body, meta) VALUES ($1,$2,$3,$4) RETURNING id, created_at`,
+      [s.issuer_id, s.customer_id, '', JSON.stringify(meta)]
+    );
+    const msg = { id: m.rows[0].id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null, created_at: m.rows[0].created_at, reply_to: null, forwarded: false, meta };
+    rtPush(s.customer_id, 'msg', { kind: 'dm', peerId: s.issuer_id, message: { ...msg, mine: false } });
+    rtPush(s.issuer_id, 'msg', { kind: 'dm', peerId: s.customer_id, message: { ...msg, mine: true } });
+  } catch (e) { /* the invoice still exists even if the chat card fails */ }
+  notify(s.customer_id, s.issuer_id, 'invoice');
+  await db.query('UPDATE recurring_invoices SET last_invoice_id = $2, runs = runs + 1 WHERE id = $1', [s.id, id]);
+  return id;
+}
+// Start a recurring invoice: validates like POST /api/invoices, issues the first
+// invoice immediately, and schedules the next one an interval out.
+app.post('/api/recurring-invoices', auth.requireAuth, rateLimit(15, 60000, 'rinv-create'), async (req, res) => {
+  const customerId = parseInt(req.body.customerId, 10);
+  if (!Number.isInteger(customerId)) return res.status(400).json({ error: 'Choose who to invoice.' });
+  if (customerId === req.user.id) return res.status(400).json({ error: 'You can’t invoice yourself.' });
+  const title = (req.body.title || '').toString().trim().slice(0, 140);
+  if (!title) return res.status(400).json({ error: 'Add a title for the invoice.' });
+  let items = null, amountCents;
+  if (Array.isArray(req.body.items) && req.body.items.length) {
+    items = req.body.items.map((it) => ({ description: (it && it.description || '').toString().trim().slice(0, 120), amountCents: Math.round(Number(it && it.amountCents) || 0) }))
+      .filter((it) => it.description && it.amountCents > 0).slice(0, 20);
+    amountCents = items.reduce((s, it) => s + it.amountCents, 0);
+  } else {
+    amountCents = Math.round(Number(req.body.amountCents) || 0);
+  }
+  if (!(amountCents >= 100 && amountCents <= 1000000)) return res.status(400).json({ error: 'The amount must be between $1 and $10,000.' });
+  const note = (req.body.note || '').toString().trim().slice(0, 500) || null;
+  const intervalDays = parseInt(req.body.intervalDays, 10);
+  if (!RINV_INTERVALS.includes(intervalDays)) return res.status(400).json({ error: 'Pick how often to bill.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const cust = (await db.query('SELECT id, username FROM users WHERE id = $1', [customerId])).rows[0];
+    if (!cust || !cust.username) return res.status(404).json({ error: 'Customer not found.' });
+    if (await blockedEither(req.user.id, customerId)) return res.status(403).json({ error: 'You can’t invoice this person.' });
+    const activeCount = (await db.query("SELECT COUNT(*)::int AS n FROM recurring_invoices WHERE issuer_id = $1 AND status <> 'cancelled'", [req.user.id])).rows[0].n;
+    if (activeCount >= 100) return res.status(400).json({ error: 'You have too many recurring invoices — end one first.' });
+    const ins = await db.query(
+      `INSERT INTO recurring_invoices (issuer_id, customer_id, title, items, amount_cents, note, interval_days, next_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7, now() + make_interval(days => $7)) RETURNING *`,
+      [req.user.id, customerId, title, items ? JSON.stringify(items) : null, amountCents, note, intervalDays]
+    );
+    const sched = ins.rows[0];
+    // First invoice goes out right now (the schedule handles every one after).
+    const firstId = await issueRecurringInvoice(sched);
+    const det = await db.query(RINV_SELECT + ' WHERE s.id = $1', [sched.id]);
+    res.status(201).json({ schedule: mapRecurringInvoice(det.rows[0]), firstInvoiceId: firstId });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not start the recurring invoice.' }); }
+});
+// My recurring-invoice schedules (issuer only; cancelled ones drop off the list).
+app.get('/api/recurring-invoices', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(RINV_SELECT + " WHERE s.issuer_id = $1 AND s.status <> 'cancelled' ORDER BY s.created_at DESC LIMIT 100", [req.user.id]);
+    res.json({ schedules: rows.map(mapRecurringInvoice) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load recurring invoices.' }); }
+});
+// Pause / resume (issuer only). Resuming re-schedules the next issue from now.
+app.patch('/api/recurring-invoices/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const action = req.body.action;
+  try {
+    let r;
+    if (action === 'pause') {
+      r = await db.query("UPDATE recurring_invoices SET status = 'paused' WHERE id = $1 AND issuer_id = $2 AND status = 'active' RETURNING id", [id, req.user.id]);
+    } else if (action === 'resume') {
+      r = await db.query(`UPDATE recurring_invoices SET status = 'active', next_at = now() + (interval_days || ' days')::interval
+        WHERE id = $1 AND issuer_id = $2 AND status = 'paused' RETURNING id`, [id, req.user.id]);
+    } else return res.status(400).json({ error: 'Invalid action.' });
+    if (!r.rowCount) return res.status(400).json({ error: 'That schedule can’t be changed.' });
+    res.json({ ok: true, status: action === 'pause' ? 'paused' : 'active' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the schedule.' }); }
+});
+// End a recurring invoice (issuer only). Already-issued invoices are untouched.
+app.delete('/api/recurring-invoices/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query("UPDATE recurring_invoices SET status = 'cancelled' WHERE id = $1 AND issuer_id = $2 AND status <> 'cancelled' RETURNING id", [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Schedule not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not end the schedule.' }); }
+});
+// The driver: claim due schedules forward (so overlapping ticks can never
+// double-issue), then issue each. A long outage issues ONE catch-up invoice and
+// re-anchors from now — never a pile of back-invoices.
+async function flushRecurringInvoices() {
+  if (!db.isConfigured()) return 0;
+  let n = 0;
+  const { rows } = await db.query(
+    `UPDATE recurring_invoices SET next_at = now() + (interval_days || ' days')::interval
+      WHERE status = 'active' AND next_at <= now() RETURNING *`);
+  for (const s of rows) {
+    try { if (await issueRecurringInvoice(s)) n++; }
+    catch (e) { console.error('recurring invoice', s.id, e.message); }
+  }
+  return n;
+}
+const RINV_FLUSH_MS = Math.max(10000, parseInt(process.env.RINV_FLUSH_MS, 10) || 3600000);
+registerJob('recurring_invoices', 'Recurring invoices', RINV_FLUSH_MS); setInterval(trackJob('recurring_invoices', flushRecurringInvoices), RINV_FLUSH_MS).unref?.();
 
 /* ═══════════════════════════════════════════════
    QUOTES / ESTIMATES  —  provider sends a priced

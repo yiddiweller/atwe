@@ -2791,6 +2791,28 @@ async function initSchema() {
   await query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS paid_outside BOOLEAN NOT NULL DEFAULT false;`);
   // Payment reminders on an unpaid invoice — throttled to one per 24h per invoice.
   await query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS last_reminded_at TIMESTAMPTZ;`);
+  // Recurring invoices (QuickBooks/FreshBooks model): a SCHEDULE that spawns a
+  // normal invoices row each cycle — the whole pay/notify/DM-card pipeline is
+  // reused untouched. The flusher claims next_at forward before issuing.
+  await query(`
+    CREATE TABLE IF NOT EXISTS recurring_invoices (
+      id              SERIAL PRIMARY KEY,
+      issuer_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      customer_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title           TEXT NOT NULL,
+      items           JSONB,
+      amount_cents    INTEGER NOT NULL,
+      note            TEXT,
+      interval_days   INTEGER NOT NULL,
+      status          TEXT NOT NULL DEFAULT 'active',
+      next_at         TIMESTAMPTZ NOT NULL,
+      last_invoice_id INTEGER REFERENCES invoices(id) ON DELETE SET NULL,
+      runs            INTEGER NOT NULL DEFAULT 0,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS recurring_invoices_issuer_idx ON recurring_invoices(issuer_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS recurring_invoices_due_idx ON recurring_invoices(next_at) WHERE status = 'active';`);
   // ~1h-before reminders for confirmed appointments + scheduled calls (both parties).
   await query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reminded BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE scheduled_calls ADD COLUMN IF NOT EXISTS reminded BOOLEAN NOT NULL DEFAULT false;`);
