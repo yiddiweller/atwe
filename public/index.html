@@ -8933,6 +8933,15 @@ body.reduce-motion .xp-ai::after{animation:none;}
 .rev-response{margin-top:10px;padding:9px 12px;background:var(--s3);border-radius:10px;font-size:13.5px;color:var(--t2);}
 .rev-response b{display:block;color:var(--t1);font-size:12.5px;margin-bottom:3px;}
 .rev-resp-date{margin-top:4px;font-size:11.5px;color:var(--t3);}
+/* Chat gallery: Links + Docs rows */
+.cm-linkrow{display:flex;align-items:center;gap:8px;padding:9px 2px;border-bottom:1px solid var(--b1);}
+.cm-linkrow a{flex:1;min-width:0;text-decoration:none;display:flex;flex-direction:column;gap:1px;}
+.cm-linkrow a b{color:var(--accent);font-size:14px;}
+.cm-linkrow a span{color:var(--t3);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cm-docbtn{flex:1;min-width:0;display:flex;align-items:center;gap:10px;background:none;border:none;color:var(--t1);font-family:inherit;cursor:pointer;text-align:start;padding:0;}
+.cm-docbtn svg{width:20px;height:20px;flex:0 0 auto;fill:none;stroke:var(--t2);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.cm-docbtn b{font-size:14px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cm-docbtn span{color:var(--t3);font-size:12px;flex:0 0 auto;}
 /* Private "note to self" box on someone's profile — amber = information, viewer-only. */
 .prof-mynote{margin-top:10px;background:rgba(255,187,0,.10);border-radius:12px;padding:9px 12px;font-size:12.5px;color:var(--t3);cursor:pointer;}
 .prof-mynote b{color:var(--amber);font-size:12px;}
@@ -16842,7 +16851,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1542'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1543'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -43045,23 +43054,44 @@ function acHeadAct(a) {
    photo + video, newest first, in a 3-up grid. Tap a photo → full-screen viewer;
    tap a video → jump to its bubble in the thread (playable there). View-once,
    deleted/hidden and meta-card media never appear. */
-function acOpenChatMedia() {
+function acOpenChatMedia(tab) {
   const body = document.getElementById('chatMediaBody'); if (!body) return;
-  const items = [];
+  AC._cmTab = tab || AC._cmTab || 'media';
+  const media = [], links = [], docs = [];
+  const urlRe = /https?:\/\/[^\s<>"')]+/g;
   (AC.messages || []).forEach((m) => {
     if (!m || m.pending || m.deleted || m.hidden || m.viewOnce || m.meta) return;
     const imgs = (m.images && m.images.length) ? m.images : (m.image ? [m.image] : []);
-    imgs.forEach((src, i) => items.push({ kind: 'image', src, mid: m.id, key: m.id + ':' + i }));
-    if (m.media && m.media_kind === 'video') items.push({ kind: 'video', src: m.media, mid: m.id, key: m.id + ':v' });
+    imgs.forEach((src, i) => media.push({ kind: 'image', src, mid: m.id, key: m.id + ':' + i }));
+    if (m.media && m.media_kind === 'video') media.push({ kind: 'video', src: m.media, mid: m.id, key: m.id + ':v' });
+    if (m.media && m.media_kind === 'file') docs.push({ name: m.media_name || 'Document', mid: m.id, at: m.created_at });
+    if (m.body) { const found = m.body.match(urlRe); if (found) found.slice(0, 3).forEach((u) => links.push({ url: u, mid: m.id, at: m.created_at })); }
   });
-  items.reverse(); // newest first
-  document.getElementById('chatMediaTitle').textContent = items.length ? `Media · ${items.length}` : 'Media';
-  body.innerHTML = items.length
-    ? `<div class="cm-grid">${items.map((it) => it.kind === 'image'
-        ? `<button class="cm-cell" onclick="openImageViewer(${jsAttr(it.src)}, this)" aria-label="Photo"><img src="${escHtml(it.src)}" alt="" loading="lazy" decoding="async"/></button>`
-        : `<button class="cm-cell" onclick="acChatMediaJump(${it.mid})" aria-label="Video"><video src="${escHtml(it.src)}" preload="metadata" muted playsinline></video><span class="cm-play"><svg viewBox="0 0 24 24"><polygon points="8 5 19 12 8 19"/></svg></span></button>`
-      ).join('')}</div>`
-    : '<div class="ac-empty" style="padding:30px;">No photos or videos in this chat yet.</div>';
+  media.reverse(); links.reverse(); docs.reverse(); // newest first
+  const t = AC._cmTab;
+  const tabBtn = (k, lbl, n) => `<button class="ntf-tab ${t === k ? 'on' : ''}" onclick="acOpenChatMedia('${k}')">${lbl}${n ? ' ' + n : ''}</button>`;
+  const tabs = `<div class="ntf-tabs" style="padding-left:0;">${tabBtn('media', 'Media', media.length)}${tabBtn('links', 'Links', links.length)}${tabBtn('docs', 'Docs', docs.length)}</div>`;
+  const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u.slice(0, 40); } };
+  let inner;
+  if (t === 'links') {
+    inner = links.length ? links.map((l) => `<div class="cm-linkrow">
+        <a href="${escHtml(l.url)}" target="_blank" rel="noopener noreferrer"><b>${escHtml(host(l.url))}</b><span>${escHtml(l.url.slice(0, 90))}</span></a>
+        <button class="ac-post-more" onclick="acChatMediaJump(${l.mid})" aria-label="Show in chat"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+      </div>`).join('') : '<div class="ac-empty" style="padding:30px;">No links shared in this chat yet.</div>';
+  } else if (t === 'docs') {
+    inner = docs.length ? docs.map((d2) => `<div class="cm-linkrow">
+        <button class="cm-docbtn" onclick="acChatMediaJump(${d2.mid})"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><b>${escHtml(d2.name)}</b><span>${acTime(d2.at)}</span></button>
+      </div>`).join('') : '<div class="ac-empty" style="padding:30px;">No documents in this chat yet.</div>';
+  } else {
+    inner = media.length
+      ? `<div class="cm-grid">${media.map((it) => it.kind === 'image'
+          ? `<button class="cm-cell" onclick="openImageViewer(${jsAttr(it.src)}, this)" aria-label="Photo"><img src="${escHtml(it.src)}" alt="" loading="lazy" decoding="async"/></button>`
+          : `<button class="cm-cell" onclick="acChatMediaJump(${it.mid})" aria-label="Video"><video src="${escHtml(it.src)}" preload="metadata" muted playsinline></video><span class="cm-play"><svg viewBox="0 0 24 24"><polygon points="8 5 19 12 8 19"/></svg></span></button>`
+        ).join('')}</div>`
+      : '<div class="ac-empty" style="padding:30px;">No photos or videos in this chat yet.</div>';
+  }
+  document.getElementById('chatMediaTitle').textContent = 'Media, links & docs';
+  body.innerHTML = tabs + inner;
   showOverlay('chatMediaView');
 }
 function acChatMediaJump(mid) { closeOverlay('chatMediaView'); acJumpToPinned(mid); }
