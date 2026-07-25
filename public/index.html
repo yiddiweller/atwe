@@ -7156,6 +7156,12 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .wp-swatch.wp-add span{background:none;padding:0;width:auto;color:var(--t2);}
 .wp-remove{margin-top:12px;width:100%;padding:12px;border:none;border-radius:999px;background:var(--s2);color:var(--red);font-weight:700;font-size:14px;cursor:pointer;}
 .wp-note{margin-top:10px;font-size:12px;color:var(--t3);text-align:center;}
+/* Product video: form preview + the leading gallery cell on the listing detail */
+.prod-vid-prev{position:relative;margin-top:8px;}
+.prod-vid-prev video{width:100%;max-height:220px;border-radius:14px;background:#000;display:block;}
+.prod-vid-prev button{position:absolute;top:8px;right:8px;width:26px;height:26px;border:none;border-radius:50%;background:rgba(0,0,0,.65);color:#fff;font-size:15px;line-height:1;cursor:pointer;}
+.mkt-vidcell{background:#000;display:flex;align-items:center;justify-content:center;}
+.mkt-vidcell video{width:100%;height:100%;object-fit:cover;border-radius:inherit;}
 /* Sticker / GIF picker */
 .stk-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;max-height:340px;overflow:auto;}
 .stk-emoji{font-size:30px;line-height:1;padding:8px 0;border-radius:12px;cursor:pointer;background:none;border:none;}
@@ -14400,6 +14406,9 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <div class="prod-img-pick" id="prodImgPick" onclick="document.getElementById('prodImgFile').click()"><span>＋ Add a photo</span></div>
     <input type="file" id="prodImgFile" accept="image/*" multiple class="hidden" onchange="acProdPickImg(event)"/>
     <div class="prod-thumbs" id="prodThumbs"></div>
+    <button class="ac-pill-btn" type="button" id="prodVideoBtn" onclick="document.getElementById('prodVideoFile').click()" style="width:100%;margin-top:8px;"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-inline-end:6px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;"><rect x="2" y="6" width="13" height="12" rx="2.5"/><path d="M15 10.5 22 7v10l-7-3.5"/></svg>Add a video (optional)</button>
+    <input type="file" id="prodVideoFile" accept="video/*" class="hidden" onchange="acProdPickVideo(this)"/>
+    <div id="prodVideoPrev"></div>
     <input class="jp-in" id="prodName" type="text" maxlength="140" placeholder="Product name" style="margin-top:8px;"/>
     <input class="jp-in" id="prodPrice" type="number" min="0" max="50000" step="0.01" placeholder="Price ($)" style="margin-top:8px;"/>
     <input class="jp-in" id="prodWasPrice" type="number" min="0" max="50000" step="0.01" placeholder="Was price ($, optional — shows a sale)" style="margin-top:8px;"/>
@@ -16866,7 +16875,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1545'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1546'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -35027,12 +35036,21 @@ async function acOpenListing(id) {
     const { listing: l } = await API.req('GET', '/api/listings/' + id);
     const biz = l.seller.accountType === 'business';
     AC._listingCur = l; AC._listingQty = 1; AC._listingVar = null;
-    // Image gallery: a swipe carousel + dots when there are 2+ photos.
+    // Media gallery: the product video (if any) leads the carousel, Etsy-style —
+    // muted looping autoplay with controls; photos follow. Dots cover all cells.
     const imgs = (l.images && l.images.length) ? l.images : (l.image ? [l.image] : []);
     const alt = escHtml(l.name);
-    const img = imgs.length > 1
-      ? `<div class="mkt-gallery" id="mktGallery" role="group" aria-label="${alt} photos" onscroll="acGalScroll(this)">${imgs.map((u, i) => `<div class="mkt-detail-img gal" role="img" aria-label="${alt} photo ${i + 1}" style="background-image:url('${u}')"></div>`).join('')}</div><div class="mkt-gdots">${imgs.map((_, i) => `<span class="${i === 0 ? 'on' : ''}"></span>`).join('')}</div>`
-      : (imgs.length ? `<div class="mkt-detail-img" role="img" aria-label="${alt}" style="background-image:url('${imgs[0]}')"></div>` : `<div class="mkt-detail-img noimg">${_MKT_BOX_SVG}</div>`);
+    const media = (l.video ? [{ v: l.video }] : []).concat(imgs.map(u => ({ i: u })));
+    const cell = (m, i) => m.v
+      ? `<div class="mkt-detail-img gal mkt-vidcell"><video src="${m.v}" muted autoplay loop playsinline controls preload="metadata" aria-label="${alt} video"></video></div>`
+      : `<div class="mkt-detail-img gal" role="img" aria-label="${alt} photo ${i + 1}" style="background-image:url('${m.i}')"></div>`;
+    const img = media.length > 1
+      ? `<div class="mkt-gallery" id="mktGallery" role="group" aria-label="${alt} media" onscroll="acGalScroll(this)">${media.map(cell).join('')}</div><div class="mkt-gdots">${media.map((_, i) => `<span class="${i === 0 ? 'on' : ''}"></span>`).join('')}</div>`
+      : media.length
+        ? (media[0].v
+          ? `<div class="mkt-detail-img mkt-vidcell"><video src="${media[0].v}" muted autoplay loop playsinline controls preload="metadata" aria-label="${alt} video"></video></div>`
+          : `<div class="mkt-detail-img" role="img" aria-label="${alt}" style="background-image:url('${media[0].i}')"></div>`)
+        : `<div class="mkt-detail-img noimg">${_MKT_BOX_SVG}</div>`;
     const store = biz ? `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="closeOverlay('listingView');closeOverlay('marketplaceView');appTab('home');acGoProfile(${jsAttr(l.seller.username || '')})">Visit ${escHtml(l.seller.name)}’s store</button>` : '';
     const own = l.seller.id === (S.user && S.user.id);
     // Shipping line + rating.
@@ -35072,7 +35090,7 @@ async function acOpenListing(id) {
       <div id="prodReviews" style="margin-top:16px;"></div>
       <div id="prodQA" style="margin-top:16px;"></div>
       ${moreSeller}${similar}`;
-    if (imgs.length > 1) acBindGallery();
+    if (media.length > 1) acBindGallery();
     acLoadProductReviews(l.id);
     acLoadProductQA(l.id);
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Could not load the listing.') + '</div>'; }
@@ -36102,9 +36120,13 @@ function acProductFormOpen(productId) {
   document.getElementById('prodRentalPeriod').value = (p && p.rentalPeriod) ? p.rentalPeriod : 'night';
   // Variants: edit existing ones (keep their ids so cart/order references stay valid).
   AC._prodVariants = (p && Array.isArray(p.variants)) ? p.variants.map(v => ({ id: v.id, label: v.label, priceCents: (v.priceCents != null && v.priceCents !== p.priceCents) ? v.priceCents : null, stock: v.stock })) : [];
+  // Video: for an existing product this is the streaming URL (previews fine);
+  // only a change (new pick / remove) sends `video` in the save payload.
+  AC._prodVideo = p ? (p.video || null) : null; AC._prodVideoChanged = false;
   acRenderVariants();
   acProdKindChange();
   acRenderProdThumbs();
+  acRenderProdVideo();
   acDetailsInit(p); acDetailsEditor('prodDetailsSec'); // amenities + specs
   document.getElementById('prodSaveBtn').textContent = productId ? 'Save changes' : 'Add product';
   document.getElementById('prodDeleteBtn').classList.toggle('hidden', !productId);
@@ -36125,6 +36147,28 @@ function acRenderProdThumbs() {
     + (imgs.length < 4 ? `<div class="prod-thumb add" onclick="document.getElementById('prodImgFile').click()">＋</div>` : '');
 }
 function acRemoveProdImg(i) { AC._prodImgs = (AC._prodImgs || []).filter((_, n) => n !== i); AC._prodImg = (AC._prodImgs[0]) || undefined; acRenderProdThumbs(); }
+/* ── Product video (one per listing) ── */
+function acProdPickVideo(input) {
+  const file = input.files && input.files[0]; input.value = '';
+  if (!file) return;
+  if (!/^video\//.test(file.type)) { showNotif('Pick a video file.'); return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    // Same ceiling the server enforces (~3.5 MB binary as base64 chars).
+    if (reader.result.length > 5200000) { showNotif('Keep the video under ~3.5 MB — try a shorter clip.'); return; }
+    AC._prodVideo = reader.result; AC._prodVideoChanged = true; acRenderProdVideo();
+  };
+  reader.readAsDataURL(file);
+}
+function acRemoveProdVideo() { AC._prodVideo = null; AC._prodVideoChanged = true; acRenderProdVideo(); }
+function acRenderProdVideo() {
+  const box = document.getElementById('prodVideoPrev'), btn = document.getElementById('prodVideoBtn');
+  if (!box || !btn) return;
+  if (AC._prodVideo) {
+    box.innerHTML = `<div class="prod-vid-prev"><video src="${AC._prodVideo}" muted playsinline controls preload="metadata"></video><button type="button" onclick="acRemoveProdVideo()" aria-label="Remove video">×</button></div>`;
+    btn.style.display = 'none';
+  } else { box.innerHTML = ''; btn.style.display = ''; }
+}
 /* ── Product variants editor ── */
 function acVarAdd() { AC._prodVariants = AC._prodVariants || []; if (AC._prodVariants.length >= 20) { showNotif('Up to 20 options.'); return; } AC._prodVariants.push({ label: '', priceCents: null, stock: null }); acRenderVariants(); }
 function acVarRemove(i) { AC._prodVariants = (AC._prodVariants || []).filter((_, n) => n !== i); acRenderVariants(); }
@@ -36170,6 +36214,7 @@ async function acSaveProduct() {
   } else { payload.shipFree = true; payload.shipFeeCents = 0; payload.pickup = false; payload.pickupLocation = ''; payload.subEnabled = false; payload.subDiscountPct = 0; }
   if (kind === 'rental') payload.rentalPeriod = document.getElementById('prodRentalPeriod').value === 'month' ? 'month' : 'night';
   payload.images = AC._prodImgs || [];
+  if (AC._prodVideoChanged) payload.video = AC._prodVideo; // data URL, or null to clear
   acVarSync();
   payload.variants = (AC._prodVariants || []).filter(v => (v.label || '').trim());
   if (kind === 'digital') payload.digitalContent = document.getElementById('prodDigital').value.trim();

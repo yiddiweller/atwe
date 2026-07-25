@@ -1704,6 +1704,10 @@ async function initSchema() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS condition TEXT;`); // new | like_new | good | fair (physical resale)
   // "Was" price (compare-at, Shopify-style) — shown struck through when > price.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS compare_at_cents INTEGER;`);
+  // Product video (one per listing, Etsy-style). video_ver busts the immutable-
+  // cached streaming URL when the clip is replaced; reads never inline the bytes.
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS video TEXT;`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS video_ver INTEGER NOT NULL DEFAULT 0;`);
   // Processing time (Etsy-style "Ships in 1-3 days") — physical items.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS processing_days_min INTEGER;`);
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS processing_days_max INTEGER;`);
