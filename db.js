@@ -1832,6 +1832,33 @@ async function initSchema() {
     CREATE UNIQUE INDEX IF NOT EXISTS chat_form_responses_once_idx
       ON chat_form_responses (form_id, responder_id, message_id) WHERE message_id IS NOT NULL;
   `);
+  // Every Atwe AI call, so the bill is never a surprise and it's clear which
+  // features people actually use. One row per call — small, and swept.
+  await query(`
+    CREATE TABLE IF NOT EXISTS ai_usage (
+      id          SERIAL PRIMARY KEY,
+      feature     TEXT NOT NULL,
+      model       TEXT,
+      user_id     INTEGER,
+      in_tokens   INTEGER NOT NULL DEFAULT 0,
+      out_tokens  INTEGER NOT NULL DEFAULT 0,
+      ok          BOOLEAN NOT NULL DEFAULT true,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS ai_usage_at_idx ON ai_usage (created_at DESC);
+    CREATE INDEX IF NOT EXISTS ai_usage_feature_idx ON ai_usage (feature);
+  `);
+  // A saved filter that stays live — "businesses with no posts in 30 days" is a
+  // question, not a fixed list, so the definition is stored and re-run.
+  await query(`
+    CREATE TABLE IF NOT EXISTS admin_segments (
+      id         SERIAL PRIMARY KEY,
+      name       TEXT NOT NULL,
+      filters    JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
   // Recent server errors, so a problem is visible in the dashboard instead of
   // only in the hosting logs. Bounded and swept — this is a window, not an
   // archive.
