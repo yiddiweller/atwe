@@ -20187,6 +20187,70 @@ app.post('/api/splits/:id/remind', auth.requireAuth, rateLimit(30, 60000, 'split
 // shipping = sum of each physical line's flat fee (free lines add 0). Resolves the
 // ship-to from a saved address (addressId) or an inline one (shipAddress, optionally
 // saved). Returns { ok, needsShipping, shippingCents, addr } | { ok:false, error, needAddress }.
+/* ─── International shipping zones (Etsy/eBay model) ────────────────────────
+   A seller groups countries into zones, each with its own rate and optional
+   free-over threshold. A seller with NO zones is unchanged (flat per-item fee).
+   Once zones exist they are authoritative: a destination matched by no zone
+   can't be shipped to, which is far better than taking an unfulfillable order.
+   A zone containing '*' is the catch-all ("everywhere else"). */
+function normCountry(c) { return String(c || '').trim().toUpperCase().slice(0, 60); }
+function cleanCountryList(v) {
+  const arr = Array.isArray(v) ? v : String(v || '').split(/[,\n]/);
+  const out = [];
+  for (const raw of arr) {
+    const c = normCountry(raw);
+    if (c && !out.includes(c)) out.push(c);
+    if (out.length >= 250) break;
+  }
+  return out;
+}
+async function sellerZones(sellerId) {
+  try { return (await db.query('SELECT * FROM shipping_zones WHERE seller_id = $1 ORDER BY id', [sellerId])).rows; }
+  catch { return []; }
+}
+// The zone that covers a destination: an exact country match wins over the
+// catch-all, so a specific rate is never shadowed by "everywhere else".
+function zoneFor(zones, country) {
+  const c = normCountry(country);
+  return zones.find((z) => (z.countries || []).includes(c)) || zones.find((z) => (z.countries || []).includes('*')) || null;
+}
+function mapZone(z) {
+  return { id: z.id, name: z.name, countries: z.countries || [], rateCents: z.rate_cents,
+    freeOverCents: z.free_over_cents == null ? null : z.free_over_cents, catchAll: (z.countries || []).includes('*') };
+}
+app.get('/api/shipping-zones', auth.requireAuth, async (req, res) => {
+  try {
+    const sellerId = req.query.seller ? parseInt(req.query.seller, 10) : req.user.id;
+    if (!Number.isInteger(sellerId)) return res.status(400).json({ error: 'Invalid seller.' });
+    res.json({ zones: (await sellerZones(sellerId)).map(mapZone) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your shipping zones.' }); }
+});
+app.post('/api/shipping-zones', auth.requireAuth, rateLimit(30, 60000, 'zone-add'), async (req, res) => {
+  const name = (req.body.name || '').toString().trim().slice(0, 60);
+  const countries = cleanCountryList(req.body.countries);
+  const rate = Math.round(Number(req.body.rateCents) || 0);
+  const freeOverRaw = Math.round(Number(req.body.freeOverCents) || 0);
+  if (!name) return res.status(400).json({ error: 'Name the zone (e.g. Europe).' });
+  if (!countries.length) return res.status(400).json({ error: 'List at least one country code, or * for everywhere else.' });
+  if (!(rate >= 0 && rate <= 100000)) return res.status(400).json({ error: 'Enter a shipping rate up to $1,000.' });
+  try {
+    const n = (await db.query('SELECT COUNT(*)::int AS n FROM shipping_zones WHERE seller_id = $1', [req.user.id])).rows[0].n;
+    if (n >= 20) return res.status(400).json({ error: 'You’ve reached the maximum number of zones.' });
+    const { rows } = await db.query(
+      'INSERT INTO shipping_zones (seller_id, name, countries, rate_cents, free_over_cents) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [req.user.id, name, countries, rate, freeOverRaw > 0 ? freeOverRaw : null]);
+    res.status(201).json({ zone: mapZone(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the zone.' }); }
+});
+app.delete('/api/shipping-zones/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM shipping_zones WHERE id = $1 AND seller_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the zone.' }); }
+});
 async function resolveShipping(userId, body, items, opts) {
   const needsShipping = items.some((it) => it.kind === 'physical');
   if (!needsShipping) return { ok: true, needsShipping: false, shippingCents: 0, addr: null };
@@ -20205,10 +20269,26 @@ async function resolveShipping(userId, body, items, opts) {
       if (t && Number(t.free_ship_over_cents) > 0 && Number(opts.subtotalCents) >= Number(t.free_ship_over_cents)) shippingCents = 0;
     } catch (e) { /* threshold is a perk — on a lookup error the flat fee stands */ }
   }
+  // Zone pricing: once the destination is known, a seller's zones are
+  // authoritative — they replace the flat fee, or block the sale outright when
+  // no zone covers that country.
+  const zoneApply = async (country) => {
+    if (!opts || !opts.sellerId) return { ok: true, shippingCents };
+    const zones = await sellerZones(opts.sellerId);
+    if (!zones.length) return { ok: true, shippingCents }; // no zones = unchanged behaviour
+    const z = zoneFor(zones, country);
+    if (!z) return { ok: false, error: `This seller doesn’t ship to ${normCountry(country) || 'that country'}.`, noZone: true };
+    let cents = z.rate_cents;
+    const sub = Number(opts.subtotalCents) || 0;
+    if (z.free_over_cents != null && sub >= z.free_over_cents) cents = 0;
+    return { ok: true, shippingCents: cents };
+  };
   if (body.addressId) {
     const a = (await db.query('SELECT * FROM addresses WHERE id = $1 AND user_id = $2', [parseInt(body.addressId, 10), userId])).rows[0];
     if (!a) return { ok: false, error: 'That shipping address was not found.', needAddress: true };
-    return { ok: true, needsShipping: true, shippingCents, addr: a };
+    const z = await zoneApply(a.country);
+    if (!z.ok) return { ok: false, error: z.error, noZone: true };
+    return { ok: true, needsShipping: true, shippingCents: z.shippingCents, addr: a };
   }
   if (body.shipAddress) {
     const v = readAddress(body.shipAddress);
@@ -20220,7 +20300,9 @@ async function resolveShipping(userId, body, items, opts) {
           [userId, v.value.fullName, v.value.phone, v.value.line1, v.value.line2, v.value.city, v.value.region, v.value.postal, v.value.country]);
       } catch (e) { /* saving is best-effort; the order still ships to the entered address */ }
     }
-    return { ok: true, needsShipping: true, shippingCents, addr: { full_name: v.value.fullName, phone: v.value.phone, line1: v.value.line1, line2: v.value.line2, city: v.value.city, region: v.value.region, postal: v.value.postal, country: v.value.country } };
+    const zn = await zoneApply(v.value.country);
+    if (!zn.ok) return { ok: false, error: zn.error, noZone: true };
+    return { ok: true, needsShipping: true, shippingCents: zn.shippingCents, addr: { full_name: v.value.fullName, phone: v.value.phone, line1: v.value.line1, line2: v.value.line2, city: v.value.city, region: v.value.region, postal: v.value.postal, country: v.value.country } };
   }
   return { ok: false, error: 'A shipping address is required for physical items.', needAddress: true };
 }

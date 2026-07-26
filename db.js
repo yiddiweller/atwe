@@ -1741,6 +1741,24 @@ async function initSchema() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS condition TEXT;`); // new | like_new | good | fair (physical resale)
   // "Was" price (compare-at, Shopify-style) — shown struck through when > price.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS compare_at_cents INTEGER;`);
+  // International shipping zones (Etsy/eBay model): a seller groups countries
+  // into zones with their own rate and optional free-over threshold. A seller
+  // with NO zones behaves exactly as before (one flat fee everywhere); once they
+  // define zones, a destination outside every zone simply can't be bought — far
+  // better than taking an order they can't fulfil. The catch-all zone
+  // ('*' in countries) covers "everywhere else".
+  await query(`
+    CREATE TABLE IF NOT EXISTS shipping_zones (
+      id             SERIAL PRIMARY KEY,
+      seller_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name           TEXT NOT NULL,
+      countries      TEXT[] NOT NULL DEFAULT '{}',
+      rate_cents     INTEGER NOT NULL DEFAULT 0,
+      free_over_cents INTEGER,
+      created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS shipping_zones_seller_idx ON shipping_zones(seller_id);`);
   // Listing A/B tests (Amazon "Manage Your Experiments" model): run ONE
   // experiment per listing that swaps a single field — the title or the price —
   // for half of viewers. Assignment is deterministic per viewer, so nobody sees
