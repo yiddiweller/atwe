@@ -4521,13 +4521,19 @@ function renderOpsView(){
     <div class="panel"><h3>Staff signed in</h3>
       <div class="sub">Every device with a staff or admin session. These are the accounts that can move money and read reports — sign one out the moment it shouldn't be there.</div></div>
     <div id="sessBox"><div class="ld"><span class="ab-mark"></span></div></div>
+    <div class="panel"><h3>What shipped, and when</h3>
+      <div class="sub">The first question when something breaks is "did this start after Tuesday?". Recorded automatically each time a new build starts.</div>
+      <div id="depBox" style="margin-top:10px;"></div></div>
+    <div class="panel"><h3>Is the data safe?</h3>
+      <div class="sub">What can honestly be known from here. Backups themselves are run by whoever hosts the database, not by Atwe.</div>
+      <div id="bkBox" style="margin-top:10px;"></div></div>
     <div class="panel"><h3>Audit trail</h3>
       <div class="sub">Every staff action, ever. Download it for your records, an insurer, or an auditor.</div>
       <div class="dur-row" style="margin-top:10px;">
         <button class="act accent" onclick="downloadAudit(30)">Last 30 days</button>
         <button class="act" onclick="downloadAudit(365)">Last year</button>
       </div></div>`;
-  loadErrors(); loadIdVerifications(); loadStaffSessions();
+  loadErrors(); loadIdVerifications(); loadStaffSessions(); loadDeploys(); loadBackup();
 }
 async function loadErrors(){
   const box = document.getElementById('errBox'); if (!box) return;
@@ -4551,6 +4557,62 @@ async function clearErrors(id){
 }
 /* ID verification: a name, a document type, and a decision. Atwe deliberately
    never holds the document itself. */
+/* Saved views: the filter combinations you actually use, one tap away. */
+let VIEWS = [];
+async function loadViews(){
+  try { const r = await api('GET', '/api/admin/views'); VIEWS = r.views || []; } catch (e) { VIEWS = []; }
+  renderViews();
+}
+function renderViews(){
+  const box = document.getElementById('savedViews'); if (!box) return;
+  const active = Object.entries(UFILT).some(([, v]) => v);
+  box.innerHTML = VIEWS.map((v, i) =>
+    `<button class="bc-aud" onclick="useView(${i})" title="${esc(JSON.stringify(v.filters))}">${esc(v.name)}</button>`).join('')
+    + (active ? `<button class="bc-aud" onclick="saveView()">＋ Save this view</button>` : '')
+    + (VIEWS.length ? `<button class="bc-aud" onclick="dropView()">Remove a view…</button>` : '');
+}
+function useView(i){
+  const v = VIEWS[i]; if (!v) return;
+  UFILT = { ...v.filters };
+  clearUserSel(); load();
+}
+async function saveView(){
+  const name = prompt('Call this view what?');
+  if (!name || !name.trim()) return;
+  VIEWS = VIEWS.concat([{ name: name.trim(), filters: { ...UFILT } }]).slice(0, 20);
+  try { await api('PUT', '/api/admin/views', { views: VIEWS }); notify('Saved.'); loadViews(); }
+  catch (e){ notify(e.message); }
+}
+async function dropView(){
+  const name = prompt('Which one? Type its name:\n\n' + VIEWS.map(v => v.name).join('\n'));
+  if (!name) return;
+  const next = VIEWS.filter(v => v.name.toLowerCase() !== name.trim().toLowerCase());
+  if (next.length === VIEWS.length) { notify('No view by that name.'); return; }
+  VIEWS = next;
+  try { await api('PUT', '/api/admin/views', { views: VIEWS }); loadViews(); }
+  catch (e){ notify(e.message); }
+}
+async function loadDeploys(){
+  const box = document.getElementById('depBox'); if (!box) return;
+  try {
+    const { deploys } = await api('GET', '/api/admin/deploys');
+    box.innerHTML = deploys.length ? deploys.slice(0, 15).map((d, i) => `
+      <div class="site-row"><div><div class="srt">Build ${esc(d.build)}${i === 0 ? ' <span class="pill pro">running now</span>' : ''}</div>
+        <div class="srs">${fmtDateTime(d.at)}</div></div></div>`).join('')
+      : '<div class="empty">Nothing recorded yet — the next new build will appear here.</div>';
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function loadBackup(){
+  const box = document.getElementById('bkBox'); if (!box) return;
+  try {
+    const d = await api('GET', '/api/admin/backup');
+    const stat = (v, l) => `<div class="ci-stat"><div class="ci-v">${v}</div><div class="ci-l">${esc(l)}</div></div>`;
+    box.innerHTML = `<div class="ci-row">
+        ${stat(esc(d.size), 'of data')}${stat(d.counts.users.toLocaleString(), 'members')}
+        ${stat(d.counts.orders.toLocaleString(), 'orders')}${stat(d.counts.ledger.toLocaleString(), 'money entries')}</div>
+      <div class="srs" style="margin-top:12px;">Records go back to ${fmtDate(d.oldestRecord)}. ${esc(d.note)}</div>`;
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
 async function loadIdVerifications(){
   const box = document.getElementById('idvBox'); if (!box) return;
   try {
@@ -5198,6 +5260,9 @@ function toggleUserFilter(key, val){
   UFILT[key] = UFILT[key] === val ? '' : val;
   clearUserSel(); load();
 }
+// Re-drawn after every user-list render so the "save this view" affordance
+// appears exactly when there is something worth saving.
+function afterUsersRender(){ if (typeof renderViews === 'function') renderViews(); }
 function clearUserSel(){ USEL = new Set(); syncBulkBar(); document.querySelectorAll('.usel').forEach(c => { c.checked = false; }); }
 function toggleUserSel(id, on){ if (on) USEL.add(id); else USEL.delete(id); syncBulkBar(); }
 function syncBulkBar(){
@@ -5249,6 +5314,7 @@ function renderUsersView(){
     </div>
     <div class="bc-auds" id="userFilters" style="margin:0 0 12px;">${USER_FILTERS.map(f =>
       `<button class="bc-aud${UFILT[f.key] === f.val ? ' on' : ''}" onclick="toggleUserFilter('${f.key}','${f.val}')">${esc(f.label)}</button>`).join('')}</div>
+    <div class="bc-auds" id="savedViews" style="margin:0 0 12px;"></div>
     <div id="bulkBar" class="bulk-bar" style="display:none;">
       <span id="bulkCount">0 selected</span>
       <select id="bulkTag" class="in" style="width:auto;margin:0;">${ADMIN_TAG_LIST.map(t => `<option value="${t}">${t}</option>`).join('')}</select>
@@ -5264,6 +5330,7 @@ function renderUsersView(){
   // Re-render only the list on keystroke so the input keeps focus (important on iOS).
   document.getElementById('search').oninput = (e) => { FILTER = e.target.value; renderList(); };
   renderList();
+  loadViews();
 }
 
 function renderList() {
