@@ -896,6 +896,10 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS contacts_owner_idx ON contacts(owner_id);`);
+  // Typo-tolerant search: pg_trgm when the host allows extensions (Railway
+  // does). Best-effort — everything degrades to plain ILIKE without it.
+  try { await query(`CREATE EXTENSION IF NOT EXISTS pg_trgm;`); } catch (e) { /* no privilege → fuzzy search off */ }
+  try { await query(`CREATE INDEX IF NOT EXISTS products_name_trgm_idx ON products USING gin (name gin_trgm_ops);`); } catch (e) { /* extension missing */ }
   // Smart links (bitly-lite): trackable short links a member shares anywhere.
   await query(`
     CREATE TABLE IF NOT EXISTS smart_links (
