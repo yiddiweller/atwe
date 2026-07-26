@@ -1263,6 +1263,8 @@ async function initSchema() {
   // Re-engagement push: when we last sent an away member a "what you missed" nudge
   // (rate-limited so we never spam). NULL = never nudged.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_reengaged_at TIMESTAMPTZ;`);
+  // Instant answers: business-defined FAQ pairs auto-answering matching DMs.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS faq JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   // Daily morning briefing (once per member per local day, ~8am; push-gated).
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_briefed_at TIMESTAMPTZ;`);
   // Split a bill / request money from several people. A split has a creator + a share
