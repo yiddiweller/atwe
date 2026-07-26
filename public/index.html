@@ -7214,6 +7214,14 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .shop-setup-row.done .shop-setup-chk{background:rgba(48,209,88,.18);}
 .shop-setup-chk svg{width:13px;height:13px;fill:none;stroke:var(--green);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;}
 .shop-setup-row .iset-chev{margin-inline-start:auto;}
+/* Verified-organization tiers: an honest label for the LEVEL of proof. The seal
+   stays the neutral silver one at every tier (design rule 10) — only this chip
+   distinguishes domain-verified from a staff-reviewed business. Premium is the
+   one place the reserve purple earns its keep. */
+.biz-tier-row{display:flex;justify-content:center;margin:6px 0 2px;}
+.biz-tier{font-size:12px;font-weight:700;border-radius:999px;padding:4px 11px;background:var(--s2);color:var(--t2);}
+.biz-tier-verified{color:var(--green);background:rgba(48,209,88,.13);}
+.biz-tier-premium{color:var(--purple);background:rgba(170,0,255,.14);}
 /* Workplace verification: verified-employer chips + the inline ✓ Verified tag. */
 .wv-row{display:flex;flex-wrap:wrap;gap:6px;padding:2px 0 8px;}
 .wv-chip{font-size:12px;font-weight:700;color:var(--green);background:rgba(48,209,88,.13);border-radius:999px;padding:4px 11px;}
@@ -15212,6 +15220,24 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Business verification: submit details for the Verified-business tier -->
+<div class="overlay hidden" id="bizVerifyView" onclick="if(event.target===this)closeOverlay('bizVerifyView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Verify your business">
+    <button class="sheet-close" onclick="closeOverlay('bizVerifyView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Verify your business</div>
+    <div class="ac-disc-sub" style="margin:0 0 10px;">Three levels: <b>Domain verified</b> is earned automatically when you confirm an email at your own website domain. <b>Verified business</b> is granted after our team checks your details. <b>Premium partner</b> is by invitation.</div>
+    <div id="bvTierNow" style="margin-bottom:12px;"></div>
+    <input class="jp-in" id="bvLegal" type="text" maxlength="160" placeholder="Registered legal name"/>
+    <input class="jp-in" id="bvReg" type="text" maxlength="80" placeholder="Company / registration number (optional)" style="margin-top:8px;"/>
+    <textarea class="jp-in" id="bvNote" maxlength="1000" rows="3" placeholder="Anything that helps us confirm you (optional)" style="margin-top:8px;"></textarea>
+    <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="document.getElementById('bvDocFile').click()">📎 Attach a registration document (optional)</button>
+    <input type="file" id="bvDocFile" accept="image/*" hidden onchange="acBvPickDoc(this)"/>
+    <div id="bvDocPrev"></div>
+    <div class="ac-disc-sub" style="margin:10px 2px 0;font-size:12px;">Your document is used only for this review and is deleted as soon as a decision is made.</div>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:14px;" onclick="acSubmitBizVerify()">Send for review</button>
+  </div>
+</div>
+
 <!-- Workplace verification: prove where you work with a work-email code -->
 <div class="overlay hidden" id="workVerifyView" onclick="if(event.target===this)closeOverlay('workVerifyView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Verify your workplace">
@@ -17340,7 +17366,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1581'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1582'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -17487,7 +17513,7 @@ async function onAuthSuccess(token, user) {
   API.setToken(token);
   S.token = token;
   S.guest = false;
-  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, pronouns: user.pronouns || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, specialHours: Array.isArray(user.specialHours) ? user.specialHours : [], hoursNote: user.hoursNote || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null , storeBanner: user.storeBanner || null, freeShipOverCents: user.freeShipOverCents || null, inquiryEnabled: !!user.inquiryEnabled, inquiryIntro: user.inquiryIntro || null, hiring: !!user.hiring, status: user.status || null };
+  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, businessTier: user.businessTier || 'none', headline: user.headline || null, pronouns: user.pronouns || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, specialHours: Array.isArray(user.specialHours) ? user.specialHours : [], hoursNote: user.hoursNote || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null , storeBanner: user.storeBanner || null, freeShipOverCents: user.freeShipOverCents || null, inquiryEnabled: !!user.inquiryEnabled, inquiryIntro: user.inquiryIntro || null, hiring: !!user.hiring, status: user.status || null };
   S.plan  = user.plan || 'free';
   Accounts.upsert(token, user);
   try { await loadFromServer(); } catch {}
@@ -23823,17 +23849,58 @@ function acIsBiz(u) {
 // "Verified business" badge — an app-shaped (rounded-square) check, distinct from
 // the personal blue "V". Shown next to a verified business account's name.
 const BIZ_VBADGE = '<span class="ac-bizverify" title="Verified business"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5.5"/><polyline points="8 12.3 11 15.3 16 9"/></svg></span>';
-function acBizVerifyLine(u, mine) {
-  if (u.accountType !== 'business' || u.businessVerified) return ''; // verified → badge already shows
-  if (!mine) return ''; // only the owner sees the CTA / pending state
-  if (u.businessVerifyStatus === 'pending') return '<div class="ac-bizverify-pending"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>Verification pending review</div>';
-  return '<button class="ac-pill-btn ac-bizverify-cta" onclick="acRequestBizVerify()">✓ Verify your business</button>';
+// Verified-organization tier chip: shown to EVERYONE, because the level of proof
+// is the point ('Domain verified' is a weaker claim than 'Verified business').
+// The seal itself only appears from 'verified' up.
+function acBizTierChip(u) {
+  const t = u && u.businessTier;
+  if (!u || u.accountType !== 'business' || !t || t === 'none') return '';
+  const label = u.businessTierLabel || ({ basic: 'Domain verified', verified: 'Verified business', premium: 'Premium partner' })[t];
+  return `<span class="biz-tier biz-tier-${t}">${t === 'premium' ? '★ ' : '✓ '}${escHtml(label)}</span>`;
 }
-async function acRequestBizVerify() {
+function acBizVerifyLine(u, mine) {
+  if (u.accountType !== 'business') return '';
+  const chip = acBizTierChip(u);
+  if (!mine) return chip ? `<div class="biz-tier-row">${chip}</div>` : '';
+  let next = '';
+  if (u.businessVerifyStatus === 'pending') next = '<div class="ac-bizverify-pending"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>Verification pending review</div>';
+  else if (!u.businessVerified) next = '<button class="ac-pill-btn ac-bizverify-cta" onclick="acOpenBizVerify()">✓ Verify your business</button>';
+  return (chip ? `<div class="biz-tier-row">${chip}</div>` : '') + next;
+}
+// Submit-for-review sheet: the details staff need to grant 'Verified business'.
+// The document is used only for the review and is deleted on the decision.
+function acOpenBizVerify() {
+  const u = S.user || {};
+  document.getElementById('bvLegal').value = u.name || '';
+  document.getElementById('bvReg').value = '';
+  document.getElementById('bvNote').value = '';
+  AC._bvDoc = null;
+  const p = document.getElementById('bvDocPrev'); if (p) p.innerHTML = '';
+  const tierBox = document.getElementById('bvTierNow');
+  if (tierBox) tierBox.innerHTML = acBizTierChip(u) || '<span class="ac-disc-sub">Not verified yet.</span>';
+  showOverlay('bizVerifyView');
+}
+function acBvPickDoc(input) {
+  const f = input.files && input.files[0]; input.value = '';
+  if (!f) return;
+  downscaleImage(f, (d) => {
+    AC._bvDoc = d;
+    const p = document.getElementById('bvDocPrev');
+    if (p) p.innerHTML = `<img src="${d}" alt="Submitted document preview" style="max-width:100%;border-radius:12px;margin-top:8px;"/>`;
+  });
+}
+async function acSubmitBizVerify() {
+  const body = {
+    legalName: document.getElementById('bvLegal').value.trim(),
+    regNumber: document.getElementById('bvReg').value.trim(),
+    note: document.getElementById('bvNote').value.trim(),
+  };
+  if (AC._bvDoc) body.doc = AC._bvDoc;
   try {
-    const r = await API.req('POST', '/api/business/verify');
-    if (S.user) S.user.businessVerifyStatus = r.status;
-    showNotif(r.status === 'verified' ? 'Your business is verified.' : 'Verification requested — we’ll review it shortly.');
+    const r = await API.req('POST', '/api/business/verify', body);
+    if (S.user) { S.user.businessVerifyStatus = r.status; if (r.tier) S.user.businessTier = r.tier; }
+    closeOverlay('bizVerifyView');
+    showNotif(r.status === 'verified' ? 'Your business is verified.' : 'Sent for review — we’ll get back to you.');
     acGoProfile();
   } catch (e) { showNotif(e.message || 'Could not submit your request.'); }
 }
@@ -52798,7 +52865,7 @@ const _bootDone = (async function boot() {
     if (user) {
       S.token = API.token();
       S.guest = false;
-      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, pronouns: user.pronouns || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, specialHours: Array.isArray(user.specialHours) ? user.specialHours : [], hoursNote: user.hoursNote || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null , storeBanner: user.storeBanner || null, freeShipOverCents: user.freeShipOverCents || null, inquiryEnabled: !!user.inquiryEnabled, inquiryIntro: user.inquiryIntro || null, hiring: !!user.hiring, status: user.status || null };
+      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, businessTier: user.businessTier || 'none', headline: user.headline || null, pronouns: user.pronouns || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, specialHours: Array.isArray(user.specialHours) ? user.specialHours : [], hoursNote: user.hoursNote || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null , storeBanner: user.storeBanner || null, freeShipOverCents: user.freeShipOverCents || null, inquiryEnabled: !!user.inquiryEnabled, inquiryIntro: user.inquiryIntro || null, hiring: !!user.hiring, status: user.status || null };
       S.plan  = user.plan || 'free';
       Accounts.upsert(API.token(), user);
       try { await loadFromServer(); } catch {}
