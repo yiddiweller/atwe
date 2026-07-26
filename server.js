@@ -26445,29 +26445,74 @@ app.delete('/api/admin/changelog/:id', auth.requireAdmin, async (req, res) => {
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete it.' }); }
 });
+/* ─── Broadcast audiences + push ────────────────────────────────────────────
+   A broadcast can go to a SLICE of the platform rather than everyone, and can
+   optionally fire a real push notification (phone/browser) on top of the in-app
+   message. Each audience is a plain SQL predicate so the count preview and the
+   send can never disagree — they run the same clause. */
+const BROADCAST_AUDIENCES = {
+  all:       { label: 'Everyone', where: 'TRUE' },
+  business:  { label: 'Businesses', where: `account_type = 'business'` },
+  personal:  { label: 'People (personal accounts)', where: `account_type <> 'business'` },
+  pro:       { label: 'Atwe Pro members', where: `plan = 'pro'` },
+  verified:  { label: 'Verified accounts', where: 'verified = true' },
+  inactive:  { label: 'Away 30+ days', where: `(last_login_at IS NULL OR last_login_at < now() - interval '30 days')` },
+  new:       { label: 'Joined in the last 7 days', where: `created_at > now() - interval '7 days'` },
+};
+// Every audience also excludes deactivated and demo accounts — a broadcast should
+// never reach someone who hibernated their account or a seeded demo user.
+function audienceWhere(key) {
+  const a = BROADCAST_AUDIENCES[key] || BROADCAST_AUDIENCES.all;
+  return `(${a.where}) AND NOT COALESCE(deactivated, false) AND COALESCE(is_demo, false) = false`;
+}
+app.get('/api/admin/broadcast/audiences', auth.requireAdmin, async (_req, res) => {
+  try {
+    const out = [];
+    for (const [key, a] of Object.entries(BROADCAST_AUDIENCES)) {
+      const { rows } = await db.query(`SELECT COUNT(*)::int AS n FROM users WHERE ${audienceWhere(key)}`);
+      out.push({ key, label: a.label, count: rows[0].n });
+    }
+    res.json({ audiences: out, pushEnabled: push.isConfigured() });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not count the audiences.' }); }
+});
 app.post('/api/admin/broadcast', auth.requireAdmin, rateLimit(10, 60000, 'admin-broadcast'), async (req, res) => {
   const body = (req.body.body || '').trim();
   const subject = (req.body.subject || '').trim().slice(0, 160);
   const alsoEmail = req.body.email !== false; // default on
+  const alsoPush = req.body.push === true;    // opt-in — it buzzes a real phone
+  const audience = BROADCAST_AUDIENCES[req.body.audience] ? req.body.audience : 'all';
   if (!body) return res.status(400).json({ error: 'Write a message to broadcast.' });
   if (body.length > 4000) return res.status(400).json({ error: 'That message is too long.' });
   try {
+    const where = audienceWhere(audience);
     const { rowCount } = await db.query(
       `INSERT INTO admin_messages (user_id, sender, body, read_by_user, read_by_admin)
-       SELECT id, 'admin', $1, false, true FROM users`,
+       SELECT id, 'admin', $1, false, true FROM users WHERE ${where}`,
       [body]
     );
     let emailing = 0;
     if (alsoEmail && mailer.isConfigured()) {
-      const { rows } = await db.query(`SELECT name, email FROM users WHERE email IS NOT NULL AND email <> ''`);
+      const { rows } = await db.query(`SELECT name, email FROM users WHERE email IS NOT NULL AND email <> '' AND ${where}`);
       emailing = rows.length;
       // Detached: don't hold the response open while the list sends.
       sendTeamBroadcastEmails(rows, subject || 'A message from Atwe', body).catch((e) =>
         console.error('Team broadcast failed:', e.message)
       );
     }
-    adminAudit(req, 'broadcast.send', 'broadcast', null, { subject: subject || null, recipients: rowCount, emailing });
-    res.json({ ok: true, sent: rowCount, emailing });
+    // Optional push: reaches members who installed the PWA and allowed alerts.
+    // Detached and best-effort — a push failure never fails the broadcast.
+    let pushing = 0;
+    if (alsoPush && push.isConfigured()) {
+      const { rows } = await db.query(`SELECT id FROM users WHERE ${where}`);
+      pushing = rows.length;
+      (async () => {
+        for (const u of rows) {
+          await pushToUser(u.id, { title: subject || 'Atwe', body: body.slice(0, 180), url: '/', tag: 'broadcast' }).catch(() => {});
+        }
+      })().catch(() => {});
+    }
+    adminAudit(req, 'broadcast.send', 'broadcast', null, { subject: subject || null, audience, recipients: rowCount, emailing, pushing });
+    res.json({ ok: true, sent: rowCount, emailing, pushing, audience });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not send the broadcast.' });

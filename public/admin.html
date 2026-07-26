@@ -470,7 +470,15 @@
   .bc-box input{margin-bottom:8px;font-weight:600;}
   .bc-box textarea:focus,.bc-box input:focus{border-color:var(--b3);}
   .bc-box textarea::placeholder,.bc-box input::placeholder{color:var(--t4);font-weight:400;}
-  .bc-row{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:10px;}
+  /* Broadcast audiences: pick a slice, with a live member count on each chip. */
+.bc-auds{display:flex;flex-wrap:wrap;gap:6px;}
+.bc-aud{background:var(--panel2,#1c1c1e);border:none;border-radius:999px;color:var(--muted);font-family:inherit;font-size:12.5px;font-weight:600;padding:6px 12px;cursor:pointer;}
+.bc-aud b{font-weight:800;color:var(--fg,#fff);margin-left:4px;}
+.bc-aud.on{background:var(--accent);color:#fff;}
+.bc-aud.on b{color:#fff;}
+.bc-chans{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:13px;color:var(--muted);}
+.bc-chans label{display:flex;align-items:center;gap:6px;cursor:pointer;}
+.bc-row{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:10px;}
   .bc-row .ct{color:var(--t4);font-size:12px;margin-right:auto;}
   .send-btn{background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);padding:10px 20px;font-size:13.5px;font-weight:700;transition:all .15s var(--ease);}
   .send-btn:hover{background:var(--accent);}
@@ -3291,17 +3299,24 @@ function renderSupportView(){
   // requireAdmin), so a scoped support agent sees only the request inbox.
   const broadcast = ME.superadmin ? `
     <div class="panel bc-box">
-      <h3>Email everyone</h3>
-      <div class="sub">Emails every user a branded message from team@atwe.com, and drops it in their Atwe inbox.</div>
+      <h3>Broadcast</h3>
+      <div class="sub">Drops a message in members' Atwe inbox, and optionally emails it and buzzes their phone. Pick who it goes to — the count is live.</div>
       <input id="bcSubject" maxlength="160" placeholder="Subject (e.g. What's new in Atwe)" />
-      <textarea id="bcInput" maxlength="4000" placeholder="Write your message to all users…"></textarea>
-      <div class="bc-row"><span class="ct" id="bcCount">0 / 4000</span><button class="send-btn" id="bcSend" onclick="sendBroadcast()">Send to all</button></div>
+      <textarea id="bcInput" maxlength="4000" placeholder="Write your message…"></textarea>
+      <div style="margin:10px 0 4px;font-size:12px;color:var(--muted);">Who gets it</div>
+      <div id="bcAudiences" class="bc-auds"><span class="muted">Loading audiences…</span></div>
+      <div class="bc-chans">
+        <label><input type="checkbox" id="bcEmail" checked/> Also email it</label>
+        <label id="bcPushWrap"><input type="checkbox" id="bcPush"/> Also send a push notification</label>
+      </div>
+      <div class="bc-row"><span class="ct" id="bcCount">0 / 4000</span><button class="send-btn" id="bcSend" onclick="sendBroadcast()">Send</button></div>
     </div>` : '';
   document.getElementById('content').innerHTML = broadcast + `
     <div class="ov-section">Support requests</div>
     <div id="supList"><div class="ld"><span class="ab-mark"></span></div></div>`;
   const inp = document.getElementById('bcInput');
   if (inp) inp.addEventListener('input', () => { document.getElementById('bcCount').textContent = inp.value.length + ' / 4000'; });
+  if (document.getElementById('bcAudiences')) loadBroadcastAudiences();
   loadSupport();
 }
 async function loadSupport(){
@@ -3334,13 +3349,34 @@ async function sendBroadcast(){
   const body = (inp.value || '').trim();
   const subject = (subj.value || '').trim();
   if (!body) { inp.focus(); return; }
-  if (!confirm('Send this to every user — email + in-app inbox?')) return;
+  const audLabel = (BC_AUDS.find(x => x.key === (BC_AUD || 'all')) || {});
+  if (!confirm(`Send this to ${audLabel.count != null ? audLabel.count : 'all'} member${audLabel.count === 1 ? '' : 's'} (${audLabel.label || 'Everyone'})?`)) return;
   btn.disabled = true;
   try {
-    const { sent, emailing } = await api('POST', '/api/admin/broadcast', { body, subject });
+    const audience = BC_AUD || 'all';
+    const email = document.getElementById('bcEmail').checked;
+    const pushIt = document.getElementById('bcPush').checked;
+    const { sent, emailing, pushing } = await api('POST', '/api/admin/broadcast', { body, subject, audience, email, push: pushIt });
     inp.value = ''; subj.value = ''; document.getElementById('bcCount').textContent = '0 / 4000';
-    notify('Sent to ' + sent + ' inbox' + (sent === 1 ? '' : 'es') + (emailing ? ' · emailing ' + emailing : '') + '.');
+    notify('Sent to ' + sent + ' inbox' + (sent === 1 ? '' : 'es') + (emailing ? ' · emailing ' + emailing : '') + (pushing ? ' · pushing ' + pushing : '') + '.');
   } catch (e) { notify(e.message); } finally { btn.disabled = false; }
+}
+// Broadcast audiences: each is a server-side predicate, so the count preview and
+// the send always agree. Push is opt-in and only offered when VAPID is set up.
+let BC_AUD = 'all', BC_AUDS = [];
+async function loadBroadcastAudiences(){
+  const box = document.getElementById('bcAudiences'); if (!box) return;
+  try {
+    const { audiences, pushEnabled } = await api('GET', '/api/admin/broadcast/audiences');
+    BC_AUDS = audiences;
+    box.innerHTML = audiences.map(a => `<button class="bc-aud${a.key === BC_AUD ? ' on' : ''}" onclick="pickAudience('${a.key}')">${esc(a.label)} <b>${a.count}</b></button>`).join('');
+    const pw = document.getElementById('bcPushWrap');
+    if (pw && !pushEnabled) { pw.style.opacity = '.5'; pw.title = 'Push isn\'t configured on this server'; document.getElementById('bcPush').disabled = true; }
+  } catch (e){ box.innerHTML = '<span class="muted">' + esc(e.message) + '</span>'; }
+}
+function pickAudience(k){
+  BC_AUD = k;
+  document.querySelectorAll('#bcAudiences .bc-aud').forEach((b, i) => b.classList.toggle('on', BC_AUDS[i] && BC_AUDS[i].key === k));
 }
 async function dismissSupport(id){
   if (!confirm('Dismiss this support request?')) return;
