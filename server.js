@@ -14304,6 +14304,34 @@ app.post('/api/business/team/:businessId/respond', auth.requireAuth, async (req,
 // Company analytics dashboard (LinkedIn-style) — aggregate reach for a business
 // account: profile views (+14-day trend), followers, connections, post reach,
 // and hiring stats across all their jobs. Business accounts only.
+/* ─── Restock suggestions ("what should I reorder") ───
+   Pure computation, no AI: 30-day sales velocity vs tracked stock → days of
+   cover left and a suggested reorder quantity (a 30-day cover). Only products
+   with tracked stock appear — untracked stock can't run out. */
+app.get('/api/shop/restock', auth.requireAuth, async (req, res) => {
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const { rows } = await db.query(
+      `SELECT p.id, p.name, p.stock, p.image,
+              COALESCE((SELECT SUM(oi.qty)::int FROM order_items oi JOIN orders o ON o.id = oi.order_id
+                 WHERE oi.product_id = p.id AND o.status IN ('paid','fulfilled','delivered','released','escrow','disputed')
+                   AND o.created_at > now() - interval '30 days'), 0) AS sold30
+         FROM products p
+        WHERE p.business_id = $1 AND p.active = true AND p.kind = 'physical' AND p.stock IS NOT NULL
+        ORDER BY p.name`, [req.user.id]);
+    const items = rows
+      .map(r => {
+        const velocity = r.sold30 / 30; // units per day
+        const daysLeft = velocity > 0 ? Math.floor(r.stock / velocity) : null;
+        const suggest = velocity > 0 ? Math.max(0, Math.ceil(velocity * 30 - r.stock)) : 0;
+        return { id: r.id, name: r.name, stock: r.stock, sold30: r.sold30, daysLeft, suggest, urgent: daysLeft !== null && daysLeft < 7 };
+      })
+      .filter(i => i.sold30 > 0) // no recent sales → nothing to project honestly
+      .sort((a, b) => (a.daysLeft ?? 9999) - (b.daysLeft ?? 9999));
+    res.json({ items });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build restock suggestions.' }); }
+});
+
 /* ─── Instant answers (business FAQ auto-replies) ─── */
 app.get('/api/business/faq', auth.requireAuth, async (req, res) => {
   try {
