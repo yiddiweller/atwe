@@ -552,6 +552,23 @@ async function initSchema() {
   // and a small meta blob (app build + platform) attached to a support request.
   await query(`ALTER TABLE support_requests ADD COLUMN IF NOT EXISTS category TEXT;`);
   await query(`ALTER TABLE support_requests ADD COLUMN IF NOT EXISTS meta JSONB;`);
+  // Ticket workflow: a state and an owner, so nothing sits in the inbox with
+  // everyone assuming someone else has it.
+  await query(`ALTER TABLE support_requests ADD COLUMN IF NOT EXISTS state TEXT NOT NULL DEFAULT 'open';`); // open | pending | solved
+  await query(`ALTER TABLE support_requests ADD COLUMN IF NOT EXISTS assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
+  await query(`ALTER TABLE support_requests ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;`);
+  await query(`CREATE INDEX IF NOT EXISTS support_state_idx ON support_requests(state, created_at DESC);`);
+  // Canned replies (macros): the saved answers that cover most of support.
+  await query(`
+    CREATE TABLE IF NOT EXISTS support_macros (
+      id         SERIAL PRIMARY KEY,
+      title      TEXT NOT NULL,
+      body       TEXT NOT NULL,
+      uses       INTEGER NOT NULL DEFAULT 0,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
 
   // App-wide settings (key → JSON value). Used for the site lock / private-test
   // gate (whether the site is locked, until when, and the tester access code).
