@@ -9929,6 +9929,679 @@ app.delete('/api/ai/actions', auth.requireAuth, async (req, res) => {
   try { await db.query('DELETE FROM ai_action_log WHERE user_id = $1', [req.user.id]); res.json({ ok: true }); }
   catch (err) { console.error(err); res.status(500).json({ error: 'Could not clear the log.' }); }
 });
+/* ═══════════════════════════════════════════════
+   BATCH 38 (part 2) — brand deals · samples · workflows · authentication ·
+                       currency · media studio
+═══════════════════════════════════════════════ */
+
+/* ─── Brand deals ──────────────────────────────────────────────────────────
+   A business says what it wants made and what it pays; creators pitch; one
+   gets picked. Money is NOT handled here on purpose — once a creator is
+   picked, the two of them use the invoice flow that already exists, which is
+   already escrow-aware and already has a paper trail. */
+function mapBrief(b, me) {
+  return { id: b.id, title: b.title, description: b.description, category: b.category,
+    budgetCents: b.budget_cents, deliverable: b.deliverable, minFollowers: b.min_followers,
+    status: b.status, createdAt: b.created_at,
+    business: b.biz_username ? { id: b.business_id, name: b.biz_name, username: b.biz_username, avatar: b.biz_avatar } : undefined,
+    applications: b.app_count != null ? Number(b.app_count) : undefined,
+    mine: me != null && b.business_id === me,
+    applied: b.applied === true || b.applied === 't',
+  };
+}
+const BRIEF_SELECT = `SELECT b.*, u.name AS biz_name, u.username AS biz_username, u.avatar AS biz_avatar,
+  (SELECT COUNT(*) FROM brand_applications a WHERE a.brief_id = b.id) AS app_count
+  FROM brand_briefs b JOIN users u ON u.id = b.business_id`;
+app.get('/api/briefs', auth.requireAuth, async (req, res) => {
+  const scope = ['mine', 'applied', 'open'].includes(req.query.scope) ? req.query.scope : 'open';
+  try {
+    let sql = BRIEF_SELECT, args = [req.user.id];
+    if (scope === 'mine') sql += ' WHERE b.business_id = $1';
+    else if (scope === 'applied') sql += ' WHERE b.id IN (SELECT brief_id FROM brand_applications WHERE creator_id = $1)';
+    else sql += " WHERE b.status = 'open' AND b.business_id <> $1";
+    sql += ' ORDER BY b.created_at DESC LIMIT 100';
+    const { rows } = await db.query(sql, args);
+    const mineApps = new Set((await db.query('SELECT brief_id FROM brand_applications WHERE creator_id = $1', [req.user.id])).rows.map((r) => r.brief_id));
+    res.json({ briefs: rows.map((b) => mapBrief({ ...b, applied: mineApps.has(b.id) }, req.user.id)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load briefs.' }); }
+});
+app.post('/api/briefs', auth.requireAuth, rateLimit(20, 3600000, 'brief'), async (req, res) => {
+  const title = String(req.body.title || '').trim().slice(0, 140);
+  if (!title) return res.status(400).json({ error: 'What do you want made?' });
+  try {
+    const u = (await db.query('SELECT account_type FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!u || u.account_type !== 'business') return res.status(403).json({ error: 'Only a business account can post a brief.' });
+    const budget = Number.isInteger(req.body.budgetCents) ? Math.max(0, Math.min(req.body.budgetCents, 100000000)) : null;
+    const minF = Number.isInteger(req.body.minFollowers) ? Math.max(0, req.body.minFollowers) : 0;
+    const { rows } = await db.query(
+      `INSERT INTO brand_briefs (business_id, title, description, category, budget_cents, deliverable, min_followers)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [req.user.id, title, String(req.body.description || '').trim().slice(0, 2000) || null,
+        String(req.body.category || '').trim().slice(0, 60) || null, budget,
+        String(req.body.deliverable || '').trim().slice(0, 200) || null, minF]);
+    res.status(201).json({ brief: mapBrief({ ...rows[0], app_count: 0 }, req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post the brief.' }); }
+});
+app.patch('/api/briefs/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const status = ['open', 'closed'].includes(req.body.status) ? req.body.status : null;
+  if (!status) return res.status(400).json({ error: 'Nothing to change.' });
+  try {
+    const { rowCount } = await db.query('UPDATE brand_briefs SET status = $3 WHERE id = $1 AND business_id = $2', [id, req.user.id, status]);
+    if (!rowCount) return res.status(404).json({ error: 'Brief not found.' });
+    res.json({ ok: true, status });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+app.post('/api/briefs/:id/apply', auth.requireAuth, rateLimit(30, 3600000, 'brief-apply'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  if (!(await requireHandle(req, res))) return;
+  try {
+    const b = (await db.query('SELECT * FROM brand_briefs WHERE id = $1', [id])).rows[0];
+    if (!b || b.status !== 'open') return res.status(404).json({ error: 'That brief is closed.' });
+    if (b.business_id === req.user.id) return res.status(400).json({ error: 'It’s your own brief.' });
+    if (await blockedEither(b.business_id, req.user.id)) return res.status(403).json({ error: 'You can’t apply to this.' });
+    // A follower minimum is the business's own filter; enforce it honestly
+    // rather than letting someone apply and be silently ignored.
+    if (b.min_followers > 0) {
+      const f = (await db.query('SELECT COUNT(*)::int AS n FROM follows WHERE following_id = $1', [req.user.id])).rows[0].n;
+      if (f < b.min_followers) return res.status(400).json({ error: 'This brief asks for at least ' + b.min_followers.toLocaleString() + ' followers.' });
+    }
+    const rate = Number.isInteger(req.body.rateCents) ? Math.max(0, Math.min(req.body.rateCents, 100000000)) : null;
+    const { rows } = await db.query(
+      `INSERT INTO brand_applications (brief_id, creator_id, pitch, rate_cents) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (brief_id, creator_id) DO UPDATE SET pitch = $3, rate_cents = $4 RETURNING id`,
+      [id, req.user.id, String(req.body.pitch || '').trim().slice(0, 1200) || null, rate]);
+    notify(b.business_id, req.user.id, 'brief_application');
+    res.status(201).json({ ok: true, id: rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not apply.' }); }
+});
+app.get('/api/briefs/:id/applications', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const b = (await db.query('SELECT business_id FROM brand_briefs WHERE id = $1', [id])).rows[0];
+    if (!b || b.business_id !== req.user.id) return res.status(404).json({ error: 'Brief not found.' });
+    const { rows } = await db.query(
+      `SELECT a.*, u.name, u.username, u.avatar, u.verified, u.headline,
+              (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = u.id) AS followers,
+              (SELECT COUNT(*)::int FROM posts p WHERE p.user_id = u.id) AS posts
+         FROM brand_applications a JOIN users u ON u.id = a.creator_id
+        WHERE a.brief_id = $1 ORDER BY a.created_at LIMIT 200`, [id]);
+    res.json({ applications: rows });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load applications.' }); }
+});
+app.post('/api/briefs/:id/applications/:creatorId', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id), cid = routeId(req.params.creatorId);
+  const status = ['shortlisted', 'picked', 'declined'].includes(req.body.status) ? req.body.status : null;
+  if (!Number.isInteger(id) || !Number.isInteger(cid) || !status) return res.status(400).json({ error: 'Invalid request.' });
+  try {
+    const b = (await db.query('SELECT business_id FROM brand_briefs WHERE id = $1', [id])).rows[0];
+    if (!b || b.business_id !== req.user.id) return res.status(404).json({ error: 'Brief not found.' });
+    await db.query('UPDATE brand_applications SET status = $3 WHERE brief_id = $1 AND creator_id = $2', [id, cid, status]);
+    notify(cid, req.user.id, status === 'picked' ? 'brief_picked' : 'brief_update');
+    // Picking someone closes the brief and opens a conversation — the deal
+    // itself then runs on invoices, which already handle the money safely.
+    if (status === 'picked') {
+      await db.query(`UPDATE brand_briefs SET status = 'closed' WHERE id = $1`, [id]);
+      try { await deliverDM(req.user.id, cid, 'We’d love to work with you on this. Let’s sort the details here.', []); } catch (e) {}
+    }
+    res.json({ ok: true, status });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+
+/* ─── Samples ──────────────────────────────────────────────────────────────
+   A seller sends a creator something to try. It exists because "did you post
+   it yet?" over DM is exactly how these arrangements quietly fall apart. */
+const SAMPLE_STATES = ['offered', 'accepted', 'declined', 'sent', 'posted'];
+app.get('/api/samples', auth.requireAuth, async (req, res) => {
+  const scope = req.query.scope === 'creator' ? 'creator' : 'business';
+  try {
+    const { rows } = await db.query(
+      `SELECT s.*, p.name AS product_name, p.image AS product_image,
+              b.name AS biz_name, b.username AS biz_username,
+              c.name AS creator_name, c.username AS creator_username, c.avatar AS creator_avatar
+         FROM product_samples s
+         LEFT JOIN products p ON p.id = s.product_id
+         JOIN users b ON b.id = s.business_id JOIN users c ON c.id = s.creator_id
+        WHERE s.${scope === 'creator' ? 'creator_id' : 'business_id'} = $1
+        ORDER BY s.created_at DESC LIMIT 200`, [req.user.id]);
+    res.json({ samples: rows.map((r) => ({ ...r, product_image: mediaRef(r.product_image, 'product-img', r.product_id) })), scope });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load samples.' }); }
+});
+app.post('/api/samples', auth.requireAuth, rateLimit(30, 3600000, 'sample'), async (req, res) => {
+  const creatorId = routeId(req.body.creatorId);
+  const productId = Number.isInteger(routeId(req.body.productId)) ? routeId(req.body.productId) : null;
+  if (!Number.isInteger(creatorId)) return res.status(400).json({ error: 'Who are you sending it to?' });
+  if (creatorId === req.user.id) return res.status(400).json({ error: 'That’s you.' });
+  try {
+    if (await blockedEither(req.user.id, creatorId)) return res.status(403).json({ error: 'You can’t send to this person.' });
+    if (productId) {
+      const p = (await db.query('SELECT business_id FROM products WHERE id = $1', [productId])).rows[0];
+      if (!p || p.business_id !== req.user.id) return res.status(400).json({ error: 'That isn’t one of your listings.' });
+    }
+    const { rows } = await db.query(
+      `INSERT INTO product_samples (business_id, creator_id, product_id, note) VALUES ($1,$2,$3,$4) RETURNING *`,
+      [req.user.id, creatorId, productId, String(req.body.note || '').trim().slice(0, 600) || null]);
+    notify(creatorId, req.user.id, 'sample_offer');
+    try { await deliverDM(req.user.id, creatorId, 'We’d like to send you something to try — have a look in Samples.', []); } catch (e) {}
+    res.status(201).json({ sample: rows[0] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send that.' }); }
+});
+app.patch('/api/samples/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  const status = SAMPLE_STATES.includes(req.body.status) ? req.body.status : null;
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const s = (await db.query('SELECT * FROM product_samples WHERE id = $1', [id])).rows[0];
+    if (!s) return res.status(404).json({ error: 'Not found.' });
+    const isBiz = s.business_id === req.user.id, isCreator = s.creator_id === req.user.id;
+    if (!isBiz && !isCreator) return res.status(403).json({ error: 'Not yours.' });
+    // Each side can only move it the way that makes sense: a creator accepts or
+    // declines and marks it posted; the seller marks it sent.
+    if (status) {
+      const allowed = isCreator ? ['accepted', 'declined', 'posted'] : ['sent'];
+      if (!allowed.includes(status)) return res.status(400).json({ error: 'You can’t set it to that.' });
+    }
+    const sets = ['updated_at = now()'], args = [id];
+    const put = (c, v) => { args.push(v); sets.push(`${c} = $${args.length}`); };
+    if (status) put('status', status);
+    if (isBiz && typeof req.body.carrier === 'string') put('carrier', req.body.carrier.trim().slice(0, 40) || null);
+    if (isBiz && typeof req.body.tracking === 'string') put('tracking', req.body.tracking.trim().slice(0, 80) || null);
+    // Linking the post is what closes the loop: proof the sample was used.
+    if (isCreator && Number.isInteger(routeId(req.body.postId))) {
+      const p = (await db.query('SELECT user_id FROM posts WHERE id = $1', [routeId(req.body.postId)])).rows[0];
+      if (!p || p.user_id !== req.user.id) return res.status(400).json({ error: 'That isn’t one of your posts.' });
+      put('post_id', routeId(req.body.postId));
+    }
+    await db.query(`UPDATE product_samples SET ${sets.join(', ')} WHERE id = $1`, args);
+    notify(isBiz ? s.creator_id : s.business_id, req.user.id, 'sample_update');
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+
+/* ─── Item authentication ──────────────────────────────────────────────────
+   For the things people are scared to buy from a stranger: a watch, a pair of
+   sneakers, a bag. The item goes to a checker first and only reaches the buyer
+   if it is real. Runs ON TOP of escrow — the money is already held, so a
+   failed check simply refunds it, which is the whole point. */
+const AUTH_FEE_KEY = 'authentication';
+let _authCfg = { enabled: false, feeCents: 2500, minOrderCents: 20000 };
+function normalizeAuthCfg(v) {
+  const src = (v && typeof v === 'object') ? v : {};
+  const num = (x, d, max) => { const n = Math.round(Number(x)); return Number.isFinite(n) && n >= 0 && n <= max ? n : d; };
+  return { enabled: src.enabled === true, feeCents: num(src.feeCents, 2500, 100000), minOrderCents: num(src.minOrderCents, 20000, 100000000) };
+}
+app.get('/api/authentication/config', auth.optionalAuth, (_req, res) => res.json({ config: _authCfg }));
+app.post('/api/orders/:id/authenticate', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  if (!_authCfg.enabled) return res.status(503).json({ error: 'Authentication isn’t offered yet.' });
+  try {
+    const o = (await db.query('SELECT * FROM orders WHERE id = $1', [id])).rows[0];
+    if (!o || o.buyer_id !== req.user.id) return res.status(404).json({ error: 'Order not found.' });
+    // It only means anything while the money is still held.
+    if (o.status !== 'escrow') return res.status(400).json({ error: 'Authentication is only available on a protected order, before you confirm it.' });
+    const already = await db.query("SELECT 1 FROM authentications WHERE order_id = $1 AND status NOT IN ('cancelled','failed')", [id]);
+    if (already.rowCount) return res.json({ ok: true, already: true });
+    const { rows } = await db.query(
+      `INSERT INTO authentications (order_id, buyer_id, seller_id, fee_cents) VALUES ($1,$2,$3,$4) RETURNING *`,
+      [id, o.buyer_id, o.seller_id, _authCfg.feeCents]);
+    notify(o.seller_id, req.user.id, 'auth_requested');
+    res.status(201).json({ authentication: rows[0] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not request that.' }); }
+});
+app.get('/api/admin/authentications', auth.requirePerm('moderation'), async (req, res) => {
+  const openOnly = req.query.state !== 'all';
+  try {
+    const { rows } = await db.query(
+      `SELECT a.*, o.total_cents, b.username AS buyer_username, s.username AS seller_username,
+              (SELECT string_agg(oi.name, ', ') FROM order_items oi WHERE oi.order_id = a.order_id) AS items
+         FROM authentications a
+         LEFT JOIN orders o ON o.id = a.order_id
+         LEFT JOIN users b ON b.id = a.buyer_id LEFT JOIN users s ON s.id = a.seller_id
+        ${openOnly ? "WHERE a.status IN ('requested','in_transit')" : ''}
+        ORDER BY a.created_at LIMIT 200`);
+    res.json({ authentications: rows, config: _authCfg });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load these.' }); }
+});
+app.put('/api/admin/authentication-config', auth.requireAdmin, async (req, res) => {
+  try {
+    const next = normalizeAuthCfg(req.body.config);
+    if (db.isConfigured()) await db.setSetting(AUTH_FEE_KEY, next);
+    _authCfg = next;
+    adminAudit(req, 'auth.config', 'settings', AUTH_FEE_KEY, next);
+    res.json({ ok: true, config: next });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+app.post('/api/admin/authentications/:id/:action', auth.requirePerm('moderation'), async (req, res) => {
+  const id = routeId(req.params.id);
+  const action = ['receive', 'pass', 'fail', 'cancel'].includes(req.params.action) ? req.params.action : null;
+  if (!Number.isInteger(id) || !action) return res.status(400).json({ error: 'Invalid request.' });
+  const note = String(req.body.note || '').trim().slice(0, 600) || null;
+  try {
+    const a = (await db.query('SELECT * FROM authentications WHERE id = $1', [id])).rows[0];
+    if (!a) return res.status(404).json({ error: 'Not found.' });
+    const map = { receive: 'in_transit', pass: 'passed', fail: 'failed', cancel: 'cancelled' };
+    await db.query(
+      `UPDATE authentications SET status = $2, verdict_note = COALESCE($3, verdict_note),
+              checked_by = $4, checked_at = CASE WHEN $2 IN ('passed','failed') THEN now() ELSE checked_at END
+        WHERE id = $1`, [id, map[action], note, req.user.id]);
+    // A failed check refunds the buyer through the escrow machinery that
+    // already exists — no separate money path, no chance of divergence.
+    if (action === 'fail' && a.order_id) {
+      await settleEscrow(a.order_id, 'buyer').catch((e) => console.error('[auth refund]', e.message));
+      notify(a.buyer_id, req.user.id, 'auth_failed');
+      notify(a.seller_id, req.user.id, 'auth_failed');
+    } else if (action === 'pass') {
+      notify(a.buyer_id, req.user.id, 'auth_passed');
+      notify(a.seller_id, req.user.id, 'auth_passed');
+    }
+    adminAudit(req, 'authentication.' + action, 'order', a.order_id, { note });
+    res.json({ ok: true, status: map[action] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+
+/* ─── Show prices in the money someone thinks in ───────────────────────────
+   DISPLAY only, and labelled as such. Every amount is still charged in the
+   platform's own currency — pretending otherwise, without a real FX provider
+   and a settlement story, would be lying to people about what they are paying. */
+const CURRENCIES = [
+  { code: 'USD', symbol: '$', name: 'US dollar' },
+  { code: 'GBP', symbol: '£', name: 'British pound' },
+  { code: 'EUR', symbol: '€', name: 'Euro' },
+  { code: 'CAD', symbol: 'CA$', name: 'Canadian dollar' },
+  { code: 'AUD', symbol: 'A$', name: 'Australian dollar' },
+  { code: 'INR', symbol: '₹', name: 'Indian rupee' },
+  { code: 'NGN', symbol: '₦', name: 'Nigerian naira' },
+  { code: 'JPY', symbol: '¥', name: 'Japanese yen' },
+  { code: 'BRL', symbol: 'R$', name: 'Brazilian real' },
+  { code: 'ZAR', symbol: 'R', name: 'South African rand' },
+];
+const CURRENCY_CODES = CURRENCIES.map((c) => c.code);
+// Rates come from an env-configured JSON map, or none at all. No made-up
+// numbers: with nothing configured, only the base currency is offered.
+function fxRates() {
+  try {
+    const raw = process.env.FX_RATES ? JSON.parse(process.env.FX_RATES) : null;
+    if (!raw || typeof raw !== 'object') return null;
+    const out = {};
+    for (const [k, v] of Object.entries(raw)) {
+      const n = Number(v);
+      if (CURRENCY_CODES.includes(k) && Number.isFinite(n) && n > 0) out[k] = n;
+    }
+    return Object.keys(out).length ? out : null;
+  } catch (e) { return null; }
+}
+app.get('/api/currency', auth.optionalAuth, async (req, res) => {
+  const rates = fxRates();
+  let mine = null;
+  if (req.user && db.isConfigured()) {
+    try { mine = (await db.query('SELECT display_currency FROM users WHERE id = $1', [req.user.id])).rows[0]?.display_currency || null; }
+    catch (e) { mine = null; }
+  }
+  res.json({
+    base: 'USD',
+    // Only offer what we can actually convert.
+    currencies: CURRENCIES.filter((c) => c.code === 'USD' || (rates && rates[c.code])),
+    rates: rates || {}, mine, configured: !!rates,
+  });
+});
+app.put('/api/currency', auth.requireAuth, async (req, res) => {
+  const code = String(req.body.currency || '').toUpperCase();
+  const rates = fxRates();
+  if (code && code !== 'USD' && !(rates && rates[code])) return res.status(400).json({ error: 'That currency isn’t available yet.' });
+  try {
+    await db.query('UPDATE users SET display_currency = $2 WHERE id = $1', [req.user.id, code && code !== 'USD' ? code : null]);
+    res.json({ ok: true, currency: code || 'USD' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+
+/* ─── Media studio ─────────────────────────────────────────────────────────
+   A creator's work and what it earns, in one place. Aggregates what already
+   exists rather than inventing a parallel set of numbers. */
+app.get('/api/media-studio', auth.requireAuth, async (req, res) => {
+  const me = req.user.id;
+  const q = (sql, args) => db.query(sql, args).then((r) => r.rows).catch(() => []);
+  try {
+    const [content, reach, money, top, samples, briefs] = await Promise.all([
+      q(`SELECT
+           (SELECT COUNT(*)::int FROM posts WHERE user_id=$1 AND parent_id IS NULL) AS posts,
+           (SELECT COUNT(*)::int FROM feed_posts WHERE user_id=$1) AS videos,
+           (SELECT COUNT(*)::int FROM series WHERE creator_id=$1) AS series,
+           (SELECT COUNT(*)::int FROM courses WHERE creator_id=$1) AS courses`, [me]),
+      q(`SELECT
+           (SELECT COUNT(*)::bigint FROM post_views v JOIN posts p ON p.id=v.post_id WHERE p.user_id=$1) AS views,
+           (SELECT COUNT(*)::bigint FROM post_likes l JOIN posts p ON p.id=l.post_id WHERE p.user_id=$1) AS likes,
+           (SELECT COUNT(*)::int FROM follows WHERE following_id=$1) AS followers`, [me]),
+      q(`SELECT
+           (SELECT COALESCE(SUM(amount_cents),0)::bigint FROM creator_payouts WHERE user_id=$1 AND status='paid') AS revshare,
+           (SELECT COALESCE(SUM(paid_cents),0)::bigint FROM series_access sa JOIN series s ON s.id=sa.series_id WHERE s.creator_id=$1) AS series_sales,
+           (SELECT COALESCE(SUM(amount_cents),0)::bigint FROM tips WHERE to_id=$1) AS tips,
+           (SELECT COUNT(*)::int FROM creator_subs WHERE creator_id=$1 AND status='active') AS subscribers`, [me]),
+      q(`SELECT p.id, left(p.body,80) AS body,
+                (SELECT COUNT(*)::int FROM post_views v WHERE v.post_id=p.id) AS views,
+                (SELECT COUNT(*)::int FROM post_likes l WHERE l.post_id=p.id) AS likes
+           FROM posts p WHERE p.user_id=$1 AND p.parent_id IS NULL
+          ORDER BY views DESC LIMIT 5`, [me]),
+      q(`SELECT COUNT(*)::int AS n FROM product_samples WHERE creator_id=$1 AND status IN ('offered','accepted','sent')`, [me]),
+      q(`SELECT COUNT(*)::int AS n FROM brand_applications WHERE creator_id=$1 AND status IN ('applied','shortlisted')`, [me]),
+    ]);
+    const m = money[0] || {};
+    res.json({
+      content: content[0] || {}, reach: reach[0] || {},
+      money: {
+        revshareCents: Number(m.revshare || 0),
+        seriesCents: Number(m.series_sales || 0),
+        tipsCents: Number(m.tips || 0),
+        subscribers: m.subscribers || 0,
+        totalCents: Number(m.revshare || 0) + Number(m.series_sales || 0) + Number(m.tips || 0),
+      },
+      topPosts: top,
+      waiting: { samples: (samples[0] || {}).n || 0, briefs: (briefs[0] || {}).n || 0 },
+      revShareOn: _revShare.enabled,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your studio.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   BATCH 38 — paying creators, matching them to brands, and trust
+═══════════════════════════════════════════════ */
+
+/* ─── Creator revenue share ────────────────────────────────────────────────
+   Atwe earns from ads. The people whose posts carried those ads should see
+   some of it. Deliberately explainable rather than clever: take a fixed share
+   of the month's AD revenue, split it across creators by how much genuine
+   attention their work got that month, and show every creator the same
+   arithmetic. A payout is computed into a row FIRST and paid separately, so it
+   can be looked at, questioned, and never accidentally paid twice. */
+const REVSHARE_KEY = 'revenue_share';
+let _revShare = { enabled: false, poolPct: 50, minPayoutCents: 500 };
+function normalizeRevShare(v) {
+  const src = (v && typeof v === 'object') ? v : {};
+  let pct = Math.round(Number(src.poolPct));
+  if (!Number.isFinite(pct) || pct < 0 || pct > 90) pct = 50;
+  let min = Math.round(Number(src.minPayoutCents));
+  if (!Number.isFinite(min) || min < 0) min = 500;
+  return { enabled: src.enabled === true, poolPct: pct, minPayoutCents: Math.min(min, 100000) };
+}
+function periodKey(d) { const x = d ? new Date(d) : new Date(); return x.toISOString().slice(0, 7); }
+function periodBounds(period) {
+  const [y, m] = String(period).split('-').map(Number);
+  const from = new Date(Date.UTC(y, m - 1, 1));
+  const to = new Date(Date.UTC(y, m, 1));
+  return { from: from.toISOString(), to: to.toISOString() };
+}
+/* Work out the month, without paying anything. Returns the pool, every
+   creator's share, and the arithmetic behind it. */
+async function computeRevenueShare(period) {
+  const { from, to } = periodBounds(period);
+  // Only AD money funds this — an order or a subscription is somebody else's
+  // revenue, not the platform's to share.
+  const pool = (await db.query(
+    `SELECT COALESCE(SUM(amount_cents),0)::bigint AS n FROM company_revenue
+      WHERE source IN ('ad','promote','boost','product_ad') AND amount_cents > 0
+        AND created_at >= $1 AND created_at < $2`, [from, to])).rows[0];
+  const adRevenue = Number(pool.n || 0);
+  const poolCents = Math.floor(adRevenue * (_revShare.poolPct / 100));
+  // Attention that month: views weigh 1, a like/repost/reply weighs 10 —
+  // somebody choosing to engage is worth far more than a scroll past.
+  const { rows } = await db.query(
+    `SELECT p.user_id,
+            COUNT(v.post_id)::bigint AS views,
+            (SELECT COUNT(*) FROM post_likes l JOIN posts p2 ON p2.id = l.post_id
+              WHERE p2.user_id = p.user_id AND l.created_at >= $1 AND l.created_at < $2)::bigint AS likes
+       FROM posts p
+       LEFT JOIN post_views v ON v.post_id = p.id AND v.viewed_at >= $1 AND v.viewed_at < $2
+      WHERE p.created_at >= ($1::timestamptz - interval '90 days')
+      GROUP BY p.user_id`, [from, to]);
+  const scored = rows.map((r) => ({
+    userId: r.user_id, views: Number(r.views || 0), engagements: Number(r.likes || 0),
+    score: Number(r.views || 0) + Number(r.likes || 0) * 10,
+  })).filter((r) => r.score > 0);
+  const total = scored.reduce((a, r) => a + r.score, 0);
+  const lines = scored.map((r) => {
+    const sharePct = total ? (r.score / total) * 100 : 0;
+    return { ...r, sharePct: Math.round(sharePct * 100) / 100,
+      amountCents: total ? Math.floor(poolCents * (r.score / total)) : 0 };
+  }).sort((a, b) => b.amountCents - a.amountCents);
+  return { period, adRevenueCents: adRevenue, poolCents, poolPct: _revShare.poolPct,
+    minPayoutCents: _revShare.minPayoutCents, creators: lines, totalScore: total };
+}
+app.get('/api/admin/revenue-share', auth.requirePerm('revenue'), async (req, res) => {
+  const period = /^\d{4}-\d{2}$/.test(req.query.period) ? req.query.period : periodKey(new Date(Date.now() - 86400000));
+  try {
+    const preview = await computeRevenueShare(period);
+    const saved = (await db.query(
+      `SELECT c.*, u.name, u.username FROM creator_payouts c LEFT JOIN users u ON u.id = c.user_id
+        WHERE c.period = $1 ORDER BY c.amount_cents DESC LIMIT 200`, [period])).rows;
+    // Attach names to the preview so the screen reads like people, not ids.
+    const ids = preview.creators.slice(0, 200).map((c) => c.userId);
+    let names = {};
+    if (ids.length) {
+      const { rows } = await db.query('SELECT id, name, username FROM users WHERE id = ANY($1)', [ids]);
+      names = Object.fromEntries(rows.map((u) => [u.id, u]));
+    }
+    res.json({
+      config: _revShare, period,
+      preview: { ...preview, creators: preview.creators.slice(0, 200).map((c) => ({ ...c, ...(names[c.userId] || {}) })) },
+      payouts: saved,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not work out the share.' }); }
+});
+app.put('/api/admin/revenue-share', auth.requirePerm('revenue'), async (req, res) => {
+  try {
+    const next = normalizeRevShare(req.body.config);
+    if (db.isConfigured()) await db.setSetting(REVSHARE_KEY, next);
+    _revShare = next;
+    adminAudit(req, 'revshare.settings', 'settings', REVSHARE_KEY, next);
+    res.json({ ok: true, config: next });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+// Write the month's payouts down, still unpaid. Separating this from paying is
+// the whole safety design: you can look at the list before any money moves.
+app.post('/api/admin/revenue-share/:period/prepare', auth.requirePerm('revenue'), async (req, res) => {
+  const period = String(req.params.period || '');
+  if (!/^\d{4}-\d{2}$/.test(period)) return res.status(400).json({ error: 'Which month?' });
+  if (period >= periodKey()) return res.status(400).json({ error: 'That month is not finished yet.' });
+  try {
+    const c = await computeRevenueShare(period);
+    let written = 0;
+    for (const line of c.creators) {
+      if (line.amountCents < _revShare.minPayoutCents) continue;
+      const r = await db.query(
+        `INSERT INTO creator_payouts (user_id, period, views, engagements, share_pct, amount_cents)
+         VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (user_id, period) DO NOTHING`,
+        [line.userId, period, line.views, line.engagements, line.sharePct, line.amountCents]);
+      written += r.rowCount;
+    }
+    adminAudit(req, 'revshare.prepare', 'settings', period, { written, poolCents: c.poolCents });
+    res.json({ ok: true, written, poolCents: c.poolCents });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not prepare the payouts.' }); }
+});
+app.post('/api/admin/revenue-share/:period/pay', auth.requirePerm('revenue'), async (req, res) => {
+  const period = String(req.params.period || '');
+  if (!/^\d{4}-\d{2}$/.test(period)) return res.status(400).json({ error: 'Which month?' });
+  try {
+    // Claim each row before crediting it — the same claim-first rule every
+    // money path here follows, so a double-click can never pay twice.
+    const { rows } = await db.query(
+      `UPDATE creator_payouts SET status = 'paying'
+        WHERE period = $1 AND status = 'pending' RETURNING *`, [period]);
+    let paid = 0, cents = 0;
+    for (const p of rows) {
+      const ok = await walletCreditStandalone(p.user_id, p.amount_cents, 'revshare',
+        'Creator share for ' + period).catch(() => false);
+      if (ok !== false) {
+        await db.query(`UPDATE creator_payouts SET status='paid', paid_at=now() WHERE id=$1`, [p.id]);
+        notify(p.user_id, p.user_id, 'revshare');
+        paid++; cents += p.amount_cents;
+      } else {
+        await db.query(`UPDATE creator_payouts SET status='pending' WHERE id=$1`, [p.id]);
+      }
+    }
+    adminAudit(req, 'revshare.pay', 'settings', period, { paid, cents });
+    res.json({ ok: true, paid, cents });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not pay the shares.' }); }
+});
+// What a creator sees about their own share — the same arithmetic, their row.
+app.get('/api/creator-earnings', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT period, views, engagements, share_pct, amount_cents, status, paid_at
+         FROM creator_payouts WHERE user_id = $1 ORDER BY period DESC LIMIT 24`, [req.user.id]);
+    const total = rows.filter((r) => r.status === 'paid').reduce((a, r) => a + r.amount_cents, 0);
+    res.json({ enabled: _revShare.enabled, poolPct: _revShare.poolPct,
+      minPayoutCents: _revShare.minPayoutCents, payouts: rows, totalPaidCents: total });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your earnings.' }); }
+});
+
+/* ─── Series: several posts sold as one pack ───────────────────────────────
+   Courses already cover "teach me a subject". This is the lighter thing: a
+   set of posts — a photo series, a run of videos, a written guide in parts —
+   sold together. Access is a row, checked on read, exactly like a
+   subscriber-only post. */
+function mapSeries(s, opts) {
+  return { id: s.id, title: s.title, description: s.description, cover: s.cover,
+    priceCents: s.price_cents, published: s.published, createdAt: s.created_at,
+    creator: s.creator_username ? { id: s.creator_id, name: s.creator_name, username: s.creator_username } : undefined,
+    items: s.item_count != null ? Number(s.item_count) : undefined,
+    owned: opts ? !!opts.owned : undefined, mine: opts ? !!opts.mine : undefined };
+}
+const SERIES_SELECT = `SELECT s.*, u.name AS creator_name, u.username AS creator_username,
+  (SELECT COUNT(*) FROM series_items i WHERE i.series_id = s.id) AS item_count FROM series s JOIN users u ON u.id = s.creator_id`;
+app.get('/api/series', auth.requireAuth, async (req, res) => {
+  const scope = ['mine', 'owned', 'discover'].includes(req.query.scope) ? req.query.scope : 'discover';
+  const creator = String(req.query.creator || '').replace(/^@/, '').slice(0, 40);
+  try {
+    let sql = SERIES_SELECT, args = [req.user.id];
+    if (scope === 'mine') sql += ' WHERE s.creator_id = $1';
+    else if (scope === 'owned') sql += ' WHERE s.id IN (SELECT series_id FROM series_access WHERE user_id = $1)';
+    else if (creator) { args.push(creator); sql += ` WHERE s.published = true AND lower(u.username) = lower($${args.length})`; }
+    else sql += ' WHERE s.published = true';
+    sql += ' ORDER BY s.created_at DESC LIMIT 100';
+    const { rows } = await db.query(sql, args);
+    const owned = new Set((await db.query('SELECT series_id FROM series_access WHERE user_id = $1', [req.user.id])).rows.map((r) => r.series_id));
+    res.json({ series: rows.map((r) => mapSeries(r, { owned: owned.has(r.id), mine: r.creator_id === req.user.id })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load series.' }); }
+});
+app.post('/api/series', auth.requireAuth, rateLimit(20, 3600000, 'series'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const title = String(req.body.title || '').trim().slice(0, 120);
+  if (!title) return res.status(400).json({ error: 'Give it a title.' });
+  let price = Math.round(Number(req.body.priceCents) || 0);
+  if (!Number.isFinite(price) || price < 0 || price > 5000000) price = 0;
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO series (creator_id, title, description, cover, price_cents) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [req.user.id, title, String(req.body.description || '').trim().slice(0, 2000) || null,
+        cleanImage(req.body.cover) || null, price]);
+    res.status(201).json({ series: mapSeries({ ...rows[0], item_count: 0 }, { mine: true, owned: true }) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the series.' }); }
+});
+app.get('/api/series/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const s = (await db.query(SERIES_SELECT + ' WHERE s.id = $1', [id])).rows[0];
+    if (!s) return res.status(404).json({ error: 'Series not found.' });
+    const mine = s.creator_id === req.user.id;
+    if (!s.published && !mine) return res.status(404).json({ error: 'Series not found.' });
+    const owned = mine || s.price_cents === 0 ||
+      (await db.query('SELECT 1 FROM series_access WHERE series_id = $1 AND user_id = $2', [id, req.user.id])).rowCount > 0;
+    // The posts themselves are only sent to someone who has access — the same
+    // locked-placeholder rule a subscriber-only post follows.
+    const items = (await db.query(
+      `SELECT p.id, p.body, p.image, p.media, p.media_kind, p.created_at, i.position
+         FROM series_items i JOIN posts p ON p.id = i.post_id
+        WHERE i.series_id = $1 ORDER BY i.position, i.post_id`, [id])).rows;
+    res.json({
+      series: mapSeries(s, { owned, mine }),
+      locked: !owned,
+      items: items.map((p, n) => owned
+        ? { id: p.id, body: p.body, image: mediaRef(p.image, 'post-img', p.id),
+            media: mediaRef(p.media, 'post-media', p.id), mediaKind: p.media_kind, createdAt: p.created_at }
+        : { id: null, locked: true, n: n + 1 }),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the series.' }); }
+});
+app.patch('/api/series/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const sets = [], args = [id, req.user.id];
+  const put = (c, v) => { args.push(v); sets.push(`${c} = $${args.length}`); };
+  if (typeof req.body.title === 'string' && req.body.title.trim()) put('title', req.body.title.trim().slice(0, 120));
+  if (typeof req.body.description === 'string') put('description', req.body.description.trim().slice(0, 2000) || null);
+  if (typeof req.body.published === 'boolean') put('published', req.body.published);
+  if (Number.isInteger(req.body.priceCents) && req.body.priceCents >= 0) put('price_cents', Math.min(req.body.priceCents, 5000000));
+  if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
+  try {
+    const { rowCount } = await db.query(`UPDATE series SET ${sets.join(', ')} WHERE id = $1 AND creator_id = $2`, args);
+    if (!rowCount) return res.status(404).json({ error: 'Series not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+app.delete('/api/series/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try { await db.query('DELETE FROM series WHERE id = $1 AND creator_id = $2', [id, req.user.id]); res.json({ ok: true }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete that.' }); }
+});
+app.post('/api/series/:id/items', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  const postId = routeId(req.body.postId);
+  if (!Number.isInteger(id) || !Number.isInteger(postId)) return res.status(400).json({ error: 'Invalid request.' });
+  try {
+    const s = (await db.query('SELECT creator_id FROM series WHERE id = $1', [id])).rows[0];
+    if (!s || s.creator_id !== req.user.id) return res.status(404).json({ error: 'Series not found.' });
+    // Only your OWN posts — a series must never be a way to sell someone else's work.
+    const p = (await db.query('SELECT user_id FROM posts WHERE id = $1', [postId])).rows[0];
+    if (!p || p.user_id !== req.user.id) return res.status(400).json({ error: 'You can only add your own posts.' });
+    const n = (await db.query('SELECT COUNT(*)::int AS n FROM series_items WHERE series_id = $1', [id])).rows[0].n;
+    await db.query('INSERT INTO series_items (series_id, post_id, position) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [id, postId, n]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add that.' }); }
+});
+app.delete('/api/series/:id/items/:postId', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id), postId = routeId(req.params.postId);
+  if (!Number.isInteger(id) || !Number.isInteger(postId)) return res.status(400).json({ error: 'Invalid request.' });
+  try {
+    await db.query(
+      'DELETE FROM series_items WHERE series_id = $1 AND post_id = $2 AND series_id IN (SELECT id FROM series WHERE creator_id = $3)',
+      [id, postId, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove that.' }); }
+});
+// Buy a series from the wallet balance — consistent with courses, pools and
+// splits. Idempotent, velocity-checked, and it pays the creator directly.
+app.post('/api/series/:id/buy', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'series-buy'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const cid = String(req.body.clientId || '').slice(0, 60) || null;
+  try {
+    const s = (await db.query('SELECT * FROM series WHERE id = $1 AND published = true', [id])).rows[0];
+    if (!s) return res.status(404).json({ error: 'Series not found.' });
+    if (s.creator_id === req.user.id) return res.status(400).json({ error: 'It’s already yours.' });
+    const have = await db.query('SELECT 1 FROM series_access WHERE series_id = $1 AND user_id = $2', [id, req.user.id]);
+    if (have.rowCount) return res.json({ ok: true, already: true });
+    if (s.price_cents === 0) {
+      await db.query('INSERT INTO series_access (series_id, user_id, paid_cents) VALUES ($1,$2,0) ON CONFLICT DO NOTHING', [id, req.user.id]);
+      return res.json({ ok: true, free: true });
+    }
+    if (cid) { const prev = await walletClaimIdem(req.user.id, cid, 'order'); if (prev && prev.replay) return res.json(prev.result); }
+    const vel = await walletVelocityCheck(req.user.id, s.price_cents);
+    if (!vel.ok) { if (cid) await walletReleaseIdem(req.user.id, cid, 'order'); return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel)); }
+    const t = await walletTransfer(req.user.id, s.creator_id, s.price_cents, 'Series: ' + s.title, false);
+    if (!t.ok) { if (cid) await walletReleaseIdem(req.user.id, cid, 'order'); return res.status(400).json({ error: 'Not enough in your balance.', insufficientBalance: true }); }
+    await db.query('INSERT INTO series_access (series_id, user_id, paid_cents) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [id, req.user.id, s.price_cents]);
+    notify(s.creator_id, req.user.id, 'series_bought');
+    const out = { ok: true, paid: true, amountCents: s.price_cents };
+    if (cid) await walletStoreIdem(req.user.id, cid, 'order', out);
+    res.json(out);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not buy that.' }); }
+});
+
 /* ─── When will it arrive? ─────────────────────────────────────────────────
    "Ships in 1-2 days" is a fact about the seller. "Arrives Tuesday to Thursday"
    is what the buyer actually wants to know. This turns the one into the other
@@ -10469,6 +11142,128 @@ async function flushAiTasks() {
 }
 registerJob('ai_tasks', 'Scheduled AI tasks', AI_TASK_FLUSH_MS);
 setInterval(trackJob('ai_tasks', flushAiTasks), AI_TASK_FLUSH_MS).unref?.();
+
+/* ─── Workflows: several steps, in order, as one routine ───────────────────
+   A single task answers one question. A workflow is the real shape of a
+   Friday afternoon: look at the week, then draft the follow-ups, then write
+   the recap — where each step can see what the step before it produced.
+   Read-only for the same reason a scheduled task is: nobody is there to
+   confirm anything, so it produces words, never actions. */
+const WF_MAX_STEPS = 5;
+function normalizeWfSteps(v) {
+  return (Array.isArray(v) ? v : [])
+    .map((x) => String((x && x.prompt) || x || '').trim().slice(0, 600))
+    .filter(Boolean).slice(0, WF_MAX_STEPS)
+    .map((prompt) => ({ prompt }));
+}
+function mapWorkflow(w) {
+  return { id: w.id, name: w.name, steps: Array.isArray(w.steps) ? w.steps : [],
+    cadence: w.cadence, cadenceLabel: AI_CADENCES[w.cadence] || w.cadence, hour: w.hour, weekday: w.weekday,
+    status: w.status, nextAt: w.next_at, lastRunAt: w.last_run_at, lastResult: w.last_result,
+    runs: w.runs, createdAt: w.created_at };
+}
+app.get('/api/ai/workflows', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT * FROM agent_workflows WHERE user_id = $1 ORDER BY id DESC', [req.user.id]);
+    res.json({ workflows: rows.map(mapWorkflow), maxSteps: WF_MAX_STEPS,
+      cadences: Object.entries(AI_CADENCES).map(([k, v]) => ({ key: k, label: v })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your routines.' }); }
+});
+app.post('/api/ai/workflows', auth.requireAuth, rateLimit(20, 3600000, 'ai-wf'), async (req, res) => {
+  const name = String(req.body.name || '').trim().slice(0, 80);
+  const steps = normalizeWfSteps(req.body.steps);
+  const cadence = AI_CADENCES[req.body.cadence] ? req.body.cadence : 'weekly';
+  let hour = Math.round(Number(req.body.hour)); if (!Number.isFinite(hour) || hour < 0 || hour > 23) hour = 8;
+  let weekday = Math.round(Number(req.body.weekday)); if (!Number.isFinite(weekday) || weekday < 0 || weekday > 6) weekday = 5;
+  if (!name) return res.status(400).json({ error: 'Give the routine a name.' });
+  if (steps.length < 2) return res.status(400).json({ error: 'A routine needs at least two steps — one step is just a task.' });
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not available on this server.' });
+  try {
+    const cap = proLimit('aiTasks', (await isPro(req.user.id)) ? 'pro' : 'free');
+    const n = (await db.query('SELECT COUNT(*)::int AS n FROM agent_workflows WHERE user_id = $1', [req.user.id])).rows[0].n;
+    if (n >= cap) return res.status(400).json({ error: 'You can keep ' + cap + ' routines. Remove one, or upgrade to Pro for ' + PRO_LIMITS.aiTasks.pro + '.', upgrade: cap < PRO_LIMITS.aiTasks.pro });
+    const { rows } = await db.query(
+      `INSERT INTO agent_workflows (user_id, name, steps, cadence, hour, weekday, next_at) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [req.user.id, name, JSON.stringify(steps), cadence, hour, weekday, aiTaskNext(cadence, hour, weekday)]);
+    res.status(201).json({ workflow: mapWorkflow(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the routine.' }); }
+});
+app.patch('/api/ai/workflows/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  const status = ['active', 'paused'].includes(req.body.status) ? req.body.status : null;
+  if (!Number.isInteger(id) || !status) return res.status(400).json({ error: 'Invalid request.' });
+  try {
+    const w = (await db.query('SELECT * FROM agent_workflows WHERE id = $1 AND user_id = $2', [id, req.user.id])).rows[0];
+    if (!w) return res.status(404).json({ error: 'Not found.' });
+    await db.query('UPDATE agent_workflows SET status = $2, next_at = $3 WHERE id = $1',
+      [id, status, status === 'active' ? aiTaskNext(w.cadence, w.hour, w.weekday) : w.next_at]);
+    res.json({ ok: true, status });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+app.delete('/api/ai/workflows/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try { await db.query('DELETE FROM agent_workflows WHERE id = $1 AND user_id = $2', [id, req.user.id]); res.json({ ok: true }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete that.' }); }
+});
+app.post('/api/ai/workflows/:id/run', auth.requireAuth, rateLimit(10, 3600000, 'ai-wf-run'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const w = (await db.query('SELECT * FROM agent_workflows WHERE id = $1 AND user_id = $2', [id, req.user.id])).rows[0];
+    if (!w) return res.status(404).json({ error: 'Not found.' });
+    const out = await runWorkflow(w, { reschedule: false });
+    res.json({ ok: true, result: out });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not run it.' }); }
+});
+async function runWorkflow(w, opts) {
+  const reschedule = !opts || opts.reschedule !== false;
+  const steps = Array.isArray(w.steps) ? w.steps : [];
+  const facts = await aiMemoryFor(w.user_id);
+  const parts = [];
+  let carried = '';
+  for (let i = 0; i < steps.length; i++) {
+    const sys = 'You are Atwe AI, running step ' + (i + 1) + ' of ' + steps.length + ' in a routine the user set up. '
+      + 'Answer this step directly and briefly, in plain language. You cannot take any action — only report. '
+      + 'Never mention "Claude" or "Anthropic" — you are "Atwe AI".' + aiMemoryPrompt(facts);
+    // Each step can see what the one before it produced — that is what makes
+    // this a routine rather than a list of unrelated questions.
+    const user = (carried ? 'What the previous step produced:\n' + carried.slice(0, 3000) + '\n\n' : '')
+      + 'This step: ' + steps[i].prompt;
+    let text = '';
+    try {
+      const msg = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6', max_tokens: 800, system: sys,
+        messages: [{ role: 'user', content: user }],
+      });
+      text = (msg.content.find((b) => b.type === 'text')?.text || '').trim();
+    } catch (e) { text = 'This step could not run: ' + String(e.message || e).slice(0, 140); }
+    parts.push('▸ ' + steps[i].prompt + '\n' + text);
+    carried = text;
+  }
+  const result = parts.join('\n\n');
+  try {
+    await db.query(
+      `INSERT INTO admin_messages (user_id, sender, body, read_by_user, read_by_admin) VALUES ($1,'admin',$2,false,true)`,
+      [w.user_id, '✦ ' + w.name + '\n\n' + result]);
+    notify(w.user_id, w.user_id, 'ai_task');
+  } catch (e) { /* the run still happened */ }
+  await db.query(
+    `UPDATE agent_workflows SET last_run_at = now(), last_result = $2, runs = runs + 1, next_at = $3 WHERE id = $1`,
+    [w.id, result.slice(0, 4000), reschedule ? aiTaskNext(w.cadence, w.hour, w.weekday) : w.next_at]).catch(() => {});
+  return result;
+}
+async function flushWorkflows() {
+  if (!db.isConfigured() || !process.env.ANTHROPIC_API_KEY) return 0;
+  const { rows } = await db.query(
+    `UPDATE agent_workflows SET next_at = next_at + interval '1 hour'
+      WHERE id IN (SELECT id FROM agent_workflows WHERE status = 'active' AND next_at <= now() ORDER BY next_at LIMIT 5)
+      RETURNING *`);
+  for (const w of rows) { try { await runWorkflow(w); } catch (e) { /* one bad routine mustn't stop the rest */ } }
+  return rows.length;
+}
+registerJob('ai_workflows', 'AI routines', AI_TASK_FLUSH_MS);
+setInterval(trackJob('ai_workflows', flushWorkflows), AI_TASK_FLUSH_MS).unref?.();
 
 // Tell a group member they've been assigned a checklist task. The assignment
 // itself lives in the checklist node's data (saved via the generic PATCH); this
@@ -34649,5 +35444,7 @@ db.init()
   .then(() => { if (db.isConfigured()) return loadExperiments().catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(GEO_KEY).then((v) => { _geoRules = normalizeGeoRules(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(MAILBRAND_KEY).then((v) => { _mailBrand = normalizeMailBrand(v); mailer.setBranding(_mailBrand); }).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return db.getSetting(REVSHARE_KEY).then((v) => { _revShare = normalizeRevShare(v); }).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return db.getSetting(AUTH_FEE_KEY).then((v) => { _authCfg = normalizeAuthCfg(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) console.log('🗄️   Schema + settings ready.'); })
   .catch((err) => console.error('Post-init setup failed:', err.message));
