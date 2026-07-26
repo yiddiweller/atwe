@@ -1741,6 +1741,10 @@ async function initSchema() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS condition TEXT;`); // new | like_new | good | fair (physical resale)
   // "Was" price (compare-at, Shopify-style) — shown struck through when > price.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS compare_at_cents INTEGER;`);
+  // Premium placement (paid featured slot in the business directory / local hub).
+  // Mirrors jobs.featured_until + posts.promoted_until: one timestamp, no state
+  // machine. Always LABELLED in the UI so it can't be mistaken for organic rank.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS directory_featured_until TIMESTAMPTZ;`);
   // International shipping zones (Etsy/eBay model): a seller groups countries
   // into zones with their own rate and optional free-over threshold. A seller
   // with NO zones behaves exactly as before (one flat fee everywhere); once they

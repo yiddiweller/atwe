@@ -7214,6 +7214,8 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .shop-setup-row.done .shop-setup-chk{background:rgba(48,209,88,.18);}
 .shop-setup-chk svg{width:13px;height:13px;fill:none;stroke:var(--green);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;}
 .shop-setup-row .iset-chev{margin-inline-start:auto;}
+/* Premium placement: the always-visible paid-slot label (never a silent boost). */
+.dir-featured{font-size:11px;font-weight:800;color:var(--t2);background:var(--s2);padding:1px 7px;border-radius:8px;margin-inline-start:6px;flex:0 0 auto;}
 /* Listing A/B tests: the two-arm comparison card. */
 .exp-card{background:var(--s1);border-radius:16px;padding:13px 14px;margin-bottom:10px;}
 .exp-head{display:flex;align-items:center;gap:8px;margin-bottom:9px;}
@@ -15456,6 +15458,16 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Premium placement: a paid, labelled featured slot in the directory -->
+<div class="overlay hidden" id="placementView" onclick="if(event.target===this)closeOverlay('placementView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Featured placement">
+    <button class="sheet-close" onclick="closeOverlay('placementView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Featured placement</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Sit at the top of the business directory and the near-me list. Always shown with a “Featured” label, so shoppers know it’s a paid slot.</div>
+    <div id="placementBody"></div>
+  </div>
+</div>
+
 <!-- International shipping zones: a rate per group of countries -->
 <div class="overlay hidden" id="shipZonesView" onclick="if(event.target===this)closeOverlay('shipZonesView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Shipping zones">
@@ -17429,7 +17441,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1585'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1586'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24767,7 +24779,7 @@ async function acLoadNearYou() {
       const dist = bz.distanceKm != null ? `<span class="dir-dist">${acDistLabel(bz.distanceKm)}</span>` : '';
       return `<div class="ac-item" onclick="appTab('home');acGoProfile(${jsAttr(bz.username)})">
         ${acAvatarHtml(bz.name, bz.avatar, '', true)}
-        <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(bz.name)}${bz.businessVerified ? vbadge(true) : ''}</span>${dist}</div>
+        <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(bz.name)}${bz.businessVerified ? vbadge(true) : ''}</span>${bz.featured ? '<span class="dir-featured">Featured</span>' : ''}${dist}</div>
           <div class="ny-meta">${star}${open}${(bz.categories && bz.categories[0]) ? `<span class="ny-cat">${escHtml(bz.categories[0])}</span>` : ''}</div></div>
       </div>`;
     }).join('');
@@ -24961,7 +24973,7 @@ async function acLoadDirectory() {
     if (!businesses.length) { body.innerHTML = `<div class="ac-empty" style="padding:26px;">${AC._dirNear ? 'No businesses near you have set a location yet.' : 'No businesses found.'}</div>`; return; }
     body.innerHTML = businesses.map(bz => `<div class="ac-item" onclick="closeOverlay('bizDirectory');appTab('home');acGoProfile(${jsAttr(bz.username)})">
       ${acAvatarHtml(bz.name, bz.avatar, '', true)}
-      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(bz.name)}${bz.businessVerified ? vbadge(true) : ''}</span>${bz.distanceKm != null ? `<span class="dir-dist">${acDistLabel(bz.distanceKm)}</span>` : ''}</div>
+      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(bz.name)}${bz.businessVerified ? vbadge(true) : ''}</span>${bz.featured ? '<span class="dir-featured">Featured</span>' : ''}${bz.distanceKm != null ? `<span class="dir-dist">${acDistLabel(bz.distanceKm)}</span>` : ''}</div>
         <div class="ac-item-last">${bz.headline ? escHtml(bz.headline) : '@' + escHtml(bz.username)}</div>
         <div class="dir-meta">${bz.followers} follower${bz.followers === 1 ? '' : 's'}${bz.jobs ? ' · ' + bz.jobs + ' job' + (bz.jobs === 1 ? '' : 's') : ''}${(bz.categories && bz.categories[0]) ? ' · ' + escHtml(bz.categories[0]) : ''}</div></div>
     </div>`).join('');
@@ -39829,6 +39841,7 @@ async function acOpenStoreManage() {
     ${row(SI.box, 'Restock suggestions', 'What to reorder, based on sales', 'acOpenRestock()')}
     ${row(SI.chart, 'A/B tests', 'Test a title or price and keep the winner', 'acOpenExperiments()')}
     ${row(SI.box, 'Shipping zones', 'Ship abroad — set a rate per country group', 'acOpenShipZones()')}
+    ${isBiz ? row(SI.megaphone, 'Featured placement', 'Appear at the top of the business directory', 'acOpenPlacement()') : ''}
     ${row(SI.store, 'Customers', 'Everyone who has bought from you', 'closeOverlay(\'storeManageView\');acOpenCustomers()')}
     ${row(SI.megaphone, 'Cart recovery', 'Win back abandoned carts via Beam', 'closeOverlay(\'storeManageView\');acOpenCartRecovery()')}
     ${row(SI.wallet, 'Wallet & payouts', 'Your balance and cash-out', 'closeOverlay(\'storeManageView\');acOpenWallet()')}
@@ -39856,6 +39869,31 @@ async function acOpenCustomers() {
         <button class="ac-post-more" onclick="event.stopPropagation();closeOverlay('customersView');appTab('chat');acOpenChat(${c.id})" aria-label="Message"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
       </div>`).join('');
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+/* ── Premium placement: a paid, clearly-labelled featured directory slot ── */
+async function acOpenPlacement() {
+  showOverlay('placementView');
+  const b = document.getElementById('placementBody'); b.innerHTML = acSkelRows(2);
+  let d;
+  try { d = await API.req('GET', '/api/business/placement'); }
+  catch (e) { b.innerHTML = '<div class="ac-empty">' + escHtml(e.message || 'Could not load.') + '</div>'; return; }
+  const live = d.featuredUntil && new Date(d.featuredUntil) > new Date();
+  b.innerHTML =
+    (live ? `<div class="wv-chip" style="display:inline-block;margin-bottom:12px;">✓ Featured until ${acFullTime(d.featuredUntil)}</div>` : '') +
+    `<div class="co-rates">${d.days.map(n => `<button class="co-rate" onclick="acBuyPlacement(${n})">
+      <span class="co-rate-main"><span class="co-rate-name">${n} days</span><span class="co-rate-days">${acMoney(d.perDayCents)} a day</span></span>
+      <span class="co-rate-price">${acMoney(n * d.perDayCents)}</span></button>`).join('')}</div>
+    <div class="ac-disc-sub" style="margin:12px 2px 0;">Paid from your Atwe balance (${acMoney(d.balanceCents)}).${live ? ' Buying again adds to your current run.' : ''}</div>`;
+}
+async function acBuyPlacement(days) {
+  const d = days;
+  const ok = await appConfirm({ title: 'Feature your business?', message: `Your business sits at the top of the directory for ${d} days, labelled “Featured”. Paid from your Atwe balance.`, confirmText: 'Confirm' });
+  if (!ok) return;
+  try {
+    const r = await API.req('POST', '/api/business/placement', { days: d, clientId: acPayCid() });
+    showNotif('You’re featured until ' + acFullTime(r.featuredUntil) + '.');
+    acRefreshBalance(); acOpenPlacement();
+  } catch (e) { acHandlePayErr ? acHandlePayErr(e) : showNotif(e.message || 'Could not buy the placement.'); }
 }
 /* ── International shipping zones: a rate per group of countries ── */
 async function acOpenShipZones() {
