@@ -945,6 +945,8 @@
       <button class="tab" data-v="investigate" onclick="switchTab('investigate')">Investigate</button>
       <button class="tab" data-v="orders" onclick="switchTab('orders')">Orders</button>
       <button class="tab" data-v="adjust" onclick="switchTab('adjust')">Adjustments</button>
+      <button class="tab" data-v="payouts" onclick="switchTab('payouts')">Payout review</button>
+      <button class="tab" data-v="risk" onclick="switchTab('risk')">Risk</button>
       <button class="tab" data-v="disputes" onclick="switchTab('disputes')">Disputes</button>
       <button class="tab" data-v="appeals" onclick="switchTab('appeals')">Appeals</button>
       <button class="tab" data-v="support" onclick="switchTab('support')">Support</button>
@@ -1409,7 +1411,7 @@ const TAB_PERM = {
   traffic: 'growth', site: 'super', usernames: 'handles', posts: 'moderation', support: 'support',
   reports: 'moderation', disputes: 'refunds', circles: 'moderation', feed: 'super',
   finance: 'revenue', growth: 'growth', audit: 'super', staff: 'super',
-  refunds: 'refunds', appeals: 'users', datareq: 'users', activity: 'super', investigate: 'moderation', moderate: 'moderation', orders: 'support', adjust: 'revenue',
+  refunds: 'refunds', appeals: 'users', datareq: 'users', activity: 'super', investigate: 'moderation', moderate: 'moderation', orders: 'support', adjust: 'revenue', payouts: 'revenue', risk: 'revenue',
   cards: 'revenue', features: 'super', featurecontrols: 'super', vault: 'super',
   announcements: 'super',
 };
@@ -1482,7 +1484,7 @@ const NAV_TITLES = {
   refunds:'Refunds', users:'Users', staff:'Staff', usernames:'Usernames', reports:'Reports',
   investigate:'Investigate', moderate:'AI content scan', disputes:'Disputes', appeals:'Appeals', support:'Support', datareq:'Data requests',
   posts:'Posts', circles:'Circles', feed:'Feed', activity:'Activity', traffic:'Traffic', growth:'Growth',
-  orders:'Orders', adjust:'Wallet adjustments', audit:'Audit log', site:'Site', cards:'Cards', features:'Features', featurecontrols:'Feature Controls', vault:'Vault',
+  orders:'Orders', adjust:'Wallet adjustments', payouts:'Payout review', risk:'Risk', audit:'Audit log', site:'Site', cards:'Cards', features:'Features', featurecontrols:'Feature Controls', vault:'Vault',
   announcements:'Announcements',
 };
 // Mobile: slide the sidebar in/out.
@@ -1513,6 +1515,8 @@ function renderView(){
   else if (VIEW === 'reports') renderReportsView();
   else if (VIEW === 'orders') renderOrdersView();
   else if (VIEW === 'adjust') renderAdjustView();
+  else if (VIEW === 'payouts') renderPayoutsView();
+  else if (VIEW === 'risk') renderRiskView();
   else if (VIEW === 'disputes') renderDisputesView();
   else if (VIEW === 'circles') renderCirclesView();
   else if (VIEW === 'feed') renderFeedSignalsView();
@@ -3506,6 +3510,78 @@ async function dismissReport(id){
 }
 /* ─── Escrow disputes ─── */
 let DISPUTES = [];
+// Cash-out review: large payouts are held with the balance already reserved, so
+// releasing or returning it is a one-way decision either way.
+let CO_STATUS = 'pending';
+function renderPayoutsView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="panel"><h3>Payout review</h3>
+      <div class="sub">Cash-outs at or above the threshold wait here. The member's balance is <b>already reserved</b>, so approving releases it to their bank and rejecting returns it to their wallet.</div></div>
+    <div class="bc-auds" style="margin:0 0 12px;">${['pending','approved','rejected'].map(s =>
+      `<button class="bc-aud${CO_STATUS === s ? ' on' : ''}" onclick="CO_STATUS='${s}';loadPayouts()">${s}</button>`).join('')}</div>
+    <div id="coList"><div class="ld"><span class="ab-mark"></span></div></div>`;
+  loadPayouts();
+}
+async function loadPayouts(){
+  const box = document.getElementById('coList'); if (!box) return;
+  try {
+    const { cashouts, thresholdCents } = await api('GET', '/api/admin/cashouts?status=' + CO_STATUS);
+    box.innerHTML = (cashouts.length ? cashouts.map(c => `<div class="site-row">
+        <div><div class="srt">$${(c.amountCents/100).toFixed(2)} → ${esc(c.user.name)} <span class="muted">@${esc(c.user.username||'')}</span></div>
+          <div class="srs">joined ${fmtDate(c.user.joinedAt)} · ${c.user.sales} completed sales · requested ${fmtDate(c.createdAt)}${c.note ? ' · ' + esc(c.note) : ''}${c.reviewer ? ' · by ' + esc(c.reviewer) : ''}</div></div>
+        ${c.status === 'pending' ? `<div style="display:flex;gap:6px;">
+          <button class="act accent" onclick="resolveCashout(${c.id},'approve')">Release</button>
+          <button class="act danger" onclick="resolveCashout(${c.id},'reject')">Return to wallet</button></div>` : ''}
+      </div>`).join('') : '<div class="empty">Nothing here.</div>')
+      + `<div class="muted" style="margin-top:10px;font-size:12px;">Threshold: $${(thresholdCents/100).toLocaleString()}</div>`;
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function resolveCashout(id, action){
+  const note = action === 'reject' ? (prompt('Why is it being returned? (the member sees nothing, this is your record)', '') || '') : '';
+  if (action === 'approve' && !confirm('Release this payout to their bank?')) return;
+  try { await api('POST', '/api/admin/cashouts/' + id + '/' + action, { note }); notify('Done.'); loadPayouts(); }
+  catch (e){ notify(e.message); }
+}
+// Suspicious activity — plain, explainable rules over the ledger you already have.
+function renderRiskView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="panel"><h3>Suspicious activity</h3>
+      <div class="sub">Computed live from the wallet ledger. Each flag is a rule you can argue with — money straight in and out, many payments in a day, paying lots of different people, or high volume from a brand-new account.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <button class="act" onclick="downloadExport('ledger')">⇩ Ledger CSV</button>
+        <button class="act" onclick="downloadExport('revenue')">⇩ Revenue CSV</button>
+        <button class="act" onclick="downloadExport('orders')">⇩ Orders CSV</button>
+      </div></div>
+    <div id="riskList"><div class="ld"><span class="ab-mark"></span></div></div>`;
+  loadRisk();
+}
+async function loadRisk(){
+  const box = document.getElementById('riskList'); if (!box) return;
+  try {
+    const { flagged } = await api('GET', '/api/admin/suspicious');
+    box.innerHTML = flagged.length ? flagged.map(f => `<div class="site-row">
+        <div><div class="srt">${esc(f.name)} <span class="muted">@${esc(f.username||'')}</span>${f.frozen ? ' <span class="pill susp">wallet frozen</span>' : ''}</div>
+          <div class="srs">in $${(f.inCents/100).toFixed(2)} · out $${(f.outCents/100).toFixed(2)} · ${f.sends24} sends/24h · ${f.peers7} people/7d · account ${f.ageDays}d old</div>
+          <div class="srs" style="color:var(--amber,#fb0);">${f.reasons.map(esc).join(' · ')}</div></div>
+        <div style="display:flex;gap:6px;">
+          <button class="act" onclick="openUser(${f.id})">Open</button>
+          ${f.frozen ? '' : `<button class="act danger" onclick="setWalletFreeze(${f.id}, true)">Freeze wallet…</button>`}
+        </div>
+      </div>`).join('') : '<div class="empty">Nothing unusual right now.</div>';
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function downloadExport(kind){
+  try {
+    const res = await fetch('/api/admin/export/' + kind + '?days=90', { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) throw new Error('Export failed.');
+    const blob = await res.blob(); const url = URL.createObjectURL(blob);
+    const a2 = document.createElement('a'); a2.href = url; a2.download = 'atwe-' + kind + '-90d.csv';
+    document.body.appendChild(a2); a2.click(); a2.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+    notify('Downloaded.');
+  } catch (e){ notify(e.message); }
+}
 // Manual wallet adjustments — dual control. One staffer requests, a DIFFERENT
 // one approves; the UI says so plainly so nobody wonders why their own button
 // won't work.

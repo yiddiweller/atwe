@@ -17274,6 +17274,20 @@ app.post('/api/wallet/cashout', auth.requireAuth, blockImpersonation, rateLimit(
     if (u.wallet_frozen) return res.status(403).json({ error: u.wallet_frozen_reason ? ('Your wallet is on hold: ' + u.wallet_frozen_reason) : 'Your wallet is on hold. Please contact support.', walletFrozen: true });
     if ((u.balance_cents || 0) < amountCents) return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true });
     const cid = req.body.clientId;
+    // Large payouts are HELD for staff review. The balance is debited now (so it
+    // can't be spent twice while pending) and the payout only happens on
+    // approval; a rejection refunds it. Below the threshold nothing changes.
+    if (CASHOUT_REVIEW_CENTS > 0 && amountCents >= CASHOUT_REVIEW_CENTS) {
+      const idem = await walletClaimIdem(req.user.id, cid, 'cashout');
+      if (!idem.claimed) return res.json(idem.result || { ok: true, held: true, deduped: true });
+      const d = await walletDebit(req.user.id, amountCents, 'cashout', 'Cash out — pending review');
+      if (!d.ok) { await walletReleaseIdem(req.user.id, cid, 'cashout'); return res.status(400).json({ error: d.insufficient ? 'Not enough wallet balance.' : 'Could not cash out.', insufficientBalance: !!d.insufficient }); }
+      await db.query('INSERT INTO cashout_reviews (user_id, amount_cents, tx_id) VALUES ($1,$2,$3)', [req.user.id, amountCents, d.txId || null]);
+      const result = { ok: true, held: true, message: 'Cash-outs of this size get a quick manual check. Your money is reserved and we’ll release it shortly.' };
+      await walletStoreIdem(req.user.id, cid, 'cashout', result);
+      rtPush(req.user.id, 'wallet', { type: 'update' });
+      return res.json(result);
+    }
     if (billing.isConnectConfigured()) {
       // Real payout path — must be onboarded with payouts enabled.
       if (!u.stripe_connect_id) return res.status(400).json({ error: 'Set up your bank first.', needsOnboarding: true });
@@ -25580,12 +25594,139 @@ app.post('/api/admin/users/bulk', auth.requirePerm('users'), async (req, res) =>
     res.json({ ok: true, affected, skipped: ids.length - safe.length });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not complete the bulk action.' }); }
 });
+/* ─── Cash-out review queue ─────────────────────────────────────────────────
+   A payout at or above the threshold is held: the member's balance is already
+   debited (so it can't be double-spent while pending), and staff either release
+   it to the bank or refund it back to the wallet. */
+app.get('/api/admin/cashouts', auth.requirePerm('revenue'), async (req, res) => {
+  const status = ['pending', 'approved', 'rejected'].includes(req.query.status) ? req.query.status : 'pending';
+  try {
+    const { rows } = await db.query(
+      `SELECT c.*, u.name, u.username, u.email, u.created_at AS joined,
+              (SELECT COUNT(*)::int FROM orders o WHERE o.seller_id = c.user_id AND o.status IN ('paid','fulfilled','delivered','released')) AS sales,
+              r.name AS reviewer
+         FROM cashout_reviews c JOIN users u ON u.id = c.user_id
+         LEFT JOIN users r ON r.id = c.reviewed_by
+        WHERE c.status = $1 ORDER BY c.created_at DESC LIMIT 200`, [status]);
+    res.json({ cashouts: rows.map((c) => ({
+      id: c.id, userId: c.user_id, user: { name: c.name, username: c.username, email: c.email, joinedAt: c.joined, sales: c.sales },
+      amountCents: c.amount_cents, status: c.status, note: c.note || null, reviewer: c.reviewer || null,
+      createdAt: c.created_at, resolvedAt: c.resolved_at,
+    })), thresholdCents: CASHOUT_REVIEW_CENTS });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the queue.' }); }
+});
+app.post('/api/admin/cashouts/:id/:action', auth.requirePerm('revenue'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const action = req.params.action === 'approve' ? 'approve' : req.params.action === 'reject' ? 'reject' : null;
+  if (!Number.isInteger(id) || !action) return res.status(400).json({ error: 'Invalid request.' });
+  const note = (req.body.note || '').toString().trim().slice(0, 300) || null;
+  try {
+    // Claim-first so two reviewers can't both release the same payout.
+    const c = (await db.query(`UPDATE cashout_reviews SET status = 'resolving' WHERE id = $1 AND status = 'pending' RETURNING *`, [id])).rows[0];
+    if (!c) return res.status(409).json({ error: 'That cash-out is no longer pending.' });
+    if (action === 'reject') {
+      // Refund the held money to the wallet — it was debited when the hold began.
+      await walletCreditStandalone(c.user_id, c.amount_cents, 'cashout_refund', 'Cash-out not approved — returned to your balance');
+      await db.query(`UPDATE cashout_reviews SET status = 'rejected', reviewed_by = $2, note = $3, resolved_at = now() WHERE id = $1`, [id, req.user.id, note]);
+      rtPush(c.user_id, 'wallet', { type: 'update' });
+      notifySelf(c.user_id, 'cashout_returned');
+      adminAudit(req, 'cashout.reject', 'user', c.user_id, { id, amountCents: c.amount_cents, note });
+      return res.json({ ok: true, status: 'rejected' });
+    }
+    // Approve: pay it out for real when Connect is configured; otherwise the
+    // hold simply clears (the demo path never had a real payout to make).
+    if (billing.isConnectConfigured()) {
+      const u = (await db.query('SELECT stripe_connect_id FROM users WHERE id = $1', [c.user_id])).rows[0] || {};
+      if (!u.stripe_connect_id) {
+        await db.query(`UPDATE cashout_reviews SET status = 'pending' WHERE id = $1`, [id]);
+        return res.status(400).json({ error: 'That member hasn’t finished bank setup — can’t release yet.' });
+      }
+      try { await billing.createPayout(u.stripe_connect_id, c.amount_cents, 'cashout_' + (c.tx_id || id)); }
+      catch (e) {
+        await db.query(`UPDATE cashout_reviews SET status = 'pending' WHERE id = $1`, [id]);
+        return res.status(400).json({ error: 'The bank transfer was refused: ' + (e.message || 'unknown error') });
+      }
+    }
+    await db.query(`UPDATE cashout_reviews SET status = 'approved', reviewed_by = $2, note = $3, resolved_at = now() WHERE id = $1`, [id, req.user.id, note]);
+    notifySelf(c.user_id, 'cashout_released');
+    adminAudit(req, 'cashout.approve', 'user', c.user_id, { id, amountCents: c.amount_cents });
+    res.json({ ok: true, status: 'approved' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not resolve the cash-out.' }); }
+});
+/* ─── Suspicious-activity queue ─────────────────────────────────────────────
+   Computed on read from the ledger that already exists — no new tracking. Each
+   signal is a plain, explainable rule a human can argue with, not a black box. */
+app.get('/api/admin/suspicious', auth.requirePerm('revenue'), async (_req, res) => {
+  try {
+    const { rows } = await db.query(`
+      WITH w AS (
+        SELECT user_id,
+               COALESCE(SUM(delta_cents) FILTER (WHERE delta_cents > 0 AND created_at > now() - interval '7 days'), 0) AS in7,
+               COALESCE(-SUM(delta_cents) FILTER (WHERE delta_cents < 0 AND created_at > now() - interval '7 days'), 0) AS out7,
+               COUNT(*) FILTER (WHERE delta_cents < 0 AND created_at > now() - interval '24 hours')::int AS sends24,
+               COUNT(DISTINCT peer_id) FILTER (WHERE delta_cents < 0 AND created_at > now() - interval '7 days')::int AS peers7
+          FROM wallet_tx WHERE created_at > now() - interval '7 days' GROUP BY user_id
+      )
+      SELECT u.id, u.name, u.username, u.created_at, u.balance_cents, u.wallet_frozen,
+             w.in7, w.out7, w.sends24, w.peers7,
+             EXTRACT(EPOCH FROM (now() - u.created_at)) / 86400 AS age_days
+        FROM w JOIN users u ON u.id = w.user_id
+       WHERE w.out7 > 0 ORDER BY w.out7 DESC LIMIT 300`);
+    const flagged = [];
+    for (const r of rows) {
+      const reasons = [];
+      // Rapid in-out: nearly everything that came in went straight back out.
+      if (Number(r.in7) > 20000 && Number(r.out7) >= Number(r.in7) * 0.9) reasons.push('Money in and straight back out');
+      // Many small sends in a day — classic structuring / mule pattern.
+      if (r.sends24 >= 15) reasons.push(`${r.sends24} outgoing payments in 24h`);
+      // Spraying across many different people in a week.
+      if (r.peers7 >= 10) reasons.push(`Paid ${r.peers7} different people this week`);
+      // High volume from a brand-new account.
+      if (Number(r.age_days) < 7 && Number(r.out7) > 50000) reasons.push('High volume from a new account');
+      if (reasons.length) flagged.push({
+        id: r.id, name: r.name, username: r.username, joinedAt: r.created_at,
+        balanceCents: r.balance_cents, frozen: !!r.wallet_frozen,
+        inCents: Number(r.in7), outCents: Number(r.out7), sends24: r.sends24, peers7: r.peers7,
+        ageDays: Math.floor(Number(r.age_days)), reasons,
+      });
+    }
+    flagged.sort((a, b) => b.reasons.length - a.reasons.length || b.outCents - a.outCents);
+    res.json({ flagged });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not scan for suspicious activity.' }); }
+});
+/* ─── Reconciliation exports (CSV for the accountant) ─── */
+app.get('/api/admin/export/:kind', auth.requirePerm('revenue'), async (req, res) => {
+  const kind = ['ledger', 'revenue', 'orders'].includes(req.params.kind) ? req.params.kind : null;
+  if (!kind) return res.status(400).json({ error: 'Unknown export.' });
+  const days = Math.max(1, Math.min(400, parseInt(req.query.days, 10) || 90));
+  try {
+    const q = {
+      ledger: `SELECT w.id, w.created_at, w.user_id, u.username, w.peer_id, w.kind, w.delta_cents, w.balance_after, w.note
+                 FROM wallet_tx w LEFT JOIN users u ON u.id = w.user_id
+                WHERE w.created_at > now() - make_interval(days => $1) ORDER BY w.id`,
+      revenue: `SELECT id, created_at, source, ref_id, payer_id, payer_name, amount_cents, note
+                  FROM company_revenue WHERE created_at > now() - make_interval(days => $1) ORDER BY id`,
+      orders: `SELECT o.id, o.created_at, o.status, o.buyer_id, o.seller_id, o.total_cents, o.shipping_cents, o.tax_cents, o.discount_cents, o.carrier, o.tracking
+                 FROM orders o WHERE o.created_at > now() - make_interval(days => $1) ORDER BY o.id`,
+    }[kind];
+    const { rows, fields } = await db.query(q, [days]);
+    const cols = fields.map((f) => f.name);
+    const esc = (v) => { const s2 = v == null ? '' : String(v); return /[",\n]/.test(s2) ? '"' + s2.replace(/"/g, '""') + '"' : s2; };
+    const csv = [cols.join(','), ...rows.map((r) => cols.map((c) => esc(r[c])).join(','))].join('\n');
+    adminAudit(req, 'export.' + kind, 'export', null, { days, rows: rows.length });
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="atwe-${kind}-${days}d.csv"`);
+    res.send(csv);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build the export.' }); }
+});
 /* ─── Manual wallet adjustments (DUAL CONTROL) ──────────────────────────────
    Crediting or debiting a member's wallet by hand is the single most dangerous
    thing an admin can do, so it takes two people: one requests with a reason,
    a DIFFERENT one approves, and only then does money move. A staffer approving
    their own request is refused — that's the entire point of the control. */
 const ADJ_MAX_CENTS = 1000000; // $10,000 per adjustment
+// Payouts at or above this get a manual check first. 0 disables the queue.
+const CASHOUT_REVIEW_CENTS = (() => { const n = parseInt(process.env.CASHOUT_REVIEW_CENTS, 10); return Number.isFinite(n) ? n : 100000; })(); // $1,000
 app.get('/api/admin/wallet-adjustments', auth.requirePerm('revenue'), async (req, res) => {
   const status = ['pending', 'approved', 'rejected'].includes(req.query.status) ? req.query.status : 'pending';
   try {
