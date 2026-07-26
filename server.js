@@ -25855,6 +25855,63 @@ app.post('/api/ai/alt-text', auth.requireAuth, rateLimit(20, 60000, 'ai-alt'), a
   } catch (err) { console.error(err); res.status(503).json({ error: 'Atwe AI is unavailable right now.' }); }
 });
 
+// AI search across your data: answers a natural question from the caller's OWN
+// visible rows — their DMs, orders, invoices, appointments, contacts. Retrieval
+// is keyword-scored to keep the context small; the model is instructed to
+// answer ONLY from that context. No row a user couldn't already read is used.
+app.post('/api/ai/ask', auth.requireAuth, rateLimit(10, 60000, 'ai-ask'), async (req, res) => {
+  const q = (req.body.question || '').toString().trim().slice(0, 300);
+  if (!q) return res.status(400).json({ error: 'Ask a question first.' });
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not available right now.' });
+  try {
+    const me = req.user.id;
+    const stop = new Set(['the', 'and', 'for', 'with', 'что', 'did', 'say', 'about', 'was', 'has', 'have', 'when', 'what', 'who', 'how', 'are', 'you', 'our', 'their']);
+    const words = [...new Set(q.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(w => w.length >= 3 && !stop.has(w)))];
+    const score = (text) => { const low = String(text || '').toLowerCase(); return words.reduce((s, w) => s + (low.includes(w) ? 1 : 0), 0); };
+    const snippets = [];
+    // My DMs (both directions), newest first — the richest source.
+    const dms = (await db.query(
+      `SELECT m.body, m.created_at, m.sender_id, su.name AS sender, ru.name AS recipient
+         FROM at_messages m JOIN users su ON su.id = m.sender_id JOIN users ru ON ru.id = m.recipient_id
+        WHERE (m.sender_id = $1 OR m.recipient_id = $1) AND m.body <> '' AND NOT m.deleted_all AND NOT ($1 = ANY(m.deleted_for))
+        ORDER BY m.created_at DESC LIMIT 400`, [me])).rows;
+    for (const m of dms) snippets.push({ kind: 'message', when: m.created_at, text: `${m.sender} → ${m.recipient}: ${m.body.slice(0, 300)}` });
+    const orders = (await db.query(
+      `SELECT o.id, o.total_cents, o.status, o.created_at, bu.name AS buyer, su.name AS seller,
+              (SELECT string_agg(oi.name, ', ') FROM order_items oi WHERE oi.order_id = o.id) AS items
+         FROM orders o JOIN users bu ON bu.id = o.buyer_id JOIN users su ON su.id = o.seller_id
+        WHERE o.buyer_id = $1 OR o.seller_id = $1 ORDER BY o.created_at DESC LIMIT 60`, [me])).rows;
+    for (const o of orders) snippets.push({ kind: 'order', when: o.created_at, text: `Order #${o.id} (${o.status}) $${(o.total_cents / 100).toFixed(2)} — ${o.items || ''} — buyer ${o.buyer}, seller ${o.seller}` });
+    const invs = (await db.query(
+      `SELECT i.title, i.amount_cents, i.status, i.created_at, iu.name AS issuer, cu.name AS customer
+         FROM invoices i JOIN users iu ON iu.id = i.issuer_id JOIN users cu ON cu.id = i.customer_id
+        WHERE i.issuer_id = $1 OR i.customer_id = $1 ORDER BY i.created_at DESC LIMIT 40`, [me])).rows;
+    for (const i2 of invs) snippets.push({ kind: 'invoice', when: i2.created_at, text: `Invoice "${i2.title}" $${(i2.amount_cents / 100).toFixed(2)} (${i2.status}) — from ${i2.issuer} to ${i2.customer}` });
+    const appts = (await db.query(
+      `SELECT a.service, a.when_at, a.status, bu.name AS business, cu.name AS customer
+         FROM appointments a JOIN users bu ON bu.id = a.business_id JOIN users cu ON cu.id = a.customer_id
+        WHERE (a.business_id = $1 OR a.customer_id = $1) AND a.when_at > now() - interval '30 days'
+        ORDER BY a.when_at DESC LIMIT 30`, [me])).rows;
+    for (const a of appts) snippets.push({ kind: 'appointment', when: a.when_at, text: `Appointment "${a.service}" (${a.status}) on ${new Date(a.when_at).toDateString()} — ${a.customer} with ${a.business}` });
+    const notes = (await db.query(
+      `SELECT c.notes, c.nickname, u.name FROM contacts c JOIN users u ON u.id = c.contact_id
+        WHERE c.owner_id = $1 AND c.notes IS NOT NULL LIMIT 50`, [me])).rows;
+    for (const n of notes) snippets.push({ kind: 'contact note', when: null, text: `Note on ${n.nickname || n.name}: ${n.notes.slice(0, 200)}` });
+    // Keyword-score, keep the best 60 (ties → newest first).
+    const ranked = snippets.map(s => ({ ...s, sc: score(s.text) })).filter(s => s.sc > 0)
+      .sort((a, b) => b.sc - a.sc || new Date(b.when || 0) - new Date(a.when || 0)).slice(0, 60);
+    if (!ranked.length) return res.json({ answer: 'I couldn’t find anything in your messages, orders or notes that matches that. Try naming the person or item.' });
+    const ctx = ranked.map(s => `[${s.kind}${s.when ? ' · ' + new Date(s.when).toISOString().slice(0, 10) : ''}] ${s.text}`).join('\n');
+    const msg = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 400,
+      system: 'You are Atwe AI, answering a member’s question about THEIR OWN activity from the context lines provided (their messages, orders, invoices, appointments, contact notes). Answer concisely and concretely — name who said what and when where relevant. If the context doesn’t contain the answer, say you couldn’t find it — NEVER invent details. No markdown headers. Never mention "Claude" or "Anthropic".',
+      messages: [{ role: 'user', content: `Context:\n${ctx}\n\nQuestion: ${q}` }],
+    });
+    const answer = (msg.content.find((b) => b.type === 'text')?.text || '').trim().slice(0, 2000);
+    res.json({ answer: answer || 'I couldn’t find that.' });
+  } catch (err) { console.error(err); res.status(503).json({ error: 'Atwe AI is unavailable right now.' }); }
+});
+
 // Photo-to-listing (eBay "magic listing"): Atwe AI drafts a marketplace listing
 // from one product photo — name, description, category, condition, and a price
 // suggestion the seller always reviews. Strict JSON; brand-safe; 503 keyless.
