@@ -18779,6 +18779,7 @@ function mapOrder(o, items, me) {
     pickup: !!o.pickup, pickupLocation: o.pickup_location || null,
     shipTo: o.needs_shipping ? { name: o.ship_name, phone: o.ship_phone || null, line1: o.ship_line1, line2: o.ship_line2 || null, city: o.ship_city, region: o.ship_region || null, postal: o.ship_postal || null, country: o.ship_country || null } : null,
     carrier: o.carrier || null, tracking: o.tracking || null, shippedAt: o.shipped_at || null, deliveredAt: o.delivered_at || null,
+    shipNote: o.ship_note || null, // seller's thank-you note, shown to both parties
     // A real, carrier-purchased label (Shippo) is an operational document for the
     // seller only — not shown on the buyer's copy of the order.
     labelUrl: (o.seller_id === me && o.label_url) || null, labelCostCents: o.seller_id === me ? (o.label_cost_cents || null) : null,
@@ -18791,7 +18792,7 @@ const ORDER_SELECT = `SELECT o.id, o.buyer_id, o.seller_id, o.total_cents, o.sta
   o.escrow, o.auto_release_at, o.released_at, o.dispute_reason, o.disputed_by,
   o.discount_cents, o.coupon_code, o.gift, o.gift_note,
   o.shipping_cents, o.tax_cents, o.needs_shipping, o.pickup, o.pickup_location, o.ship_name, o.ship_phone, o.ship_line1, o.ship_line2, o.ship_city, o.ship_region, o.ship_postal, o.ship_country,
-  o.carrier, o.tracking, o.shipped_at, o.delivered_at, o.label_url, o.label_cost_cents,
+  o.carrier, o.tracking, o.shipped_at, o.delivered_at, o.label_url, o.label_cost_cents, o.ship_note,
   bu.name AS buyer_name, bu.username AS buyer_username, bu.avatar AS buyer_avatar,
   su.name AS seller_name, su.username AS seller_username, su.avatar AS seller_avatar
   FROM orders o JOIN users bu ON bu.id = o.buyer_id JOIN users su ON su.id = o.seller_id`;
@@ -18865,12 +18866,13 @@ async function sendOrderEmails(orderId) {
 async function sendOrderShippedEmail(orderId) {
   try {
     const o = (await db.query(
-      `SELECT o.carrier, o.tracking, bu.email AS buyer_email, su.name AS seller_name
+      `SELECT o.carrier, o.tracking, o.ship_note, bu.email AS buyer_email, su.name AS seller_name
        FROM orders o JOIN users bu ON bu.id = o.buyer_id JOIN users su ON su.id = o.seller_id WHERE o.id = $1`, [orderId])).rows[0];
     if (!o || !o.buyer_email) return;
     const track = o.tracking ? `<p>${escapeHtml(o.carrier || 'Carrier')} tracking number: <b>${escapeHtml(o.tracking)}</b></p>` : '';
+    const note = o.ship_note ? `<p>A note from ${escapeHtml(o.seller_name)}:</p><blockquote>${escapeHtml(o.ship_note)}</blockquote>` : '';
     await mailer.sendMail({ to: o.buyer_email, subject: `Your Atwe order #${orderId} has shipped`,
-      html: `<h2>Your order is on its way!</h2><p>Order #${orderId} from <b>${escapeHtml(o.seller_name)}</b> has shipped.</p>${track}` });
+      html: `<h2>Your order is on its way!</h2><p>Order #${orderId} from <b>${escapeHtml(o.seller_name)}</b> has shipped.</p>${track}${note}` });
   } catch (e) { /* mail is best-effort */ }
 }
 // Email whichever party didn't mark the order delivered — mirrors the in-app
@@ -19475,8 +19477,8 @@ const CARRIERS = ['USPS', 'UPS', 'FedEx', 'DHL', 'Other'];
 // between the two paths. `extra` optionally carries the purchased-label fields.
 async function markOrderShipped(id, buyerId, sellerId, carrier, tracking, extra) {
   const r = await db.query(
-    'UPDATE orders SET carrier = $2, tracking = $3, shipped_at = now(), label_url = $4, label_cost_cents = $5, label_transaction_id = $6, label_claimed_at = NULL WHERE id = $1 AND shipped_at IS NULL',
-    [id, carrier, tracking, (extra && extra.labelUrl) || null, (extra && extra.labelCostCents) || null, (extra && extra.labelTransactionId) || null]
+    'UPDATE orders SET carrier = $2, tracking = $3, shipped_at = now(), label_url = $4, label_cost_cents = $5, label_transaction_id = $6, ship_note = $7, label_claimed_at = NULL WHERE id = $1 AND shipped_at IS NULL',
+    [id, carrier, tracking, (extra && extra.labelUrl) || null, (extra && extra.labelCostCents) || null, (extra && extra.labelTransactionId) || null, (extra && extra.shipNote) || null]
   );
   if (!r.rowCount) return false; // already shipped by a concurrent request — caller decides what to do
   notify(buyerId, sellerId, 'order_shipped');
@@ -19484,6 +19486,8 @@ async function markOrderShipped(id, buyerId, sellerId, carrier, tracking, extra)
   sendOrderShippedEmail(id).catch(() => {});
   return true;
 }
+// A seller's optional thank-you note, attached at ship time (Etsy dispatch-message style).
+function readShipNote(body) { return (body.note || '').toString().trim().slice(0, 300) || null; }
 app.post('/api/orders/:id/ship', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
@@ -19496,7 +19500,7 @@ app.post('/api/orders/:id/ship', auth.requireAuth, async (req, res) => {
     if (!o.needs_shipping) return res.status(400).json({ error: 'This order has nothing to ship.' });
     if (!['paid', 'escrow'].includes(o.status)) return res.status(400).json({ error: 'Only a paid order can be marked shipped.' });
     if (o.shipped_at) return res.status(400).json({ error: 'This order is already marked shipped.' });
-    await markOrderShipped(id, o.buyer_id, o.seller_id, carrier, tracking);
+    await markOrderShipped(id, o.buyer_id, o.seller_id, carrier, tracking, { shipNote: readShipNote(req.body) });
     res.json({ ok: true, carrier, tracking });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the order.' }); }
 });
@@ -19602,6 +19606,7 @@ app.post('/api/orders/:id/label/buy', auth.requireAuth, blockImpersonation, asyn
     // it can be reconciled by hand instead of silently debiting an untracked charge.
     const shipped = await markOrderShipped(id, o.buyer_id, o.seller_id, carrier, bought.trackingNumber, {
       labelUrl: bought.labelUrl, labelCostCents: rate.amountCents, labelTransactionId: bought.transactionId,
+      shipNote: readShipNote(req.body),
     });
     if (!shipped) {
       console.error(`shipping label ${bought.transactionId} for order ${id} purchased but the order was already marked shipped by a concurrent request — seller ${o.seller_id} was NOT charged; reconcile the label manually (cost ${rate.amountCents}c, tracking ${bought.trackingNumber})`);
