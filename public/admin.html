@@ -954,6 +954,7 @@
       <button class="tab" data-v="payouts" onclick="switchTab('payouts')">Payout review</button>
       <button class="tab" data-v="risk" onclick="switchTab('risk')">Risk</button>
       <button class="tab" data-v="retention" onclick="switchTab('retention')">Retention</button>
+      <button class="tab" data-v="curate" onclick="switchTab('curate')">Curate</button>
       <button class="tab" data-v="disputes" onclick="switchTab('disputes')">Disputes</button>
       <button class="tab" data-v="appeals" onclick="switchTab('appeals')">Appeals</button>
       <button class="tab" data-v="support" onclick="switchTab('support')">Support</button>
@@ -1418,7 +1419,7 @@ const TAB_PERM = {
   traffic: 'growth', site: 'super', usernames: 'handles', posts: 'moderation', support: 'support',
   reports: 'moderation', disputes: 'refunds', circles: 'moderation', feed: 'super',
   finance: 'revenue', growth: 'growth', audit: 'super', staff: 'super',
-  refunds: 'refunds', appeals: 'users', datareq: 'users', activity: 'super', investigate: 'moderation', moderate: 'moderation', orders: 'support', adjust: 'revenue', payouts: 'revenue', risk: 'revenue', retention: 'growth',
+  refunds: 'refunds', appeals: 'users', datareq: 'users', activity: 'super', investigate: 'moderation', moderate: 'moderation', orders: 'support', adjust: 'revenue', payouts: 'revenue', risk: 'revenue', retention: 'growth', curate: 'moderation',
   cards: 'revenue', features: 'super', featurecontrols: 'super', vault: 'super',
   announcements: 'super',
 };
@@ -1491,7 +1492,7 @@ const NAV_TITLES = {
   refunds:'Refunds', users:'Users', staff:'Staff', usernames:'Usernames', reports:'Reports',
   investigate:'Investigate', moderate:'AI content scan', disputes:'Disputes', appeals:'Appeals', support:'Support', datareq:'Data requests',
   posts:'Posts', circles:'Circles', feed:'Feed', activity:'Activity', traffic:'Traffic', growth:'Growth',
-  orders:'Orders', adjust:'Wallet adjustments', payouts:'Payout review', risk:'Risk', retention:'Retention', audit:'Audit log', site:'Site', cards:'Cards', features:'Features', featurecontrols:'Feature Controls', vault:'Vault',
+  orders:'Orders', adjust:'Wallet adjustments', payouts:'Payout review', risk:'Risk', retention:'Retention', curate:'Curate', audit:'Audit log', site:'Site', cards:'Cards', features:'Features', featurecontrols:'Feature Controls', vault:'Vault',
   announcements:'Announcements',
 };
 // Mobile: slide the sidebar in/out.
@@ -1525,6 +1526,7 @@ function renderView(){
   else if (VIEW === 'payouts') renderPayoutsView();
   else if (VIEW === 'risk') renderRiskView();
   else if (VIEW === 'retention') renderRetentionView();
+  else if (VIEW === 'curate') renderCurateView();
   else if (VIEW === 'disputes') renderDisputesView();
   else if (VIEW === 'circles') renderCirclesView();
   else if (VIEW === 'feed') renderFeedSignalsView();
@@ -3679,6 +3681,62 @@ async function dismissReport(id){
 }
 /* ─── Escrow disputes ─── */
 let DISPUTES = [];
+// Editorial curation: hand-picked shelves shown in Discover. One system for
+// featured listings and featured profiles.
+function renderCurateView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="panel"><h3>Curated shelves <span class="muted">· shown in Discover</span></h3>
+      <div class="sub">Hand-pick listings or profiles to spotlight. A shelf with nothing in it — or one you turn off — simply isn't shown to members.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <input class="in" id="colTitle" maxlength="80" placeholder="Title (e.g. Featured this week)" style="flex:1;min-width:200px;margin:0;"/>
+        <input class="in" id="colSub" maxlength="140" placeholder="Subtitle (optional)" style="flex:1;min-width:180px;margin:0;"/>
+        <select class="in" id="colKind" style="width:150px;margin:0;"><option value="products">Listings</option><option value="profiles">Profiles</option></select>
+        <button class="act accent" onclick="createCollection()">Create shelf</button>
+      </div></div>
+    <div id="colList"><div class="ld"><span class="ab-mark"></span></div></div>`;
+  loadCollections();
+}
+async function loadCollections(){
+  const box = document.getElementById('colList'); if (!box) return;
+  try {
+    const { collections } = await api('GET', '/api/admin/collections');
+    box.innerHTML = collections.length ? collections.map(c => `<div class="panel">
+        <div class="site-row" style="border:none;padding-top:0;">
+          <div><div class="srt">${esc(c.title)} <span class="pill${c.active ? ' pro' : ''}">${c.active ? 'live' : 'off'}</span> <span class="pill">${c.kind === 'profiles' ? 'profiles' : 'listings'}</span></div>
+            <div class="srs">${c.items.length} item${c.items.length === 1 ? '' : 's'}${c.subtitle ? ' · ' + esc(c.subtitle) : ''}</div></div>
+          <div style="display:flex;gap:6px;">
+            <button class="act" onclick="toggleCollection(${c.id}, ${c.active ? 'false' : 'true'})">${c.active ? 'Turn off' : 'Turn on'}</button>
+            <button class="act danger" onclick="deleteCollection(${c.id})">Delete</button></div>
+        </div>
+        <div style="display:flex;gap:8px;margin:8px 0;">
+          <input class="in" id="ci${c.id}" placeholder="${c.kind === 'profiles' ? '@username' : 'Listing id'}" style="flex:1;margin:0;"/>
+          <button class="act" onclick="addCollectionItem(${c.id}, '${c.kind}')">Add</button>
+        </div>
+        ${c.items.map(i => `<div class="site-row"><div><div class="srt">${esc(i.name || '')}${i.username ? ' <span class="muted">@' + esc(i.username) + '</span>' : ''}</div>
+          <div class="srs">${i.type === 'product' ? '$' + ((i.priceCents||0)/100).toFixed(2) : 'profile'}</div></div>
+          <button class="act danger" onclick="removeCollectionItem(${c.id}, ${i.itemId})">Remove</button></div>`).join('')}
+      </div>`).join('') : '<div class="empty">No shelves yet.</div>';
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function createCollection(){
+  const title = document.getElementById('colTitle').value.trim();
+  if (!title) { notify('Give the shelf a title.'); return; }
+  try {
+    await api('POST', '/api/admin/collections', { title, subtitle: document.getElementById('colSub').value.trim(), kind: document.getElementById('colKind').value });
+    document.getElementById('colTitle').value = ''; document.getElementById('colSub').value = '';
+    loadCollections();
+  } catch (e){ notify(e.message); }
+}
+async function toggleCollection(id, active){ try { await api('PATCH', '/api/admin/collections/' + id, { active }); loadCollections(); } catch (e){ notify(e.message); } }
+async function deleteCollection(id){ if (!confirm('Delete this shelf?')) return; try { await api('DELETE', '/api/admin/collections/' + id); loadCollections(); } catch (e){ notify(e.message); } }
+async function addCollectionItem(id, kind){
+  const v = (document.getElementById('ci' + id).value || '').trim();
+  if (!v) return;
+  try { await api('POST', '/api/admin/collections/' + id + '/items', kind === 'profiles' ? { username: v } : { productId: parseInt(v, 10) }); loadCollections(); }
+  catch (e){ notify(e.message); }
+}
+async function removeCollectionItem(id, itemId){ try { await api('DELETE', '/api/admin/collections/' + id + '/items/' + itemId); loadCollections(); } catch (e){ notify(e.message); } }
 // Retention cohorts — of the people who joined in week N, how many kept coming
 // back? Built from session activity that's already recorded.
 async function renderRetentionView(){

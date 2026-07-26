@@ -1758,6 +1758,33 @@ async function initSchema() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS condition TEXT;`); // new | like_new | good | fair (physical resale)
   // "Was" price (compare-at, Shopify-style) — shown struck through when > price.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS compare_at_cents INTEGER;`);
+  // Editorial curation: hand-picked shelves that appear in Discover — either a
+  // set of LISTINGS ("Featured this week") or a set of PROFILES ("Makers to
+  // follow"). One system for both, so merchandising and editorial picks don't
+  // drift into two half-built features.
+  await query(`
+    CREATE TABLE IF NOT EXISTS editorial_collections (
+      id         SERIAL PRIMARY KEY,
+      title      TEXT NOT NULL,
+      subtitle   TEXT,
+      kind       TEXT NOT NULL DEFAULT 'products',
+      active     BOOLEAN NOT NULL DEFAULT true,
+      position   INTEGER NOT NULL DEFAULT 0,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`
+    CREATE TABLE IF NOT EXISTS editorial_items (
+      id            SERIAL PRIMARY KEY,
+      collection_id INTEGER NOT NULL REFERENCES editorial_collections(id) ON DELETE CASCADE,
+      product_id    INTEGER REFERENCES products(id) ON DELETE CASCADE,
+      user_id       INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      position      INTEGER NOT NULL DEFAULT 0
+    );
+  `);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS editorial_items_prod_idx ON editorial_items(collection_id, product_id) WHERE product_id IS NOT NULL;`);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS editorial_items_user_idx ON editorial_items(collection_id, user_id) WHERE user_id IS NOT NULL;`);
   // Platform promo codes — ATWE-funded discounts (WELCOME10), distinct from a
   // seller's own coupons. The seller is still paid in full; the discount comes
   // out of Atwe's pocket and is booked as negative company revenue, so the
