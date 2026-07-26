@@ -1707,6 +1707,24 @@ async function initSchema() {
   // Product video (one per listing, Etsy-style). video_ver busts the immutable-
   // cached streaming URL when the clip is replaced; reads never inline the bytes.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS video TEXT;`);
+  // Auctions (eBay model): a listing with auction_ends_at sells by ascending
+  // bids — a bid is a commitment, never held funds; the winner pays afterwards
+  // through the offers checkout. Settlement is claim-first via auction_settled.
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS auction_ends_at TIMESTAMPTZ;`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS auction_min_cents INTEGER;`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS auction_settled BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS auction_winner_id INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS auction_bids (
+      id         SERIAL PRIMARY KEY,
+      product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      bidder_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      amount_cents INTEGER NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS auction_bids_product_idx ON auction_bids(product_id, amount_cents DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS products_auction_due_idx ON products(auction_ends_at) WHERE auction_ends_at IS NOT NULL AND NOT auction_settled;`);
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS video_ver INTEGER NOT NULL DEFAULT 0;`);
   // Processing time (Etsy-style "Ships in 1-3 days") — physical items.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS processing_days_min INTEGER;`);
