@@ -28,6 +28,12 @@ const ADMIN_HOST = process.env.ADMIN_HOST || 'admin.atwe.com';
 // and req.protocol reflect the real client-facing host.
 app.set('trust proxy', 1);
 
+// How slow is "slow", and how long the API log is kept. Declared up here
+// because the logging middleware below runs before the rest of the
+// developer-platform code is reached.
+const REQLOG_SLOW_MS = 800;
+const REQLOG_CAP_DAYS = 30;
+
 // Permanently move the old atwe.ai domain to atwe.com. A bare visit lands on the
 // Atwe AI page (?go=ai); deep links (verify/reset, etc.) keep their path + query,
 // and the old admin subdomain maps to the new one.
@@ -944,6 +950,36 @@ app.use('/api/admin', (req, res, next) => {
   res.status(403).json({ error: 'The dashboard is restricted to approved networks. You are on ' + (reqIp(req) || 'an unknown address') + '.', ipBlocked: true });
 });
 
+/* API request log. MUST be mounted here, above every route — Express runs its
+   stack in registration order, so a logger declared further down would never
+   see a request that a route defined earlier already answered. Records every
+   public-API call (rare, and somebody's integration depends on it) plus
+   anything on /api that failed or ran slow. Constants live with the rest of the
+   developer-platform code below. */
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api/')) return next();
+  const t0 = Date.now();
+  // Capture the path NOW. Express strips the mount prefix off req.path while a
+  // request is inside a mounted Router, and 'finish' fires from in there — so
+  // reading it later gave "/me" instead of "/api/v1/me", and every SUCCESSFUL
+  // public-API call was then mistaken for an ordinary fast request and dropped.
+  const fullPath = String(req.path).slice(0, 200);
+  const isPublicApi = fullPath.startsWith('/api/v1/');
+  res.on('finish', () => {
+    const ms = Date.now() - t0;
+    const failed = res.statusCode >= 400;
+    if (!isPublicApi && !failed && ms < REQLOG_SLOW_MS) return;
+    if (fullPath === '/api/rt/stream') return;   // a long-lived stream isn't "slow"
+    if (!db.isConfigured()) return;
+    db.query(
+      `INSERT INTO api_request_log (method, path, status, ms, key_id, user_id, ip) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [req.method, fullPath, res.statusCode, ms,
+        (req.apiKey && req.apiKey.id) || null, (req.user && req.user.id) || null, reqIp(req).slice(0, 60)]
+    ).catch(() => {});
+  });
+  next();
+});
+
 // On the admin subdomain (admin.atwe.com), the dashboard is the homepage.
 app.use((req, res, next) => {
   if (req.hostname === ADMIN_HOST && (req.path === '/' || req.path === '/index.html')) {
@@ -1024,6 +1060,7 @@ app.use((req, res, next) => {
   if (req.hostname === ADMIN_HOST) return next();         // admin dashboard host
   if (req.path === '/admin.html') return next();          // admin on the main domain
   if (req.path === '/robots.txt') return next();          // crawlers can always read robots
+  if (req.path === '/status' || req.path === '/status.html') return next(); // the status page is exactly what people check when the site is down
   if (req.path.startsWith('/api/')) return next();        // API incl. /api/site/unlock
   if (req.method !== 'GET') return next();
   if (!(req.headers.accept || '').includes('text/html')) return next(); // only navigations
@@ -2985,7 +3022,7 @@ app.post('/api/live/gift', auth.requireAuth, blockImpersonation, rateLimit(30, 6
     if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
     if (await blockedEither(req.user.id, s.userId)) return res.status(403).json({ error: 'You can’t send gifts here.' });
     const vel = await walletVelocityCheck(req.user.id, gift.cents);
-    if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
+    if (!vel.ok) return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel));
     const cid = req.body.clientId;
     const idem = await walletClaimIdem(req.user.id, cid, 'livegift');
     if (!idem.claimed) return res.json(idem.result || { ok: true, sent: true, deduped: true });
@@ -9933,7 +9970,7 @@ async function chargeGroupJoinFee(gid, uid, imp) {
   if (imp) return { error: { status: 403, body: { error: 'Paying a join fee isn’t available in view-as mode.' } } };
   if (await blockedEither(uid, g.created_by)) return { error: { status: 403, body: { error: 'You can’t join this group.' } } };
   const vel = await walletVelocityCheck(uid, g.join_fee_cents);
-  if (!vel.ok) return { error: { status: vel.frozen ? 403 : 429, body: walletVelocityError(vel) } };
+  if (!vel.ok) return { error: { status: walletVelocityStatus(vel), body: walletVelocityError(vel) } };
   const claim = await db.query('INSERT INTO at_group_members (group_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING user_id', [gid, uid]);
   if (!claim.rowCount) return { ok: true, charged: 0 }; // a concurrent join won — they're in, unpaid twice never happens
   const tr = await walletTransfer(uid, g.created_by, g.join_fee_cents, 'Join fee · ' + g.name);
@@ -13544,7 +13581,7 @@ app.post('/api/social/posts/:id/unlock', auth.requireAuth, blockImpersonation, r
     if (p.user_id === req.user.id) return res.status(400).json({ error: 'It’s your own post.' });
     if (await blockedEither(req.user.id, p.user_id)) return res.status(403).json({ error: 'Not available.' });
     const v = await walletVelocityCheck(req.user.id, p.ppv_cents);
-    if (!v.ok) return res.status(429).json(walletVelocityError(v));
+    if (!v.ok) return res.status(walletVelocityStatus(v)).json(walletVelocityError(v));
     // Claim the unlock row before moving money so two concurrent requests can't
     // both pass an "already unlocked?" check and charge the buyer twice.
     const claim = await db.query('INSERT INTO post_unlocks (post_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING 1', [id, req.user.id]);
@@ -14082,7 +14119,7 @@ app.post('/api/ads/campaigns/:id/pay', auth.requireAuth, blockImpersonation, asy
     // Pay with wallet balance (idempotent double-tap safe).
     if (req.body.payWith === 'balance') {
       const v = await walletVelocityCheck(req.user.id, amountCents);
-      if (!v.ok) return res.status(429).json(walletVelocityError(v));
+      if (!v.ok) return res.status(walletVelocityStatus(v)).json(walletVelocityError(v));
       const claim = await walletClaimIdem(req.user.id, clientId, 'ad');
       if (!claim.claimed) return res.json(claim.result || { ok: true, paid: true });
       const d = await walletDebit(req.user.id, amountCents, 'ad', 'Atwe ad — ' + c.sponsor_name);
@@ -16239,6 +16276,887 @@ app.put('/api/admin/feature-flags', auth.requireAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save feature flags.' }); }
 });
 /* ═══════════════════════════════════════════════
+   BATCH 35 — ops: fraud rules · alert rules · broadcasts · SLA · QA · digest · status
+═══════════════════════════════════════════════ */
+
+/* ─── Fraud rules: the admin surface ─── */
+app.get('/api/admin/fraud-rules', auth.requirePerm('revenue'), async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT r.*, u.name AS created_by_name FROM fraud_rules r LEFT JOIN users u ON u.id = r.created_by ORDER BY r.id`);
+    const hits = (await db.query(
+      `SELECT h.*, r.name AS rule_name, u.username FROM fraud_hits h
+         LEFT JOIN fraud_rules r ON r.id = h.rule_id LEFT JOIN users u ON u.id = h.user_id
+        ORDER BY h.id DESC LIMIT 100`)).rows;
+    res.json({ rules: rows, hits, conditions: FRAUD_CONDITIONS, actions: FRAUD_ACTIONS });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the rules.' }); }
+});
+app.post('/api/admin/fraud-rules', auth.requirePerm('revenue'), async (req, res) => {
+  const name = String(req.body.name || '').trim().slice(0, 80);
+  const action = FRAUD_ACTIONS.includes(req.body.action) ? req.body.action : 'flag';
+  const conditions = normalizeFraudConditions(req.body.conditions);
+  if (!name) return res.status(400).json({ error: 'Give the rule a name.' });
+  if (!fraudRuleIsUsable(conditions)) return res.status(400).json({ error: 'Add at least one condition — a rule with none would match every payment on the platform.' });
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO fraud_rules (name, action, conditions, created_by) VALUES ($1,$2,$3,$4) RETURNING *`,
+      [name, action, conditions, req.user.id]);
+    await loadFraudRules();
+    adminAudit(req, 'fraud.rule_create', 'settings', rows[0].id, { name, action, conditions });
+    res.status(201).json({ rule: rows[0] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the rule.' }); }
+});
+app.patch('/api/admin/fraud-rules/:id', auth.requirePerm('revenue'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const sets = [], args = [id];
+  if (typeof req.body.enabled === 'boolean') { args.push(req.body.enabled); sets.push(`enabled = $${args.length}`); }
+  if (typeof req.body.name === 'string' && req.body.name.trim()) { args.push(req.body.name.trim().slice(0, 80)); sets.push(`name = $${args.length}`); }
+  if (FRAUD_ACTIONS.includes(req.body.action)) { args.push(req.body.action); sets.push(`action = $${args.length}`); }
+  if (req.body.conditions) {
+    const c = normalizeFraudConditions(req.body.conditions);
+    if (!fraudRuleIsUsable(c)) return res.status(400).json({ error: 'A rule needs at least one condition.' });
+    args.push(c); sets.push(`conditions = $${args.length}`);
+  }
+  if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
+  try {
+    const { rowCount } = await db.query(`UPDATE fraud_rules SET ${sets.join(', ')} WHERE id = $1`, args);
+    if (!rowCount) return res.status(404).json({ error: 'Rule not found.' });
+    await loadFraudRules();
+    adminAudit(req, 'fraud.rule_update', 'settings', id, req.body);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the rule.' }); }
+});
+app.delete('/api/admin/fraud-rules/:id', auth.requirePerm('revenue'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    await db.query('DELETE FROM fraud_rules WHERE id = $1', [id]);
+    await loadFraudRules();
+    adminAudit(req, 'fraud.rule_delete', 'settings', id, {});
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the rule.' }); }
+});
+// Try a rule against a real account before trusting it with real money.
+app.post('/api/admin/fraud-rules/test', auth.requirePerm('revenue'), async (req, res) => {
+  const username = String(req.body.username || '').trim().replace(/^@/, '').slice(0, 40);
+  const amountCents = Math.round(Number(req.body.amountCents) || 0);
+  if (!username) return res.status(400).json({ error: 'Enter a @username to test against.' });
+  try {
+    const u = (await db.query('SELECT id FROM users WHERE lower(username) = lower($1)', [username])).rows[0];
+    if (!u) return res.status(404).json({ error: 'No account with that @username.' });
+    // A dry run: report what WOULD happen without recording a hit or freezing.
+    const saved = _fraudRules;
+    const would = [];
+    for (const r of saved) {
+      const one = [r];
+      _fraudRules = one.map((x) => ({ ...x, action: 'flag' }));  // never freeze in a test
+      const out = await fraudCheck(u.id, amountCents);
+      if (out.action) would.push({ id: r.id, name: r.name, action: r.action });
+    }
+    _fraudRules = saved;
+    // The test above records hits (it runs the real evaluator) — clear them so a
+    // dry run never pollutes the real log.
+    await db.query(`DELETE FROM fraud_hits WHERE user_id = $1 AND created_at > now() - interval '10 seconds'`, [u.id]).catch(() => {});
+    res.json({ matched: would, amountCents, username });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not run the test.' }); }
+});
+
+/* ─── Alert rules: which numbers you want to hear about ─── */
+app.get('/api/admin/alert-rules', auth.requireAdmin, async (_req, res) => {
+  try {
+    const { rows } = await db.query('SELECT * FROM alert_rules ORDER BY metric');
+    const byMetric = Object.fromEntries(rows.map((r) => [r.metric, r]));
+    res.json({
+      // Every watchable number, with its rule if one has been set.
+      metrics: ANOMALY_METRICS.map((m) => ({
+        key: m.key, label: m.label, money: !!m.money, upOnly: !!m.upOnly,
+        rule: byMetric[m.key] || null,
+      })),
+      defaultThreshold: 60,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load alert rules.' }); }
+});
+app.put('/api/admin/alert-rules/:metric', auth.requireAdmin, async (req, res) => {
+  const metric = String(req.params.metric || '');
+  if (!ANOMALY_METRICS.some((m) => m.key === metric)) return res.status(400).json({ error: 'Unknown metric.' });
+  const direction = ['up', 'down', 'both'].includes(req.body.direction) ? req.body.direction : 'both';
+  let threshold = Math.round(Number(req.body.threshold));
+  if (!Number.isFinite(threshold) || threshold < 5) threshold = 60;
+  threshold = Math.min(threshold, 1000);
+  const enabled = req.body.enabled !== false;
+  const byEmail = req.body.byEmail !== false;
+  const byPush = req.body.byPush === true;
+  try {
+    await db.query(
+      `INSERT INTO alert_rules (metric, direction, threshold, by_email, by_push, enabled, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT (metric) DO UPDATE SET direction = $2, threshold = $3, by_email = $4, by_push = $5, enabled = $6`,
+      [metric, direction, threshold, byEmail, byPush, enabled, req.user.id]);
+    await loadAlertRules();
+    adminAudit(req, 'alert.rule', 'settings', metric, { direction, threshold, enabled });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the rule.' }); }
+});
+app.delete('/api/admin/alert-rules/:metric', auth.requireAdmin, async (req, res) => {
+  try {
+    await db.query('DELETE FROM alert_rules WHERE metric = $1', [String(req.params.metric || '')]);
+    await loadAlertRules();
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the rule.' }); }
+});
+
+/* ─── Scheduled & draft broadcasts ─── */
+const BROADCAST_STATES = ['draft', 'scheduled', 'sent', 'cancelled'];
+function mapBroadcast(b) {
+  return { id: b.id, subject: b.subject, body: b.body, audience: b.audience,
+    byEmail: b.by_email, byPush: b.by_push, status: b.status, sendAt: b.send_at,
+    sentAt: b.sent_at, recipients: b.recipients, emailed: b.emailed, pushed: b.pushed,
+    createdByName: b.created_by_name || null, createdAt: b.created_at };
+}
+app.get('/api/admin/broadcasts', auth.requireAdmin, async (req, res) => {
+  const status = BROADCAST_STATES.includes(req.query.status) ? req.query.status : null;
+  try {
+    const args = [], where = [];
+    if (status) { args.push(status); where.push(`b.status = $${args.length}`); }
+    const { rows } = await db.query(
+      `SELECT b.*, u.name AS created_by_name FROM admin_broadcasts b LEFT JOIN users u ON u.id = b.created_by
+        ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+        ORDER BY b.created_at DESC LIMIT 100`, args);
+    res.json({ broadcasts: rows.map(mapBroadcast), audiences: Object.keys(BROADCAST_AUDIENCES) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load broadcasts.' }); }
+});
+app.post('/api/admin/broadcasts', auth.requireAdmin, async (req, res) => {
+  const body = String(req.body.body || '').trim();
+  const subject = String(req.body.subject || '').trim().slice(0, 160) || null;
+  const audience = BROADCAST_AUDIENCES[req.body.audience] ? req.body.audience : 'all';
+  const byEmail = req.body.byEmail !== false;
+  const byPush = req.body.byPush === true;
+  const wantSchedule = !!req.body.sendAt;
+  if (!body) return res.status(400).json({ error: 'Write a message.' });
+  if (body.length > 4000) return res.status(400).json({ error: 'That message is too long.' });
+  let sendAt = null;
+  if (wantSchedule) {
+    const d = new Date(req.body.sendAt);
+    if (isNaN(d.getTime())) return res.status(400).json({ error: 'That send time is not a date.' });
+    if (d.getTime() < Date.now() + 30000) return res.status(400).json({ error: 'Pick a time at least a minute from now.' });
+    sendAt = d.toISOString();
+  }
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO admin_broadcasts (subject, body, audience, by_email, by_push, status, send_at, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [subject, body, audience, byEmail, byPush, sendAt ? 'scheduled' : 'draft', sendAt, req.user.id]);
+    adminAudit(req, sendAt ? 'broadcast.schedule' : 'broadcast.draft', 'system', rows[0].id, { audience, sendAt });
+    res.status(201).json({ broadcast: mapBroadcast(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the broadcast.' }); }
+});
+app.patch('/api/admin/broadcasts/:id', auth.requireAdmin, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const sets = ['updated_at = now()'], args = [id];
+  const put = (col, v) => { args.push(v); sets.push(`${col} = $${args.length}`); };
+  if (typeof req.body.body === 'string' && req.body.body.trim()) put('body', req.body.body.trim().slice(0, 4000));
+  if (typeof req.body.subject === 'string') put('subject', req.body.subject.trim().slice(0, 160) || null);
+  if (BROADCAST_AUDIENCES[req.body.audience]) put('audience', req.body.audience);
+  if (typeof req.body.byEmail === 'boolean') put('by_email', req.body.byEmail);
+  if (typeof req.body.byPush === 'boolean') put('by_push', req.body.byPush);
+  if ('sendAt' in req.body) {
+    if (!req.body.sendAt) { put('send_at', null); put('status', 'draft'); }
+    else {
+      const d = new Date(req.body.sendAt);
+      if (isNaN(d.getTime())) return res.status(400).json({ error: 'That send time is not a date.' });
+      if (d.getTime() < Date.now() + 30000) return res.status(400).json({ error: 'Pick a time at least a minute from now.' });
+      put('send_at', d.toISOString()); put('status', 'scheduled');
+    }
+  }
+  try {
+    // A broadcast that has already gone out can never be edited — the message
+    // is in people's inboxes, and a rewritten record would be a lie.
+    const { rowCount } = await db.query(
+      `UPDATE admin_broadcasts SET ${sets.join(', ')} WHERE id = $1 AND status IN ('draft','scheduled')`, args);
+    if (!rowCount) return res.status(409).json({ error: 'That broadcast has already been sent or cancelled.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+app.delete('/api/admin/broadcasts/:id', auth.requireAdmin, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rowCount } = await db.query(
+      `UPDATE admin_broadcasts SET status = 'cancelled' WHERE id = $1 AND status IN ('draft','scheduled')`, [id]);
+    if (!rowCount) return res.status(409).json({ error: 'That broadcast has already been sent.' });
+    adminAudit(req, 'broadcast.cancel', 'system', id, {});
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel that.' }); }
+});
+// Send a saved one right now (the "actually, send it" button).
+app.post('/api/admin/broadcasts/:id/send', auth.requireAdmin, rateLimit(10, 60000, 'bcast-send'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    // Claim-first: two admins pressing Send can't mail everyone twice.
+    const b = (await db.query(
+      `UPDATE admin_broadcasts SET status = 'sending' WHERE id = $1 AND status IN ('draft','scheduled') RETURNING *`, [id])).rows[0];
+    if (!b) return res.status(409).json({ error: 'That broadcast is not waiting to be sent.' });
+    const out = await runBroadcast(b);
+    adminAudit(req, 'broadcast.send', 'system', id, { audience: b.audience, recipients: out.recipients });
+    res.json({ ok: true, ...out });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send that.' }); }
+});
+
+/* ─── Support SLA ──────────────────────────────────────────────────────────
+   A ticket sitting unanswered is the one thing a support queue must never let
+   you miss. The clock starts when they wrote in and stops when a human replies,
+   which is exactly how a response-time promise is measured. */
+const SLA_KEY = 'support_sla';
+let _supportSla = { firstReplyHours: 24, resolveHours: 72 };
+function normalizeSla(v) {
+  const src = (v && typeof v === 'object') ? v : {};
+  const num = (x, d) => { const n = Math.round(Number(x)); return Number.isFinite(n) && n > 0 && n <= 720 ? n : d; };
+  return { firstReplyHours: num(src.firstReplyHours, 24), resolveHours: num(src.resolveHours, 72) };
+}
+app.get('/api/admin/support-sla', auth.requirePerm('support'), async (_req, res) => {
+  try {
+    // How the queue is actually doing, not just what the target is.
+    const { rows } = await db.query(
+      `SELECT COUNT(*)::int AS open,
+              COUNT(*) FILTER (WHERE created_at < now() - ($1 || ' hours')::interval)::int AS overdue,
+              ROUND(EXTRACT(EPOCH FROM AVG(now() - created_at)) / 3600)::int AS avg_wait_hours
+         FROM support_requests WHERE COALESCE(state,'open') = 'open'`, [String(_supportSla.firstReplyHours)]);
+    const solved = (await db.query(
+      `SELECT ROUND(EXTRACT(EPOCH FROM AVG(resolved_at - created_at)) / 3600)::int AS avg_resolve_hours,
+              COUNT(*)::int AS n
+         FROM support_requests WHERE resolved_at IS NOT NULL AND resolved_at > now() - interval '30 days'`)).rows[0];
+    res.json({ sla: _supportSla, queue: rows[0], last30: solved });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the SLA.' }); }
+});
+app.put('/api/admin/support-sla', auth.requirePerm('support'), async (req, res) => {
+  try {
+    const next = normalizeSla(req.body.sla);
+    if (db.isConfigured()) await db.setSetting(SLA_KEY, next);
+    _supportSla = next;
+    adminAudit(req, 'support.sla', 'settings', SLA_KEY, next);
+    res.json({ ok: true, sla: next });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+
+/* ─── Moderator performance & QA ───────────────────────────────────────────
+   Who decided what, how fast, and how often an appeal overturned them — plus a
+   random sample to double-check. Not a stick to beat staff with: an overturn
+   rate that is climbing usually means the GUIDANCE is unclear, not the person. */
+const QA_ACTIONS = ['user.status', 'report.action', 'moderation.flag_resolve', 'dmca.remove',
+  'dmca.reject', 'impersonation.uphold', 'impersonation.reject', 'appeal.grant', 'appeal.deny'];
+app.get('/api/admin/moderator-qa', auth.requirePerm('moderation'), async (req, res) => {
+  const days = Math.min(365, Math.max(1, parseInt(req.query.days, 10) || 30));
+  try {
+    const [perStaff, overturns, sample, reviewed] = await Promise.all([
+      db.query(
+        `SELECT a.actor_id, COALESCE(a.actor_name, 'Unknown') AS actor_name, COUNT(*)::int AS decisions,
+                COUNT(*) FILTER (WHERE a.action LIKE 'dmca.%')::int AS copyright,
+                COUNT(*) FILTER (WHERE a.action LIKE 'impersonation.%')::int AS impersonation,
+                COUNT(*) FILTER (WHERE a.action = 'user.status')::int AS enforcement
+           FROM admin_audit a
+          WHERE a.created_at > now() - ($1 || ' days')::interval AND a.action = ANY($2)
+          GROUP BY a.actor_id, a.actor_name ORDER BY decisions DESC LIMIT 50`,
+        [String(days), QA_ACTIONS]),
+      // An appeal granted against a suspension is that suspension overturned.
+      db.query(
+        `SELECT s.status_by AS actor_id, COUNT(*)::int AS overturned
+           FROM appeals ap JOIN users s ON s.id = ap.user_id
+          WHERE ap.state = 'granted' AND ap.created_at > now() - ($1 || ' days')::interval
+            AND s.status_by IS NOT NULL
+          GROUP BY s.status_by`, [String(days)]),
+      // A random handful to look at again. Ordering by random() is fine here:
+      // it runs on one admin's click over a bounded, recent window.
+      db.query(
+        `SELECT a.id, a.actor_id, a.actor_name, a.action, a.target_type, a.target_id, a.meta, a.created_at
+           FROM admin_audit a
+          WHERE a.created_at > now() - ($1 || ' days')::interval AND a.action = ANY($2)
+            AND NOT EXISTS (SELECT 1 FROM qa_reviews q WHERE q.audit_id = a.id)
+          ORDER BY random() LIMIT 10`, [String(days), QA_ACTIONS]),
+      db.query(
+        `SELECT q.*, u.name AS reviewer_name, a.action, a.actor_name, a.target_type, a.target_id
+           FROM qa_reviews q LEFT JOIN users u ON u.id = q.reviewer_id
+           LEFT JOIN admin_audit a ON a.id = q.audit_id
+          ORDER BY q.id DESC LIMIT 50`),
+    ]);
+    const overturnBy = Object.fromEntries(overturns.rows.map((r) => [r.actor_id, r.overturned]));
+    const staff = perStaff.rows.map((r) => {
+      const ov = overturnBy[r.actor_id] || 0;
+      return { ...r, overturned: ov, overturnPct: r.decisions ? Math.round((ov / r.decisions) * 100) : 0 };
+    });
+    const agree = reviewed.rows.filter((r) => r.verdict === 'agree').length;
+    const judged = reviewed.rows.filter((r) => r.verdict !== 'unsure').length;
+    res.json({ days, staff, sample: sample.rows, reviewed: reviewed.rows,
+      agreementPct: judged ? Math.round((agree / judged) * 100) : null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the review.' }); }
+});
+app.post('/api/admin/moderator-qa/:auditId', auth.requirePerm('moderation'), async (req, res) => {
+  const auditId = routeId(req.params.auditId);
+  const verdict = ['agree', 'disagree', 'unsure'].includes(req.body.verdict) ? req.body.verdict : null;
+  if (!Number.isInteger(auditId) || !verdict) return res.status(400).json({ error: 'Pick a verdict.' });
+  const note = String(req.body.note || '').trim().slice(0, 500) || null;
+  try {
+    const a = (await db.query('SELECT actor_id FROM admin_audit WHERE id = $1', [auditId])).rows[0];
+    if (!a) return res.status(404).json({ error: 'That decision no longer exists.' });
+    // Reviewing your own decision defeats the entire point of a second look.
+    if (a.actor_id === req.user.id) return res.status(400).json({ error: 'You can’t second-review your own decision.' });
+    await db.query(
+      `INSERT INTO qa_reviews (audit_id, reviewer_id, verdict, note) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (audit_id, reviewer_id) DO UPDATE SET verdict = $3, note = $4, created_at = now()`,
+      [auditId, req.user.id, verdict, note]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+
+/* ─── Public status page ───────────────────────────────────────────────────
+   The page a business checks BEFORE they trust you with their money. No auth:
+   if the platform is having a bad day, the status page must still answer. */
+const INCIDENT_IMPACTS = ['minor', 'major', 'critical', 'maintenance'];
+const INCIDENT_STATES = ['investigating', 'identified', 'monitoring', 'resolved'];
+app.get(['/status', '/status.html'], (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'status.html'));
+});
+app.get('/api/status', async (_req, res) => {
+  try {
+    if (!db.isConfigured()) return res.json({ ok: true, database: false, incidents: [] });
+    const open = (await db.query(
+      `SELECT * FROM incidents WHERE resolved_at IS NULL ORDER BY started_at DESC LIMIT 10`)).rows;
+    const recent = (await db.query(
+      `SELECT * FROM incidents WHERE resolved_at IS NOT NULL AND resolved_at > now() - interval '14 days'
+        ORDER BY started_at DESC LIMIT 10`)).rows;
+    const ids = [...open, ...recent].map((i) => i.id);
+    let updates = [];
+    if (ids.length) {
+      updates = (await db.query(
+        `SELECT incident_id, status, body, created_at FROM incident_updates WHERE incident_id = ANY($1) ORDER BY created_at`, [ids])).rows;
+    }
+    const withUpdates = (rows) => rows.map((i) => ({
+      id: i.id, title: i.title, impact: i.impact, status: i.status,
+      startedAt: i.started_at, resolvedAt: i.resolved_at,
+      updates: updates.filter((u) => u.incident_id === i.id)
+        .map((u) => ({ status: u.status, body: u.body, at: u.created_at })),
+    }));
+    const worst = open.reduce((w, i) => (INCIDENT_IMPACTS.indexOf(i.impact) > INCIDENT_IMPACTS.indexOf(w) ? i.impact : w), null);
+    res.json({
+      ok: !open.length,
+      // Only reported when there IS something to report — claiming "all systems
+      // operational" from inside a broken system would be worse than silence.
+      state: open.length ? (worst === 'maintenance' ? 'maintenance' : 'incident') : 'operational',
+      database: true, incidents: withUpdates(open), history: withUpdates(recent),
+      checkedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    res.json({ ok: false, state: 'incident', database: false, incidents: [],
+      note: 'The status service could not reach the database.' });
+  }
+});
+app.get('/api/admin/incidents', auth.requireAdmin, async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT i.*, u.name AS created_by_name,
+              (SELECT COUNT(*)::int FROM incident_updates x WHERE x.incident_id = i.id) AS update_count
+         FROM incidents i LEFT JOIN users u ON u.id = i.created_by
+        ORDER BY i.started_at DESC LIMIT 100`);
+    res.json({ incidents: rows, impacts: INCIDENT_IMPACTS, states: INCIDENT_STATES });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load incidents.' }); }
+});
+app.post('/api/admin/incidents', auth.requireAdmin, async (req, res) => {
+  const title = String(req.body.title || '').trim().slice(0, 160);
+  const impact = INCIDENT_IMPACTS.includes(req.body.impact) ? req.body.impact : 'minor';
+  const body = String(req.body.body || '').trim().slice(0, 2000);
+  if (!title) return res.status(400).json({ error: 'Give the incident a title.' });
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO incidents (title, impact, created_by) VALUES ($1,$2,$3) RETURNING *`,
+      [title, impact, req.user.id]);
+    if (body) {
+      await db.query(`INSERT INTO incident_updates (incident_id, status, body, created_by) VALUES ($1,'investigating',$2,$3)`,
+        [rows[0].id, body, req.user.id]);
+    }
+    adminAudit(req, 'incident.open', 'system', rows[0].id, { title, impact });
+    res.status(201).json({ incident: rows[0] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not open the incident.' }); }
+});
+app.post('/api/admin/incidents/:id/update', auth.requireAdmin, async (req, res) => {
+  const id = routeId(req.params.id);
+  const status = INCIDENT_STATES.includes(req.body.status) ? req.body.status : null;
+  const body = String(req.body.body || '').trim().slice(0, 2000);
+  if (!Number.isInteger(id) || !status) return res.status(400).json({ error: 'Pick a status.' });
+  if (!body) return res.status(400).json({ error: 'Write what changed — an update with no words tells nobody anything.' });
+  try {
+    const inc = (await db.query('SELECT id, resolved_at FROM incidents WHERE id = $1', [id])).rows[0];
+    if (!inc) return res.status(404).json({ error: 'Incident not found.' });
+    await db.query(`INSERT INTO incident_updates (incident_id, status, body, created_by) VALUES ($1,$2,$3,$4)`,
+      [id, status, body, req.user.id]);
+    await db.query(
+      `UPDATE incidents SET status = $2, resolved_at = CASE WHEN $2 = 'resolved' THEN now() ELSE NULL END WHERE id = $1`,
+      [id, status]);
+    adminAudit(req, status === 'resolved' ? 'incident.resolve' : 'incident.update', 'system', id, { status });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post the update.' }); }
+});
+app.delete('/api/admin/incidents/:id', auth.requireAdmin, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    await db.query('DELETE FROM incidents WHERE id = $1', [id]);
+    adminAudit(req, 'incident.delete', 'system', id, {});
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete that.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   BATCH 35 — the developer platform: API keys · webhooks · request log
+   A business can finally connect Atwe to whatever else they run. Three parts,
+   built together because they only make sense together: a KEY to call us with,
+   a WEBHOOK so we can call them, and a LOG so both sides can see what happened.
+═══════════════════════════════════════════════ */
+const _nodeCrypto = require('crypto');
+// Deliberately narrow. Each scope is a real thing a key can do, and read is
+// separate from write everywhere — an integration that only needs to see orders
+// should never be able to create products.
+const API_SCOPES = [
+  { key: 'profile.read', label: 'Read your account', help: 'Name, @username, plan, account type.' },
+  { key: 'orders.read', label: 'Read your orders', help: 'Orders where you are the seller.' },
+  { key: 'products.read', label: 'Read your listings', help: 'Your catalogue.' },
+  { key: 'products.write', label: 'Create & edit listings', help: 'Add, update and hide your own listings.' },
+  { key: 'webhooks.read', label: 'Read your webhooks', help: 'See where events are being sent.' },
+];
+const API_SCOPE_KEYS = API_SCOPES.map((s) => s.key);
+const API_KEY_PREFIX = 'atwe_sk_';
+const API_KEY_CAP = 20;             // per account
+function hashApiKey(raw) { return _nodeCrypto.createHash('sha256').update(String(raw)).digest('hex'); }
+function newApiKey() {
+  const body = _nodeCrypto.randomBytes(24).toString('base64url');
+  const raw = API_KEY_PREFIX + body;
+  return { raw, hash: hashApiKey(raw), prefix: raw.slice(0, API_KEY_PREFIX.length + 6) };
+}
+function mapApiKey(k) {
+  return {
+    id: k.id, name: k.name, prefix: k.prefix, scopes: k.scopes || [],
+    lastUsedAt: k.last_used_at, calls: Number(k.calls || 0),
+    revokedAt: k.revoked_at, createdAt: k.created_at,
+    ownerName: k.owner_name || null, ownerUsername: k.owner_username || null,
+  };
+}
+/* Authenticate a public-API call by key. Deliberately NOT the same middleware
+   as requireAuth: a key is not a login. It carries no session, can't touch
+   another account, and only ever does what its scopes allow. */
+function requireApiKey(scope) {
+  return async function (req, res, next) {
+    const hdr = String(req.headers.authorization || '');
+    const raw = hdr.startsWith('Bearer ') ? hdr.slice(7).trim() : String(req.headers['x-api-key'] || '').trim();
+    if (!raw || !raw.startsWith(API_KEY_PREFIX)) {
+      return res.status(401).json({ error: 'An API key is required. Send it as "Authorization: Bearer atwe_sk_…".' });
+    }
+    try {
+      const { rows } = await db.query(
+        `SELECT k.*, u.deactivated, u.status FROM api_keys k JOIN users u ON u.id = k.owner_id
+          WHERE k.key_hash = $1 LIMIT 1`, [hashApiKey(raw)]);
+      const k = rows[0];
+      if (!k || k.revoked_at) return res.status(401).json({ error: 'That API key is not valid.' });
+      if (k.deactivated || (k.status && k.status !== 'active')) return res.status(403).json({ error: 'This account cannot use the API right now.' });
+      if (scope && !(k.scopes || []).includes(scope)) {
+        return res.status(403).json({ error: 'This key does not have the "' + scope + '" permission.', needScope: scope });
+      }
+      req.apiKey = { id: k.id, ownerId: k.owner_id, scopes: k.scopes || [] };
+      req.user = { id: k.owner_id, api: true };  // so shared helpers behave
+      // Fire-and-forget usage stamp; a busy key must not pay for bookkeeping.
+      db.query('UPDATE api_keys SET last_used_at = now(), calls = calls + 1 WHERE id = $1', [k.id]).catch(() => {});
+      next();
+    } catch (err) { console.error(err); res.status(500).json({ error: 'Could not check that key.' }); }
+  };
+}
+
+/* ─── Request log ──────────────────────────────────────────────────────────
+   Not every request — that would be a firehose nobody reads. Every PUBLIC API
+   call (they are rare and they are somebody's integration), plus anything on
+   /api that failed or was slow. That's the set you actually go looking for. */
+// (the logging middleware itself is mounted with the other global
+// middleware, near express.json — see 'API request log' there.)
+setInterval(() => {
+  if (!db.isConfigured()) return;
+  db.query(`DELETE FROM api_request_log WHERE created_at < now() - ($1 || ' days')::interval`, [String(REQLOG_CAP_DAYS)]).catch(() => {});
+}, 24 * 3600 * 1000).unref?.();
+
+/* ─── Outbound webhooks ────────────────────────────────────────────────────
+   Atwe calls YOUR system when something happens. Every delivery is queued
+   first, then attempted by a flusher with backoff — so a customer's server
+   being down for an hour costs them nothing, and never slows an order down. */
+const WEBHOOK_EVENTS = [
+  { key: 'order.created', label: 'A new order', help: 'Someone bought from you.' },
+  { key: 'order.paid', label: 'An order was paid', help: 'The money has landed.' },
+  { key: 'order.shipped', label: 'An order shipped', help: 'Carrier and tracking included.' },
+  { key: 'product.created', label: 'A listing was added', help: 'You (or your team) added a listing.' },
+  { key: 'review.created', label: 'A new review', help: 'Someone reviewed one of your products.' },
+];
+const WEBHOOK_EVENT_KEYS = WEBHOOK_EVENTS.map((e) => e.key);
+const WEBHOOK_MAX_ATTEMPTS = 6;
+const WEBHOOK_CAP = 10;             // endpoints per account
+function newWebhookSecret() { return 'whsec_' + _nodeCrypto.randomBytes(24).toString('base64url'); }
+function webhookSignature(secret, timestamp, body) {
+  return _nodeCrypto.createHmac('sha256', secret).update(timestamp + '.' + body).digest('hex');
+}
+// A URL we are willing to call. No localhost, no private ranges — an endpoint
+// pointing back inside our own network is how a webhook becomes an SSRF hole.
+function cleanWebhookUrl(v) {
+  const raw = String(v || '').trim();
+  if (!/^https:\/\//i.test(raw)) return null;   // https only
+  let u;
+  try { u = new URL(raw); } catch (e) { return null; }
+  const h = u.hostname.toLowerCase();
+  if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.internal') || h === '::1') return null;
+  if (/^127\./.test(h) || /^10\./.test(h) || /^192\.168\./.test(h) || /^169\.254\./.test(h)) return null;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return null;
+  if (!h.includes('.')) return null;            // bare hostnames are internal
+  return u.toString().slice(0, 500);
+}
+/* Queue an event for every endpoint of `ownerId` that asked for it. Never
+   throws and never awaits the customer's server — the caller is in the middle
+   of an order. */
+function emitWebhook(ownerId, event, payload) {
+  if (!ownerId || !db.isConfigured() || !WEBHOOK_EVENT_KEYS.includes(event)) return;
+  db.query(
+    `INSERT INTO webhook_deliveries (endpoint_id, event, payload)
+     SELECT id, $2, $3 FROM webhook_endpoints
+      WHERE owner_id = $1 AND active = true AND $2 = ANY(events)`,
+    [ownerId, event, payload || {}]
+  ).catch(() => {});
+}
+async function attemptWebhook(d) {
+  const ep = (await db.query('SELECT * FROM webhook_endpoints WHERE id = $1', [d.endpoint_id])).rows[0];
+  if (!ep || !ep.active) {
+    await db.query(`UPDATE webhook_deliveries SET status = 'failed', error = 'endpoint gone' WHERE id = $1`, [d.id]);
+    return;
+  }
+  const body = JSON.stringify({ id: d.id, event: d.event, createdAt: d.created_at, data: d.payload });
+  const ts = String(Math.floor(Date.now() / 1000));
+  let httpStatus = 0, errText = null;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10000);
+    const r = await fetch(ep.url, {
+      method: 'POST', signal: ctrl.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Atwe-Webhooks/1',
+        'X-Atwe-Event': d.event,
+        'X-Atwe-Timestamp': ts,
+        'X-Atwe-Signature': webhookSignature(ep.secret, ts, body),
+      },
+      body,
+    }).finally(() => clearTimeout(timer));
+    httpStatus = r.status;
+  } catch (e) { errText = String((e && e.message) || e).slice(0, 200); }
+  const ok = httpStatus >= 200 && httpStatus < 300;
+  const attempts = (d.attempts || 0) + 1;
+  if (ok) {
+    await db.query(`UPDATE webhook_deliveries SET status='delivered', attempts=$2, http_status=$3, error=NULL, delivered_at=now() WHERE id=$1`, [d.id, attempts, httpStatus]);
+    await db.query(`UPDATE webhook_endpoints SET failures=0, last_status=$2, last_at=now() WHERE id=$1`, [ep.id, httpStatus]);
+    return;
+  }
+  const done = attempts >= WEBHOOK_MAX_ATTEMPTS;
+  // Backoff: 1min, 5, 25, 2h, 10h — generous, because the far end being down
+  // for a while is normal and shouldn't lose the event.
+  const waitMin = [1, 5, 25, 120, 600][Math.min(attempts - 1, 4)];
+  await db.query(
+    `UPDATE webhook_deliveries SET status=$2, attempts=$3, http_status=$4, error=$5,
+            next_at = now() + ($6 || ' minutes')::interval WHERE id=$1`,
+    [d.id, done ? 'failed' : 'pending', attempts, httpStatus || null, errText, String(waitMin)]);
+  await db.query(`UPDATE webhook_endpoints SET failures=failures+1, last_status=$2, last_at=now() WHERE id=$1`,
+    [ep.id, httpStatus || null]);
+  // An endpoint that has failed a lot is switched off rather than retried
+  // forever — a dead URL shouldn't burn the queue.
+  if (done) await db.query(`UPDATE webhook_endpoints SET active=false WHERE id=$1 AND failures >= $2`, [ep.id, WEBHOOK_MAX_ATTEMPTS * 3]);
+}
+const WEBHOOK_FLUSH_MS = Math.max(10000, parseInt(process.env.WEBHOOK_FLUSH_MS, 10) || 30000);
+async function flushWebhooks() {
+  if (!db.isConfigured()) return 0;
+  const { rows } = await db.query(
+    `SELECT * FROM webhook_deliveries WHERE status = 'pending' AND next_at <= now() ORDER BY id LIMIT 50`);
+  for (const d of rows) { try { await attemptWebhook(d); } catch (e) { /* one bad endpoint mustn't stop the rest */ } }
+  return rows.length;
+}
+registerJob('webhooks', 'Webhook delivery', WEBHOOK_FLUSH_MS);
+setInterval(trackJob('webhooks', flushWebhooks), WEBHOOK_FLUSH_MS).unref?.();
+// Old delivery records are a log, not a store.
+setInterval(() => {
+  if (!db.isConfigured()) return;
+  db.query(`DELETE FROM webhook_deliveries WHERE created_at < now() - interval '30 days'`).catch(() => {});
+}, 24 * 3600 * 1000).unref?.();
+
+/* ─── The public API itself (v1) ───────────────────────────────────────────
+   Small on purpose. A key is only worth issuing if it can do something, so
+   this is a real, working surface — not a placeholder. */
+const apiV1 = express.Router();
+apiV1.use(rateLimit(120, 60000, 'apiv1'));
+apiV1.get('/me', requireApiKey('profile.read'), async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT id, name, username, account_type, plan, verified, created_at FROM users WHERE id = $1', [req.apiKey.ownerId]);
+    const u = rows[0];
+    if (!u) return res.status(404).json({ error: 'Account not found.' });
+    res.json({ id: u.id, name: u.name, username: u.username, accountType: u.account_type,
+      plan: u.plan, verified: !!u.verified, createdAt: u.created_at });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong.' }); }
+});
+apiV1.get('/orders', requireApiKey('orders.read'), async (req, res) => {
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+  const status = typeof req.query.status === 'string' ? req.query.status.slice(0, 20) : null;
+  try {
+    const args = [req.apiKey.ownerId], where = ['o.seller_id = $1'];
+    if (status) { args.push(status); where.push(`o.status = $${args.length}`); }
+    args.push(limit);
+    const { rows } = await db.query(
+      `SELECT o.id, o.status, o.total_cents, o.shipping_cents, o.tax_cents, o.discount_cents,
+              o.created_at, o.carrier, o.tracking, o.shipped_at, o.delivered_at,
+              b.username AS buyer_username
+         FROM orders o LEFT JOIN users b ON b.id = o.buyer_id
+        WHERE ${where.join(' AND ')} ORDER BY o.created_at DESC LIMIT $${args.length}`, args);
+    res.json({ orders: rows.map((o) => ({
+      id: o.id, status: o.status, totalCents: o.total_cents,
+      // Subtotal is DERIVED, not stored — same arithmetic mapOrder uses, so the
+      // API and the app can never disagree about what an order was worth.
+      subtotalCents: o.total_cents - (o.shipping_cents || 0) - (o.tax_cents || 0) + (o.discount_cents || 0),
+      shippingCents: o.shipping_cents || 0, taxCents: o.tax_cents || 0,
+      discountCents: o.discount_cents || 0, buyer: o.buyer_username,
+      carrier: o.carrier, tracking: o.tracking, shippedAt: o.shipped_at,
+      deliveredAt: o.delivered_at, createdAt: o.created_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong.' }); }
+});
+apiV1.get('/products', requireApiKey('products.read'), async (req, res) => {
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+  try {
+    const { rows } = await db.query(
+      `SELECT id, name, description, price_cents, kind, active, stock, category, created_at
+         FROM products WHERE business_id = $1 ORDER BY created_at DESC LIMIT $2`,
+      [req.apiKey.ownerId, limit]);
+    res.json({ products: rows.map((p) => ({ id: p.id, name: p.name, description: p.description,
+      priceCents: p.price_cents, kind: p.kind, active: p.active, stock: p.stock,
+      category: p.category, createdAt: p.created_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong.' }); }
+});
+apiV1.post('/products', requireApiKey('products.write'), async (req, res) => {
+  const name = String(req.body.name || '').trim().slice(0, 140);
+  const priceCents = Math.round(Number(req.body.priceCents));
+  const kind = ['physical', 'digital', 'service'].includes(req.body.kind) ? req.body.kind : 'physical';
+  const description = String(req.body.description || '').trim().slice(0, 4000) || null;
+  const stock = Number.isInteger(req.body.stock) ? Math.max(0, req.body.stock) : null;
+  if (!name) return res.status(400).json({ error: 'A name is required.' });
+  if (!Number.isInteger(priceCents) || priceCents < 0) return res.status(400).json({ error: 'priceCents must be a whole number of cents.' });
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO products (business_id, name, description, price_cents, kind, stock)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, created_at`,
+      [req.apiKey.ownerId, name, description, priceCents, kind, stock]);
+    emitWebhook(req.apiKey.ownerId, 'product.created', { id: rows[0].id, name, priceCents, kind });
+    res.status(201).json({ id: rows[0].id, name, priceCents, kind, createdAt: rows[0].created_at });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create that listing.' }); }
+});
+apiV1.patch('/products/:id', requireApiKey('products.write'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const sets = [], args = [id, req.apiKey.ownerId];
+  const put = (col, val) => { args.push(val); sets.push(`${col} = $${args.length}`); };
+  if (typeof req.body.name === 'string') put('name', req.body.name.trim().slice(0, 140));
+  if (typeof req.body.description === 'string') put('description', req.body.description.trim().slice(0, 4000));
+  if (Number.isInteger(req.body.priceCents) && req.body.priceCents >= 0) put('price_cents', req.body.priceCents);
+  if (typeof req.body.active === 'boolean') put('active', req.body.active);
+  if (Number.isInteger(req.body.stock) || req.body.stock === null) put('stock', req.body.stock);
+  if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
+  try {
+    // The owner check is IN the statement — a key can only ever touch its own.
+    const { rowCount } = await db.query(
+      `UPDATE products SET ${sets.join(', ')} WHERE id = $1 AND business_id = $2`, args);
+    if (!rowCount) return res.status(404).json({ error: 'Listing not found.' });
+    res.json({ ok: true, id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update that listing.' }); }
+});
+apiV1.get('/webhooks', requireApiKey('webhooks.read'), async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT id, url, events, active, last_status, last_at FROM webhook_endpoints WHERE owner_id = $1 ORDER BY id', [req.apiKey.ownerId]);
+    res.json({ webhooks: rows });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong.' }); }
+});
+// An unknown v1 path should say so in the API's own voice, not fall through to
+// the app shell and hand an integration a page of HTML.
+apiV1.use((req, res) => res.status(404).json({ error: 'Unknown endpoint: ' + req.method + ' ' + req.path }));
+app.use('/api/v1', apiV1);
+
+/* ─── Managing keys + webhooks (the account's own dashboard) ─── */
+app.get('/api/api-keys', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT * FROM api_keys WHERE owner_id = $1 ORDER BY created_at DESC', [req.user.id]);
+    res.json({ keys: rows.map(mapApiKey), scopes: API_SCOPES, prefix: API_KEY_PREFIX });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your keys.' }); }
+});
+app.post('/api/api-keys', auth.requireAuth, rateLimit(10, 3600000, 'apikey'), async (req, res) => {
+  const name = String(req.body.name || '').trim().slice(0, 60) || 'API key';
+  const scopes = [...new Set((Array.isArray(req.body.scopes) ? req.body.scopes : []).filter((s) => API_SCOPE_KEYS.includes(s)))];
+  if (!scopes.length) return res.status(400).json({ error: 'Choose at least one permission.' });
+  try {
+    const live = (await db.query('SELECT COUNT(*)::int AS n FROM api_keys WHERE owner_id = $1 AND revoked_at IS NULL', [req.user.id])).rows[0].n;
+    if (live >= API_KEY_CAP) return res.status(400).json({ error: 'You already have ' + API_KEY_CAP + ' live keys. Revoke one first.' });
+    const k = newApiKey();
+    const { rows } = await db.query(
+      `INSERT INTO api_keys (owner_id, name, key_hash, prefix, scopes) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [req.user.id, name, k.hash, k.prefix, scopes]);
+    // The ONLY time the key itself is ever returned. After this we hold a hash.
+    res.status(201).json({ key: mapApiKey(rows[0]), secret: k.raw });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the key.' }); }
+});
+app.delete('/api/api-keys/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rowCount } = await db.query(
+      'UPDATE api_keys SET revoked_at = now(), revoked_by = $2 WHERE id = $1 AND owner_id = $2 AND revoked_at IS NULL',
+      [id, req.user.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Key not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not revoke the key.' }); }
+});
+app.get('/api/webhooks', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT * FROM webhook_endpoints WHERE owner_id = $1 ORDER BY id', [req.user.id]);
+    const recent = (await db.query(
+      `SELECT d.id, d.event, d.status, d.attempts, d.http_status, d.error, d.created_at, d.endpoint_id
+         FROM webhook_deliveries d JOIN webhook_endpoints e ON e.id = d.endpoint_id
+        WHERE e.owner_id = $1 ORDER BY d.id DESC LIMIT 50`, [req.user.id])).rows;
+    res.json({ endpoints: rows, deliveries: recent, events: WEBHOOK_EVENTS });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your webhooks.' }); }
+});
+app.post('/api/webhooks', auth.requireAuth, rateLimit(20, 3600000, 'webhook'), async (req, res) => {
+  const url = cleanWebhookUrl(req.body.url);
+  const events = [...new Set((Array.isArray(req.body.events) ? req.body.events : []).filter((e) => WEBHOOK_EVENT_KEYS.includes(e)))];
+  if (!url) return res.status(400).json({ error: 'Enter a public https:// address we can reach.' });
+  if (!events.length) return res.status(400).json({ error: 'Choose at least one event.' });
+  try {
+    const n = (await db.query('SELECT COUNT(*)::int AS n FROM webhook_endpoints WHERE owner_id = $1', [req.user.id])).rows[0].n;
+    if (n >= WEBHOOK_CAP) return res.status(400).json({ error: 'You already have ' + WEBHOOK_CAP + ' endpoints.' });
+    const { rows } = await db.query(
+      `INSERT INTO webhook_endpoints (owner_id, url, secret, events) VALUES ($1,$2,$3,$4) RETURNING *`,
+      [req.user.id, url, newWebhookSecret(), events]);
+    res.status(201).json({ endpoint: rows[0] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that endpoint.' }); }
+});
+app.patch('/api/webhooks/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const sets = [], args = [id, req.user.id];
+  if (typeof req.body.active === 'boolean') { args.push(req.body.active); sets.push(`active = $${args.length}`);
+    if (req.body.active) sets.push('failures = 0'); }
+  if (Array.isArray(req.body.events)) {
+    const ev = [...new Set(req.body.events.filter((e) => WEBHOOK_EVENT_KEYS.includes(e)))];
+    if (!ev.length) return res.status(400).json({ error: 'Choose at least one event.' });
+    args.push(ev); sets.push(`events = $${args.length}`);
+  }
+  if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
+  try {
+    const { rowCount } = await db.query(`UPDATE webhook_endpoints SET ${sets.join(', ')} WHERE id = $1 AND owner_id = $2`, args);
+    if (!rowCount) return res.status(404).json({ error: 'Endpoint not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+app.delete('/api/webhooks/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rowCount } = await db.query('DELETE FROM webhook_endpoints WHERE id = $1 AND owner_id = $2', [id, req.user.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Endpoint not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete that.' }); }
+});
+// Send a test event, so nobody has to wait for a real order to know it works.
+app.post('/api/webhooks/:id/test', auth.requireAuth, rateLimit(20, 3600000, 'whtest'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const ep = (await db.query('SELECT * FROM webhook_endpoints WHERE id = $1 AND owner_id = $2', [id, req.user.id])).rows[0];
+    if (!ep) return res.status(404).json({ error: 'Endpoint not found.' });
+    const { rows } = await db.query(
+      `INSERT INTO webhook_deliveries (endpoint_id, event, payload) VALUES ($1,$2,$3) RETURNING *`,
+      [ep.id, ep.events[0] || 'order.created', { test: true, message: 'This is a test event from Atwe.' }]);
+    await attemptWebhook(rows[0]);
+    const after = (await db.query('SELECT status, http_status, error, attempts FROM webhook_deliveries WHERE id = $1', [rows[0].id])).rows[0];
+    res.json({ ok: after.status === 'delivered', delivery: after });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the test.' }); }
+});
+// The signing secret, shown on request so it isn't sitting on screen by default.
+app.get('/api/webhooks/:id/secret', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rows } = await db.query('SELECT secret FROM webhook_endpoints WHERE id = $1 AND owner_id = $2', [id, req.user.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Endpoint not found.' });
+    res.json({ secret: rows[0].secret });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong.' }); }
+});
+
+/* ─── Admin oversight of the developer platform ─── */
+app.get('/api/admin/api-keys', auth.requireAdmin, async (req, res) => {
+  const q = String(req.query.q || '').trim().slice(0, 60);
+  try {
+    const args = [], where = [];
+    if (q) { args.push('%' + q.replace(/[%_\\]/g, '\\$&') + '%'); where.push(`(u.username ILIKE $1 OR u.name ILIKE $1 OR k.name ILIKE $1)`); }
+    const { rows } = await db.query(
+      `SELECT k.*, u.name AS owner_name, u.username AS owner_username FROM api_keys k
+         JOIN users u ON u.id = k.owner_id
+        ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+        ORDER BY k.created_at DESC LIMIT 200`, args);
+    const stats = (await db.query(
+      `SELECT COUNT(*) FILTER (WHERE revoked_at IS NULL)::int AS live,
+              COUNT(*) FILTER (WHERE revoked_at IS NOT NULL)::int AS revoked,
+              COALESCE(SUM(calls),0)::bigint AS calls FROM api_keys`)).rows[0];
+    const hooks = (await db.query(
+      `SELECT COUNT(*)::int AS endpoints, COUNT(*) FILTER (WHERE active)::int AS active FROM webhook_endpoints`)).rows[0];
+    res.json({ keys: rows.map(mapApiKey), stats: { ...stats, calls: Number(stats.calls) }, hooks });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load API keys.' }); }
+});
+app.post('/api/admin/api-keys/:id/revoke', auth.requireAdmin, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rowCount } = await db.query(
+      'UPDATE api_keys SET revoked_at = now(), revoked_by = $2 WHERE id = $1 AND revoked_at IS NULL', [id, req.user.id]);
+    if (!rowCount) return res.status(409).json({ error: 'That key is already revoked.' });
+    adminAudit(req, 'apikey.revoke', 'api_key', id, {});
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not revoke the key.' }); }
+});
+app.get('/api/admin/api-log', auth.requireAdmin, async (req, res) => {
+  const hours = Math.min(720, Math.max(1, parseInt(req.query.hours, 10) || 24));
+  const only = ['errors', 'slow', 'public'].includes(req.query.only) ? req.query.only : null;
+  try {
+    const where = [`created_at > now() - ($1 || ' hours')::interval`];
+    const args = [String(hours)];
+    if (only === 'errors') where.push('status >= 400');
+    if (only === 'slow') where.push(`ms >= ${REQLOG_SLOW_MS}`);
+    if (only === 'public') where.push("path LIKE '/api/v1/%'");
+    const [recent, slowest, totals] = await Promise.all([
+      db.query(`SELECT * FROM api_request_log WHERE ${where.join(' AND ')} ORDER BY id DESC LIMIT 100`, args),
+      db.query(
+        `SELECT path, COUNT(*)::int AS calls, ROUND(AVG(ms))::int AS avg_ms, MAX(ms)::int AS max_ms,
+                COUNT(*) FILTER (WHERE status >= 500)::int AS errors
+           FROM api_request_log WHERE created_at > now() - ($1 || ' hours')::interval
+          GROUP BY path ORDER BY avg_ms DESC LIMIT 20`, args),
+      db.query(
+        `SELECT COUNT(*)::int AS n,
+                COUNT(*) FILTER (WHERE status >= 500)::int AS server_errors,
+                COUNT(*) FILTER (WHERE status >= 400 AND status < 500)::int AS client_errors,
+                COUNT(*) FILTER (WHERE path LIKE '/api/v1/%')::int AS public_calls,
+                ROUND(AVG(ms))::int AS avg_ms
+           FROM api_request_log WHERE created_at > now() - ($1 || ' hours')::interval`, args),
+    ]);
+    res.json({ hours, recent: recent.rows, slowest: slowest.rows, totals: totals.rows[0], slowMs: REQLOG_SLOW_MS });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the API log.' }); }
+});
+
+/* ═══════════════════════════════════════════════
    BATCH 34 — AI governance + ops guardrails (admin)
 ═══════════════════════════════════════════════ */
 
@@ -18038,7 +18956,7 @@ app.post('/api/business/placement', auth.requireAuth, blockImpersonation, rateLi
     const u = (await db.query('SELECT account_type FROM users WHERE id = $1', [req.user.id])).rows[0];
     if (!u || u.account_type !== 'business') return res.status(400).json({ error: 'Only business accounts can be featured.' });
     const vel = await walletVelocityCheck(req.user.id, cents);
-    if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
+    if (!vel.ok) return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel));
     const cid = req.body.clientId;
     const idem = await walletClaimIdem(req.user.id, cid, 'placement');
     if (!idem.claimed) return res.json(idem.result || { ok: true, deduped: true });
@@ -18135,7 +19053,7 @@ app.post('/api/tips/:userId', auth.requireAuth, blockImpersonation, rateLimit(20
     // Idempotent (a double-tap replays the first result instead of tipping twice).
     if (req.body.payWith === 'balance') {
       const vel = await walletVelocityCheck(req.user.id, amountCents);
-      if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
+      if (!vel.ok) return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel));
       const cid = req.body.clientId;
       const idem = await walletClaimIdem(req.user.id, cid, 'tip');
       if (!idem.claimed) return res.json(idem.result || { ok: true, tipped: true, fromBalance: true, deduped: true });
@@ -18184,8 +19102,111 @@ const WALLET_WEEKLY_CAP_CENTS = (() => { const n = parseInt(process.env.WALLET_W
 // debits except a bank cash-out, which has its own cap) and decide whether a new
 // outflow of `amountCents` would breach the daily or weekly ceiling. Returns
 // { ok:true } or { ok:false, scope:'day'|'week', limitCents, usedCents, remainingCents }.
+/* ─── Fraud rules (write your own) ─────────────────────────────────────────
+   The velocity caps are one blunt number for everyone. A rules engine lets you
+   say the specific thing you actually mean — "block if an account under 7 days
+   old sends more than $500 in an hour" — and choose what happens when it fires:
+   just record it, refuse the payment, or freeze the wallet for a human to look
+   at. Evaluated HERE, at the single point every outflow already passes through,
+   so a new money route inherits it for free. */
+const FRAUD_ACTIONS = ['flag', 'block', 'freeze'];
+// The conditions you can build a rule from. Each is a plain number, so the
+// dashboard is a form and not a query language.
+const FRAUD_CONDITIONS = [
+  { key: 'maxAccountAgeDays', label: 'Account is newer than', unit: 'days' },
+  { key: 'minAmountCents', label: 'This payment is at least', unit: 'money' },
+  { key: 'minDayTotalCents', label: 'Sent in the last 24h is at least', unit: 'money' },
+  { key: 'minHourCount', label: 'Payments in the last hour is at least', unit: 'count' },
+  { key: 'unverifiedEmail', label: 'Email is not verified', unit: 'flag' },
+  { key: 'noIdCheck', label: 'Identity is not verified', unit: 'flag' },
+];
+const FRAUD_CONDITION_KEYS = FRAUD_CONDITIONS.map((c) => c.key);
+function normalizeFraudConditions(v) {
+  const src = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+  const out = {};
+  for (const c of FRAUD_CONDITIONS) {
+    if (!(c.key in src)) continue;
+    if (c.unit === 'flag') { if (src[c.key] === true) out[c.key] = true; continue; }
+    const n = Math.round(Number(src[c.key]));
+    if (Number.isFinite(n) && n >= 0) out[c.key] = n;
+  }
+  return out;
+}
+// A rule with no conditions would match every payment on the platform. That is
+// never what someone meant, so it is refused at save time.
+function fraudRuleIsUsable(conds) { return Object.keys(conds || {}).length > 0; }
+let _fraudRules = [];
+async function loadFraudRules() {
+  if (!db.isConfigured()) return;
+  try {
+    const { rows } = await db.query('SELECT * FROM fraud_rules WHERE enabled = true ORDER BY id');
+    _fraudRules = rows;
+  } catch (e) { /* keep whatever we had */ }
+}
+/* Evaluate the live rules against one outgoing payment. Returns the STRICTEST
+   action any matching rule asks for. Fails OPEN on any error — a broken rule
+   must never stop somebody spending their own money. */
+async function fraudCheck(userId, amountCents) {
+  if (!_fraudRules.length) return { action: null };
+  // Only ask the database for what some rule actually needs.
+  const need = (k) => _fraudRules.some((r) => (r.conditions || {})[k] !== undefined);
+  try {
+    let ctx = { amountCents };
+    if (need('maxAccountAgeDays') || need('unverifiedEmail') || need('noIdCheck')) {
+      const u = (await db.query(
+        'SELECT created_at, email_verified, COALESCE(id_verified,false) AS id_verified FROM users WHERE id = $1', [userId])).rows[0];
+      if (!u) return { action: null };
+      ctx.ageDays = (Date.now() - new Date(u.created_at).getTime()) / 86400000;
+      ctx.emailVerified = !!u.email_verified;
+      ctx.idVerified = !!u.id_verified;
+    }
+    if (need('minDayTotalCents') || need('minHourCount')) {
+      const t = (await db.query(
+        `SELECT COALESCE(-SUM(delta_cents) FILTER (WHERE created_at > now() - interval '24 hours'),0) AS day,
+                COUNT(*) FILTER (WHERE created_at > now() - interval '1 hour')::int AS hourCount
+           FROM wallet_tx WHERE user_id = $1 AND delta_cents < 0 AND created_at > now() - interval '24 hours'`,
+        [userId])).rows[0];
+      ctx.dayTotal = Number(t.day) || 0;
+      ctx.hourCount = Number(t.hourcount ?? t.hourCount) || 0;
+    }
+    let worst = null, worstRule = null;
+    const rank = { flag: 1, block: 2, freeze: 3 };
+    for (const r of _fraudRules) {
+      const c = r.conditions || {};
+      // EVERY condition on a rule must hold — an AND, which is what people mean
+      // when they write "new account AND big payment".
+      let hit = true;
+      if (c.maxAccountAgeDays !== undefined && !(ctx.ageDays < c.maxAccountAgeDays)) hit = false;
+      if (hit && c.minAmountCents !== undefined && !(amountCents >= c.minAmountCents)) hit = false;
+      if (hit && c.minDayTotalCents !== undefined && !((ctx.dayTotal + amountCents) >= c.minDayTotalCents)) hit = false;
+      if (hit && c.minHourCount !== undefined && !(ctx.hourCount >= c.minHourCount)) hit = false;
+      if (hit && c.unverifiedEmail === true && ctx.emailVerified !== false) hit = false;
+      if (hit && c.noIdCheck === true && ctx.idVerified !== false) hit = false;
+      if (!hit) continue;
+      const action = FRAUD_ACTIONS.includes(r.action) ? r.action : 'flag';
+      db.query('UPDATE fraud_rules SET hits = hits + 1 WHERE id = $1', [r.id]).catch(() => {});
+      db.query(
+        `INSERT INTO fraud_hits (rule_id, user_id, amount_cents, action, detail) VALUES ($1,$2,$3,$4,$5)`,
+        [r.id, userId, amountCents, action, r.name]).catch(() => {});
+      if (!worst || rank[action] > rank[worst]) { worst = action; worstRule = r; }
+    }
+    if (worst === 'freeze') {
+      await db.query(
+        `UPDATE users SET wallet_frozen = true, wallet_frozen_reason = $2 WHERE id = $1 AND wallet_frozen = false`,
+        [userId, 'Automatic hold: ' + (worstRule ? worstRule.name : 'fraud rule')]).catch(() => {});
+      notify(userId, userId, 'wallet_frozen');
+    }
+    return { action: worst, rule: worstRule ? worstRule.name : null };
+  } catch (e) { return { action: null }; }  // fail open, always
+}
+
 async function walletVelocityCheck(userId, amountCents) {
   if (!db.isConfigured()) return { ok: true };
+  // Your own rules run FIRST — they are the specific thing you asked for, and
+  // a "flag" must still be recorded even when the payment is allowed through.
+  const fr = await fraudCheck(userId, amountCents);
+  if (fr.action === 'block') return { ok: false, fraud: true, rule: fr.rule };
+  if (fr.action === 'freeze') return { ok: false, frozen: true, reason: 'Automatic hold: ' + (fr.rule || 'fraud rule') };
   // Fraud hold: a frozen wallet can't move money out at all (all velocity-gated
   // outflows — send / order / tip / paylink / split / pool / rental / handle).
   try {
@@ -18221,7 +19242,17 @@ async function walletVelocityCheck(userId, amountCents) {
   return { ok: true };
 }
 // Build the friendly 429 body for a tripped velocity cap.
+/* Which HTTP status a refused payment deserves. A velocity cap is temporary —
+   429 correctly says "you have hit a limit, try later". A frozen wallet or a
+   fraud rule is a refusal: 403, because no amount of retrying changes it. */
+function walletVelocityStatus(v) { return (v && (v.frozen || v.fraud)) ? 403 : 429; }
 function walletVelocityError(v) {
+  if (v.fraud) {
+    return {
+      error: 'This payment was stopped by a security check. If you think that is wrong, contact support.',
+      fraudBlocked: true,
+    };
+  }
   if (v.frozen) {
     return {
       error: v.reason ? ('Your wallet is on hold: ' + v.reason) : 'Your wallet is on hold. Please contact support.',
@@ -18772,7 +19803,7 @@ app.post('/api/wallet/send', auth.requireAuth, blockImpersonation, blockLimited,
     if (toRow.id === req.user.id) return res.status(400).json({ error: 'You can’t send money to yourself.' });
     if (await blockedEither(req.user.id, toRow.id)) return res.status(403).json({ error: 'You can’t send money to this person.' });
     const vel = await walletVelocityCheck(req.user.id, amountCents);
-    if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
+    if (!vel.ok) return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel));
     const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
     const cid = req.body.clientId;
     if (bal >= amountCents) {
@@ -18897,7 +19928,7 @@ app.post('/api/wallet/requests/:id/pay', auth.requireAuth, blockImpersonation, r
     const { requester_id, amount_cents, note } = claim.rows[0];
     const unclaim = () => db.query("UPDATE money_requests SET status = 'pending', resolved_at = NULL WHERE id = $1 AND status = 'paid'", [id]).catch(() => {});
     const vel = await walletVelocityCheck(req.user.id, amount_cents);
-    if (!vel.ok) { await unclaim(); return res.status(429).json(walletVelocityError(vel)); }
+    if (!vel.ok) { await unclaim(); return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel)); }
     let t;
     try { t = await walletTransfer(req.user.id, requester_id, amount_cents, note ? ('Request: ' + note) : 'Money request', false); }
     catch (e) { await unclaim(); throw e; }
@@ -19166,7 +20197,7 @@ app.post('/api/pools/:id/contribute', auth.requireAuth, blockImpersonation, rate
     if (p.creator_id === req.user.id) return res.status(400).json({ error: 'You can’t contribute to your own pool.' });
     if (await blockedEither(req.user.id, p.creator_id)) return res.status(403).json({ error: 'You can’t contribute to this pool.' });
     const vel = await walletVelocityCheck(req.user.id, amount);
-    if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
+    if (!vel.ok) return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel));
     const cid = req.body.clientId ? String(req.body.clientId).slice(0, 80) : null;
     const idem = await walletClaimIdem(req.user.id, cid, 'pool');
     if (!idem.claimed) return res.json(idem.result || { ok: true });
@@ -19407,7 +20438,7 @@ app.post('/api/gift-cards', auth.requireAuth, blockImpersonation, rateLimit(20, 
       toId = u.id;
     }
     const v = await walletVelocityCheck(req.user.id, amount);
-    if (!v.ok) return res.status(429).json(walletVelocityError(v));
+    if (!v.ok) return res.status(walletVelocityStatus(v)).json(walletVelocityError(v));
     // Debit the wallet AND mint the card in ONE transaction, so a mint failure can never
     // leave the buyer charged with no card (money-destruction). The card HOLDS the value
     // (balance_cents = amount) and starts UNCLAIMED (owner_id NULL): whoever redeems the
@@ -19714,7 +20745,7 @@ app.post('/api/paylink/:code/pay', auth.requireAuth, blockImpersonation, rateLim
     const amount = l.amount_cents != null ? l.amount_cents : Math.round(Number(req.body.amountCents) || 0);
     if (!(amount >= 100 && amount <= 200000)) return res.status(400).json({ error: 'Enter an amount between $1 and $2,000.' });
     const vel = await walletVelocityCheck(req.user.id, amount);
-    if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
+    if (!vel.ok) return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel));
     const cid = req.body.clientId ? String(req.body.clientId).slice(0, 80) : null;
     const idem = await walletClaimIdem(req.user.id, cid, 'paylink');
     if (!idem.claimed) return res.json(idem.result || { ok: true });
@@ -20497,7 +21528,7 @@ app.post('/api/offers/:id/checkout', auth.requireAuth, blockImpersonation, rateL
     const markPaid = () => db.query("UPDATE offers SET status = 'paid', order_id = $2, updated_at = now() WHERE id = $1", [id, orderId]).catch(() => {});
     if (req.body.protected || req.body.payWith === 'balance') {
       const vel = await walletVelocityCheck(req.user.id, total);
-      if (!vel.ok) { await dropPending(); return res.status(429).json(walletVelocityError(vel)); }
+      if (!vel.ok) { await dropPending(); return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel)); }
       const idem = await walletClaimIdem(req.user.id, cid, 'order');
       if (!idem.claimed) { await dropPending(); return res.json(idem.result || { ok: true, orderId, deduped: true }); }
       const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
@@ -21678,6 +22709,7 @@ app.post('/api/products', auth.requireAuth, blockLimited, rateLimit(40, 60000, '
       [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, pickup, pickupLocation, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct, amenities, JSON.stringify(specs), rentalPeriod, category, condition, compareAtCents, procDays.min, procDays.max, video, video ? 1 : 0, auctionEndsAt, auctionMinCents, wholesale.cents, wholesale.minQty]
     );
     if (rows[0].active !== false) notifyMarketMatch(rows[0]); // alert saved-search watchers
+    emitWebhook(rows[0].business_id, 'product.created', { id: rows[0].id, name: rows[0].name, priceCents: rows[0].price_cents, kind: rows[0].kind });
     res.status(201).json({ product: mapProduct(rows[0], { owner: true }) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the product.' }); }
 });
@@ -22225,7 +23257,7 @@ app.post('/api/rentals/bookings/:id/pay', auth.requireAuth, blockImpersonation, 
     if (!b || b.guest_id !== req.user.id) return res.status(404).json({ error: 'Booking not found.' });
     if (b.status !== 'confirmed') return res.status(400).json({ error: 'This booking isn’t ready to pay yet.' });
     const amount = b.total_cents;
-    const vel = await walletVelocityCheck(req.user.id, amount); if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
+    const vel = await walletVelocityCheck(req.user.id, amount); if (!vel.ok) return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel));
     const claim = await walletClaimIdem(req.user.id, clientId, 'rental'); if (!claim.claimed) return res.json(claim.result || { ok: true, paid: true });
     // Atomically claim the booking to a transient 'paying' state before charging, so
     // two overlapping /pay requests can't both pass the status==='confirmed' check
@@ -22961,7 +23993,7 @@ app.post('/api/splits/:id/pay', auth.requireAuth, blockImpersonation, rateLimit(
     const unclaim = () => db.query('UPDATE split_shares SET paid = false, paid_at = NULL WHERE split_id = $1 AND user_id = $2', [id, req.user.id]).catch(() => {});
     // Velocity cap parity with send/tip/order/pool/paylink (outgoing wallet money).
     const vel = await walletVelocityCheck(req.user.id, amount);
-    if (!vel.ok) { await unclaim(); return res.status(429).json(walletVelocityError(vel)); }
+    if (!vel.ok) { await unclaim(); return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel)); }
     let t;
     // A throw (DB error mid-transfer) must release the claim too, not just the
     // {insufficient}/{error} returns — otherwise the share reads paid with no money moved.
@@ -23313,6 +24345,10 @@ async function recordOrderPaid(orderId, sellerCredited) {
   // Clear the bought items from the buyer's cart (products belonging to this seller).
   await db.query('DELETE FROM cart_items WHERE user_id = $1 AND product_id IN (SELECT id FROM products WHERE business_id = $2)', [o.buyer_id, o.seller_id]).catch(() => {});
   markCartRecovered(o.seller_id, o.buyer_id);
+  // Tell the seller's own systems. Queued, never awaited — their server being
+  // slow (or down) must not hold up an order that has already been paid for.
+  emitWebhook(o.seller_id, 'order.created', { orderId, totalCents: o.total_cents, buyerId: o.buyer_id });
+  emitWebhook(o.seller_id, 'order.paid', { orderId, totalCents: o.total_cents, buyerId: o.buyer_id });
   try {
     if (await dmAllowed(o.buyer_id, o.seller_id)) {
       const meta = { t: 'order', id: orderId, totalCents: o.total_cents };
@@ -23688,6 +24724,24 @@ const ANOMALY_METRICS = [
 const ANOMALY_METRIC_LABEL = Object.fromEntries(ANOMALY_METRICS.map((m) => [m.key, m.label]));
 // Don't re-raise the same alert every half hour while a genuine spike lasts.
 const ANOMALY_COOLDOWN_HOURS = 12;
+/* Your own rules, on top of the automatic scan: which numbers are watched, how
+   far each has to move before it counts, and how you hear about it. Nothing
+   saved means the sensible default — every metric watched at 60%, by email. */
+const ANOMALY_DEFAULT_THRESHOLD = 60;
+let _alertRules = {};
+async function loadAlertRules() {
+  if (!db.isConfigured()) return;
+  try {
+    const { rows } = await db.query('SELECT * FROM alert_rules');
+    _alertRules = Object.fromEntries(rows.map((r) => [r.metric, r]));
+  } catch (e) { /* keep whatever we had */ }
+}
+// The rule for a metric, or the default one.
+function alertRuleFor(key) {
+  const r = _alertRules[key];
+  if (!r) return { enabled: true, direction: 'both', threshold: ANOMALY_DEFAULT_THRESHOLD, by_email: true, by_push: false };
+  return r;
+}
 async function flushAnomalies() {
   if (!db.isConfigured()) return 0;
   let raised = 0;
@@ -23701,7 +24755,11 @@ async function flushAnomalies() {
       const pct = base > 0 ? Math.round(((cur - base) / base) * 100) : (cur >= m.floor ? 100 : 0);
       const up = cur > base;
       if (!up && m.upOnly) continue;            // fewer refunds is good news
-      if (Math.abs(pct) < 60) continue;          // ordinary day-to-day movement
+      const rule = alertRuleFor(m.key);
+      if (!rule.enabled) continue;               // you asked not to hear about this one
+      if (rule.direction === 'up' && !up) continue;
+      if (rule.direction === 'down' && up) continue;
+      if (Math.abs(pct) < (rule.threshold || ANOMALY_DEFAULT_THRESHOLD)) continue;
       // A collapse only counts if there WAS something to collapse from.
       if (!up && base < m.floor) continue;
       const severity = Math.abs(pct) >= 150 ? 'high' : 'warn';
@@ -23717,17 +24775,22 @@ async function flushAnomalies() {
          VALUES ($1,$2,$3,$4,$5,$6,$7)`,
         [m.key, up ? 'up' : 'down', severity, cur, base, pct, detail]);
       raised++;
-      // Tell the owners, best-effort. Email degrades to a console line without
-      // SMTP, exactly like every other mail in the app.
+      // Tell the owners the way this rule asked to be told. Email degrades to a
+      // console line without SMTP, exactly like every other mail in the app.
       try {
         const admins = (await db.query(
-          `SELECT email, name FROM users WHERE is_admin = true AND email IS NOT NULL AND NOT COALESCE(deactivated,false) LIMIT 5`)).rows;
+          `SELECT id, email, name FROM users WHERE is_admin = true AND email IS NOT NULL AND NOT COALESCE(deactivated,false) LIMIT 5`)).rows;
         for (const a of admins) {
-          await mailer.sendMail({
-            to: a.email,
-            subject: `Atwe alert — ${m.label} ${up ? 'spike' : 'drop'}`,
-            html: `<p>${escapeHtml(detail)}</p><p>Open the dashboard to look into it.</p>`,
-          }).catch(() => {});
+          if (rule.by_email !== false) {
+            await mailer.sendMail({
+              to: a.email,
+              subject: `Atwe alert — ${m.label} ${up ? 'spike' : 'drop'}`,
+              html: `<p>${escapeHtml(detail)}</p><p>Open the dashboard to look into it.</p>`,
+            }).catch(() => {});
+          }
+          if (rule.by_push === true) {
+            await pushToUser(a.id, { title: 'Atwe alert — ' + m.label, body: detail.slice(0, 180), url: '/admin.html', tag: 'alert' }).catch(() => {});
+          }
         }
       } catch (e) { /* alerting must never break the scan */ }
     } catch (e) { /* one metric failing must not stop the rest */ }
@@ -23736,6 +24799,138 @@ async function flushAnomalies() {
 }
 registerJob('anomalies', 'Anomaly detection', ANOMALY_FLUSH_MS);
 setInterval(trackJob('anomalies', flushAnomalies), ANOMALY_FLUSH_MS).unref?.();
+
+/* ─── Weekly owner digest ──────────────────────────────────────────────────
+   The platform's pulse in your inbox on a Monday morning, without opening a
+   laptop: what came in, who joined, what needs attention. Deliberately a
+   SUMMARY, not a dashboard in an email — the numbers that would make you go
+   and look, and nothing else. */
+const DIGEST_KEY = 'owner_digest';
+let _ownerDigest = { enabled: true, weekday: 1, hour: 8, lastSentOn: null }; // Monday 08:00
+function normalizeDigest(v) {
+  const src = (v && typeof v === 'object') ? v : {};
+  const wd = Math.round(Number(src.weekday));
+  const hr = Math.round(Number(src.hour));
+  return {
+    enabled: src.enabled !== false,
+    weekday: Number.isFinite(wd) && wd >= 0 && wd <= 6 ? wd : 1,
+    hour: Number.isFinite(hr) && hr >= 0 && hr <= 23 ? hr : 8,
+    lastSentOn: typeof src.lastSentOn === 'string' ? src.lastSentOn : null,
+  };
+}
+// Gather the week. One query set, reused by the email and by the preview.
+async function buildOwnerDigest() {
+  const q = (sql, args) => db.query(sql, args).then((r) => r.rows[0] || {}).catch(() => ({}));
+  const [money, people, trade, care, top] = await Promise.all([
+    q(`SELECT COALESCE(SUM(amount_cents) FILTER (WHERE created_at > now() - interval '7 days'),0)::bigint AS week,
+              COALESCE(SUM(amount_cents) FILTER (WHERE created_at BETWEEN now() - interval '14 days' AND now() - interval '7 days'),0)::bigint AS prev
+         FROM company_revenue`),
+    q(`SELECT COUNT(*) FILTER (WHERE created_at > now() - interval '7 days')::int AS signups,
+              COUNT(*) FILTER (WHERE created_at BETWEEN now() - interval '14 days' AND now() - interval '7 days')::int AS prev,
+              COUNT(*)::int AS total
+         FROM users WHERE NOT COALESCE(is_demo,false)`),
+    q(`SELECT COUNT(*) FILTER (WHERE created_at > now() - interval '7 days')::int AS orders,
+              COALESCE(SUM(total_cents) FILTER (WHERE created_at > now() - interval '7 days'),0)::bigint AS gmv
+         FROM orders WHERE status <> 'pending'`),
+    q(`SELECT (SELECT COUNT(*)::int FROM orders WHERE status = 'disputed') AS disputes,
+              (SELECT COUNT(*)::int FROM reports WHERE status = 'open') AS reports,
+              (SELECT COUNT(*)::int FROM support_requests WHERE COALESCE(state,'open') = 'open') AS support,
+              (SELECT COUNT(*)::int FROM refund_requests WHERE status = 'open') AS refunds,
+              (SELECT COUNT(*)::int FROM anomaly_alerts WHERE acked_at IS NULL) AS alerts`),
+    db.query(
+      `SELECT p.id, left(p.body, 90) AS body, u.username,
+              (SELECT COUNT(*)::int FROM post_likes l WHERE l.post_id = p.id) AS likes
+         FROM posts p JOIN users u ON u.id = p.user_id
+        WHERE p.created_at > now() - interval '7 days' AND p.parent_id IS NULL AND p.to_main = true
+        ORDER BY likes DESC LIMIT 5`).then((r) => r.rows).catch(() => []),
+  ]);
+  const pct = (now, was) => (was > 0 ? Math.round(((now - was) / was) * 100) : (now > 0 ? 100 : 0));
+  return {
+    revenueCents: Number(money.week || 0),
+    revenueChangePct: pct(Number(money.week || 0), Number(money.prev || 0)),
+    signups: people.signups || 0,
+    signupsChangePct: pct(people.signups || 0, people.prev || 0),
+    totalMembers: people.total || 0,
+    orders: trade.orders || 0,
+    gmvCents: Number(trade.gmv || 0),
+    needsAttention: {
+      disputes: care.disputes || 0, reports: care.reports || 0,
+      support: care.support || 0, refunds: care.refunds || 0, alerts: care.alerts || 0,
+    },
+    topPosts: top,
+  };
+}
+function digestHtml(d) {
+  const money = (c) => '$' + (Number(c || 0) / 100).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  const arrow = (p) => (p > 0 ? '▲ ' + p + '%' : p < 0 ? '▼ ' + Math.abs(p) + '%' : 'level');
+  const attn = Object.entries(d.needsAttention).filter(([, n]) => n > 0);
+  const row = (k, v) => `<tr><td style="padding:6px 14px 6px 0;color:#666">${escapeHtml(k)}</td><td style="padding:6px 0;font-weight:700">${v}</td></tr>`;
+  return `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:520px">
+    <h2 style="margin:0 0 4px">Your week on Atwe</h2>
+    <p style="margin:0 0 18px;color:#666">The seven days just gone.</p>
+    <table style="border-collapse:collapse;font-size:15px">
+      ${row('Revenue', money(d.revenueCents) + ' <span style="color:#888;font-weight:400">(' + arrow(d.revenueChangePct) + ')</span>')}
+      ${row('New members', d.signups + ' <span style="color:#888;font-weight:400">(' + arrow(d.signupsChangePct) + ')</span>')}
+      ${row('Orders', d.orders + ' <span style="color:#888;font-weight:400">' + money(d.gmvCents) + ' of goods</span>')}
+      ${row('Members in total', Number(d.totalMembers).toLocaleString())}
+    </table>
+    ${attn.length
+      ? `<h3 style="margin:22px 0 6px">Waiting on you</h3><ul style="margin:0;padding-left:18px;color:#333">${
+          attn.map(([k, n]) => `<li>${n} ${escapeHtml(k)}</li>`).join('')}</ul>`
+      : '<p style="margin:22px 0 0;color:#2a7">Nothing is waiting on you. A clean week.</p>'}
+    ${d.topPosts && d.topPosts.length
+      ? `<h3 style="margin:22px 0 6px">Most liked this week</h3><ol style="margin:0;padding-left:18px;color:#333">${
+          d.topPosts.map((p) => `<li>@${escapeHtml(p.username || '')} — ${escapeHtml(p.body || '')} <span style="color:#888">(${p.likes})</span></li>`).join('')}</ol>`
+      : ''}
+    <p style="margin:24px 0 0;color:#888;font-size:13px">You can change or switch off this email in the dashboard, under Alerts.</p>
+  </div>`;
+}
+async function sendOwnerDigest() {
+  const d = await buildOwnerDigest();
+  const admins = (await db.query(
+    `SELECT id, email, name FROM users WHERE is_admin = true AND email IS NOT NULL AND email <> ''
+       AND NOT COALESCE(deactivated,false) LIMIT 10`)).rows;
+  const html = digestHtml(d);
+  for (const a of admins) {
+    await mailer.sendMail({ to: a.email, subject: 'Your week on Atwe', html }).catch(() => {});
+  }
+  return { sent: admins.length, digest: d };
+}
+const DIGEST_FLUSH_MS = 30 * 60000;   // checks twice an hour; the day/hour gate is what decides
+async function flushOwnerDigest() {
+  if (!db.isConfigured() || !_ownerDigest.enabled) return 0;
+  const now = new Date();
+  if (now.getDay() !== _ownerDigest.weekday) return 0;
+  if (now.getHours() < _ownerDigest.hour) return 0;
+  // One per day, tracked by date string — so a restart at 8:05 can't send a
+  // second copy, and a server that was down at 8 still sends when it comes back.
+  const today = now.toISOString().slice(0, 10);
+  if (_ownerDigest.lastSentOn === today) return 0;
+  _ownerDigest = { ..._ownerDigest, lastSentOn: today };
+  await db.setSetting(DIGEST_KEY, _ownerDigest).catch(() => {});
+  const out = await sendOwnerDigest();
+  return out.sent;
+}
+registerJob('owner_digest', 'Weekly owner digest', DIGEST_FLUSH_MS);
+setInterval(trackJob('owner_digest', flushOwnerDigest), DIGEST_FLUSH_MS).unref?.();
+app.get('/api/admin/owner-digest', auth.requireAdmin, async (_req, res) => {
+  try { res.json({ config: _ownerDigest, preview: await buildOwnerDigest(), emailEnabled: mailer.isConfigured() }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not build the digest.' }); }
+});
+app.put('/api/admin/owner-digest', auth.requireAdmin, async (req, res) => {
+  try {
+    // Keep lastSentOn — it's a record of what happened, not a setting.
+    const next = normalizeDigest({ ...req.body.config, lastSentOn: _ownerDigest.lastSentOn });
+    await db.setSetting(DIGEST_KEY, next);
+    _ownerDigest = next;
+    adminAudit(req, 'digest.settings', 'settings', DIGEST_KEY, next);
+    res.json({ ok: true, config: next });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+app.post('/api/admin/owner-digest/send', auth.requireAdmin, rateLimit(5, 3600000, 'digest'), async (req, res) => {
+  try { const out = await sendOwnerDigest(); adminAudit(req, 'digest.send', 'system', null, { sent: out.sent }); res.json({ ok: true, sent: out.sent }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the digest.' }); }
+});
 app.get('/api/admin/anomalies', auth.requireAdmin, async (req, res) => {
   const showAll = req.query.state === 'all';
   try {
@@ -23980,7 +25175,7 @@ app.post('/api/orders', auth.requireAuth, blockImpersonation, rateLimit(20, 6000
       if (gp.blocked) { await dropPending(); return res.status(400).json(gp.blocked); }
       const balancePart = total - gp.giftPart;
       const vel = await walletVelocityCheck(req.user.id, balancePart);
-      if (!vel.ok) { await dropPending(); return res.status(429).json(walletVelocityError(vel)); }
+      if (!vel.ok) { await dropPending(); return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel)); }
       const idem = await walletClaimIdem(req.user.id, cid, 'order');
       if (!idem.claimed) { await dropPending(); return res.json(idem.result || { ok: true, orderId, deduped: true }); }
       const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
@@ -24070,7 +25265,7 @@ app.post('/api/orders/buy', auth.requireAuth, blockImpersonation, rateLimit(20, 
       if (gp.blocked) { await dropPending(); return res.status(400).json(gp.blocked); }
       const balancePart = total - gp.giftPart;
       const vel = await walletVelocityCheck(req.user.id, balancePart);
-      if (!vel.ok) { await dropPending(); return res.status(429).json(walletVelocityError(vel)); }
+      if (!vel.ok) { await dropPending(); return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel)); }
       const idem = await walletClaimIdem(req.user.id, cid, 'order');
       if (!idem.claimed) { await dropPending(); return res.json(idem.result || { ok: true, orderId, deduped: true }); }
       const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
@@ -24195,6 +25390,7 @@ async function markOrderShipped(id, buyerId, sellerId, carrier, tracking, extra)
   notify(buyerId, sellerId, 'order_shipped');
   rtPush(buyerId, 'order', { id, shipped: true, carrier, tracking });
   sendOrderShippedEmail(id).catch(() => {});
+  emitWebhook(sellerId, 'order.shipped', { orderId: id, carrier, tracking });
   return true;
 }
 // A seller's optional thank-you note, attached at ship time (Etsy dispatch-message style).
@@ -24292,7 +25488,7 @@ app.post('/api/orders/:id/label/buy', auth.requireAuth, blockImpersonation, asyn
     const rate = await shiplabels.getRate(rateId);
     if (!rate.ok) { await walletReleaseIdem(o.seller_id, cid, 'shipping_label'); await releaseClaim(); return res.status(400).json({ error: rate.error }); }
     const vel = await walletVelocityCheck(o.seller_id, rate.amountCents);
-    if (!vel.ok) { await walletReleaseIdem(o.seller_id, cid, 'shipping_label'); await releaseClaim(); return res.status(429).json(walletVelocityError(vel)); }
+    if (!vel.ok) { await walletReleaseIdem(o.seller_id, cid, 'shipping_label'); await releaseClaim(); return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel)); }
     // Preliminary balance check — avoids purchasing a real (non-refundable-by-us) label
     // the seller can't afford. walletDebit below still re-checks atomically at charge time.
     const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [o.seller_id])).rows[0];
@@ -24622,7 +25818,7 @@ app.post('/api/bundles/:id/buy', auth.requireAuth, blockImpersonation, rateLimit
     const dropPending = async () => { await restoreStock(items); await db.query("DELETE FROM orders WHERE id = $1 AND status = 'pending'", [orderId]).catch(() => {}); };
     if (req.body.protected || req.body.payWith === 'balance') {
       const vel = await walletVelocityCheck(req.user.id, total);
-      if (!vel.ok) { await dropPending(); return res.status(429).json(walletVelocityError(vel)); }
+      if (!vel.ok) { await dropPending(); return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel)); }
       const idem = await walletClaimIdem(req.user.id, cid, 'order');
       if (!idem.claimed) { await dropPending(); return res.json(idem.result || { ok: true, orderId, deduped: true }); }
       const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
@@ -24730,7 +25926,7 @@ app.post('/api/product-subscriptions', auth.requireAuth, blockImpersonation, rat
     const discT = Math.max(0, Math.min(subT, Math.round(subT * (discountPct || 0) / 100)));
     const shipT = (p.kind === 'physical' && p.ship_free === false) ? (p.ship_fee_cents || 0) : 0;
     const vel = await walletVelocityCheck(req.user.id, subT - discT + shipT);
-    if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
+    if (!vel.ok) return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel));
     const cid = req.body.clientId;
     const idem = await walletClaimIdem(req.user.id, cid, 'order');
     if (!idem.claimed) return res.json(idem.result || { ok: true, deduped: true });
@@ -24969,7 +26165,7 @@ app.post('/api/orders/:id/return/label/buy', auth.requireAuth, blockImpersonatio
     const rate = await shiplabels.getRate(rateId);
     if (!rate.ok) { await walletReleaseIdem(o.seller_id, cid, 'return_label'); await releaseClaim(); return res.status(400).json({ error: rate.error }); }
     const vel = await walletVelocityCheck(o.seller_id, rate.amountCents);
-    if (!vel.ok) { await walletReleaseIdem(o.seller_id, cid, 'return_label'); await releaseClaim(); return res.status(429).json(walletVelocityError(vel)); }
+    if (!vel.ok) { await walletReleaseIdem(o.seller_id, cid, 'return_label'); await releaseClaim(); return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel)); }
     const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [o.seller_id])).rows[0];
     if (!bal || bal.balance_cents < rate.amountCents) {
       await walletReleaseIdem(o.seller_id, cid, 'return_label');
@@ -25103,6 +26299,7 @@ app.post('/api/products/:id/reviews', auth.requireAuth, rateLimit(20, 60000, 'pr
       [id, req.user.id, rating, body, media]
     );
     notify(prod.business_id, req.user.id, 'product_review');
+    emitWebhook(prod.business_id, 'review.created', { productId: id, rating, reviewId: r.rows[0].id });
     res.status(201).json({ ok: true, id: r.rows[0].id });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save your review.' }); }
 });
@@ -25664,7 +26861,7 @@ app.post('/api/business/:id/appointments', auth.requireAuth, blockImpersonation,
     }
     if (depositCents > 0) {
       const v = await walletVelocityCheck(req.user.id, depositCents);
-      if (!v.ok) return res.status(429).json(walletVelocityError(v));
+      if (!v.ok) return res.status(walletVelocityStatus(v)).json(walletVelocityError(v));
     }
     // Insert the appointment + hold the deposit in ONE transaction, so a crash between
     // the two can never leave a debited deposit with no matching held appointment (which
@@ -27581,7 +28778,7 @@ app.post('/api/courses/:id/enroll', auth.requireAuth, blockImpersonation, async 
     if (price > 0) {
       const undo = async () => { await db.query('DELETE FROM course_enrollments WHERE course_id = $1 AND user_id = $2', [id, req.user.id]).catch(() => {}); };
       const vel = await walletVelocityCheck(req.user.id, price);
-      if (!vel.ok) { await undo(); return res.status(429).json(walletVelocityError(vel)); }
+      if (!vel.ok) { await undo(); return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel)); }
       const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
       if (bal < price) { await undo(); return res.status(400).json({ error: 'Not enough wallet balance — top up to enroll.', insufficientBalance: true, priceCents: price }); }
       const t = await walletTransfer(req.user.id, c.creator_id, price, 'Course: ' + c.title, false);
@@ -30578,7 +31775,7 @@ app.post('/api/handles/claim', auth.requireAuth, blockImpersonation, rateLimit(1
     const priceRow = (await db.query('SELECT price_cents FROM reserved_usernames WHERE username = $1', [username])).rows[0];
     if (!priceRow || priceRow.price_cents == null) return res.status(400).json({ error: 'That handle isn’t for sale.' });
     const vel = await walletVelocityCheck(req.user.id, priceRow.price_cents);
-    if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
+    if (!vel.ok) return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel));
     const idem = await walletClaimIdem(req.user.id, cid, 'handle');
     if (!idem.claimed) return res.json(idem.result || { ok: true, username, deduped: true });
     const r = await claimHandleFromBalance(req.user.id, username, expectedPrice);
@@ -30720,7 +31917,18 @@ app.get('/api/admin/support', auth.requirePerm('support'), async (req, res) => {
                 s.created_at DESC LIMIT 200`, params);
     const counts = (await db.query(
       `SELECT COALESCE(state,'open') AS state, COUNT(*)::int AS n FROM support_requests GROUP BY 1`)).rows;
-    res.json({ requests: rows, counts: Object.fromEntries(counts.map((c) => [c.state, c.n])) });
+    // The SLA clock. Only an OPEN ticket is still on it — once it's pending on
+    // the member or solved, the wait is no longer ours.
+    const slaMs = _supportSla.firstReplyHours * 3600000;
+    const withSla = rows.map((r) => {
+      if ((r.state || 'open') !== 'open') return { ...r, slaHours: null, overdue: false };
+      const waited = Date.now() - new Date(r.created_at).getTime();
+      return { ...r, waitedHours: Math.floor(waited / 3600000),
+        slaHoursLeft: Math.round((slaMs - waited) / 3600000), overdue: waited > slaMs };
+    });
+    res.json({ requests: withSla, sla: _supportSla,
+      overdue: withSla.filter((r) => r.overdue).length,
+      counts: Object.fromEntries(counts.map((c) => [c.state, c.n])) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not load support requests.' });
@@ -30886,49 +32094,90 @@ app.get('/api/admin/broadcast/audiences', auth.requireAdmin, async (_req, res) =
     res.json({ audiences: out, pushEnabled: push.isConfigured() });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not count the audiences.' }); }
 });
+/* ONE place that actually sends a broadcast. Used by "send now", by "send this
+   saved one", and by the scheduler — so a message written today and sent on
+   Friday behaves identically to one sent on the spot. */
+async function runBroadcast(b) {
+  const body = String(b.body || '').trim();
+  const subject = String(b.subject || '').trim().slice(0, 160);
+  const audience = BROADCAST_AUDIENCES[b.audience] ? b.audience : 'all';
+  const where = audienceWhere(audience);
+  const { rowCount } = await db.query(
+    `INSERT INTO admin_messages (user_id, sender, body, read_by_user, read_by_admin)
+     SELECT id, 'admin', $1, false, true FROM users WHERE ${where}`,
+    [body]
+  );
+  let emailing = 0;
+  if (b.by_email !== false && mailer.isConfigured()) {
+    const { rows } = await db.query(`SELECT name, email FROM users WHERE email IS NOT NULL AND email <> '' AND ${where}`);
+    emailing = rows.length;
+    // Detached: don't hold the caller open while the list sends.
+    sendTeamBroadcastEmails(rows, subject || 'A message from Atwe', body).catch((e) =>
+      console.error('Team broadcast failed:', e.message)
+    );
+  }
+  // Optional push: reaches members who installed the PWA and allowed alerts.
+  // Detached and best-effort — a push failure never fails the broadcast.
+  let pushing = 0;
+  if (b.by_push === true && push.isConfigured()) {
+    const { rows } = await db.query(`SELECT id FROM users WHERE ${where}`);
+    pushing = rows.length;
+    (async () => {
+      for (const u of rows) {
+        await pushToUser(u.id, { title: subject || 'Atwe', body: body.slice(0, 180), url: '/', tag: 'broadcast' }).catch(() => {});
+      }
+    })().catch(() => {});
+  }
+  // A saved broadcast records what it actually did; an ad-hoc one has no row.
+  if (b.id) {
+    await db.query(
+      `UPDATE admin_broadcasts SET status='sent', sent_at=now(), recipients=$2, emailed=$3, pushed=$4 WHERE id=$1`,
+      [b.id, rowCount, emailing, pushing]).catch(() => {});
+  }
+  return { recipients: rowCount, emailing, pushing, audience };
+}
 app.post('/api/admin/broadcast', auth.requireAdmin, rateLimit(10, 60000, 'admin-broadcast'), async (req, res) => {
   const body = (req.body.body || '').trim();
-  const subject = (req.body.subject || '').trim().slice(0, 160);
-  const alsoEmail = req.body.email !== false; // default on
-  const alsoPush = req.body.push === true;    // opt-in — it buzzes a real phone
-  const audience = BROADCAST_AUDIENCES[req.body.audience] ? req.body.audience : 'all';
   if (!body) return res.status(400).json({ error: 'Write a message to broadcast.' });
   if (body.length > 4000) return res.status(400).json({ error: 'That message is too long.' });
   try {
-    const where = audienceWhere(audience);
-    const { rowCount } = await db.query(
-      `INSERT INTO admin_messages (user_id, sender, body, read_by_user, read_by_admin)
-       SELECT id, 'admin', $1, false, true FROM users WHERE ${where}`,
-      [body]
-    );
-    let emailing = 0;
-    if (alsoEmail && mailer.isConfigured()) {
-      const { rows } = await db.query(`SELECT name, email FROM users WHERE email IS NOT NULL AND email <> '' AND ${where}`);
-      emailing = rows.length;
-      // Detached: don't hold the response open while the list sends.
-      sendTeamBroadcastEmails(rows, subject || 'A message from Atwe', body).catch((e) =>
-        console.error('Team broadcast failed:', e.message)
-      );
-    }
-    // Optional push: reaches members who installed the PWA and allowed alerts.
-    // Detached and best-effort — a push failure never fails the broadcast.
-    let pushing = 0;
-    if (alsoPush && push.isConfigured()) {
-      const { rows } = await db.query(`SELECT id FROM users WHERE ${where}`);
-      pushing = rows.length;
-      (async () => {
-        for (const u of rows) {
-          await pushToUser(u.id, { title: subject || 'Atwe', body: body.slice(0, 180), url: '/', tag: 'broadcast' }).catch(() => {});
-        }
-      })().catch(() => {});
-    }
-    adminAudit(req, 'broadcast.send', 'broadcast', null, { subject: subject || null, audience, recipients: rowCount, emailing, pushing });
-    res.json({ ok: true, sent: rowCount, emailing, pushing, audience });
+    const out = await runBroadcast({
+      body,
+      subject: (req.body.subject || '').trim().slice(0, 160),
+      audience: BROADCAST_AUDIENCES[req.body.audience] ? req.body.audience : 'all',
+      by_email: req.body.email !== false,   // default on
+      by_push: req.body.push === true,      // opt-in — it buzzes a real phone
+    });
+    adminAudit(req, 'broadcast.send', 'broadcast', null, { subject: req.body.subject || null, ...out });
+    res.json({ ok: true, sent: out.recipients, emailing: out.emailing, pushing: out.pushing, audience: out.audience });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not send the broadcast.' });
   }
 });
+/* The scheduler. Claim-first (status → 'sending' in the same statement that
+   selects it), so two server instances can never mail the same list twice. */
+const BCAST_FLUSH_MS = Math.max(20000, parseInt(process.env.BCAST_FLUSH_MS, 10) || 60000);
+async function flushScheduledBroadcasts() {
+  if (!db.isConfigured()) return 0;
+  const { rows } = await db.query(
+    `UPDATE admin_broadcasts SET status = 'sending'
+      WHERE id IN (SELECT id FROM admin_broadcasts
+                    WHERE status = 'scheduled' AND send_at <= now()
+                    ORDER BY send_at LIMIT 5)
+      RETURNING *`);
+  for (const b of rows) {
+    try { await runBroadcast(b); }
+    catch (e) {
+      // Put it back so it is retried rather than silently lost.
+      await db.query(`UPDATE admin_broadcasts SET status='scheduled' WHERE id=$1`, [b.id]).catch(() => {});
+      console.error('[broadcast]', e && e.message);
+    }
+  }
+  return rows.length;
+}
+registerJob('broadcasts', 'Scheduled broadcasts', BCAST_FLUSH_MS);
+setInterval(trackJob('broadcasts', flushScheduledBroadcasts), BCAST_FLUSH_MS).unref?.();
 
 /* ═══════════════════════════════════════════════
    CHAT  —  the actual Claude call
@@ -31787,7 +33036,7 @@ async function ogForPath(req) {
   const httpImg = (v) => (typeof v === 'string' && /^https?:\/\//i.test(v)) ? v : null;
   let segs;
   try { segs = decodeURIComponent(req.path).split('/').filter(Boolean); } catch { return null; }
-  const RESERVED = ['index.html', 'admin.html', 'locked.html', 'api', 'sw.js', 'manifest.json', 'manifest.webmanifest', 'favicon.png', 'robots.txt', 'ai', 'og'];
+  const RESERVED = ['index.html', 'admin.html', 'locked.html', 'status.html', 'status', 'api', 'sw.js', 'manifest.json', 'manifest.webmanifest', 'favicon.png', 'robots.txt', 'ai', 'og'];
   try {
     if ((segs[0] === 'group' || segs[0] === 'circle') && segs[1] && /^@?[a-z0-9._-]{1,40}$/i.test(segs[1])) {
       const uname = segs[1].replace(/^@/, '');
@@ -31890,5 +33139,9 @@ db.init()
   .then(() => { if (db.isConfigured()) return db.getSetting(ROLLOUT_KEY).then((v) => { _featureRollout = normalizeRollout(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(DUAL_KEY).then((v) => { _dualApproval = normalizeDual(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(ADMIN_IP_KEY).then((v) => { _adminIpAllow = normalizeAdminIps(v); }).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return db.getSetting(SLA_KEY).then((v) => { _supportSla = normalizeSla(v); }).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return db.getSetting(DIGEST_KEY).then((v) => { if (v) _ownerDigest = normalizeDigest(v); }).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return loadFraudRules().catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return loadAlertRules().catch(() => {}); })
   .then(() => { if (db.isConfigured()) console.log('🗄️   Schema + settings ready.'); })
   .catch((err) => console.error('Post-init setup failed:', err.message));

@@ -292,6 +292,24 @@
   .ovp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-top:10px;}
   .ovp-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--t2);background:var(--s1);padding:9px 12px;border-radius:var(--r-pill);cursor:pointer;}
   .ovp-item input{accent-color:var(--accent);}
+  /* ── Batch 35 ── */
+  .fr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;align-items:end;}
+  .fr-in{display:flex;flex-direction:column;gap:4px;}
+  .fr-in label{font-size:12px;color:var(--t3);}
+  .fr-conds{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+  .fr-cond{background:var(--s1);border-radius:var(--r-pill);padding:5px 11px;font-size:12.5px;color:var(--t2);}
+  .ar-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:8px;}
+  /* The request log reads like a log: fixed columns, one line each. */
+  .al-list{margin-top:8px;max-height:520px;overflow:auto;}
+  .al-row{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:13px;
+    border-bottom:1px solid var(--b1);white-space:nowrap;}
+  .al-row:last-child{border-bottom:none;}
+  .al-m{color:var(--t3);font-weight:700;width:52px;flex:none;}
+  .al-p{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;}
+  .al-ms{color:var(--t3);width:74px;text-align:right;flex:none;}
+  .al-ms.slow{color:var(--amber);font-weight:700;}
+  .al-t{color:var(--t3);width:82px;text-align:right;flex:none;}
+  @media(max-width:720px){.al-t{display:none;}}
   .act-filter{display:flex;gap:8px;flex-wrap:wrap;}
   .live-pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green,var(--green));margin-right:5px;vertical-align:middle;animation:livep 1.8s ease-in-out infinite;}
   @keyframes livep{0%,100%{opacity:.35;}50%{opacity:1;}}
@@ -1010,6 +1028,7 @@
       <button class="tab" data-v="affiliations" onclick="switchTab('affiliations')">Affiliations</button>
       <button class="tab" data-v="refunds" onclick="switchTab('refunds')">Refunds</button>
       <button class="tab" data-v="cards" onclick="switchTab('cards')">Cards</button>
+      <button class="tab" data-v="fraud" onclick="switchTab('fraud')">Fraud rules</button>
 
       <div class="nav-label" data-group="people">People</div>
       <button class="tab" data-v="users" onclick="switchTab('users')">Users</button>
@@ -1034,11 +1053,13 @@
       <button class="tab" data-v="safety" onclick="switchTab('safety')">Safety tools</button>
       <button class="tab" data-v="copyright" onclick="switchTab('copyright')">Copyright</button>
       <button class="tab" data-v="impersonation" onclick="switchTab('impersonation')">Impersonation</button>
+      <button class="tab" data-v="modqa" onclick="switchTab('modqa')">Moderator QA</button>
       <button class="tab" data-v="datareq" onclick="switchTab('datareq')">Data requests</button>
 
       <div class="nav-label" data-group="content">Content</div>
       <button class="tab" data-v="posts" onclick="switchTab('posts')">Posts</button>
       <button class="tab" data-v="announcements" onclick="switchTab('announcements')">Announcements</button>
+      <button class="tab" data-v="broadcasts" onclick="switchTab('broadcasts')">Broadcasts</button>
       <button class="tab" data-v="circles" onclick="switchTab('circles')">Circles</button>
       <button class="tab" data-v="feed" onclick="switchTab('feed')">Feed</button>
 
@@ -1060,6 +1081,9 @@
 
       <div class="nav-label" data-group="system">System</div>
       <button class="tab" data-v="alerts" onclick="switchTab('alerts')">Alerts</button>
+      <button class="tab" data-v="developers" onclick="switchTab('developers')">Developers</button>
+      <button class="tab" data-v="apilog" onclick="switchTab('apilog')">API log</button>
+      <button class="tab" data-v="incidents" onclick="switchTab('incidents')">Status page</button>
       <button class="tab" data-v="aistudio" onclick="switchTab('aistudio')">AI Studio</button>
       <button class="tab" data-v="ops" onclick="switchTab('ops')">Operations</button>
       <button class="tab" data-v="site" onclick="switchTab('site')">Site</button>
@@ -1515,6 +1539,8 @@ const TAB_PERM = {
   safety: 'moderation',
   approvals: 'super', copyright: 'moderation', impersonation: 'moderation',
   alerts: 'super', aistudio: 'super',
+  fraud: 'revenue', modqa: 'moderation', broadcasts: 'super',
+  developers: 'super', apilog: 'super', incidents: 'super',
 };
 function canSee(tab){ const p = TAB_PERM[tab]; if (ME.superadmin) return true; return p !== 'super' && ME.perms.includes(p); }
 
@@ -1594,6 +1620,8 @@ const NAV_TITLES = {
   safety:'Safety tools',
   approvals:'Approvals', copyright:'Copyright claims', impersonation:'Impersonation',
   alerts:'Alerts', aistudio:'AI Studio',
+  fraud:'Fraud rules', modqa:'Moderator QA', broadcasts:'Broadcasts',
+  developers:'Developers', apilog:'API log', incidents:'Status page',
 };
 // Mobile: slide the sidebar in/out.
 function toggleNav(open){
@@ -1611,7 +1639,13 @@ function renderView(){
   const statRow = document.getElementById('stats'); if (statRow) statRow.style.display = (VIEW === 'features') ? 'none' : '';
   const inner = document.querySelector('.main-inner'); if (inner) inner.scrollTop = 0;
   window.scrollTo(0, 0);
-  if (VIEW === 'approvals') renderApprovalsView();
+  if (VIEW === 'fraud') renderFraudView();
+  else if (VIEW === 'modqa') renderModQaView();
+  else if (VIEW === 'broadcasts') renderBroadcastsView();
+  else if (VIEW === 'developers') renderDevelopersView();
+  else if (VIEW === 'apilog') renderApiLogView();
+  else if (VIEW === 'incidents') renderIncidentsView();
+  else if (VIEW === 'approvals') renderApprovalsView();
   else if (VIEW === 'copyright') renderCopyrightView();
   else if (VIEW === 'impersonation') renderImpersonationView();
   else if (VIEW === 'alerts') renderAlertsView();
@@ -3289,6 +3323,447 @@ async function resolveAppeal(id, action){
 }
 
 /* ═══════════════════════════════════════════════
+   BATCH 35 — Fraud · Moderator QA · Broadcasts · Developers · API log · Status
+═══════════════════════════════════════════════ */
+
+/* ─── Fraud rules ─── */
+let FR = { rules: [], hits: [], conditions: [], actions: [] };
+const FR_ACTION_HELP = {
+  flag: 'Let it through, but write it down.',
+  block: 'Refuse the payment and tell them to contact support.',
+  freeze: 'Refuse it AND freeze the wallet for a person to look at.',
+};
+function renderFraudView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="ld"><span class="ab-mark"></span></div>';
+  loadFraud();
+}
+async function loadFraud(){
+  try { FR = await api('GET', '/api/admin/fraud-rules'); renderFraud(); }
+  catch (e){ document.getElementById('content').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function frCondLabel(key){ const c = (FR.conditions||[]).find(x => x.key === key); return c ? c.label : key; }
+function frCondValue(key, v){
+  const c = (FR.conditions||[]).find(x => x.key === key);
+  if (!c) return String(v);
+  if (c.unit === 'money') return '$' + (Number(v)/100).toLocaleString();
+  if (c.unit === 'flag') return '';
+  return String(v) + ' ' + c.unit;
+}
+function renderFraud(){
+  if (VIEW !== 'fraud') return;
+  const rows = (FR.rules || []).map(r => {
+    const conds = Object.entries(r.conditions || {}).map(([k, v]) =>
+      '<div class="fr-cond">' + esc(frCondLabel(k)) + ' <b>' + esc(frCondValue(k, v)) + '</b></div>').join('');
+    return `<div class="ref-row"><div class="ref-main">
+      <div class="ref-top"><span class="ref-kind">${esc(r.name)}</span>
+        <span class="pill ${r.action==='freeze'?'ban':(r.action==='block'?'susp':'')}">${esc(r.action)}</span>
+        ${r.enabled ? '' : '<span class="pill">paused</span>'}
+        ${r.hits ? '<span class="muted">' + r.hits + ' hit' + (r.hits===1?'':'s') + '</span>' : ''}</div>
+      <div class="ref-sub">${esc(FR_ACTION_HELP[r.action] || '')}</div>
+      <div class="fr-conds">${conds || '<span class="muted">no conditions</span>'}</div>
+    </div><div class="ref-side"><div class="ref-acts">
+      <button class="act" onclick="frToggle(${r.id}, ${r.enabled ? 'false' : 'true'})">${r.enabled ? 'Pause' : 'Turn on'}</button>
+      <button class="act danger" onclick="frDelete(${r.id})">Delete</button>
+    </div></div></div>`;
+  }).join('') || '<div class="empty">No rules yet. The standard velocity caps still apply to everyone.</div>';
+
+  const condInputs = (FR.conditions || []).map(c => c.unit === 'flag'
+    ? `<label class="ovp-item"><input type="checkbox" id="frc-${c.key}"/><span>${esc(c.label)}</span></label>`
+    : `<div class="fr-in"><label>${esc(c.label)}${c.unit === 'money' ? ' ($)' : ''}</label>
+        <input class="in" id="frc-${c.key}" type="number" min="0" step="${c.unit === 'money' ? '1' : '1'}" placeholder="—" style="margin:0;"/></div>`
+  ).join('');
+
+  const hits = (FR.hits || []).slice(0, 30).map(h => `<div class="ref-row"><div class="ref-main">
+      <div class="ref-top"><span class="ref-kind">${esc(h.rule_name || 'deleted rule')}</span>
+        <span class="pill ${h.action==='freeze'?'ban':(h.action==='block'?'susp':'')}">${esc(h.action)}</span></div>
+      <div class="ref-sub">${h.username ? '@'+esc(h.username) : 'account #' + h.user_id} · ${h.amount_cents != null ? money(h.amount_cents) : '—'} · ${new Date(h.created_at).toLocaleString()}</div>
+    </div></div>`).join('') || '<div class="empty">No rule has fired yet.</div>';
+
+  document.getElementById('content').innerHTML = `
+    <div class="panel"><h3>Your own fraud rules</h3>
+      <div class="sub">The standard limits are one blunt number for everyone. A rule lets you say the specific thing you mean — <b>"a brand-new account trying to send $500"</b> — and choose what happens: write it down, refuse the payment, or freeze the wallet for a person to look at. Every condition on a rule must be true at once. Rules run on every payment leaving a wallet, and a broken rule never stops someone spending their own money.</div>
+    </div>
+    <div class="panel"><h3>Add a rule</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+        <input class="in" id="frName" maxlength="80" placeholder="Rule name (e.g. New account, big send)" style="flex:1;min-width:220px;margin:0;"/>
+        <select class="in" id="frAction" style="width:170px;margin:0;">
+          <option value="flag">Just record it</option>
+          <option value="block">Refuse the payment</option>
+          <option value="freeze">Refuse &amp; freeze wallet</option>
+        </select>
+      </div>
+      <div class="sub" style="margin-bottom:8px;">Fires when <b>all</b> of these are true. Leave a box empty to ignore it.</div>
+      <div class="fr-grid">${condInputs}</div>
+      <button class="act accent" style="margin-top:12px;" onclick="frCreate()">Create rule</button>
+    </div>
+    <div class="panel"><h3>Try it against a real account</h3>
+      <div class="sub">A dry run — nothing is charged, frozen or recorded.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <input class="in" id="frTestUser" placeholder="@username" style="flex:1;min-width:160px;margin:0;"/>
+        <input class="in" id="frTestAmt" type="number" placeholder="amount $" style="width:130px;margin:0;"/>
+        <button class="act" onclick="frTest()">Test</button>
+      </div>
+      <div id="frTestOut" class="sub" style="margin-top:10px;"></div>
+    </div>
+    <div class="panel"><h3>Live rules</h3></div>${rows}
+    <div class="panel"><h3>Recently fired</h3></div>${hits}`;
+}
+function frReadConditions(){
+  const out = {};
+  for (const c of (FR.conditions || [])) {
+    const el = document.getElementById('frc-' + c.key); if (!el) continue;
+    if (c.unit === 'flag') { if (el.checked) out[c.key] = true; continue; }
+    const v = el.value.trim(); if (v === '') continue;
+    const n = Number(v); if (!Number.isFinite(n) || n < 0) continue;
+    out[c.key] = c.unit === 'money' ? Math.round(n * 100) : Math.round(n);
+  }
+  return out;
+}
+async function frCreate(){
+  const name = (document.getElementById('frName').value || '').trim();
+  const action = document.getElementById('frAction').value;
+  const conditions = frReadConditions();
+  if (!name) { notify('Give the rule a name.'); return; }
+  if (!Object.keys(conditions).length) { notify('Add at least one condition — a rule with none would match every payment.'); return; }
+  try { await api('POST', '/api/admin/fraud-rules', { name, action, conditions }); notify('Rule created.'); loadFraud(); }
+  catch (e){ notify(e.message); }
+}
+async function frToggle(id, enabled){
+  try { await api('PATCH', '/api/admin/fraud-rules/' + id, { enabled }); loadFraud(); } catch (e){ notify(e.message); }
+}
+async function frDelete(id){
+  if (!confirm('Delete this rule? Payments it was catching will go through again.')) return;
+  try { await api('DELETE', '/api/admin/fraud-rules/' + id); loadFraud(); } catch (e){ notify(e.message); }
+}
+async function frTest(){
+  const username = (document.getElementById('frTestUser').value || '').trim();
+  const amt = Number(document.getElementById('frTestAmt').value);
+  const out = document.getElementById('frTestOut');
+  if (!username) { notify('Enter a @username.'); return; }
+  out.textContent = 'Testing…';
+  try {
+    const r = await api('POST', '/api/admin/fraud-rules/test', { username, amountCents: Math.round((amt||0)*100) });
+    out.innerHTML = r.matched.length
+      ? 'Would fire: ' + r.matched.map(m => '<b>' + esc(m.name) + '</b> (' + esc(m.action) + ')').join(', ')
+      : 'No rule would fire for that payment.';
+  } catch (e){ out.textContent = e.message; }
+}
+
+/* ─── Moderator QA ─── */
+let MQ = null, MQ_DAYS = 30;
+function renderModQaView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="tf-head"><div class="tf-ranges">
+      ${[7,30,90].map(d => `<button class="tf-r ${MQ_DAYS===d?'on':''}" onclick="mqDays(${d})">${d} days</button>`).join('')}
+    </div></div>
+    <div id="mqBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
+  loadModQa();
+}
+function mqDays(d){ MQ_DAYS = d; renderModQaView(); }
+async function loadModQa(){
+  const el = document.getElementById('mqBody'); if (!el) return;
+  try {
+    MQ = await api('GET', '/api/admin/moderator-qa?days=' + MQ_DAYS);
+    const staff = (MQ.staff || []).map(s => `<div class="ref-row"><div class="ref-main">
+        <div class="ref-top"><span class="ref-kind">${esc(s.actor_name)}</span>
+          <span class="pill">${s.decisions} decision${s.decisions===1?'':'s'}</span>
+          ${s.overturned ? `<span class="pill ${s.overturnPct>=25?'ban':'susp'}">${s.overturnPct}% overturned</span>` : '<span class="pill pro">none overturned</span>'}</div>
+        <div class="ref-sub">${s.enforcement} suspensions/bans · ${s.copyright} copyright · ${s.impersonation} impersonation</div>
+      </div></div>`).join('') || '<div class="empty">No moderation decisions in this period.</div>';
+    const sample = (MQ.sample || []).map(a => `<div class="ref-row"><div class="ref-main">
+        <div class="ref-top"><span class="ref-kind">${esc(a.action)}</span>
+          <span class="muted">by ${esc(a.actor_name || 'unknown')}</span></div>
+        <div class="ref-sub">${esc(a.target_type || '')} ${esc(String(a.target_id || ''))} · ${new Date(a.created_at).toLocaleString()}</div>
+        ${a.meta && Object.keys(a.meta).length ? `<div class="ref-note">${esc(JSON.stringify(a.meta).slice(0,200))}</div>` : ''}
+      </div><div class="ref-side"><div class="ref-acts">
+        <button class="act accent" onclick="mqJudge(${a.id},'agree')">Right call</button>
+        <button class="act danger" onclick="mqJudge(${a.id},'disagree')">Wrong call</button>
+        <button class="act" onclick="mqJudge(${a.id},'unsure')">Not sure</button>
+      </div></div></div>`).join('') || '<div class="empty">Nothing left to second-review in this period.</div>';
+    const reviewed = (MQ.reviewed || []).slice(0, 20).map(r => `<div class="ref-row"><div class="ref-main">
+        <div class="ref-top"><span class="pill ${r.verdict==='agree'?'pro':(r.verdict==='disagree'?'ban':'')}">${esc(r.verdict)}</span>
+          <span class="ref-kind">${esc(r.action || '')}</span></div>
+        <div class="ref-sub">${esc(r.actor_name || '')}'s call, reviewed by ${esc(r.reviewer_name || '')} · ${new Date(r.created_at).toLocaleString()}</div>
+        ${r.note ? `<div class="ref-note">${esc(r.note)}</div>` : ''}
+      </div></div>`).join('') || '<div class="empty">No second reviews yet.</div>';
+    el.innerHTML = `
+      <div class="panel"><h3>How the team is deciding</h3>
+        <div class="sub">Decisions made, and how often an appeal overturned them. A climbing overturn rate usually means the <b>guidance</b> is unclear, not that the person is bad at their job — read it that way.
+        ${MQ.agreementPct != null ? ` Second reviewers have agreed with <b>${MQ.agreementPct}%</b> of the calls they looked at.` : ''}</div>
+      </div>${staff}
+      <div class="panel"><h3>Second look <span class="muted">· a random sample</span></h3>
+        <div class="sub">Ten recent decisions picked at random. You can't review your own.</div>
+      </div>${sample}
+      <div class="panel"><h3>Already second-reviewed</h3></div>${reviewed}`;
+  } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function mqJudge(auditId, verdict){
+  const note = verdict === 'disagree' ? prompt('What should have happened instead?', '') : null;
+  if (verdict === 'disagree' && note === null) return;
+  try { await api('POST', '/api/admin/moderator-qa/' + auditId, { verdict, note }); loadModQa(); }
+  catch (e){ notify(e.message); }
+}
+
+/* ─── Broadcasts: drafts + scheduling ─── */
+let BC = { broadcasts: [], audiences: [] }, BC_FILTER = '';
+function renderBroadcastsView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="ld"><span class="ab-mark"></span></div>';
+  loadBroadcasts();
+}
+async function loadBroadcasts(){
+  try { BC = await api('GET', '/api/admin/broadcasts' + (BC_FILTER ? '?status=' + BC_FILTER : '')); renderBroadcasts(); }
+  catch (e){ document.getElementById('content').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function bcFilter(f){ BC_FILTER = f; loadBroadcasts(); }
+function renderBroadcasts(){
+  if (VIEW !== 'broadcasts') return;
+  const rows = (BC.broadcasts || []).map(b => {
+    const waiting = b.status === 'draft' || b.status === 'scheduled';
+    const acts = waiting
+      ? `<div class="ref-acts">
+          <button class="act accent" onclick="bcSend(${b.id})">Send now</button>
+          <button class="act danger" onclick="bcCancel(${b.id})">Discard</button></div>`
+      : `<span class="pill ${b.status==='sent'?'pro':''}">${esc(b.status)}</span>`;
+    const when = b.status === 'sent'
+      ? 'Sent ' + new Date(b.sentAt).toLocaleString() + ' · ' + (b.recipients||0) + ' people'
+        + (b.emailed ? ', ' + b.emailed + ' emailed' : '') + (b.pushed ? ', ' + b.pushed + ' pushed' : '')
+      : b.sendAt ? 'Goes out ' + new Date(b.sendAt).toLocaleString()
+      : 'Draft · saved ' + new Date(b.createdAt).toLocaleString();
+    return `<div class="ref-row"><div class="ref-main">
+      <div class="ref-top"><span class="ref-kind">${esc(b.subject || 'No subject')}</span>
+        <span class="pill">${esc(b.audience)}</span>
+        ${b.byEmail ? '<span class="pill">email</span>' : ''}${b.byPush ? '<span class="pill">push</span>' : ''}</div>
+      <div class="ref-sub">${esc(when)}</div>
+      <div class="ref-reason">${esc((b.body||'').slice(0,200))}</div>
+    </div><div class="ref-side">${acts}</div></div>`;
+  }).join('') || '<div class="empty">Nothing saved yet.</div>';
+  document.getElementById('content').innerHTML = `
+    <div class="panel"><h3>Write it now, send it when you mean to</h3>
+      <div class="sub">A broadcast reaches every member you pick — in the app, and by email or push if you choose. Save it as a draft and sleep on it, or set a time and let it go out on its own. Once it has gone, it can't be edited: the words are already in people's inboxes.</div>
+      <input class="in" id="bcSubject" maxlength="160" placeholder="Subject (used as the email subject)" style="width:100%;margin:10px 0 8px;"/>
+      <textarea class="in" id="bcBody" rows="5" maxlength="4000" placeholder="What do you want to say?" style="width:100%;box-sizing:border-box;resize:vertical;"></textarea>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
+        <select class="in" id="bcAudience" style="width:170px;margin:0;">
+          ${(BC.audiences||['all']).map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join('')}
+        </select>
+        <label class="ovp-item"><input type="checkbox" id="bcEmail" checked/><span>Also email</span></label>
+        <label class="ovp-item"><input type="checkbox" id="bcPush"/><span>Also push</span></label>
+        <input class="in" id="bcWhen" type="datetime-local" style="width:220px;margin:0;"/>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+        <button class="act" onclick="bcSave(false)">Save as draft</button>
+        <button class="act accent" onclick="bcSave(true)">Schedule it</button>
+      </div>
+      <div class="sub" style="margin-top:8px;">Leave the time empty to keep it as a draft.</div>
+    </div>
+    <div class="tf-head"><div class="tf-ranges">
+      <button class="tf-r ${BC_FILTER===''?'on':''}" onclick="bcFilter('')">All</button>
+      <button class="tf-r ${BC_FILTER==='draft'?'on':''}" onclick="bcFilter('draft')">Drafts</button>
+      <button class="tf-r ${BC_FILTER==='scheduled'?'on':''}" onclick="bcFilter('scheduled')">Scheduled</button>
+      <button class="tf-r ${BC_FILTER==='sent'?'on':''}" onclick="bcFilter('sent')">Sent</button>
+    </div></div>${rows}`;
+}
+async function bcSave(schedule){
+  const body = (document.getElementById('bcBody').value || '').trim();
+  if (!body) { notify('Write a message first.'); return; }
+  const whenRaw = (document.getElementById('bcWhen').value || '').trim();
+  if (schedule && !whenRaw) { notify('Pick a date and time, or save it as a draft.'); return; }
+  const payload = {
+    body, subject: (document.getElementById('bcSubject').value || '').trim(),
+    audience: document.getElementById('bcAudience').value,
+    byEmail: document.getElementById('bcEmail').checked,
+    byPush: document.getElementById('bcPush').checked,
+  };
+  // datetime-local has no timezone; the browser's own Date reads it as local,
+  // which is what the person typing it meant.
+  if (schedule) payload.sendAt = new Date(whenRaw).toISOString();
+  try {
+    await api('POST', '/api/admin/broadcasts', payload);
+    document.getElementById('bcBody').value = ''; document.getElementById('bcSubject').value = '';
+    document.getElementById('bcWhen').value = '';
+    notify(schedule ? 'Scheduled.' : 'Saved as a draft.');
+    loadBroadcasts();
+  } catch (e){ notify(e.message); }
+}
+async function bcSend(id){
+  if (!confirm('Send this to everyone in that audience now? This cannot be taken back.')) return;
+  try { const r = await api('POST', '/api/admin/broadcasts/' + id + '/send', {});
+    notify('Sent to ' + r.recipients + ' people.'); loadBroadcasts(); }
+  catch (e){ notify(e.message); }
+}
+async function bcCancel(id){
+  if (!confirm('Discard this broadcast?')) return;
+  try { await api('DELETE', '/api/admin/broadcasts/' + id); loadBroadcasts(); } catch (e){ notify(e.message); }
+}
+
+/* ─── Developers: API keys + webhook health ─── */
+let DEV = null, DEV_Q = '';
+function renderDevelopersView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="ld"><span class="ab-mark"></span></div>';
+  loadDevelopers();
+}
+async function loadDevelopers(){
+  try { DEV = await api('GET', '/api/admin/api-keys' + (DEV_Q ? '?q=' + encodeURIComponent(DEV_Q) : '')); renderDevelopers(); }
+  catch (e){ document.getElementById('content').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function devSearch(v){ DEV_Q = v; clearTimeout(window._devT); window._devT = setTimeout(loadDevelopers, 300); }
+function renderDevelopers(){
+  if (VIEW !== 'developers') return;
+  const s = DEV.stats || {}, h = DEV.hooks || {};
+  const rows = (DEV.keys || []).map(k => `<div class="ref-row"><div class="ref-main">
+      <div class="ref-top"><span class="ref-kind">${esc(k.name)}</span>
+        <span class="pill">${esc(k.prefix)}…</span>
+        ${k.revokedAt ? '<span class="pill ban">revoked</span>' : '<span class="pill pro">live</span>'}</div>
+      <div class="ref-sub">${k.ownerUsername ? '@'+esc(k.ownerUsername) : esc(k.ownerName||'')} · ${Number(k.calls).toLocaleString()} calls${k.lastUsedAt ? ' · last used ' + new Date(k.lastUsedAt).toLocaleString() : ' · never used'}</div>
+      <div class="ref-note">${(k.scopes||[]).map(x => esc(x)).join(' · ') || 'no permissions'}</div>
+    </div><div class="ref-side">${k.revokedAt ? '' : `<button class="act danger" onclick="devRevoke(${k.id})">Revoke</button>`}</div></div>`
+  ).join('') || '<div class="empty">Nobody has created an API key yet.</div>';
+  document.getElementById('content').innerHTML = `
+    <div class="panel"><h3>The developer platform</h3>
+      <div class="sub">A business can now connect Atwe to whatever else they run: a <b>key</b> to call us with, a <b>webhook</b> so we can call them when something happens, and a log of both. Keys are stored as a one-way hash — nobody, including you, can read a key back after it is created. You can revoke any of them from here.</div>
+      <div class="ov-grid" style="margin-top:14px;">
+        ${ovCard('at', s.live || 0, 'Live keys')}
+        ${ovCard('lock', s.revoked || 0, 'Revoked')}
+        ${ovCard('post', Number(s.calls || 0).toLocaleString(), 'API calls')}
+        ${ovCard('dm', (h.active || 0) + ' / ' + (h.endpoints || 0), 'Webhooks active')}
+      </div>
+    </div>
+    <div class="panel"><h3>Keys</h3>
+      <input class="in" placeholder="Search by account or key name" value="${esc(DEV_Q)}" oninput="devSearch(this.value)" style="width:100%;margin:8px 0 0;"/>
+    </div>${rows}`;
+}
+async function devRevoke(id){
+  if (!confirm('Revoke this key? Anything using it stops working immediately.')) return;
+  try { await api('POST', '/api/admin/api-keys/' + id + '/revoke', {}); notify('Revoked.'); loadDevelopers(); }
+  catch (e){ notify(e.message); }
+}
+
+/* ─── API log ─── */
+let AL = null, AL_HOURS = 24, AL_ONLY = '';
+function renderApiLogView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="tf-head"><div class="tf-ranges">
+      ${[1,24,168].map(h => `<button class="tf-r ${AL_HOURS===h?'on':''}" onclick="alHours(${h})">${h===1?'1 hour':(h===24?'24 hours':'7 days')}</button>`).join('')}
+    </div><div class="tf-ranges">
+      ${[['','Everything'],['errors','Errors'],['slow','Slow'],['public','Public API']].map(([k,l]) =>
+        `<button class="tf-r ${AL_ONLY===k?'on':''}" onclick="alOnly('${k}')">${l}</button>`).join('')}
+    </div></div>
+    <div id="alBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
+  loadApiLog();
+}
+function alHours(h){ AL_HOURS = h; renderApiLogView(); }
+function alOnly(k){ AL_ONLY = k; renderApiLogView(); }
+async function loadApiLog(){
+  const el = document.getElementById('alBody'); if (!el) return;
+  try {
+    AL = await api('GET', '/api/admin/api-log?hours=' + AL_HOURS + (AL_ONLY ? '&only=' + AL_ONLY : ''));
+    const t = AL.totals || {};
+    const slow = (AL.slowest || []).map(r => `<div class="ref-row"><div class="ref-main">
+        <div class="ref-top"><span class="ref-kind">${esc(r.path)}</span>
+          <span class="pill ${r.avg_ms > 1500 ? 'ban' : (r.avg_ms > 600 ? 'susp' : '')}">${r.avg_ms} ms average</span>
+          ${r.errors ? `<span class="pill ban">${r.errors} failed</span>` : ''}</div>
+        <div class="ref-sub">${r.calls} recorded · slowest ${r.max_ms} ms</div>
+      </div></div>`).join('') || '<div class="empty">Nothing recorded in this period.</div>';
+    const recent = (AL.recent || []).map(r => `<div class="al-row">
+        <span class="pill ${r.status>=500?'ban':(r.status>=400?'susp':'pro')}">${r.status}</span>
+        <span class="al-m">${esc(r.method)}</span>
+        <span class="al-p">${esc(r.path)}</span>
+        <span class="al-ms ${r.ms>=AL.slowMs?'slow':''}">${r.ms} ms</span>
+        <span class="al-t">${new Date(r.created_at).toLocaleTimeString()}</span>
+      </div>`).join('') || '<div class="empty">Nothing here.</div>';
+    el.innerHTML = `
+      <div class="panel"><h3>What the API did</h3>
+        <div class="sub">Every call to the public API, plus anything anywhere on Atwe that <b>failed</b> or took longer than ${AL.slowMs} ms. Ordinary fast requests aren't recorded — that would be a firehose nobody reads. Kept for 30 days.</div>
+        <div class="ov-grid" style="margin-top:14px;">
+          ${ovCard('post', t.n || 0, 'Recorded')}
+          ${ovCard('shield', t.server_errors || 0, 'Server errors')}
+          ${ovCard('lock', t.client_errors || 0, 'Rejected')}
+          ${ovCard('at', t.public_calls || 0, 'Public API')}
+        </div>
+      </div>
+      <div class="panel"><h3>Slowest endpoints</h3></div>${slow}
+      <div class="panel"><h3>Most recent</h3><div class="al-list">${recent}</div></div>`;
+  } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+
+/* ─── Status page + incidents ─── */
+let INC = { incidents: [], impacts: [], states: [] };
+function renderIncidentsView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="ld"><span class="ab-mark"></span></div>';
+  loadIncidents();
+}
+async function loadIncidents(){
+  try { INC = await api('GET', '/api/admin/incidents'); renderIncidents(); }
+  catch (e){ document.getElementById('content').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function renderIncidents(){
+  if (VIEW !== 'incidents') return;
+  const rows = (INC.incidents || []).map(i => {
+    const live = !i.resolved_at;
+    return `<div class="ref-row"><div class="ref-main">
+      <div class="ref-top"><span class="ref-kind">${esc(i.title)}</span>
+        <span class="pill ${i.impact==='critical'?'ban':(i.impact==='major'?'susp':'')}">${esc(i.impact)}</span>
+        <span class="pill ${live?'susp':'pro'}">${esc(i.status)}</span></div>
+      <div class="ref-sub">Started ${new Date(i.started_at).toLocaleString()}${i.resolved_at ? ' · resolved ' + new Date(i.resolved_at).toLocaleString() : ''} · ${i.update_count} update${i.update_count===1?'':'s'}</div>
+    </div><div class="ref-side"><div class="ref-acts">
+      ${live ? `<button class="act" onclick="incUpdate(${i.id})">Post an update</button>
+                <button class="act accent" onclick="incResolve(${i.id})">Mark resolved</button>` : ''}
+      <button class="act danger" onclick="incDelete(${i.id})">Delete</button>
+    </div></div></div>`;
+  }).join('') || '<div class="empty">No incidents. Long may it last.</div>';
+  document.getElementById('content').innerHTML = `
+    <div class="panel"><h3>Your public status page</h3>
+      <div class="sub">Live at <a href="/status" target="_blank" rel="noopener" style="color:var(--accent)">/status</a> — no sign-in, and it keeps working when the app doesn't. Businesses check a page like this before they trust a platform with their money. Opening an incident here puts it there straight away.</div>
+    </div>
+    <div class="panel"><h3>Open an incident</h3>
+      <input class="in" id="incTitle" maxlength="160" placeholder="What's wrong, in plain words (e.g. Payments are slow)" style="width:100%;margin:8px 0;"/>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <select class="in" id="incImpact" style="width:170px;margin:0;">
+          ${(INC.impacts||[]).map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('')}
+        </select>
+      </div>
+      <textarea class="in" id="incBody" rows="3" maxlength="2000" placeholder="First update — what you know so far" style="width:100%;box-sizing:border-box;margin-top:8px;resize:vertical;"></textarea>
+      <button class="act accent" style="margin-top:10px;" onclick="incCreate()">Publish</button>
+    </div>
+    ${rows}`;
+}
+async function incCreate(){
+  const title = (document.getElementById('incTitle').value || '').trim();
+  if (!title) { notify('Give it a title.'); return; }
+  try {
+    await api('POST', '/api/admin/incidents', {
+      title, impact: document.getElementById('incImpact').value,
+      body: (document.getElementById('incBody').value || '').trim() });
+    document.getElementById('incTitle').value = ''; document.getElementById('incBody').value = '';
+    notify('Published to the status page.'); loadIncidents();
+  } catch (e){ notify(e.message); }
+}
+async function incUpdate(id){
+  const body = prompt('What has changed? (this appears on the public page)', '');
+  if (!body) return;
+  const status = prompt('Status: investigating, identified or monitoring', 'identified');
+  if (!status) return;
+  try { await api('POST', '/api/admin/incidents/' + id + '/update', { status, body }); loadIncidents(); }
+  catch (e){ notify(e.message); }
+}
+async function incResolve(id){
+  const body = prompt('Closing note for the public page:', 'This is now fixed.');
+  if (!body) return;
+  try { await api('POST', '/api/admin/incidents/' + id + '/update', { status: 'resolved', body }); notify('Resolved.'); loadIncidents(); }
+  catch (e){ notify(e.message); }
+}
+async function incDelete(id){
+  if (!confirm('Delete this incident and its updates from the public page?')) return;
+  try { await api('DELETE', '/api/admin/incidents/' + id); loadIncidents(); } catch (e){ notify(e.message); }
+}
+
+/* ═══════════════════════════════════════════════
    BATCH 34 — Approvals · Copyright · Impersonation · Alerts · AI Studio
 ═══════════════════════════════════════════════ */
 
@@ -3515,7 +3990,10 @@ async function loadAlerts(){
   const el = document.getElementById('alertBody'); if (!el) return;
   try {
     const d = await api('GET', '/api/admin/anomalies' + (ALERT_ALL ? '?state=all' : ''));
-    const head = `<div class="panel"><h3>Watching for surprises</h3><div class="sub">Every ${d.nextScanMins} minutes, Atwe compares the last 24 hours against the previous week — signups, revenue, orders, refunds, disputes, errors and reports — and raises a flag when something moves far enough to be worth your attention. Quiet is good news.</div></div>`;
+    let rulesHtml = '', digestHtml = '';
+    try { rulesHtml = alertRulesPanel(await api('GET', '/api/admin/alert-rules')); } catch (e) {}
+    try { digestHtml = digestPanel(await api('GET', '/api/admin/owner-digest')); } catch (e) {}
+    const head = `<div class="panel"><h3>Watching for surprises</h3><div class="sub">Every ${d.nextScanMins} minutes, Atwe compares the last 24 hours against the previous week — signups, revenue, orders, refunds, disputes, errors and reports — and raises a flag when something moves far enough to be worth your attention. Quiet is good news.</div></div>` + rulesHtml + digestHtml;
     if (!d.alerts.length) { el.innerHTML = head + '<div class="empty">' + (ALERT_ALL ? 'No alerts have ever been raised.' : 'Nothing unusual. All quiet.') + '</div>'; return; }
     el.innerHTML = head + d.alerts.map(a => {
       const up = a.direction === 'up';
@@ -3532,6 +4010,83 @@ async function loadAlerts(){
     }).join('');
   } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
 }
+/* Which numbers you want to hear about, how far they must move, and how. */
+function alertRulesPanel(d){
+  const rows = (d.metrics || []).map(m => {
+    const r = m.rule || {};
+    const thr = r.threshold != null ? r.threshold : d.defaultThreshold;
+    const on = r.enabled !== false;
+    return `<div class="site-row" style="display:block;">
+      <div class="srt">${esc(m.label)}${on ? '' : ' <span class="pill ban">not watched</span>'}</div>
+      <div class="ar-row">
+        <label class="ovp-item"><input type="checkbox" ${on?'checked':''} onchange="arSave('${m.key}')" id="ar-on-${m.key}"/><span>Watch it</span></label>
+        <select class="in" id="ar-dir-${m.key}" style="width:150px;margin:0;" onchange="arSave('${m.key}')">
+          <option value="both"${(r.direction||'both')==='both'?' selected':''}>Up or down</option>
+          <option value="up"${r.direction==='up'?' selected':''}>Only if it rises</option>
+          <option value="down"${r.direction==='down'?' selected':''}>Only if it falls</option>
+        </select>
+        <div class="fr-in" style="min-width:130px;"><label>Tell me past</label>
+          <input class="in" id="ar-th-${m.key}" type="number" min="5" max="1000" value="${thr}" onchange="arSave('${m.key}')" style="margin:0;"/></div>
+        <label class="ovp-item"><input type="checkbox" ${r.by_email !== false?'checked':''} onchange="arSave('${m.key}')" id="ar-em-${m.key}"/><span>Email</span></label>
+        <label class="ovp-item"><input type="checkbox" ${r.by_push === true?'checked':''} onchange="arSave('${m.key}')" id="ar-pu-${m.key}"/><span>Push</span></label>
+      </div></div>`;
+  }).join('');
+  return `<div class="panel"><h3>Tell me if… <span class="muted">· your own alert rules</span></h3>
+    <div class="sub">Each number can be watched on its own terms. "Tell me past 60" means a 60% move against a normal week. Turn one off and Atwe stops raising it — the number is still tracked, you just stop hearing about it.</div>
+    ${rows}</div>`;
+}
+async function arSave(metric){
+  const get = (p) => document.getElementById('ar-' + p + '-' + metric);
+  try {
+    await api('PUT', '/api/admin/alert-rules/' + metric, {
+      enabled: get('on').checked,
+      direction: get('dir').value,
+      threshold: Number(get('th').value),
+      byEmail: get('em').checked,
+      byPush: get('pu').checked,
+    });
+    notify('Saved.');
+  } catch (e){ notify(e.message); }
+}
+/* The Monday-morning email. */
+function digestPanel(d){
+  const c = d.config || {}, p = d.preview || {};
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  return `<div class="panel"><h3>Your week in an email</h3>
+    <div class="sub">A short summary in your inbox — money in, who joined, and what is waiting on you — so you get the platform's pulse without opening a laptop. It goes to every admin.
+      ${d.emailEnabled ? '' : '<br><b>Note:</b> email isn\'t set up on this server yet, so it is written to the server log instead of sent.'}</div>
+    <div class="site-row"><div><div class="srt">Send it weekly</div><div class="srs">One email a week, on the day and hour you choose.</div></div>
+      <button class="switch ${c.enabled !== false ? 'on':''}" onclick="digToggle()" aria-label="Weekly digest"><span></span></button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
+      <select class="in" id="digDay" style="width:150px;margin:0;">
+        ${days.map((n,i) => `<option value="${i}"${(c.weekday||1)===i?' selected':''}>${n}</option>`).join('')}
+      </select>
+      <select class="in" id="digHour" style="width:110px;margin:0;">
+        ${Array.from({length:24},(_,h)=>`<option value="${h}"${(c.hour||8)===h?' selected':''}>${String(h).padStart(2,'0')}:00</option>`).join('')}
+      </select>
+      <button class="act" onclick="digSave()">Save</button>
+      <button class="act accent" onclick="digSendNow()">Send me one now</button>
+    </div>
+    <div class="sub" style="margin-top:12px;">This week so far: <b>${money(p.revenueCents||0)}</b> revenue · <b>${p.signups||0}</b> new members · <b>${p.orders||0}</b> orders.</div>
+  </div>`;
+}
+async function digToggle(){
+  try { const cur = await api('GET', '/api/admin/owner-digest');
+    await api('PUT', '/api/admin/owner-digest', { config: { ...cur.config, enabled: !(cur.config.enabled !== false) } });
+    loadAlerts(); } catch (e){ notify(e.message); }
+}
+async function digSave(){
+  try { const cur = await api('GET', '/api/admin/owner-digest');
+    await api('PUT', '/api/admin/owner-digest', { config: { ...cur.config,
+      weekday: Number(document.getElementById('digDay').value),
+      hour: Number(document.getElementById('digHour').value) } });
+    notify('Saved.'); } catch (e){ notify(e.message); }
+}
+async function digSendNow(){
+  try { const r = await api('POST', '/api/admin/owner-digest/send', {}); notify('Sent to ' + r.sent + ' admin' + (r.sent===1?'':'s') + '.'); }
+  catch (e){ notify(e.message); }
+}
+
 async function ackAlert(id){
   try { await api('POST', '/api/admin/anomalies/' + id + '/ack', {}); loadAlerts(); } catch (e){ notify(e.message); }
 }
@@ -4166,6 +4721,7 @@ function renderSupportView(){
         `<button class="bc-aud${SUP_FILTER[k] === v ? ' on' : ''}" onclick="supFilter('${k}','${v}')">${l}</button>`).join('')}
       <button class="bc-aud" onclick="openMacros(0)">Canned replies…</button>
     </div>
+    <div id="slaBar"></div>
     <div id="supList"><div class="ld"><span class="ab-mark"></span></div></div>
     <div id="csatBox"></div>
     <div class="panel"><h3>Help centre</h3>
@@ -4251,10 +4807,38 @@ async function useMacro(id, userId){
 async function loadSupport(){
   try {
     const qs = Object.entries(SUP_FILTER).map(([k, v]) => k + '=' + encodeURIComponent(v)).join('&');
-    const { requests, counts } = await api('GET', '/api/admin/support' + (qs ? '?' + qs : ''));
-    SUPPORT = requests || []; SUP_COUNTS = counts || {}; renderSupportList();
+    const d = await api('GET', '/api/admin/support' + (qs ? '?' + qs : ''));
+    SUPPORT = d.requests || []; SUP_COUNTS = d.counts || {};
+    SUP_SLA = d.sla || null; SUP_OVERDUE = d.overdue || 0;
+    renderSlaBar();
+    renderSupportList();
   }
   catch (e) { const el = document.getElementById('supList'); if (el) el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+let SUP_SLA = null, SUP_OVERDUE = 0;
+/* The response-time promise, and whether the queue is keeping it. A ticket
+   nobody has answered is the single thing a support queue must not hide. */
+function renderSlaBar(){
+  const el = document.getElementById('slaBar'); if (!el || !SUP_SLA) return;
+  el.innerHTML = `<div class="panel"><h3>Response time <span class="muted">· your promise</span></h3>
+    <div class="sub">The clock starts when someone writes in and stops when a person replies. ${SUP_OVERDUE
+      ? `<b style="color:var(--red)">${SUP_OVERDUE} ticket${SUP_OVERDUE===1?' is':'s are'} past ${SUP_SLA.firstReplyHours}h.</b>`
+      : `Nothing is past your ${SUP_SLA.firstReplyHours}-hour target right now.`}</div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
+      <div class="fr-in"><label>First reply within</label>
+        <input class="in" id="slaFirst" type="number" min="1" max="720" value="${SUP_SLA.firstReplyHours}" style="margin:0;"/></div>
+      <div class="fr-in"><label>Fully resolved within</label>
+        <input class="in" id="slaResolve" type="number" min="1" max="720" value="${SUP_SLA.resolveHours}" style="margin:0;"/></div>
+      <button class="act" onclick="slaSave()">Save</button>
+    </div></div>`;
+}
+async function slaSave(){
+  try {
+    await api('PUT', '/api/admin/support-sla', { sla: {
+      firstReplyHours: Number(document.getElementById('slaFirst').value),
+      resolveHours: Number(document.getElementById('slaResolve').value) } });
+    notify('Saved.'); loadSupport();
+  } catch (e){ notify(e.message); }
 }
 function renderSupportList(){
   const el = document.getElementById('supList'); if (!el) return;
@@ -4271,6 +4855,8 @@ function renderSupportList(){
         ${r.category ? `<span class="sup-cat sup-cat-${esc(r.category)}">${esc(r.category)}</span>` : ''}
         <span class="sup-email">${esc(r.email)}</span>
         <span class="sup-date">${fmtDateTime(r.created_at)}</span>
+        ${r.overdue ? `<span class="pill ban">${r.waitedHours}h waiting</span>`
+          : (r.slaHoursLeft != null ? `<span class="pill ${r.slaHoursLeft <= 4 ? 'susp' : ''}">${r.slaHoursLeft}h left</span>` : '')}
       </div>
       <div class="sup-msg">${esc(r.message)}</div>
       ${r.meta && (r.meta.build || r.meta.platform) ? `<div class="sup-meta">${r.meta.build ? 'build ' + esc(r.meta.build) : ''}${r.meta.build && r.meta.platform ? ' · ' : ''}${r.meta.platform ? esc(r.meta.platform) : ''}</div>` : ''}

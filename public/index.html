@@ -2876,6 +2876,25 @@ body.reduce-motion .brand-menu{animation-duration:.01s;}
 .aifb-r{border:none;background:var(--s1);color:var(--t2);font-family:inherit;font-size:13px;font-weight:600;
   padding:9px 14px;border-radius:999px;cursor:pointer;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
 .aifb-r.on{background:var(--accent);color:var(--accent-tint,#fff);}
+/* Keys and secrets are read character by character — a monospace face and room
+   to breathe is the difference between copying it right and not. */
+.dev-secret{background:var(--s1);border-radius:14px;padding:14px;margin-bottom:14px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.6;
+  word-break:break-all;color:var(--t1);user-select:all;-webkit-user-select:all;}
+.dev-item{background:var(--s1);border-radius:16px;padding:14px;margin-bottom:10px;}
+.dev-item-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;}
+.dev-name{font-weight:700;font-size:15px;}
+.dev-sub{color:var(--t3);font-size:13px;line-height:1.5;}
+.dev-scopes{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.dev-scope{background:var(--s2);border-radius:999px;padding:4px 10px;font-size:12px;color:var(--t2);}
+.dev-acts{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+.dev-pill{font-size:11px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;
+  padding:3px 9px;border-radius:999px;background:var(--s2);color:var(--t3);}
+.dev-pill.ok{background:rgba(136,255,0,.14);color:var(--green);}
+.dev-pill.off{background:rgba(255,0,51,.14);color:var(--red);}
+.dev-check{display:flex;align-items:flex-start;gap:9px;padding:9px 0;font-size:14px;color:var(--t1);cursor:pointer;}
+.dev-check input{margin-top:2px;width:17px;height:17px;flex:none;accent-color:var(--accent);}
+.dev-check span small{display:block;color:var(--t3);font-size:12.5px;margin-top:1px;}
 @media(hover:hover){.aifb-r:hover{background:var(--s2);}.aifb-r.on:hover{background:var(--accent);}}
 .msg-act svg{width:11px;height:11px;stroke:currentColor;stroke-width:2;fill:none;}
 .msg-act.icon-only{padding:4px 6px;}
@@ -14197,6 +14216,29 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Connect your systems: API keys + webhooks, for a business that runs
+     other software and wants it talking to Atwe. -->
+<div class="overlay hidden" id="devToolsView" onclick="if(event.target===this)closeOverlay('devToolsView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Connect your systems">
+    <button class="sheet-close" onclick="closeOverlay('devToolsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Connect your systems</div>
+    <div class="ac-disc-sub" style="margin:0 0 14px;">If you already run other software — a till, a spreadsheet, your own site — this lets it talk to Atwe. A <b>key</b> so your software can ask us things, and a <b>webhook</b> so we can tell it the moment something happens.</div>
+    <div class="ac-job-views" id="devTabs" style="margin-bottom:12px;"></div>
+    <div id="devBody"></div>
+  </div>
+</div>
+
+<!-- Shown once, immediately after a key is created. -->
+<div class="overlay hidden" id="devKeyShow" onclick="if(event.target===this)closeOverlay('devKeyShow')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Your new key">
+    <div class="jp-title">Your new key</div>
+    <div class="ac-disc-sub" style="margin:0 0 14px;">Copy this now — <b>it is never shown again</b>. We only keep a scrambled copy, so nobody, including us, can read it back. If you lose it, make a new one.</div>
+    <div class="dev-secret" id="devKeySecret"></div>
+    <button class="ac-pill-btn accent jp-submit" onclick="acCopyText(document.getElementById('devKeySecret').textContent);showNotif('Copied.')">Copy the key</button>
+    <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="closeOverlay('devKeyShow')">I've saved it</button>
+  </div>
+</div>
+
 <!-- Copyright claim (DMCA). Opened when someone picks the IP reason on a
      report — a sworn legal claim needs its own form, not a free-text note. -->
 <div class="overlay hidden" id="dmcaSheet" onclick="if(event.target===this)closeOverlay('dmcaSheet')">
@@ -17848,7 +17890,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1616'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1617'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24497,6 +24539,164 @@ async function acSubmitReport() {
     await API.req('POST', '/api/reports', { targetType: r.type, targetId: r.id, reason, note: document.getElementById('reportNote').value.trim() });
     closeOverlay('reportSheet'); showNotif('Thanks. Your report was sent to the Atwe team.');
   } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not submit the report.'); }
+}
+
+/* ─── Connect your systems: API keys + webhooks ─────────────────────────── */
+let DEVT = { tab: 'keys', keys: [], scopes: [], endpoints: [], deliveries: [], events: [] };
+function acOpenDevTools(tab) {
+  DEVT.tab = tab || 'keys';
+  showOverlay('devToolsView');
+  acRenderDevTabs();
+  acLoadDevTools();
+}
+function acRenderDevTabs() {
+  const el = document.getElementById('devTabs'); if (!el) return;
+  el.innerHTML = [['keys', 'Keys'], ['hooks', 'Webhooks'], ['docs', 'How to use it']]
+    .map(([k, l]) => `<button class="ac-jv ${DEVT.tab === k ? 'on' : ''}" onclick="acDevTab('${k}')">${l}</button>`).join('');
+}
+function acDevTab(t) { DEVT.tab = t; acRenderDevTabs(); acRenderDevTools(); }
+async function acLoadDevTools() {
+  const b = document.getElementById('devBody'); if (b) b.innerHTML = acSkelRows(3);
+  try {
+    const [k, w] = await Promise.all([
+      API.req('GET', '/api/api-keys').catch(() => ({ keys: [], scopes: [] })),
+      API.req('GET', '/api/webhooks').catch(() => ({ endpoints: [], deliveries: [], events: [] })),
+    ]);
+    DEVT = { ...DEVT, ...k, ...w };
+  } catch (e) {}
+  acRenderDevTools();
+}
+function acRenderDevTools() {
+  const b = document.getElementById('devBody'); if (!b) return;
+  if (DEVT.tab === 'keys') return acRenderDevKeys(b);
+  if (DEVT.tab === 'hooks') return acRenderDevHooks(b);
+  acRenderDevDocs(b);
+}
+function acRenderDevKeys(b) {
+  const live = (DEVT.keys || []).filter(k => !k.revokedAt);
+  const dead = (DEVT.keys || []).filter(k => k.revokedAt);
+  const item = (k) => `<div class="dev-item">
+    <div class="dev-item-top"><span class="dev-name">${escHtml(k.name)}</span>
+      <span class="dev-pill ${k.revokedAt ? 'off' : 'ok'}">${k.revokedAt ? 'revoked' : 'live'}</span></div>
+    <div class="dev-sub">${escHtml(k.prefix)}… · ${Number(k.calls).toLocaleString()} call${k.calls === 1 ? '' : 's'}${k.lastUsedAt ? ' · last used ' + acTime(k.lastUsedAt) : ' · not used yet'}</div>
+    <div class="dev-scopes">${(k.scopes || []).map(sc => `<span class="dev-scope">${escHtml(acScopeLabel(sc))}</span>`).join('')}</div>
+    ${k.revokedAt ? '' : `<div class="dev-acts"><button class="ac-pill-btn" onclick="acRevokeKey(${k.id})">Revoke</button></div>`}
+  </div>`;
+  b.innerHTML = `
+    <div class="ac-disc-sub" style="margin:0 0 12px;">A key is like a password for your software. Give it only the permissions it needs, and revoke it the moment you stop using it.</div>
+    ${live.map(item).join('') || '<div class="ac-empty-sm">No keys yet.</div>'}
+    <div class="dev-item" style="margin-top:14px;">
+      <div class="dev-name" style="margin-bottom:8px;">Create a key</div>
+      <input class="jp-in" id="devKeyName" maxlength="60" placeholder="What is it for? (e.g. My till system)"/>
+      <div style="margin-top:10px;">
+        ${(DEVT.scopes || []).map(sc => `<label class="dev-check"><input type="checkbox" value="${escHtml(sc.key)}" class="dev-scope-cb"/><span>${escHtml(sc.label)}<small>${escHtml(sc.help)}</small></span></label>`).join('')}
+      </div>
+      <button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="acCreateKey()">Create the key</button>
+    </div>
+    ${dead.length ? '<div class="ac-disc-sub" style="margin:16px 0 8px;">Revoked</div>' + dead.map(item).join('') : ''}`;
+}
+function acScopeLabel(key) {
+  const s = (DEVT.scopes || []).find(x => x.key === key);
+  return s ? s.label : key;
+}
+async function acCreateKey() {
+  const name = (document.getElementById('devKeyName').value || '').trim();
+  const scopes = [...document.querySelectorAll('.dev-scope-cb:checked')].map(c => c.value);
+  if (!scopes.length) { showNotif('Choose at least one permission.'); return; }
+  try {
+    const r = await API.req('POST', '/api/api-keys', { name: name || 'API key', scopes });
+    // The one and only time the key exists in readable form.
+    document.getElementById('devKeySecret').textContent = r.secret;
+    showOverlay('devKeyShow');
+    acLoadDevTools();
+  } catch (e) { showNotif(e.message || 'Could not create the key.'); }
+}
+async function acRevokeKey(id) {
+  const ok = await appConfirm({ title: 'Revoke this key?', message: 'Anything using it stops working straight away.', confirmText: 'Revoke', danger: true });
+  if (!ok) return;
+  try { await API.req('DELETE', '/api/api-keys/' + id); showNotif('Revoked.'); acLoadDevTools(); }
+  catch (e) { showNotif(e.message || 'Could not revoke it.'); }
+}
+function acRenderDevHooks(b) {
+  const eps = DEVT.endpoints || [];
+  const item = (e) => `<div class="dev-item">
+    <div class="dev-item-top"><span class="dev-name" style="word-break:break-all;">${escHtml(e.url)}</span>
+      <span class="dev-pill ${e.active ? 'ok' : 'off'}">${e.active ? 'on' : 'off'}</span></div>
+    <div class="dev-sub">${(e.events || []).length} event${(e.events || []).length === 1 ? '' : 's'}${e.last_at ? ' · last call ' + acTime(e.last_at) + (e.last_status ? ' (' + e.last_status + ')' : '') : ' · never called'}${e.failures ? ' · ' + e.failures + ' failure' + (e.failures === 1 ? '' : 's') : ''}</div>
+    <div class="dev-scopes">${(e.events || []).map(x => `<span class="dev-scope">${escHtml(x)}</span>`).join('')}</div>
+    <div class="dev-acts">
+      <button class="ac-pill-btn" onclick="acTestHook(${e.id})">Send a test</button>
+      <button class="ac-pill-btn" onclick="acShowHookSecret(${e.id})">Signing secret</button>
+      <button class="ac-pill-btn" onclick="acToggleHook(${e.id}, ${e.active ? 'false' : 'true'})">${e.active ? 'Pause' : 'Turn on'}</button>
+      <button class="ac-pill-btn" onclick="acDeleteHook(${e.id})">Delete</button>
+    </div></div>`;
+  const recent = (DEVT.deliveries || []).slice(0, 10).map(d => `<div class="dev-sub" style="padding:5px 0;">
+      <span class="dev-pill ${d.status === 'delivered' ? 'ok' : (d.status === 'failed' ? 'off' : '')}">${escHtml(d.status)}</span>
+      ${escHtml(d.event)} · ${acTime(d.created_at)}${d.http_status ? ' · HTTP ' + d.http_status : ''}${d.error ? ' · ' + escHtml(d.error.slice(0, 60)) : ''}
+    </div>`).join('');
+  b.innerHTML = `
+    <div class="ac-disc-sub" style="margin:0 0 12px;">We send a message to your address the moment something happens, so your system never has to keep asking. Every message is signed, so you can be sure it really came from us.</div>
+    ${eps.map(item).join('') || '<div class="ac-empty-sm">No addresses yet.</div>'}
+    <div class="dev-item" style="margin-top:14px;">
+      <div class="dev-name" style="margin-bottom:8px;">Add an address</div>
+      <input class="jp-in" id="devHookUrl" maxlength="500" placeholder="https://your-system.example/atwe"/>
+      <div style="margin-top:10px;">
+        ${(DEVT.events || []).map(ev => `<label class="dev-check"><input type="checkbox" value="${escHtml(ev.key)}" class="dev-ev-cb"/><span>${escHtml(ev.label)}<small>${escHtml(ev.help)}</small></span></label>`).join('')}
+      </div>
+      <button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="acCreateHook()">Add it</button>
+    </div>
+    ${recent ? '<div class="ac-disc-sub" style="margin:16px 0 6px;">Recent messages we sent</div>' + recent : ''}`;
+}
+async function acCreateHook() {
+  const url = (document.getElementById('devHookUrl').value || '').trim();
+  const events = [...document.querySelectorAll('.dev-ev-cb:checked')].map(c => c.value);
+  if (!url) { showNotif('Enter the address to send to.'); return; }
+  if (!events.length) { showNotif('Choose at least one event.'); return; }
+  try { await API.req('POST', '/api/webhooks', { url, events }); showNotif('Added.'); acLoadDevTools(); }
+  catch (e) { showNotif(e.message || 'Could not add that address.'); }
+}
+async function acToggleHook(id, active) {
+  try { await API.req('PATCH', '/api/webhooks/' + id, { active }); acLoadDevTools(); }
+  catch (e) { showNotif(e.message); }
+}
+async function acDeleteHook(id) {
+  const ok = await appConfirm({ title: 'Delete this address?', message: 'We will stop sending events to it.', confirmText: 'Delete', danger: true });
+  if (!ok) return;
+  try { await API.req('DELETE', '/api/webhooks/' + id); acLoadDevTools(); } catch (e) { showNotif(e.message); }
+}
+async function acTestHook(id) {
+  showNotif('Sending a test…');
+  try {
+    const r = await API.req('POST', '/api/webhooks/' + id + '/test', {});
+    showNotif(r.ok ? 'Your system answered. It works.'
+      : 'No answer' + (r.delivery && r.delivery.http_status ? ' (HTTP ' + r.delivery.http_status + ')' : '') + '. We will keep retrying.');
+    acLoadDevTools();
+  } catch (e) { showNotif(e.message || 'Could not send the test.'); }
+}
+async function acShowHookSecret(id) {
+  try {
+    const r = await API.req('GET', '/api/webhooks/' + id + '/secret');
+    document.getElementById('devKeySecret').textContent = r.secret;
+    showOverlay('devKeyShow');
+  } catch (e) { showNotif(e.message); }
+}
+function acRenderDevDocs(b) {
+  const origin = location.origin;
+  b.innerHTML = `
+    <div class="ac-disc-sub" style="margin:0 0 12px;">You don't need to read this to use Atwe. It's here for whoever looks after your software.</div>
+    <div class="dev-item"><div class="dev-name" style="margin-bottom:6px;">Asking Atwe for something</div>
+      <div class="dev-sub" style="margin-bottom:8px;">Send your key with every request:</div>
+      <div class="dev-secret">curl ${escHtml(origin)}/api/v1/orders \
+  -H "Authorization: Bearer atwe_sk_…"</div>
+      <div class="dev-sub">Available: <b>/api/v1/me</b>, <b>/api/v1/orders</b>, <b>/api/v1/products</b> (GET and POST), <b>/api/v1/products/:id</b> (PATCH), <b>/api/v1/webhooks</b>. A key can only ever see and change its own account's things.</div>
+    </div>
+    <div class="dev-item"><div class="dev-name" style="margin-bottom:6px;">When Atwe calls you</div>
+      <div class="dev-sub" style="margin-bottom:8px;">We POST JSON to your address and sign it. Check the signature before you trust it:</div>
+      <div class="dev-secret">X-Atwe-Event: order.paid
+X-Atwe-Timestamp: 1735689600
+X-Atwe-Signature: hex(HMAC-SHA256(secret, timestamp + "." + body))</div>
+      <div class="dev-sub">Answer with any 2xx status. If you don't, we retry with growing gaps for about half a day before giving up.</div>
+    </div>`;
 }
 
 /* ─── Copyright claims + impersonation fast-track ───────────────────────── */
@@ -41321,6 +41521,7 @@ async function acOpenStoreManage() {
     ${row(SI.megaphone, 'Announcement', (S.user && S.user.storeBanner) ? '“' + escHtml(S.user.storeBanner.slice(0, 42)) + (S.user.storeBanner.length > 42 ? '…' : '') + '”' : 'One line pinned atop your shop', 'acOpenStoreBanner()')}
     ${row(SI.box, 'Free shipping', (S.user && S.user.freeShipOverCents) ? 'Free on orders over $' + (S.user.freeShipOverCents / 100).toFixed(0) : 'Offer free shipping over an amount', 'acOpenFreeShip()')}
     ${row(SI.store, 'Vacation mode', 'Pause new orders while you’re away', 'acOpenVacation()')}
+    ${row(SI.chart, 'Connect your systems', 'API keys and webhooks for your own software', 'acOpenDevTools()')}
   </div>`;
   });
 }
