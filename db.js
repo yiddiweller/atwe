@@ -1737,6 +1737,22 @@ async function initSchema() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS condition TEXT;`); // new | like_new | good | fair (physical resale)
   // "Was" price (compare-at, Shopify-style) — shown struck through when > price.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS compare_at_cents INTEGER;`);
+  // Graduated enforcement (Meta-style strike ladder). Each strike ages out after
+  // STRIKE_TTL_DAYS, so a member who behaves recovers rather than carrying a
+  // permanent record. The ladder maps live strike COUNT to a consequence, which
+  // is why strikes and account status live side by side.
+  await query(`
+    CREATE TABLE IF NOT EXISTS user_strikes (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      reason     TEXT NOT NULL,
+      severity   TEXT NOT NULL DEFAULT 'minor',
+      issued_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      expires_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS user_strikes_user_idx ON user_strikes(user_id, expires_at);`);
   // "What's new" changelog: staff-written release notes members can read in-app.
   // Drafts are invisible to members until published; users.changelog_seen_at is
   // what drives the unread dot (a timestamp, so no per-entry read table).

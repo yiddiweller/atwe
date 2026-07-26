@@ -228,6 +228,30 @@ function driveId() { return 'dv_' + _vcrypto.randomBytes(12).toString('hex'); }
 // "viewing as" a member (money out, password/email change, account deletion). The
 // impersonation token carries an `imp` claim; this 403s those routes. Runs after
 // requireAuth (which sets req.user).
+// A LIMITED account can sign in and read, but can't create anything. This is the
+// rung between "fine" and "suspended" — enforced server-side on every write path
+// that produces content, messages or money.
+async function limitedBlock(userId) {
+  try {
+    const { rows } = await db.query('SELECT status, suspended_until FROM users WHERE id = $1', [userId]);
+    const r = rows[0];
+    if (!r || r.status !== 'limited') return null;
+    // A limited period that has run out lifts itself, like a suspension does.
+    if (r.suspended_until && new Date(r.suspended_until).getTime() <= Date.now()) {
+      await db.query("UPDATE users SET status = 'active', suspended_until = NULL WHERE id = $1 AND status = 'limited'", [userId]).catch(() => {});
+      return null;
+    }
+    const until = r.suspended_until ? ` until ${new Date(r.suspended_until).toISOString().slice(0, 10)}` : '';
+    return `Your account is limited${until} — you can read and browse, but not post, message or sell. Check your notifications for details.`;
+  } catch { return null; } // fail OPEN: a lookup error must never lock a good member out
+}
+function blockLimited(req, res, next) {
+  if (!req.user) return next();
+  limitedBlock(req.user.id).then((msg) => {
+    if (msg) return res.status(403).json({ error: msg, limited: true });
+    next();
+  }).catch(() => next());
+}
 function blockImpersonation(req, res, next) {
   if (req.user && req.user.imp) return res.status(403).json({ error: 'This action is disabled while an admin is viewing the account.', impersonationBlocked: true });
   next();
@@ -1800,6 +1824,7 @@ const PUSH_VERBS = {
   message: 'sent you a message', call: 'called you', video_call: 'video-called you',
   chat_request: 'wants to chat with you', mention: 'mentioned you', quote: 'quoted your post',
   story_mention: 'mentioned you in their Daily', remix: 'remixed your video',
+  strike: 'issued a warning on your account — tap for details',
   job_application: 'applied to your job', connection_request: 'wants to connect',
   connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills',
   event_rsvp: 'is going to your event', event_reminder: 'an event you’re going to starts soon', event_comment: 'commented on your event', rec_received: 'recommended you',
@@ -5566,7 +5591,7 @@ app.get('/api/cart-recovery/mute/:businessId', auth.requireAuth, async (req, res
 });
 
 // Send a DM to another user.
-app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-send'), async (req, res) => {
+app.post('/api/atchat/with/:id', auth.requireAuth, blockLimited, rateLimit(40, 60000, 'atchat-send'), async (req, res) => {
   const other = routeId(req.params.id);
   if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user id.' });
   await resolveMediaRefs(req.body); // a forwarded photo arrives as its /api/media URL — resolve to the stored bytes
@@ -7190,7 +7215,7 @@ app.post('/api/atchat/groups/:id/permissions', auth.requireAuth, async (req, res
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update permissions.' }); }
 });
-app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 60000, 'group-send'), async (req, res) => {
+app.post('/api/atchat/groups/:id/messages', auth.requireAuth, blockLimited, rateLimit(60, 60000, 'group-send'), async (req, res) => {
   const gid = routeId(req.params.id);
   if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
   await resolveMediaRefs(req.body); // a forwarded photo arrives as its /api/media URL — resolve to the stored bytes
@@ -8491,7 +8516,7 @@ async function loadStorySharedCard(postId) {
   };
 }
 // Post a story (photo or text). Visible for 24h to your followers.
-app.post('/api/stories', auth.requireAuth, rateLimit(30, 60000, 'story-post'), requireFeature('stories'), async (req, res) => {
+app.post('/api/stories', auth.requireAuth, blockLimited, rateLimit(30, 60000, 'story-post'), requireFeature('stories'), async (req, res) => {
   if (!(await requireHandle(req, res))) return;
   await resolveMediaRefs(req.body);
   const kind = STORY_KINDS.includes(req.body.kind) ? req.body.kind : 'image';
@@ -10879,7 +10904,7 @@ const FEED_TEXT_MAX = 280;
 const FEED_BG_RE = /^#[0-9a-fA-F]{6}$/;
 
 // Create a feed post: text status (words on a colour), photo, or small video.
-app.post('/api/feedposts', auth.requireAuth, rateLimit(30, 60000, 'feedpost'), async (req, res) => {
+app.post('/api/feedposts', auth.requireAuth, blockLimited, rateLimit(30, 60000, 'feedpost'), async (req, res) => {
   try {
     const me = await requireHandle(req, res); if (!me) return;
     await resolveMediaRefs(req.body);
@@ -11314,7 +11339,7 @@ app.get('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
 });
 
 // Create a post — or a reply when `parentId` is given.
-app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), requireFeature('posting'), async (req, res) => {
+app.post('/api/social/posts', auth.requireAuth, blockLimited, rateLimit(40, 60000, 'post'), requireFeature('posting'), async (req, res) => {
   await resolveMediaRefs(req.body); // a shared/forwarded photo may arrive as its /api/media URL
   const body = (req.body.body || '').trim();
   // Multiple images (carousel) or a single one (back-compat). `image` stays the
@@ -16115,7 +16140,7 @@ app.post('/api/wallet/topup', auth.requireAuth, blockImpersonation, rateLimit(20
 });
 // Send money to another username. Pays instantly from balance when it covers the
 // amount; otherwise charges the sender (Stripe/demo) for the full amount.
-app.post('/api/wallet/send', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'wallet-send'), requireFeature('wallet'), async (req, res) => {
+app.post('/api/wallet/send', auth.requireAuth, blockImpersonation, blockLimited, rateLimit(20, 60000, 'wallet-send'), requireFeature('wallet'), async (req, res) => {
   const amountCents = parseWalletAmount(req.body.amount);
   if (amountCents === null) return res.status(400).json({ error: 'Enter an amount between $1 and $2,000.' });
   const note = (req.body.note || '').toString().trim().slice(0, 200) || null;
@@ -18959,7 +18984,7 @@ function readWholesale(body, kind) {
   if (!(w > 0 && w <= 5000000 && min >= 2 && min <= 1000)) return { cents: null, minQty: null };
   return { cents: w, minQty: min };
 }
-app.post('/api/products', auth.requireAuth, rateLimit(40, 60000, 'product-add'), async (req, res) => {
+app.post('/api/products', auth.requireAuth, blockLimited, rateLimit(40, 60000, 'product-add'), async (req, res) => {
   if (!(await requireHandle(req, res))) return;
   const name = (req.body.name || '').toString().trim().slice(0, 140);
   if (!name) return res.status(400).json({ error: 'Give the product a name.' });
@@ -25093,7 +25118,34 @@ function logEvent(category, action, opts = {}) {
 // once suspended_until passes), `banned` (permanent). Returns a login-blocking message
 // or null. Used at sign-in so a banned/suspended account can't get a fresh token; live
 // sessions are separately revoked the moment the status is set.
-const ACCOUNT_STATUSES = ['active', 'suspended', 'banned'];
+const ACCOUNT_STATUSES = ['active', 'limited', 'suspended', 'banned'];
+/* ─── Graduated enforcement: the strike ladder ──────────────────────────────
+   A strike ages out after STRIKE_TTL_DAYS so good behaviour actually clears
+   your record. The ladder maps LIVE strike count to a consequence, escalating
+   automatically instead of jumping straight from "fine" to "banned":
+     1 → a warning        2 → limited (read-only) 7 days
+     3 → suspended 7 days  4+ → banned
+   'limited' is the missing rung: they can still sign in and read, they just
+   can't create anything. */
+const STRIKE_TTL_DAYS = 90;
+const STRIKE_LADDER = [
+  { at: 1, action: 'warn',      label: 'Warning' },
+  { at: 2, action: 'limited',   days: 7, label: 'Limited for 7 days' },
+  { at: 3, action: 'suspended', days: 7, label: 'Suspended for 7 days' },
+  { at: 4, action: 'banned',    label: 'Banned' },
+];
+function ladderFor(count) {
+  let hit = null;
+  for (const rung of STRIKE_LADDER) if (count >= rung.at) hit = rung;
+  return hit;
+}
+async function activeStrikeCount(userId) {
+  try {
+    const { rows } = await db.query(
+      'SELECT COUNT(*)::int AS n FROM user_strikes WHERE user_id = $1 AND (expires_at IS NULL OR expires_at > now())', [userId]);
+    return rows[0].n;
+  } catch { return 0; }
+}
 // Staff permission scopes (RBAC). A superadmin (`is_admin`) implicitly has all; a
 // scoped staff member is granted a subset. Each maps to a group of admin routes +
 // dashboard tabs. Keep in sync with admin.html's TAB_PERM map.
@@ -25103,6 +25155,9 @@ function accountStatusBlock(row) {
   if (row.status === 'banned') {
     return row.status_reason ? `This account has been banned. Reason: ${row.status_reason}` : 'This account has been banned.';
   }
+  // 'limited' deliberately does NOT block sign-in — a limited member can read;
+  // the write routes are what stop them (see blockLimited).
+  if (row.status === 'limited') return null;
   if (row.status === 'suspended') {
     // A past suspension auto-lifts; the caller clears it lazily.
     if (row.suspended_until && new Date(row.suspended_until).getTime() <= Date.now()) return null;
@@ -25349,37 +25404,98 @@ app.delete('/api/admin/users/:id', auth.requirePerm('users'), async (req, res) =
 // Enforcement: suspend (temporary), ban (permanent), or reinstate an account.
 // Distinct from delete — the account and its content stay, but the person is locked
 // out. Live sessions are revoked immediately; login is blocked while suspended/banned.
+/* ─── Strikes: issue one, and let the ladder apply the consequence ─── */
+// Shared with the status route so a laddered action and a manual one behave
+// identically (sessions dropped, streams kicked, audit written).
+async function applyAccountStatus(req, id, status, reason, days) {
+  const until = (status === 'suspended' || status === 'limited')
+    ? new Date(Date.now() + Math.max(1, Math.min(3650, days || 7)) * 86400000) : null;
+  const { rows } = await db.query(
+    `UPDATE users SET status = $1, status_reason = $2, suspended_until = $3, status_by = $4, status_at = now()
+     WHERE id = $5 RETURNING id, status, status_reason, suspended_until`,
+    [status, reason, until, req.user.id, id]);
+  // Suspended/banned lose their sessions immediately. A LIMITED member keeps
+  // theirs on purpose — they're allowed to stay signed in and read.
+  if (status === 'suspended' || status === 'banned') {
+    await db.query('DELETE FROM auth_sessions WHERE user_id = $1', [id]).catch(() => {});
+    auth.sessionInvalidateAll();
+    rtKickUser(id);
+  }
+  return rows[0];
+}
+app.get('/api/admin/users/:id/strikes', auth.requirePerm('users'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
+  try {
+    const { rows } = await db.query(
+      `SELECT s.id, s.reason, s.severity, s.created_at, s.expires_at, (s.expires_at IS NULL OR s.expires_at > now()) AS active,
+              u.name AS by_name
+         FROM user_strikes s LEFT JOIN users u ON u.id = s.issued_by
+        WHERE s.user_id = $1 ORDER BY s.created_at DESC LIMIT 100`, [id]);
+    const active = rows.filter((r) => r.active).length;
+    res.json({
+      strikes: rows.map((r) => ({ id: r.id, reason: r.reason, severity: r.severity, active: r.active,
+        createdAt: r.created_at, expiresAt: r.expires_at, by: r.by_name || null })),
+      activeCount: active, ladder: STRIKE_LADDER, next: ladderFor(active + 1), ttlDays: STRIKE_TTL_DAYS,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the strikes.' }); }
+});
+app.post('/api/admin/users/:id/strikes', auth.requirePerm('users'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
+  const reason = (req.body.reason || '').toString().trim().slice(0, 500);
+  const severity = req.body.severity === 'major' ? 'major' : 'minor';
+  if (!reason) return res.status(400).json({ error: 'Give a reason — the member is told what it was for.' });
+  if (req.user.id === id) return res.status(400).json({ error: 'You can’t strike your own account.' });
+  try {
+    const t = (await db.query('SELECT is_admin FROM users WHERE id = $1', [id])).rows[0];
+    if (!t) return res.status(404).json({ error: 'User not found.' });
+    if (t.is_admin) return res.status(400).json({ error: 'Remove admin access before striking this account.' });
+    // A major strike counts double on the ladder — one serious incident can
+    // move an account further than one minor slip.
+    const expires = new Date(Date.now() + STRIKE_TTL_DAYS * 86400000);
+    await db.query('INSERT INTO user_strikes (user_id, reason, severity, issued_by, expires_at) VALUES ($1,$2,$3,$4,$5)', [id, reason, severity, req.user.id, expires]);
+    if (severity === 'major') await db.query('INSERT INTO user_strikes (user_id, reason, severity, issued_by, expires_at) VALUES ($1,$2,$3,$4,$5)', [id, reason + ' (major)', 'major', req.user.id, expires]);
+    const count = await activeStrikeCount(id);
+    const rung = ladderFor(count);
+    let applied = null;
+    if (rung && rung.action !== 'warn') {
+      await applyAccountStatus(req, id, rung.action, reason, rung.days);
+      applied = rung.action;
+    }
+    notify(id, req.user.id, 'strike');
+    adminAudit(req, 'user.strike', 'user', id, { reason, severity, count, applied });
+    res.json({ ok: true, activeCount: count, applied, label: rung ? rung.label : null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not record the strike.' }); }
+});
+// Remove a strike (mistake / successful appeal). Never auto-restores status —
+// staff decide that explicitly, so a lift is always a deliberate act.
+app.delete('/api/admin/users/:uid/strikes/:id', auth.requirePerm('users'), async (req, res) => {
+  const uid = parseInt(req.params.uid, 10), id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(uid) || !Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM user_strikes WHERE id = $1 AND user_id = $2', [id, uid]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    adminAudit(req, 'user.strike_remove', 'user', uid, { strikeId: id });
+    res.json({ ok: true, activeCount: await activeStrikeCount(uid) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the strike.' }); }
+});
 app.post('/api/admin/users/:id/status', auth.requirePerm('users'), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
   const status = String(req.body.status || '').trim();
-  if (!ACCOUNT_STATUSES.includes(status)) return res.status(400).json({ error: 'status must be active, suspended or banned.' });
+  if (!ACCOUNT_STATUSES.includes(status)) return res.status(400).json({ error: 'status must be active, limited, suspended or banned.' });
   if (req.user.id === id && status !== 'active') return res.status(400).json({ error: 'You cannot suspend or ban your own account.' });
   const reason = (req.body.reason ? String(req.body.reason) : '').slice(0, 500) || null;
-  let suspendedUntil = null;
-  if (status === 'suspended') {
-    const days = Math.max(1, Math.min(3650, parseInt(req.body.days, 10) || 7));
-    suspendedUntil = new Date(Date.now() + days * 86400000);
-  }
+  const statusDays = parseInt(req.body.days, 10) || 7;
   try {
     const target = await db.query('SELECT is_admin FROM users WHERE id = $1', [id]);
     if (!target.rows[0]) return res.status(404).json({ error: 'User not found.' });
-    if (target.rows[0].is_admin && status !== 'active') return res.status(400).json({ error: 'Remove admin access before suspending or banning this account.' });
-    const { rows } = await db.query(
-      `UPDATE users SET status = $1, status_reason = $2, suspended_until = $3, status_by = $4, status_at = now()
-       WHERE id = $5 RETURNING id, status, status_reason, suspended_until`,
-      [status, reason, suspendedUntil, req.user.id, id]
-    );
-    // Lock them out now: drop every live session + realtime stream.
-    if (status !== 'active') {
-      await db.query('DELETE FROM auth_sessions WHERE user_id = $1', [id]).catch(() => {});
-      // Clear the positive session-validity cache too — requireAuth's cached check
-      // could otherwise keep letting a just-revoked token through for up to
-      // SESSION_TTL (60s), so "lock them out now" wasn't actually instant.
-      auth.sessionInvalidateAll();
-      rtKickUser(id);
-    }
-    adminAudit(req, status === 'active' ? 'user.reinstate' : ('user.' + status), 'user', id, { reason, suspendedUntil });
+    if (target.rows[0].is_admin && status !== 'active') return res.status(400).json({ error: 'Remove admin access before restricting this account.' });
+    // One shared path with the strike ladder: sessions are dropped for
+    // suspended/banned, kept for limited (they're allowed to read).
+    const rows = [await applyAccountStatus(req, id, status, reason, statusDays)];
+    adminAudit(req, status === 'active' ? 'user.reinstate' : ('user.' + status), 'user', id, { reason, days: statusDays });
     res.json({ user: rows[0] });
   } catch (err) {
     console.error(err);
