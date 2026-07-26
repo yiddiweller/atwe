@@ -12712,6 +12712,7 @@ function mapJob(j, me) {
     salaryPeriod: j.salary_period || null, hours: j.hours || null,
     description: j.description || null, created_at: j.created_at,
     poster: j.poster_id ? { id: j.poster_id, name: j.poster_name, username: j.poster_username, avatar: j.poster_avatar || null, accountType: j.poster_account_type === 'business' ? 'business' : 'personal' } : null,
+    verifiedEmployer: j.poster_bv === 'verified',
     applicants: j.applicants != null ? j.applicants : undefined,
     // Insight: among the first applicants (LinkedIn-style "Be an early applicant").
     earlyApplicant: j.applicants != null ? j.applicants < 10 : undefined,
@@ -12752,7 +12753,7 @@ function answersMeet(screening, answers) {
 const JOB_COLS = `j.id, j.title, j.company, j.location, j.industry, j.type, j.remote, j.description, j.created_at, j.screening,
   j.salary_min, j.salary_max, j.salary_period, j.hours, j.closes_at,
 
-  u.id AS poster_id, u.name AS poster_name, u.username AS poster_username, u.avatar AS poster_avatar, u.account_type AS poster_account_type,
+  u.id AS poster_id, u.name AS poster_name, u.username AS poster_username, u.avatar AS poster_avatar, u.account_type AS poster_account_type, u.business_verify_status AS poster_bv,
   EXISTS(SELECT 1 FROM job_applications a WHERE a.job_id = j.id AND a.user_id = $1) AS applied,
   EXISTS(SELECT 1 FROM saved_jobs sv WHERE sv.job_id = j.id AND sv.user_id = $1) AS saved,
   (SELECT a.status FROM job_applications a WHERE a.job_id = j.id AND a.user_id = $1) AS application_status,
@@ -12837,6 +12838,7 @@ app.get('/api/jobs', auth.requireAuth, async (req, res) => {
   const conds = [], params = [me];
   const type = (req.query.type || '').trim();
   if (q) { params.push('%' + q.replace(/[%_\\]/g, '\\$&') + '%'); conds.push(`(j.title ILIKE $${params.length} OR j.company ILIKE $${params.length} OR j.description ILIKE $${params.length})`); }
+  if (req.query.verified === 'true') conds.push(`u.business_verify_status = 'verified'`);
   if (industry) { params.push(industry); conds.push(`lower(j.industry) = lower($${params.length})`); }
   if (location) { params.push('%' + location.replace(/[%_\\]/g, '\\$&') + '%'); conds.push(`j.location ILIKE $${params.length}`); }
   if (type) { params.push(type); conds.push(`lower(j.type) = lower($${params.length})`); }
