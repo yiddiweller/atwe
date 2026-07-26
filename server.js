@@ -6705,6 +6705,7 @@ app.post('/api/atchat/groups', auth.requireAuth, rateLimit(20, 60000, 'group-cre
   const avatar = cleanImage(req.body.avatar);
   if (avatar === undefined) return res.status(400).json({ error: 'That image could not be used.' });
   const description = ((req.body.description || '').toString().trim().slice(0, 500)) || null;
+  const rules = ((req.body.rules || '').toString().trim().slice(0, 2000)) || null;
   const broadcast = !contact && req.body.broadcast === true;
   const members = Array.isArray(req.body.members) ? req.body.members : [];
   const ids = [...new Set(members.map((x) => parseInt(x, 10)).filter((n) => Number.isInteger(n) && n !== req.user.id))];
@@ -6733,8 +6734,8 @@ app.post('/api/atchat/groups', auth.requireAuth, rateLimit(20, 60000, 'group-cre
     let g;
     try {
       g = await db.query(
-        'INSERT INTO at_groups (name, username, avatar, created_by, broadcast, description) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-        [name, username, avatar, req.user.id, broadcast, description]
+        'INSERT INTO at_groups (name, username, avatar, created_by, broadcast, description, rules) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+        [name, username, avatar, req.user.id, broadcast, description, rules]
       );
     } catch (e) {
       if (e.code === '23505') return res.status(409).json({ error: 'That group username is already taken.' });
@@ -6793,6 +6794,7 @@ app.patch('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     if (setAvatar) { vals.push(avatarVal); fields.push(`avatar = $${vals.length}`); }
     if (typeof req.body.broadcast === 'boolean') { vals.push(req.body.broadcast); fields.push(`broadcast = $${vals.length}`); }
     if ('description' in req.body) { vals.push(((req.body.description || '').toString().trim().slice(0, 500)) || null); fields.push(`description = $${vals.length}`); }
+    if ('rules' in req.body) { vals.push(((req.body.rules || '').toString().trim().slice(0, 2000)) || null); fields.push(`rules = $${vals.length}`); }
     vals.push(gid);
     let upd;
     try {
@@ -6934,7 +6936,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
     const g = await db.query(
-      `SELECT g.id, g.name, g.username, g.avatar, g.created_by, g.broadcast, g.disappearing, g.slow_mode_seconds, g.description,
+      `SELECT g.id, g.name, g.username, g.avatar, g.created_by, g.broadcast, g.disappearing, g.slow_mode_seconds, g.description, g.rules,
               (SELECT (m.muted AND (m.muted_until IS NULL OR m.muted_until > now())) FROM at_group_members m WHERE m.group_id = g.id AND m.user_id = $2) AS muted
        FROM at_groups g WHERE g.id = $1`,
       [gid, req.user.id]
@@ -6973,7 +6975,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       requests = rq.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null }));
     }
     res.json({
-      group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by, broadcast: g.rows[0].broadcast, muted: !!g.rows[0].muted, disappearing: g.rows[0].disappearing || 0, slowMode: g.rows[0].slow_mode_seconds || 0, description: g.rows[0].description || null, iAmAdmin },
+      group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by, broadcast: g.rows[0].broadcast, muted: !!g.rows[0].muted, disappearing: g.rows[0].disappearing || 0, slowMode: g.rows[0].slow_mode_seconds || 0, description: g.rows[0].description || null, rules: g.rows[0].rules || null, iAmAdmin },
       requests,
       lastRead,
       live: ls ? liveStreamPublic(ls) : null,
@@ -7891,11 +7893,11 @@ app.get('/api/atchat/invite/:code', auth.requireAuth, async (req, res) => {
   const code = (req.params.code || '').trim();
   if (!code) return res.status(400).json({ error: 'Invalid invite link.' });
   try {
-    const g = await db.query('SELECT id, name, avatar, broadcast FROM at_groups WHERE invite_code = $1', [code]);
+    const g = await db.query('SELECT id, name, avatar, broadcast, rules FROM at_groups WHERE invite_code = $1', [code]);
     if (!g.rows[0]) return res.status(404).json({ error: 'This invite link is no longer valid.' });
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM at_group_members WHERE group_id = $1', [g.rows[0].id]);
     const member = await isGroupMember(g.rows[0].id, req.user.id);
-    res.json({ group: { id: g.rows[0].id, name: g.rows[0].name, avatar: g.rows[0].avatar || null, broadcast: !!g.rows[0].broadcast, members: cnt.rows[0].n, member } });
+    res.json({ group: { id: g.rows[0].id, name: g.rows[0].name, avatar: g.rows[0].avatar || null, broadcast: !!g.rows[0].broadcast, members: cnt.rows[0].n, member, rules: g.rows[0].rules || null } });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not open that invite link.' }); }
 });
 // Join a group via its invite code.
@@ -7905,9 +7907,13 @@ app.post('/api/atchat/invite/:code/join', auth.requireAuth, async (req, res) => 
   try {
     const me = await chatIdentity(req.user.id);
     if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
-    const g = await db.query('SELECT id, name FROM at_groups WHERE invite_code = $1', [code]);
+    const g = await db.query('SELECT id, name, rules FROM at_groups WHERE invite_code = $1', [code]);
     if (!g.rows[0]) return res.status(404).json({ error: 'This invite link is no longer valid.' });
     const gid = g.rows[0].id;
+    // Rules gate: a group with rules only admits members who sent acceptance.
+    if (g.rows[0].rules && req.body.acceptRules !== true && !(await isGroupMember(gid, req.user.id))) {
+      return res.status(400).json({ needsRules: true, rules: g.rows[0].rules, error: 'Please agree to the group rules first.' });
+    }
     await db.query('INSERT INTO at_group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [gid, req.user.id]);
     res.json({ ok: true, groupId: gid, name: g.rows[0].name });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not join the group.' }); }
@@ -8089,6 +8095,11 @@ app.post('/api/communities/:id/groups/:gid/join', auth.requireAuth, async (req, 
     if (!(await isCommunityMember(id, req.user.id))) return res.status(403).json({ error: 'Join the community first.' });
     const linked = await db.query('SELECT 1 FROM community_groups WHERE community_id = $1 AND group_id = $2', [id, gid]);
     if (!linked.rowCount) return res.status(404).json({ error: 'That group isn’t part of this community.' });
+    // Rules gate (same as invite joins): a ruled group only admits acceptors.
+    const gr = (await db.query('SELECT rules FROM at_groups WHERE id = $1', [gid])).rows[0];
+    if (gr && gr.rules && req.body.acceptRules !== true && !(await isGroupMember(gid, req.user.id))) {
+      return res.status(400).json({ needsRules: true, rules: gr.rules, error: 'Please agree to the group rules first.' });
+    }
     await db.query('INSERT INTO at_group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [gid, req.user.id]);
     res.json({ ok: true, groupId: gid });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not join the group.' }); }
