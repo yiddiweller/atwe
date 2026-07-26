@@ -18564,6 +18564,108 @@ app.post('/api/products/:id/pin', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
 });
 // A single listing (with seller) — the "view more" detail.
+/* ─── Listing A/B tests (Amazon "Manage Your Experiments" model) ────────────
+   Run ONE experiment per listing that swaps a single field — title or price —
+   for half of viewers. Assignment is a deterministic hash of (experiment,
+   viewer), so a shopper always sees the same version and the test isn't
+   polluted by flicker. Counters live on the experiment row. */
+const EXP_FIELDS = ['title', 'price'];
+function expArm(expId, viewerId) {
+  const h = _vcrypto.createHash('sha256').update(expId + ':' + viewerId).digest();
+  return (h[0] % 2) === 0 ? 'a' : 'b';
+}
+// The running experiment for a product (or null).
+async function liveExperiment(productId) {
+  try {
+    const { rows } = await db.query("SELECT * FROM product_experiments WHERE product_id = $1 AND status = 'running'", [productId]);
+    return rows[0] || null;
+  } catch { return null; }
+}
+// Apply the viewer's arm to a mapped listing. The seller always sees version A
+// (their own listing as stored) so managing it is never confusing.
+function applyExperiment(listing, exp, viewerId) {
+  if (!exp || !listing || listing.businessId === viewerId) return listing;
+  const arm = expArm(exp.id, viewerId);
+  if (arm === 'b') {
+    if (exp.field === 'title') listing.name = exp.value_b;
+    else if (exp.field === 'price') {
+      const cents = parseInt(exp.value_b, 10);
+      if (Number.isInteger(cents)) { listing.priceCents = cents; if (!listing.hasVariants) listing.priceFromCents = cents; }
+    }
+  }
+  return listing;
+}
+function mapExperiment(e) {
+  const rate = (o, v) => (v > 0 ? (o / v) * 100 : null);
+  const ra = rate(e.orders_a, e.views_a), rb = rate(e.orders_b, e.views_b);
+  const views = e.views_a + e.views_b;
+  return {
+    id: e.id, productId: e.product_id, field: e.field, valueA: e.value_a, valueB: e.value_b,
+    viewsA: e.views_a, viewsB: e.views_b, ordersA: e.orders_a, ordersB: e.orders_b,
+    rateA: ra, rateB: rb, status: e.status, createdAt: e.created_at, endedAt: e.ended_at,
+    // Honest reporting: with thin traffic we say so instead of crowning a winner.
+    enough: views >= 40 && (e.orders_a + e.orders_b) >= 4,
+    leader: (ra == null || rb == null) ? null : (rb > ra ? 'b' : (ra > rb ? 'a' : null)),
+  };
+}
+app.get('/api/experiments', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT e.*, p.name AS product_name, p.image AS product_image FROM product_experiments e
+         JOIN products p ON p.id = e.product_id
+        WHERE e.seller_id = $1 ORDER BY (e.status = 'running') DESC, e.created_at DESC LIMIT 60`, [req.user.id]);
+    res.json({ experiments: rows.map((e) => ({ ...mapExperiment(e), productName: e.product_name, productImage: mediaRef(e.product_image, 'product-img', e.product_id) })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your tests.' }); }
+});
+app.post('/api/experiments', auth.requireAuth, rateLimit(20, 60000, 'exp-create'), async (req, res) => {
+  const productId = parseInt(req.body.productId, 10);
+  const field = EXP_FIELDS.includes(req.body.field) ? req.body.field : null;
+  if (!Number.isInteger(productId) || !field) return res.status(400).json({ error: 'Pick a listing and what to test.' });
+  try {
+    const p = (await db.query('SELECT id, name, price_cents, active, variants FROM products WHERE id = $1 AND business_id = $2', [productId, req.user.id])).rows[0];
+    if (!p) return res.status(404).json({ error: 'That listing isn’t yours.' });
+    if (!p.active) return res.status(400).json({ error: 'Publish the listing before testing it.' });
+    let valueA, valueB;
+    if (field === 'title') {
+      valueA = p.name;
+      valueB = (req.body.valueB || '').toString().trim().slice(0, 140);
+      if (!valueB) return res.status(400).json({ error: 'Write the alternative title.' });
+      if (valueB === valueA) return res.status(400).json({ error: 'Version B has to be different.' });
+    } else {
+      if (Array.isArray(p.variants) && p.variants.length) return res.status(400).json({ error: 'Price tests aren’t available on listings with options.' });
+      valueA = String(p.price_cents);
+      const cents = Math.round(Number(req.body.valueB) || 0);
+      if (!(cents > 0 && cents <= 5000000)) return res.status(400).json({ error: 'Enter a valid alternative price.' });
+      if (cents === p.price_cents) return res.status(400).json({ error: 'Version B has to be a different price.' });
+      valueB = String(cents);
+    }
+    const { rows } = await db.query(
+      `INSERT INTO product_experiments (product_id, seller_id, field, value_a, value_b) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [productId, req.user.id, field, valueA, valueB]);
+    res.status(201).json({ experiment: mapExperiment(rows[0]) });
+  } catch (err) {
+    if (err && err.code === '23505') return res.status(409).json({ error: 'This listing already has a test running.' });
+    console.error(err); res.status(500).json({ error: 'Could not start the test.' });
+  }
+});
+// Stop a test — optionally APPLYING version B to the real listing first.
+app.post('/api/experiments/:id/stop', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const apply = req.body.apply === true;
+  try {
+    // Claim-first so two taps can't apply version B twice.
+    const e = (await db.query(
+      "UPDATE product_experiments SET status = 'stopped', ended_at = now() WHERE id = $1 AND seller_id = $2 AND status = 'running' RETURNING *", [id, req.user.id])).rows[0];
+    if (!e) return res.status(404).json({ error: 'That test isn’t running.' });
+    if (apply) {
+      if (e.field === 'title') await db.query('UPDATE products SET name = $1 WHERE id = $2 AND business_id = $3', [e.value_b, e.product_id, req.user.id]);
+      else await db.query('UPDATE products SET price_cents = $1 WHERE id = $2 AND business_id = $3', [parseInt(e.value_b, 10), e.product_id, req.user.id]);
+      await db.query("UPDATE product_experiments SET status = 'applied' WHERE id = $1", [id]);
+    }
+    res.json({ ok: true, applied: apply });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not stop the test.' }); }
+});
 app.get('/api/listings/:id', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
@@ -18572,6 +18674,13 @@ app.get('/api/listings/:id', auth.requireAuth, async (req, res) => {
     const l = r.rows[0];
     if (!l || (!l.active && l.business_id !== req.user.id)) return res.status(404).json({ error: 'That listing is no longer available.' });
     const listing = mapListing(l);
+    // A/B test: show this viewer their assigned version and count the impression.
+    const exp = await liveExperiment(id);
+    if (exp && l.business_id !== req.user.id) {
+      applyExperiment(listing, exp, req.user.id);
+      const arm = expArm(exp.id, req.user.id);
+      db.query(`UPDATE product_experiments SET views_${arm === 'b' ? 'b' : 'a'} = views_${arm === 'b' ? 'b' : 'a'} + 1 WHERE id = $1`, [exp.id]).catch(() => {});
+    }
     listing.saved = (await db.query('SELECT 1 FROM saved_products WHERE user_id = $1 AND product_id = $2', [req.user.id, id])).rowCount > 0;
     // Auction detail: live top bid + count, whether I lead, and — once won — the
     // winner's pay path (their accepted offer id) so the detail can offer "Pay now".
@@ -20301,7 +20410,21 @@ async function recordOrderPaid(orderId, sellerCredited) {
   sendOrderEmails(orderId).catch(() => {}); // best-effort confirmation (degrades to console)
   awardPoints(o.buyer_id, pointsForOrder(o.total_cents), 'order', orderId); // loyalty points (~1% back)
   payAffiliateCommission(orderId, !!sellerCredited).catch(() => {}); // pay any attributed affiliate
+  countExperimentOrders(orderId, o.buyer_id).catch(() => {}); // A/B test conversion
   return true;
+}
+// A/B test conversion: credit the BUYER'S arm for every ordered line that has a
+// running experiment. Best-effort — an order never fails over test bookkeeping.
+async function countExperimentOrders(orderId, buyerId) {
+  try {
+    const { rows } = await db.query(
+      `SELECT e.id FROM order_items oi JOIN product_experiments e ON e.product_id = oi.product_id AND e.status = 'running'
+        WHERE oi.order_id = $1`, [orderId]);
+    for (const e of rows) {
+      const arm = expArm(e.id, buyerId) === 'b' ? 'b' : 'a';
+      await db.query(`UPDATE product_experiments SET orders_${arm} = orders_${arm} + 1 WHERE id = $1`, [e.id]);
+    }
+  } catch (err) { /* bookkeeping is best-effort */ }
 }
 // Auto-deliver digital products on payment: notify the buyer their download is ready
 // and drop the access content into the DM thread (a server-built meta card the buyer
@@ -20488,6 +20611,7 @@ async function fundEscrowOrder(buyerId, sellerId, orderId, totalCents) {
   deliverDigitalGoods(orderId, buyerId, sellerId).catch(() => {}); // digital items are instant even under protection
   sendOrderEmails(orderId).catch(() => {});
   awardPoints(buyerId, pointsForOrder(totalCents), 'order', orderId); // loyalty points (~1% back)
+  countExperimentOrders(orderId, buyerId).catch(() => {}); // A/B test conversion
   rtPush(buyerId, 'wallet', { type: 'update', amountCents: totalCents });
   rtPush(buyerId, 'order', { id: orderId, status: 'escrow' });
   rtPush(sellerId, 'order', { id: orderId, status: 'escrow' });
