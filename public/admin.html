@@ -492,6 +492,14 @@
 .bc-aud.on b{color:#fff;}
 .bc-chans{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:13px;color:var(--muted);}
 .bc-chans label{display:flex;align-items:center;gap:6px;cursor:pointer;}
+/* Funnel + adoption bars: label, bar, number — the same shape for both, so one
+   reads like the other. */
+.fn-row{display:grid;grid-template-columns:150px 1fr 110px;align-items:center;gap:12px;padding:6px 0;}
+  .fn-lbl{font-size:13px;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .fn-track{height:9px;border-radius:999px;background:var(--b1);overflow:hidden;}
+  .fn-fill{height:100%;background:var(--accent);border-radius:999px;}
+  .fn-n{font-size:13px;font-weight:700;color:var(--t1);text-align:end;font-variant-numeric:tabular-nums;}
+  @media(max-width:700px){.fn-row{grid-template-columns:110px 1fr 84px;gap:8px;}}
 /* Header actions: search everything, and what needs you. */
 .main-top{display:flex;align-items:center;gap:10px;}
   .main-top h1{flex:1;min-width:0;}
@@ -1009,6 +1017,7 @@
       <button class="tab" data-v="traffic" onclick="switchTab('traffic')">Traffic</button>
       <button class="tab" data-v="growth" onclick="switchTab('growth')">Growth</button>
       <button class="tab" data-v="demand" onclick="switchTab('demand')">Demand</button>
+      <button class="tab" data-v="numbers" onclick="switchTab('numbers')">Numbers</button>
       <button class="tab" data-v="groups" onclick="switchTab('groups')">Groups</button>
       <button class="tab" data-v="audit" onclick="switchTab('audit')">Audit log</button>
 
@@ -1470,7 +1479,7 @@ const TAB_PERM = {
   finance: 'revenue', growth: 'growth', audit: 'super', staff: 'super',
   refunds: 'refunds', appeals: 'users', datareq: 'users', activity: 'super', investigate: 'moderation', moderate: 'moderation', orders: 'support', adjust: 'revenue', payouts: 'revenue', risk: 'revenue', retention: 'growth', curate: 'moderation', catalog: 'moderation',
   cards: 'revenue', features: 'super', featurecontrols: 'super', vault: 'super',
-  announcements: 'super', demand: 'growth', groups: 'moderation', ops: 'super',
+  announcements: 'super', demand: 'growth', groups: 'moderation', ops: 'super', numbers: 'growth',
 };
 function canSee(tab){ const p = TAB_PERM[tab]; if (ME.superadmin) return true; return p !== 'super' && ME.perms.includes(p); }
 
@@ -1546,7 +1555,7 @@ const NAV_TITLES = {
   investigate:'Investigate', moderate:'AI content scan', disputes:'Disputes', appeals:'Appeals', support:'Support', datareq:'Data requests',
   posts:'Posts', circles:'Circles', feed:'Feed', activity:'Activity', traffic:'Traffic', growth:'Growth',
   orders:'Orders', adjust:'Wallet adjustments', payouts:'Payout review', risk:'Risk', retention:'Retention', curate:'Curate', catalog:'Catalog', audit:'Audit log', site:'Site', cards:'Cards', features:'Features', featurecontrols:'Feature Controls', vault:'Vault',
-  announcements:'Announcements', demand:'Demand', groups:'Groups & channels', ops:'Operations',
+  announcements:'Announcements', demand:'Demand', groups:'Groups & channels', ops:'Operations', numbers:'Numbers',
 };
 // Mobile: slide the sidebar in/out.
 function toggleNav(open){
@@ -1581,6 +1590,7 @@ function renderView(){
   else if (VIEW === 'retention') renderRetentionView();
   else if (VIEW === 'curate') renderCurateView();
   else if (VIEW === 'demand') renderDemandView();
+  else if (VIEW === 'numbers') renderNumbersView();
   else if (VIEW === 'groups') renderGroupsView();
   else if (VIEW === 'ops') renderOpsView();
   else if (VIEW === 'catalog') renderCatalogView();
@@ -4076,6 +4086,131 @@ document.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); if (document.body.classList.contains('authed')) openPalette(); }
   else if (e.key === 'Escape') closeModal();
 });
+/* ═══ Numbers — the figures you'd actually be asked for ═══
+   One date range drives every panel, so a question asked of one is asked of
+   all of them. */
+let NUM_RANGE = { from: '', to: '' };
+function renderNumbersView(){
+  document.getElementById('stats').innerHTML = '';
+  const iso = (d) => d.toISOString().slice(0, 10);
+  if (!NUM_RANGE.from) { const t = new Date(); NUM_RANGE = { from: iso(new Date(t - 29*86400000)), to: iso(t) }; }
+  document.getElementById('content').innerHTML = `
+    <div class="panel"><h3>Over what period?</h3>
+      <div class="sub">Everything on this page answers for the dates you pick.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
+        <input class="in" id="numFrom" type="date" value="${NUM_RANGE.from}" style="width:170px;margin:0;"/>
+        <span class="muted">to</span>
+        <input class="in" id="numTo" type="date" value="${NUM_RANGE.to}" style="width:170px;margin:0;"/>
+        <button class="act accent" onclick="numApply()">Show me</button>
+        <button class="act" onclick="numQuick(7)">7 days</button>
+        <button class="act" onclick="numQuick(30)">30 days</button>
+        <button class="act" onclick="numQuick(365)">A year</button>
+      </div></div>
+    <div id="numBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
+  loadNumbers();
+}
+function numQuick(days){
+  const iso = (d) => d.toISOString().slice(0, 10);
+  const t = new Date();
+  NUM_RANGE = { from: iso(new Date(t - (days - 1) * 86400000)), to: iso(t) };
+  renderNumbersView();
+}
+function numApply(){
+  NUM_RANGE = { from: document.getElementById('numFrom').value, to: document.getElementById('numTo').value };
+  loadNumbers();
+}
+const numQS = () => `?from=${encodeURIComponent(NUM_RANGE.from)}&to=${encodeURIComponent(NUM_RANGE.to)}`;
+const money0 = (c) => '$' + ((c || 0) / 100).toLocaleString(undefined, { maximumFractionDigits: 0 });
+async function loadNumbers(){
+  const box = document.getElementById('numBody'); if (!box) return;
+  box.innerHTML = '<div class="ld"><span class="ab-mark"></span></div>';
+  try {
+    const [fun, ob, rev, adopt, ref, ai] = await Promise.all([
+      api('GET', '/api/admin/funnel' + numQS()),
+      api('GET', '/api/admin/onboarding-funnel' + numQS()),
+      api('GET', '/api/admin/revenue-v2' + numQS()).catch(() => null),
+      api('GET', '/api/admin/feature-adoption' + numQS()),
+      api('GET', '/api/admin/referrals' + numQS()),
+      api('GET', '/api/admin/ai-usage' + numQS()),
+    ]);
+    const stat = (v, l) => `<div class="ci-stat"><div class="ci-v">${v}</div><div class="ci-l">${esc(l)}</div></div>`;
+    // Funnel: a bar per step, each as a share of the people who signed up.
+    const funnel = fun.steps.map(s => `
+      <div class="fn-row"><div class="fn-lbl">${esc(s.label)}</div>
+        <div class="fn-track"><div class="fn-fill" style="width:${Math.max(2, s.pct)}%"></div></div>
+        <div class="fn-n">${s.n}<span class="muted"> · ${s.pct}%</span></div></div>`).join('');
+    const adoptRows = adopt.features.map(f => `
+      <div class="fn-row"><div class="fn-lbl">${esc(f.label)}</div>
+        <div class="fn-track"><div class="fn-fill" style="width:${Math.max(2, f.pct)}%"></div></div>
+        <div class="fn-n">${f.users}<span class="muted"> · ${f.pct}%</span></div></div>`).join('');
+    box.innerHTML = `
+      <div class="panel"><h3>From signing up to selling</h3>
+        <div class="sub">Of everyone who joined in this period, how far each of them got.</div>
+        <div style="margin-top:12px;">${funnel}</div></div>
+
+      <div class="panel"><h3>Getting started</h3>
+        <div class="sub">Where new members stop during setup.</div>
+        <div class="ci-row" style="margin-top:12px;">
+          ${stat(ob.total, 'joined')}${stat(ob.has_handle, 'chose a handle')}
+          ${stat(ob.finished, 'finished setup')}${stat(ob.has_photo, 'added a photo')}
+        </div>
+        ${ob.intents.length ? `<div style="margin-top:14px;">${ob.intents.map(i =>
+          `<div class="site-row"><div class="srt">${esc(i.intent)}</div><span class="pill">${i.n}</span></div>`).join('')}</div>` : ''}</div>
+
+      ${rev ? `<div class="panel"><h3>Money</h3>
+        <div class="sub">What Atwe itself earned — fees, ads and subscriptions. Not money moving between members.</div>
+        <div class="ci-row" style="margin-top:12px;">
+          ${stat(money0(rev.totalCents), 'in this period')}${stat(money0(rev.arpuCents), 'per paying member')}
+          ${stat(money0(rev.perDayCents), 'a day')}${stat(money0(rev.runRateCents), 'a year at this rate')}
+        </div>
+        <div style="margin-top:14px;">${rev.bySource.map(s =>
+          `<div class="site-row"><div class="srt">${esc(s.source)}</div><span class="pill">${money0(s.cents)}</span></div>`).join('')
+          || '<div class="empty">Nothing yet in this period.</div>'}</div>
+        <div class="srs" style="margin-top:10px;">${rev.proMembers} Pro member${rev.proMembers === 1 ? '' : 's'} · ${money0(rev.avgLifetimeCents)} average from a paying member so far</div></div>` : ''}
+
+      <div class="panel"><h3>What people use</h3>
+        <div class="sub">Of the ${adopt.activeMembers} member${adopt.activeMembers === 1 ? '' : 's'} who were active, how many used each part of Atwe.</div>
+        <div style="margin-top:12px;">${adoptRows}</div></div>
+
+      <div class="panel"><h3>Invites</h3>
+        <div class="ci-row" style="margin-top:12px;">
+          ${stat(ref.referred, 'joined by invite')}${stat(ref.activationPct + '%', 'then did something')}
+          ${stat(ref.shareOfSignupsPct + '%', 'of all signups')}
+        </div>
+        ${ref.topReferrers.length ? `<div style="margin-top:14px;">${ref.topReferrers.slice(0, 8).map(r =>
+          `<div class="site-row"><div class="srt">${esc(r.name)} <span class="muted">@${esc(r.username || '')}</span></div><span class="pill">${r.n}</span></div>`).join('')}</div>` : ''}</div>
+
+      <div class="panel"><h3>Atwe AI</h3>
+        <div class="sub">What the assistant costs and which parts of it people use. The cost is worked out from published token prices.</div>
+        <div class="ci-row" style="margin-top:12px;">
+          ${stat('$' + ai.estimatedCostUsd.toFixed(2), 'in this period')}
+          ${stat('$' + ai.projectedMonthlyUsd.toFixed(2), 'a month at this rate')}
+          ${stat(ai.calls, 'requests')}${stat(ai.failed, 'failed')}
+        </div>
+        <div style="margin-top:14px;">${ai.byFeature.length ? ai.byFeature.map(f =>
+          `<div class="site-row"><div><div class="srt">${esc(f.feature)}</div><div class="srs">${(f.inTokens + f.outTokens).toLocaleString()} tokens${f.failed ? ' · ' + f.failed + ' failed' : ''}</div></div><span class="pill">${f.calls}</span></div>`).join('')
+          : '<div class="empty">Nobody has used Atwe AI in this period.</div>'}</div></div>
+
+      <div class="panel"><h3>Take it with you</h3>
+        <div class="sub">Any of these as a spreadsheet.</div>
+        <div class="dur-row" style="margin-top:10px;flex-wrap:wrap;">
+          ${[['members','Members'],['revenue','Revenue'],['orders','Orders'],['ledger','Wallet ledger'],['jobsposted','Jobs'],['aiusage','AI usage']]
+            .map(([k,l]) => `<button class="act" onclick="exportTable(${jstr(k)})">${l}</button>`).join('')}
+        </div></div>`;
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+// Downloads need the admin token, so they can't be a plain link.
+async function exportTable(kind){
+  try {
+    const r = await fetch('/api/admin/export2/' + kind, { headers: { Authorization: 'Bearer ' + token } });
+    if (!r.ok) throw new Error('Could not build that export.');
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'atwe-' + kind + '.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  } catch (e){ notify(e.message); }
+}
 /* ═══ Operations: what broke, what's stuck, and who's signed in as staff ═══ */
 function renderOpsView(){
   document.getElementById('stats').innerHTML = '';

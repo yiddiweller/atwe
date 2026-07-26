@@ -50,6 +50,47 @@ app.use((req, res, next) => {
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
+/* ─── AI usage metering ─────────────────────────────────────────────────────
+   Every Atwe AI call is recorded once, HERE, by wrapping the client — rather
+   than at each of the ~29 call sites, where a new feature would quietly be
+   missed. The feature name is inferred from the route handling the request
+   (tracked in a request-scoped store), so nothing else has to pass it through.
+   Recording is fire-and-forget: metering must never break an AI reply. */
+// Request-scoped, so two people using two different AI features at the same
+// moment are never attributed to each other. A module-level "current feature"
+// would be wrong the instant anything overlapped.
+const { AsyncLocalStorage } = require('node:async_hooks');
+const _aiCtx = new AsyncLocalStorage();
+// The feature name is the AI route's own path — /api/ai/prospect → "prospect",
+// /api/chat → "chat" — so a new AI route is metered without being registered.
+app.use((req, _res, next) => {
+  const p = req.path || '';
+  if (!/^\/api\/(ai\/|chat|explain)/.test(p)) return next();
+  const name = p.startsWith('/api/ai/') ? p.slice(8).split('/')[0].slice(0, 40)
+    : p.replace(/^\/api\//, '').split('/')[0].slice(0, 40);
+  _aiCtx.run({ feature: name || 'other' }, next);
+});
+{
+  const realCreate = anthropic.messages.create.bind(anthropic.messages);
+  anthropic.messages.create = async function (params, ...rest) {
+    const feature = (_aiCtx.getStore() || {}).feature || 'other';
+    try {
+      const out = await realCreate(params, ...rest);
+      const u = (out && out.usage) || {};
+      if (db.isConfigured()) {
+        db.query(`INSERT INTO ai_usage (feature, model, in_tokens, out_tokens, ok) VALUES ($1,$2,$3,$4,true)`,
+          [feature, params && params.model, u.input_tokens || 0, u.output_tokens || 0]).catch(() => {});
+      }
+      return out;
+    } catch (err) {
+      if (db.isConfigured()) {
+        db.query(`INSERT INTO ai_usage (feature, model, ok) VALUES ($1,$2,false)`,
+          [feature, params && params.model]).catch(() => {});
+      }
+      throw err;
+    }
+  };
+}
 
 // Lightweight in-memory per-IP rate limiter for abuse-prone routes.
 const _rlBuckets = new Map();
@@ -6089,6 +6130,280 @@ app.put('/api/admin/maintenance', auth.requireAdmin, async (req, res) => {
     res.json({ ok: true, maintenance: m });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the message.' }); }
 });
+/* ─── Saved segments ────────────────────────────────────────────────────────
+   A saved filter that stays live. "Businesses with no posts in 30 days" is a
+   question, not a fixed list of people — so the QUESTION is stored and re-run,
+   and the answer is whoever matches today. */
+app.get('/api/admin/segments', auth.requirePerm('users'), async (_req, res) => {
+  try {
+    const { rows } = await db.query('SELECT * FROM admin_segments ORDER BY created_at DESC LIMIT 100');
+    res.json({ segments: rows.map((x) => ({ id: x.id, name: x.name, filters: x.filters || {}, createdAt: x.created_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the segments.' }); }
+});
+app.post('/api/admin/segments', auth.requirePerm('users'), async (req, res) => {
+  const name = (req.body.name || '').toString().trim().slice(0, 60);
+  if (!name) return res.status(400).json({ error: 'Give the segment a name.' });
+  // Only the filters the user list actually understands are kept, so a saved
+  // segment can never smuggle anything into the query.
+  const ALLOWED = ['plan', 'type', 'status', 'verified', 'bizVerified', 'deactivated', 'frozen', 'staff', 'tag', 'joinedDays', 'inactiveDays'];
+  const filters = {};
+  for (const k of ALLOWED) if (req.body.filters && req.body.filters[k]) filters[k] = String(req.body.filters[k]).slice(0, 40);
+  try {
+    const { rows } = await db.query('INSERT INTO admin_segments (name, filters, created_by) VALUES ($1,$2,$3) RETURNING id',
+      [name, JSON.stringify(filters), req.user.id]);
+    adminAudit(req, 'segment.create', 'segment', rows[0].id, { name, filters });
+    res.status(201).json({ ok: true, id: rows[0].id, name, filters });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the segment.' }); }
+});
+app.delete('/api/admin/segments/:id', auth.requirePerm('users'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM admin_segments WHERE id = $1', [id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the segment.' }); }
+});
+/* ─── Download any table ────────────────────────────────────────────────────
+   A CSV button that works the same way everywhere, rather than one export bolted
+   onto one screen. Each kind names an explicit, safe query — never anything the
+   caller supplies. */
+const EXPORT_KINDS = {
+  members: [`SELECT id, name, username, email, account_type, plan, COALESCE(status,'active') AS status, verified,
+                    business_verify_status, created_at, last_login_at FROM users WHERE NOT COALESCE(is_demo,false)
+             ORDER BY created_at DESC LIMIT 50000`, 'users'],
+  revenue: [`SELECT created_at, source, amount_cents, payer_name, note FROM company_revenue
+             ORDER BY created_at DESC LIMIT 50000`, 'revenue'],
+  orders:  [`SELECT o.id, o.created_at, o.status, o.total_cents, o.shipping_cents, o.tax_cents,
+                    b.username AS buyer, s.username AS seller FROM orders o
+             LEFT JOIN users b ON b.id = o.buyer_id LEFT JOIN users s ON s.id = o.seller_id
+             ORDER BY o.created_at DESC LIMIT 50000`, 'revenue'],
+  ledger:  [`SELECT w.created_at, u.username, w.kind, w.delta_cents, w.balance_after, w.note
+             FROM wallet_tx w LEFT JOIN users u ON u.id = w.user_id
+             ORDER BY w.created_at DESC LIMIT 50000`, 'revenue'],
+  jobsposted: [`SELECT j.id, j.created_at, j.title, j.location, j.industry, u.username AS posted_by,
+                       (SELECT COUNT(*) FROM job_applications a WHERE a.job_id = j.id) AS applicants
+                FROM jobs j LEFT JOIN users u ON u.id = j.posted_by ORDER BY j.created_at DESC LIMIT 50000`, 'users'],
+  aiusage: [`SELECT created_at, feature, model, in_tokens, out_tokens, ok FROM ai_usage
+             ORDER BY created_at DESC LIMIT 50000`, 'growth'],
+};
+app.get('/api/admin/export2/:kind', auth.requireAuth, async (req, res) => {
+  const spec = EXPORT_KINDS[req.params.kind];
+  if (!spec) return res.status(404).json({ error: 'Nothing to export by that name.' });
+  const [sql, perm] = spec;
+  // Each export carries the same permission as the screen it belongs to.
+  const allowed = req.user.is_admin || (Array.isArray(req.user.adminPerms) && req.user.adminPerms.includes(perm));
+  if (!allowed) {
+    const me = (await db.query('SELECT is_admin, admin_perms FROM users WHERE id = $1', [req.user.id])).rows[0];
+    const perms = Array.isArray(me?.admin_perms) ? me.admin_perms : [];
+    if (!me?.is_admin && !perms.includes(perm)) return res.status(403).json({ error: 'Not allowed.' });
+  }
+  try {
+    const { rows, fields } = await db.query(sql);
+    const cols = fields.map((f) => f.name);
+    const body = rows.map((r) => cols.map((c) => csvCell(r[c])).join(',')).join('\n');
+    adminAudit(req, 'export.' + req.params.kind, 'system', null, { rows: rows.length });
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="atwe-${req.params.kind}.csv"`);
+    res.send(cols.join(',') + '\n' + body + '\n');
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build the export.' }); }
+});
+/* ═══ Analytics: the numbers you'd actually be asked for ═══
+   Every figure below is computed on read from data Atwe already keeps. A shared
+   date window means one range control can drive every screen. */
+// Any analytics screen can take from/to; anything missing falls back to a
+// sensible window, and the range is always clamped so a stray value can't ask
+// for a decade of rows.
+function readRange(q) {
+  const now = new Date();
+  const parse = (v) => (v && !isNaN(Date.parse(v))) ? new Date(v) : null;
+  // A date picker sends "2026-07-26", which parses to MIDNIGHT — so asking for
+  // a range ending today used to exclude everything that happened today and
+  // report zero. A date-only end means the whole of that day.
+  const dateOnly = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v.trim());
+  let to = parse(q.to) || now;
+  if (dateOnly(q.to)) to = new Date(to.getTime() + 86400000 - 1);
+  let from = parse(q.from) || new Date(to.getTime() - 29 * 86400000);
+  if (from > to) { const t = from; from = to; to = t; }
+  const maxDays = 400;
+  if ((to - from) / 86400000 > maxDays) from = new Date(to.getTime() - maxDays * 86400000);
+  return { from: from.toISOString(), to: to.toISOString() };
+}
+/* ─── Funnels: signup → username → first post → first sale ─────────────────── */
+app.get('/api/admin/funnel', auth.requirePerm('growth'), async (req, res) => {
+  const { from, to } = readRange(req.query);
+  try {
+    const { rows } = await db.query(
+      `WITH c AS (SELECT id FROM users WHERE created_at BETWEEN $1 AND $2 AND NOT COALESCE(is_demo,false))
+       SELECT (SELECT COUNT(*)::int FROM c) AS signed_up,
+              (SELECT COUNT(*)::int FROM c JOIN users u ON u.id = c.id WHERE u.username IS NOT NULL) AS picked_handle,
+              (SELECT COUNT(*)::int FROM c WHERE EXISTS (SELECT 1 FROM posts p WHERE p.user_id = c.id)) AS posted,
+              (SELECT COUNT(*)::int FROM c WHERE EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = c.id)) AS followed,
+              (SELECT COUNT(*)::int FROM c WHERE EXISTS (SELECT 1 FROM orders o WHERE o.buyer_id = c.id)) AS bought,
+              (SELECT COUNT(*)::int FROM c WHERE EXISTS (SELECT 1 FROM orders o WHERE o.seller_id = c.id)) AS sold`,
+      [from, to]);
+    const r = rows[0];
+    const steps = [
+      { key: 'signed_up', label: 'Signed up', n: r.signed_up },
+      { key: 'picked_handle', label: 'Chose a handle', n: r.picked_handle },
+      { key: 'followed', label: 'Followed someone', n: r.followed },
+      { key: 'posted', label: 'Posted something', n: r.posted },
+      { key: 'bought', label: 'Bought something', n: r.bought },
+      { key: 'sold', label: 'Made a sale', n: r.sold },
+    ];
+    const top = steps[0].n || 0;
+    res.json({ from, to, steps: steps.map((st, i) => ({ ...st,
+      pct: top ? Math.round((st.n / top) * 100) : 0,
+      dropFromPrev: i === 0 ? null : Math.max(0, steps[i - 1].n - st.n) })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build the funnel.' }); }
+});
+/* ─── Onboarding: where new members stop ─────────────────────────────────── */
+app.get('/api/admin/onboarding-funnel', auth.requirePerm('growth'), async (req, res) => {
+  const { from, to } = readRange(req.query);
+  try {
+    const { rows } = await db.query(
+      `WITH c AS (SELECT id, username, onboarded, intent, avatar, categories FROM users
+                   WHERE created_at BETWEEN $1 AND $2 AND NOT COALESCE(is_demo,false))
+       SELECT COUNT(*)::int AS total,
+              COUNT(*) FILTER (WHERE username IS NOT NULL)::int AS has_handle,
+              COUNT(*) FILTER (WHERE onboarded)::int AS finished,
+              COUNT(*) FILTER (WHERE intent IS NOT NULL)::int AS said_goal,
+              COUNT(*) FILTER (WHERE avatar IS NOT NULL)::int AS has_photo,
+              COUNT(*) FILTER (WHERE categories IS NOT NULL AND jsonb_array_length(categories) > 0)::int AS picked_industry
+         FROM c`, [from, to]);
+    const intents = (await db.query(
+      `SELECT intent, COUNT(*)::int AS n FROM users
+        WHERE created_at BETWEEN $1 AND $2 AND intent IS NOT NULL AND NOT COALESCE(is_demo,false)
+        GROUP BY intent ORDER BY n DESC`, [from, to])).rows;
+    res.json({ from, to, ...rows[0], intents });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build the view.' }); }
+});
+/* ─── Revenue: per-member figures, not just totals ────────────────────────── */
+app.get('/api/admin/revenue-v2', auth.requirePerm('revenue'), async (req, res) => {
+  const { from, to } = readRange(req.query);
+  try {
+    const [tot, bySrc, payers, recur, trend] = await Promise.all([
+      db.query(`SELECT COALESCE(SUM(amount_cents),0)::int AS cents, COUNT(*)::int AS n
+                  FROM company_revenue WHERE created_at BETWEEN $1 AND $2`, [from, to]),
+      db.query(`SELECT source, COALESCE(SUM(amount_cents),0)::int AS cents, COUNT(*)::int AS n
+                  FROM company_revenue WHERE created_at BETWEEN $1 AND $2 GROUP BY source ORDER BY cents DESC`, [from, to]),
+      db.query(`SELECT COUNT(DISTINCT payer_id)::int AS n FROM company_revenue
+                 WHERE created_at BETWEEN $1 AND $2 AND payer_id IS NOT NULL`, [from, to]),
+      db.query(`SELECT COUNT(*)::int AS n FROM users WHERE plan = 'pro'`),
+      db.query(`SELECT d::date AS day, COALESCE(SUM(r.amount_cents),0)::int AS cents
+                  FROM generate_series($1::date, $2::date, interval '1 day') d
+                  LEFT JOIN company_revenue r ON r.created_at::date = d::date
+                 GROUP BY d ORDER BY d`, [from, to]),
+    ]);
+    const cents = tot.rows[0].cents, payerCount = payers.rows[0].n;
+    const days = Math.max(1, Math.round((new Date(to) - new Date(from)) / 86400000));
+    // Lifetime value needs real history, so it's stated as what it is: revenue
+    // per paying member so far, not a projection.
+    const lifetime = await db.query(
+      `SELECT COALESCE(AVG(total),0)::int AS avg FROM (
+         SELECT SUM(amount_cents)::int AS total FROM company_revenue WHERE payer_id IS NOT NULL GROUP BY payer_id) z`);
+    res.json({ from, to,
+      totalCents: cents, payments: tot.rows[0].n, payingMembers: payerCount,
+      arpuCents: payerCount ? Math.round(cents / payerCount) : 0,
+      perDayCents: Math.round(cents / days),
+      runRateCents: Math.round((cents / days) * 365),
+      proMembers: recur.rows[0].n,
+      avgLifetimeCents: lifetime.rows[0].avg,
+      bySource: bySrc.rows.map((r) => ({ source: r.source, cents: r.cents, n: r.n })),
+      trend: trend.rows.map((r) => ({ day: r.day, cents: r.cents })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load revenue.' }); }
+});
+/* ─── Feature adoption: what people actually use ──────────────────────────── */
+app.get('/api/admin/feature-adoption', auth.requirePerm('growth'), async (req, res) => {
+  const { from, to } = readRange(req.query);
+  // Each feature is "how many DIFFERENT members did this in the window" — a
+  // count of actions would let one enthusiast look like adoption.
+  const FEATURES = [
+    ['Posting', `SELECT COUNT(DISTINCT user_id)::int AS n FROM posts WHERE created_at BETWEEN $1 AND $2`],
+    ['Messaging', `SELECT COUNT(DISTINCT sender_id)::int AS n FROM at_messages WHERE created_at BETWEEN $1 AND $2`],
+    ['Groups', `SELECT COUNT(DISTINCT sender_id)::int AS n FROM at_group_messages WHERE created_at BETWEEN $1 AND $2`],
+    ['Dailies', `SELECT COUNT(DISTINCT user_id)::int AS n FROM stories WHERE created_at BETWEEN $1 AND $2`],
+    ['Buying', `SELECT COUNT(DISTINCT buyer_id)::int AS n FROM orders WHERE created_at BETWEEN $1 AND $2`],
+    ['Selling', `SELECT COUNT(DISTINCT business_id)::int AS n FROM products WHERE created_at BETWEEN $1 AND $2`],
+    ['Wallet', `SELECT COUNT(DISTINCT user_id)::int AS n FROM wallet_tx WHERE created_at BETWEEN $1 AND $2`],
+    ['Jobs', `SELECT COUNT(DISTINCT posted_by)::int AS n FROM jobs WHERE created_at BETWEEN $1 AND $2`],
+    ['Applying', `SELECT COUNT(DISTINCT user_id)::int AS n FROM job_applications WHERE created_at BETWEEN $1 AND $2`],
+    ['Atwe AI', `SELECT COUNT(DISTINCT user_id)::int AS n FROM ai_usage WHERE created_at BETWEEN $1 AND $2 AND user_id IS NOT NULL`],
+    ['Events', `SELECT COUNT(DISTINCT user_id)::int AS n FROM event_rsvps WHERE created_at BETWEEN $1 AND $2`],
+    ['Calls', `SELECT COUNT(DISTINCT user_id)::int AS n FROM calls WHERE created_at BETWEEN $1 AND $2`],
+  ];
+  try {
+    const active = (await db.query(
+      `SELECT COUNT(DISTINCT user_id)::int AS n FROM auth_sessions WHERE last_seen BETWEEN $1 AND $2`, [from, to])).rows[0].n;
+    const out = [];
+    for (const [label, sql] of FEATURES) {
+      const n = await db.query(sql, [from, to]).then((r) => r.rows[0].n).catch(() => 0);
+      out.push({ label, users: n, pct: active ? Math.round((n / active) * 100) : 0 });
+    }
+    out.sort((a, b) => b.users - a.users);
+    res.json({ from, to, activeMembers: active, features: out });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load adoption.' }); }
+});
+/* ─── Referrals: does the invite loop actually work? ──────────────────────── */
+app.get('/api/admin/referrals', auth.requirePerm('growth'), async (req, res) => {
+  const { from, to } = readRange(req.query);
+  try {
+    const [tot, activated, top] = await Promise.all([
+      db.query(`SELECT COUNT(*)::int AS n FROM referrals WHERE created_at BETWEEN $1 AND $2`, [from, to]),
+      // An invite only counts for something if the person then did something.
+      db.query(`SELECT COUNT(*)::int AS n FROM referrals r JOIN users u ON u.id = r.referred_id
+                 WHERE r.created_at BETWEEN $1 AND $2 AND (u.username IS NOT NULL AND EXISTS
+                       (SELECT 1 FROM posts p WHERE p.user_id = u.id))`, [from, to]),
+      db.query(`SELECT u.name, u.username, COUNT(*)::int AS n
+                  FROM referrals r JOIN users u ON u.id = r.referrer_id
+                 GROUP BY u.id, u.name, u.username ORDER BY n DESC LIMIT 15`),
+    ]);
+    const signups = (await db.query(
+      `SELECT COUNT(*)::int AS n FROM users WHERE created_at BETWEEN $1 AND $2 AND NOT COALESCE(is_demo,false)`, [from, to])).rows[0].n;
+    res.json({ from, to, referred: tot.rows[0].n, activated: activated.rows[0].n,
+      activationPct: tot.rows[0].n ? Math.round((activated.rows[0].n / tot.rows[0].n) * 100) : 0,
+      shareOfSignupsPct: signups ? Math.round((tot.rows[0].n / signups) * 100) : 0,
+      topReferrers: top.rows.map((r) => ({ name: r.name, username: r.username, n: r.n })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load referrals.' }); }
+});
+/* ─── Atwe AI: what it costs and who uses it ─────────────────────────────── */
+// Published per-million-token prices, so the estimate is transparent rather
+// than a magic number. Unknown models fall back to the middle tier.
+const AI_PRICES = { 'claude-sonnet-4-6': [3, 15], 'claude-haiku-4-5-20251001': [0.8, 4] };
+app.get('/api/admin/ai-usage', auth.requirePerm('growth'), async (req, res) => {
+  const { from, to } = readRange(req.query);
+  try {
+    const [byFeature, byModel, trend, totals] = await Promise.all([
+      db.query(`SELECT feature, COUNT(*)::int AS calls, SUM(in_tokens)::bigint AS tin, SUM(out_tokens)::bigint AS tout,
+                       COUNT(*) FILTER (WHERE NOT ok)::int AS failed
+                  FROM ai_usage WHERE created_at BETWEEN $1 AND $2 GROUP BY feature ORDER BY calls DESC`, [from, to]),
+      db.query(`SELECT model, COUNT(*)::int AS calls, SUM(in_tokens)::bigint AS tin, SUM(out_tokens)::bigint AS tout
+                  FROM ai_usage WHERE created_at BETWEEN $1 AND $2 GROUP BY model`, [from, to]),
+      db.query(`SELECT d::date AS day, COUNT(u.id)::int AS calls,
+                       COALESCE(SUM(u.in_tokens),0)::bigint AS tin, COALESCE(SUM(u.out_tokens),0)::bigint AS tout
+                  FROM generate_series($1::date, $2::date, interval '1 day') d
+                  LEFT JOIN ai_usage u ON u.created_at::date = d::date
+                 GROUP BY d ORDER BY d`, [from, to]),
+      db.query(`SELECT COUNT(*)::int AS calls, COUNT(*) FILTER (WHERE NOT ok)::int AS failed
+                  FROM ai_usage WHERE created_at BETWEEN $1 AND $2`, [from, to]),
+    ]);
+    const costOf = (model, tin, tout) => {
+      const [pin, pout] = AI_PRICES[model] || [3, 15];
+      return (Number(tin || 0) / 1e6) * pin + (Number(tout || 0) / 1e6) * pout;
+    };
+    const modelRows = byModel.rows.map((m) => ({ model: m.model || 'unknown', calls: m.calls,
+      inTokens: Number(m.tin || 0), outTokens: Number(m.tout || 0), costUsd: +costOf(m.model, m.tin, m.tout).toFixed(2) }));
+    const totalCost = modelRows.reduce((a, m) => a + m.costUsd, 0);
+    const days = Math.max(1, Math.round((new Date(to) - new Date(from)) / 86400000));
+    res.json({ from, to, calls: totals.rows[0].calls, failed: totals.rows[0].failed,
+      estimatedCostUsd: +totalCost.toFixed(2), perDayUsd: +(totalCost / days).toFixed(2),
+      projectedMonthlyUsd: +((totalCost / days) * 30).toFixed(2),
+      byModel: modelRows,
+      byFeature: byFeature.rows.map((f) => ({ feature: f.feature, calls: f.calls, failed: f.failed,
+        inTokens: Number(f.tin || 0), outTokens: Number(f.tout || 0) })),
+      trend: trend.rows.map((t) => ({ day: t.day, calls: t.calls, tokens: Number(t.tin || 0) + Number(t.tout || 0) })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load AI usage.' }); }
+});
 /* ─── Circles manager ───────────────────────────────────────────────────────
    Circles are company-defined industries, so they can only come from here.
    Until now the tab could only field deletion requests — you couldn't actually
@@ -6255,7 +6570,12 @@ app.post('/api/admin/staff-sessions/revoke', auth.requireAdmin, async (req, res)
 /* ─── Audit log export ──────────────────────────────────────────────────────
    Append-only is good; downloadable is what an insurer or an auditor asks for. */
 function csvCell(v) {
-  const s = v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : String(v));
+  // A Date is an object, so a naive JSON.stringify wrapped every timestamp in
+  // its own quotes and the escaping then doubled them — dates came out as
+  // """2026-07-26...""". Dates are rendered plainly; only real structures
+  // are stringified.
+  const s = v == null ? '' : (v instanceof Date ? v.toISOString()
+    : (typeof v === 'object' ? JSON.stringify(v) : String(v)));
   return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 app.get('/api/admin/audit.csv', auth.requireAdmin, async (req, res) => {
