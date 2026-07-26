@@ -2076,6 +2076,16 @@ function renderSite(){
       }).join('')}
     </div>
     <div class="panel">
+      <h3>Blocked links <span class="muted">· scam &amp; phishing domains</span></h3>
+      <div class="sub">Blocks a domain everywhere members write — posts, messages and listings. Subdomains and bare mentions are covered too. New accounts also can't post any link for their first <b id="probHrs">48</b> hours.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <input class="in" id="bdDomain" maxlength="190" placeholder="scam-site.com" style="flex:1;margin:0;"/>
+        <input class="in" id="bdNote" maxlength="200" placeholder="Note (optional)" style="flex:1;margin:0;"/>
+        <button class="act accent" onclick="addBlockedDomain()">Block</button>
+      </div>
+      <div id="bdList" style="margin-top:12px;"></div>
+    </div>
+    <div class="panel">
       <h3>What's new <span class="muted">· release notes</span></h3>
       <div class="sub">Write a short note after each release. Members read it in the app; a quiet dot marks it unread until they do. Drafts stay invisible until you publish.</div>
       <input class="in" id="clTitle" maxlength="140" placeholder="Title (e.g. Shipping zones, A/B tests)"/>
@@ -2088,6 +2098,33 @@ function renderSite(){
       <div id="clList" style="margin-top:14px;"></div>
     </div>`;
   loadChangelog();
+  loadBlockedDomains();
+}
+// Scam/phishing domains blocked platform-wide (moderation scope).
+async function loadBlockedDomains(){
+  const box = document.getElementById('bdList'); if (!box) return;
+  try {
+    const { domains, probationHours } = await api('GET', '/api/admin/blocked-domains');
+    const ph = document.getElementById('probHrs'); if (ph) ph.textContent = probationHours;
+    box.innerHTML = domains.length ? domains.map(d => `<div class="site-row">
+        <div><div class="srt">${esc(d.domain)}</div><div class="srs">${d.note ? esc(d.note) + ' · ' : ''}${fmtDate(d.createdAt)}${d.by ? ' · ' + esc(d.by) : ''}</div></div>
+        <button class="act danger" onclick="removeBlockedDomain('${esc(d.domain)}')">Unblock</button></div>`).join('')
+      : '<div class="muted" style="padding:6px 0;">Nothing blocked yet.</div>';
+  } catch (e){ box.innerHTML = '<div class="muted">' + esc(e.message) + '</div>'; }
+}
+async function addBlockedDomain(){
+  const domain = document.getElementById('bdDomain').value.trim();
+  const note = document.getElementById('bdNote').value.trim();
+  if (!domain) { notify('Enter a domain.'); return; }
+  try {
+    await api('POST', '/api/admin/blocked-domains', { domain, note });
+    document.getElementById('bdDomain').value = ''; document.getElementById('bdNote').value = '';
+    notify('Blocked everywhere.'); loadBlockedDomains();
+  } catch (e){ notify(e.message); }
+}
+async function removeBlockedDomain(domain){
+  try { await api('DELETE', '/api/admin/blocked-domains/' + encodeURIComponent(domain)); loadBlockedDomains(); }
+  catch (e){ notify(e.message); }
 }
 async function loadChangelog(){
   const box = document.getElementById('clList'); if (!box) return;

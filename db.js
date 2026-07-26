@@ -1737,6 +1737,17 @@ async function initSchema() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS condition TEXT;`); // new | like_new | good | fair (physical resale)
   // "Was" price (compare-at, Shopify-style) — shown struck through when > price.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS compare_at_cents INTEGER;`);
+  // Link & domain blacklist: known scam/phishing hosts blocked platform-wide.
+  // Matching covers subdomains, so blocking "evil.com" also stops
+  // "login.evil.com". Cached in memory and refreshed on every edit.
+  await query(`
+    CREATE TABLE IF NOT EXISTS blocked_domains (
+      domain     TEXT PRIMARY KEY,
+      note       TEXT,
+      added_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
   // Graduated enforcement (Meta-style strike ladder). Each strike ages out after
   // STRIKE_TTL_DAYS, so a member who behaves recovers rather than carrying a
   // permanent record. The ladder maps live strike COUNT to a consequence, which
