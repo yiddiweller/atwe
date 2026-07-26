@@ -1808,6 +1808,7 @@ const PUSH_VERBS = {
   pot_saved: 'auto-saved into your pot', pot_save_skipped: 'an auto-save was skipped — balance too low',
   auction_outbid: 'outbid you — bid again to stay in it', auction_won: 'you won the auction — pay to claim it',
   auction_ended: 'your auction ended — the winner is paying', auction_no_bids: 'your auction ended without bids',
+  group_join_paid: 'paid your group’s join fee',
   payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review',
   ad_approved: 'approved your ad — it’s ready to pay', ad_rejected: 'reviewed your ad',
   aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation',
@@ -6706,6 +6707,7 @@ app.post('/api/atchat/groups', auth.requireAuth, rateLimit(20, 60000, 'group-cre
   if (avatar === undefined) return res.status(400).json({ error: 'That image could not be used.' });
   const description = ((req.body.description || '').toString().trim().slice(0, 500)) || null;
   const rules = ((req.body.rules || '').toString().trim().slice(0, 2000)) || null;
+  const joinFeeCents = (() => { const f = Math.round(Number(req.body.joinFeeCents) || 0); return (f >= 0 && f <= 50000) ? f : 0; })();
   const broadcast = !contact && req.body.broadcast === true;
   const members = Array.isArray(req.body.members) ? req.body.members : [];
   const ids = [...new Set(members.map((x) => parseInt(x, 10)).filter((n) => Number.isInteger(n) && n !== req.user.id))];
@@ -6734,8 +6736,8 @@ app.post('/api/atchat/groups', auth.requireAuth, rateLimit(20, 60000, 'group-cre
     let g;
     try {
       g = await db.query(
-        'INSERT INTO at_groups (name, username, avatar, created_by, broadcast, description, rules) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-        [name, username, avatar, req.user.id, broadcast, description, rules]
+        'INSERT INTO at_groups (name, username, avatar, created_by, broadcast, description, rules, join_fee_cents) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id',
+        [name, username, avatar, req.user.id, broadcast, description, rules, joinFeeCents]
       );
     } catch (e) {
       if (e.code === '23505') return res.status(409).json({ error: 'That group username is already taken.' });
@@ -6795,6 +6797,13 @@ app.patch('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     if (typeof req.body.broadcast === 'boolean') { vals.push(req.body.broadcast); fields.push(`broadcast = $${vals.length}`); }
     if ('description' in req.body) { vals.push(((req.body.description || '').toString().trim().slice(0, 500)) || null); fields.push(`description = $${vals.length}`); }
     if ('rules' in req.body) { vals.push(((req.body.rules || '').toString().trim().slice(0, 2000)) || null); fields.push(`rules = $${vals.length}`); }
+    if ('joinFeeCents' in req.body) {
+      // Money control stays with the CREATOR, not every admin.
+      if (g.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the group creator can set a join fee.' });
+      const jf = Math.round(Number(req.body.joinFeeCents) || 0);
+      if (!(jf >= 0 && jf <= 50000)) return res.status(400).json({ error: 'Join fee can be up to $500.' });
+      vals.push(jf); fields.push(`join_fee_cents = $${vals.length}`);
+    }
     vals.push(gid);
     let upd;
     try {
@@ -7899,15 +7908,37 @@ app.delete('/api/atchat/groups/:id/invite', auth.requireAuth, async (req, res) =
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not revoke the invite link.' }); }
 });
 // Preview a group by its invite code (name + member count) before joining.
+/* Paid groups: a one-time join fee, balance-funded (claim-first — membership
+   is inserted BEFORE the transfer and reverted if the money can't move, so a
+   crash or short balance can never leave a paid member out or a free rider in). */
+async function chargeGroupJoinFee(gid, uid, imp) {
+  const g = (await db.query('SELECT created_by, join_fee_cents, name FROM at_groups WHERE id = $1', [gid])).rows[0];
+  if (!g || !(g.join_fee_cents > 0)) return { ok: true, charged: 0 };
+  if (uid === g.created_by || (await isGroupMember(gid, uid))) return { ok: true, charged: 0 };
+  if (imp) return { error: { status: 403, body: { error: 'Paying a join fee isn’t available in view-as mode.' } } };
+  if (await blockedEither(uid, g.created_by)) return { error: { status: 403, body: { error: 'You can’t join this group.' } } };
+  const vel = await walletVelocityCheck(uid, g.join_fee_cents);
+  if (!vel.ok) return { error: { status: vel.frozen ? 403 : 429, body: walletVelocityError(vel) } };
+  const claim = await db.query('INSERT INTO at_group_members (group_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING user_id', [gid, uid]);
+  if (!claim.rowCount) return { ok: true, charged: 0 }; // a concurrent join won — they're in, unpaid twice never happens
+  const tr = await walletTransfer(uid, g.created_by, g.join_fee_cents, 'Join fee · ' + g.name);
+  if (!tr.ok) {
+    await db.query('DELETE FROM at_group_members WHERE group_id = $1 AND user_id = $2', [gid, uid]).catch(() => {});
+    return { error: { status: 400, body: { error: 'Not enough balance for the join fee — add money to your wallet first.', insufficientBalance: true } } };
+  }
+  notify(g.created_by, uid, 'group_join_paid', null, null, gid);
+  rtPush(uid, 'wallet', { type: 'update' }); rtPush(g.created_by, 'wallet', { type: 'update' });
+  return { ok: true, charged: g.join_fee_cents, joined: true };
+}
 app.get('/api/atchat/invite/:code', auth.requireAuth, async (req, res) => {
   const code = (req.params.code || '').trim();
   if (!code) return res.status(400).json({ error: 'Invalid invite link.' });
   try {
-    const g = await db.query('SELECT id, name, avatar, broadcast, rules FROM at_groups WHERE invite_code = $1', [code]);
+    const g = await db.query('SELECT id, name, avatar, broadcast, rules, join_fee_cents FROM at_groups WHERE invite_code = $1', [code]);
     if (!g.rows[0]) return res.status(404).json({ error: 'This invite link is no longer valid.' });
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM at_group_members WHERE group_id = $1', [g.rows[0].id]);
     const member = await isGroupMember(g.rows[0].id, req.user.id);
-    res.json({ group: { id: g.rows[0].id, name: g.rows[0].name, avatar: g.rows[0].avatar || null, broadcast: !!g.rows[0].broadcast, members: cnt.rows[0].n, member, rules: g.rows[0].rules || null } });
+    res.json({ group: { id: g.rows[0].id, name: g.rows[0].name, avatar: g.rows[0].avatar || null, broadcast: !!g.rows[0].broadcast, members: cnt.rows[0].n, member, rules: g.rows[0].rules || null, joinFeeCents: g.rows[0].join_fee_cents || 0 } });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not open that invite link.' }); }
 });
 // Join a group via its invite code.
@@ -7924,6 +7955,9 @@ app.post('/api/atchat/invite/:code/join', auth.requireAuth, async (req, res) => 
     if (g.rows[0].rules && req.body.acceptRules !== true && !(await isGroupMember(gid, req.user.id))) {
       return res.status(400).json({ needsRules: true, rules: g.rows[0].rules, error: 'Please agree to the group rules first.' });
     }
+    // Join fee (paid groups): claim-first charge; a short balance never admits.
+    const fee = await chargeGroupJoinFee(gid, req.user.id, !!req.user.imp);
+    if (fee.error) return res.status(fee.error.status).json(fee.error.body);
     await db.query('INSERT INTO at_group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [gid, req.user.id]);
     res.json({ ok: true, groupId: gid, name: g.rows[0].name });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not join the group.' }); }
@@ -8170,6 +8204,8 @@ app.post('/api/communities/:id/groups/:gid/join', auth.requireAuth, async (req, 
     if (gr && gr.rules && req.body.acceptRules !== true && !(await isGroupMember(gid, req.user.id))) {
       return res.status(400).json({ needsRules: true, rules: gr.rules, error: 'Please agree to the group rules first.' });
     }
+    const fee = await chargeGroupJoinFee(gid, req.user.id, !!req.user.imp);
+    if (fee.error) return res.status(fee.error.status).json(fee.error.body);
     await db.query('INSERT INTO at_group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [gid, req.user.id]);
     res.json({ ok: true, groupId: gid });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not join the group.' }); }

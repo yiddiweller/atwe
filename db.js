@@ -3691,6 +3691,8 @@ async function initSchema() {
   await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS rules TEXT;`);
   // Group AutoMod (Discord model): admin-set blocked words, enforced at send.
   await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS blocked_words TEXT[] NOT NULL DEFAULT '{}';`);
+  // Paid groups (community monetization): a one-time, balance-funded join fee.
+  await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS join_fee_cents INTEGER NOT NULL DEFAULT 0;`);
   // Group invite link: a random join code; anyone with it can join (WhatsApp-style).
   await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS invite_code TEXT;`);
   await query(`CREATE UNIQUE INDEX IF NOT EXISTS at_groups_invite_idx ON at_groups(invite_code) WHERE invite_code IS NOT NULL;`);
