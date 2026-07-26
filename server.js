@@ -18102,6 +18102,102 @@ app.delete('/api/products/:id', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the product.' }); }
 });
 
+/* ─── Bulk listing tools (Etsy/Shopify-style CSV export + import) ─── */
+// Export my catalog as a spreadsheet. Free-text cells get the formula-injection
+// guard; price/stock stay real numbers for Excel (same rules as the wallet export).
+app.get('/api/my-listings/export', auth.requireAuth, rateLimit(10, 60000, 'listings-export'), async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, name, description, price_cents, kind, category, condition, stock, ship_free, ship_fee_cents, active, created_at
+         FROM products WHERE business_id = $1 ORDER BY created_at ASC`, [req.user.id]);
+    const quote = (s) => '"' + s.replace(/"/g, '""') + '"';
+    const text = (v) => { let s = String(v == null ? '' : v); if (/^[=+\-@]/.test(s)) s = "'" + s; return quote(s); };
+    const lines = ['id,name,description,price_dollars,kind,category,condition,stock,free_shipping,ship_fee_dollars,active,created'];
+    for (const p of rows) {
+      lines.push([
+        p.id, text(p.name), text(p.description || ''), (p.price_cents / 100).toFixed(2), p.kind,
+        text(p.category || ''), p.condition || '', p.stock == null ? '' : p.stock,
+        p.ship_free !== false ? 'yes' : 'no', ((p.ship_fee_cents || 0) / 100).toFixed(2),
+        p.active !== false ? 'yes' : 'no', new Date(p.created_at).toISOString().slice(0, 10),
+      ].join(','));
+    }
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="atwe-listings.csv"');
+    res.send(lines.join('\r\n'));
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not export your listings.' }); }
+});
+// A small, correct CSV parser: quoted fields, escaped quotes, commas + newlines
+// inside quotes. Returns an array of rows (arrays of strings).
+function parseCsv(textIn) {
+  const rows = []; let row = [], cell = '', inQ = false;
+  const s = String(textIn || '');
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inQ) {
+      if (c === '"') { if (s[i + 1] === '"') { cell += '"'; i++; } else inQ = false; }
+      else cell += c;
+    } else if (c === '"') inQ = true;
+    else if (c === ',') { row.push(cell); cell = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && s[i + 1] === '\n') i++;
+      row.push(cell); cell = '';
+      if (row.length > 1 || row[0] !== '') rows.push(row);
+      row = [];
+    } else cell += c;
+  }
+  row.push(cell);
+  if (row.length > 1 || row[0] !== '') rows.push(row);
+  return rows;
+}
+// Import listings from CSV (≤100 rows per run; the 300-listing cap still holds).
+// Header-mapped columns; name + price required; images are added later by editing.
+// Returns per-row results so a seller can fix exactly what failed.
+app.post('/api/products/import', auth.requireAuth, rateLimit(6, 60000, 'listings-import'), async (req, res) => {
+  const raw = String(req.body.csv || '');
+  if (!raw.trim()) return res.status(400).json({ error: 'Paste or upload a CSV first.' });
+  if (raw.length > 200000) return res.status(400).json({ error: 'That file is too large (200 KB max).' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const rows = parseCsv(raw);
+    if (rows.length < 2) return res.status(400).json({ error: 'The file needs a header row and at least one listing.' });
+    const header = rows[0].map(h => String(h || '').trim().toLowerCase().replace(/\s+/g, '_'));
+    const col = (r, ...names) => { for (const n of names) { const i = header.indexOf(n); if (i >= 0) return String(r[i] == null ? '' : r[i]).trim(); } return ''; };
+    if (!header.some(h => ['name', 'title', 'product'].includes(h))) return res.status(400).json({ error: 'The header row needs a "name" column.' });
+    const data = rows.slice(1, 101); // ≤100 listings per import
+    const existing = (await db.query('SELECT COUNT(*)::int AS n FROM products WHERE business_id = $1', [req.user.id])).rows[0].n;
+    let imported = 0; const skipped = [];
+    for (let r = 0; r < data.length; r++) {
+      const rowNum = r + 2; // 1-based + header
+      try {
+        const name = col(data[r], 'name', 'title', 'product').slice(0, 140);
+        if (!name) { skipped.push({ row: rowNum, error: 'Missing name' }); continue; }
+        const priceRaw = col(data[r], 'price_dollars', 'price', 'price_usd').replace(/[$,]/g, '');
+        const priceCents = Math.round(parseFloat(priceRaw) * 100);
+        if (!(Number.isFinite(priceCents) && priceCents >= 0 && priceCents <= 5000000)) { skipped.push({ row: rowNum, error: 'Invalid price' }); continue; }
+        if (existing + imported >= 300) { skipped.push({ row: rowNum, error: 'Listing limit reached (300)' }); continue; }
+        const kindRaw = col(data[r], 'kind', 'type').toLowerCase();
+        const kind = PRODUCT_KINDS.includes(kindRaw) ? kindRaw : 'physical';
+        const description = col(data[r], 'description', 'desc').slice(0, 1000) || null;
+        const category = col(data[r], 'category', 'section').slice(0, 60) || null;
+        const condRaw = col(data[r], 'condition').toLowerCase().replace(/\s+/g, '_');
+        const condition = (kind === 'physical' && PRODUCT_CONDITIONS.includes(condRaw)) ? condRaw : null;
+        const stockRaw = col(data[r], 'stock', 'quantity', 'qty');
+        const stock = stockRaw === '' ? null : Math.max(0, Math.min(1000000, parseInt(stockRaw, 10) || 0));
+        const shipFreeRaw = col(data[r], 'free_shipping', 'ship_free').toLowerCase();
+        const shipFree = kind !== 'physical' ? true : !['no', 'false', '0', 'n'].includes(shipFreeRaw);
+        const feeRaw = col(data[r], 'ship_fee_dollars', 'shipping_fee', 'ship_fee').replace(/[$,]/g, '');
+        const shipFeeCents = (kind === 'physical' && !shipFree) ? Math.max(0, Math.min(100000, Math.round((parseFloat(feeRaw) || 0) * 100))) : 0;
+        await db.query(
+          `INSERT INTO products (business_id, name, description, price_cents, kind, category, condition, stock, ship_free, ship_fee_cents)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+          [req.user.id, name, description, priceCents, kind, category, condition, stock, shipFree, shipFeeCents]);
+        imported++;
+      } catch (e) { skipped.push({ row: rowNum, error: 'Could not save this row' }); }
+    }
+    res.json({ imported, skipped, truncated: rows.length - 1 > 100 ? rows.length - 1 - 100 : 0 });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not import the file.' }); }
+});
+
 /* ─── Starter packs (Bluesky model) ───
    A curated, shareable set of accounts followed in one tap — the highest-
    leverage onboarding tool a network can give its members. */
