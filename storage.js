@@ -168,4 +168,56 @@ async function selfTest() {
   return { ok: true, readable, url, cdn: !!CDN, endpoint: ENDPOINT || 'aws', bucket: BUCKET };
 }
 
-module.exports = { isConfigured, putDataUrl, remove, isStoredUrl, publicUrl, selfTest };
+/* ─── Uploading straight to the bucket ─────────────────────────────────────
+   Everything above sends the bytes through our own server first, which caps a
+   file at whatever the JSON body limit is (~18MB of real video). That is the
+   actual reason Atwe could not take a long or high-definition clip.
+
+   A presigned URL removes the ceiling entirely: we sign a permission slip, the
+   browser PUTs the file straight to the bucket, and our server never touches
+   the bytes at all. The signature is scoped to ONE key, ONE method and a short
+   window, so it cannot be reused to overwrite anything else.
+
+   This is SigV4 again, but with the signature in the query string rather than a
+   header — a browser cannot set an Authorization header on a plain PUT it makes
+   from a file input without the whole request being ours to build. */
+function presignPut(contentType, kind, seconds) {
+  if (!ok) return null;
+  const ct = String(contentType || '').toLowerCase().split(';')[0].trim();
+  if (!/^[a-z]+\/[a-z0-9.+-]+$/.test(ct)) return null;
+  const key = makeKey(kind, EXT_FOR[ct] || ct.split('/')[1]);
+  const expires = Math.min(3600, Math.max(60, seconds || 900));
+
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
+  const dateStamp = amzDate.slice(0, 8);
+  const host = bucketHost();
+  const canonicalUri = objectPath(key).split('/').map(encodeURIComponent).join('/').replace(/%2F/g, '/');
+  const scope = `${dateStamp}/${REGION}/s3/aws4_request`;
+
+  // Only the host is signed, so the browser is free to send whatever else it
+  // likes (Content-Type included) without invalidating the signature.
+  const q = new URLSearchParams({
+    'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
+    'X-Amz-Credential': `${ACCESS}/${scope}`,
+    'X-Amz-Date': amzDate,
+    'X-Amz-Expires': String(expires),
+    'X-Amz-SignedHeaders': 'host',
+  });
+  // S3 requires the query string sorted by key.
+  const canonicalQuery = [...q.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v)).join('&');
+  const canonicalRequest = ['PUT', canonicalUri, canonicalQuery, `host:${host}\n`, 'host', 'UNSIGNED-PAYLOAD'].join('\n');
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, scope, sha256(canonicalRequest)].join('\n');
+  let k = hmac('AWS4' + SECRET, dateStamp);
+  k = hmac(k, REGION); k = hmac(k, 's3'); k = hmac(k, 'aws4_request');
+  const signature = crypto.createHmac('sha256', k).update(stringToSign).digest('hex');
+
+  return {
+    uploadUrl: `https://${host}${objectPath(key)}?${canonicalQuery}&X-Amz-Signature=${signature}`,
+    publicUrl: publicUrl(key),
+    key, expiresIn: expires,
+  };
+}
+
+module.exports = { isConfigured, putDataUrl, remove, isStoredUrl, publicUrl, selfTest, presignPut };

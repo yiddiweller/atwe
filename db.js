@@ -1946,6 +1946,150 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS ai_usage_at_idx ON ai_usage (created_at DESC);
     CREATE INDEX IF NOT EXISTS ai_usage_feature_idx ON ai_usage (feature);
   `);
+  // ── Batch 40: bigger media, better calls, and marketing your own shop ──────
+  // A business marketing to ITS OWN customers — distinct from the admin
+  // campaigns tool, which is Atwe writing to Atwe's members.
+  await query(`
+    CREATE TABLE IF NOT EXISTS shop_campaigns (
+      id           SERIAL PRIMARY KEY,
+      owner_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name         TEXT NOT NULL,
+      audience     TEXT NOT NULL DEFAULT 'customers',
+      subject      TEXT,
+      body         TEXT NOT NULL,
+      cta_label    TEXT,
+      product_id   INTEGER REFERENCES products(id) ON DELETE SET NULL,
+      coupon_code  TEXT,
+      by_beam      BOOLEAN NOT NULL DEFAULT true,
+      by_email     BOOLEAN NOT NULL DEFAULT false,
+      by_push      BOOLEAN NOT NULL DEFAULT false,
+      status       TEXT NOT NULL DEFAULT 'draft',   -- draft | sending | sent
+      reached      INTEGER,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      sent_at      TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS shop_camp_owner_idx ON shop_campaigns (owner_id, created_at DESC);
+    -- Who it went to, and whether they came back and bought. Attribution has to
+    -- be recorded at send time or it is guesswork afterwards.
+    CREATE TABLE IF NOT EXISTS shop_campaign_recipients (
+      campaign_id  INTEGER NOT NULL REFERENCES shop_campaigns(id) ON DELETE CASCADE,
+      user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      ordered_at   TIMESTAMPTZ,
+      order_cents  INTEGER,
+      PRIMARY KEY (campaign_id, user_id)
+    );
+    -- A shopper who wants no marketing from a particular shop. Checked on every
+    -- send, and offered in every message.
+    CREATE TABLE IF NOT EXISTS shop_marketing_optout (
+      owner_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (owner_id, user_id)
+    );
+  `);
+  // A scheduled, structured broadcast with an audience that registers in
+  // advance — a webinar, rather than a spur-of-the-moment Go Live.
+  await query(`
+    CREATE TABLE IF NOT EXISTS webinars (
+      id            SERIAL PRIMARY KEY,
+      host_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title         TEXT NOT NULL,
+      description   TEXT,
+      starts_at     TIMESTAMPTZ NOT NULL,
+      minutes       INTEGER NOT NULL DEFAULT 60,
+      cover         TEXT,
+      capacity      INTEGER,
+      price_cents   INTEGER NOT NULL DEFAULT 0,
+      qa_open       BOOLEAN NOT NULL DEFAULT true,
+      status        TEXT NOT NULL DEFAULT 'scheduled', -- scheduled | live | ended | cancelled
+      stream_id     TEXT,
+      started_at    TIMESTAMPTZ,
+      ended_at      TIMESTAMPTZ,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS webinars_start_idx ON webinars (starts_at);
+    CREATE TABLE IF NOT EXISTS webinar_signups (
+      webinar_id  INTEGER NOT NULL REFERENCES webinars(id) ON DELETE CASCADE,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      paid        BOOLEAN NOT NULL DEFAULT false,
+      attended    BOOLEAN NOT NULL DEFAULT false,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (webinar_id, user_id)
+    );
+    -- Questions from the floor, upvoted, so the host answers what most people
+    -- actually want asked rather than whatever scrolled past last.
+    CREATE TABLE IF NOT EXISTS webinar_questions (
+      id          SERIAL PRIMARY KEY,
+      webinar_id  INTEGER NOT NULL REFERENCES webinars(id) ON DELETE CASCADE,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body        TEXT NOT NULL,
+      votes       INTEGER NOT NULL DEFAULT 0,
+      answered    BOOLEAN NOT NULL DEFAULT false,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE TABLE IF NOT EXISTS webinar_question_votes (
+      question_id INTEGER NOT NULL REFERENCES webinar_questions(id) ON DELETE CASCADE,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (question_id, user_id)
+    );
+  `);
+  // Local delivery: a seller's own drivers, or themselves, taking an order to a
+  // nearby buyer the same day. Deliberately NOT a third-party courier network —
+  // that needs a partner. This is the shop's own runs, tracked properly.
+  await query(`
+    CREATE TABLE IF NOT EXISTS delivery_zones (
+      id           SERIAL PRIMARY KEY,
+      owner_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name         TEXT NOT NULL,
+      radius_km    NUMERIC(6,2) NOT NULL DEFAULT 5,
+      fee_cents    INTEGER NOT NULL DEFAULT 0,
+      free_over_cents INTEGER,
+      min_order_cents INTEGER NOT NULL DEFAULT 0,
+      eta_minutes  INTEGER NOT NULL DEFAULT 90,
+      active       BOOLEAN NOT NULL DEFAULT true,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS delivery_zones_owner_idx ON delivery_zones (owner_id);
+    CREATE TABLE IF NOT EXISTS delivery_runs (
+      id           SERIAL PRIMARY KEY,
+      order_id     INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      owner_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      driver_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      status       TEXT NOT NULL DEFAULT 'waiting',  -- waiting|picked_up|on_the_way|delivered|failed
+      eta_at       TIMESTAMPTZ,
+      lat          NUMERIC(9,6),
+      lng          NUMERIC(9,6),
+      note         TEXT,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      delivered_at TIMESTAMPTZ
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS delivery_runs_order_idx ON delivery_runs (order_id);
+  `);
+  // Orders remember they were a local delivery, and which zone paid for it.
+  await query(`
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS local_delivery BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_zone_id INTEGER;
+  `);
+  // A saved address can carry rough coordinates, so "is this buyer near enough
+  // for us to drive it round?" can be answered without a map service.
+  await query(`
+    ALTER TABLE addresses ADD COLUMN IF NOT EXISTS lat NUMERIC(9,6);
+    ALTER TABLE addresses ADD COLUMN IF NOT EXISTS lng NUMERIC(9,6);
+  `);
+  // A clip is more than its bytes: how long it runs and which way round it is,
+  // so a player can size itself without downloading the film to find out.
+  await query(`
+    ALTER TABLE feed_posts ADD COLUMN IF NOT EXISTS duration_sec INTEGER;
+    ALTER TABLE feed_posts ADD COLUMN IF NOT EXISTS aspect TEXT;
+    ALTER TABLE posts ADD COLUMN IF NOT EXISTS duration_sec INTEGER;
+    ALTER TABLE posts ADD COLUMN IF NOT EXISTS aspect TEXT;
+    ALTER TABLE stories ADD COLUMN IF NOT EXISTS duration_sec INTEGER;
+  `);
+  // A save carries the version it was based on, so a stale one is refused
+  // rather than quietly overwriting somebody else's work.
+  await query(`ALTER TABLE group_cloud ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 0;`);
+  // Which camera look somebody last used, so it is still there next time.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS camera_prefs JSONB;`);
+
   // ── Batch 39: the platform underneath ──────────────────────────────────────
   // Passkeys. Only the PUBLIC half is stored — there is nothing here worth
   // stealing, which is the entire point of the design.

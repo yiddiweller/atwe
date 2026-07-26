@@ -1926,6 +1926,15 @@ function cleanImages(arr) {
   return out;
 }
 function mediaFromBody(body) {
+  // Uploaded straight to the bucket: there are no bytes here to inspect, so the
+  // kind comes from what was declared and is checked against a fixed list.
+  if (typeof body.media === 'string' && !body.media.startsWith('data:')) {
+    if (typeof cleanMediaUrl === 'function' && cleanMediaUrl(body.media) !== undefined) {
+      const kind = ['image', 'video', 'audio', 'file'].includes(body.mediaKind) ? body.mediaKind : 'file';
+      return { data: body.media, kind, name: kind === 'file' ? cleanMediaName(body.mediaName) : null };
+    }
+    return undefined;
+  }
   const media = cleanMedia(body.media);
   if (media === undefined) return undefined;
   if (!media) return { data: null, kind: null, name: null };
@@ -1986,6 +1995,7 @@ const MEDIA_KINDS = {
   // A call recording is private, like a DM — the unguessable signature IS the
   // capability, which is the same bargain every other private media kind here makes.
   'callrec':    { table: 'call_recordings',   col: 'media'  },
+  'webinar':    { table: 'webinars',          col: 'cover'  },
 };
 function mediaSig(kind, id, idx) {
   return _vcrypto.createHmac('sha256', MEDIA_SECRET).update(kind + ':' + id + ':' + (idx || 0)).digest('hex').slice(0, 20);
@@ -2427,6 +2437,8 @@ const PUSH_VERBS = {
   chat_request: 'wants to chat with you', mention: 'mentioned you', quote: 'quoted your post',
   story_mention: 'mentioned you in their Daily', remix: 'remixed your video',
   strike: 'issued a warning on your account — tap for details',
+  shop_campaign: 'has news for you', webinar_live: 'is live now — the webinar you signed up for has started',
+  webinar_cancelled: 'cancelled a webinar you signed up for', delivery_on_way: 'is on the way with your order',
   job_application: 'applied to your job', connection_request: 'wants to connect',
   connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills',
   event_rsvp: 'is going to your event', event_reminder: 'an event you’re going to starts soon', event_comment: 'commented on your event', rec_received: 'recommended you',
@@ -9676,6 +9688,8 @@ function cloudNode(r, withData) {
     ownerId: r.owner_id || null, ownerName: r.owner_name || null, ownerUsername: r.owner_username || null,
     mime: r.mime || null, mediaKind: r.media_kind || null, size: r.size_bytes != null ? Number(r.size_bytes) : null,
     created_at: r.created_at, updated_at: r.updated_at,
+    // What the editor sends back on save, so a stale write is caught.
+    version: r.version == null ? 0 : Number(r.version),
   };
   if (withData) o.data = r.data || null;
   // Lightweight summary for "tool" nodes so the list can show progress/counts
@@ -9822,7 +9836,9 @@ app.patch('/api/atchat/groups/:id/cloud/:nid', auth.requireAuth, async (req, res
   if (!Number.isInteger(gid) || !Number.isInteger(nid)) return res.status(400).json({ error: 'Invalid id.' });
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
-    const cur = await db.query('SELECT id, kind FROM group_cloud WHERE id = $1 AND group_id = $2', [nid, gid]);
+    // `version` has to be read here, or the staleness check compares against
+    // undefined and lets exactly the wrong saves through.
+    const cur = await db.query('SELECT id, kind, version FROM group_cloud WHERE id = $1 AND group_id = $2', [nid, gid]);
     if (!cur.rows[0]) return res.status(404).json({ error: 'Not found.' });
     const sets = [], vals = [];
     if (typeof req.body.name === 'string') {
@@ -9831,7 +9847,21 @@ app.patch('/api/atchat/groups/:id/cloud/:nid', auth.requireAuth, async (req, res
     }
     if (typeof req.body.data === 'string' && ['sheet', 'checklist', 'note', 'form', 'schedule', 'roster', 'expenses', 'whiteboard'].includes(cur.rows[0].kind)) {
       if (req.body.data.length > 2_000_000) return res.status(400).json({ error: 'That’s too large to save.' });
+      // If the client says which version it started from, a save based on an
+      // older one is REFUSED. Saving anyway is what silently erased the other
+      // person's work; refusing and showing them the newer copy does not.
+      if (req.body.baseVersion != null) {
+        const base = parseInt(req.body.baseVersion, 10);
+        if (Number.isInteger(base) && base !== Number(cur.rows[0].version || 0)) {
+          const latest = (await db.query('SELECT data, version, updated_at FROM group_cloud WHERE id = $1', [nid])).rows[0];
+          return res.status(409).json({
+            error: 'Somebody else saved this while you were editing. Your text has not been lost — compare the two and save again.',
+            conflict: true, version: latest ? latest.version : null, data: latest ? latest.data : null,
+          });
+        }
+      }
       vals.push(req.body.data); sets.push(`data = $${vals.length}`);
+      sets.push('version = version + 1');
     }
     if (!sets.length) return res.status(400).json({ error: 'Nothing to update.' });
     sets.push('updated_at = now()');
@@ -9840,8 +9870,8 @@ app.patch('/api/atchat/groups/:id/cloud/:nid', auth.requireAuth, async (req, res
       `UPDATE group_cloud SET ${sets.join(', ')} WHERE id = $${vals.length - 1} AND group_id = $${vals.length} RETURNING *`,
       vals
     );
-    cloudPush(gid, req.user.id, { groupId: gid, parentId: rows[0].parent_id || null, nodeId: nid });
-    res.json({ node: cloudNode(rows[0], false) });
+    cloudPush(gid, req.user.id, { groupId: gid, parentId: rows[0].parent_id || null, nodeId: nid, version: rows[0].version });
+    res.json({ node: cloudNode(rows[0], false), version: rows[0].version });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 
@@ -10893,6 +10923,996 @@ app.get('/api/customers/export', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not export.' }); }
 });
 
+
+
+/* ═══════════════════════════════════════════════
+   BATCH 40 — bigger media, better calls, marketing your own shop
+═══════════════════════════════════════════════ */
+
+/* ─── Big files, uploaded straight to the bucket ───────────────────────────
+   Until now every photo and video travelled through this server inside a JSON
+   body, which capped a file at about 18MB of real video however generous we
+   were elsewhere. That is the actual reason Atwe could not take a long clip or
+   a high-definition one.
+
+   With object storage configured the browser now PUTs the file straight to the
+   bucket using a permission slip we sign, and tells us only the resulting URL.
+   Our server never touches the bytes, so the limit becomes whatever the bucket
+   allows rather than whatever fits in a request.
+
+   With NO storage configured the old path is untouched and the old, smaller
+   limits still apply — which is honest, because without somewhere to put it a
+   large file genuinely has nowhere to go. */
+const UPLOAD_TYPES = {
+  image: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+  video: ['video/mp4', 'video/quicktime', 'video/webm'],
+  audio: ['audio/mpeg', 'audio/mp4', 'audio/webm', 'audio/wav'],
+  doc:   ['application/pdf'],
+};
+// What we will accept, in megabytes. The small numbers are what fits through a
+// JSON body; the large ones are what a bucket happily takes.
+const UPLOAD_LIMITS_DIRECT = { image: 25, video: 2048, audio: 200, doc: 100 };
+const UPLOAD_LIMITS_INLINE = { image: 16, video: 16, audio: 16, doc: 16 };
+function uploadLimits() {
+  return storage.isConfigured() ? UPLOAD_LIMITS_DIRECT : UPLOAD_LIMITS_INLINE;
+}
+app.get('/api/uploads/limits', auth.requireAuth, (_req, res) => {
+  res.json({ direct: storage.isConfigured(), limitsMb: uploadLimits(),
+    // Minutes are what a person thinks in; the byte cap is what actually applies.
+    videoMinutes: storage.isConfigured() ? 180 : 2 });
+});
+app.post('/api/uploads/sign', auth.requireAuth, rateLimit(60, 60000, 'upload-sign'), async (req, res) => {
+  if (!storage.isConfigured()) return res.status(503).json({ error: 'Large uploads are not set up on this server yet.', direct: false });
+  const contentType = String(req.body.contentType || '').toLowerCase().split(';')[0].trim();
+  const family = Object.keys(UPLOAD_TYPES).find((k) => UPLOAD_TYPES[k].includes(contentType));
+  if (!family) return res.status(400).json({ error: 'That kind of file is not accepted.' });
+  const sizeMb = Number(req.body.sizeBytes || 0) / (1024 * 1024);
+  const cap = uploadLimits()[family];
+  if (sizeMb > cap) return res.status(413).json({ error: `That file is larger than the ${cap}MB limit.`, limitMb: cap });
+  const kind = String(req.body.kind || family).replace(/[^a-z0-9-]/gi, '').slice(0, 24) || family;
+  try {
+    const out = storage.presignPut(contentType, kind, 900);
+    if (!out) return res.status(500).json({ error: 'Could not prepare that upload.' });
+    res.json({ uploadUrl: out.uploadUrl, url: out.publicUrl, expiresIn: out.expiresIn });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not prepare that upload.' }); }
+});
+
+/* ─── Longer, landscape video ──────────────────────────────────────────────
+   A clip is described by more than its bytes. Storing how long it runs and
+   which way round it is means the player can size itself correctly instead of
+   letterboxing a landscape film into a portrait box, and a list can show the
+   running time without downloading the film to find out. */
+const ASPECTS = ['portrait', 'square', 'landscape'];
+function cleanAspect(v) { return ASPECTS.includes(v) ? v : null; }
+function cleanDuration(v) {
+  const n = Math.round(Number(v));
+  // Three hours is the ceiling; anything longer is a mistake or an attack.
+  return Number.isFinite(n) && n > 0 && n <= 3 * 3600 ? n : null;
+}
+// A stored media value may now be a bucket URL rather than base64. Anywhere we
+// used to insist on a data: URL has to accept both, or a direct upload would be
+// rejected by the very validation meant to protect us.
+function cleanMediaUrl(v) {
+  if (typeof v !== 'string') return undefined;
+  if (storage.isStoredUrl(v)) return v;      // one of ours, put there by a signed upload
+  return undefined;
+}
+
+/* ─── Live captions ────────────────────────────────────────────────────────
+   The speaking device does the listening — it already has the microphone open
+   and the browser's own recogniser is far better than anything we would build.
+   What travels is the text, which is small enough to send as it is spoken.
+
+   Deliberately not stored: a caption is an aid to the person in the call at
+   that moment, not a transcript. Recording a call is a separate, announced
+   thing (see batch 39) and it is the only thing that keeps a copy. */
+app.post('/api/rt/caption', auth.requireAuth, rateLimit(240, 60000, 'caption'), async (req, res) => {
+  const text = String(req.body.text || '').trim().slice(0, 300);
+  const final = req.body.final === true;
+  const peerId = parseInt(req.body.peerId, 10);
+  const groupId = parseInt(req.body.groupId, 10);
+  if (!text) return res.json({ ok: true });
+  try {
+    const me = await chatIdentity(req.user.id);
+    const payload = { kind: 'caption', text, final, callId: String(req.body.callId || '').slice(0, 64),
+      from: { id: req.user.id, name: me ? me.name : null } };
+    if (Number.isInteger(groupId)) {
+      if (!(await isGroupMember(groupId, req.user.id))) return res.status(403).json({ error: 'Not a member.' });
+      for (const uid of await groupMemberIds(groupId, req.user.id)) rtPush(uid, 'call', payload);
+    } else if (Number.isInteger(peerId)) {
+      rtPush(peerId, 'call', payload);
+    }
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Could not send that.' }); }
+});
+
+/* ─── Breakout rooms ───────────────────────────────────────────────────────
+   Split a group call into smaller ones and bring everybody back. The rooms are
+   in memory, like the call itself, because they last exactly as long as it
+   does. Everyone starts in the main room; moving somebody is a roster change
+   the whole call is told about, so nobody vanishes without explanation. */
+const breakouts = new Map();   // groupId -> { rooms:[{id,name,members:Set}], openedBy }
+const BREAKOUT_MAX_ROOMS = 6;
+function breakoutPublic(b) {
+  if (!b) return null;
+  return { rooms: b.rooms.map((r) => ({ id: r.id, name: r.name, members: [...r.members] })), openedBy: b.openedBy };
+}
+async function pushBreakout(groupId) {
+  const b = breakouts.get(groupId) || null;
+  const room = groupCalls.get(groupId);
+  const who = room ? [...room.keys()] : [];
+  for (const uid of who) rtPush(uid, 'group-call', { kind: 'breakout', groupId, breakout: breakoutPublic(b) });
+}
+// Only somebody actually in the call may arrange it.
+function inGroupCall(groupId, userId) {
+  const room = groupCalls.get(groupId);
+  return !!(room && room.has(userId));
+}
+app.post('/api/rt/breakout/open', auth.requireAuth, async (req, res) => {
+  const groupId = parseInt(req.body.groupId, 10);
+  const count = Math.max(2, Math.min(BREAKOUT_MAX_ROOMS, parseInt(req.body.rooms, 10) || 2));
+  if (!Number.isInteger(groupId)) return res.status(400).json({ error: 'Invalid group.' });
+  if (!inGroupCall(groupId, req.user.id)) return res.status(403).json({ error: 'You are not in this call.' });
+  const names = Array.isArray(req.body.names) ? req.body.names : [];
+  const rooms = [];
+  for (let i = 0; i < count; i++) {
+    rooms.push({ id: 'b' + (i + 1), members: new Set(),
+      name: String(names[i] || ('Room ' + (i + 1))).trim().slice(0, 40) || ('Room ' + (i + 1)) });
+  }
+  breakouts.set(groupId, { rooms, openedBy: req.user.id });
+  await pushBreakout(groupId);
+  res.json({ ok: true, breakout: breakoutPublic(breakouts.get(groupId)) });
+});
+app.post('/api/rt/breakout/move', auth.requireAuth, async (req, res) => {
+  const groupId = parseInt(req.body.groupId, 10);
+  const roomId = req.body.roomId == null ? null : String(req.body.roomId).slice(0, 8);
+  const uid = Number.isInteger(parseInt(req.body.userId, 10)) ? parseInt(req.body.userId, 10) : req.user.id;
+  const b = breakouts.get(groupId);
+  if (!b) return res.status(404).json({ error: 'There are no rooms open.' });
+  if (!inGroupCall(groupId, req.user.id)) return res.status(403).json({ error: 'You are not in this call.' });
+  // Move yourself freely; moving somebody else is the organiser's job.
+  if (uid !== req.user.id && b.openedBy !== req.user.id) return res.status(403).json({ error: 'Only whoever opened the rooms can move other people.' });
+  for (const r of b.rooms) r.members.delete(uid);
+  if (roomId) {
+    const target = b.rooms.find((r) => r.id === roomId);
+    if (!target) return res.status(404).json({ error: 'No such room.' });
+    target.members.add(uid);
+  }
+  rtPush(uid, 'group-call', { kind: 'breakout-moved', groupId, roomId });
+  await pushBreakout(groupId);
+  res.json({ ok: true });
+});
+app.post('/api/rt/breakout/close', auth.requireAuth, async (req, res) => {
+  const groupId = parseInt(req.body.groupId, 10);
+  const b = breakouts.get(groupId);
+  if (!b) return res.json({ ok: true });
+  if (b.openedBy !== req.user.id) return res.status(403).json({ error: 'Only whoever opened the rooms can bring everyone back.' });
+  breakouts.delete(groupId);
+  await pushBreakout(groupId);
+  res.json({ ok: true });
+});
+app.get('/api/rt/breakout', auth.requireAuth, async (req, res) => {
+  const groupId = parseInt(req.query.groupId, 10);
+  if (!Number.isInteger(groupId) || !(await isGroupMember(groupId, req.user.id))) return res.status(403).json({ error: 'Not a member.' });
+  res.json({ breakout: breakoutPublic(breakouts.get(groupId)) });
+});
+
+
+/* ─── Webinars and town halls ──────────────────────────────────────────────
+   Go Live is spur-of-the-moment. A webinar is the opposite: announced in
+   advance, people sign up, they are reminded, and there is a proper question
+   queue so the host answers what most of the room actually wants asked rather
+   than whatever happened to scroll past.
+
+   It runs ON TOP of Go Live rather than beside it — starting one creates a
+   normal live stream, so every existing piece (the console, the comments, the
+   gifts, the recap) works unchanged. */
+const WEBINAR_MAX_MINUTES = 480;
+function mapWebinar(w, me) {
+  return {
+    id: w.id, title: w.title, description: w.description || '',
+    startsAt: w.starts_at, minutes: w.minutes, cover: mediaRef(w.cover, 'webinar', w.id),
+    capacity: w.capacity, priceCents: w.price_cents || 0, qaOpen: !!w.qa_open,
+    status: w.status, streamId: w.stream_id || null,
+    host: { id: w.host_id, name: w.host_name, username: w.host_username, avatar: w.host_avatar || null,
+      verified: !!w.host_verified, accountType: w.host_type === 'business' ? 'business' : 'personal' },
+    signups: Number(w.signups || 0),
+    spotsLeft: w.capacity == null ? null : Math.max(0, w.capacity - Number(w.signups || 0)),
+    full: w.capacity != null && Number(w.signups || 0) >= w.capacity,
+    isHost: me != null && w.host_id === me,
+    signedUp: !!w.signed_up, paid: !!w.paid_up,
+  };
+}
+// $1 is always the viewer, so "have I signed up / have I paid" travel with the
+// row rather than being asked for separately and forgotten.
+const WEBINAR_SELECT = `
+  SELECT w.*, u.name AS host_name, u.username AS host_username, u.avatar AS host_avatar,
+         u.verified AS host_verified, u.account_type AS host_type,
+         (SELECT COUNT(*)::int FROM webinar_signups s WHERE s.webinar_id = w.id) AS signups,
+         EXISTS(SELECT 1 FROM webinar_signups s WHERE s.webinar_id = w.id AND s.user_id = $1) AS signed_up,
+         EXISTS(SELECT 1 FROM webinar_signups s WHERE s.webinar_id = w.id AND s.user_id = $1 AND s.paid) AS paid_up
+    FROM webinars w JOIN users u ON u.id = w.host_id`;
+
+app.get('/api/webinars', auth.requireAuth, async (req, res) => {
+  const scope = ['upcoming', 'mine', 'signed', 'past'].includes(req.query.scope) ? req.query.scope : 'upcoming';
+  const where = { upcoming: `w.status IN ('scheduled','live') AND w.starts_at > now() - interval '4 hours'`,
+    mine: 'w.host_id = $1', signed: 'EXISTS(SELECT 1 FROM webinar_signups s WHERE s.webinar_id = w.id AND s.user_id = $1)',
+    past: `w.status = 'ended'` }[scope];
+  try {
+    const { rows } = await db.query(
+      `${WEBINAR_SELECT} WHERE ${where} ORDER BY w.starts_at ${scope === 'past' ? 'DESC' : 'ASC'} LIMIT 60`, [req.user.id]);
+    res.json({ webinars: rows.map((r) => mapWebinar(r, req.user.id)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load those.' }); }
+});
+app.post('/api/webinars', auth.requireAuth, rateLimit(20, 3600000, 'webinar'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const title = String(req.body.title || '').trim().slice(0, 140);
+  const startsAt = new Date(req.body.startsAt);
+  if (!title) return res.status(400).json({ error: 'Give it a title.' });
+  if (isNaN(startsAt.getTime())) return res.status(400).json({ error: 'When does it start?' });
+  const minutes = Math.max(5, Math.min(WEBINAR_MAX_MINUTES, parseInt(req.body.minutes, 10) || 60));
+  const capacity = Number.isInteger(parseInt(req.body.capacity, 10)) && parseInt(req.body.capacity, 10) > 0
+    ? Math.min(100000, parseInt(req.body.capacity, 10)) : null;
+  const priceCents = Math.max(0, Math.min(500000, parseInt(req.body.priceCents, 10) || 0));
+  try {
+    const cover = req.body.cover ? await offloadMedia(cleanImage(req.body.cover) || null, 'webinar') : null;
+    const { rows } = await db.query(
+      `INSERT INTO webinars (host_id, title, description, starts_at, minutes, cover, capacity, price_cents, qa_open)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [req.user.id, title, String(req.body.description || '').trim().slice(0, 4000) || null,
+        startsAt, minutes, cover, capacity, priceCents, req.body.qaOpen !== false]);
+    // The host is always in the room.
+    await db.query('INSERT INTO webinar_signups (webinar_id, user_id, paid) VALUES ($1,$2,true) ON CONFLICT DO NOTHING', [rows[0].id, req.user.id]);
+    res.status(201).json({ id: rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not schedule that.' }); }
+});
+async function loadWebinar(id, me) {
+  const { rows } = await db.query(`${WEBINAR_SELECT} WHERE w.id = $2`, [me, id]);
+  return rows[0] || null;
+}
+app.get('/api/webinars/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const w = await loadWebinar(id, req.user.id);
+    if (!w) return res.status(404).json({ error: 'Not found.' });
+    const qs = await db.query(
+      `SELECT q.*, u.name, u.username,
+              EXISTS(SELECT 1 FROM webinar_question_votes v WHERE v.question_id = q.id AND v.user_id = $2) AS voted
+         FROM webinar_questions q JOIN users u ON u.id = q.user_id
+        WHERE q.webinar_id = $1 ORDER BY q.answered ASC, q.votes DESC, q.created_at ASC LIMIT 100`, [id, req.user.id]);
+    res.json({ webinar: mapWebinar(w, req.user.id),
+      questions: qs.rows.map((q) => ({ id: q.id, body: q.body, votes: q.votes, answered: !!q.answered,
+        voted: !!q.voted, mine: q.user_id === req.user.id,
+        from: { id: q.user_id, name: q.name, username: q.username } })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load that.' }); }
+});
+app.patch('/api/webinars/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const sets = [], vals = [];
+  const put = (col, v) => { vals.push(v); sets.push(`${col} = $${vals.length}`); };
+  if (typeof req.body.title === 'string') put('title', req.body.title.trim().slice(0, 140));
+  if (typeof req.body.description === 'string') put('description', req.body.description.trim().slice(0, 4000));
+  if (req.body.startsAt && !isNaN(new Date(req.body.startsAt).getTime())) put('starts_at', new Date(req.body.startsAt));
+  if (Number.isInteger(parseInt(req.body.minutes, 10))) put('minutes', Math.max(5, Math.min(WEBINAR_MAX_MINUTES, parseInt(req.body.minutes, 10))));
+  if (typeof req.body.qaOpen === 'boolean') put('qa_open', req.body.qaOpen);
+  if (req.body.status === 'cancelled') put('status', 'cancelled');
+  if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
+  vals.push(id, req.user.id);
+  try {
+    const { rowCount } = await db.query(
+      `UPDATE webinars SET ${sets.join(', ')} WHERE id = $${vals.length - 1} AND host_id = $${vals.length}`, vals);
+    if (!rowCount) return res.status(404).json({ error: 'Not found.' });
+    // People cleared their diary for this, so a change or a cancellation is
+    // told to them rather than left to be discovered.
+    const who = await db.query('SELECT user_id FROM webinar_signups WHERE webinar_id = $1 AND user_id <> $2', [id, req.user.id]);
+    for (const r of who.rows) notify(r.user_id, req.user.id, req.body.status === 'cancelled' ? 'webinar_cancelled' : 'webinar_updated');
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update that.' }); }
+});
+app.post('/api/webinars/:id/signup', auth.requireAuth, blockImpersonation, rateLimit(30, 60000, 'webinar-signup'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const w = await loadWebinar(id, req.user.id);
+    if (!w) return res.status(404).json({ error: 'Not found.' });
+    if (w.status === 'cancelled') return res.status(400).json({ error: 'That has been cancelled.' });
+    if (w.signed_up) return res.json({ ok: true, already: true });
+    if (w.capacity != null && Number(w.signups) >= w.capacity) return res.status(400).json({ error: 'That is full.', full: true });
+    const price = w.price_cents || 0;
+    if (price > 0) {
+      // Paid from the wallet, like everything else that costs money here.
+      const vel = await walletVelocityCheck(req.user.id, price);
+      if (!vel.ok) return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel));
+      const cid = String(req.body.clientId || '').slice(0, 60) || null;
+      if (cid) { const prev = await walletClaimIdem(req.user.id, cid, 'webinar'); if (prev && prev.replay) return res.json(prev.result); }
+      const t = await walletTransfer(req.user.id, w.host_id, price, 'Webinar: ' + w.title, false);
+      if (!t.ok) { if (cid) await walletReleaseIdem(req.user.id, cid, 'webinar');
+        return res.status(400).json({ error: 'Not enough wallet balance — add money first.', insufficientBalance: true }); }
+      await db.query('INSERT INTO webinar_signups (webinar_id, user_id, paid) VALUES ($1,$2,true) ON CONFLICT DO NOTHING', [id, req.user.id]);
+      const out = { ok: true, paid: true };
+      if (cid) await walletStoreIdem(req.user.id, cid, 'webinar', out);
+      notify(w.host_id, req.user.id, 'webinar_signup');
+      return res.json(out);
+    }
+    await db.query('INSERT INTO webinar_signups (webinar_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, req.user.id]);
+    notify(w.host_id, req.user.id, 'webinar_signup');
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not sign you up.' }); }
+});
+app.delete('/api/webinars/:id/signup', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    // A paid place is not given up with a tap — that would be a refund, and
+    // refunds go through the proper route where somebody can look at them.
+    const { rows } = await db.query('SELECT paid FROM webinar_signups WHERE webinar_id = $1 AND user_id = $2', [id, req.user.id]);
+    if (rows[0] && rows[0].paid) return res.status(400).json({ error: 'You paid for this place. Ask for a refund under Help & refunds.' });
+    await db.query('DELETE FROM webinar_signups WHERE webinar_id = $1 AND user_id = $2', [id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not do that.' }); }
+});
+// Going live: create a real stream so every existing broadcast feature applies.
+app.post('/api/webinars/:id/start', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const w = (await db.query('SELECT * FROM webinars WHERE id = $1 AND host_id = $2', [id, req.user.id])).rows[0];
+    if (!w) return res.status(404).json({ error: 'Not found.' });
+    if (w.status === 'ended') return res.status(400).json({ error: 'That has already finished.' });
+    const me = await chatIdentity(req.user.id);
+    for (const [, st] of liveStreams) if (st.userId === req.user.id) await endLiveStream(st);
+    const sid = 'live_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    liveStreams.set(sid, {
+      id: sid, userId: req.user.id, name: me.name, username: me.username, avatar: me.avatar || null,
+      title: w.title, groupId: null, groupName: null, mode: 'video', startedAt: Date.now(),
+      viewers: new Set(), speakers: new Map(), requests: new Map(),
+      scene: 'camera', pinnedComment: null, guests: new Map(), invites: new Map(),
+      peakViewers: 0, commentCount: 0, giftsCents: 0, webinarId: id,
+    });
+    await db.query(`UPDATE webinars SET status='live', stream_id=$2, started_at=now() WHERE id=$1`, [id, sid]);
+    // Everyone who signed up is told it has begun — that is the whole point of
+    // signing up in advance.
+    const who = await db.query('SELECT user_id FROM webinar_signups WHERE webinar_id = $1 AND user_id <> $2', [id, req.user.id]);
+    for (const r of who.rows) { notify(r.user_id, req.user.id, 'webinar_live'); rtPush(r.user_id, 'live', { kind: 'webinar-live', webinarId: id, streamId: sid, title: w.title }); }
+    res.json({ streamId: sid });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not start it.' }); }
+});
+app.post('/api/webinars/:id/end', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const w = (await db.query('SELECT stream_id FROM webinars WHERE id = $1 AND host_id = $2', [id, req.user.id])).rows[0];
+    if (!w) return res.status(404).json({ error: 'Not found.' });
+    const st = w.stream_id ? liveStreams.get(w.stream_id) : null;
+    if (st) await endLiveStream(st);
+    await db.query(`UPDATE webinars SET status='ended', ended_at=now() WHERE id=$1`, [id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not end it.' }); }
+});
+/* Questions from the floor. Upvoting is what makes this different from a chat:
+   the room decides the running order, not whoever typed most recently. */
+app.post('/api/webinars/:id/questions', auth.requireAuth, rateLimit(20, 60000, 'webinar-q'), async (req, res) => {
+  const id = routeId(req.params.id);
+  const body = String(req.body.body || '').trim().slice(0, 400);
+  if (!Number.isInteger(id) || !body) return res.status(400).json({ error: 'Ask something.' });
+  try {
+    const w = await loadWebinar(id, req.user.id);
+    if (!w) return res.status(404).json({ error: 'Not found.' });
+    if (!w.qa_open) return res.status(400).json({ error: 'Questions are closed for this one.' });
+    if (!w.signed_up) return res.status(403).json({ error: 'Sign up first.' });
+    const { rows } = await db.query(
+      'INSERT INTO webinar_questions (webinar_id, user_id, body) VALUES ($1,$2,$3) RETURNING id', [id, req.user.id, body]);
+    if (w.host_id !== req.user.id) rtPush(w.host_id, 'live', { kind: 'webinar-question', webinarId: id });
+    res.status(201).json({ id: rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not ask that.' }); }
+});
+app.post('/api/webinars/questions/:qid/vote', auth.requireAuth, rateLimit(120, 60000, 'webinar-vote'), async (req, res) => {
+  const qid = routeId(req.params.qid);
+  if (!Number.isInteger(qid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    // The vote row IS the count's source of truth, so one person cannot vote twice.
+    const on = req.body.on !== false;
+    if (on) {
+      const ins = await db.query(
+        'INSERT INTO webinar_question_votes (question_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING question_id', [qid, req.user.id]);
+      if (ins.rowCount) await db.query('UPDATE webinar_questions SET votes = votes + 1 WHERE id = $1', [qid]);
+    } else {
+      const del = await db.query('DELETE FROM webinar_question_votes WHERE question_id = $1 AND user_id = $2 RETURNING question_id', [qid, req.user.id]);
+      if (del.rowCount) await db.query('UPDATE webinar_questions SET votes = GREATEST(0, votes - 1) WHERE id = $1', [qid]);
+    }
+    const { rows } = await db.query('SELECT votes FROM webinar_questions WHERE id = $1', [qid]);
+    res.json({ ok: true, votes: rows[0] ? rows[0].votes : 0 });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not vote.' }); }
+});
+app.post('/api/webinars/questions/:qid/answered', auth.requireAuth, async (req, res) => {
+  const qid = routeId(req.params.qid);
+  if (!Number.isInteger(qid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rowCount } = await db.query(
+      `UPDATE webinar_questions q SET answered = true
+        FROM webinars w WHERE q.id = $1 AND w.id = q.webinar_id AND w.host_id = $2`, [qid, req.user.id]);
+    if (!rowCount) return res.status(403).json({ error: 'Only the host can do that.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not do that.' }); }
+});
+
+
+/* ─── Marketing to your own customers ──────────────────────────────────────
+   Distinct from the admin campaigns tool, which is Atwe writing to Atwe's
+   members. This is a SHOP writing to the people who bought from it.
+
+   Three deliberate limits, because the difference between marketing and spam is
+   entirely in the restraint:
+     · you can only reach people who have actually dealt with you,
+     · one message a day per shop, so nobody is buried,
+     · every message carries a way out, and opting out is honoured for good.
+
+   It goes over Beam by default because that is where people are; email and push
+   are opt-in extras, both of which the recipient's existing settings still gate. */
+const SHOP_AUDIENCES = {
+  customers:  { label: 'Everyone who has bought from me',
+    sql: `SELECT DISTINCT buyer_id AS id FROM orders WHERE seller_id = $1 AND status IN ('paid','fulfilled','delivered','released') AND buyer_id IS NOT NULL` },
+  recent:     { label: 'Bought in the last 90 days',
+    sql: `SELECT DISTINCT buyer_id AS id FROM orders WHERE seller_id = $1 AND status IN ('paid','fulfilled','delivered','released') AND created_at > now() - interval '90 days' AND buyer_id IS NOT NULL` },
+  lapsed:     { label: 'Bought once, but not for six months',
+    sql: `SELECT buyer_id AS id FROM orders WHERE seller_id = $1 AND status IN ('paid','fulfilled','delivered','released') AND buyer_id IS NOT NULL
+           GROUP BY buyer_id HAVING MAX(created_at) < now() - interval '180 days'` },
+  followers:  { label: 'People who follow my shop',
+    sql: `SELECT follower_id AS id FROM follows WHERE following_id = $1` },
+  wishlisted: { label: 'People who saved one of my items',
+    sql: `SELECT DISTINCT sp.user_id AS id FROM saved_products sp JOIN products p ON p.id = sp.product_id WHERE p.business_id = $1` },
+};
+const SHOP_AUDIENCE_KEYS = Object.keys(SHOP_AUDIENCES);
+const SHOP_CAMPAIGN_CAP_PER_DAY = 1;
+const SHOP_CAMPAIGN_MAX_RECIPIENTS = 5000;
+
+// The audience, minus anyone who asked this shop to stop, minus anyone blocked
+// either way, minus the shop itself and anyone deactivated.
+function shopAudienceSql(key) {
+  const base = (SHOP_AUDIENCES[key] || SHOP_AUDIENCES.customers).sql;
+  return `SELECT u.id, u.name, u.username, u.email FROM (${base}) a
+            JOIN users u ON u.id = a.id
+           WHERE u.id <> $1 AND u.username IS NOT NULL AND NOT u.deactivated
+             AND NOT EXISTS(SELECT 1 FROM shop_marketing_optout o WHERE o.owner_id = $1 AND o.user_id = u.id)
+             AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id = $1 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = $1))`;
+}
+function mapShopCampaign(c) {
+  return { id: c.id, name: c.name, audience: c.audience, subject: c.subject || '', body: c.body,
+    ctaLabel: c.cta_label || '', productId: c.product_id || null, couponCode: c.coupon_code || null,
+    byBeam: c.by_beam, byEmail: c.by_email, byPush: c.by_push,
+    status: c.status, reached: c.reached, createdAt: c.created_at, sentAt: c.sent_at,
+    ordered: Number(c.ordered || 0), orderedCents: Number(c.ordered_cents || 0) };
+}
+app.get('/api/shop-campaigns', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT c.*,
+              (SELECT COUNT(*)::int FROM shop_campaign_recipients r WHERE r.campaign_id = c.id AND r.ordered_at IS NOT NULL) AS ordered,
+              (SELECT COALESCE(SUM(r.order_cents),0)::bigint FROM shop_campaign_recipients r WHERE r.campaign_id = c.id) AS ordered_cents
+         FROM shop_campaigns c WHERE c.owner_id = $1 ORDER BY c.id DESC LIMIT 60`, [req.user.id]);
+    res.json({ campaigns: rows.map(mapShopCampaign),
+      audiences: SHOP_AUDIENCE_KEYS.map((k) => ({ key: k, label: SHOP_AUDIENCES[k].label })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your campaigns.' }); }
+});
+// How many people that group actually holds, before committing to anything.
+app.get('/api/shop-campaigns/audience', auth.requireAuth, async (req, res) => {
+  const key = SHOP_AUDIENCE_KEYS.includes(req.query.audience) ? req.query.audience : 'customers';
+  try {
+    const r = await db.query(`SELECT COUNT(*)::int AS n FROM (${shopAudienceSql(key)}) x`, [req.user.id]);
+    res.json({ audience: key, count: r.rows[0].n });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not count that group.' }); }
+});
+app.post('/api/shop-campaigns', auth.requireAuth, rateLimit(20, 3600000, 'shopcamp'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const name = String(req.body.name || '').trim().slice(0, 80);
+  const body = String(req.body.body || '').trim().slice(0, 1200);
+  const audience = SHOP_AUDIENCE_KEYS.includes(req.body.audience) ? req.body.audience : 'customers';
+  if (!name) return res.status(400).json({ error: 'Give it a name.' });
+  if (!body) return res.status(400).json({ error: 'Write the message.' });
+  try {
+    // A tagged product must genuinely be theirs, or a campaign becomes a way to
+    // advertise somebody else's listing.
+    let productId = null;
+    if (req.body.productId != null && req.body.productId !== '') {
+      const pid = parseInt(req.body.productId, 10);
+      const own = await db.query('SELECT id FROM products WHERE id = $1 AND business_id = $2 AND active = true', [pid, req.user.id]);
+      if (!own.rows[0]) return res.status(400).json({ error: 'That is not one of your listings.' });
+      productId = pid;
+    }
+    let couponCode = null;
+    if (req.body.couponCode) {
+      const cc = String(req.body.couponCode).trim().toUpperCase().slice(0, 24);
+      const own = await db.query('SELECT code FROM coupons WHERE seller_id = $1 AND lower(code) = lower($2) AND active = true', [req.user.id, cc]);
+      if (!own.rows[0]) return res.status(400).json({ error: 'That discount code is not one of yours.' });
+      couponCode = own.rows[0].code;
+    }
+    const { rows } = await db.query(
+      `INSERT INTO shop_campaigns (owner_id, name, audience, subject, body, cta_label, product_id, coupon_code, by_beam, by_email, by_push)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [req.user.id, name, audience, String(req.body.subject || '').trim().slice(0, 140) || null, body,
+        String(req.body.ctaLabel || '').trim().slice(0, 40) || null, productId, couponCode,
+        req.body.byBeam !== false, req.body.byEmail === true, req.body.byPush === true]);
+    res.status(201).json({ campaign: mapShopCampaign(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+app.delete('/api/shop-campaigns/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rowCount } = await db.query(`DELETE FROM shop_campaigns WHERE id = $1 AND owner_id = $2 AND status = 'draft'`, [id, req.user.id]);
+    if (!rowCount) return res.status(400).json({ error: 'Only a draft can be deleted.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete that.' }); }
+});
+app.post('/api/shop-campaigns/:id/send', auth.requireAuth, rateLimit(5, 3600000, 'shopcamp-send'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    // One a day, per shop. Checked before the claim so the message is honest.
+    const today = await db.query(
+      `SELECT COUNT(*)::int AS n FROM shop_campaigns WHERE owner_id = $1 AND sent_at > now() - interval '24 hours'`, [req.user.id]);
+    if (today.rows[0].n >= SHOP_CAMPAIGN_CAP_PER_DAY) {
+      return res.status(429).json({ error: 'You can send one campaign a day. This keeps people opening them.' });
+    }
+    // Claim first, so two taps cannot send it twice to everybody.
+    const { rows } = await db.query(
+      `UPDATE shop_campaigns SET status = 'sending' WHERE id = $1 AND owner_id = $2 AND status = 'draft' RETURNING *`,
+      [id, req.user.id]);
+    const c = rows[0];
+    if (!c) return res.status(409).json({ error: 'That has already been sent.' });
+    const me = await chatIdentity(req.user.id);
+    const audience = await db.query(`${shopAudienceSql(c.audience)} LIMIT ${SHOP_CAMPAIGN_MAX_RECIPIENTS}`, [req.user.id]);
+    let reached = 0;
+    for (const person of audience.rows) {
+      try {
+        await db.query('INSERT INTO shop_campaign_recipients (campaign_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [c.id, person.id]);
+        if (c.by_beam) {
+          // A server-built card, so nothing in it is forgeable by the client,
+          // and it carries the way out along with the offer.
+          await pushMetaCard(req.user.id, person.id, {
+            t: 'shopcampaign', campaignId: c.id, shop: me ? me.name : null, shopId: req.user.id,
+            subject: c.subject || null, body: c.body, ctaLabel: c.cta_label || null,
+            productId: c.product_id || null, coupon: c.coupon_code || null,
+          });
+          notify(person.id, req.user.id, 'message');
+        }
+        if (c.by_push) sendPushForNotif(person.id, req.user.id, 'shop_campaign').catch(() => {});
+        if (c.by_email && person.email) {
+          mailer.sendMail({ to: person.email, subject: c.subject || (me ? me.name + ' has news' : 'News from a shop you bought from'),
+            html: `<p>${escapeHtml(c.body)}</p><p style="color:#888;font-size:12px">You are getting this because you bought from ${escapeHtml(me ? me.name : 'this shop')} on Atwe. Open the shop in Atwe to stop these.</p>` }).catch(() => {});
+        }
+        reached++;
+      } catch (e) { /* one bad recipient must not stop the rest */ }
+    }
+    await db.query(`UPDATE shop_campaigns SET status='sent', reached=$2, sent_at=now() WHERE id=$1`, [c.id, reached]);
+    res.json({ ok: true, reached });
+  } catch (err) {
+    console.error(err);
+    await db.query(`UPDATE shop_campaigns SET status='draft' WHERE id=$1 AND status='sending'`, [id]).catch(() => {});
+    res.status(500).json({ error: 'Could not send that.' });
+  }
+});
+// The way out, and the way back in.
+app.post('/api/shop-marketing/optout', auth.requireAuth, async (req, res) => {
+  const shopId = parseInt(req.body.shopId, 10);
+  if (!Number.isInteger(shopId)) return res.status(400).json({ error: 'Invalid shop.' });
+  try {
+    if (req.body.on === false) await db.query('DELETE FROM shop_marketing_optout WHERE owner_id = $1 AND user_id = $2', [shopId, req.user.id]);
+    else await db.query('INSERT INTO shop_marketing_optout (owner_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [shopId, req.user.id]);
+    res.json({ ok: true, optedOut: req.body.on !== false });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+app.get('/api/shop-marketing/optout/:shopId', auth.requireAuth, async (req, res) => {
+  const shopId = routeId(req.params.shopId);
+  if (!Number.isInteger(shopId)) return res.status(400).json({ error: 'Invalid shop.' });
+  try {
+    const { rows } = await db.query('SELECT 1 FROM shop_marketing_optout WHERE owner_id = $1 AND user_id = $2', [shopId, req.user.id]);
+    res.json({ optedOut: !!rows[0] });
+  } catch (err) { res.status(500).json({ error: 'Could not check.' }); }
+});
+/* Attribution. Called when an order is paid: if this buyer was sent a campaign
+   by this seller in the last 30 days, that campaign gets the credit. Recorded
+   at the time, because working it out afterwards is guesswork. */
+function creditShopCampaign(sellerId, buyerId, cents) {
+  if (!sellerId || !buyerId || !db.isConfigured()) return;
+  db.query(
+    `UPDATE shop_campaign_recipients r SET ordered_at = now(), order_cents = COALESCE(r.order_cents,0) + $3
+       FROM shop_campaigns c
+      WHERE r.campaign_id = c.id AND c.owner_id = $1 AND r.user_id = $2
+        AND r.ordered_at IS NULL AND c.sent_at > now() - interval '30 days'`,
+    [sellerId, buyerId, Math.max(0, parseInt(cents, 10) || 0)]).catch(() => {});
+}
+
+
+/* ─── Local delivery ───────────────────────────────────────────────────────
+   A shop taking an order to somebody nearby the same day, with their own
+   driver or on their own bike.
+
+   Honest about the boundary: this is NOT a courier network. Summoning a
+   stranger to collect a parcel needs a partner (Uber Direct, Stuart, and the
+   like), an account with them and money changing hands per drop. What IS built
+   is everything a shop needs to run its OWN local runs properly — a zone with
+   a radius and a fee, the option offered at checkout only to buyers actually
+   inside it, and a live "on the way" the buyer can watch. */
+function mapDeliveryZone(z) {
+  return { id: z.id, name: z.name, radiusKm: Number(z.radius_km), feeCents: z.fee_cents,
+    freeOverCents: z.free_over_cents, minOrderCents: z.min_order_cents,
+    etaMinutes: z.eta_minutes, active: z.active };
+}
+app.get('/api/delivery-zones', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT * FROM delivery_zones WHERE owner_id = $1 ORDER BY id', [req.user.id]);
+    res.json({ zones: rows.map(mapDeliveryZone) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load those.' }); }
+});
+app.post('/api/delivery-zones', auth.requireAuth, rateLimit(30, 3600000, 'zone'), async (req, res) => {
+  const name = String(req.body.name || '').trim().slice(0, 60) || 'Local delivery';
+  const radiusKm = Math.max(0.5, Math.min(80, Number(req.body.radiusKm) || 5));
+  const feeCents = Math.max(0, Math.min(50000, parseInt(req.body.feeCents, 10) || 0));
+  const etaMinutes = Math.max(15, Math.min(1440, parseInt(req.body.etaMinutes, 10) || 90));
+  const freeOver = req.body.freeOverCents == null || req.body.freeOverCents === '' ? null
+    : Math.max(0, Math.min(1000000, parseInt(req.body.freeOverCents, 10) || 0));
+  const minOrder = Math.max(0, Math.min(1000000, parseInt(req.body.minOrderCents, 10) || 0));
+  try {
+    // A shop with no location cannot say who is nearby, so say so rather than
+    // quietly offering delivery to the whole world.
+    const u = (await db.query('SELECT lat, lng FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+    if (u.lat == null || u.lng == null) {
+      return res.status(400).json({ error: 'Set your shop’s location on your profile first — otherwise there is no way to tell who is nearby.', needLocation: true });
+    }
+    const { rows } = await db.query(
+      `INSERT INTO delivery_zones (owner_id, name, radius_km, fee_cents, free_over_cents, min_order_cents, eta_minutes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [req.user.id, name, radiusKm, feeCents, freeOver, minOrder, etaMinutes]);
+    res.status(201).json({ zone: mapDeliveryZone(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+app.patch('/api/delivery-zones/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const sets = [], vals = [];
+  const put = (c, v) => { vals.push(v); sets.push(`${c} = $${vals.length}`); };
+  if (typeof req.body.name === 'string') put('name', req.body.name.trim().slice(0, 60));
+  if (req.body.radiusKm != null) put('radius_km', Math.max(0.5, Math.min(80, Number(req.body.radiusKm) || 5)));
+  if (req.body.feeCents != null) put('fee_cents', Math.max(0, Math.min(50000, parseInt(req.body.feeCents, 10) || 0)));
+  if (req.body.etaMinutes != null) put('eta_minutes', Math.max(15, Math.min(1440, parseInt(req.body.etaMinutes, 10) || 90)));
+  if (typeof req.body.active === 'boolean') put('active', req.body.active);
+  if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
+  vals.push(id, req.user.id);
+  try {
+    const { rowCount } = await db.query(
+      `UPDATE delivery_zones SET ${sets.join(', ')} WHERE id = $${vals.length - 1} AND owner_id = $${vals.length}`, vals);
+    if (!rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update that.' }); }
+});
+app.delete('/api/delivery-zones/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    await db.query('DELETE FROM delivery_zones WHERE id = $1 AND owner_id = $2', [id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Could not delete that.' }); }
+});
+/* Is this buyer close enough? Same haversine the business directory already
+   uses — no PostGIS, no map service, just the distance between two points. */
+async function localDeliveryOffer(sellerId, lat, lng, subtotalCents) {
+  if (lat == null || lng == null) return null;
+  const { rows } = await db.query(
+    `SELECT z.*, u.lat AS slat, u.lng AS slng,
+            (6371 * acos(LEAST(1, GREATEST(-1,
+               cos(radians($2)) * cos(radians(u.lat)) * cos(radians(u.lng) - radians($3))
+             + sin(radians($2)) * sin(radians(u.lat)))))) AS km
+       FROM delivery_zones z JOIN users u ON u.id = z.owner_id
+      WHERE z.owner_id = $1 AND z.active = true AND u.lat IS NOT NULL AND u.lng IS NOT NULL
+      ORDER BY z.fee_cents ASC`, [sellerId, Number(lat), Number(lng)]);
+  const zone = rows.find((z) => Number(z.km) <= Number(z.radius_km));
+  if (!zone) return null;
+  const sub = Math.max(0, parseInt(subtotalCents, 10) || 0);
+  if (sub < zone.min_order_cents) {
+    return { available: false, reason: `Local delivery starts at ${(zone.min_order_cents / 100).toFixed(2)}.`, zone: mapDeliveryZone(zone) };
+  }
+  const free = zone.free_over_cents != null && sub >= zone.free_over_cents;
+  return { available: true, zoneId: zone.id, name: zone.name,
+    feeCents: free ? 0 : zone.fee_cents, free, etaMinutes: zone.eta_minutes,
+    distanceKm: Math.round(Number(zone.km) * 10) / 10 };
+}
+// Asked by the checkout sheet once an address is chosen.
+app.post('/api/delivery/check', auth.requireAuth, async (req, res) => {
+  const sellerId = parseInt(req.body.sellerId, 10);
+  if (!Number.isInteger(sellerId)) return res.status(400).json({ error: 'Invalid shop.' });
+  try {
+    let { lat, lng } = req.body;
+    // An address the buyer saved may already carry coordinates; otherwise the
+    // browser can offer its own, with permission.
+    if ((lat == null || lng == null) && req.body.addressId) {
+      const a = (await db.query('SELECT lat, lng FROM addresses WHERE id = $1 AND user_id = $2',
+        [routeId(req.body.addressId), req.user.id])).rows[0];
+      if (a) { lat = a.lat; lng = a.lng; }
+    }
+    if (lat == null || lng == null) return res.json({ offer: null, needLocation: true });
+    res.json({ offer: await localDeliveryOffer(sellerId, lat, lng, req.body.subtotalCents) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not check.' }); }
+});
+/* The run itself: the shop's own record of taking it round. */
+const RUN_STATUSES = ['waiting', 'picked_up', 'on_the_way', 'delivered', 'failed'];
+function mapRun(r) {
+  return { id: r.id, orderId: r.order_id, status: r.status, etaAt: r.eta_at,
+    lat: r.lat == null ? null : Number(r.lat), lng: r.lng == null ? null : Number(r.lng),
+    note: r.note || null, driverId: r.driver_id, createdAt: r.created_at, deliveredAt: r.delivered_at };
+}
+app.get('/api/delivery-runs', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT r.*, o.buyer_id, u.name AS buyer_name, o.ship_name, o.ship_line1, o.ship_city, o.ship_postal
+         FROM delivery_runs r JOIN orders o ON o.id = r.order_id
+         LEFT JOIN users u ON u.id = o.buyer_id
+        WHERE r.owner_id = $1 AND r.status <> 'delivered' ORDER BY r.created_at LIMIT 100`, [req.user.id]);
+    res.json({ runs: rows.map((r) => ({ ...mapRun(r), buyerName: r.buyer_name,
+      shipTo: [r.ship_name, r.ship_line1, r.ship_city, r.ship_postal].filter(Boolean).join(', ') })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load those.' }); }
+});
+app.post('/api/orders/:id/delivery', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const status = RUN_STATUSES.includes(req.body.status) ? req.body.status : null;
+  if (!status) return res.status(400).json({ error: 'Invalid status.' });
+  try {
+    const o = (await db.query('SELECT seller_id, buyer_id FROM orders WHERE id = $1', [id])).rows[0];
+    if (!o) return res.status(404).json({ error: 'Order not found.' });
+    if (!(await canActAs(req.user.id, o.seller_id, 'orders'))) return res.status(403).json({ error: 'Not your order.' });
+    const eta = status === 'on_the_way' && req.body.etaMinutes
+      ? new Date(Date.now() + Math.max(1, Math.min(1440, parseInt(req.body.etaMinutes, 10))) * 60000) : null;
+    const { rows } = await db.query(
+      `INSERT INTO delivery_runs (order_id, owner_id, driver_id, status, eta_at, note)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (order_id) DO UPDATE SET status = EXCLUDED.status,
+         eta_at = COALESCE(EXCLUDED.eta_at, delivery_runs.eta_at),
+         note = COALESCE(EXCLUDED.note, delivery_runs.note),
+         driver_id = COALESCE(EXCLUDED.driver_id, delivery_runs.driver_id),
+         delivered_at = CASE WHEN EXCLUDED.status = 'delivered' THEN now() ELSE delivery_runs.delivered_at END
+       RETURNING *`,
+      [id, o.seller_id, req.user.id, status, eta, String(req.body.note || '').trim().slice(0, 200) || null]);
+    // The buyer watches this happen rather than wondering.
+    if (o.buyer_id) {
+      rtPush(o.buyer_id, 'order', { type: 'delivery', orderId: id, status, etaAt: rows[0].eta_at });
+      if (status === 'on_the_way') notify(o.buyer_id, req.user.id, 'delivery_on_way');
+    }
+    // Arriving IS delivery — reuse the one helper so notify/push/email/SSE can
+    // never drift between a courier and a van and somebody's own bike.
+    if (status === 'delivered') await markOrderDelivered(id, req.user.id).catch(() => {});
+    res.json({ run: mapRun(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update that.' }); }
+});
+app.get('/api/orders/:id/delivery', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rows } = await db.query(
+      `SELECT r.* FROM delivery_runs r JOIN orders o ON o.id = r.order_id
+        WHERE r.order_id = $1 AND (o.buyer_id = $2 OR o.seller_id = $2)`, [id, req.user.id]);
+    res.json({ run: rows[0] ? mapRun(rows[0]) : null });
+  } catch (err) { res.status(500).json({ error: 'Could not load that.' }); }
+});
+
+/* ─── Tidying up a listing photo ───────────────────────────────────────────
+   A phone photo on a kitchen table sells less than the same thing on a clean
+   background. This asks the picture service to redraw it properly, keeping the
+   item and replacing everything around it.
+
+   It reuses the image generator from batch 39 rather than inventing a second
+   integration, and it is honest when there is no provider: it says so instead
+   of silently doing nothing. */
+const PHOTO_STYLES = {
+  clean:   { label: 'Clean white background', prompt: 'the same product, centred on a plain seamless white studio background, soft even lighting, sharp focus, no props, no text, e-commerce product photography' },
+  wood:    { label: 'On a wooden surface',    prompt: 'the same product on a warm wooden surface, natural window light, shallow depth of field, no text' },
+  marble:  { label: 'On marble',              prompt: 'the same product on a pale marble surface, soft daylight, minimal styling, no text' },
+  outdoor: { label: 'Natural daylight',       prompt: 'the same product photographed outdoors in soft natural daylight, blurred neutral background, no text' },
+  lifestyle:{ label: 'In a real setting',     prompt: 'the same product in a tasteful real-world setting appropriate to what it is, natural light, uncluttered, no text' },
+};
+const PHOTO_STYLE_KEYS = Object.keys(PHOTO_STYLES);
+app.get('/api/ai/photo-styles', auth.requireAuth, (_req, res) => {
+  res.json({ styles: PHOTO_STYLE_KEYS.map((k) => ({ key: k, label: PHOTO_STYLES[k].label })),
+    enabled: imagegen.isConfigured() && !!process.env.ANTHROPIC_API_KEY });
+});
+app.post('/api/ai/product-photo', auth.requireAuth, rateLimit(20, 3600000, 'ai-photo'), requireFeature('ai'), async (req, res) => {
+  if (!imagegen.isConfigured()) return res.status(503).json({ error: 'Tidying up photos is not set up on this server yet.' });
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not set up on this server.' });
+  const style = PHOTO_STYLE_KEYS.includes(req.body.style) ? req.body.style : 'clean';
+  const image = cleanImage(req.body.image);
+  if (!image) return res.status(400).json({ error: 'Send a photo to tidy up.' });
+  try {
+    // The picture service draws from words, not from a photo, so first look at
+    // the photo and describe exactly what is in it. Describing it accurately is
+    // the whole difference between "your product, tidied" and "something else".
+    const look = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 300,
+      system: aiPrompt('photo-describe',
+        'Describe ONLY the product in this photo, for someone who will draw it from your words: what it is, its exact colours, materials, shape, any writing on it, and how it is turned. '
+        + 'One paragraph, no more than 70 words. Do not describe the background, the surface, the lighting or anything else in the picture. No preamble.'),
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: (image.match(/^data:([^;]+);/) || [])[1] || 'image/jpeg',
+          data: image.slice(image.indexOf(';base64,') + 8) } },
+        { type: 'text', text: 'Describe the product.' },
+      ] }],
+    });
+    const desc = ((look.content.find((b) => b.type === 'text') || {}).text || '').trim();
+    if (!desc) return res.status(502).json({ error: 'Could not make out what is in that photo.' });
+    const out = await imagegen.generate(desc + '. Photographed: ' + PHOTO_STYLES[style].prompt + '.', { size: req.body.size });
+    if (out.error) return res.status(502).json({ error: out.error });
+    const url = await offloadMedia(out.dataUrl, 'product');
+    // The description is returned too, so the seller can see what it understood
+    // — if it got the product wrong, that is visible rather than mysterious.
+    res.json({ image: url, understood: desc, style });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not tidy up that photo.' }); }
+});
+
+
+/* ─── Two people in the same document ──────────────────────────────────────
+   Group Cloud notes and sheets already save — but last-write-wins, so if two
+   people had one open at the same time, whoever pressed save last silently
+   erased the other's work. That is the bug this fixes.
+
+   Deliberately NOT a full character-by-character merge (an operational
+   transform, or a CRDT). That is a large piece of machinery and it would be the
+   wrong trade here. What this does instead is the honest, simple thing:
+     · every save carries the version it was based on,
+     · a save based on a stale version is REFUSED rather than silently winning,
+     · the person is shown that somebody else got there first, and offered the
+       newer copy,
+     · and while a document is open, everyone in it can see who else is there
+       and where they are typing, so the collision usually never happens.
+
+   Refusing to lose work beats pretending to merge it. */
+const docPresence = new Map();   // nodeId -> Map<userId, {name, at, field}>
+const DOC_PRESENCE_MS = 25000;
+
+function docPeople(nodeId) {
+  const m = docPresence.get(nodeId);
+  if (!m) return [];
+  const now = Date.now();
+  for (const [uid, v] of m) if (now - v.at > DOC_PRESENCE_MS) m.delete(uid);
+  if (!m.size) docPresence.delete(nodeId);
+  return [...m.entries()].map(([id, v]) => ({ id, name: v.name, field: v.field || null }));
+}
+async function pushDocPresence(groupId, nodeId, exceptId) {
+  const people = docPeople(nodeId);
+  try {
+    for (const uid of await groupMemberIds(groupId, exceptId)) {
+      rtPush(uid, 'cloud', { kind: 'doc-presence', groupId, nodeId, people });
+    }
+  } catch (e) {}
+}
+// "I am in this document, here." Called every few seconds while it is open.
+app.post('/api/atchat/groups/:id/cloud/:nid/here', auth.requireAuth, rateLimit(120, 60000, 'doc-here'), async (req, res) => {
+  const gid = routeId(req.params.id), nid = routeId(req.params.nid);
+  if (!Number.isInteger(gid) || !Number.isInteger(nid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+    if (req.body.leaving === true) {
+      const m = docPresence.get(nid); if (m) m.delete(req.user.id);
+    } else {
+      const me = await chatIdentity(req.user.id);
+      let m = docPresence.get(nid);
+      if (!m) { m = new Map(); docPresence.set(nid, m); }
+      m.set(req.user.id, { name: me ? me.name : 'Someone', at: Date.now(),
+        field: String(req.body.field || '').slice(0, 40) || null });
+    }
+    await pushDocPresence(gid, nid, req.user.id);
+    const cur = (await db.query('SELECT version FROM group_cloud WHERE id = $1 AND group_id = $2', [nid, gid])).rows[0];
+    res.json({ people: docPeople(nid), version: cur ? cur.version : null });
+  } catch (err) { res.status(500).json({ error: 'Could not do that.' }); }
+});
+setInterval(() => {
+  for (const [nid] of docPresence) docPeople(nid);   // prunes as it goes
+}, 60000).unref?.();
+
+
+/* ─── Camera looks ─────────────────────────────────────────────────────────
+   Filters and templates for a reel or a story. The filter itself is done in the
+   browser — a CSS filter on the video element, then baked into the recording —
+   because sending video here to have a colour curve applied would be absurd.
+
+   What the server holds is the LIST (so a new look appears everywhere at once
+   without an app update) and which one somebody used last. */
+const CAMERA_LOOKS = [
+  { id: 'none',     label: 'None',      css: 'none' },
+  { id: 'warm',     label: 'Warm',      css: 'saturate(1.15) sepia(.18) contrast(1.04)' },
+  { id: 'cool',     label: 'Cool',      css: 'saturate(1.1) hue-rotate(-10deg) brightness(1.03)' },
+  { id: 'mono',     label: 'Mono',      css: 'grayscale(1) contrast(1.1)' },
+  { id: 'film',     label: 'Film',      css: 'sepia(.32) contrast(1.12) saturate(.9)' },
+  { id: 'vivid',    label: 'Vivid',     css: 'saturate(1.5) contrast(1.08)' },
+  { id: 'faded',    label: 'Faded',     css: 'saturate(.75) brightness(1.08) contrast(.92)' },
+  { id: 'noir',     label: 'Noir',      css: 'grayscale(1) contrast(1.45) brightness(.92)' },
+  { id: 'sunset',   label: 'Sunset',    css: 'sepia(.28) saturate(1.35) hue-rotate(-14deg)' },
+  { id: 'bright',   label: 'Bright',    css: 'brightness(1.14) saturate(1.1)' },
+];
+/* A template is a starting point, not a filter: the shape of a video somebody
+   who has never made one would otherwise stare at a blank camera trying to
+   invent. Each is a few timed prompts. */
+const CAMERA_TEMPLATES = [
+  { id: 'product', label: 'Show a product', beats: [
+    { at: 0, say: 'Hold it up — what is it?' },
+    { at: 4, say: 'Show the detail people ask about' },
+    { at: 9, say: 'Say the price and where to get it' }] },
+  { id: 'before', label: 'Before and after', beats: [
+    { at: 0, say: 'Film the before' },
+    { at: 5, say: 'Cut to the after' },
+    { at: 10, say: 'Say how long it took' }] },
+  { id: 'day', label: 'A day at work', beats: [
+    { at: 0, say: 'Where you start' },
+    { at: 5, say: 'The bit people never see' },
+    { at: 11, say: 'How it ends' }] },
+  { id: 'howto', label: 'How to', beats: [
+    { at: 0, say: 'What you will show them' },
+    { at: 4, say: 'Step one' },
+    { at: 9, say: 'Step two' },
+    { at: 14, say: 'The result' }] },
+  { id: 'meet', label: 'Introduce yourself', beats: [
+    { at: 0, say: 'Your name and what you do' },
+    { at: 5, say: 'Who you do it for' },
+    { at: 10, say: 'How to reach you' }] },
+];
+app.get('/api/camera', auth.requireAuth, async (req, res) => {
+  try {
+    const r = (await db.query('SELECT camera_prefs FROM users WHERE id = $1', [req.user.id])).rows[0];
+    const p = (r && r.camera_prefs) || {};
+    res.json({ looks: CAMERA_LOOKS, templates: CAMERA_TEMPLATES,
+      prefs: { look: typeof p.look === 'string' ? p.look : 'none', template: p.template || null } });
+  } catch (err) { res.status(500).json({ error: 'Could not load that.' }); }
+});
+app.put('/api/camera', auth.requireAuth, async (req, res) => {
+  const look = CAMERA_LOOKS.some((l) => l.id === req.body.look) ? req.body.look : 'none';
+  const template = CAMERA_TEMPLATES.some((t) => t.id === req.body.template) ? req.body.template : null;
+  try {
+    await db.query('UPDATE users SET camera_prefs = $2 WHERE id = $1', [req.user.id, JSON.stringify({ look, template })]);
+    res.json({ ok: true, prefs: { look, template } });
+  } catch (err) { res.status(500).json({ error: 'Could not save that.' }); }
+});
+
+
+/* ─── Webinars, from the outside (admin) ──────────────────────────────────
+   Somebody scheduling a broadcast has made a promise to an audience who have
+   put it in their diary. That is worth being able to see — and to stop, if it
+   turns out to be something it should not be. */
+app.get('/api/admin/webinars', auth.requirePerm('moderation'), async (_req, res) => {
+  try {
+    const totals = (await db.query(
+      `SELECT COUNT(*) FILTER (WHERE status = 'scheduled')::int AS scheduled,
+              COUNT(*) FILTER (WHERE status = 'live')::int AS live,
+              (SELECT COUNT(*)::int FROM webinar_signups) AS signups,
+              (SELECT COALESCE(SUM(w.price_cents),0)::bigint FROM webinar_signups s JOIN webinars w ON w.id = s.webinar_id WHERE s.paid) AS paid_cents
+         FROM webinars`)).rows[0];
+    const { rows } = await db.query(
+      `SELECT w.id, w.title, w.starts_at, w.status, w.price_cents, u.username AS host_username,
+              (SELECT COUNT(*)::int FROM webinar_signups s WHERE s.webinar_id = w.id) AS signups
+         FROM webinars w JOIN users u ON u.id = w.host_id
+        ORDER BY w.starts_at DESC LIMIT 60`);
+    res.json({ scheduled: totals.scheduled, live: totals.live, signups: totals.signups,
+      paidCents: Number(totals.paid_cents || 0),
+      webinars: rows.map((w) => ({ id: w.id, title: w.title, startsAt: w.starts_at, status: w.status,
+        priceCents: w.price_cents, hostUsername: w.host_username, signups: w.signups })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load those.' }); }
+});
+app.post('/api/admin/webinars/:id/cancel', auth.requirePerm('moderation'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const w = (await db.query(`UPDATE webinars SET status='cancelled' WHERE id=$1 RETURNING host_id, stream_id, title`, [id])).rows[0];
+    if (!w) return res.status(404).json({ error: 'Not found.' });
+    // If it is on air right now, take it off air too — cancelling a live
+    // broadcast has to actually stop it, not just change a word in a table.
+    const st = w.stream_id ? liveStreams.get(w.stream_id) : null;
+    if (st) await endLiveStream(st);
+    const who = await db.query('SELECT user_id FROM webinar_signups WHERE webinar_id = $1', [id]);
+    for (const r of who.rows) notify(r.user_id, req.user.id, 'webinar_cancelled');
+    adminAudit(req, 'webinar.cancel', 'webinar', id, { title: w.title });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel it.' }); }
+});
 
 /* ═══════════════════════════════════════════════
    BATCH 39 (part 2) — the broadcast console, talking out loud, and
@@ -15388,6 +16408,9 @@ function mapFeedPost(r) {
   return {
     id: r.id, kind: r.kind, text: r.text || null, bg: r.bg || null,
     media: mediaRef(r.media, 'feed-media', r.id), created_at: r.created_at, expiresAt: r.expires_at || null,
+    // How long it runs and which way round it is, so the player can size itself
+    // before a byte of the film has been fetched.
+    durationSec: r.duration_sec || null, aspect: r.aspect || null,
     mine: !!r.mine, products: tagProductsFrom(r),
     likes: r.likes || 0, dislikes: r.dislikes || 0, comments: r.comment_count || 0,
     myVote: r.my_vote || 0, saved: !!r.my_saved, iFollow: !!r.i_follow,
@@ -15421,8 +16444,11 @@ app.post('/api/feedposts', auth.requireAuth, blockLimited, rateLimit(30, 60000, 
       if (bg && !FEED_BG_RE.test(bg)) return res.status(400).json({ error: 'Invalid background colour.' });
       expiresAt = new Date(Date.now() + 24 * 3600 * 1000); // text statuses last 24h
     } else if (kind === 'photo' || kind === 'video') {
-      const ok = kind === 'photo' ? /^data:image\//.test(media || '') : /^data:video\//.test(media || '');
-      if (!ok) return res.status(400).json({ error: 'Please choose a ' + kind + ' to share.' });
+      // Either the bytes inline (small files, the old path) or a URL in our own
+      // bucket (big files, uploaded straight there). Anything else is refused.
+      const inline = kind === 'photo' ? /^data:image\//.test(media || '') : /^data:video\//.test(media || '');
+      const uploaded = cleanMediaUrl(media) !== undefined;
+      if (!inline && !uploaded) return res.status(400).json({ error: 'Please choose a ' + kind + ' to share.' });
     } else {
       return res.status(400).json({ error: 'Unsupported feed type.' });
     }
@@ -15443,9 +16469,10 @@ app.post('/api/feedposts', auth.requireAuth, blockLimited, rateLimit(30, 60000, 
       remixOf = srcId;
     }
     const { rows } = await db.query(
-      `INSERT INTO feed_posts (user_id, kind, text, bg, media, expires_at, remix_of)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      [req.user.id, kind, text.trim() || null, kind === 'text' ? (bg || null) : null, kind === 'text' ? null : media, expiresAt, remixOf]
+      `INSERT INTO feed_posts (user_id, kind, text, bg, media, expires_at, remix_of, duration_sec, aspect)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [req.user.id, kind, text.trim() || null, kind === 'text' ? (bg || null) : null, kind === 'text' ? null : media, expiresAt, remixOf,
+        cleanDuration(req.body.durationSec), cleanAspect(req.body.aspect)]
     );
     // Tell the original creator (never yourself).
     if (remixOf) {
@@ -24833,7 +25860,8 @@ app.post('/api/offers/:id/checkout', auth.requireAuth, blockImpersonation, rateL
     const items = [{ product_id: o.product_id, qty: 1, name: p.name, price_cents: unitPrice, kind: p.kind, stock: p.stock, ship_free: p.ship_free, ship_fee_cents: p.ship_fee_cents, pickup: p.pickup, pickup_location: p.pickup_location, variant_id: null, variant_label: null }];
     const ship = await resolveShipping(req.user.id, req.body, items, { sellerId: p.business_id, subtotalCents: unitPrice });
     if (!ship.ok) return res.status(400).json({ error: ship.error, needAddress: !!ship.needAddress });
-    const rt = await applyRatesAndTax(req.body, ship, items, unitPrice);
+    const rt = await applyRatesAndTax(req.body, ship, items, unitPrice, p.business_id);
+    if (rt.error) return res.status(400).json({ error: rt.error });
     const total = unitPrice + rt.shippingCents + rt.taxCents;
     // Atomically claim the offer to a transient 'paying' state before building the
     // order, so two concurrent checkouts can't both create an order for one offer.
@@ -26736,6 +27764,11 @@ app.get('/api/addresses', auth.requireAuth, async (req, res) => {
     res.json({ addresses: rows.map(mapAddress) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your addresses.' }); }
 });
+// A coordinate we are willing to store. Out of range means "not given".
+function _addrCoord(v, max) {
+  const n = Number(v);
+  return Number.isFinite(n) && Math.abs(n) <= max ? n : null;
+}
 app.post('/api/addresses', auth.requireAuth, rateLimit(30, 60000, 'addr-add'), async (req, res) => {
   const a = readAddress(req.body);
   if (!a.ok) return res.status(400).json({ error: a.error });
@@ -26745,10 +27778,11 @@ app.post('/api/addresses', auth.requireAuth, rateLimit(30, 60000, 'addr-add'), a
     const makeDefault = req.body.isDefault === true || cnt === 0; // first address is the default
     if (makeDefault) await db.query('UPDATE addresses SET is_default = false WHERE user_id = $1', [req.user.id]);
     const v = a.value;
+    const lat = _addrCoord(req.body.lat, 90), lng = _addrCoord(req.body.lng, 180);
     const { rows } = await db.query(
-      `INSERT INTO addresses (user_id, full_name, phone, line1, line2, city, region, postal, country, is_default)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [req.user.id, v.fullName, v.phone, v.line1, v.line2, v.city, v.region, v.postal, v.country, makeDefault]
+      `INSERT INTO addresses (user_id, full_name, phone, line1, line2, city, region, postal, country, is_default, lat, lng)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      [req.user.id, v.fullName, v.phone, v.line1, v.line2, v.city, v.region, v.postal, v.country, makeDefault, lat, lng]
     );
     res.status(201).json({ address: mapAddress(rows[0]) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the address.' }); }
@@ -26760,10 +27794,12 @@ app.patch('/api/addresses/:id', auth.requireAuth, async (req, res) => {
   if (!a.ok) return res.status(400).json({ error: a.error });
   try {
     const v = a.value;
+    const lat = _addrCoord(req.body.lat, 90), lng = _addrCoord(req.body.lng, 180);
     const r = await db.query(
-      `UPDATE addresses SET full_name=$1, phone=$2, line1=$3, line2=$4, city=$5, region=$6, postal=$7, country=$8
+      `UPDATE addresses SET full_name=$1, phone=$2, line1=$3, line2=$4, city=$5, region=$6, postal=$7, country=$8,
+              lat = COALESCE($11, lat), lng = COALESCE($12, lng)
        WHERE id=$9 AND user_id=$10 RETURNING *`,
-      [v.fullName, v.phone, v.line1, v.line2, v.city, v.region, v.postal, v.country, id, req.user.id]
+      [v.fullName, v.phone, v.line1, v.line2, v.city, v.region, v.postal, v.country, id, req.user.id, lat, lng]
     );
     if (!r.rowCount) return res.status(404).json({ error: 'Address not found.' });
     if (req.body.isDefault === true) {
@@ -27487,14 +28523,16 @@ async function resolveShipping(userId, body, items, opts) {
     if (!v.ok) return { ok: false, error: v.error, needAddress: true };
     if (body.saveAddress) {
       try {
-        await db.query(`INSERT INTO addresses (user_id, full_name, phone, line1, line2, city, region, postal, country, is_default)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, (SELECT COUNT(*) = 0 FROM addresses WHERE user_id = $1))`,
-          [userId, v.value.fullName, v.value.phone, v.value.line1, v.value.line2, v.value.city, v.value.region, v.value.postal, v.value.country]);
+        await db.query(`INSERT INTO addresses (user_id, full_name, phone, line1, line2, city, region, postal, country, is_default, lat, lng)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, (SELECT COUNT(*) = 0 FROM addresses WHERE user_id = $1), $10, $11)`,
+          [userId, v.value.fullName, v.value.phone, v.value.line1, v.value.line2, v.value.city, v.value.region, v.value.postal, v.value.country,
+            _addrCoord(body.shipAddress.lat, 90), _addrCoord(body.shipAddress.lng, 180)]);
       } catch (e) { /* saving is best-effort; the order still ships to the entered address */ }
     }
     const zn = await zoneApply(v.value.country);
     if (!zn.ok) return { ok: false, error: zn.error, noZone: true };
-    return { ok: true, needsShipping: true, shippingCents: zn.shippingCents, addr: { full_name: v.value.fullName, phone: v.value.phone, line1: v.value.line1, line2: v.value.line2, city: v.value.city, region: v.value.region, postal: v.value.postal, country: v.value.country } };
+    return { ok: true, needsShipping: true, shippingCents: zn.shippingCents, addr: { full_name: v.value.fullName, phone: v.value.phone, line1: v.value.line1, line2: v.value.line2, city: v.value.city, region: v.value.region, postal: v.value.postal, country: v.value.country,
+      lat: _addrCoord(body.shipAddress.lat, 90), lng: _addrCoord(body.shipAddress.lng, 180) } };
   }
   return { ok: false, error: 'A shipping address is required for physical items.', needAddress: true };
 }
@@ -27601,23 +28639,35 @@ async function buyerIsBusiness(userId) {
   catch { return false; }
 }
 // Insert a pending order with its ship-to snapshot (immutable history the seller ships against).
-async function insertOrder({ buyerId, sellerId, total, note, shippingCents, taxCents, needsShipping, addr, discountCents, couponCode, pickup, pickupLocation, affiliateId, commissionCents, gift, giftNote, eta }) {
+async function insertOrder({ buyerId, sellerId, total, note, shippingCents, taxCents, needsShipping, addr, discountCents, couponCode, pickup, pickupLocation, affiliateId, commissionCents, gift, giftNote, eta, localDelivery, deliveryZoneId }) {
   const a = addr || {};
   const { rows } = await db.query(
-    `INSERT INTO orders (buyer_id, seller_id, total_cents, note, shipping_cents, tax_cents, discount_cents, coupon_code, needs_shipping, pickup, pickup_location, affiliate_id, commission_cents, ship_name, ship_phone, ship_line1, ship_line2, ship_city, ship_region, ship_postal, ship_country, gift, gift_note, eta_min_at, eta_max_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25) RETURNING id`,
+    `INSERT INTO orders (buyer_id, seller_id, total_cents, note, shipping_cents, tax_cents, discount_cents, coupon_code, needs_shipping, pickup, pickup_location, affiliate_id, commission_cents, ship_name, ship_phone, ship_line1, ship_line2, ship_city, ship_region, ship_postal, ship_country, gift, gift_note, eta_min_at, eta_max_at, local_delivery, delivery_zone_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27) RETURNING id`,
     [buyerId, sellerId, total, note || null, shippingCents || 0, taxCents || 0, discountCents || 0, couponCode || null, !!needsShipping, !!pickup, pickupLocation || null, affiliateId || null, commissionCents || 0, a.full_name || null, a.phone || null, a.line1 || null, a.line2 || null, a.city || null, a.region || null, a.postal || null, a.country || null, gift === true, (giftNote || '').toString().trim().slice(0, 300) || null,
-      (eta && eta.minAt) || null, (eta && eta.maxAt) || null]
+      (eta && eta.minAt) || null, (eta && eta.maxAt) || null, localDelivery === true, deliveryZoneId || null]
   );
   return rows[0].id;
 }
 // Resolve the carrier shipping amount (selectable when rates are configured; else the
 // seller flat fee) + sales tax for an order. Degrades to today's behavior (flat
 // shipping, zero tax) when nothing is configured. `taxableCents` = subtotal − discount.
-async function applyRatesAndTax(body, ship, items, taxableCents) {
+async function applyRatesAndTax(body, ship, items, taxableCents, sellerId) {
   const a = ship.addr || {};
   let shippingCents = ship.shippingCents || 0;
   let chosenRate = null;
+  // The shop driving it round itself replaces posting it, so neither a carrier
+  // rate nor the flat shipping fee applies — the zone's own fee does.
+  if (body.localDelivery === true && sellerId && ship.needsShipping) {
+    const offer = await localDeliveryOffer(sellerId, a.lat, a.lng, taxableCents).catch(() => null);
+    if (!offer || !offer.available) {
+      return { error: (offer && offer.reason) || 'That address is not in this shop’s delivery area.' };
+    }
+    let taxLocal = 0;
+    try { taxLocal = (await shiptax.estimateTax({ country: a.country, region: a.region, postal: a.postal, taxableCents })).taxCents; } catch (e) { taxLocal = 0; }
+    return { shippingCents: offer.feeCents, taxCents: taxLocal, chosenRate: null,
+      localDelivery: true, deliveryZoneId: offer.zoneId, etaMinutes: offer.etaMinutes };
+  }
   if (ship.needsShipping && shiptax.ratesConfigured()) {
     try {
       const q = await shiptax.quoteRates({ country: a.country, region: a.region, postal: a.postal, items, flatCents: ship.shippingCents });
@@ -27642,6 +28692,7 @@ function mapOrder(o, items, me) {
     cancelReason: o.cancel_reason ? (ORDER_CANCEL_LABELS[o.cancel_reason] || null) : null, cancelNote: o.cancel_note || null, cancelledByMe: o.cancelled_by != null && o.cancelled_by === me,
     archived: o.seller_id === me ? !!o.seller_archived : !!o.buyer_archived,
     mine: o.seller_id === me, // I'm the seller (vs the buyer)
+    localDelivery: !!o.local_delivery,
     escrow: !!o.escrow, autoReleaseAt: o.auto_release_at || null, releasedAt: o.released_at || null,
     disputeReason: o.dispute_reason || null, disputedByMe: o.disputed_by === me,
     // Shipping: the ship-to snapshot is visible to BOTH parties (the seller must see it
@@ -27664,7 +28715,7 @@ const ORDER_SELECT = `SELECT o.id, o.buyer_id, o.seller_id, o.total_cents, o.sta
   o.escrow, o.auto_release_at, o.released_at, o.dispute_reason, o.disputed_by,
   o.discount_cents, o.coupon_code, o.gift, o.gift_note,
   o.shipping_cents, o.tax_cents, o.needs_shipping, o.pickup, o.pickup_location, o.ship_name, o.ship_phone, o.ship_line1, o.ship_line2, o.ship_city, o.ship_region, o.ship_postal, o.ship_country,
-  o.carrier, o.tracking, o.shipped_at, o.delivered_at, o.label_url, o.label_cost_cents, o.ship_note,
+  o.carrier, o.tracking, o.shipped_at, o.delivered_at, o.label_url, o.label_cost_cents, o.ship_note, o.local_delivery,
   bu.name AS buyer_name, bu.username AS buyer_username, bu.avatar AS buyer_avatar,
   su.name AS seller_name, su.username AS seller_username, su.avatar AS seller_avatar
   FROM orders o JOIN users bu ON bu.id = o.buyer_id JOIN users su ON su.id = o.seller_id`;
@@ -27676,6 +28727,7 @@ async function recordOrderPaid(orderId, sellerCredited) {
   // Clear the bought items from the buyer's cart (products belonging to this seller).
   await db.query('DELETE FROM cart_items WHERE user_id = $1 AND product_id IN (SELECT id FROM products WHERE business_id = $2)', [o.buyer_id, o.seller_id]).catch(() => {});
   markCartRecovered(o.seller_id, o.buyer_id);
+  creditShopCampaign(o.seller_id, o.buyer_id, o.total_cents);
   // Tell the seller's own systems. Queued, never awaited — their server being
   // slow (or down) must not hold up an order that has already been paid for.
   emitWebhook(o.seller_id, 'order.created', { orderId, totalCents: o.total_cents, buyerId: o.buyer_id });
@@ -27885,6 +28937,7 @@ async function fundEscrowOrder(buyerId, sellerId, orderId, totalCents) {
   }
   await db.query('DELETE FROM cart_items WHERE user_id = $1 AND product_id IN (SELECT id FROM products WHERE business_id = $2)', [buyerId, sellerId]).catch(() => {});
   markCartRecovered(sellerId, buyerId);
+  creditShopCampaign(sellerId, buyerId, totalCents);
   try {
     if (await dmAllowed(buyerId, sellerId)) {
       const meta = { t: 'order', id: orderId, totalCents, escrow: true };
@@ -28488,11 +29541,15 @@ app.post('/api/orders', auth.requireAuth, blockImpersonation, rateLimit(20, 6000
       if (!couponClaimId) return res.status(400).json({ error: 'You’ve already used this code.', couponError: true });
     }
     const taxable = subtotal - (cp.discountCents || 0);
-    const rt = await applyRatesAndTax(req.body, ship, items, taxable);
+    const rt = await applyRatesAndTax(req.body, ship, items, taxable, sellerId);
+    if (rt.error) { if (couponClaimId) await releaseCouponClaim(couponClaimId).catch(() => {}); return res.status(400).json({ error: rt.error }); }
     const total = taxable + rt.shippingCents + rt.taxCents;
     const note = (req.body.note || '').toString().trim().slice(0, 500) || null;
-    const eta = ship.needsShipping ? await etaForProducts(cart.rows.map((r) => r.product_id), transitFromRate(rt.chosenRate)) : null;
-    const orderId = await insertOrder({ buyerId: req.user.id, sellerId, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null, gift: req.body.gift === true, giftNote: req.body.giftNote, eta });
+    // A local drop-off has its own promise (an hour or two), not a carrier's.
+    const eta = rt.localDelivery
+      ? { minAt: new Date(Date.now() + rt.etaMinutes * 60000), maxAt: new Date(Date.now() + rt.etaMinutes * 60000) }
+      : (ship.needsShipping ? await etaForProducts(cart.rows.map((r) => r.product_id), transitFromRate(rt.chosenRate)) : null);
+    const orderId = await insertOrder({ buyerId: req.user.id, sellerId, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null, gift: req.body.gift === true, giftNote: req.body.giftNote, eta, localDelivery: rt.localDelivery, deliveryZoneId: rt.deliveryZoneId });
     await attachCouponClaim(couponClaimId, orderId);
     for (const r of items) {
       await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty, variant_id, variant_label) VALUES ($1,$2,$3,$4,$5,$6,$7)', [orderId, r.product_id, r.name, r.price_cents, r.qty, r.variant_id, r.variant_label]);
@@ -28579,14 +29636,17 @@ app.post('/api/orders/buy', auth.requireAuth, blockImpersonation, rateLimit(20, 
       return res.status(400).json({ error: 'You’ve already used this code.', couponError: true });
     }
     const taxable = subtotal - (cp.discountCents || 0);
-    const rt = await applyRatesAndTax(req.body, ship, items, taxable);
+    const rt = await applyRatesAndTax(req.body, ship, items, taxable, p.business_id);
+    if (rt.error) { if (couponClaimId) await releaseCouponClaim(couponClaimId).catch(() => {}); return res.status(400).json({ error: rt.error }); }
     const total = taxable + rt.shippingCents + rt.taxCents;
     const note = (req.body.note || '').toString().trim().slice(0, 500) || null;
     // Affiliate attribution: a purchase through someone's product link pays them a %.
     const affiliateId = await resolveAffiliate(req.body.affCode, productId, req.user.id, p.business_id);
     const commissionCents = affiliateId ? Math.round(subtotal * AFFILIATE_RATE_PCT / 100) : 0;
-    const eta = ship.needsShipping ? await etaForProducts([productId], transitFromRate(rt.chosenRate)) : null;
-    const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null, affiliateId, commissionCents, gift: req.body.gift === true, giftNote: req.body.giftNote, eta });
+    const eta = rt.localDelivery
+      ? { minAt: new Date(Date.now() + rt.etaMinutes * 60000), maxAt: new Date(Date.now() + rt.etaMinutes * 60000) }
+      : (ship.needsShipping ? await etaForProducts([productId], transitFromRate(rt.chosenRate)) : null);
+    const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null, affiliateId, commissionCents, gift: req.body.gift === true, giftNote: req.body.giftNote, eta, localDelivery: rt.localDelivery, deliveryZoneId: rt.deliveryZoneId });
     await attachCouponClaim(couponClaimId, orderId);
     if (promo) await bookPlatformPromo(promo.id, req.user.id, orderId, cp.discountCents, p.business_id);
     await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty, variant_id, variant_label) VALUES ($1,$2,$3,$4,$5,$6,$7)', [orderId, productId, p.name, unitPrice, qty, items[0].variant_id, items[0].variant_label]);
@@ -29143,7 +30203,8 @@ app.post('/api/bundles/:id/buy', auth.requireAuth, blockImpersonation, rateLimit
     const discount = Math.max(0, retail - b.price_cents);
     const ship = await resolveShipping(req.user.id, req.body, items, { sellerId: b.seller_id, subtotalCents: b.price_cents });
     if (!ship.ok) return res.status(400).json({ error: ship.error, needAddress: !!ship.needAddress });
-    const rt = await applyRatesAndTax(req.body, ship, items, b.price_cents);
+    const rt = await applyRatesAndTax(req.body, ship, items, b.price_cents, b.seller_id);
+    if (rt.error) return res.status(400).json({ error: rt.error });
     const total = b.price_cents + rt.shippingCents + rt.taxCents;
     if (total <= 0) return res.status(400).json({ error: 'Order total must be greater than zero.' });
     const note = ('Bundle: ' + b.name).slice(0, 500);
