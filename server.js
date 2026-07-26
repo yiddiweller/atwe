@@ -179,6 +179,51 @@ function rejectIfBlocked(res, text) {
 // false; fail-open) but its own app_settings store so the two don't collide.
 // The catalog is curated in feature-controls-data.js.
 const CONTROLS_KEY = 'feature_controls';
+/* ─── Platform fee (your marketplace take-rate) ─────────────────────────────
+   A percentage of each completed sale, taken from the SELLER's proceeds at the
+   moment they're paid — never added on top of what the buyer sees, so a listed
+   price is always the price. 0 (the default) means Atwe takes nothing, which is
+   exactly how the marketplace has behaved until now. */
+const FEE_KEY = 'platform_fee';
+let _platformFee = { pct: 0, minCents: 0, exemptVerified: false };
+function normalizeFee(v) {
+  const src = (v && typeof v === 'object') ? v : {};
+  const pct = Number(src.pct);
+  const min = Math.round(Number(src.minCents));
+  return {
+    pct: Number.isFinite(pct) ? Math.max(0, Math.min(20, Math.round(pct * 100) / 100)) : 0,
+    minCents: Number.isFinite(min) ? Math.max(0, Math.min(100000, min)) : 0,
+    exemptVerified: src.exemptVerified === true,
+  };
+}
+// What Atwe keeps from a sale of `grossCents` paid to `sellerId`. Returns 0
+// whenever the fee is off, the sale is below the floor, or the seller is exempt.
+async function platformFeeFor(sellerId, grossCents) {
+  const f = _platformFee;
+  if (!f.pct || !(grossCents > 0) || grossCents < f.minCents) return 0;
+  if (f.exemptVerified) {
+    try {
+      const u = (await db.query(`SELECT business_verify_status FROM users WHERE id = $1`, [sellerId])).rows[0];
+      if (u && u.business_verify_status === 'verified') return 0;
+    } catch (_) { /* on a lookup error, charge the normal fee */ }
+  }
+  const fee = Math.floor(grossCents * f.pct / 100);
+  // Never take more than the sale, and never bother with sub-cent dust.
+  return Math.max(0, Math.min(fee, grossCents));
+}
+// Take the fee out of the seller's balance right after they're paid, and book it
+// as company revenue. Best-effort: a fee hiccup must never unwind a real sale.
+async function chargePlatformFee(sellerId, orderId, grossCents) {
+  try {
+    const fee = await platformFeeFor(sellerId, grossCents);
+    if (!fee) return 0;
+    const d = await walletDebit(sellerId, fee, 'platform_fee', `Atwe fee on order #${orderId}`);
+    if (!d || d.insufficient || d.error) return 0;
+    await recordCompanyRevenue('fee', orderId, sellerId, fee, 'Marketplace fee');
+    rtPush(sellerId, 'wallet', { type: 'update' });
+    return fee;
+  } catch (_) { return 0; }
+}
 const CONTROL_KEYS = FEATURE_CONTROLS.map((f) => f.key);
 let _featureControls = {}; // { key: false } = OFF
 function controlEnabled(key) { return _featureControls[key] !== false; }
@@ -20879,6 +20924,7 @@ async function payOrderFromBalance(buyerId, sellerId, orderId, totalCents) {
   const t = await walletTransfer(buyerId, sellerId, totalCents, 'Order payment', false);
   if (!t.ok) return t;
   await recordOrderPaid(orderId, true);
+  chargePlatformFee(sellerId, orderId, totalCents).catch(() => {}); // take-rate, if any
   rtPush(buyerId, 'wallet', { type: 'update', amountCents: totalCents });
   rtPush(sellerId, 'wallet', { type: 'update', amountCents: totalCents });
   return { ok: true };
@@ -21010,6 +21056,8 @@ async function settleEscrow(orderId, to) {
   } else {
     notify(o.seller_id, o.buyer_id, 'escrow_released');
     rtPush(o.seller_id, 'wallet', { type: 'receive', amountCents: o.total_cents });
+    // Escrow is the other moment a seller actually receives the money.
+    chargePlatformFee(o.seller_id, orderId, o.total_cents).catch(() => {});
   }
   rtPush(o.buyer_id, 'order', { id: orderId, status: newStatus });
   rtPush(o.seller_id, 'order', { id: orderId, status: newStatus });
@@ -25596,6 +25644,27 @@ app.post('/api/admin/users/bulk', auth.requirePerm('users'), async (req, res) =>
     res.json({ ok: true, affected, skipped: ids.length - safe.length });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not complete the bulk action.' }); }
 });
+/* ─── Platform fee manager ─── */
+app.get('/api/admin/platform-fee', auth.requirePerm('revenue'), async (_req, res) => {
+  try {
+    // What it would have earned over the last 30 days, so the number isn't abstract.
+    const { rows } = await db.query(
+      `SELECT COALESCE(SUM(total_cents), 0)::bigint AS gross, COUNT(*)::int AS orders
+         FROM orders WHERE status IN ('paid','fulfilled','delivered','released') AND created_at > now() - interval '30 days'`);
+    const earned = (await db.query(
+      `SELECT COALESCE(SUM(amount_cents), 0)::bigint AS n FROM company_revenue WHERE source = 'fee' AND created_at > now() - interval '30 days'`)).rows[0].n;
+    res.json({ fee: _platformFee, last30: { grossCents: Number(rows[0].gross), orders: rows[0].orders, feeEarnedCents: Number(earned) } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the fee.' }); }
+});
+app.put('/api/admin/platform-fee', auth.requireAdmin, async (req, res) => {
+  const next = normalizeFee(req.body.fee);
+  try {
+    await db.setSetting(FEE_KEY, next);
+    _platformFee = next;
+    adminAudit(req, 'fee.update', 'settings', null, next);
+    res.json({ ok: true, fee: _platformFee });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the fee.' }); }
+});
 /* ─── Cash-out review queue ─────────────────────────────────────────────────
    A payout at or above the threshold is held: the member's balance is already
    debited (so it can't be double-spent while pending), and staff either release
@@ -28069,5 +28138,6 @@ db.init()
   .then(() => { if (db.isConfigured()) return db.getSetting(MODLISTS_KEY).then((v) => applyModLists(v)).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(CONTROLS_KEY).then((v) => { _featureControls = normalizeControls(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return loadBlockedDomains().catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return db.getSetting(FEE_KEY).then((v) => { _platformFee = normalizeFee(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) console.log('🗄️   Schema + settings ready.'); })
   .catch((err) => console.error('Post-init setup failed:', err.message));

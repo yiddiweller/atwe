@@ -2092,6 +2092,17 @@ function renderSite(){
       }).join('')}
     </div>
     <div class="panel">
+      <h3>Platform fee <span class="muted">· your marketplace take-rate</span></h3>
+      <div class="sub">A share of each completed sale, taken from the <b>seller's</b> proceeds when they're paid — never added on top of what the buyer sees, so a listed price stays the price. <b>0% means Atwe takes nothing</b>, which is how it has worked so far.</div>
+      <div id="feeStats" class="sub" style="margin-top:8px;"></div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
+        <input class="in" id="feePct" type="number" min="0" max="20" step="0.25" placeholder="%" style="width:110px;margin:0;"/>
+        <input class="in" id="feeMin" type="number" min="0" step="1" placeholder="Only on sales over ($)" style="width:200px;margin:0;"/>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);"><input type="checkbox" id="feeExempt"/> Verified businesses pay nothing</label>
+        <button class="act accent" onclick="savePlatformFee()">Save</button>
+      </div>
+    </div>
+    <div class="panel">
       <h3>Blocked links <span class="muted">· scam &amp; phishing domains</span></h3>
       <div class="sub">Blocks a domain everywhere members write — posts, messages and listings. Subdomains and bare mentions are covered too. New accounts also can't post any link for their first <b id="probHrs">48</b> hours.</div>
       <div style="display:flex;gap:8px;margin-top:10px;">
@@ -2115,6 +2126,30 @@ function renderSite(){
     </div>`;
   loadChangelog();
   loadBlockedDomains();
+  loadPlatformFee();
+}
+// Your marketplace take-rate. Shown next to what it would have earned, so the
+// number isn't abstract.
+async function loadPlatformFee(){
+  try {
+    const { fee, last30 } = await api('GET', '/api/admin/platform-fee');
+    document.getElementById('feePct').value = fee.pct || '';
+    document.getElementById('feeMin').value = fee.minCents ? (fee.minCents / 100) : '';
+    document.getElementById('feeExempt').checked = !!fee.exemptVerified;
+    const would = Math.round((last30.grossCents * (fee.pct || 0)) / 100);
+    document.getElementById('feeStats').innerHTML =
+      `Last 30 days: <b>${last30.orders}</b> paid orders worth <b>$${(last30.grossCents/100).toFixed(2)}</b> · fee earned <b>$${(last30.feeEarnedCents/100).toFixed(2)}</b>`
+      + (fee.pct ? ` · at ${fee.pct}% that volume would be about <b>$${(would/100).toFixed(2)}</b>` : ' · fee is currently <b>off</b>');
+  } catch (e){ const el = document.getElementById('feeStats'); if (el) el.textContent = e.message; }
+}
+async function savePlatformFee(){
+  const pct = parseFloat(document.getElementById('feePct').value) || 0;
+  const minCents = Math.round((parseFloat(document.getElementById('feeMin').value) || 0) * 100);
+  const exemptVerified = document.getElementById('feeExempt').checked;
+  if (pct > 0 && !confirm('Charge sellers ' + pct + '% of every completed sale from now on?')) return;
+  try { const r = await api('PUT', '/api/admin/platform-fee', { fee: { pct, minCents, exemptVerified } });
+    notify(r.fee.pct ? ('Fee set to ' + r.fee.pct + '%.') : 'Fee turned off.'); loadPlatformFee(); }
+  catch (e){ notify(e.message); }
 }
 // Scam/phishing domains blocked platform-wide (moderation scope).
 async function loadBlockedDomains(){
