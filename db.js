@@ -2220,6 +2220,12 @@ async function initSchema() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS feed_posts_user_idx ON feed_posts(user_id, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS feed_posts_exp_idx ON feed_posts(expires_at);`);
+  // Remix (TikTok Duet/Stitch model): a feed post that responds to ANOTHER
+  // creator's post. The original is referenced, never copied — so deleting the
+  // original leaves the remix standing with its credit line intact (SET NULL).
+  await query(`ALTER TABLE feed_posts ADD COLUMN IF NOT EXISTS remix_of INTEGER REFERENCES feed_posts(id) ON DELETE SET NULL;`);
+  // Creator opt-out: nobody can remix your videos while this is off.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS allow_remix BOOLEAN NOT NULL DEFAULT true;`);
   // Playlists / series (YouTube-playlist / IG-series style): a creator's ORDERED
   // collections of their own feed posts, shown on the profile Media tab and
   // played in sequence in the immersive viewer.

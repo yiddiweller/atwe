@@ -1138,6 +1138,7 @@ function publicUser(row) {
     businessVerifyStatus: ['pending', 'verified'].includes(row.business_verify_status) ? row.business_verify_status : 'none',
     businessVerified: row.business_verify_status === 'verified',
     businessTier: BIZ_TIERS.includes(row.business_verify_tier) ? row.business_verify_tier : 'none',
+    allowRemix: row.allow_remix !== false,
     dmConnectionsOnly: !!row.dm_connections_only,
     otwVisibility: ['recruiters', 'everyone'].includes(row.otw_visibility) ? row.otw_visibility : 'off',
     openToWork: row.otw_visibility === 'everyone', // drives the public #OpenToWork ring
@@ -1738,7 +1739,7 @@ const NEW_ACCOUNT_DAYS = 7;
 // Types silenced by a per-post notification mute — social noise about the post
 // only; money/message types never route through this.
 const POST_MUTE_TYPES = new Set(['like', 'reply', 'repost', 'quote', 'mention', 'tagged']);
-async function notify(userId, actorId, type, postId, feedId, groupId, productId, eventId) {
+async function notify(userId, actorId, type, postId, feedId, groupId, productId, eventId, metaNum) {
   if (!userId || userId === actorId) return;
   // "Turn off notifications for this post": drop social notifs about a post the
   // recipient muted. Fail-open — a lookup error must never eat a notification.
@@ -1775,7 +1776,7 @@ async function notify(userId, actorId, type, postId, feedId, groupId, productId,
     } catch (_) { /* fail-open: deliver if the lookup fails */ }
   }
   try {
-    await db.query('INSERT INTO notifications (user_id, actor_id, type, post_id, feed_id, group_id, product_id, event_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)', [userId, actorId, type, postId || null, feedId || null, groupId || null, productId || null, eventId || null]);
+    await db.query('INSERT INTO notifications (user_id, actor_id, type, post_id, feed_id, group_id, product_id, event_id, meta_num) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)', [userId, actorId, type, postId || null, feedId || null, groupId || null, productId || null, eventId || null, metaNum || null]);
     rtPush(userId, 'notif', { type });
     sendPushForNotif(userId, actorId, type).catch(() => {}); // best-effort web push
   } catch (e) { /* notifications are best-effort */ }
@@ -1798,7 +1799,7 @@ const PUSH_VERBS = {
   like: 'liked your post', reply: 'replied to your post', follow: 'followed you',
   message: 'sent you a message', call: 'called you', video_call: 'video-called you',
   chat_request: 'wants to chat with you', mention: 'mentioned you', quote: 'quoted your post',
-  story_mention: 'mentioned you in their Daily',
+  story_mention: 'mentioned you in their Daily', remix: 'remixed your video',
   job_application: 'applied to your job', connection_request: 'wants to connect',
   connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills',
   event_rsvp: 'is going to your event', event_reminder: 'an event you’re going to starts soon', event_comment: 'commented on your event', rec_received: 'recommended you',
@@ -3551,7 +3552,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, business_verify_tier, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, intro_seen, business_hours, special_hours, hours_note, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, paused, pause_message, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off, store_banner, free_ship_over_cents, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, hiring, pronouns FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, business_verify_tier, allow_remix, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, intro_seen, business_hours, special_hours, hours_note, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, paused, pause_message, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off, store_banner, free_ship_over_cents, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, hiring, pronouns FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -3662,7 +3663,7 @@ const REQUEST_VIS = ['everyone', 'network', 'nobody'];
 const GROUPADD_VIS = ['everyone', 'connections', 'nobody'];
 app.get('/api/account-privacy', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT presence_visibility, connections_visible, who_can_request, who_can_add_groups, share_profile_updates, personalized, silence_unknown_callers, dnd_enabled, dnd_start_min, dnd_end_min, dnd_tz_offset FROM users WHERE id = $1', [req.user.id]);
+    const { rows } = await db.query('SELECT presence_visibility, connections_visible, who_can_request, who_can_add_groups, share_profile_updates, personalized, allow_remix, silence_unknown_callers, dnd_enabled, dnd_start_min, dnd_end_min, dnd_tz_offset FROM users WHERE id = $1', [req.user.id]);
     const u = rows[0] || {};
     res.json({
       presenceVisibility: PRESENCE_VIS.includes(u.presence_visibility) ? u.presence_visibility : 'everyone',
@@ -3671,6 +3672,7 @@ app.get('/api/account-privacy', auth.requireAuth, async (req, res) => {
       whoCanAddGroups: GROUPADD_VIS.includes(u.who_can_add_groups) ? u.who_can_add_groups : 'everyone',
       shareProfileUpdates: u.share_profile_updates !== false,
       personalized: u.personalized !== false,
+      allowRemix: u.allow_remix !== false,
       silenceUnknownCallers: u.silence_unknown_callers === true,
       dndEnabled: u.dnd_enabled === true,
       dndStartMin: Number.isFinite(u.dnd_start_min) ? u.dnd_start_min : 1320,
@@ -3687,6 +3689,7 @@ app.put('/api/account-privacy', auth.requireAuth, async (req, res) => {
   if ('whoCanAddGroups' in b && GROUPADD_VIS.includes(b.whoCanAddGroups)) { vals.push(b.whoCanAddGroups); fields.push(`who_can_add_groups = $${vals.length}`); }
   if ('shareProfileUpdates' in b) { vals.push(b.shareProfileUpdates !== false); fields.push(`share_profile_updates = $${vals.length}`); }
   if ('personalized' in b) { vals.push(b.personalized !== false); fields.push(`personalized = $${vals.length}`); }
+  if ('allowRemix' in b) { vals.push(b.allowRemix !== false); fields.push(`allow_remix = $${vals.length}`); }
   if ('silenceUnknownCallers' in b) { vals.push(b.silenceUnknownCallers === true); fields.push(`silence_unknown_callers = $${vals.length}`); }
   if ('dndEnabled' in b) { vals.push(b.dndEnabled === true); fields.push(`dnd_enabled = $${vals.length}`); }
   const clampMin = (v) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.max(0, Math.min(1439, n)) : null; };
@@ -10846,8 +10849,13 @@ const FEEDPOST_SELECT = `
          EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $1 AND f.following_id = fp.user_id) AS i_follow,
          (SELECT json_agg(json_build_object('id', tpr.id, 'name', tpr.name, 'price_cents', tpr.price_cents, 'image', tpr.image, 'active', tpr.active, 'stock', tpr.stock, 'variants', tpr.variants) ORDER BY cpt.position, cpt.id)
             FROM content_product_tags cpt JOIN products tpr ON tpr.id = cpt.product_id
-            WHERE cpt.content_kind = 'feedpost' AND cpt.content_id = fp.id) AS tagged_products
-  FROM feed_posts fp JOIN users u ON u.id = fp.user_id `;
+            WHERE cpt.content_kind = 'feedpost' AND cpt.content_id = fp.id) AS tagged_products,
+         fp.remix_of, rp.kind AS remix_kind, rp.media AS remix_media, rp.text AS remix_text,
+         ru.id AS remix_author_id, ru.name AS remix_author_name, ru.username AS remix_author_username,
+         ru.avatar AS remix_author_avatar, ru.verified AS remix_author_verified, ru.account_type AS remix_author_type
+  FROM feed_posts fp JOIN users u ON u.id = fp.user_id
+       LEFT JOIN feed_posts rp ON rp.id = fp.remix_of AND (rp.expires_at IS NULL OR rp.expires_at > now())
+       LEFT JOIN users ru ON ru.id = rp.user_id `;
 function mapFeedPost(r) {
   return {
     id: r.id, kind: r.kind, text: r.text || null, bg: r.bg || null,
@@ -10856,6 +10864,15 @@ function mapFeedPost(r) {
     likes: r.likes || 0, dislikes: r.dislikes || 0, comments: r.comment_count || 0,
     myVote: r.my_vote || 0, saved: !!r.my_saved, iFollow: !!r.i_follow,
     author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: mediaRef(r.author_avatar, 'avatar', r.author_id), verified: !!r.author_verified, accountType: r.author_type === 'business' ? 'business' : 'personal' },
+    // Remix source (TikTok Duet/Stitch): present only while the original is live.
+    remixOf: r.remix_of || null,
+    remix: (r.remix_of && r.remix_author_id) ? {
+      id: r.remix_of, kind: r.remix_kind, text: r.remix_text || null,
+      media: mediaRef(r.remix_media, 'feed-media', r.remix_of),
+      author: { id: r.remix_author_id, name: r.remix_author_name, username: r.remix_author_username,
+        avatar: mediaRef(r.remix_author_avatar, 'avatar', r.remix_author_id), verified: !!r.remix_author_verified,
+        accountType: r.remix_author_type === 'business' ? 'business' : 'personal' },
+    } : null,
   };
 }
 const FEED_TEXT_MAX = 280;
@@ -10883,11 +10900,30 @@ app.post('/api/feedposts', auth.requireAuth, rateLimit(30, 60000, 'feedpost'), a
     }
     // Tagged products (≤5 of the poster's OWN active products) on a reel/short.
     const taggedProductIds = await validateOwnProductIds(req.user.id, req.body.productIds);
+    // Remix (Duet/Stitch): respond to another creator's post. The source must be
+    // visible to me and its author must allow remixes; a text status has nothing
+    // to remix. The original is referenced, never copied.
+    let remixOf = null;
+    if (req.body.remixOf != null && req.body.remixOf !== '') {
+      const srcId = parseInt(req.body.remixOf, 10);
+      if (!Number.isInteger(srcId)) return res.status(400).json({ error: 'Invalid remix source.' });
+      const srcAuthor = await feedPostVisible(req.user.id, srcId);
+      if (!srcAuthor) return res.status(404).json({ error: 'That video isn’t available to remix.' });
+      const src = (await db.query('SELECT fp.kind, u.allow_remix FROM feed_posts fp JOIN users u ON u.id = fp.user_id WHERE fp.id = $1', [srcId])).rows[0];
+      if (!src || src.kind === 'text') return res.status(400).json({ error: 'Only photos and videos can be remixed.' });
+      if (srcAuthor !== req.user.id && src.allow_remix === false) return res.status(403).json({ error: 'This creator has turned off remixes.' });
+      remixOf = srcId;
+    }
     const { rows } = await db.query(
-      `INSERT INTO feed_posts (user_id, kind, text, bg, media, expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-      [req.user.id, kind, text.trim() || null, kind === 'text' ? (bg || null) : null, kind === 'text' ? null : media, expiresAt]
+      `INSERT INTO feed_posts (user_id, kind, text, bg, media, expires_at, remix_of)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [req.user.id, kind, text.trim() || null, kind === 'text' ? (bg || null) : null, kind === 'text' ? null : media, expiresAt, remixOf]
     );
+    // Tell the original creator (never yourself).
+    if (remixOf) {
+      const srcOwner = (await db.query('SELECT user_id FROM feed_posts WHERE id = $1', [remixOf])).rows[0];
+      if (srcOwner && srcOwner.user_id !== req.user.id) notify(srcOwner.user_id, req.user.id, 'remix', null, null, null, null, null, rows[0].id);
+    }
     if (taggedProductIds.length) await saveContentProductTags('feedpost', rows[0].id, taggedProductIds);
     const out = await db.query(FEEDPOST_SELECT + 'WHERE fp.id = $2', [req.user.id, rows[0].id]);
     res.json({ post: mapFeedPost(out.rows[0]) });
@@ -11094,6 +11130,19 @@ app.post('/api/playlists/:id/reorder', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not reorder.' }); }
 });
 
+// One feed post by id — used to open the ORIGINAL a remix responds to.
+// Same visibility rule as the rest of the feed surface (exists, not blocked).
+app.get('/api/feedposts/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    if (!(await feedPostVisible(req.user.id, id))) return res.status(404).json({ error: 'That video isn’t available.' });
+    const { rows } = await db.query(FEEDPOST_SELECT + 'WHERE fp.id = $2', [req.user.id, id]);
+    if (!rows[0]) return res.status(404).json({ error: 'That video isn’t available.' });
+    res.json({ post: mapFeedPost(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
 // Delete my own feed post.
 app.delete('/api/feedposts/:id', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
