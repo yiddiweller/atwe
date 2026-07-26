@@ -955,6 +955,7 @@
       <button class="tab" data-v="risk" onclick="switchTab('risk')">Risk</button>
       <button class="tab" data-v="retention" onclick="switchTab('retention')">Retention</button>
       <button class="tab" data-v="curate" onclick="switchTab('curate')">Curate</button>
+      <button class="tab" data-v="catalog" onclick="switchTab('catalog')">Catalog</button>
       <button class="tab" data-v="disputes" onclick="switchTab('disputes')">Disputes</button>
       <button class="tab" data-v="appeals" onclick="switchTab('appeals')">Appeals</button>
       <button class="tab" data-v="support" onclick="switchTab('support')">Support</button>
@@ -1419,7 +1420,7 @@ const TAB_PERM = {
   traffic: 'growth', site: 'super', usernames: 'handles', posts: 'moderation', support: 'support',
   reports: 'moderation', disputes: 'refunds', circles: 'moderation', feed: 'super',
   finance: 'revenue', growth: 'growth', audit: 'super', staff: 'super',
-  refunds: 'refunds', appeals: 'users', datareq: 'users', activity: 'super', investigate: 'moderation', moderate: 'moderation', orders: 'support', adjust: 'revenue', payouts: 'revenue', risk: 'revenue', retention: 'growth', curate: 'moderation',
+  refunds: 'refunds', appeals: 'users', datareq: 'users', activity: 'super', investigate: 'moderation', moderate: 'moderation', orders: 'support', adjust: 'revenue', payouts: 'revenue', risk: 'revenue', retention: 'growth', curate: 'moderation', catalog: 'moderation',
   cards: 'revenue', features: 'super', featurecontrols: 'super', vault: 'super',
   announcements: 'super',
 };
@@ -1492,7 +1493,7 @@ const NAV_TITLES = {
   refunds:'Refunds', users:'Users', staff:'Staff', usernames:'Usernames', reports:'Reports',
   investigate:'Investigate', moderate:'AI content scan', disputes:'Disputes', appeals:'Appeals', support:'Support', datareq:'Data requests',
   posts:'Posts', circles:'Circles', feed:'Feed', activity:'Activity', traffic:'Traffic', growth:'Growth',
-  orders:'Orders', adjust:'Wallet adjustments', payouts:'Payout review', risk:'Risk', retention:'Retention', curate:'Curate', audit:'Audit log', site:'Site', cards:'Cards', features:'Features', featurecontrols:'Feature Controls', vault:'Vault',
+  orders:'Orders', adjust:'Wallet adjustments', payouts:'Payout review', risk:'Risk', retention:'Retention', curate:'Curate', catalog:'Catalog', audit:'Audit log', site:'Site', cards:'Cards', features:'Features', featurecontrols:'Feature Controls', vault:'Vault',
   announcements:'Announcements',
 };
 // Mobile: slide the sidebar in/out.
@@ -1527,6 +1528,7 @@ function renderView(){
   else if (VIEW === 'risk') renderRiskView();
   else if (VIEW === 'retention') renderRetentionView();
   else if (VIEW === 'curate') renderCurateView();
+  else if (VIEW === 'catalog') renderCatalogView();
   else if (VIEW === 'disputes') renderDisputesView();
   else if (VIEW === 'circles') renderCirclesView();
   else if (VIEW === 'feed') renderFeedSignalsView();
@@ -3681,6 +3683,61 @@ async function dismissReport(id){
 }
 /* ─── Escrow disputes ─── */
 let DISPUTES = [];
+// Catalog moderation + the official category list, on one screen.
+let CAT_Q = '', CAT_STATUS = '';
+function renderCatalogView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="panel"><h3>Categories <span class="muted">· what sellers pick from</span></h3>
+      <div class="sub">One per line. Listings store the category as text, so editing this list can never orphan an existing listing — it only changes what's offered next time.</div>
+      <textarea class="in" id="taxBox" rows="6" style="margin-top:10px;"></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;"><button class="act accent" onclick="saveTaxonomy()">Save list</button><span id="taxInfo" class="muted" style="align-self:center;font-size:12px;"></span></div>
+    </div>
+    <div class="toolbar">
+      <input id="catQ" placeholder="Search listings, sellers…" value="${esc(CAT_Q)}"/>
+      <button class="refresh" onclick="loadCatalog()">Search</button>
+    </div>
+    <div class="bc-auds" style="margin:0 0 12px;">${[['','All'],['live','Live'],['hidden','Hidden'],['reported','Reported']].map(([v,l]) =>
+      `<button class="bc-aud${CAT_STATUS === v ? ' on' : ''}" onclick="CAT_STATUS='${v}';loadCatalog()">${l}</button>`).join('')}</div>
+    <div id="catList"><div class="ld"><span class="ab-mark"></span></div></div>`;
+  const inp = document.getElementById('catQ');
+  if (inp) inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') loadCatalog(); });
+  loadTaxonomy(); loadCatalog();
+}
+async function loadTaxonomy(){
+  try {
+    const { categories } = await api('GET', '/api/admin/categories');
+    document.getElementById('taxBox').value = categories.map(c => c.name).join('\n');
+    const busy = categories.filter(c => c.listings).map(c => c.name + ' (' + c.listings + ')');
+    document.getElementById('taxInfo').textContent = busy.length ? ('In use: ' + busy.join(', ')) : 'No listings categorised yet.';
+  } catch (e){ notify(e.message); }
+}
+async function saveTaxonomy(){
+  const categories = document.getElementById('taxBox').value.split('\n').map(s => s.trim()).filter(Boolean);
+  try { await api('PUT', '/api/admin/categories', { categories }); notify('Categories saved.'); loadTaxonomy(); }
+  catch (e){ notify(e.message); }
+}
+async function loadCatalog(){
+  const inp = document.getElementById('catQ'); if (inp) CAT_Q = inp.value.trim();
+  const box = document.getElementById('catList'); if (!box) return;
+  try {
+    const parts = [];
+    if (CAT_Q) parts.push('q=' + encodeURIComponent(CAT_Q));
+    if (CAT_STATUS === 'reported') parts.push('reported=true'); else if (CAT_STATUS) parts.push('status=' + CAT_STATUS);
+    const { listings } = await api('GET', '/api/admin/listings' + (parts.length ? '?' + parts.join('&') : ''));
+    box.innerHTML = listings.length ? listings.map(l => `<div class="site-row">
+        <div><div class="srt">${esc(l.name)} ${l.active ? '' : '<span class="pill ban">hidden</span>'}${l.openReports ? ` <span class="pill susp">${l.openReports} report${l.openReports===1?'':'s'}</span>` : ''}</div>
+          <div class="srs">@${esc(l.seller.username || '')} · $${((l.priceCents||0)/100).toFixed(2)}${l.category ? ' · ' + esc(l.category) : ''} · ${fmtDate(l.createdAt)}</div></div>
+        <button class="act ${l.active ? 'danger' : ''}" onclick="setListingVisibility(${l.id}, ${l.active ? 'true' : 'false'})">${l.active ? 'Hide…' : 'Restore'}</button>
+      </div>`).join('') : '<div class="empty">No listings match.</div>';
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function setListingVisibility(id, hide){
+  let reason = '';
+  if (hide) { reason = prompt('Why is it being hidden? (the seller is told)', '') || ''; if (!reason) return; }
+  try { await api('POST', '/api/admin/listings/' + id + '/visibility', { hide, reason }); notify(hide ? 'Hidden — the seller has been told.' : 'Restored.'); loadCatalog(); }
+  catch (e){ notify(e.message); }
+}
 // Editorial curation: hand-picked shelves shown in Discover. One system for
 // featured listings and featured profiles.
 function renderCurateView(){
