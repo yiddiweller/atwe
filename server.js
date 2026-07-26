@@ -15685,6 +15685,7 @@ app.get('/api/admin/reports', auth.requirePerm('moderation'), async (_req, res) 
   try {
     const { rows } = await db.query(
       `SELECT r.id, r.target_type, r.target_id, r.reason, r.note, r.status, r.created_at, r.auto,
+              r.assigned_to, r.escalated, r.staff_note,
               ru.name AS reporter_name, ru.username AS reporter_username,
               CASE r.target_type
                 WHEN 'job'    THEN (SELECT j.title FROM jobs j WHERE j.id = r.target_id)
@@ -27489,7 +27490,7 @@ app.get('/api/admin/users', auth.requirePerm('users'), async (req, res) => {
              u.username, u.avatar, u.created_at, u.last_login_at,
              u.verified, u.verify_requested_at, u.account_type, u.business_verify_status, u.business_verify_tier, u.admin_tags,
              u.status, u.status_reason, u.suspended_until, u.deactivated,
-             u.wallet_frozen, u.wallet_frozen_reason,
+             u.wallet_frozen, u.wallet_frozen_reason, u.reach_limited,
              COUNT(c.id)::int AS chat_count,
              MAX(c.updated_at) AS last_chat_at,
              (SELECT COUNT(*)::int FROM admin_messages am

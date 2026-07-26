@@ -1004,6 +1004,7 @@
       <button class="tab" data-v="disputes" onclick="switchTab('disputes')">Disputes</button>
       <button class="tab" data-v="appeals" onclick="switchTab('appeals')">Appeals</button>
       <button class="tab" data-v="support" onclick="switchTab('support')">Support</button>
+      <button class="tab" data-v="safety" onclick="switchTab('safety')">Safety tools</button>
       <button class="tab" data-v="datareq" onclick="switchTab('datareq')">Data requests</button>
 
       <div class="nav-label" data-group="content">Content</div>
@@ -1480,6 +1481,7 @@ const TAB_PERM = {
   refunds: 'refunds', appeals: 'users', datareq: 'users', activity: 'super', investigate: 'moderation', moderate: 'moderation', orders: 'support', adjust: 'revenue', payouts: 'revenue', risk: 'revenue', retention: 'growth', curate: 'moderation', catalog: 'moderation',
   cards: 'revenue', features: 'super', featurecontrols: 'super', vault: 'super',
   announcements: 'super', demand: 'growth', groups: 'moderation', ops: 'super', numbers: 'growth',
+  safety: 'moderation',
 };
 function canSee(tab){ const p = TAB_PERM[tab]; if (ME.superadmin) return true; return p !== 'super' && ME.perms.includes(p); }
 
@@ -1499,7 +1501,7 @@ async function load(){
     // Staff-2FA policy: when required, a staffer without 2FA is gated until they enable
     // it (in the normal app — so this can't create an unrecoverable lockout).
     if (cfg.requireAdmin2fa && !user.twoFactorEnabled) { show2faGate(); return; }
-    ME = { perms: user.adminPerms === 'all' ? [] : (user.adminPerms || []), role: user.adminRole || null, superadmin: user.adminPerms === 'all', twoFa: !!user.twoFactorEnabled };
+    ME = { id: user.id, perms: user.adminPerms === 'all' ? [] : (user.adminPerms || []), role: user.adminRole || null, superadmin: user.adminPerms === 'all', twoFa: !!user.twoFactorEnabled };
     applyTabPerms();
     if (!canSee(VIEW)) VIEW = firstVisibleTab();
     if (canSee('users')) { try { const { users } = await api('GET', '/api/admin/users' + userFilterQS()); USERS = users || []; } catch (_) {} }
@@ -1556,6 +1558,7 @@ const NAV_TITLES = {
   posts:'Posts', circles:'Circles', feed:'Feed', activity:'Activity', traffic:'Traffic', growth:'Growth',
   orders:'Orders', adjust:'Wallet adjustments', payouts:'Payout review', risk:'Risk', retention:'Retention', curate:'Curate', catalog:'Catalog', audit:'Audit log', site:'Site', cards:'Cards', features:'Features', featurecontrols:'Feature Controls', vault:'Vault',
   announcements:'Announcements', demand:'Demand', groups:'Groups & channels', ops:'Operations', numbers:'Numbers',
+  safety:'Safety tools',
 };
 // Mobile: slide the sidebar in/out.
 function toggleNav(open){
@@ -1591,6 +1594,7 @@ function renderView(){
   else if (VIEW === 'curate') renderCurateView();
   else if (VIEW === 'demand') renderDemandView();
   else if (VIEW === 'numbers') renderNumbersView();
+  else if (VIEW === 'safety') renderSafetyView();
   else if (VIEW === 'groups') renderGroupsView();
   else if (VIEW === 'ops') renderOpsView();
   else if (VIEW === 'catalog') renderCatalogView();
@@ -3612,7 +3616,18 @@ function renderSupportView(){
         `<button class="bc-aud${SUP_FILTER[k] === v ? ' on' : ''}" onclick="supFilter('${k}','${v}')">${l}</button>`).join('')}
       <button class="bc-aud" onclick="openMacros(0)">Canned replies…</button>
     </div>
-    <div id="supList"><div class="ld"><span class="ab-mark"></span></div></div>`;
+    <div id="supList"><div class="ld"><span class="ab-mark"></span></div></div>
+    <div id="csatBox"></div>
+    <div class="panel"><h3>Help centre</h3>
+      <div class="sub">Answer a common question once, publicly, instead of typing it into every thread. Members see these in the app.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <input class="in" id="hcTitle" maxlength="120" placeholder="The question, as someone would ask it" style="flex:1;min-width:220px;margin:0;"/>
+        <input class="in" id="hcCat" maxlength="60" placeholder="Section (e.g. Money)" style="width:170px;margin:0;"/>
+      </div>
+      <textarea id="hcBody" rows="4" placeholder="The answer, in plain words…" style="width:100%;box-sizing:border-box;background:var(--s1);border:1px solid var(--b1);border-radius:12px;color:var(--t1);padding:11px 13px;font:inherit;resize:vertical;margin-top:8px;"></textarea>
+      <div class="custom-row" style="margin-top:10px;"><button class="act accent" onclick="saveHelp()">Publish the answer</button></div></div>
+    <div id="hcBox"></div>`;
+  loadCsat(); loadHelp();
   const inp = document.getElementById('bcInput');
   if (inp) inp.addEventListener('input', () => { document.getElementById('bcCount').textContent = inp.value.length + ' / 4000'; });
   if (document.getElementById('bcAudiences')) loadBroadcastAudiences();
@@ -3798,6 +3813,8 @@ function renderReportList(){
         ${r.target_type === 'user' ? `<button class="act" onclick="openUser(${r.target_id})">View user</button>` : ''}
         ${r.target_type !== 'user' ? `<button class="act danger" onclick="resolveReport(${r.id}, true)">Remove item</button>` : ''}
         <button class="act" onclick="resolveReport(${r.id}, false)">Resolve</button>
+        <button class="act${r.assigned_to ? ' on' : ''}" onclick="takeCase(${r.id}, ${r.assigned_to ? 'true' : 'false'})">${r.assigned_to ? (r.assigned_to === ME.id ? 'Mine' : 'Taken') : 'Take it'}</button>
+        <button class="act${r.escalated ? ' danger' : ''}" onclick="escalateCase(${r.id}, ${r.escalated ? 'false' : 'true'})">${r.escalated ? 'Escalated' : 'Escalate'}</button>
         <button class="act" onclick="dismissReport(${r.id})">Dismiss</button>
       </div>
     </div>`).join('');
@@ -4086,6 +4103,186 @@ document.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); if (document.body.classList.contains('authed')) openPalette(); }
   else if (e.key === 'Escape') closeModal();
 });
+// A queue where nobody owns anything is one where two people do the same job.
+async function takeCase(id, taken){
+  try {
+    await api('POST', '/api/admin/reports/' + id + '/assign', { assignee: taken ? null : ME.id });
+    notify(taken ? 'Put back in the queue.' : 'It\u2019s yours.');
+    if (typeof loadReports === 'function') loadReports(); else renderView();
+  } catch (e){ notify(e.message); }
+}
+async function escalateCase(id, on){
+  const note = on ? (prompt('Anything the next person should know?') || '') : '';
+  if (on && note === null) return;
+  try {
+    await api('POST', '/api/admin/reports/' + id + '/escalate', { escalated: on, note });
+    if (typeof loadReports === 'function') loadReports(); else renderView();
+  } catch (e){ notify(e.message); }
+}
+// Reduced reach: their followers still see everything, but strangers stop
+// being shown their posts. They are never told — but it is audit-logged.
+async function setReach(id, limited){
+  if (limited && !confirm('Reduce this account\u2019s reach?\n\nTheir followers still see everything. They stop being shown to strangers in For You. They are not told — but this is recorded in the audit log.')) return;
+  try {
+    await api('POST', '/api/admin/users/' + id + '/reach', { limited });
+    notify(limited ? 'Reach reduced.' : 'Reach restored.');
+    if (typeof openUser === 'function') openUser(id);
+  } catch (e){ notify(e.message); }
+}
+/* ═══ Help centre + "did that help?" ═══ */
+async function loadCsat(){
+  const box = document.getElementById('csatBox'); if (!box) return;
+  try {
+    const d = await api('GET', '/api/admin/support-ratings');
+    if (!d.total) { box.innerHTML = ''; return; }
+    box.innerHTML = `<div class="panel"><h3>Did that help?</h3>
+      <div class="sub">What people said after a support conversation.</div>
+      <div class="ci-row" style="margin-top:12px;">
+        <div class="ci-stat"><div class="ci-v">${d.solvedPct}%</div><div class="ci-l">said it was sorted</div></div>
+        <div class="ci-stat"><div class="ci-v">${d.total}</div><div class="ci-l">answered</div></div>
+      </div>
+      ${d.recent.length ? '<div style="margin-top:14px;">' + d.recent.slice(0, 8).map(r =>
+        `<div class="site-row"><div style="min-width:0;"><div class="srt" style="white-space:normal;">${esc(r.comment)}</div>
+          <div class="srs">@${esc(r.username || '')} · ${fmtDate(r.created_at)}</div></div>
+          <span class="pill${r.solved ? ' pro' : ' susp'}">${r.solved ? 'sorted' : 'not sorted'}</span></div>`).join('') + '</div>' : ''}
+    </div>`;
+  } catch (e){ box.innerHTML = ''; }
+}
+async function loadHelp(){
+  const box = document.getElementById('hcBox'); if (!box) return;
+  try {
+    const { articles } = await api('GET', '/api/admin/help');
+    box.innerHTML = articles.length ? '<div class="panel">' + articles.map(a => `
+      <div class="site-row"><div style="min-width:0;">
+        <div class="srt">${esc(a.title)} ${a.published ? '' : '<span class="pill">draft</span>'}</div>
+        <div class="srs">${esc(a.category || 'General')} · read ${a.views} time${a.views === 1 ? '' : 's'}</div>
+      </div><button class="act danger" onclick="deleteHelp(${a.id})">Delete</button></div>`).join('') + '</div>'
+      : '<div class="empty">No answers written yet.</div>';
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function saveHelp(){
+  const title = (document.getElementById('hcTitle').value || '').trim();
+  const body = (document.getElementById('hcBody').value || '').trim();
+  if (!title || !body) { notify('A question and an answer are both needed.'); return; }
+  try {
+    await api('POST', '/api/admin/help', { title, body, category: document.getElementById('hcCat').value });
+    document.getElementById('hcTitle').value = ''; document.getElementById('hcBody').value = '';
+    document.getElementById('hcCat').value = '';
+    notify('Published.'); loadHelp();
+  } catch (e){ notify(e.message); }
+}
+async function deleteHelp(id){
+  if (!confirm('Delete this answer?')) return;
+  try { await api('DELETE', '/api/admin/help/' + id); loadHelp(); } catch (e){ notify(e.message); }
+}
+/* ═══ Safety tools ═══ */
+function renderSafetyView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="panel"><h3>Blocked networks</h3>
+      <div class="sub">Turn an abusive network away at the door. Every block runs out on its own, so one can never quietly become permanent.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <input class="in" id="ipAddr" maxlength="45" placeholder="Address (e.g. 203.0.113.9)" style="flex:1;min-width:180px;margin:0;"/>
+        <input class="in" id="ipWhy" maxlength="200" placeholder="Why?" style="flex:1;min-width:150px;margin:0;"/>
+        <input class="in" id="ipDays" type="number" min="1" max="365" value="7" style="width:100px;margin:0;"/>
+        <button class="act accent" onclick="blockIp()">Block</button>
+      </div></div>
+    <div id="ipBox"><div class="ld"><span class="ab-mark"></span></div></div>
+
+    <div class="panel"><h3>Enforcement report</h3>
+      <div class="sub">The numbers a platform is increasingly expected to publish. Built from the record, not typed up by hand.</div>
+      <div class="tf-ranges" style="margin-top:10px;">
+        <button class="tf-r on" onclick="trDays(30,this)">30 days</button>
+        <button class="tf-r" onclick="trDays(90,this)">90 days</button>
+        <button class="tf-r" onclick="trDays(365,this)">A year</button>
+      </div></div>
+    <div id="trBox"><div class="ld"><span class="ab-mark"></span></div></div>
+
+    <div class="panel"><h3>Terms &amp; privacy</h3>
+      <div class="sub">Publish a new version and members are asked to accept it. The accept count is your record of who agreed to what.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <select class="in" id="lgKind" style="width:140px;margin:0;"><option value="terms">Terms</option><option value="privacy">Privacy</option></select>
+        <input class="in" id="lgVer" maxlength="30" placeholder="Version (e.g. 2026-07)" style="width:180px;margin:0;"/>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--t2);">
+          <input type="checkbox" id="lgPub" checked style="width:18px;height:18px;"/> Publish it now</label>
+      </div>
+      <textarea id="lgBody" rows="5" placeholder="The wording…" style="width:100%;box-sizing:border-box;background:var(--s1);border:1px solid var(--b1);border-radius:12px;color:var(--t1);padding:11px 13px;font:inherit;resize:vertical;margin-top:8px;"></textarea>
+      <div class="custom-row" style="margin-top:10px;"><button class="act accent" onclick="saveLegal()">Save this version</button></div></div>
+    <div id="lgBox"><div class="ld"><span class="ab-mark"></span></div></div>`;
+  loadIpBlocks(); loadTransparency(30); loadLegal();
+}
+async function loadIpBlocks(){
+  const box = document.getElementById('ipBox'); if (!box) return;
+  try {
+    const { blocks } = await api('GET', '/api/admin/ip-blocks');
+    box.innerHTML = blocks.length ? '<div class="panel">' + blocks.map(b => `
+      <div class="site-row"><div style="min-width:0;">
+        <div class="srt">${esc(b.ip)}</div>
+        <div class="srs">${esc(b.reason || 'no reason given')}${b.expiresAt ? ' · until ' + fmtDate(b.expiresAt) : ''}</div>
+      </div><button class="act" onclick="unblockIp(${jstr(b.ip)})">Unblock</button></div>`).join('') + '</div>'
+      : '<div class="empty">No networks are blocked.</div>';
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function blockIp(){
+  const ip = (document.getElementById('ipAddr').value || '').trim();
+  if (!ip) { notify('Type an address first.'); return; }
+  try {
+    await api('POST', '/api/admin/ip-blocks', { ip, reason: document.getElementById('ipWhy').value,
+      days: parseInt(document.getElementById('ipDays').value, 10) || 7 });
+    document.getElementById('ipAddr').value = ''; document.getElementById('ipWhy').value = '';
+    loadIpBlocks();
+  } catch (e){ notify(e.message); }
+}
+async function unblockIp(ip){
+  try { await api('DELETE', '/api/admin/ip-blocks/' + encodeURIComponent(ip)); loadIpBlocks(); }
+  catch (e){ notify(e.message); }
+}
+function trDays(d, btn){
+  btn.parentNode.querySelectorAll('.tf-r').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  loadTransparency(d);
+}
+async function loadTransparency(days){
+  const box = document.getElementById('trBox'); if (!box) return;
+  const from = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+  try {
+    const d = await api('GET', `/api/admin/transparency?from=${from}`);
+    const stat = (v, l) => `<div class="ci-stat"><div class="ci-v">${v}</div><div class="ci-l">${esc(l)}</div></div>`;
+    box.innerHTML = `<div class="panel">
+      <div class="ci-row">${stat(d.reports.received, 'reports')}${stat(d.reports.actioned, 'acted on')}
+        ${stat(d.reports.dismissed, 'dismissed')}${stat(d.content.removed, 'posts removed')}</div>
+      <div class="ci-row" style="margin-top:14px;">${stat(d.accounts.suspended, 'suspended')}${stat(d.accounts.banned, 'banned')}
+        ${stat(d.appeals.received, 'appeals')}${stat(d.appeals.upheldPct + '%', 'appeals upheld')}</div>
+      <div class="srs" style="margin-top:12px;">${d.reports.automated} found by Atwe itself · ${d.reports.fromPeople} reported by people · ${d.accounts.idVerified} identities verified</div>
+      ${d.byReason.length ? '<div style="margin-top:14px;">' + d.byReason.map(r =>
+        `<div class="site-row"><div class="srt">${esc(r.reason || 'other')}</div><span class="pill">${r.n}</span></div>`).join('') + '</div>' : ''}
+    </div>`;
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function loadLegal(){
+  const box = document.getElementById('lgBox'); if (!box) return;
+  try {
+    const { docs } = await api('GET', '/api/admin/legal');
+    box.innerHTML = docs.length ? '<div class="panel">' + docs.map(d => `
+      <div class="site-row"><div style="min-width:0;">
+        <div class="srt">${esc(d.kind)} ${esc(d.version)} ${d.published ? '<span class="pill pro">live</span>' : '<span class="pill">draft</span>'}</div>
+        <div class="srs">${d.accepts} ${d.accepts === 1 ? 'person has' : 'people have'} accepted it · written ${fmtDate(d.createdAt)}</div>
+      </div></div>`).join('') + '</div>' : '<div class="empty">No versions yet.</div>';
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function saveLegal(){
+  const version = (document.getElementById('lgVer').value || '').trim();
+  const body = (document.getElementById('lgBody').value || '').trim();
+  if (!version || !body) { notify('A version and the wording are both needed.'); return; }
+  if (document.getElementById('lgPub').checked &&
+      !confirm('Publish this? Everyone will be asked to accept the new version.')) return;
+  try {
+    await api('POST', '/api/admin/legal', { kind: document.getElementById('lgKind').value, version, body,
+      published: document.getElementById('lgPub').checked });
+    document.getElementById('lgVer').value = ''; document.getElementById('lgBody').value = '';
+    notify('Saved.'); loadLegal();
+  } catch (e){ notify(e.message); }
+}
 /* ═══ Numbers — the figures you'd actually be asked for ═══
    One date range drives every panel, so a question asked of one is asked of
    all of them. */
@@ -5069,6 +5266,7 @@ async function openUser(id){
       <button class="act" onclick="openLimits(${u.id})">Sending limits…</button>
       <button class="act" onclick="openLinked(${u.id})">Linked accounts…</button>
       <button class="act${u.wallet_frozen ? ' accent' : ''}" onclick="setWalletFreeze(${u.id}, ${u.wallet_frozen ? 'false' : 'true'})">${u.wallet_frozen ? 'Unfreeze wallet' : 'Freeze wallet…'}</button>
+      <button class="act${u.reach_limited ? ' accent' : ''}" onclick="setReach(${u.id}, ${u.reach_limited ? 'false' : 'true'})" title="Their followers still see everything; strangers stop being shown their posts">${u.reach_limited ? 'Restore their reach' : 'Reduce their reach…'}</button>
       ${u.is_admin ? '' : `<button class="act" onclick="impersonateUser(${u.id})">View as user…</button>`}
       <button class="act danger" onclick="removeUser(${u.id})">Delete user</button>
     </div>
