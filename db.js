@@ -2429,6 +2429,19 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS saved_candidates_owner_idx ON saved_candidates(owner_id);`);
+  // AI action log (transparency): actions the member confirmed Atwe AI to take
+  // ("Do it for me") — private to the owner, listable + clearable.
+  await query(`
+    CREATE TABLE IF NOT EXISTS ai_action_log (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      tool       TEXT NOT NULL,
+      label      TEXT NOT NULL,
+      detail     TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS ai_action_log_user_idx ON ai_action_log(user_id, created_at DESC);`);
   // Recruiter projects (LinkedIn-Recruiter-style): NAMED candidate shortlists —
   // "Q3 warehouse hires", "Designers to watch" — each member with a private
   // pipeline stage + note. Entirely private to the owner; candidates are never

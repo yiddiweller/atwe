@@ -7822,6 +7822,29 @@ const AGENT_TOOLS = [
 const AGENT_ACTION_LABELS = {
   create_event: 'Create an event', draft_invoice: 'Send an invoice', schedule_post: 'Schedule a post', draft_reply: 'Draft a reply',
 };
+// AI action log (transparency): every action the member CONFIRMED Atwe AI to
+// take is recorded here — "what has the AI done for me". The client logs right
+// after the real, authenticated route succeeds; rows are private to the owner.
+app.post('/api/ai/actions/log', auth.requireAuth, rateLimit(60, 60000, 'ai-log'), async (req, res) => {
+  const tool = (req.body.tool || '').toString().trim().slice(0, 40);
+  const label = (req.body.label || '').toString().trim().slice(0, 200);
+  const detail = (req.body.detail || '').toString().trim().slice(0, 500) || null;
+  if (!tool || !label) return res.status(400).json({ error: 'Nothing to log.' });
+  try {
+    await db.query('INSERT INTO ai_action_log (user_id, tool, label, detail) VALUES ($1,$2,$3,$4)', [req.user.id, tool, label, detail]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not log it.' }); }
+});
+app.get('/api/ai/actions', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT id, tool, label, detail, created_at FROM ai_action_log WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100', [req.user.id]);
+    res.json({ actions: rows.map((r) => ({ id: r.id, tool: r.tool, label: r.label, detail: r.detail || null, createdAt: r.created_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the log.' }); }
+});
+app.delete('/api/ai/actions', auth.requireAuth, async (req, res) => {
+  try { await db.query('DELETE FROM ai_action_log WHERE user_id = $1', [req.user.id]); res.json({ ok: true }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not clear the log.' }); }
+});
 app.post('/api/ai/agent', auth.requireAuth, rateLimit(20, 60000, 'ai-agent'), async (req, res) => {
   if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not available right now.' });
   const message = (req.body.message || '').toString().trim().slice(0, 2000);
