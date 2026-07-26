@@ -7482,7 +7482,7 @@ app.get('/api/atchat/groups/:id/cloud', auth.requireAuth, async (req, res) => {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
     const { rows } = await db.query(
       `SELECT n.id, n.parent_id, n.kind, n.name, n.owner_id, n.mime, n.media_kind, n.size_bytes, n.created_at, n.updated_at, u.name AS owner_name, u.username AS owner_username,
-              CASE WHEN n.kind IN ('checklist','form','schedule','roster','expenses') THEN n.data ELSE NULL END AS list_data
+              CASE WHEN n.kind IN ('checklist','form','schedule','roster','expenses','whiteboard') THEN n.data ELSE NULL END AS list_data
        FROM group_cloud n LEFT JOIN users u ON u.id = n.owner_id
        WHERE n.group_id = $1 AND n.parent_id IS NOT DISTINCT FROM $2
        ORDER BY (n.kind = 'folder') DESC, lower(n.name)`,
@@ -7538,6 +7538,7 @@ app.post('/api/atchat/groups/:id/cloud', auth.requireAuth, rateLimit(60, 60000, 
     else if (kind === 'schedule') { if (!name) name = 'Schedule'; data = JSON.stringify({ shifts: [] }); }
     else if (kind === 'roster') { if (!name) name = 'Team & key info'; data = JSON.stringify({ people: [], info: [] }); }
     else if (kind === 'expenses') { if (!name) name = 'Expenses'; data = JSON.stringify({ items: [] }); }
+    else if (kind === 'whiteboard') { if (!name) name = 'Whiteboard'; data = JSON.stringify({ strokes: [] }); }
     else if (kind === 'file') {
       const media = mediaFromBody(req.body);
       if (media === undefined || !media.data) return res.status(400).json({ error: 'That file could not be added (unsupported type or too large — 16 MB max).' });
@@ -7587,7 +7588,7 @@ app.patch('/api/atchat/groups/:id/cloud/:nid', auth.requireAuth, async (req, res
       const nm = req.body.name.trim().slice(0, 120);
       if (nm) { vals.push(nm); sets.push(`name = $${vals.length}`); }
     }
-    if (typeof req.body.data === 'string' && ['sheet', 'checklist', 'note', 'form', 'schedule', 'roster', 'expenses'].includes(cur.rows[0].kind)) {
+    if (typeof req.body.data === 'string' && ['sheet', 'checklist', 'note', 'form', 'schedule', 'roster', 'expenses', 'whiteboard'].includes(cur.rows[0].kind)) {
       if (req.body.data.length > 2_000_000) return res.status(400).json({ error: 'That’s too large to save.' });
       vals.push(req.body.data); sets.push(`data = $${vals.length}`);
     }
