@@ -3589,7 +3589,7 @@ function renderList() {
         <span class="pill ${u.plan === 'pro' ? 'pro' : 'free'}">${esc(u.plan)}</span>
         ${u.is_admin ? '<span class="pill admin">admin</span>' : ''}
         ${u.verified ? '<span class="pill pro">verified</span>' : (u.verify_requested_at ? '<span class="pill admin">pending</span>' : '')}
-        ${u.account_type === 'business' ? (u.business_verify_status === 'verified' ? '<span class="pill pro">biz ✓</span>' : u.business_verify_status === 'pending' ? '<span class="pill admin">biz pending</span>' : '<span class="pill">business</span>') : ''}
+        ${u.account_type === 'business' ? (u.business_verify_tier === 'premium' ? '<span class="pill pro">premium partner</span>' : u.business_verify_status === 'verified' ? '<span class="pill pro">biz ✓</span>' : u.business_verify_tier === 'basic' ? '<span class="pill">domain ✓</span>' : u.business_verify_status === 'pending' ? '<span class="pill admin">biz pending</span>' : '<span class="pill">business</span>') : ''}
         ${u.status === 'banned' ? '<span class="pill ban">banned</span>' : (u.status === 'suspended' ? '<span class="pill susp">suspended</span>' : '')}
         ${u.wallet_frozen ? '<span class="pill susp">wallet frozen</span>' : ''}
       </div>
@@ -3640,6 +3640,11 @@ async function openUser(id){
       <div class="m"><span class="k">Last login</span><span class="v">${u.last_login_at ? fmtDateTime(u.last_login_at) : 'never'}</span></div>
       <div class="m"><span class="k">Account status</span><span class="v">${u.status === 'banned' ? '<span class="pill ban">banned</span>' : (u.status === 'suspended' ? '<span class="pill susp">suspended'+(u.suspended_until ? ' · until '+fmtDate(u.suspended_until) : '')+'</span>' : '<span class="pill">active</span>')}</span></div>
       ${u.status && u.status !== 'active' && u.status_reason ? `<div class="m"><span class="k">Reason</span><span class="v">${esc(u.status_reason)}</span></div>` : ''}
+      ${u.account_type === 'business' ? `<div class="m"><span class="k">Org tier</span><span class="v">${esc(BIZ_TIER_LABEL[u.business_verify_tier] || 'Not verified')}</span></div>` : ''}
+      ${u.business_legal_name ? `<div class="m"><span class="k">Legal name</span><span class="v">${esc(u.business_legal_name)}</span></div>` : ''}
+      ${u.business_reg_number ? `<div class="m"><span class="k">Reg. number</span><span class="v">${esc(u.business_reg_number)}</span></div>` : ''}
+      ${u.business_verify_note ? `<div class="m"><span class="k">Their note</span><span class="v">${esc(u.business_verify_note)}</span></div>` : ''}
+      ${u.business_verify_doc ? `<div class="m"><span class="k">Document</span><span class="v"><a href="${u.business_verify_doc}" target="_blank" rel="noopener">Open submitted document ↗</a></span></div>` : ''}
     </div>
     <div class="acts">
       <button class="act" onclick="togglePlan(${u.id})">${u.plan === 'pro' ? 'Downgrade to Free' : 'Upgrade to Pro'}</button>
@@ -3647,7 +3652,7 @@ async function openUser(id){
       <button class="act" onclick="toggleAdmin(${u.id})">${u.is_admin ? 'Revoke admin' : 'Make admin'}</button>
       <button class="act" onclick="toggleVerified(${u.id})">${u.email_verified ? 'Mark email unverified' : 'Mark email verified'}</button>
       <button class="act${u.verified ? '' : (u.verify_requested_at ? ' accent' : '')}" onclick="toggleBadge(${u.id})">${u.verified ? 'Revoke verified badge' : (u.verify_requested_at ? 'Approve verification' : 'Grant verified badge')}</button>
-      ${u.account_type === 'business' ? `<button class="act${u.business_verify_status === 'pending' ? ' accent' : ''}" onclick="setBizVerify(${u.id}, '${u.business_verify_status === 'verified' ? 'none' : 'verified'}')">${u.business_verify_status === 'verified' ? 'Revoke business verification' : (u.business_verify_status === 'pending' ? 'Approve business verification' : 'Verify business')}</button>` : ''}
+      ${u.account_type === 'business' ? BIZ_TIER_BTNS.map(([t, lbl]) => `<button class="act${(u.business_verify_tier || 'none') === t ? ' accent' : ''}${t === 'none' ? ' danger' : ''}" onclick="setBizTier(${u.id}, '${t}')">${lbl}</button>`).join('') : ''}
       ${u.status && u.status !== 'active'
         ? `<button class="act accent" onclick="setUserStatus(${u.id}, 'active')">Reinstate account</button>`
         : `<button class="act" onclick="setUserStatus(${u.id}, 'suspended')">Suspend…</button><button class="act danger" onclick="setUserStatus(${u.id}, 'banned')">Ban…</button>`}
@@ -3873,6 +3878,17 @@ async function toggleBadge(id){
   catch (e) { notify(e.message); }
 }
 // Approve / revoke a business account's verification.
+// Verified-organization tiers. 'basic' is normally earned automatically (the
+// business proves control of its own domain); staff grant verified / premium.
+const BIZ_TIER_LABEL = { none: 'Not verified', basic: 'Domain verified', verified: 'Verified business', premium: 'Premium partner' };
+const BIZ_TIER_BTNS = [['basic', 'Tier: domain ✓'], ['verified', 'Tier: verified business'], ['premium', 'Tier: premium partner'], ['none', 'Remove verification']];
+async function setBizTier(id, tier){
+  try {
+    const { user } = await api('PATCH', '/api/admin/users/' + id, { businessVerifyTier: tier });
+    merge(user); notify(tier === 'none' ? 'Business verification removed.' : ('Set to ' + BIZ_TIER_LABEL[tier] + '.'));
+    if (modalOpen()) openUser(id);
+  } catch (e) { notify(e.message); }
+}
 async function setBizVerify(id, status){
   try { const { user } = await api('PATCH', '/api/admin/users/' + id, { businessVerifyStatus: status }); merge(user); notify(status === 'verified' ? 'Business verified.' : 'Business verification removed.'); if (modalOpen()) openUser(id); }
   catch (e) { notify(e.message); }

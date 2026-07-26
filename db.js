@@ -336,6 +336,17 @@ async function initSchema() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS account_type TEXT NOT NULL DEFAULT 'personal';`);
   // Business verification: 'none' | 'pending' (requested) | 'verified' (admin-approved).
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS business_verify_status TEXT NOT NULL DEFAULT 'none';`);
+  // Verified-organization TIERS (X-Verified-Orgs / LinkedIn model). The status
+  // column above stays the workflow state (none|pending|verified); the tier is
+  // the LEVEL actually granted: basic = the business proved control of its own
+  // domain (via the work-email code flow), verified = staff reviewed documents,
+  // premium = a partner-level seal staff grants. Submitted details live here
+  // too, and the document image is CLEARED the moment a decision is made.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS business_verify_tier TEXT NOT NULL DEFAULT 'none';`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS business_legal_name TEXT;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS business_reg_number TEXT;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS business_verify_note TEXT;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS business_verify_doc TEXT;`);
   // Presence: when the user was last connected (for "last seen").
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ;`);
   // Contact privacy (who can call / video / DM you). Default: everyone.

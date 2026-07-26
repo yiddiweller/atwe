@@ -1135,6 +1135,7 @@ function publicUser(row) {
     accountType: row.account_type === 'business' ? 'business' : 'personal',
     businessVerifyStatus: ['pending', 'verified'].includes(row.business_verify_status) ? row.business_verify_status : 'none',
     businessVerified: row.business_verify_status === 'verified',
+    businessTier: BIZ_TIERS.includes(row.business_verify_tier) ? row.business_verify_tier : 'none',
     dmConnectionsOnly: !!row.dm_connections_only,
     otwVisibility: ['recruiters', 'everyone'].includes(row.otw_visibility) ? row.otw_visibility : 'off',
     openToWork: row.otw_visibility === 'everyone', // drives the public #OpenToWork ring
@@ -2864,7 +2865,7 @@ async function sendResetCode(email, name, code) {
   });
 }
 // Columns needed to build a public user / sign a token (no password_hash).
-const RESET_USER_COLS = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, categories, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password';
+const RESET_USER_COLS = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, categories, account_type, business_verify_status, business_verify_tier, dm_connections_only, otw_visibility, has_password';
 // Look up an account by email or @username.
 async function findUserByIdentifier(identifier) {
   const id = (identifier || '').trim().toLowerCase().replace(/^@/, '');
@@ -3548,7 +3549,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, intro_seen, business_hours, special_hours, hours_note, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, paused, pause_message, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off, store_banner, free_ship_over_cents, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, hiring, pronouns FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, business_verify_tier, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, intro_seen, business_hours, special_hours, hours_note, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, paused, pause_message, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off, store_banner, free_ship_over_cents, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, hiring, pronouns FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -4056,7 +4057,7 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
     const prev = (await db.query('SELECT name, username, headline, share_profile_updates FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
     const { rows } = await db.query(
       `UPDATE users SET ${fields.join(', ')} WHERE id = $${vals.length}
-       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, pronouns, hiring, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, has_password, profile_cta, business_hours, hours_note`,
+       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, pronouns, hiring, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, business_verify_tier, dm_connections_only, has_password, profile_cta, business_hours, hours_note`,
       vals
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -9391,7 +9392,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query(`SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, profile_cta, pinned_post_id, sub_price_cents, sub_blurb, created_at, deactivated, paused, pause_message, connections_visible, business_hours, special_hours, hours_note, shop_paused, shop_pause_message, store_banner, hiring, pronouns, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, (SELECT username FROM users bu WHERE bu.id = users.aff_business_id) AS aff_business_username FROM users WHERE lower(username) = lower($1)`, [handle]);
+    const u = await db.query(`SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, business_verify_tier, otw_visibility, profile_cta, pinned_post_id, sub_price_cents, sub_blurb, created_at, deactivated, paused, pause_message, connections_visible, business_hours, special_hours, hours_note, shop_paused, shop_pause_message, store_banner, hiring, pronouns, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, (SELECT username FROM users bu WHERE bu.id = users.aff_business_id) AS aff_business_username FROM users WHERE lower(username) = lower($1)`, [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     // A hibernated (deactivated) account's profile is hidden from everyone but the owner.
@@ -9524,7 +9525,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     res.json({
       myNote,
       businessJobs, businessPeople, mutualConnections, reviewSummary, trustScore, followedBy, followedByCount,
-      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, pronouns: t.pronouns || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone', profileCta: ['book', 'order', 'message'].includes(t.profile_cta) ? t.profile_cta : null, joinedAt: t.created_at || null, paused: !!t.paused, pauseMessage: t.paused ? (t.pause_message || null) : null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null, specialHours: Array.isArray(t.special_hours) ? t.special_hours : [], hoursNote: t.hours_note || null, shopPaused: !!t.shop_paused, shopPauseMessage: t.shop_paused ? (t.shop_pause_message || null) : null, storeBanner: t.store_banner || null, hiring: !!t.hiring, inquiryEnabled: !!t.inquiry_enabled, inquiryIntro: t.inquiry_intro || null, status: userStatus(t), affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: t.aff_business_username || null } : null },
+      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, pronouns: t.pronouns || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', businessTier: bizTier(t), businessTierLabel: BIZ_TIER_LABEL[bizTier(t)] || null, openToWork: t.otw_visibility === 'everyone', profileCta: ['book', 'order', 'message'].includes(t.profile_cta) ? t.profile_cta : null, joinedAt: t.created_at || null, paused: !!t.paused, pauseMessage: t.paused ? (t.pause_message || null) : null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null, specialHours: Array.isArray(t.special_hours) ? t.special_hours : [], hoursNote: t.hours_note || null, shopPaused: !!t.shop_paused, shopPauseMessage: t.shop_paused ? (t.shop_pause_message || null) : null, storeBanner: t.store_banner || null, hiring: !!t.hiring, inquiryEnabled: !!t.inquiry_enabled, inquiryIntro: t.inquiry_intro || null, status: userStatus(t), affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: t.aff_business_username || null } : null },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       education: edu.rows.map(mapEducation),
       certifications: certs.rows.map(mapCertification),
@@ -14548,14 +14549,35 @@ app.post('/api/admin/moderation/flags/:id/resolve', auth.requirePerm('moderation
 
 
 // A business account requests verification (admin reviews → 'verified').
+// Verified-organization tiers (loudest last). 'basic' is earned automatically by
+// proving control of the business's own domain; 'verified' and 'premium' are
+// staff decisions. The SEAL only shows from 'verified' up — domain control alone
+// is a weaker claim, so it gets an honest chip instead of the badge.
+const BIZ_TIERS = ['none', 'basic', 'verified', 'premium'];
+const BIZ_TIER_LABEL = { basic: 'Domain verified', verified: 'Verified business', premium: 'Premium partner' };
+function bizTier(row) { return BIZ_TIERS.includes(row && row.business_verify_tier) ? row.business_verify_tier : 'none'; }
 app.post('/api/business/verify', auth.requireAuth, rateLimit(5, 3600000, 'biz-verify'), async (req, res) => {
   try {
-    const u = await db.query('SELECT account_type, business_verify_status FROM users WHERE id = $1', [req.user.id]);
+    const u = await db.query('SELECT account_type, business_verify_status, business_verify_tier FROM users WHERE id = $1', [req.user.id]);
     const r = u.rows[0];
     if (!r || r.account_type !== 'business') return res.status(400).json({ error: 'Only business accounts can request verification.' });
-    if (r.business_verify_status === 'verified') return res.json({ ok: true, status: 'verified' });
-    await db.query(`UPDATE users SET business_verify_status = 'pending' WHERE id = $1`, [req.user.id]);
-    res.json({ ok: true, status: 'pending' });
+    if (r.business_verify_status === 'verified') return res.json({ ok: true, status: 'verified', tier: bizTier(r) });
+    // Optional supporting details for the staff review. The document image is
+    // stored only until a decision is made, then cleared (see the admin route).
+    const legalName = (req.body.legalName || '').toString().trim().slice(0, 160) || null;
+    const regNumber = (req.body.regNumber || '').toString().trim().slice(0, 80) || null;
+    const note = (req.body.note || '').toString().trim().slice(0, 1000) || null;
+    let doc = null;
+    if (req.body.doc) {
+      doc = cleanImage(req.body.doc);
+      if (doc === undefined) return res.status(400).json({ error: 'That document image could not be used.' });
+    }
+    await db.query(
+      `UPDATE users SET business_verify_status = 'pending', business_legal_name = COALESCE($2, business_legal_name),
+              business_reg_number = COALESCE($3, business_reg_number), business_verify_note = COALESCE($4, business_verify_note),
+              business_verify_doc = COALESCE($5, business_verify_doc)
+        WHERE id = $1`, [req.user.id, legalName, regNumber, note, doc]);
+    res.json({ ok: true, status: 'pending', tier: bizTier(r) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not submit your request.' }); }
 });
 
@@ -14905,6 +14927,15 @@ app.post('/api/work-verification/confirm', auth.requireAuth, rateLimit(20, 60000
       return res.status(400).json({ error: 'That code isn’t right.' });
     }
     await db.query('UPDATE work_verifications SET verified_at = now(), code_hash = NULL, attempts = 0 WHERE id = $1', [row.id]);
+    // A BUSINESS account that verifies an email at its OWN website domain has
+    // proved domain control → auto-grant the 'basic' verified-org tier (never
+    // downgrades a staff-granted verified/premium tier).
+    try {
+      const me = (await db.query('SELECT account_type, website, business_verify_tier FROM users WHERE id = $1', [req.user.id])).rows[0];
+      if (me && me.account_type === 'business' && hostDomain(me.website) === domain && bizTier(me) === 'none') {
+        await db.query(`UPDATE users SET business_verify_tier = 'basic' WHERE id = $1`, [req.user.id]);
+      }
+    } catch (e) { /* tier grant is best-effort */ }
     const out = (await db.query(
       `SELECT w.domain, b.id AS biz_id, b.name AS biz_name, b.username AS biz_username
          FROM work_verifications w LEFT JOIN users b ON b.id = w.business_id WHERE w.id = $1`, [row.id])).rows[0];
@@ -24707,7 +24738,7 @@ app.get('/api/admin/users', auth.requirePerm('users'), async (_req, res) => {
     const { rows } = await db.query(`
       SELECT u.id, u.name, u.email, u.plan, u.is_admin, u.email_verified,
              u.username, u.avatar, u.created_at, u.last_login_at,
-             u.verified, u.verify_requested_at, u.account_type, u.business_verify_status,
+             u.verified, u.verify_requested_at, u.account_type, u.business_verify_status, u.business_verify_tier,
              u.status, u.status_reason, u.suspended_until, u.deactivated,
              u.wallet_frozen, u.wallet_frozen_reason,
              COUNT(c.id)::int AS chat_count,
@@ -24876,6 +24907,20 @@ app.patch('/api/admin/users/:id', auth.requirePerm('users'), async (req, res) =>
     if (!req.isSuperAdmin) return res.status(403).json({ error: 'Only a superadmin can change business verification.' });
     values.push(req.body.businessVerifyStatus);
     fields.push(`business_verify_status = $${values.length}`);
+    // A decision has been made — drop the submitted document (we keep it only
+    // for as long as the review needs it).
+    fields.push('business_verify_doc = NULL');
+  }
+  // Verified-organization TIER: none | basic | verified | premium (superadmin).
+  // Setting a tier also settles the workflow status so the two never disagree.
+  if (BIZ_TIERS.includes(req.body.businessVerifyTier)) {
+    if (!req.isSuperAdmin) return res.status(403).json({ error: 'Only a superadmin can change business verification.' });
+    const tier = req.body.businessVerifyTier;
+    values.push(tier);
+    fields.push(`business_verify_tier = $${values.length}`);
+    values.push(['verified', 'premium'].includes(tier) ? 'verified' : 'none');
+    fields.push(`business_verify_status = $${values.length}`);
+    fields.push('business_verify_doc = NULL');
   }
   if (!fields.length) return res.status(400).json({ error: 'Nothing to update.' });
 
@@ -24883,7 +24928,7 @@ app.patch('/api/admin/users/:id', auth.requirePerm('users'), async (req, res) =>
   try {
     const { rows } = await db.query(
       `UPDATE users SET ${fields.join(', ')} WHERE id = $${values.length}
-       RETURNING id, name, email, plan, is_admin, email_verified, verified, verify_requested_at, username, account_type, business_verify_status`,
+       RETURNING id, name, email, plan, is_admin, email_verified, verified, verify_requested_at, username, account_type, business_verify_status, business_verify_tier`,
       values
     );
     if (!rows[0]) return res.status(404).json({ error: 'User not found.' });
