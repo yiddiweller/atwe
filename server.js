@@ -15387,6 +15387,47 @@ app.get('/api/local', auth.requireAuth, async (req, res) => {
 /* ═══════════════════════════════════════════════
    BUSINESS DIRECTORY  —  browsable, verified-first
 ═══════════════════════════════════════════════ */
+/* ─── Premium placement: a paid, clearly-labelled featured slot in the business
+   directory. Wallet-funded like every other in-app purchase (top up first),
+   velocity-checked, frozen-wallet-aware and double-tap idempotent. Buying while
+   already featured EXTENDS the run rather than restarting it. ─── */
+const DIRECTORY_FEATURE_DAYS = [7, 14, 30];
+const DIRECTORY_FEATURE_DAY_CENTS = parseInt(process.env.DIRECTORY_FEATURE_DAY_CENTS, 10) || 300;
+app.get('/api/business/placement', auth.requireAuth, async (req, res) => {
+  try {
+    const u = (await db.query('SELECT account_type, directory_featured_until, balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!u || u.account_type !== 'business') return res.status(400).json({ error: 'Only business accounts can be featured.' });
+    const until = u.directory_featured_until && new Date(u.directory_featured_until) > new Date() ? u.directory_featured_until : null;
+    res.json({ featuredUntil: until, perDayCents: DIRECTORY_FEATURE_DAY_CENTS, days: DIRECTORY_FEATURE_DAYS, balanceCents: u.balance_cents || 0 });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your placement.' }); }
+});
+app.post('/api/business/placement', auth.requireAuth, blockImpersonation, rateLimit(10, 60000, 'placement'), async (req, res) => {
+  const days = parseInt(req.body.days, 10);
+  if (!DIRECTORY_FEATURE_DAYS.includes(days)) return res.status(400).json({ error: 'Pick one of the listed durations.' });
+  const cents = days * DIRECTORY_FEATURE_DAY_CENTS;
+  try {
+    const u = (await db.query('SELECT account_type FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!u || u.account_type !== 'business') return res.status(400).json({ error: 'Only business accounts can be featured.' });
+    const vel = await walletVelocityCheck(req.user.id, cents);
+    if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
+    const cid = req.body.clientId;
+    const idem = await walletClaimIdem(req.user.id, cid, 'placement');
+    if (!idem.claimed) return res.json(idem.result || { ok: true, deduped: true });
+    const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
+    if (bal < cents) { await walletReleaseIdem(req.user.id, cid, 'placement'); return res.status(400).json({ error: 'Not enough wallet balance — add money first.', insufficientBalance: true }); }
+    const d = await walletDebit(req.user.id, cents, 'placement', 'Featured directory placement');
+    if (!d || d.insufficient || d.error) { await walletReleaseIdem(req.user.id, cid, 'placement'); return res.status(400).json({ error: 'Could not charge your balance.', insufficientBalance: !!(d && d.insufficient) }); }
+    // Extend from whichever is later: now, or the end of a run already paid for.
+    const { rows } = await db.query(
+      `UPDATE users SET directory_featured_until = GREATEST(COALESCE(directory_featured_until, now()), now()) + make_interval(days => $2)
+        WHERE id = $1 RETURNING directory_featured_until`, [req.user.id, days]);
+    await recordCompanyRevenue('placement', req.user.id, req.user.id, cents, 'Featured directory placement');
+    rtPush(req.user.id, 'wallet', { type: 'update' });
+    const result = { ok: true, featuredUntil: rows[0].directory_featured_until, chargedCents: cents };
+    await walletStoreIdem(req.user.id, cid, 'placement', result);
+    res.json(result);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not buy the placement.' }); }
+});
 app.get('/api/businesses/directory', auth.requireAuth, async (req, res) => {
   try {
     const params = [req.user.id];
@@ -15411,16 +15452,19 @@ app.get('/api/businesses/directory', auth.requireAuth, async (req, res) => {
       const m = String(req.query.near).split(',').map(Number);
       if (m.length === 2 && Number.isFinite(m[0]) && Number.isFinite(m[1]) && Math.abs(m[0]) <= 90 && Math.abs(m[1]) <= 180) near = m;
     }
-    let distSelect = 'NULL::float AS dist_km', orderBy = `(u.business_verify_status = 'verified') DESC, followers DESC, lower(u.name)`;
+    // Paid placement sorts FIRST (always labelled in the UI), then the organic order.
+    const featSort = `(u.directory_featured_until IS NOT NULL AND u.directory_featured_until > now()) DESC, `;
+    let distSelect = 'NULL::float AS dist_km', orderBy = featSort + `(u.business_verify_status = 'verified') DESC, followers DESC, lower(u.name)`;
     if (near) {
       params.push(near[0], near[1]);
       const la = params.length - 1, lo = params.length;
       distSelect = `(6371 * acos(GREATEST(-1, LEAST(1, cos(radians($${la})) * cos(radians(u.lat)) * cos(radians(u.lng) - radians($${lo})) + sin(radians($${la})) * sin(radians(u.lat)))))) AS dist_km`;
       where.push('u.lat IS NOT NULL AND u.lng IS NOT NULL');
-      orderBy = 'dist_km ASC';
+      orderBy = featSort + 'dist_km ASC';
     }
     const { rows } = await db.query(
       `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.categories, u.account_type, u.business_verify_status, u.headline, u.business_hours, u.special_hours,
+              (u.directory_featured_until IS NOT NULL AND u.directory_featured_until > now()) AS featured,
               (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = u.id) AS followers,
               (SELECT COUNT(*)::int FROM jobs j WHERE j.posted_by = u.id) AS jobs,
               (SELECT ROUND(AVG(br.rating)::numeric, 1) FROM business_reviews br WHERE br.business_id = u.id) AS rating,
@@ -15431,7 +15475,7 @@ app.get('/api/businesses/directory', auth.requireAuth, async (req, res) => {
       params
     );
     res.json({ businesses: rows.map((u) => Object.assign(mapSearchUser(u), {
-      followers: u.followers, jobs: u.jobs,
+      followers: u.followers, jobs: u.jobs, featured: !!u.featured,
       distanceKm: u.dist_km != null ? Math.round(u.dist_km * 10) / 10 : null,
       rating: u.rating != null ? Number(u.rating) : null, reviewCount: u.review_count || 0,
       openNow: businessOpenNow(u.business_hours, u.special_hours), // true / false / null (no hours set)
