@@ -9286,6 +9286,9 @@ button.ac-skill.endorse.on .ac-skill-c{background:rgba(255,255,255,.15);color:va
   .ci-hire{margin-top:14px;font-size:13px;color:var(--t2);}
   .ci-hire.up{color:var(--green);} .ci-hire.down{color:var(--t3);}
   .ci-note{margin-top:10px;font-size:11.5px;color:var(--t4);}
+/* The morning briefing: the sentence, then the money, then the list. */
+.bf-line{font-size:15px;line-height:1.45;color:var(--t1);}
+.bf-money{margin-top:10px;font-size:14px;font-weight:700;color:var(--green);}
 /* Skill suggestions — tap one to use the shared name everyone else uses. */
 .skill-sugg{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px;}
   .skill-chip{background:var(--s2);border:none;border-radius:999px;padding:7px 13px;font-size:12.5px;
@@ -15316,6 +15319,34 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Posts you've read, so "that thing I saw yesterday" is findable -->
+<div class="overlay hidden" id="historyView" onclick="if(event.target===this)closeOverlay('historyView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Posts you've read">
+    <button class="sheet-close" onclick="closeOverlay('historyView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="ac-section-row" style="padding:0;"><span class="jp-title" style="margin:0;">Posts you've read</span>
+      <button class="ac-link-btn" onclick="acClearHistory()">Clear</button></div>
+    <div class="ac-disc-sub" style="margin:6px 0 12px;">Only you can see this.</div>
+    <div id="historyBody"></div>
+  </div>
+</div>
+
+<!-- Your day, before you go looking for it -->
+<div class="overlay hidden" id="briefingView" onclick="if(event.target===this)closeOverlay('briefingView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Your day">
+    <button class="sheet-close" onclick="closeOverlay('briefingView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Your day</div>
+    <div id="briefingBody"></div>
+  </div>
+</div>
+
+<!-- Prove who you are -->
+<div class="overlay hidden" id="idVerifyView" onclick="if(event.target===this)closeOverlay('idVerifyView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Verify your identity">
+    <button class="sheet-close" onclick="closeOverlay('idVerifyView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="idVerifyBody"></div>
+  </div>
+</div>
+
 <!-- Any emoji as a reaction, not just the ten favourites -->
 <div class="overlay hidden" id="reactPickerView" onclick="if(event.target===this)closeOverlay('reactPickerView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Pick a reaction">
@@ -17740,7 +17771,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1609'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1610'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -29858,6 +29889,7 @@ function acGoProfileHub() {
     html += item('Recruiter projects', _ME_IC.bmk, "acOpenRecruitProjects()", null);
     html += item('Lead lists', _ME_IC.bmk, "acOpenLeads()", null);
     html += item('Saved replies & forms', _ME_IC.sent || _ME_IC.bmk, "acOpenBizTools()", null);
+    html += item('Your day', _ME_IC.bell, "acOpenBriefing()", null);
     if (acIsBiz(S.user)) html += item('Interested in you', _ME_IC.eye || _ME_IC.people, "acOpenIntent()", null);
     if (acIsBiz(S.user)) html += item('Team inbox', _ME_IC.people, "acOpenTeamInbox()", null);
     html += item('Message insights', _ME_IC.chart || _ME_IC.people, "acOpenConvStats()", null);
@@ -29907,6 +29939,8 @@ function acGoProfileHub() {
     html += item('Do it for me', _ME_IC.doit, "acOpenAgent()", null);
     html += item('Ask about your data', _ME_IC.doit, "acOpenAiAsk()", null);
     html += item('QR code', _ME_IC.qr, "acOpenMyQR()", null);
+    html += item('Posts you\u2019ve read', _ME_IC.eye || _ME_IC.bmk, "acOpenHistory()", null);
+    html += item('Verify your identity', _ME_IC.badge, "acOpenIdVerify()", null);
     html += item('Settings', _ME_IC.gear, "openSettings()", null);
     html += item('Notifications', _ME_IC.bell, "openNotifications()", null);
     html += item('Devices', _ME_IC.device, "openDevices()", null);
@@ -34276,7 +34310,10 @@ async function acLoadPostView(id) {
     if (AC._postId !== id) return; // navigated away mid-load
     AC._postData = d;
     // Count a view (once per session per post; the server ignores the author + dedups).
-    if (d.post && !d.post.mine) { AC._postViewed = AC._postViewed || new Set(); if (!AC._postViewed.has(id)) { AC._postViewed.add(id); API.req('POST', '/api/social/posts/' + id + '/view', {}).catch(() => {}); } }
+    // Called for YOUR posts too — the server still won't count a view on your
+    // own post, but it does record it in your reading history, and "where was
+    // that thing I wrote" is the same problem as "that thing I read".
+    if (d.post) { AC._postViewed = AC._postViewed || new Set(); if (!AC._postViewed.has(id)) { AC._postViewed.add(id); API.req('POST', '/api/social/posts/' + id + '/view', {}).catch(() => {}); } }
     document.getElementById('acPostView').innerHTML =
       acPostFocusCard(d.post) + acRepliesHtml(d);
     // Reply controls: lock the composer when this viewer can't reply.
@@ -37563,7 +37600,13 @@ async function acOpenShopAnalytics() {
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
         ${['How’s my shop doing?', 'What sold best this month?', 'Are sales up or down?'].map(x => `<button class="ppl-chip" onclick="document.getElementById('saAskIn').value=${jsAttr(x)};acRunShopAnalyst()">${escHtml(x)}</button>`).join('')}
       </div>
-      <div id="saAskOut"></div>`;
+      <div id="saAskOut"></div>
+      <div class="co-sec-h" style="margin-top:18px;">Your sales as a spreadsheet</div>
+      <div class="ac-disc-sub" style="margin:4px 0 8px;">Every order, line by line — the thing an accountant asks for.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="ac-pill-btn" onclick="acExportSales(90)">Last 3 months</button>
+        <button class="ac-pill-btn" onclick="acExportSales(365)">Last year</button>
+      </div>`;
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
 // AI analytics analyst — answers grounded on the shop's real numbers.
@@ -38955,6 +38998,107 @@ function acToggleSilentMode() {
   showNotif(AC._silentMode ? 'Messages will arrive quietly.' : 'Messages will notify as usual.');
   const bar = document.getElementById('acSilentBar');
   if (bar) bar.classList.toggle('hidden', !AC._silentMode);
+}
+/* ─── Posts you've read ─────────────────────────────────────────────────────
+   Your own record of what you opened, so a post you half-remember is findable
+   again. Nobody else can see it, and you can wipe it. */
+async function acOpenHistory() {
+  const box = document.getElementById('historyBody'); if (!box) return;
+  box.innerHTML = acSkelRows(3);
+  showOverlay('historyView');
+  try {
+    const { posts } = await API.req('GET', '/api/social/history');
+    box.innerHTML = posts.length ? posts.map((p) => acPostCard(p)).join('')
+      : '<div class="ac-empty" style="padding:16px;">Nothing here yet. Posts you open show up here.</div>';
+  } catch (e) { box.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load.')}</div>`; }
+}
+async function acClearHistory() {
+  if (!(await appConfirm({ title: 'Clear your reading history?', message: 'The posts stay where they are — only your record of opening them goes.', confirmText: 'Clear' }))) return;
+  try { await API.req('DELETE', '/api/social/history'); acOpenHistory(); }
+  catch (e) { showNotif(e.message || 'Could not clear it.'); }
+}
+/* ─── Your day ──────────────────────────────────────────────────────────────
+   What was waiting while you were away, before you have to go and find it. */
+// A seller's own sales as a spreadsheet — what an accountant asks for.
+async function acExportSales(days) {
+  try {
+    const r = await fetch('/api/shop/export?days=' + (days || 90), { headers: { Authorization: 'Bearer ' + S.token } });
+    if (!r.ok) throw new Error('Could not build the export.');
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'atwe-sales.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  } catch (e) { showNotif(e.message || 'Could not build the export.'); }
+}
+async function acOpenBriefing() {
+  const box = document.getElementById('briefingBody'); if (!box) return;
+  box.innerHTML = acSkelRows(2);
+  showOverlay('briefingView');
+  try {
+    const d = await API.req('GET', '/api/ai/briefing');
+    if (d.quiet) {
+      box.innerHTML = '<div class="ac-empty" style="padding:20px;">Nothing is waiting. Enjoy the quiet.</div>';
+      return;
+    }
+    const money = d.moneyInCents ? `<div class="bf-money">${acMoney(d.moneyInCents)} came in today</div>` : '';
+    box.innerHTML = `${d.text ? `<div class="bf-line">${escHtml(d.text)}</div>` : ''}${money}
+      <div class="iset-group" style="margin-top:12px;">${d.items.map((i) => `
+        <button class="iset-row" onclick="acBriefGo(${jsAttr(i.key)})">
+          <div class="iset-main"><div class="iset-label">${i.n} ${escHtml(i.n === 1 ? i.label : (i.plural || i.label + 's'))}</div></div>
+          <svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>`).join('')}</div>`;
+  } catch (e) { box.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load.')}</div>`; }
+}
+function acBriefGo(key) {
+  closeOverlay('briefingView');
+  const go = { unread: () => acGoMessages(), requests: () => acOpenConnections(), orders: () => acOpenOrders('seller'),
+    toShip: () => acOpenOrders('seller'), applicants: () => acOpenJobsView('mine'),
+    appointments: () => acOpenAppointments(), notifications: () => openNotifications() }[key];
+  if (go) setTimeout(go, 120);
+}
+/* ─── Prove who you are ─────────────────────────────────────────────────────
+   Atwe never asks for a photo of your passport — storing those would create a
+   risk nobody needs. You say who you are and what you hold; the check itself
+   happens with a person. */
+const ID_DOCS = [['passport', 'Passport'], ['driving_licence', 'Driving licence'],
+  ['national_id', 'National ID card'], ['residence_permit', 'Residence permit']];
+async function acOpenIdVerify() {
+  const box = document.getElementById('idVerifyBody'); if (!box) return;
+  box.innerHTML = acSkelRows(2);
+  showOverlay('idVerifyView');
+  try {
+    const d = await API.req('GET', '/api/id-verification');
+    if (d.verified) {
+      box.innerHTML = `<div class="jp-title">You're ID verified</div>
+        <div class="ac-empty" style="padding:16px;">Your identity has been checked. This makes it much harder for anyone to pretend to be you.</div>`;
+      return;
+    }
+    const r = d.request;
+    if (r && r.status === 'pending') {
+      box.innerHTML = `<div class="jp-title">We're checking</div>
+        <div class="ac-empty" style="padding:16px;">Your request is with our team. We'll let you know as soon as it's looked at.</div>`;
+      return;
+    }
+    box.innerHTML = `<div class="jp-title">Verify your identity</div>
+      <div class="ac-disc-sub" style="margin:0 0 14px;">An ID-verified label makes it much harder for anyone to pretend to be you.
+        <b>We never ask you to upload your document</b> — tell us your legal name and what you hold, and we'll take it from there.</div>
+      ${r && r.status === 'rejected' && r.note ? `<div class="ac-empty" style="padding:12px;margin-bottom:12px;">Last time: ${escHtml(r.note)}</div>` : ''}
+      <input class="jp-in" id="idvName" maxlength="120" placeholder="Your full legal name" style="width:100%;margin:0 0 8px;"/>
+      <select class="jp-in" id="idvDoc" style="width:100%;margin:0 0 8px;">${ID_DOCS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
+      <input class="jp-in" id="idvCountry" maxlength="60" placeholder="Country that issued it" style="width:100%;margin:0 0 14px;"/>
+      <button class="ac-pill-btn accent" style="width:100%;" onclick="acSubmitIdVerify()">Send the request</button>`;
+  } catch (e) { box.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load.')}</div>`; }
+}
+async function acSubmitIdVerify() {
+  const legalName = (document.getElementById('idvName').value || '').trim();
+  if (!legalName) { showNotif('Your legal name is needed.'); return; }
+  try {
+    await API.req('POST', '/api/id-verification', { legalName,
+      docKind: document.getElementById('idvDoc').value,
+      country: (document.getElementById('idvCountry').value || '').trim() });
+    acOpenIdVerify();
+  } catch (e) { showNotif(e.message || 'Could not send it.'); }
 }
 /* ─── Any-emoji reactions ───────────────────────────────────────────────────
    The server has always accepted any emoji; the ten favourites were only ever

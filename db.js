@@ -1836,6 +1836,36 @@ async function initSchema() {
     CREATE UNIQUE INDEX IF NOT EXISTS chat_form_responses_once_idx
       ON chat_form_responses (form_id, responder_id, message_id) WHERE message_id IS NOT NULL;
   `);
+  // A member's own reading history — "that post I saw yesterday" is a real
+  // thing to want back. Their own record, and theirs to clear.
+  await query(`
+    CREATE TABLE IF NOT EXISTS post_history (
+      user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      post_id   INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      viewed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, post_id)
+    );
+    CREATE INDEX IF NOT EXISTS post_history_recent_idx ON post_history (user_id, viewed_at DESC);
+  `);
+  // Government-ID verification: a request, a staff decision, and a label. The
+  // documents themselves are deliberately NOT stored — see the route.
+  await query(`
+    CREATE TABLE IF NOT EXISTS id_verifications (
+      id          SERIAL PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      legal_name  TEXT NOT NULL,
+      doc_kind    TEXT NOT NULL,
+      country     TEXT,
+      status      TEXT NOT NULL DEFAULT 'pending',
+      note        TEXT,
+      reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      reviewed_at TIMESTAMPTZ,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS id_verifications_open_idx
+      ON id_verifications (user_id) WHERE status = 'pending';
+  `);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS id_verified BOOLEAN NOT NULL DEFAULT false`);
   // Every Atwe AI call, so the bill is never a surprise and it's clear which
   // features people actually use. One row per call — small, and swept.
   await query(`

@@ -1267,6 +1267,7 @@ function publicUser(row) {
     intent: row.intent || null,
     introSeen: Array.isArray(row.intro_seen) ? row.intro_seen : [], // feature-intro sheets already shown (per-account, cross-device)
     twoFactorEnabled: !!row.totp_enabled,
+    idVerified: !!row.id_verified,          // government-ID checked (fights impersonation)
     subPriceCents: row.sub_price_cents || 0, // own creator-subscription price (0 = off)
     readReceipts: row.read_receipts !== false,
     privateProfileViews: !!row.private_profile_views,
@@ -3439,7 +3440,7 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
 
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at, account_type, dm_connections_only, password_hash, totp_secret, totp_enabled, totp_recovery, status, status_reason, suspended_until, admin_perms, admin_role, wallet_frozen FROM users WHERE lower(email) = $1 OR lower(username) = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at, account_type, dm_connections_only, password_hash, totp_secret, totp_enabled, id_verified, totp_recovery, status, status_reason, suspended_until, admin_perms, admin_role, wallet_frozen FROM users WHERE lower(email) = $1 OR lower(username) = $1',
       [identifier]
     );
     const user = rows[0];
@@ -3676,7 +3677,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, business_verify_tier, allow_remix, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, intro_seen, business_hours, special_hours, hours_note, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, paused, pause_message, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off, store_banner, free_ship_over_cents, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, hiring, pronouns FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, business_verify_tier, allow_remix, dm_connections_only, otw_visibility, has_password, totp_enabled, id_verified, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, intro_seen, business_hours, special_hours, hours_note, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, paused, pause_message, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off, store_banner, free_ship_over_cents, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, hiring, pronouns FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -3692,7 +3693,7 @@ app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
 // otpauth URI the authenticator scans + the secret for manual entry.
 app.post('/api/auth/2fa/setup', auth.requireAuth, async (req, res) => {
   try {
-    const u = (await db.query('SELECT email, totp_enabled FROM users WHERE id = $1', [req.user.id])).rows[0];
+    const u = (await db.query('SELECT email, totp_enabled, id_verified FROM users WHERE id = $1', [req.user.id])).rows[0];
     if (!u) return res.status(404).json({ error: 'Account not found.' });
     if (u.totp_enabled) return res.status(400).json({ error: 'Two-factor is already enabled. Disable it first to re-enroll.' });
     const secret = auth.generateTotpSecret();
@@ -3704,7 +3705,7 @@ app.post('/api/auth/2fa/setup', auth.requireAuth, async (req, res) => {
 app.post('/api/auth/2fa/enable', auth.requireAuth, async (req, res) => {
   const code = String(req.body.code || '').trim();
   try {
-    const u = (await db.query('SELECT totp_secret, totp_enabled FROM users WHERE id = $1', [req.user.id])).rows[0];
+    const u = (await db.query('SELECT totp_secret, totp_enabled, id_verified FROM users WHERE id = $1', [req.user.id])).rows[0];
     if (!u || !u.totp_secret) return res.status(400).json({ error: 'Start setup first.' });
     if (u.totp_enabled) return res.status(400).json({ error: 'Two-factor is already enabled.' });
     if (!auth.verifyTotp(u.totp_secret, code)) return res.status(400).json({ error: 'That code isn’t valid. Check your authenticator app and try again.' });
@@ -3719,7 +3720,7 @@ app.post('/api/auth/2fa/enable', auth.requireAuth, async (req, res) => {
 app.post('/api/auth/2fa/recovery', auth.requireAuth, async (req, res) => {
   const code = String(req.body.code || '').trim();
   try {
-    const u = (await db.query('SELECT totp_secret, totp_enabled FROM users WHERE id = $1', [req.user.id])).rows[0];
+    const u = (await db.query('SELECT totp_secret, totp_enabled, id_verified FROM users WHERE id = $1', [req.user.id])).rows[0];
     if (!u || !u.totp_enabled) return res.status(400).json({ error: 'Two-factor isn’t enabled.' });
     if (!auth.verifyTotp(u.totp_secret, code)) return res.status(403).json({ error: 'That code isn’t valid.' });
     const recovery = auth.generateRecoveryCodes(10);
@@ -3732,7 +3733,7 @@ app.post('/api/auth/2fa/disable', auth.requireAuth, blockImpersonation, async (r
   const password = String(req.body.password || '');
   const code = String(req.body.code || '').trim();
   try {
-    const u = (await db.query('SELECT password_hash, totp_secret, totp_enabled FROM users WHERE id = $1', [req.user.id])).rows[0];
+    const u = (await db.query('SELECT password_hash, totp_secret, totp_enabled, id_verified FROM users WHERE id = $1', [req.user.id])).rows[0];
     if (!u || !u.totp_enabled) return res.status(400).json({ error: 'Two-factor isn’t enabled.' });
     const okPw = await auth.verifyPassword(password, u.password_hash || auth.DUMMY_HASH);
     if (!okPw) return res.status(403).json({ error: 'Incorrect password.' });
@@ -6129,6 +6130,151 @@ app.put('/api/admin/maintenance', auth.requireAdmin, async (req, res) => {
     adminAudit(req, 'maintenance.set', 'system', null, m);
     res.json({ ok: true, maintenance: m });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the message.' }); }
+});
+/* ─── Reading history ───────────────────────────────────────────────────────
+   "That post I saw yesterday" is a real thing to want back. This is the
+   member's own record of what they opened — theirs to see and theirs to
+   clear, and nobody else's business. */
+app.get('/api/social/history', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      POSTS_SELECT + ` JOIN post_history h ON h.post_id = p.id AND h.user_id = $1
+        WHERE p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+        ORDER BY h.viewed_at DESC LIMIT 100`, [req.user.id]);
+    res.json({ posts: rows.map((r) => mapPost(r, req.user.id)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your history.' }); }
+});
+app.delete('/api/social/history', auth.requireAuth, async (req, res) => {
+  try {
+    if (req.query.postId) await db.query('DELETE FROM post_history WHERE user_id = $1 AND post_id = $2', [req.user.id, routeId(req.query.postId)]);
+    else await db.query('DELETE FROM post_history WHERE user_id = $1', [req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not clear your history.' }); }
+});
+/* ─── Seller reports ────────────────────────────────────────────────────────
+   A seller's own sales, as a spreadsheet — the thing an accountant asks for.
+   Scoped to the caller, so it can only ever be their own numbers. */
+app.get('/api/shop/export', auth.requireAuth, async (req, res) => {
+  const days = Math.max(1, Math.min(400, parseInt(req.query.days, 10) || 90));
+  try {
+    const { rows, fields } = await db.query(
+      `SELECT o.id AS order_id, o.created_at, o.status, oi.name AS item, oi.variant_label AS variant,
+              oi.qty, oi.price_cents, o.discount_cents, o.shipping_cents, o.tax_cents, o.total_cents,
+              b.username AS buyer, o.carrier, o.tracking
+         FROM orders o JOIN order_items oi ON oi.order_id = o.id
+         LEFT JOIN users b ON b.id = o.buyer_id
+        WHERE o.seller_id = $1 AND o.created_at > now() - make_interval(days => $2)
+        ORDER BY o.created_at DESC LIMIT 20000`, [req.user.id, days]);
+    const cols = fields.map((f) => f.name);
+    const body = rows.map((r) => cols.map((c) => csvCell(r[c])).join(',')).join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="atwe-sales-${days}d.csv"`);
+    res.send(cols.join(',') + '\n' + body + '\n');
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build the export.' }); }
+});
+/* ─── Your day, in one place ────────────────────────────────────────────────
+   What happened while you were away — messages, orders, applicants, money —
+   before you have to go looking for it. The counts are real either way; Atwe
+   AI only writes the sentence on top, so this still works without a key. */
+app.get('/api/ai/briefing', auth.requireAuth, async (req, res) => {
+  const uid = req.user.id;
+  try {
+    const q = (sql, p) => db.query(sql, p || [uid]).then((r) => r.rows[0].n).catch(() => 0);
+    const [unread, requests, orders, toShip, applicants, appts, money, mentions] = await Promise.all([
+      q(`SELECT COUNT(*)::int AS n FROM at_messages WHERE recipient_id = $1 AND read_at IS NULL AND deleted_all IS NOT TRUE`),
+      q(`SELECT COUNT(*)::int AS n FROM connections WHERE addressee_id = $1 AND status = 'pending'`),
+      q(`SELECT COUNT(*)::int AS n FROM orders WHERE seller_id = $1 AND created_at > now() - interval '1 day'`),
+      q(`SELECT COUNT(*)::int AS n FROM orders WHERE seller_id = $1 AND status IN ('paid','escrow') AND shipped_at IS NULL`),
+      q(`SELECT COUNT(*)::int AS n FROM job_applications a JOIN jobs j ON j.id = a.job_id
+          WHERE j.posted_by = $1 AND a.status = 'applied'`),
+      q(`SELECT COUNT(*)::int AS n FROM appointments WHERE business_id = $1 AND status = 'requested'`),
+      q(`SELECT COALESCE(SUM(delta_cents),0)::int AS n FROM wallet_tx
+          WHERE user_id = $1 AND delta_cents > 0 AND created_at > now() - interval '1 day'`),
+      q(`SELECT COUNT(*)::int AS n FROM notifications WHERE user_id = $1 AND read = false`).catch(() => 0),
+    ]);
+    // Both forms are given, because "order waiting to be sent" doesn't
+    // pluralise by sticking an s on the end of the phrase.
+    const items = [
+      { key: 'unread', label: 'unread message', plural: 'unread messages', n: unread },
+      { key: 'requests', label: 'connection request', plural: 'connection requests', n: requests },
+      { key: 'orders', label: 'new order', plural: 'new orders', n: orders },
+      { key: 'toShip', label: 'order waiting to be sent', plural: 'orders waiting to be sent', n: toShip },
+      { key: 'applicants', label: 'new applicant', plural: 'new applicants', n: applicants },
+      { key: 'appointments', label: 'booking to confirm', plural: 'bookings to confirm', n: appts },
+      { key: 'notifications', label: 'unread notification', plural: 'unread notifications', n: mentions },
+    ].filter((i) => i.n > 0);
+    const out = { items, moneyInCents: money, quiet: items.length === 0 && money === 0, text: null };
+    if (process.env.ANTHROPIC_API_KEY && !out.quiet) {
+      try {
+        const sys = 'You are Atwe AI writing a short morning briefing for a business owner. ' +
+          'Given a list of what is waiting for them, write ONE friendly sentence (max 30 words) telling them ' +
+          'what matters most first. Plain language, no emojis, no greeting, no list. ' +
+          'Never mention being an AI or any AI company.';
+        const msg = await anthropic.messages.create({ model: 'claude-haiku-4-5-20251001', max_tokens: 120, system: sys,
+          messages: [{ role: 'user', content: JSON.stringify({ waiting: items, moneyInCents: money }) }] });
+        out.text = (msg.content.find((x) => x.type === 'text')?.text || '').trim() || null;
+      } catch (e) { /* the counts are the point; the sentence is a bonus */ }
+    }
+    res.json(out);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build your briefing.' }); }
+});
+/* ─── ID verification ───────────────────────────────────────────────────────
+   A member asks to be ID-verified; staff decide. Atwe deliberately does NOT
+   store the document — asking someone to upload a passport into a database
+   creates a liability nobody here needs. The member states their legal name
+   and what they hold; verification happens out of band, and only the DECISION
+   is recorded. */
+const ID_DOC_KINDS = ['passport', 'driving_licence', 'national_id', 'residence_permit'];
+app.post('/api/id-verification', auth.requireAuth, rateLimit(5, 3600000, 'idv'), async (req, res) => {
+  const legalName = (req.body.legalName || '').toString().trim().slice(0, 120);
+  const docKind = ID_DOC_KINDS.includes(req.body.docKind) ? req.body.docKind : null;
+  const country = (req.body.country || '').toString().trim().slice(0, 60) || null;
+  if (!legalName || !docKind) return res.status(400).json({ error: 'Your legal name and which document you hold are both needed.' });
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO id_verifications (user_id, legal_name, doc_kind, country) VALUES ($1,$2,$3,$4)
+       ON CONFLICT DO NOTHING RETURNING id`, [req.user.id, legalName, docKind, country]);
+    if (!rows[0]) return res.status(409).json({ error: 'You already have a request being looked at.' });
+    res.status(201).json({ ok: true, id: rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send your request.' }); }
+});
+app.get('/api/id-verification', auth.requireAuth, async (req, res) => {
+  try {
+    const r = (await db.query(
+      `SELECT status, note, created_at, reviewed_at FROM id_verifications WHERE user_id = $1
+        ORDER BY created_at DESC LIMIT 1`, [req.user.id])).rows[0];
+    const me = (await db.query('SELECT id_verified FROM users WHERE id = $1', [req.user.id])).rows[0];
+    res.json({ verified: !!me?.id_verified, request: r || null, docKinds: ID_DOC_KINDS });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load.' }); }
+});
+app.get('/api/admin/id-verifications', auth.requirePerm('users'), async (req, res) => {
+  const status = ['pending', 'approved', 'rejected'].includes(req.query.status) ? req.query.status : 'pending';
+  try {
+    const { rows } = await db.query(
+      `SELECT v.*, u.name, u.username, u.avatar FROM id_verifications v JOIN users u ON u.id = v.user_id
+        WHERE v.status = $1 ORDER BY v.created_at LIMIT 200`, [status]);
+    res.json({ requests: rows.map((v) => ({ id: v.id, userId: v.user_id, name: v.name, username: v.username,
+      legalName: v.legal_name, docKind: v.doc_kind, country: v.country, status: v.status,
+      note: v.note, createdAt: v.created_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the requests.' }); }
+});
+app.post('/api/admin/id-verifications/:id/:action', auth.requirePerm('users'), async (req, res) => {
+  const id = routeId(req.params.id);
+  const approve = req.params.action === 'approve';
+  if (!Number.isInteger(id) || !['approve', 'reject'].includes(req.params.action)) return res.status(400).json({ error: 'Invalid request.' });
+  const note = (req.body.note || '').toString().trim().slice(0, 300) || null;
+  try {
+    // Claim-first, so two staff can't both resolve the same request.
+    const { rows } = await db.query(
+      `UPDATE id_verifications SET status = $2, note = $3, reviewed_by = $4, reviewed_at = now()
+        WHERE id = $1 AND status = 'pending' RETURNING user_id`,
+      [id, approve ? 'approved' : 'rejected', note, req.user.id]);
+    if (!rows[0]) return res.status(409).json({ error: 'That request has already been dealt with.' });
+    if (approve) await db.query('UPDATE users SET id_verified = true WHERE id = $1', [rows[0].user_id]);
+    notify(rows[0].user_id, req.user.id, approve ? 'id_verified' : 'id_rejected');
+    adminAudit(req, 'idv.' + req.params.action, 'user', rows[0].user_id, { note });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not record that.' }); }
 });
 /* ─── Saved segments ────────────────────────────────────────────────────────
    A saved filter that stays live. "Businesses with no posts in 30 days" is a
@@ -12888,6 +13034,12 @@ app.post('/api/social/posts/:id/view', auth.requireAuth, rateLimit(200, 60000, '
          WHERE NOT EXISTS (SELECT 1 FROM post_views WHERE post_id = $1 AND viewer_id = $2 AND viewed_at::date = now()::date)`,
         [id, req.user.id]
       );
+    }
+    // The member's own reading history — including their own posts, since
+    // "where was that thing I wrote" is the same problem. Never blocks the read.
+    if (o.rows[0]) {
+      db.query(`INSERT INTO post_history (user_id, post_id) VALUES ($1,$2)
+                ON CONFLICT (user_id, post_id) DO UPDATE SET viewed_at = now()`, [req.user.id, id]).catch(() => {});
     }
     res.json({ ok: true });
   } catch (err) { res.json({ ok: true }); }
