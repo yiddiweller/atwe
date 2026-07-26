@@ -1799,6 +1799,84 @@ async function initSchema() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
+  // Reusable outbound message templates for a business — the things you end up
+  // typing over and over (opening hours, delivery times, a price list).
+  await query(`
+    CREATE TABLE IF NOT EXISTS message_templates (
+      id         SERIAL PRIMARY KEY,
+      owner_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title      TEXT NOT NULL,
+      body       TEXT NOT NULL,
+      buttons    JSONB,                 -- optional reply buttons sent with it
+      uses       INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS message_templates_owner_idx ON message_templates (owner_id);
+  `);
+  // A structured mini-form a business sends into a chat (booking, intake). The
+  // definition is reusable; each filled-in copy is a response row.
+  await query(`
+    CREATE TABLE IF NOT EXISTS chat_forms (
+      id         SERIAL PRIMARY KEY,
+      owner_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title      TEXT NOT NULL,
+      fields     JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS chat_forms_owner_idx ON chat_forms (owner_id);
+    CREATE TABLE IF NOT EXISTS chat_form_responses (
+      id          SERIAL PRIMARY KEY,
+      form_id     INTEGER NOT NULL REFERENCES chat_forms(id) ON DELETE CASCADE,
+      responder_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      message_id  INTEGER,              -- the at_messages card it was sent on
+      answers     JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS chat_form_responses_form_idx ON chat_form_responses (form_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS chat_form_responses_once_idx
+      ON chat_form_responses (form_id, responder_id, message_id) WHERE message_id IS NOT NULL;
+  `);
+  // Custom folder tabs across the chat list, on top of the existing labels.
+  await query(`
+    CREATE TABLE IF NOT EXISTS chat_folders (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name       TEXT NOT NULL,
+      position   INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS chat_folders_user_idx ON chat_folders (user_id);
+    CREATE TABLE IF NOT EXISTS chat_folder_items (
+      folder_id  INTEGER NOT NULL REFERENCES chat_folders(id) ON DELETE CASCADE,
+      kind       TEXT NOT NULL,         -- dm | group
+      target_id  INTEGER NOT NULL,
+      PRIMARY KEY (folder_id, kind, target_id)
+    );
+  `);
+  // Topic threads inside a big group: a named sub-conversation. A message with
+  // no topic_id is the main room, so every existing message is unaffected.
+  await query(`
+    CREATE TABLE IF NOT EXISTS group_topics (
+      id         SERIAL PRIMARY KEY,
+      group_id   INTEGER NOT NULL REFERENCES at_groups(id) ON DELETE CASCADE,
+      name       TEXT NOT NULL,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      closed     BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS group_topics_group_idx ON group_topics (group_id);
+  `);
+  await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS topic_id INTEGER REFERENCES group_topics(id) ON DELETE SET NULL`);
+  await query(`CREATE INDEX IF NOT EXISTS at_group_messages_topic_idx ON at_group_messages (topic_id) WHERE topic_id IS NOT NULL`);
+  // A message sent without ringing anyone's phone (Telegram's "send silently").
+  await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS silent BOOLEAN NOT NULL DEFAULT false`);
+  await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS silent BOOLEAN NOT NULL DEFAULT false`);
+  // AI disclosure: a post the member says Atwe AI helped write. Self-declared,
+  // and set by the AI tools themselves when they draft the text — a trust
+  // signal, shown plainly on the post rather than buried.
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS ai_assisted BOOLEAN NOT NULL DEFAULT false`);
+  // Per-conversation notification sound.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_sounds JSONB NOT NULL DEFAULT '{}'::jsonb`);
   // Team inbox: which staff member owns a business's conversation with one
   // customer. One owner per (business, customer) — a shared inbox where two
   // people can't quietly both think they're handling it.
