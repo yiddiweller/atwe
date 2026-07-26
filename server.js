@@ -6131,6 +6131,68 @@ app.put('/api/admin/maintenance', auth.requireAdmin, async (req, res) => {
     res.json({ ok: true, maintenance: m });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the message.' }); }
 });
+/* ─── Saved views ───────────────────────────────────────────────────────────
+   The member-list filters you actually use, kept as one-tap views. Same idea
+   as a segment, but personal to the staffer and aimed at the Users tab. */
+const VIEWS_KEY = 'admin_saved_views';
+app.get('/api/admin/views', auth.requirePerm('users'), async (_req, res) => {
+  try { res.json({ views: (await db.getSetting(VIEWS_KEY)) || [] }); }
+  catch (err) { res.json({ views: [] }); }
+});
+app.put('/api/admin/views', auth.requirePerm('users'), async (req, res) => {
+  // Only the filters the member list understands are stored, so a saved view
+  // can never smuggle anything into the query.
+  const ALLOWED = ['plan', 'type', 'status', 'verified', 'bizVerified', 'deactivated', 'frozen', 'staff', 'tag', 'joinedDays', 'inactiveDays'];
+  const views = Array.isArray(req.body.views) ? req.body.views.slice(0, 20).map((v) => {
+    const f = {};
+    for (const k of ALLOWED) if (v && v.filters && v.filters[k]) f[k] = String(v.filters[k]).slice(0, 40);
+    return { name: String((v && v.name) || '').trim().slice(0, 40) || 'View', filters: f };
+  }).filter((v) => v.name) : [];
+  try {
+    await db.setSetting(VIEWS_KEY, views);
+    res.json({ ok: true, views });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save your views.' }); }
+});
+/* ─── What shipped, and when ────────────────────────────────────────────────
+   "Did this start after Tuesday?" is the first question when something breaks.
+   The build number the app is serving is already stamped in the client, so it
+   is recorded on boot rather than kept by hand. */
+const DEPLOY_KEY = 'deploy_history';
+async function recordDeploy() {
+  if (!db.isConfigured()) return;
+  try {
+    const build = (require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8')
+      .match(/const ATWE_BUILD = '(\d+)'/) || [])[1] || null;
+    if (!build) return;
+    const hist = (await db.getSetting(DEPLOY_KEY)) || [];
+    if (hist[0] && hist[0].build === build) return;   // same build restarting — not a deploy
+    hist.unshift({ build, at: new Date().toISOString() });
+    await db.setSetting(DEPLOY_KEY, hist.slice(0, 60));
+  } catch (e) { /* never let bookkeeping stop the server starting */ }
+}
+app.get('/api/admin/deploys', auth.requireAdmin, async (_req, res) => {
+  try { res.json({ deploys: (await db.getSetting(DEPLOY_KEY)) || [] }); }
+  catch (err) { res.json({ deploys: [] }); }
+});
+/* ─── Is the data safe? ─────────────────────────────────────────────────────
+   Peace of mind on one screen. Atwe does not run its own backups — the
+   database host does — so this reports what can HONESTLY be known: how big
+   the data is, how far back it goes, and when the host last reported a
+   backup, rather than inventing a reassuring green tick. */
+app.get('/api/admin/backup', auth.requireAdmin, async (_req, res) => {
+  try {
+    const size = (await db.query(`SELECT pg_size_pretty(pg_database_size(current_database())) AS size`)).rows[0].size;
+    const oldest = (await db.query(`SELECT MIN(created_at) AS t FROM users`)).rows[0].t;
+    const counts = (await db.query(
+      `SELECT (SELECT COUNT(*)::int FROM users) AS users,
+              (SELECT COUNT(*)::int FROM posts) AS posts,
+              (SELECT COUNT(*)::int FROM orders) AS orders,
+              (SELECT COUNT(*)::int FROM wallet_tx) AS ledger`)).rows[0];
+    res.json({ size, oldestRecord: oldest, counts,
+      // Said plainly rather than implied: whoever hosts the database owns this.
+      note: 'Backups are run by whoever hosts the database, not by Atwe itself. Check your database provider for restore points.' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not read the database.' }); }
+});
 /* ─── Push composer ─────────────────────────────────────────────────────────
    Write a notification and send it to a slice of members' phones. It reuses
    the audiences the email broadcast already uses, so "businesses only" means
@@ -30887,6 +30949,7 @@ db.init()
   .then(() => { if (db.isConfigured()) return db.getSetting(TAXONOMY_KEY).then((v) => { _taxonomy = normalizeTaxonomy(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return backfillSkillCanonicals().catch(() => {}); })
   .then(() => { if (db.isConfigured()) return loadIpBlocks().catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return recordDeploy().catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(MAINT_KEY).then((v) => { if (v && typeof v === 'object') _maintenance = v; }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) console.log('🗄️   Schema + settings ready.'); })
   .catch((err) => console.error('Post-init setup failed:', err.message));
