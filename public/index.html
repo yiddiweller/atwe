@@ -6085,6 +6085,11 @@ body.light .lp-card{background:rgba(0,0,0,.06);}
 .lp-title{font-size:13px;font-weight:700;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .lp-desc{font-size:12px;opacity:.75;margin-top:2px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .lp-dom{display:block;font-size:11px;opacity:.6;margin-top:4px;}
+/* Coupon share-link landing */
+.cpl-hero{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 0 4px;}
+.cpl-save{font-size:26px;font-weight:800;letter-spacing:-.02em;margin-top:6px;}
+.cpl-from{font-size:14px;color:var(--t2);}
+.cpl-code{margin-top:8px;padding:8px 18px;border-radius:999px;background:var(--s2);font-weight:800;font-size:15px;letter-spacing:.12em;}
 .pot-bar{height:7px;border-radius:4px;background:var(--s3);overflow:hidden;margin:8px 0 4px;}
 .pot-bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--violet));border-radius:4px;transition:width var(--t-slow) var(--ease);}
 .pot-actions{display:flex;align-items:center;gap:7px;margin-top:8px;}
@@ -15430,6 +15435,14 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Coupon share-link landing (?coupon=CODE&s=<sellerId>) -->
+<div class="overlay hidden" id="couponLanding" onclick="if(event.target===this)closeOverlay('couponLanding')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Coupon">
+    <button class="sheet-close" onclick="closeOverlay('couponLanding')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="couponLandingBody"></div>
+  </div>
+</div>
+
 <!-- Create / edit a coupon -->
 <div class="overlay hidden" id="couponForm" onclick="if(event.target===this)closeOverlay('couponForm')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Coupon">
@@ -16898,7 +16911,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1549'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1550'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -17739,6 +17752,14 @@ async function handleUrlParams() {
   if (p.get('call')) { _pendingCallLink = p.get('call').replace(/[^a-z0-9]/gi, '').slice(0, 32); stripParam(); }
   if (p.get('pool')) { const pid = parseInt(p.get('pool'), 10); if (Number.isInteger(pid)) _pendingPool = pid; stripParam(); }
   if (p.get('paylink')) { _pendingPayLink = p.get('paylink').replace(/[^a-f0-9]/gi, '').slice(0, 32); stripParam(); }
+  // Coupon share link (?coupon=CODE&s=<sellerId>): stash it in localStorage so it
+  // survives a sign-up/sign-in redirect, then the landing sheet opens after auth.
+  if (p.get('coupon')) {
+    const code = p.get('coupon').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 24);
+    const sid = parseInt(p.get('s'), 10);
+    if (code.length >= 3 && Number.isInteger(sid)) { try { localStorage.setItem('atwe_coupon_pending', JSON.stringify({ code, sellerId: sid })); } catch (e) {} }
+    stripParam();
+  }
   if (p.get('reset')) { _resetToken = p.get('reset'); stripParam(); return true; }
   // Shareable deep links: ?u=<username> (legacy) or a pretty path
   // (/<username>, /circle/<username>, /group/<username>). Stash it; it opens
@@ -17788,6 +17809,10 @@ let _pendingPayLink = null;   // a ?paylink=<code> to open the pay sheet after a
 let _pendingPool = null;      // a ?pool=<id> to open after auth
 let _pendingCallLink = null;  // a ?call=<code> call link to open after auth
 function consumePendingRoute() {
+  try {
+    const pc = JSON.parse(localStorage.getItem('atwe_coupon_pending') || 'null');
+    if (pc && pc.code) { localStorage.removeItem('atwe_coupon_pending'); setTimeout(() => acOpenCouponLanding(pc), 200); }
+  } catch (e) {}
   if (_pendingJoinGroup) { const code = _pendingJoinGroup; _pendingJoinGroup = null; setTimeout(() => acOpenJoinInvite(code), 120); }
   if (_pendingCallLink) { const code = _pendingCallLink; _pendingCallLink = null; setTimeout(() => acOpenCallLinkJoin(code), 140); }
   if (_pendingPayLink) { const code = _pendingPayLink; _pendingPayLink = null; setTimeout(() => acOpenPayLink(code), 160); }
@@ -37013,6 +37038,12 @@ async function acOpenCheckout(ctx) {
   if (acQuoteActive()) acRefreshQuote();
   // A deal card's "Shop now" stashes its code — auto-apply it at checkout.
   if (AC._pendingPromo) { const code = AC._pendingPromo; AC._pendingPromo = null; setTimeout(() => { const inp = document.getElementById('coPromoIn'); if (inp) { inp.value = code; acApplyCoupon(); } }, 250); }
+  // A coupon saved from a share link auto-applies for THAT seller (and quietly
+  // drops itself once the code stops being valid — used up, expired, disabled).
+  else if (ctx.sellerId && _savedCoupons()[ctx.sellerId]) {
+    const code = _savedCoupons()[ctx.sellerId];
+    setTimeout(() => { const inp = document.getElementById('coPromoIn'); if (inp && !inp.value && !AC._coCoupon) { inp.value = code; AC._coAutoCoupon = true; acApplyCoupon(); } }, 250);
+  }
 }
 function acPickSource(s) { AC._coSource = s; acRenderCheckout(); }
 // Tax / carrier-rate quoting is only used when the server has them configured;
@@ -37127,14 +37158,27 @@ async function acApplyCoupon() {
   try {
     const r = await API.req('POST', '/api/coupons/validate', { sellerId: c.sellerId, code, subtotalCents: c.subtotalCents });
     AC._coCoupon = r.coupon; AC._coDiscount = r.discountCents || 0;
+    AC._coAutoCoupon = false;
     if (acQuoteActive()) acRefreshQuote(); else acRenderCheckout();
     showNotif('Promo code applied — you saved ' + acMoney(r.discountCents) + '.');
   } catch (e) {
+    if (AC._coAutoCoupon) {
+      // A silently auto-applied share-link code that no longer validates just
+      // drops itself — never an error toast the buyer didn't cause.
+      AC._coAutoCoupon = false; acDropCouponFor(c.sellerId);
+      if (inp) inp.value = ''; if (errEl) errEl.textContent = '';
+      if (btn) { btn.disabled = false; btn.textContent = 'Apply'; }
+      return;
+    }
     if (errEl) errEl.textContent = e.message || 'That code isn’t valid.';
     if (btn) { btn.disabled = false; btn.textContent = 'Apply'; }
   }
 }
-function acClearCoupon() { AC._coCoupon = null; AC._coDiscount = 0; if (acQuoteActive()) acRefreshQuote(); else acRenderCheckout(); }
+function acClearCoupon() {
+  AC._coCoupon = null; AC._coDiscount = 0;
+  if (AC._co && AC._co.sellerId) acDropCouponFor(AC._co.sellerId); // "Remove" also forgets a share-link code
+  if (acQuoteActive()) acRefreshQuote(); else acRenderCheckout();
+}
 
 /* ── Ads Manager ── */
 /* ─── Atwe Ads (client) — feed ad unit + advertiser create/pay ─────────────── */
@@ -38058,10 +38102,49 @@ function acCouponRow(c) {
     <div class="cp-main"><div class="cp-code">${escHtml(c.code)}${c.active ? '' : ' <span class="shop-off">Off</span>'}</div>
       <div class="cp-sub">${off} · ${bits.join(' · ')}</div></div>
     <div class="cp-acts">
+      ${c.active ? `<button class="ac-pill-btn sm" onclick="acShareCoupon(${jsAttr(c.code)})">Share</button>` : ''}
       <button class="ac-pill-btn sm" onclick="acToggleCoupon(${c.id})">${c.active ? 'Disable' : 'Enable'}</button>
       <button class="ac-pill-btn sm" onclick="acCouponFormOpen(${c.id})">Edit</button>
       <button class="ac-pill-btn sm danger" onclick="acDeleteCoupon(${c.id})">Delete</button>
     </div></div>`;
+}
+// Share a coupon as a deep link (Shopify discount-link style): opening it shows
+// the deal and auto-applies the code at that seller's checkout.
+function acShareCoupon(code) {
+  const link = location.origin + '/?coupon=' + encodeURIComponent(code) + '&s=' + (S.user && S.user.id);
+  if (navigator.share) navigator.share({ title: 'A discount for you', text: 'Use code ' + code + ' at my Atwe shop', url: link }).catch(() => {});
+  else { acCopyText(link); showNotif('Coupon link copied — share it anywhere.'); }
+}
+/* ── Saved coupons from share links: { sellerId: code }, survives reload ── */
+function _savedCoupons() { try { return JSON.parse(localStorage.getItem('atwe_coupons') || '{}') || {}; } catch (e) { return {}; } }
+function acSaveCouponFor(sellerId, code) { const m = _savedCoupons(); m[sellerId] = code; try { localStorage.setItem('atwe_coupons', JSON.stringify(m)); } catch (e) {} }
+function acDropCouponFor(sellerId) { const m = _savedCoupons(); delete m[sellerId]; try { localStorage.setItem('atwe_coupons', JSON.stringify(m)); } catch (e) {} }
+// The share-link landing sheet: what the deal is + who it's from, one white CTA.
+async function acOpenCouponLanding(pc) {
+  try {
+    const { coupon, seller } = await API.req('GET', '/api/coupons/peek?sellerId=' + pc.sellerId + '&code=' + encodeURIComponent(pc.code));
+    AC._cpnSeller = seller;
+    acSaveCouponFor(seller.id, coupon.code);
+    const save = coupon.kind === 'percent' ? (coupon.value + '% off') : (acMoney(coupon.value) + ' off');
+    const bits = [];
+    if (coupon.minOrderCents) bits.push('on orders over ' + acMoney(coupon.minOrderCents));
+    if (coupon.expiresAt) bits.push('until ' + new Date(coupon.expiresAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
+    document.getElementById('couponLandingBody').innerHTML = `
+      <div class="cpl-hero">
+        ${acAvatarHtml(seller.name, seller.avatar, 'user-avatar lg', seller.accountType === 'business')}
+        <div class="cpl-save">${escHtml(save)}</div>
+        <div class="cpl-from">at ${escHtml(seller.name)}’s shop</div>
+        <div class="cpl-code">${escHtml(coupon.code)}</div>
+        ${bits.length ? `<div class="ac-disc-sub" style="text-align:center;">${escHtml(bits.join(' · '))}</div>` : ''}
+      </div>
+      <button class="ac-pill-btn accent" style="width:100%;margin-top:14px;" onclick="acCouponLandingShop()">Shop and save</button>
+      <div class="ac-disc-sub" style="margin-top:10px;text-align:center;">The code is saved — it applies automatically at checkout.</div>`;
+    showOverlay('couponLanding');
+  } catch (e) { showNotif(e.message || 'This coupon is no longer active.'); }
+}
+function acCouponLandingShop() {
+  const s = AC._cpnSeller; closeOverlay('couponLanding'); if (!s) return;
+  if (s.accountType === 'business') acOpenStorefront(s); else acGoProfile(s.username);
 }
 function acCouponKindUI() {
   const k = document.getElementById('cpKind').value;
