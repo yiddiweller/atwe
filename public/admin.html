@@ -4219,6 +4219,14 @@ function renderOpsView(){
       <div class="sub">Problems the server hit, newest first. The same fault happening a thousand times is shown once with a count, so a burst can't bury the rest.</div>
       <div class="dur-row" style="margin-top:10px;"><button class="act danger" onclick="clearErrors()">Clear the list</button></div></div>
     <div id="errBox"><div class="ld"><span class="ab-mark"></span></div></div>
+    <div class="panel"><h3>Identity checks</h3>
+      <div class="sub">People asking to be ID-verified. Atwe never holds their document — check it with them however you normally would, then record the decision here.</div>
+      <div class="tf-ranges" style="margin-top:10px;">
+        <button class="tf-r on" onclick="idvState('pending');this.parentNode.querySelectorAll('.tf-r').forEach(b=>b.classList.remove('on'));this.classList.add('on')">Waiting</button>
+        <button class="tf-r" onclick="idvState('approved');this.parentNode.querySelectorAll('.tf-r').forEach(b=>b.classList.remove('on'));this.classList.add('on')">Verified</button>
+        <button class="tf-r" onclick="idvState('rejected');this.parentNode.querySelectorAll('.tf-r').forEach(b=>b.classList.remove('on'));this.classList.add('on')">Rejected</button>
+      </div></div>
+    <div id="idvBox"><div class="ld"><span class="ab-mark"></span></div></div>
     <div class="panel"><h3>Staff signed in</h3>
       <div class="sub">Every device with a staff or admin session. These are the accounts that can move money and read reports — sign one out the moment it shouldn't be there.</div></div>
     <div id="sessBox"><div class="ld"><span class="ab-mark"></span></div></div>
@@ -4228,7 +4236,7 @@ function renderOpsView(){
         <button class="act accent" onclick="downloadAudit(30)">Last 30 days</button>
         <button class="act" onclick="downloadAudit(365)">Last year</button>
       </div></div>`;
-  loadErrors(); loadStaffSessions();
+  loadErrors(); loadIdVerifications(); loadStaffSessions();
 }
 async function loadErrors(){
   const box = document.getElementById('errBox'); if (!box) return;
@@ -4248,6 +4256,33 @@ async function loadErrors(){
 async function clearErrors(id){
   if (!id && !confirm('Clear every recorded error?')) return;
   try { await api('DELETE', '/api/admin/errors' + (id ? '?id=' + id : '')); loadErrors(); }
+  catch (e){ notify(e.message); }
+}
+/* ID verification: a name, a document type, and a decision. Atwe deliberately
+   never holds the document itself. */
+async function loadIdVerifications(){
+  const box = document.getElementById('idvBox'); if (!box) return;
+  try {
+    const { requests } = await api('GET', '/api/admin/id-verifications?status=' + (IDV_STATE || 'pending'));
+    box.innerHTML = requests.length ? '<div class="panel">' + requests.map(r => `
+      <div class="site-row" style="align-items:flex-start;">
+        <div style="min-width:0;flex:1;">
+          <div class="srt">${esc(r.legalName)} <span class="muted">@${esc(r.username || '')}</span></div>
+          <div class="srs">${esc(r.docKind.replace(/_/g, ' '))}${r.country ? ' · ' + esc(r.country) : ''} · asked ${fmtDate(r.createdAt)}</div>
+        </div>
+        ${r.status === 'pending' ? `<div class="ref-acts">
+          <button class="act accent" onclick="resolveIdv(${r.id},'approve')">Verify them</button>
+          <button class="act danger" onclick="resolveIdv(${r.id},'reject')">Reject</button></div>`
+          : `<span class="pill${r.status === 'approved' ? ' pro' : ''}">${esc(r.status)}</span>`}
+      </div>`).join('') + '</div>' : '<div class="empty">Nothing waiting.</div>';
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+let IDV_STATE = 'pending';
+function idvState(st){ IDV_STATE = st; loadIdVerifications(); }
+async function resolveIdv(id, action){
+  const note = action === 'reject' ? (prompt('Why? (they will see this)') || '') : '';
+  if (action === 'reject' && note === null) return;
+  try { await api('POST', '/api/admin/id-verifications/' + id + '/' + action, { note }); loadIdVerifications(); }
   catch (e){ notify(e.message); }
 }
 async function loadStaffSessions(){
