@@ -1807,6 +1807,7 @@ const PUSH_VERBS = {
   sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription',
   sched_pay_failed: 'a scheduled payment couldn’t be sent',
   rinv_paused: 'a recurring invoice was paused',
+  pot_saved: 'auto-saved into your pot', pot_save_skipped: 'an auto-save was skipped — balance too low',
   payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review',
   ad_approved: 'approved your ad — it’s ready to pay', ad_rejected: 'reviewed your ad',
   aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation',
@@ -15305,11 +15306,14 @@ app.post('/api/wallet/requests/:id/cancel', auth.requireAuth, async (req, res) =
 
 /* ─── Savings pots / goals (wallet sub-balances) ─── */
 function mapPot(p) {
-  return { id: p.id, name: p.name, targetCents: p.target_cents || null, balanceCents: p.balance_cents || 0, createdAt: p.created_at };
+  return {
+    id: p.id, name: p.name, targetCents: p.target_cents || null, balanceCents: p.balance_cents || 0, createdAt: p.created_at,
+    autoAmountCents: p.auto_amount_cents || null, autoIntervalDays: p.auto_interval_days || null, autoNextAt: p.auto_next_at || null,
+  };
 }
 app.get('/api/wallet/pots', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT id, name, target_cents, balance_cents, created_at FROM wallet_pots WHERE user_id = $1 ORDER BY created_at', [req.user.id]);
+    const { rows } = await db.query('SELECT id, name, target_cents, balance_cents, created_at, auto_amount_cents, auto_interval_days, auto_next_at FROM wallet_pots WHERE user_id = $1 ORDER BY created_at', [req.user.id]);
     res.json({ pots: rows.map(mapPot) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your pots.' }); }
 });
@@ -15321,7 +15325,7 @@ app.post('/api/wallet/pots', auth.requireAuth, rateLimit(30, 60000, 'pot-create'
   try {
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM wallet_pots WHERE user_id = $1', [req.user.id]);
     if (cnt.rows[0].n >= 30) return res.status(400).json({ error: 'You’ve reached the maximum number of pots.' });
-    const r = await db.query('INSERT INTO wallet_pots (user_id, name, target_cents) VALUES ($1,$2,$3) RETURNING id, name, target_cents, balance_cents, created_at', [req.user.id, name, target && target > 0 ? target : null]);
+    const r = await db.query('INSERT INTO wallet_pots (user_id, name, target_cents) VALUES ($1,$2,$3) RETURNING id, name, target_cents, balance_cents, created_at, auto_amount_cents, auto_interval_days, auto_next_at', [req.user.id, name, target && target > 0 ? target : null]);
     res.status(201).json({ pot: mapPot(r.rows[0]) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the pot.' }); }
 });
@@ -15334,7 +15338,7 @@ app.patch('/api/wallet/pots/:id', auth.requireAuth, async (req, res) => {
   if (!fields.length) return res.json({ ok: true });
   try {
     vals.push(id, req.user.id);
-    const r = await db.query(`UPDATE wallet_pots SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND user_id = $${vals.length} RETURNING id, name, target_cents, balance_cents, created_at`, vals);
+    const r = await db.query(`UPDATE wallet_pots SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND user_id = $${vals.length} RETURNING id, name, target_cents, balance_cents, created_at, auto_amount_cents, auto_interval_days, auto_next_at`, vals);
     if (!r.rowCount) return res.status(404).json({ error: 'Pot not found.' });
     res.json({ pot: mapPot(r.rows[0]) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the pot.' }); }
@@ -15383,10 +15387,71 @@ app.post('/api/wallet/pots/:id/move', auth.requireAuth, rateLimit(60, 60000, 'po
   } catch (e) { await client.query('ROLLBACK').catch(() => {}); console.error(e); return res.status(500).json({ error: 'Could not move the money.' }); }
   finally { client.release(); }
   rtPush(req.user.id, 'wallet', { type: 'update' });
-  const pot = (await db.query('SELECT id, name, target_cents, balance_cents, created_at FROM wallet_pots WHERE id = $1', [id])).rows[0];
+  const pot = (await db.query('SELECT id, name, target_cents, balance_cents, created_at, auto_amount_cents, auto_interval_days, auto_next_at FROM wallet_pots WHERE id = $1', [id])).rows[0];
   const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
   res.json({ ok: true, pot: mapPot(pot), balanceCents: bal });
 });
+// Pot auto-save (Revolut/Monzo-style scheduled deposit): move a fixed amount
+// from the spendable balance into the pot on a cadence. It's an INTERNAL move
+// (your own money), so — like the manual pot move — it isn't velocity-capped
+// and isn't blocked by a wallet freeze on outflows.
+const POT_SAVE_INTERVALS = [1, 7, 14, 30]; // daily / weekly / every 2 weeks / monthly
+app.put('/api/wallet/pots/:id/auto', auth.requireAuth, rateLimit(30, 60000, 'pot-auto'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const amount = Math.round(Number(req.body.amountCents) || 0);
+  try {
+    let r;
+    if (!amount) {
+      // Off: clear the schedule.
+      r = await db.query(
+        `UPDATE wallet_pots SET auto_amount_cents = NULL, auto_interval_days = NULL, auto_next_at = NULL
+          WHERE id = $1 AND user_id = $2 RETURNING id, name, target_cents, balance_cents, created_at, auto_amount_cents, auto_interval_days, auto_next_at`,
+        [id, req.user.id]);
+    } else {
+      if (!(amount >= 100 && amount <= 200000)) return res.status(400).json({ error: 'Auto-save between $1 and $2,000 per deposit.' });
+      const intervalDays = parseInt(req.body.intervalDays, 10);
+      if (!POT_SAVE_INTERVALS.includes(intervalDays)) return res.status(400).json({ error: 'Pick how often to save.' });
+      r = await db.query(
+        `UPDATE wallet_pots SET auto_amount_cents = $3, auto_interval_days = $4, auto_next_at = now() + make_interval(days => $4)
+          WHERE id = $1 AND user_id = $2 RETURNING id, name, target_cents, balance_cents, created_at, auto_amount_cents, auto_interval_days, auto_next_at`,
+        [id, req.user.id, amount, intervalDays]);
+    }
+    if (!r.rowCount) return res.status(404).json({ error: 'Pot not found.' });
+    res.json({ pot: mapPot(r.rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update auto-save.' }); }
+});
+// The driver: claim due schedules forward first (overlapping ticks can never
+// double-deposit), then move each atomically. A short balance skips the cycle
+// (nothing borrowed, nothing paused — it just tries again next time) and tells
+// the member once per skip.
+async function flushPotAutoSaves() {
+  if (!db.isConfigured()) return 0;
+  let n = 0;
+  const { rows } = await db.query(
+    `UPDATE wallet_pots SET auto_next_at = now() + make_interval(days => auto_interval_days)
+      WHERE auto_amount_cents IS NOT NULL AND auto_next_at <= now() RETURNING id, user_id, name, auto_amount_cents`);
+  for (const p of rows) {
+    const client = await db.getPool().connect();
+    let saved = false;
+    try {
+      await client.query('BEGIN');
+      const u = (await client.query('SELECT balance_cents FROM users WHERE id = $1 FOR UPDATE', [p.user_id])).rows[0];
+      if (u && u.balance_cents >= p.auto_amount_cents) {
+        await walletCredit(client, p.user_id, -p.auto_amount_cents, 'pot_in', null, 'Auto-save · ' + p.name);
+        await client.query('UPDATE wallet_pots SET balance_cents = balance_cents + $2 WHERE id = $1', [p.id, p.auto_amount_cents]);
+        saved = true;
+      }
+      await client.query('COMMIT');
+    } catch (e) { await client.query('ROLLBACK').catch(() => {}); console.error('pot auto-save', p.id, e.message); client.release(); continue; }
+    client.release();
+    if (saved) { n++; rtPush(p.user_id, 'wallet', { type: 'update' }); notifySelf(p.user_id, 'pot_saved'); }
+    else notifySelf(p.user_id, 'pot_save_skipped');
+  }
+  return n;
+}
+const POTSAVE_FLUSH_MS = Math.max(10000, parseInt(process.env.POTSAVE_FLUSH_MS, 10) || 3600000);
+registerJob('pot_autosave', 'Pot auto-saves', POTSAVE_FLUSH_MS); setInterval(trackJob('pot_autosave', flushPotAutoSaves), POTSAVE_FLUSH_MS).unref?.();
 
 /* ═══════════════════════════════════════════════
    GROUP FUNDRAISING / MONEY POOLS

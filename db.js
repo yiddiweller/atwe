@@ -2978,6 +2978,11 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS wallet_pots_user_idx ON wallet_pots(user_id, created_at);`);
+  // Pot auto-save (Revolut/Monzo scheduled deposits): move a fixed amount from
+  // the spendable balance into the pot on a cadence. All-null = off.
+  await query(`ALTER TABLE wallet_pots ADD COLUMN IF NOT EXISTS auto_amount_cents INTEGER;`);
+  await query(`ALTER TABLE wallet_pots ADD COLUMN IF NOT EXISTS auto_interval_days INTEGER;`);
+  await query(`ALTER TABLE wallet_pots ADD COLUMN IF NOT EXISTS auto_next_at TIMESTAMPTZ;`);
   // Group fundraising / money pools: a shareable goal anyone can chip in toward
   // (distinct from a split, which assigns fixed shares). Contributions move from the
   // contributor's wallet to the creator's via walletTransfer.
