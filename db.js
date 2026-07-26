@@ -2789,6 +2789,8 @@ async function initSchema() {
   // Gift orders: hide prices on the packing slip + an optional gift note.
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS gift BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS gift_note TEXT;`);
+  // Seller's thank-you / dispatch note attached when marking shipped (Etsy-style).
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS ship_note TEXT;`);
   // Weekly shop-summary notification cadence (one per business per week).
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_week_summary_at TIMESTAMPTZ;`);
   // Invoice settled outside Atwe (cash/bank) — a bookkeeping mark, no wallet money moved.

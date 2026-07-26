@@ -6072,6 +6072,10 @@ body.reduce-motion .ac-react-bar,body.reduce-motion .ac-rb-btn{animation:none;}
 .pot-name{font-size:15px;font-weight:700;color:var(--t1);}
 .pot-goal{font-size:13px;color:var(--t3);white-space:nowrap;}
 .pot-auto{font-size:12px;color:var(--accent);font-weight:600;margin-top:4px;}
+/* Seller thank-you note on a shipped order */
+.ord-shipnote{margin:10px 0;background:var(--s2);border-radius:14px;padding:12px 14px;}
+.ord-shipnote .co-sec-h{margin:0 0 4px;}
+.ord-shipnote-body{font-size:14px;line-height:1.45;white-space:pre-wrap;}
 .pot-bar{height:7px;border-radius:4px;background:var(--s3);overflow:hidden;margin:8px 0 4px;}
 .pot-bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--violet));border-radius:4px;transition:width var(--t-slow) var(--ease);}
 .pot-actions{display:flex;align-items:center;gap:7px;margin-top:8px;}
@@ -15492,6 +15496,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <div class="as-head"><div class="as-name">Mark as shipped</div><div class="as-handle">Add a tracking number so the buyer can follow it.</div></div>
     <select class="jp-in" id="shipCarrier" style="margin:4px 0 8px;"><option>USPS</option><option>UPS</option><option>FedEx</option><option>DHL</option><option>Other</option></select>
     <input class="jp-in" id="shipTracking" type="text" maxlength="80" placeholder="Tracking number (optional)"/>
+    <textarea class="jp-in" id="shipNote" maxlength="300" placeholder="Add a thank-you note for the buyer (optional)" style="margin-top:8px;min-height:54px;"></textarea>
     <button class="as-item ad-go" onclick="acSubmitShip()"><svg viewBox="0 0 24 24"><path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg> <span>Confirm shipped</span></button>
     <button class="as-cancel" onclick="closeOverlay('shipSheet')">Cancel</button>
   </div>
@@ -16884,7 +16889,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1547'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1548'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -36444,12 +36449,16 @@ async function acOpenOrder(id) {
       const trackUrlFn = o.tracking && _CARRIER_TRACK_URL[o.carrier];
       const trackNum = o.tracking ? (trackUrlFn ? `<a class="ord-trk" style="color:var(--accent);text-decoration:underline;" href="${escHtml(trackUrlFn(o.tracking))}" target="_blank" rel="noopener">${escHtml(o.tracking)}</a>` : `<span class="ord-trk">${escHtml(o.tracking)}</span>`) : '';
       const track = o.shippedAt ? `<div class="ord-track"><b>${escHtml(o.carrier || 'Carrier')}</b>${o.tracking ? ` · Tracking ${trackNum}` : ''}</div>` : '';
+      // Seller's thank-you note, attached at ship time (shown to both parties;
+      // the buyer sees who it's from, the seller sees what they wrote).
+      const sellerNote = (o.shippedAt && o.shipNote)
+        ? `<div class="ord-shipnote"><div class="co-sec-h">${o.mine ? 'Your note to the buyer' : 'A note from ' + escHtml(o.seller.name)}</div><div class="ord-shipnote-body">${escHtml(o.shipNote)}</div></div>` : '';
       const st = o.shipTo;
       const ship = st ? `<div class="ord-shipto"><div class="co-sec-h">Ship to</div><div class="addr-name">${escHtml(st.name)}</div><div class="addr-lines">${escHtml(acAddrText(st))}</div>${st.phone ? `<div class="addr-lines">${escHtml(st.phone)}</div>` : ''}</div>` : '';
       // Ship-by estimate (from the items' stated processing time) — until it ships.
       const shipBy = (o.shipByAt && !o.shippedAt)
         ? `<div class="ord-track">📦 Estimated to ship by <b>${new Date(o.shipByAt).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</b></div>` : '';
-      shipBlock = timeline + shipBy + track + ship;
+      shipBlock = timeline + shipBy + track + sellerNote + ship;
     }
     const totals = `<div class="inv-items">${items}
       ${o.needsShipping || o.shippingCents || o.discountCents ? `<div class="inv-item"><span>Subtotal</span><span>$${(o.subtotalCents / 100).toFixed(2)}</span></div>` : ''}
@@ -38901,9 +38910,9 @@ async function acSubmitReview() {
 }
 
 /* ── Seller fulfillment: ship + deliver + packing slip ── */
-function acShipOrder() { document.getElementById('shipCarrier').value = 'USPS'; document.getElementById('shipTracking').value = ''; showOverlay('shipSheet'); }
+function acShipOrder() { document.getElementById('shipCarrier').value = 'USPS'; document.getElementById('shipTracking').value = ''; document.getElementById('shipNote').value = ''; showOverlay('shipSheet'); }
 async function acSubmitShip() {
-  try { await API.req('POST', '/api/orders/' + AC._ordId + '/ship', { carrier: document.getElementById('shipCarrier').value, tracking: document.getElementById('shipTracking').value.trim() });
+  try { await API.req('POST', '/api/orders/' + AC._ordId + '/ship', { carrier: document.getElementById('shipCarrier').value, tracking: document.getElementById('shipTracking').value.trim(), note: document.getElementById('shipNote').value.trim() });
     closeOverlay('shipSheet'); showNotif('Marked shipped. The buyer’s been notified.'); acOpenOrder(AC._ordId);
   } catch (e) { showNotif(e.message || 'Could not update.'); }
 }
@@ -38959,6 +38968,7 @@ function acLabelRenderRates() {
   document.getElementById('labelBody').innerHTML = `
     <div class="co-sec-h">Choose a rate</div>
     <div class="co-rates">${rows || '<div class="ac-empty" style="padding:10px 0;">No rates available.</div>'}</div>
+    ${AC._label.kind === 'return' ? '' : `<textarea class="jp-in" id="labelShipNote" maxlength="300" placeholder="Add a thank-you note for the buyer (optional)" style="margin-top:10px;min-height:50px;" oninput="AC._label.note=this.value">${escHtml(AC._label.note || '')}</textarea>`}
     <button class="ac-pill-btn" style="width:100%;margin-top:10px;" onclick="acLabelRenderPkg()">← Change package size</button>
     <button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" ${AC._label.chosenId ? '' : 'disabled'} onclick="acLabelBuy()">Buy label${AC._label.chosenId ? ' · $' + ((rates.find(r => r.id === AC._label.chosenId) || {}).amountCents / 100).toFixed(2) : ''}</button>`;
 }
@@ -38967,7 +38977,7 @@ async function acLabelBuy() {
   if (!AC._label.chosenId) return;
   document.getElementById('labelBody').innerHTML = '<div class="ac-empty" style="padding:20px 0;">Buying label…</div>';
   try {
-    await API.req('POST', _acLabelBase() + '/buy', { rateId: AC._label.chosenId, clientId: AC._label.cid });
+    await API.req('POST', _acLabelBase() + '/buy', { rateId: AC._label.chosenId, clientId: AC._label.cid, note: (AC._label.note || '').trim() });
     closeOverlay('labelSheet'); showNotif('Label purchased. The buyer’s been notified.'); acOpenOrder(AC._ordId);
   } catch (e) {
     showNotif(e.message || 'Could not buy the label.');
