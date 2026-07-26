@@ -1030,6 +1030,7 @@
       <button class="tab" data-v="cards" onclick="switchTab('cards')">Cards</button>
       <button class="tab" data-v="fraud" onclick="switchTab('fraud')">Fraud rules</button>
       <button class="tab" data-v="chargebacks" onclick="switchTab('chargebacks')">Chargebacks</button>
+      <button class="tab" data-v="revshare" onclick="switchTab('revshare')">Creator share</button>
 
       <div class="nav-label" data-group="people">People</div>
       <button class="tab" data-v="users" onclick="switchTab('users')">Users</button>
@@ -1055,6 +1056,7 @@
       <button class="tab" data-v="copyright" onclick="switchTab('copyright')">Copyright</button>
       <button class="tab" data-v="impersonation" onclick="switchTab('impersonation')">Impersonation</button>
       <button class="tab" data-v="modqa" onclick="switchTab('modqa')">Moderator QA</button>
+      <button class="tab" data-v="authenticate" onclick="switchTab('authenticate')">Authentication</button>
       <button class="tab" data-v="datareq" onclick="switchTab('datareq')">Data requests</button>
 
       <div class="nav-label" data-group="content">Content</div>
@@ -1552,6 +1554,7 @@ const TAB_PERM = {
   chargebacks: 'refunds', reports2: 'growth', churn: 'growth',
   campaigns: 'super', experiments: 'super', wording: 'super',
   places: 'super', emailbrand: 'super',
+  revshare: 'revenue', authenticate: 'moderation',
 };
 function canSee(tab){ const p = TAB_PERM[tab]; if (ME.superadmin) return true; return p !== 'super' && ME.perms.includes(p); }
 
@@ -1636,6 +1639,7 @@ const NAV_TITLES = {
   chargebacks:'Chargebacks', reports2:'Report builder', churn:'Churn',
   campaigns:'Campaigns', experiments:'Experiments', wording:'Wording',
   places:'Countries', emailbrand:'Email design',
+  revshare:'Creator share', authenticate:'Item authentication',
 };
 // Mobile: slide the sidebar in/out.
 function toggleNav(open){
@@ -1653,7 +1657,9 @@ function renderView(){
   const statRow = document.getElementById('stats'); if (statRow) statRow.style.display = (VIEW === 'features') ? 'none' : '';
   const inner = document.querySelector('.main-inner'); if (inner) inner.scrollTop = 0;
   window.scrollTo(0, 0);
-  if (VIEW === 'chargebacks') renderChargebacksView();
+  if (VIEW === 'revshare') renderRevShareView();
+  else if (VIEW === 'authenticate') renderAuthView();
+  else if (VIEW === 'chargebacks') renderChargebacksView();
   else if (VIEW === 'reports2') renderReportBuilderView();
   else if (VIEW === 'churn') renderChurnView();
   else if (VIEW === 'campaigns') renderCampaignsView();
@@ -3341,6 +3347,151 @@ async function resolveAppeal(id, action){
   const note = prompt(action === 'grant' ? 'Optional note (shown to the member):' : 'Reason for denying (shown to the member):', '');
   if (action === 'deny' && note === null) return;
   try { await api('POST', '/api/admin/appeals/' + id + '/resolve', { action, note: note || null }); notify(action === 'grant' ? 'Appeal granted — account reinstated.' : 'Appeal denied.'); loadAppeals(); }
+  catch (e){ notify(e.message); }
+}
+
+/* ═══════════════════════════════════════════════
+   BATCH 38 — Creator revenue share · Item authentication
+═══════════════════════════════════════════════ */
+
+/* ─── Creator revenue share ─── */
+let RS = null, RS_PERIOD = '';
+function renderRevShareView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="ld"><span class="ab-mark"></span></div>';
+  loadRevShare();
+}
+async function loadRevShare(){
+  try { RS = await api('GET', '/api/admin/revenue-share' + (RS_PERIOD ? '?period=' + RS_PERIOD : '')); renderRevShare(); }
+  catch (e){ document.getElementById('content').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function rsPeriod(p){ RS_PERIOD = p; loadRevShare(); }
+function renderRevShare(){
+  if (VIEW !== 'revshare') return;
+  const c = RS.config || {}, p = RS.preview || {};
+  // The last six finished months, so a period is picked rather than typed.
+  const months = [];
+  { const d = new Date(); d.setDate(1);
+    for (let i = 1; i <= 6; i++) { const x = new Date(d); x.setMonth(x.getMonth() - i); months.push(x.toISOString().slice(0,7)); } }
+  const prepared = (RS.payouts || []).length;
+  const pending = (RS.payouts || []).filter(x => x.status === 'pending').length;
+  const rows = (p.creators || []).slice(0, 60).map(x => `<div class="ref-row"><div class="ref-main">
+      <div class="ref-top"><span class="ref-kind">${x.username ? '@'+esc(x.username) : ('account #'+x.userId)}</span>
+        <span class="pill">${money(x.amountCents)}</span>
+        <span class="muted">${x.sharePct}% of the pot</span></div>
+      <div class="ref-sub">${Number(x.views).toLocaleString()} views · ${Number(x.engagements).toLocaleString()} likes${x.amountCents < (c.minPayoutCents||0) ? ' · under the minimum, will not be paid' : ''}</div>
+    </div></div>`).join('') || '<div class="empty">Nobody earned a share in this month.</div>';
+  document.getElementById('content').innerHTML = `
+    <div class="panel"><h3>Paying the people who bring the audience</h3>
+      <div class="sub">Atwe earns money from ads. This gives a slice of it back to the creators whose work carried those ads. The sum is deliberately simple so you can explain it to anyone who asks: take a share of the month's <b>ad</b> revenue (never orders or subscriptions — that is somebody else's money), then split it by how much genuine attention each creator's work got, counting a like or a share as worth ten views.</div>
+      <div class="site-row"><div><div class="srt">Share ad revenue with creators${c.enabled ? '' : ' <span class="pill ban">off</span>'}</div><div class="srs">Nothing is paid while this is off.</div></div>
+        <button class="switch ${c.enabled?'on':''}" onclick="rsToggle()" aria-label="Revenue share"><span></span></button></div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
+        <div class="fr-in"><label>Share of ad revenue (%)</label><input class="in" id="rsPct" type="number" min="0" max="90" value="${c.poolPct}" style="margin:0;"/></div>
+        <div class="fr-in"><label>Do not pay under ($)</label><input class="in" id="rsMin" type="number" min="0" step="1" value="${((c.minPayoutCents||0)/100).toFixed(2)}" style="margin:0;"/></div>
+        <button class="act" onclick="rsSave()">Save</button>
+      </div>
+    </div>
+    <div class="tf-head"><div class="tf-ranges">
+      ${months.map(m => `<button class="tf-r ${RS.period===m?'on':''}" onclick="rsPeriod('${m}')">${m}</button>`).join('')}
+    </div></div>
+    <div class="panel"><h3>${esc(RS.period)}</h3>
+      <div class="ov-grid" style="margin-top:10px;">
+        ${ovCard('pro', money(p.adRevenueCents||0), 'Ad revenue')}
+        ${ovCard('users', money(p.poolCents||0), 'The pot')}
+        ${ovCard('post', (p.creators||[]).length, 'Creators')}
+        ${ovCard('check', prepared, 'Written down')}
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+        <button class="act" onclick="rsPrepare()">Write down this month's payouts</button>
+        <button class="act accent" onclick="rsPay()" ${pending ? '' : 'disabled'}>Pay the ${pending} waiting</button>
+      </div>
+      <div class="sub" style="margin-top:8px;">Writing them down does not move any money — it just makes the list, so you can look at it first.</div>
+    </div>
+    <div class="panel"><h3>Who would be paid</h3></div>${rows}`;
+}
+async function rsToggle(){
+  try { const r = await api('PUT', '/api/admin/revenue-share', { config: { ...RS.config, enabled: !RS.config.enabled } });
+    RS.config = r.config; renderRevShare(); } catch (e){ notify(e.message); }
+}
+async function rsSave(){
+  try { const r = await api('PUT', '/api/admin/revenue-share', { config: { ...RS.config,
+      poolPct: Number(document.getElementById('rsPct').value),
+      minPayoutCents: Math.round(Number(document.getElementById('rsMin').value) * 100) } });
+    RS.config = r.config; notify('Saved.'); loadRevShare(); } catch (e){ notify(e.message); }
+}
+async function rsPrepare(){
+  try { const r = await api('POST', '/api/admin/revenue-share/' + RS.period + '/prepare', {});
+    notify(r.written + ' payout' + (r.written===1?'':'s') + ' written down.'); loadRevShare(); }
+  catch (e){ notify(e.message); }
+}
+async function rsPay(){
+  if (!confirm('Pay everyone waiting for ' + RS.period + '? The money goes into their Atwe wallets.')) return;
+  try { const r = await api('POST', '/api/admin/revenue-share/' + RS.period + '/pay', {});
+    notify('Paid ' + r.paid + ' creator' + (r.paid===1?'':'s') + ' · ' + money(r.cents) + '.'); loadRevShare(); }
+  catch (e){ notify(e.message); }
+}
+
+/* ─── Item authentication ─── */
+let AU = null, AU_ALL = false;
+function renderAuthView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="tf-head"><div class="tf-ranges">
+      <button class="tf-r ${!AU_ALL?'on':''}" onclick="auFilter(false)">Waiting</button>
+      <button class="tf-r ${AU_ALL?'on':''}" onclick="auFilter(true)">All</button>
+    </div></div>
+    <div id="auBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
+  loadAuth();
+}
+function auFilter(all){ AU_ALL = all; renderAuthView(); }
+async function loadAuth(){
+  const el = document.getElementById('auBody'); if (!el) return;
+  try {
+    AU = await api('GET', '/api/admin/authentications' + (AU_ALL ? '?state=all' : ''));
+    const c = AU.config || {};
+    const head = `<div class="panel"><h3>Checking an item is real before the buyer gets it</h3>
+      <div class="sub">For the things people are afraid to buy from a stranger — a watch, a pair of trainers, a bag. The item comes to a checker first and only goes on to the buyer if it is genuine. It sits on top of protected payment: the money is already being held, so if the check fails the buyer is simply refunded.</div>
+      <div class="site-row"><div><div class="srt">Offer authentication${c.enabled ? '' : ' <span class="pill ban">off</span>'}</div><div class="srs">Buyers only see the option when this is on.</div></div>
+        <button class="switch ${c.enabled?'on':''}" onclick="auToggle()" aria-label="Authentication"><span></span></button></div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
+        <div class="fr-in"><label>What you charge ($)</label><input class="in" id="auFee" type="number" min="0" step="1" value="${((c.feeCents||0)/100).toFixed(2)}" style="margin:0;"/></div>
+        <div class="fr-in"><label>Only on orders over ($)</label><input class="in" id="auMin" type="number" min="0" step="1" value="${((c.minOrderCents||0)/100).toFixed(2)}" style="margin:0;"/></div>
+        <button class="act" onclick="auSave()">Save</button>
+      </div></div>`;
+    if (!AU.authentications.length) { el.innerHTML = head + '<div class="empty">Nothing waiting to be checked.</div>'; return; }
+    el.innerHTML = head + AU.authentications.map(a => {
+      const open = ['requested','in_transit'].includes(a.status);
+      return `<div class="ref-row"><div class="ref-main">
+        <div class="ref-top"><span class="ref-kind">Order #${a.order_id}</span>
+          <span class="pill ${a.status==='passed'?'pro':(a.status==='failed'?'ban':'')}">${esc(a.status)}</span>
+          ${a.total_cents ? `<span class="pill">${money(a.total_cents)}</span>` : ''}</div>
+        <div class="ref-sub">${esc(a.items || 'item')} · @${esc(a.seller_username||'?')} → @${esc(a.buyer_username||'?')} · ${new Date(a.created_at).toLocaleString()}</div>
+        ${a.verdict_note ? `<div class="ref-note">${esc(a.verdict_note)}</div>` : ''}
+      </div><div class="ref-side"><div class="ref-acts">
+        ${a.status === 'requested' ? `<button class="act" onclick="auAct(${a.id},'receive')">It has arrived</button>` : ''}
+        ${open ? `<button class="act accent" onclick="auAct(${a.id},'pass')">It is genuine</button>
+                  <button class="act danger" onclick="auAct(${a.id},'fail')">It is not — refund</button>` : ''}
+      </div></div></div>`;
+    }).join('');
+  } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function auToggle(){
+  try { const r = await api('PUT', '/api/admin/authentication-config', { config: { ...AU.config, enabled: !AU.config.enabled } });
+    AU.config = r.config; loadAuth(); } catch (e){ notify(e.message); }
+}
+async function auSave(){
+  try { const r = await api('PUT', '/api/admin/authentication-config', { config: { ...AU.config,
+      feeCents: Math.round(Number(document.getElementById('auFee').value)*100),
+      minOrderCents: Math.round(Number(document.getElementById('auMin').value)*100) } });
+    AU.config = r.config; notify('Saved.'); loadAuth(); } catch (e){ notify(e.message); }
+}
+async function auAct(id, action){
+  const msg = action === 'fail' ? 'Mark this as NOT genuine? The buyer gets their money back straight away.'
+    : action === 'pass' ? 'Mark this as genuine? It goes on to the buyer.' : 'Mark this as arrived?';
+  if (!confirm(msg)) return;
+  const note = prompt('A note for the record (optional):', '');
+  try { await api('POST', '/api/admin/authentications/' + id + '/' + action, { note: note || null }); loadAuth(); }
   catch (e){ notify(e.message); }
 }
 

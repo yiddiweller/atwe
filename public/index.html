@@ -2926,6 +2926,11 @@ body.reduce-motion .brand-menu{animation-duration:.01s;}
 .pro-perk.off .pro-tick{background:var(--s2);color:var(--t3);}
 .pro-perk-t{font-weight:650;font-size:14.5px;}
 .pro-perk-h{color:var(--t3);font-size:13px;margin-top:2px;line-height:1.45;}
+/* Things written while offline, waiting to go. Quiet, tappable, never in the way. */
+.outbox-pill{position:fixed;left:50%;transform:translateX(-50%);
+  bottom:calc(env(safe-area-inset-bottom,0px) + 92px);z-index:900;
+  background:var(--amber);color:#241a00;font-size:13px;font-weight:700;
+  padding:8px 16px;border-radius:999px;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.28);}
 @media(hover:hover){.aifb-r:hover{background:var(--s2);}.aifb-r.on:hover{background:var(--accent);}}
 .msg-act svg{width:11px;height:11px;stroke:currentColor;stroke-width:2;fill:none;}
 .msg-act.icon-only{padding:4px 6px;}
@@ -14273,6 +14278,45 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- A creator's work and what it earns, in one place. -->
+<div class="overlay hidden" id="studioView" onclick="if(event.target===this)closeOverlay('studioView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Studio">
+    <button class="sheet-close" onclick="closeOverlay('studioView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Your studio</div>
+    <div id="studioBody"></div>
+  </div>
+</div>
+
+<!-- Series: several posts sold together. -->
+<div class="overlay hidden" id="seriesView" onclick="if(event.target===this)closeOverlay('seriesView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Series">
+    <button class="sheet-close" onclick="closeOverlay('seriesView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="seriesTitle">Series</div>
+    <div class="ac-job-views" id="seriesTabs" style="margin-bottom:12px;"></div>
+    <div id="seriesBody"></div>
+  </div>
+</div>
+
+<!-- Brand briefs: businesses looking for creators. -->
+<div class="overlay hidden" id="briefsView" onclick="if(event.target===this)closeOverlay('briefsView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Brand deals">
+    <button class="sheet-close" onclick="closeOverlay('briefsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Brand deals</div>
+    <div class="ac-job-views" id="briefTabs" style="margin-bottom:12px;"></div>
+    <div id="briefsBody"></div>
+  </div>
+</div>
+
+<!-- Samples sent to creators. -->
+<div class="overlay hidden" id="samplesView" onclick="if(event.target===this)closeOverlay('samplesView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Samples">
+    <button class="sheet-close" onclick="closeOverlay('samplesView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Samples</div>
+    <div class="ac-job-views" id="sampleTabs" style="margin-bottom:12px;"></div>
+    <div id="samplesBody"></div>
+  </div>
+</div>
+
 <!-- What Atwe AI remembers, and what it is scheduled to do for you. -->
 <div class="overlay hidden" id="aiBrainView" onclick="if(event.target===this)closeOverlay('aiBrainView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Atwe AI">
@@ -18000,7 +18044,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1619'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1620'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -18078,17 +18122,103 @@ const Store = {
    Signed-in users persist to PostgreSQL via the API.
    Guests have no token and stay local-only (localStorage).
 ═══════════════════════════════════════════════ */
+/* ─── Writing things while offline ─────────────────────────────────────────
+   A tunnel, a lift, a bad signal: the thing you just wrote should not vanish.
+   Anything queued here is retried automatically the moment the connection is
+   back. Deliberately narrow — only the writes that are SAFE to repeat, and
+   never money. A payment that might or might not have gone through must be
+   the person's own decision to retry, never a silent one. */
+const OUTBOX_KEY = 'atwe_outbox';
+const OUTBOX_MAX = 60;
+// Paths whose writes can be queued. Each is either naturally idempotent or
+// carries a clientId, so a retry cannot create a duplicate.
+const OUTBOX_SAFE = [
+  /^\/api\/social\/posts$/, /^\/api\/atchat\/with\/\d+$/, /^\/api\/atchat\/groups\/\d+\/messages$/,
+  /^\/api\/social\/posts\/\d+\/like$/, /^\/api\/social\/bookmark/, /^\/api\/social\/dwell$/,
+  /^\/api\/ai\/actions\/log$/, /^\/api\/search\/log$/, /^\/api\/social\/follow\/\d+$/,
+];
+function outboxCanQueue(method, path) {
+  if (method !== 'POST' && method !== 'PUT' && method !== 'PATCH') return false;
+  return OUTBOX_SAFE.some((re) => re.test(String(path).split('?')[0]));
+}
+function outboxRead() {
+  try { const v = JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]'); return Array.isArray(v) ? v : []; }
+  catch (e) { return []; }
+}
+function outboxWrite(list) {
+  try { localStorage.setItem(OUTBOX_KEY, JSON.stringify(list.slice(-OUTBOX_MAX))); } catch (e) {}
+}
+function outboxAdd(method, path, body) {
+  const list = outboxRead();
+  list.push({ id: 'ob_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), method, path, body, at: Date.now() });
+  outboxWrite(list);
+  outboxSyncBadge();
+}
+function outboxCount() { return outboxRead().length; }
+let _outboxFlushing = false;
+async function outboxFlush() {
+  if (_outboxFlushing || !navigator.onLine) return;
+  const list = outboxRead();
+  if (!list.length) return;
+  _outboxFlushing = true;
+  const left = [];
+  for (const item of list) {
+    try {
+      await API.req(item.method, item.path, item.body, { noQueue: true });
+    } catch (e) {
+      // A rejection is final — the server SAW it and said no, so keeping it
+      // would mean retrying something already refused. Only a genuine
+      // connection failure is worth holding on to.
+      if (e && e.status) continue;
+      left.push(item);
+    }
+  }
+  outboxWrite(left);
+  _outboxFlushing = false;
+  outboxSyncBadge();
+  const sent = list.length - left.length;
+  if (sent > 0) showNotif(sent === 1 ? 'Sent the message you wrote while offline.' : 'Sent ' + sent + ' things you did while offline.');
+}
+function outboxSyncBadge() {
+  const n = outboxCount();
+  let el = document.getElementById('outboxPill');
+  if (!n) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'outboxPill';
+    el.className = 'outbox-pill';
+    el.onclick = outboxFlush;
+    document.body.appendChild(el);
+  }
+  el.textContent = n === 1 ? '1 waiting to send' : n + ' waiting to send';
+}
+
 const API = {
   token: () => localStorage.getItem('atwe_token'),
   setToken: (t) => t ? localStorage.setItem('atwe_token', t) : localStorage.removeItem('atwe_token'),
-  async req(method, path, body) {
+  async req(method, path, body, opts) {
     const headers = { 'Content-Type': 'application/json' };
     const t = API.token();
     if (t) headers.Authorization = 'Bearer ' + t;
-    const res = await fetch(path, {
-      method, headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
+    // Already offline and this is safe to repeat? Queue it rather than losing it.
+    if (!(opts && opts.noQueue) && !navigator.onLine && outboxCanQueue(method, path)) {
+      outboxAdd(method, path, body);
+      return { queued: true };
+    }
+    let res;
+    try {
+      res = await fetch(path, {
+        method, headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+    } catch (netErr) {
+      // The request never reached the server — same treatment.
+      if (!(opts && opts.noQueue) && outboxCanQueue(method, path)) {
+        outboxAdd(method, path, body);
+        return { queued: true };
+      }
+      throw netErr;
+    }
     let data = {};
     try { data = await res.json(); } catch {}
     if (!res.ok) { const err = new Error(data.error || ('Request failed (' + res.status + ')')); err.status = res.status; err.body = data; throw err; }
@@ -24677,6 +24807,323 @@ function acEtaText(eta) {
   return sa + ' – ' + b.toLocaleDateString([], opts);
 }
 
+/* ─── Your studio: the work and what it earns ────────────────────────────── */
+async function acOpenStudio() {
+  showOverlay('studioView');
+  const b = document.getElementById('studioBody'); if (b) b.innerHTML = acSkelRows(3);
+  try {
+    const d = await API.req('GET', '/api/media-studio');
+    const c = d.content || {}, r = d.reach || {}, m = d.money || {}, w = d.waiting || {};
+    const stat = (n, l) => `<div class="dev-item" style="flex:1;min-width:120px;text-align:center;">
+      <div style="font-size:22px;font-weight:800;">${escHtml(String(n))}</div>
+      <div class="dev-sub" style="margin-top:2px;">${escHtml(l)}</div></div>`;
+    b.innerHTML = `
+      <div class="ac-disc-sub" style="margin:0 0 12px;">Everything you have made, and everything it has earned.</div>
+      <div class="dev-name" style="margin-bottom:6px;">Money</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${stat(acMoney(m.totalCents || 0), 'earned in total')}
+        ${stat(m.subscribers || 0, 'subscribers')}
+      </div>
+      <div class="dev-scopes" style="margin-top:8px;">
+        <span class="dev-scope">${acMoney(m.revshareCents || 0)} ad share</span>
+        <span class="dev-scope">${acMoney(m.seriesCents || 0)} series</span>
+        <span class="dev-scope">${acMoney(m.tipsCents || 0)} tips</span>
+      </div>
+      ${d.revShareOn ? '' : '<div class="ac-disc-sub" style="margin-top:8px;">The ad revenue share is not switched on yet.</div>'}
+      <div class="dev-name" style="margin:16px 0 6px;">Reach</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${stat(Number(r.views || 0).toLocaleString(), 'views')}
+        ${stat(Number(r.likes || 0).toLocaleString(), 'likes')}
+        ${stat(Number(r.followers || 0).toLocaleString(), 'followers')}
+      </div>
+      <div class="dev-name" style="margin:16px 0 6px;">What you have made</div>
+      <div class="dev-scopes">
+        <span class="dev-scope">${c.posts || 0} posts</span>
+        <span class="dev-scope">${c.videos || 0} videos</span>
+        <span class="dev-scope">${c.series || 0} series</span>
+        <span class="dev-scope">${c.courses || 0} courses</span>
+      </div>
+      ${(d.topPosts || []).length ? '<div class="dev-name" style="margin:16px 0 6px;">Most seen</div>'
+        + d.topPosts.map(p => `<div class="dev-item"><div class="dev-sub">${escHtml(p.body || '(no words)')}</div>
+            <div class="dev-sub" style="margin-top:4px;">${p.views} views · ${p.likes} likes</div></div>`).join('') : ''}
+      ${(w.samples || w.briefs) ? `<div class="dev-name" style="margin:16px 0 6px;">Waiting on you</div>
+        <div class="dev-acts">
+          ${w.samples ? `<button class="ac-pill-btn" onclick="closeOverlay('studioView');acOpenSamples('creator')">${w.samples} sample${w.samples===1?'':'s'}</button>` : ''}
+          ${w.briefs ? `<button class="ac-pill-btn" onclick="closeOverlay('studioView');acOpenBriefs('applied')">${w.briefs} pitch${w.briefs===1?'':'es'}</button>` : ''}
+        </div>` : ''}
+      <div class="dev-acts" style="margin-top:16px;">
+        <button class="ac-pill-btn" onclick="closeOverlay('studioView');acOpenSeries('mine')">My series</button>
+        <button class="ac-pill-btn" onclick="closeOverlay('studioView');acOpenBriefs('open')">Find brand deals</button>
+        <button class="ac-pill-btn" onclick="closeOverlay('studioView');acOpenEarnings()">Ad share</button>
+      </div>`;
+  } catch (e) { b.innerHTML = '<div class="ac-empty-sm">' + escHtml(e.message) + '</div>'; }
+}
+async function acOpenEarnings() {
+  showOverlay('studioView');
+  const b = document.getElementById('studioBody'); if (b) b.innerHTML = acSkelRows(2);
+  try {
+    const d = await API.req('GET', '/api/creator-earnings');
+    const rows = (d.payouts || []).map(p => `<div class="dev-item">
+        <div class="dev-item-top"><span class="dev-name">${escHtml(p.period)}</span>
+          <span class="dev-pill ${p.status === 'paid' ? 'ok' : ''}">${escHtml(p.status)}</span></div>
+        <div class="dev-sub">${acMoney(p.amount_cents)} · ${Number(p.views).toLocaleString()} views · ${Number(p.engagements).toLocaleString()} likes · your share ${p.share_pct}%</div>
+      </div>`).join('') || '<div class="ac-empty-sm">Nothing yet.</div>';
+    b.innerHTML = `
+      <div class="ac-disc-sub" style="margin:0 0 12px;">${d.enabled
+        ? 'Atwe puts <b>' + d.poolPct + '%</b> of what it earns from ads into a pot each month, and splits it between creators by how much genuine attention their work got. Paid once it passes ' + acMoney(d.minPayoutCents) + '.'
+        : 'The ad revenue share is not switched on yet. When it is, this is where your share will appear.'}</div>
+      <div class="dev-item" style="text-align:center;">
+        <div style="font-size:26px;font-weight:800;">${acMoney(d.totalPaidCents || 0)}</div>
+        <div class="dev-sub">paid to you so far</div></div>
+      <div class="dev-name" style="margin:16px 0 6px;">Month by month</div>${rows}`;
+  } catch (e) { b.innerHTML = '<div class="ac-empty-sm">' + escHtml(e.message) + '</div>'; }
+}
+
+/* ─── Series ─────────────────────────────────────────────────────────────── */
+let SER = { tab: 'discover', list: [] };
+function acOpenSeries(tab) {
+  SER.tab = tab || 'discover';
+  showOverlay('seriesView');
+  document.getElementById('seriesTitle').textContent = 'Series';
+  document.getElementById('seriesTabs').innerHTML = [['discover','Discover'],['owned','Bought'],['mine','Mine']]
+    .map(([k,l]) => `<button class="ac-jv ${SER.tab===k?'on':''}" onclick="acOpenSeries('${k}')">${l}</button>`).join('');
+  acLoadSeries();
+}
+async function acLoadSeries() {
+  const b = document.getElementById('seriesBody'); if (b) b.innerHTML = acSkelRows(3);
+  try {
+    const d = await API.req('GET', '/api/series?scope=' + SER.tab);
+    SER.list = d.series || [];
+    const rows = SER.list.map(s => `<div class="dev-item" onclick="acOpenSeriesDetail(${s.id})" style="cursor:pointer;">
+        <div class="dev-item-top"><span class="dev-name">${escHtml(s.title)}</span>
+          ${s.priceCents ? `<span class="dev-pill">${acMoney(s.priceCents)}</span>` : '<span class="dev-pill ok">free</span>'}
+          ${s.mine && !s.published ? '<span class="dev-pill off">draft</span>' : ''}
+          ${s.owned && !s.mine ? '<span class="dev-pill ok">yours</span>' : ''}</div>
+        <div class="dev-sub">${s.items || 0} part${s.items === 1 ? '' : 's'}${s.creator ? ' · @' + escHtml(s.creator.username) : ''}</div>
+        ${s.description ? `<div class="dev-sub" style="margin-top:4px;">${escHtml(s.description.slice(0,140))}</div>` : ''}
+      </div>`).join('') || '<div class="ac-empty-sm">Nothing here yet.</div>';
+    b.innerHTML = rows + (SER.tab === 'mine' ? `
+      <div class="dev-item" style="margin-top:14px;">
+        <div class="dev-name" style="margin-bottom:8px;">Start a series</div>
+        <input class="jp-in" id="serTitle" maxlength="120" placeholder="Title"/>
+        <textarea class="jp-in jp-desc" id="serDesc" maxlength="2000" placeholder="What is it about?" style="margin-top:8px;"></textarea>
+        <input class="jp-in" id="serPrice" type="number" min="0" step="0.01" placeholder="Price (leave empty for free)" style="margin-top:8px;"/>
+        <button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="acCreateSeries()">Create</button>
+      </div>` : '');
+  } catch (e) { b.innerHTML = '<div class="ac-empty-sm">' + escHtml(e.message) + '</div>'; }
+}
+async function acCreateSeries() {
+  const title = (document.getElementById('serTitle').value || '').trim();
+  if (!title) { showNotif('Give it a title.'); return; }
+  const price = (document.getElementById('serPrice').value || '').trim();
+  try {
+    await API.req('POST', '/api/series', { title,
+      description: (document.getElementById('serDesc').value || '').trim(),
+      priceCents: price === '' ? 0 : Math.round(Number(price) * 100) });
+    showNotif('Created.'); acLoadSeries();
+  } catch (e) { showNotif(e.message || 'Could not create it.'); }
+}
+async function acOpenSeriesDetail(id) {
+  const b = document.getElementById('seriesBody'); if (b) b.innerHTML = acSkelRows(3);
+  try {
+    const d = await API.req('GET', '/api/series/' + id);
+    const s = d.series;
+    document.getElementById('seriesTitle').textContent = s.title;
+    const items = (d.items || []).map((it, n) => it.locked
+      ? `<div class="dev-item"><div class="dev-sub">Part ${it.n} · locked</div></div>`
+      : `<div class="dev-item"><div class="dev-sub">Part ${n + 1}</div>
+          <div class="dev-name" style="font-weight:500;font-size:14px;margin-top:3px;">${escHtml((it.body || '').slice(0, 200) || '(no words)')}</div>
+          ${it.media && it.mediaKind === 'video' ? `<video class="ac-post-img" src="${jsAttr(it.media)}" controls preload="metadata" playsinline style="margin-top:8px;border-radius:12px;"></video>`
+            : it.image ? `<img src="${jsAttr(it.image)}" alt="" loading="lazy" style="width:100%;border-radius:12px;margin-top:8px;"/>` : ''}
+        </div>`).join('') || '<div class="ac-empty-sm">Nothing in it yet.</div>';
+    b.innerHTML = `
+      <button class="ac-pill-btn" style="margin-bottom:10px;" onclick="acOpenSeries(SER.tab)">← All series</button>
+      ${s.description ? `<div class="ac-disc-sub" style="margin-bottom:12px;">${escHtml(s.description)}</div>` : ''}
+      ${(d.locked && s.priceCents) ? `<button class="ac-pill-btn accent" style="width:100%;margin-bottom:12px;" onclick="acBuySeries(${s.id})">Get the whole series · ${acMoney(s.priceCents)}</button>` : ''}
+      ${s.mine ? `<div class="dev-item" style="margin-bottom:12px;">
+          <div class="dev-name" style="margin-bottom:6px;">Yours to manage</div>
+          <div class="dev-acts">
+            <button class="ac-pill-btn" onclick="acSeriesPublish(${s.id}, ${s.published ? 'false' : 'true'})">${s.published ? 'Unpublish' : 'Publish'}</button>
+            <button class="ac-pill-btn" onclick="acSeriesAddPost(${s.id})">Add one of my posts</button>
+          </div></div>` : ''}
+      ${items}`;
+  } catch (e) { b.innerHTML = '<div class="ac-empty-sm">' + escHtml(e.message) + '</div>'; }
+}
+async function acBuySeries(id) {
+  const ok = await appConfirm({ title: 'Get this series?', message: 'It will be paid from your Atwe balance.', confirmText: 'Get it' });
+  if (!ok) return;
+  try { await API.req('POST', '/api/series/' + id + '/buy', { clientId: acPayCid() }); showNotif('It’s yours.'); acOpenSeriesDetail(id); }
+  catch (e) { acHandlePayErr ? acHandlePayErr(e) : showNotif(e.message); }
+}
+async function acSeriesPublish(id, published) {
+  try { await API.req('PATCH', '/api/series/' + id, { published }); acOpenSeriesDetail(id); } catch (e) { showNotif(e.message); }
+}
+async function acSeriesAddPost(id) {
+  const postId = prompt('Which post? Paste its number (you can see it in the address bar when you open a post).', '');
+  if (!postId) return;
+  try { await API.req('POST', '/api/series/' + id + '/items', { postId: Number(postId) }); acOpenSeriesDetail(id); }
+  catch (e) { showNotif(e.message || 'Could not add that.'); }
+}
+
+/* ─── Brand deals ────────────────────────────────────────────────────────── */
+let BRF = { tab: 'open', list: [] };
+function acOpenBriefs(tab) {
+  BRF.tab = tab || 'open';
+  showOverlay('briefsView');
+  document.getElementById('briefTabs').innerHTML = [['open','Open'],['applied','My pitches'],['mine','My briefs']]
+    .map(([k,l]) => `<button class="ac-jv ${BRF.tab===k?'on':''}" onclick="acOpenBriefs('${k}')">${l}</button>`).join('');
+  acLoadBriefs();
+}
+async function acLoadBriefs() {
+  const b = document.getElementById('briefsBody'); if (b) b.innerHTML = acSkelRows(3);
+  try {
+    const d = await API.req('GET', '/api/briefs?scope=' + BRF.tab);
+    BRF.list = d.briefs || [];
+    const rows = BRF.list.map(x => `<div class="dev-item">
+        <div class="dev-item-top"><span class="dev-name">${escHtml(x.title)}</span>
+          ${x.budgetCents ? `<span class="dev-pill">${acMoney(x.budgetCents)}</span>` : ''}
+          <span class="dev-pill ${x.status === 'open' ? 'ok' : 'off'}">${escHtml(x.status)}</span></div>
+        <div class="dev-sub">${x.business ? '@' + escHtml(x.business.username) : ''}${x.deliverable ? ' · ' + escHtml(x.deliverable) : ''}${x.minFollowers ? ' · ' + x.minFollowers.toLocaleString() + '+ followers' : ''}</div>
+        ${x.description ? `<div class="dev-sub" style="margin-top:4px;">${escHtml(x.description.slice(0,200))}</div>` : ''}
+        <div class="dev-acts">
+          ${x.mine ? `<button class="ac-pill-btn" onclick="acBriefApps(${x.id})">${x.applications || 0} pitch${x.applications === 1 ? '' : 'es'}</button>
+                      <button class="ac-pill-btn" onclick="acBriefClose(${x.id}, ${x.status === 'open' ? 'true' : 'false'})">${x.status === 'open' ? 'Close it' : 'Reopen'}</button>`
+            : (x.applied ? '<span class="dev-sub">You have pitched for this.</span>'
+              : `<button class="ac-pill-btn accent" onclick="acBriefApply(${x.id})">Pitch for it</button>`)}
+        </div></div>`).join('') || '<div class="ac-empty-sm">Nothing here yet.</div>';
+    b.innerHTML = rows + (BRF.tab === 'mine' && acIsBiz(S.user) ? `
+      <div class="dev-item" style="margin-top:14px;">
+        <div class="dev-name" style="margin-bottom:8px;">Post a brief</div>
+        <input class="jp-in" id="brTitle" maxlength="140" placeholder="What do you want made?"/>
+        <textarea class="jp-in jp-desc" id="brDesc" maxlength="2000" placeholder="Describe it" style="margin-top:8px;"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <input class="jp-in" id="brBudget" type="number" min="0" step="1" placeholder="Budget" style="flex:1;margin:0;"/>
+          <input class="jp-in" id="brFollowers" type="number" min="0" placeholder="Min followers" style="flex:1;margin:0;"/>
+        </div>
+        <input class="jp-in" id="brDeliver" maxlength="200" placeholder="What they deliver (e.g. one video, two posts)" style="margin-top:8px;"/>
+        <button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="acCreateBrief()">Post it</button>
+      </div>` : '');
+  } catch (e) { b.innerHTML = '<div class="ac-empty-sm">' + escHtml(e.message) + '</div>'; }
+}
+async function acCreateBrief() {
+  const title = (document.getElementById('brTitle').value || '').trim();
+  if (!title) { showNotif('What do you want made?'); return; }
+  const bud = (document.getElementById('brBudget').value || '').trim();
+  try {
+    await API.req('POST', '/api/briefs', { title,
+      description: (document.getElementById('brDesc').value || '').trim(),
+      budgetCents: bud === '' ? null : Math.round(Number(bud) * 100),
+      minFollowers: Number(document.getElementById('brFollowers').value || 0),
+      deliverable: (document.getElementById('brDeliver').value || '').trim() });
+    showNotif('Posted.'); acLoadBriefs();
+  } catch (e) { showNotif(e.message || 'Could not post it.'); }
+}
+async function acBriefApply(id) {
+  const pitch = prompt('Why you? Keep it short.', '');
+  if (pitch === null) return;
+  const rate = prompt('What would you charge? (leave empty to discuss)', '');
+  try {
+    await API.req('POST', '/api/briefs/' + id + '/apply', { pitch,
+      rateCents: rate ? Math.round(Number(rate) * 100) : null });
+    showNotif('Pitched.'); acLoadBriefs();
+  } catch (e) { showNotif(e.message || 'Could not pitch.'); }
+}
+async function acBriefClose(id, close) {
+  try { await API.req('PATCH', '/api/briefs/' + id, { status: close ? 'closed' : 'open' }); acLoadBriefs(); }
+  catch (e) { showNotif(e.message); }
+}
+async function acBriefApps(id) {
+  const b = document.getElementById('briefsBody'); if (b) b.innerHTML = acSkelRows(3);
+  try {
+    const d = await API.req('GET', '/api/briefs/' + id + '/applications');
+    b.innerHTML = `<button class="ac-pill-btn" style="margin-bottom:10px;" onclick="acOpenBriefs('mine')">← Back</button>` +
+      ((d.applications || []).map(a => `<div class="dev-item">
+        <div class="dev-item-top"><span class="dev-name">@${escHtml(a.username)}</span>
+          <span class="dev-pill">${Number(a.followers).toLocaleString()} followers</span>
+          ${a.rate_cents ? `<span class="dev-pill">${acMoney(a.rate_cents)}</span>` : ''}
+          <span class="dev-pill ${a.status === 'picked' ? 'ok' : ''}">${escHtml(a.status)}</span></div>
+        ${a.headline ? `<div class="dev-sub">${escHtml(a.headline)}</div>` : ''}
+        ${a.pitch ? `<div class="dev-sub" style="margin-top:4px;">“${escHtml(a.pitch)}”</div>` : ''}
+        <div class="dev-acts">
+          <button class="ac-pill-btn accent" onclick="acBriefPick(${id},${a.creator_id},'picked')">Pick them</button>
+          <button class="ac-pill-btn" onclick="acBriefPick(${id},${a.creator_id},'shortlisted')">Shortlist</button>
+          <button class="ac-pill-btn" onclick="acBriefPick(${id},${a.creator_id},'declined')">Pass</button>
+        </div></div>`).join('') || '<div class="ac-empty-sm">No pitches yet.</div>');
+  } catch (e) { b.innerHTML = '<div class="ac-empty-sm">' + escHtml(e.message) + '</div>'; }
+}
+async function acBriefPick(briefId, creatorId, status) {
+  try { await API.req('POST', '/api/briefs/' + briefId + '/applications/' + creatorId, { status });
+    showNotif(status === 'picked' ? 'Picked — a message has been opened with them.' : 'Saved.'); acBriefApps(briefId); }
+  catch (e) { showNotif(e.message); }
+}
+
+/* ─── Samples ────────────────────────────────────────────────────────────── */
+let SMP = { tab: 'business', list: [] };
+const _SMP_STATE = { offered: 'offered', accepted: 'accepted', declined: 'declined', sent: 'on its way', posted: 'posted' };
+function acOpenSamples(tab) {
+  SMP.tab = tab || 'business';
+  showOverlay('samplesView');
+  document.getElementById('sampleTabs').innerHTML = [['business','I am sending'],['creator','Sent to me']]
+    .map(([k,l]) => `<button class="ac-jv ${SMP.tab===k?'on':''}" onclick="acOpenSamples('${k}')">${l}</button>`).join('');
+  acLoadSamples();
+}
+async function acLoadSamples() {
+  const b = document.getElementById('samplesBody'); if (b) b.innerHTML = acSkelRows(3);
+  try {
+    const d = await API.req('GET', '/api/samples?scope=' + SMP.tab);
+    const mineBiz = SMP.tab === 'business';
+    const rows = (d.samples || []).map(s => `<div class="dev-item">
+        <div class="dev-item-top"><span class="dev-name">${escHtml(s.product_name || 'A sample')}</span>
+          <span class="dev-pill ${s.status === 'posted' ? 'ok' : (s.status === 'declined' ? 'off' : '')}">${escHtml(_SMP_STATE[s.status] || s.status)}</span></div>
+        <div class="dev-sub">${mineBiz ? 'to @' + escHtml(s.creator_username) : 'from @' + escHtml(s.biz_username)}${s.tracking ? ' · ' + escHtml(s.carrier || '') + ' ' + escHtml(s.tracking) : ''}</div>
+        ${s.note ? `<div class="dev-sub" style="margin-top:4px;">${escHtml(s.note)}</div>` : ''}
+        <div class="dev-acts">
+          ${!mineBiz && s.status === 'offered' ? `<button class="ac-pill-btn accent" onclick="acSampleSet(${s.id},'accepted')">Yes please</button>
+            <button class="ac-pill-btn" onclick="acSampleSet(${s.id},'declined')">No thanks</button>` : ''}
+          ${mineBiz && s.status === 'accepted' ? `<button class="ac-pill-btn accent" onclick="acSampleShip(${s.id})">Mark as sent</button>` : ''}
+          ${!mineBiz && s.status === 'sent' ? `<button class="ac-pill-btn accent" onclick="acSamplePosted(${s.id})">I posted about it</button>` : ''}
+        </div></div>`).join('') || '<div class="ac-empty-sm">Nothing here yet.</div>';
+    b.innerHTML = `<div class="ac-disc-sub" style="margin:0 0 12px;">${mineBiz
+      ? 'Send a creator something to try, and keep track of whether it turned into a post.'
+      : 'Things businesses have offered to send you.'}</div>` + rows
+      + (mineBiz ? `<div class="dev-item" style="margin-top:14px;">
+        <div class="dev-name" style="margin-bottom:8px;">Offer a sample</div>
+        <input class="jp-in" id="smpUser" maxlength="40" placeholder="@username of the creator"/>
+        <input class="jp-in" id="smpProduct" maxlength="10" placeholder="Listing number (optional)" style="margin-top:8px;"/>
+        <input class="jp-in" id="smpNote" maxlength="600" placeholder="A note to them (optional)" style="margin-top:8px;"/>
+        <button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="acSampleOffer()">Offer it</button>
+      </div>` : '');
+  } catch (e) { b.innerHTML = '<div class="ac-empty-sm">' + escHtml(e.message) + '</div>'; }
+}
+async function acSampleOffer() {
+  const uname = (document.getElementById('smpUser').value || '').trim().replace(/^@/, '');
+  if (!uname) { showNotif('Who are you sending it to?'); return; }
+  try {
+    const prof = await API.req('GET', '/api/social/profile/' + encodeURIComponent(uname));
+    const cid = prof && prof.user && prof.user.id;
+    if (!cid) { showNotif('Could not find that person.'); return; }
+    const pid = (document.getElementById('smpProduct').value || '').trim();
+    await API.req('POST', '/api/samples', { creatorId: cid,
+      productId: pid ? Number(pid) : null,
+      note: (document.getElementById('smpNote').value || '').trim() });
+    showNotif('Offered.'); acLoadSamples();
+  } catch (e) { showNotif(e.message || 'Could not send that.'); }
+}
+async function acSampleSet(id, status) {
+  try { await API.req('PATCH', '/api/samples/' + id, { status }); acLoadSamples(); } catch (e) { showNotif(e.message); }
+}
+async function acSampleShip(id) {
+  const carrier = prompt('Which carrier?', '');
+  const tracking = prompt('Tracking number (optional)', '');
+  try { await API.req('PATCH', '/api/samples/' + id, { status: 'sent', carrier, tracking }); acLoadSamples(); }
+  catch (e) { showNotif(e.message); }
+}
+async function acSamplePosted(id) {
+  const postId = prompt('Which post? Paste its number (optional).', '');
+  try { await API.req('PATCH', '/api/samples/' + id, { status: 'posted', postId: postId ? Number(postId) : undefined }); acLoadSamples(); }
+  catch (e) { showNotif(e.message); }
+}
+
 /* ─── A document on a post ───────────────────────────────────────────────── */
 let _acPostDoc = null;
 const _POST_DOC_MAX = 12 * 1024 * 1024;
@@ -30792,6 +31239,9 @@ function acGoProfileHub() {
     html += item('Edit profile', _ME_IC.edit, "openProfileEdit()", null);
     html += item(S.plan === 'pro' ? 'Manage plan' : 'Upgrade to Pro', _ME_IC.star, "acOpenPro()", null);
     html += item('Atwe AI · memory & tasks', _ME_IC.spark, "acOpenAiBrain()", null);
+    html += item('Your studio', _ME_IC.analytics, "acOpenStudio()", null);
+    html += item('Brand deals', _ME_IC.spark, "acOpenBriefs()", null);
+    html += item('Samples', _ME_IC.gift, "acOpenSamples('creator')", null);
     if (!verified) html += item('Get verified', _ME_IC.badge, "acGetVerified()", null);
     html += '</div>';
     // Everything personal that used to live in Engine now lives here, grouped
@@ -42194,6 +42644,8 @@ async function acOpenStoreManage() {
     ${row(SI.store, 'How your shop looks', 'A feel, a layout, your colour', 'acOpenStoreLook()')}
     ${isBiz ? row(SI.megaphone, 'Front desk', 'Let Atwe AI answer customers when you can’t', 'closeOverlay(\'storeManageView\');acOpenReception()') : ''}
     ${isBiz ? row(SI.box, 'What you have in', 'So customers get a straight answer', 'closeOverlay(\'storeManageView\');acOpenAvailability()') : ''}
+    ${row(SI.megaphone, 'Send samples to creators', 'And see whether it turned into a post', 'closeOverlay(\'storeManageView\');acOpenSamples(\'business\')')}
+    ${isBiz ? row(SI.megaphone, 'Find a creator', 'Post a brief and pick who makes it', 'closeOverlay(\'storeManageView\');acOpenBriefs(\'mine\')') : ''}
     ${row(SI.chart, 'Connect your systems', 'API keys and webhooks for your own software', 'acOpenDevTools()')}
   </div>`;
   });
@@ -47144,10 +47596,12 @@ function syncOnlineBanner(initial) {
 if (!window._rtResyncBound) {
   window._rtResyncBound = true;
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') rtResync(); });
-  window.addEventListener('online', () => { rtResync(); rtRetryFailed(); syncOnlineBanner(false); });
-  window.addEventListener('offline', () => syncOnlineBanner(false));
-  window.addEventListener('pageshow', e => { if (e.persisted) rtResync(); }); // bfcache restore (back/forward)
+  window.addEventListener('online', () => { rtResync(); rtRetryFailed(); outboxFlush(); syncOnlineBanner(false); });
+  window.addEventListener('offline', () => { outboxSyncBadge(); syncOnlineBanner(false); });
+  window.addEventListener('pageshow', e => { if (e.persisted) { rtResync(); outboxFlush(); } }); // bfcache restore
   syncOnlineBanner(true); // reflect the current state on load (e.g. opened while offline)
+  // Anything queued in a previous session goes out as soon as we are up.
+  outboxSyncBadge(); outboxFlush();
 }
 function rtThreadOpen(kind, id) {
   if (document.getElementById('acThreadScreen').classList.contains('hidden')) return false;

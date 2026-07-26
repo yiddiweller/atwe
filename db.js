@@ -1946,6 +1946,140 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS ai_usage_at_idx ON ai_usage (created_at DESC);
     CREATE INDEX IF NOT EXISTS ai_usage_feature_idx ON ai_usage (feature);
   `);
+  // ── Batch 38: paying creators, matching them to brands, and trust ─────────
+  // A share of what Atwe earns from ads, paid out to the people whose work
+  // carried them. One row per creator per month, so a payout can be looked at,
+  // explained and never accidentally paid twice.
+  await query(`
+    CREATE TABLE IF NOT EXISTS creator_payouts (
+      id           SERIAL PRIMARY KEY,
+      user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      period       TEXT NOT NULL,                  -- 'YYYY-MM'
+      views        BIGINT NOT NULL DEFAULT 0,
+      engagements  BIGINT NOT NULL DEFAULT 0,
+      share_pct    NUMERIC NOT NULL DEFAULT 0,
+      amount_cents INTEGER NOT NULL DEFAULT 0,
+      status       TEXT NOT NULL DEFAULT 'pending', -- pending | paid | skipped
+      paid_at      TIMESTAMPTZ,
+      note         TEXT,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS creator_payouts_one_idx ON creator_payouts (user_id, period);
+    CREATE INDEX IF NOT EXISTS creator_payouts_period_idx ON creator_payouts (period, status);
+  `);
+  // A series: several posts sold together as one pack, free or paid.
+  await query(`
+    CREATE TABLE IF NOT EXISTS series (
+      id          SERIAL PRIMARY KEY,
+      creator_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title       TEXT NOT NULL,
+      description TEXT,
+      cover       TEXT,
+      price_cents INTEGER NOT NULL DEFAULT 0,
+      published   BOOLEAN NOT NULL DEFAULT false,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS series_creator_idx ON series (creator_id, created_at DESC);
+    CREATE TABLE IF NOT EXISTS series_items (
+      series_id  INTEGER NOT NULL REFERENCES series(id) ON DELETE CASCADE,
+      post_id    INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      position   INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (series_id, post_id)
+    );
+    CREATE TABLE IF NOT EXISTS series_access (
+      series_id   INTEGER NOT NULL REFERENCES series(id) ON DELETE CASCADE,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      paid_cents  INTEGER NOT NULL DEFAULT 0,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (series_id, user_id)
+    );
+  `);
+  // A business posts what it wants made; creators apply; one gets picked.
+  await query(`
+    CREATE TABLE IF NOT EXISTS brand_briefs (
+      id           SERIAL PRIMARY KEY,
+      business_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title        TEXT NOT NULL,
+      description  TEXT,
+      category     TEXT,
+      budget_cents INTEGER,
+      deliverable  TEXT,
+      min_followers INTEGER NOT NULL DEFAULT 0,
+      status       TEXT NOT NULL DEFAULT 'open',   -- open | closed
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS brand_briefs_open_idx ON brand_briefs (status, created_at DESC);
+    CREATE TABLE IF NOT EXISTS brand_applications (
+      id          SERIAL PRIMARY KEY,
+      brief_id    INTEGER NOT NULL REFERENCES brand_briefs(id) ON DELETE CASCADE,
+      creator_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      pitch       TEXT,
+      rate_cents  INTEGER,
+      status      TEXT NOT NULL DEFAULT 'applied', -- applied | shortlisted | picked | declined
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS brand_apps_one_idx ON brand_applications (brief_id, creator_id);
+  `);
+  // A seller sends a creator a product to try. Tracked, because "did you post
+  // it yet?" over DM is how these arrangements fall apart.
+  await query(`
+    CREATE TABLE IF NOT EXISTS product_samples (
+      id          SERIAL PRIMARY KEY,
+      business_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      creator_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      product_id  INTEGER REFERENCES products(id) ON DELETE SET NULL,
+      note        TEXT,
+      status      TEXT NOT NULL DEFAULT 'offered', -- offered | accepted | declined | sent | posted
+      carrier     TEXT,
+      tracking    TEXT,
+      post_id     INTEGER REFERENCES posts(id) ON DELETE SET NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS samples_biz_idx ON product_samples (business_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS samples_creator_idx ON product_samples (creator_id, created_at DESC);
+  `);
+  // Several scheduled AI steps, run in order, as one named routine.
+  await query(`
+    CREATE TABLE IF NOT EXISTS agent_workflows (
+      id          SERIAL PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name        TEXT NOT NULL,
+      steps       JSONB NOT NULL DEFAULT '[]'::jsonb,
+      cadence     TEXT NOT NULL DEFAULT 'weekly',
+      hour        INTEGER NOT NULL DEFAULT 8,
+      weekday     INTEGER NOT NULL DEFAULT 1,
+      status      TEXT NOT NULL DEFAULT 'active',
+      next_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+      last_run_at TIMESTAMPTZ,
+      last_result TEXT,
+      runs        INTEGER NOT NULL DEFAULT 0,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS agent_wf_due_idx ON agent_workflows (status, next_at);
+  `);
+  // Somebody independent checks the item is real before the buyer gets it.
+  await query(`
+    CREATE TABLE IF NOT EXISTS authentications (
+      id           SERIAL PRIMARY KEY,
+      order_id     INTEGER REFERENCES orders(id) ON DELETE CASCADE,
+      product_id   INTEGER REFERENCES products(id) ON DELETE SET NULL,
+      buyer_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      seller_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      fee_cents    INTEGER NOT NULL DEFAULT 0,
+      status       TEXT NOT NULL DEFAULT 'requested', -- requested | in_transit | passed | failed | cancelled
+      verdict_note TEXT,
+      checked_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      checked_at   TIMESTAMPTZ,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS auth_open_idx ON authentications (status, created_at DESC);
+  `);
+  // Sellers can offer it on a listing; the buyer opts in at checkout.
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS authenticate BOOLEAN NOT NULL DEFAULT false;`);
+  // Show prices in the money someone actually thinks in.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS display_currency TEXT;`);
+
   // ── Batch 37: the assistant that works for you, and a shop that sells ──────
   // What Atwe AI remembers about you between conversations. Deliberately a
   // short list of plain facts you can read and delete — not a hidden profile.
