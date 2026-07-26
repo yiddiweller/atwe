@@ -1737,6 +1737,13 @@ async function initSchema() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS condition TEXT;`); // new | like_new | good | fair (physical resale)
   // "Was" price (compare-at, Shopify-style) — shown struck through when > price.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS compare_at_cents INTEGER;`);
+  // Targeted ads v2: audience targeting on the existing CPC auction. Empty
+  // arrays / 'all' mean untargeted (today's behaviour), so existing campaigns
+  // are unchanged. Targeting only ever NARROWS who can be shown an ad — it never
+  // widens reach or changes what a click costs.
+  await query(`ALTER TABLE product_ads ADD COLUMN IF NOT EXISTS target_categories TEXT[] NOT NULL DEFAULT '{}';`);
+  await query(`ALTER TABLE product_ads ADD COLUMN IF NOT EXISTS target_countries TEXT[] NOT NULL DEFAULT '{}';`);
+  await query(`ALTER TABLE product_ads ADD COLUMN IF NOT EXISTS target_account TEXT NOT NULL DEFAULT 'all';`); // all | personal | business
   // Premium placement (paid featured slot in the business directory / local hub).
   // Mirrors jobs.featured_until + posts.promoted_until: one timestamp, no state
   // machine. Always LABELLED in the UI so it can't be mistaken for organic rank.

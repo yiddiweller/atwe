@@ -7214,6 +7214,10 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .shop-setup-row.done .shop-setup-chk{background:rgba(48,209,88,.18);}
 .shop-setup-chk svg{width:13px;height:13px;fill:none;stroke:var(--green);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;}
 .shop-setup-row .iset-chev{margin-inline-start:auto;}
+/* Targeted ads v2: the audience chip grid in the campaign form. */
+.pad-cats{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.pad-cats .ppl-chip.on{background:var(--accent-dim);color:var(--accent);font-weight:700;}
+.pad-aud{font-size:11.5px;color:var(--t3);margin-top:4px;}
 /* Business referral engine: milestone ladder + per-invite tags. */
 .ref-mile-row{display:flex;gap:8px;}
 .ref-mile{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--s1);border-radius:14px;padding:11px 6px;}
@@ -15219,6 +15223,14 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <input class="jp-in" id="padBudget" type="number" min="1" max="200" step="1" placeholder="$10"/>
       <div style="font-size:12px;color:var(--t3);margin:10px 0 4px;">Keywords (optional. Blank auto-targets any relevant search)</div>
       <input class="jp-in" id="padKeywords" placeholder="e.g. leather wallet, gift"/>
+      <div style="font-size:12px;color:var(--t3);margin:14px 0 4px;">Who should see it? (optional — leave blank to reach everyone)</div>
+      <select class="jp-in" id="padTargetAccount" aria-label="Audience account type">
+        <option value="all">Everyone</option>
+        <option value="personal">People (personal accounts)</option>
+        <option value="business">Businesses only</option>
+      </select>
+      <div id="padTargetCats" class="pad-cats"></div>
+      <input class="jp-in" id="padTargetCountries" maxlength="300" placeholder="Countries: GB, FR, US — blank = anywhere" style="margin-top:8px;"/>
       <button class="ac-pill-btn accent jp-submit" id="padGoBtn" onclick="acSaveProductAd()" style="margin-top:14px;">Start campaign</button>
     </div>
   </div>
@@ -17450,7 +17462,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1587'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1588'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -38885,16 +38897,34 @@ function acEditProductAd(id) {
   document.getElementById('padBid').value = (a.bidCents / 100).toFixed(2);
   document.getElementById('padBudget').value = (a.dailyBudgetCents / 100).toFixed(2);
   document.getElementById('padKeywords').value = a.keywords || '';
+  document.getElementById('padTargetAccount').value = a.targetAccount || 'all';
+  document.getElementById('padTargetCountries').value = (a.targetCountries || []).join(', ');
+  acRenderPadTargets(a.targetCategories || []);
   document.getElementById('padBidHint').textContent = ''; // clear any stale suggestion left from a prior create/edit
 }
 // Open the creation sheet. Called with a productId (from a listing's own
 // "Advertise" button) or with none (from the manager's "+ New campaign", which
 // shows a picker of the seller's own active listings first).
+// Audience targeting chips — the same industry vocabulary the rest of the app uses.
+function acRenderPadTargets(sel) {
+  AC._padCats = Array.isArray(sel) ? sel.slice() : [];
+  const box = document.getElementById('padTargetCats'); if (!box) return;
+  box.innerHTML = _SERVICE_CATS.map(c => `<button type="button" class="ppl-chip${AC._padCats.includes(c) ? ' on' : ''}" onclick="acPadToggleCat(${jsAttr(c)})">${escHtml(c)}</button>`).join('');
+}
+function acPadToggleCat(c) {
+  AC._padCats = AC._padCats || [];
+  const i = AC._padCats.indexOf(c);
+  if (i >= 0) AC._padCats.splice(i, 1); else if (AC._padCats.length < 20) AC._padCats.push(c);
+  acRenderPadTargets(AC._padCats);
+}
 async function acOpenProductAdForm(productId) {
   AC._padEdit = null; AC._padProductId = null;
   showOverlay('productAdForm');
   document.getElementById('padFormTitle').textContent = 'Sponsor a listing';
   document.getElementById('padBid').value = ''; document.getElementById('padBudget').value = ''; document.getElementById('padKeywords').value = '';
+  document.getElementById('padTargetAccount').value = 'all';
+  document.getElementById('padTargetCountries').value = '';
+  acRenderPadTargets([]);
   document.getElementById('padBidHint').textContent = '';
   if (productId) {
     document.getElementById('padFormPicker').style.display = 'none';
@@ -38935,6 +38965,13 @@ async function acLoadPadSuggestion(productId) {
     if (bidInput && !bidInput.value) bidInput.value = (s.suggestedCents / 100).toFixed(2);
   } catch (e) { /* best-effort hint, never blocks the form */ }
 }
+function acPadTargeting() {
+  return {
+    targetAccount: (document.getElementById('padTargetAccount') || {}).value || 'all',
+    targetCategories: AC._padCats || [],
+    targetCountries: (document.getElementById('padTargetCountries') || {}).value || '',
+  };
+}
 async function acSaveProductAd() {
   const bid = Math.round(parseFloat(document.getElementById('padBid').value) * 100);
   const budget = Math.round(parseFloat(document.getElementById('padBudget').value) * 100);
@@ -38944,11 +38981,11 @@ async function acSaveProductAd() {
   const btn = document.getElementById('padGoBtn'); if (btn) btn.disabled = true;
   try {
     if (AC._padEdit) {
-      await API.req('PATCH', '/api/product-ads/' + AC._padEdit.id, { bidCents: bid, dailyBudgetCents: budget, keywords });
+      await API.req('PATCH', '/api/product-ads/' + AC._padEdit.id, { bidCents: bid, dailyBudgetCents: budget, keywords, ...acPadTargeting() });
       showNotif('Campaign updated.');
     } else {
       if (!AC._padProductId) { showNotif('Pick a listing to advertise.'); if (btn) btn.disabled = false; return; }
-      await API.req('POST', '/api/product-ads', { productId: AC._padProductId, bidCents: bid, dailyBudgetCents: budget, keywords });
+      await API.req('POST', '/api/product-ads', { productId: AC._padProductId, bidCents: bid, dailyBudgetCents: budget, keywords, ...acPadTargeting() });
       showNotif('Your listing is now advertised.');
     }
     closeOverlay('productAdForm');
