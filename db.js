@@ -1725,6 +1725,27 @@ async function initSchema() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS auction_bids_product_idx ON auction_bids(product_id, amount_cents DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS products_auction_due_idx ON products(auction_ends_at) WHERE auction_ends_at IS NOT NULL AND NOT auction_settled;`);
+  // Starter packs (Bluesky model): a curated, shareable set of accounts a new
+  // member follows in one tap. Members are snapshotted references, cap-enforced
+  // in the route; deleting a listed account just drops them from the pack.
+  await query(`
+    CREATE TABLE IF NOT EXISTS starter_packs (
+      id          SERIAL PRIMARY KEY,
+      creator_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title       TEXT NOT NULL,
+      description TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`
+    CREATE TABLE IF NOT EXISTS starter_pack_members (
+      pack_id  INTEGER NOT NULL REFERENCES starter_packs(id) ON DELETE CASCADE,
+      user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      position INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (pack_id, user_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS starter_packs_creator_idx ON starter_packs(creator_id);`);
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS video_ver INTEGER NOT NULL DEFAULT 0;`);
   // Processing time (Etsy-style "Ships in 1-3 days") — physical items.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS processing_days_min INTEGER;`);

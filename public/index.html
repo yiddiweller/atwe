@@ -15491,6 +15491,35 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Starter packs: my packs + create/edit + the shared pack view -->
+<div class="overlay hidden" id="starterPacksView" onclick="if(event.target===this)closeOverlay('starterPacksView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Starter packs">
+    <button class="sheet-close" onclick="closeOverlay('starterPacksView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="ac-section-row"><span class="jp-title" style="margin:0;">Starter packs</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 14px;" onclick="acPackFormOpen()">＋ New pack</button></div>
+    <div class="ac-disc-sub" style="margin:2px 0 12px;">Bundle the accounts you’d recommend into one link — anyone who opens it can follow them all in a tap.</div>
+    <div id="starterPacksBody"></div>
+  </div>
+</div>
+<div class="overlay hidden" id="packForm" onclick="if(event.target===this)closeOverlay('packForm')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Starter pack">
+    <button class="sheet-close" onclick="closeOverlay('packForm')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="packFormTitle">New starter pack</div>
+    <input class="jp-in" id="packTitle" type="text" maxlength="80" placeholder="Pack name (e.g. NYC food scene)"/>
+    <textarea class="jp-in" id="packDesc" maxlength="300" placeholder="What’s this pack about? (optional)" style="margin-top:8px;min-height:50px;"></textarea>
+    <input class="jp-in" id="packPeopleIn" type="text" maxlength="40" placeholder="Add people (@username)" autocomplete="off" oninput="acPackSearch()" style="margin-top:8px;"/>
+    <div id="packSearchResults"></div>
+    <div id="packChips" class="split-chips" style="margin-top:8px;"></div>
+    <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">You’re always included. Up to 25 people.</div>
+    <button class="ac-pill-btn accent jp-submit" id="packSaveBtn" onclick="acPackSave()">Create pack</button>
+  </div>
+</div>
+<div class="overlay hidden" id="packView" onclick="if(event.target===this)closeOverlay('packView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Starter pack">
+    <button class="sheet-close" onclick="closeOverlay('packView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="packViewBody"></div>
+  </div>
+</div>
+
 <!-- About this account (IG/X-style transparency sheet) -->
 <div class="overlay hidden" id="aboutAccountView" onclick="if(event.target===this)closeOverlay('aboutAccountView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="About this account">
@@ -16967,7 +16996,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1552'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1553'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -17808,6 +17837,12 @@ async function handleUrlParams() {
   if (p.get('call')) { _pendingCallLink = p.get('call').replace(/[^a-z0-9]/gi, '').slice(0, 32); stripParam(); }
   if (p.get('pool')) { const pid = parseInt(p.get('pool'), 10); if (Number.isInteger(pid)) _pendingPool = pid; stripParam(); }
   if (p.get('paylink')) { _pendingPayLink = p.get('paylink').replace(/[^a-f0-9]/gi, '').slice(0, 32); stripParam(); }
+  // Starter-pack share link (?pack=<id>): stash through login like the coupon link.
+  if (p.get('pack')) {
+    const pid = parseInt(p.get('pack'), 10);
+    if (Number.isInteger(pid)) { try { localStorage.setItem('atwe_pack_pending', String(pid)); } catch (e) {} }
+    stripParam();
+  }
   // Coupon share link (?coupon=CODE&s=<sellerId>): stash it in localStorage so it
   // survives a sign-up/sign-in redirect, then the landing sheet opens after auth.
   if (p.get('coupon')) {
@@ -17868,6 +17903,10 @@ function consumePendingRoute() {
   try {
     const pc = JSON.parse(localStorage.getItem('atwe_coupon_pending') || 'null');
     if (pc && pc.code) { localStorage.removeItem('atwe_coupon_pending'); setTimeout(() => acOpenCouponLanding(pc), 200); }
+  } catch (e) {}
+  try {
+    const pk = parseInt(localStorage.getItem('atwe_pack_pending') || '', 10);
+    if (Number.isInteger(pk)) { localStorage.removeItem('atwe_pack_pending'); setTimeout(() => acOpenPack(pk), 220); }
   } catch (e) {}
   if (_pendingJoinGroup) { const code = _pendingJoinGroup; _pendingJoinGroup = null; setTimeout(() => acOpenJoinInvite(code), 120); }
   if (_pendingCallLink) { const code = _pendingCallLink; _pendingCallLink = null; setTimeout(() => acOpenCallLinkJoin(code), 140); }
@@ -28637,6 +28676,7 @@ function acGoProfileHub() {
     // Work & network
     html += '<div class="me-catlabel">Work &amp; network</div><div class="me-group">';
     html += item('My network', _ME_IC.people, "acOpenConnections()", null);
+    html += item('Starter packs', _ME_IC.people, "acOpenStarterPacks()", null);
     html += item('Who viewed my profile', (_ME_IC.eye || '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>'), "acOpenProfileViewers()", null);
     html += item('Post a job', _ME_IC.job, "acPostJobOpen()", null);
     html += item('Jobs I posted', _ME_IC.job, "acOpenJobsView('mine')", null);
@@ -34946,6 +34986,113 @@ function acRenderListingBuy(l, own) {
     ? `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acOfferSaversOpen(${l.id}, ${l.priceCents}, ${jsAttr(l.name)})"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-inline-end:6px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M20.6 13.4 12 22l-9-9V4a1 1 0 0 1 1-1h8.6z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>Send a deal to shoppers who saved this</button>` : '';
   return `<div class="mkt-detail-meta"><span class="mkt-price">${priceLbl}</span><span class="shop-kind">${_PROD_KIND[l.kind] || 'Item'}</span>${stockBadge}${l.active ? '' : '<span class="shop-off">Hidden</span>'}</div>${shipLine}${escChip}${qtyRow}${buyRow}${dealRow}${subRow}${offerRow}${earnRow}`;
 }
+/* ── Starter packs (Bluesky model) ── */
+async function acOpenStarterPacks() {
+  showOverlay('starterPacksView');
+  const body = document.getElementById('starterPacksBody'); body.innerHTML = acSkelRows(2);
+  try {
+    const { packs } = await API.req('GET', '/api/starter-packs');
+    body.innerHTML = packs.length ? packs.map(p => `<div class="ac-item" onclick="acOpenPack(${p.id})">
+      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(p.title)}</span></div>
+        <div class="ac-item-last">${p.memberCount} ${p.memberCount === 1 ? 'person' : 'people'}${p.description ? ' · ' + escHtml(p.description) : ''}</div></div>
+    </div>`).join('') : '<div class="ac-empty" style="padding:26px;">No packs yet. Make one and share the link.</div>';
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+let _packT = null;
+function acPackSearch() {
+  const q = (document.getElementById('packPeopleIn').value || '').trim().replace(/^@/, '');
+  clearTimeout(_packT);
+  if (q.length < 2) { document.getElementById('packSearchResults').innerHTML = ''; return; }
+  _packT = setTimeout(async () => {
+    try {
+      const r = await API.req('GET', '/api/social/mention-search?q=' + encodeURIComponent(q));
+      const users = (r.users || r.results || []).filter(u => u.id !== (S.user && S.user.id) && !(AC._packPeople || []).some(p => p.id === u.id));
+      document.getElementById('packSearchResults').innerHTML = users.slice(0, 6).map(u =>
+        `<button class="split-sr" onclick="acPackAddPerson(${jsAttr(u)})">${acAvatarHtml(u.name, u.avatar, 'user-avatar sm', u.accountType === 'business')}<span class="split-sr-main"><span class="split-sr-name">${escHtml(u.name)}</span><span class="split-sr-h">@${escHtml(u.username || '')}</span></span></button>`).join('');
+    } catch (e) {}
+  }, 250);
+}
+function acPackAddPerson(u) {
+  AC._packPeople = AC._packPeople || [];
+  if (AC._packPeople.length >= 24) { showNotif('Up to 25 people including you.'); return; }
+  if (!AC._packPeople.some(p => p.id === u.id)) AC._packPeople.push({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, accountType: u.accountType });
+  document.getElementById('packPeopleIn').value = ''; document.getElementById('packSearchResults').innerHTML = '';
+  acPackRenderChips();
+}
+function acPackRemovePerson(id) { AC._packPeople = (AC._packPeople || []).filter(p => p.id !== id); acPackRenderChips(); }
+function acPackRenderChips() {
+  document.getElementById('packChips').innerHTML = (AC._packPeople || []).map(p =>
+    `<span class="split-chip">${acAvatarHtml(p.name, p.avatar, 'user-avatar sm', p.accountType === 'business')}${escHtml(p.name)}<button onclick="acPackRemovePerson(${p.id})" aria-label="Remove">×</button></span>`).join('');
+}
+function acPackFormOpen(pack, members) {
+  AC._packEditId = pack ? pack.id : null;
+  AC._packPeople = (members || []).filter(m => !m.isMe).map(m => ({ id: m.id, name: m.name, username: m.username, avatar: m.avatar, accountType: m.accountType }));
+  document.getElementById('packFormTitle').textContent = pack ? 'Edit starter pack' : 'New starter pack';
+  document.getElementById('packSaveBtn').textContent = pack ? 'Save changes' : 'Create pack';
+  document.getElementById('packTitle').value = pack ? pack.title : '';
+  document.getElementById('packDesc').value = pack ? (pack.description || '') : '';
+  document.getElementById('packPeopleIn').value = ''; document.getElementById('packSearchResults').innerHTML = '';
+  acPackRenderChips();
+  showOverlay('packForm');
+  setTimeout(() => document.getElementById('packTitle').focus(), 80);
+}
+async function acPackSave() {
+  const title = document.getElementById('packTitle').value.trim();
+  if (!title) { showNotif('Name the pack.'); return; }
+  const payload = { title, description: document.getElementById('packDesc').value.trim(), userIds: (AC._packPeople || []).map(p => p.id) };
+  try {
+    let id = AC._packEditId;
+    if (id) await API.req('PATCH', '/api/starter-packs/' + id, payload);
+    else { const r = await API.req('POST', '/api/starter-packs', payload); id = r.id; }
+    closeOverlay('packForm');
+    acOpenPack(id);
+    const lv = document.getElementById('starterPacksView'); if (lv && !lv.classList.contains('hidden')) acOpenStarterPacks();
+  } catch (e) { showNotif(e.message || 'Could not save the pack.'); }
+}
+async function acOpenPack(id) {
+  showOverlay('packView');
+  const body = document.getElementById('packViewBody'); body.innerHTML = acSkelRows(3);
+  try {
+    const { pack, members } = await API.req('GET', '/api/starter-packs/' + id);
+    AC._packCur = { pack, members };
+    const notYet = members.filter(m => !m.following && !m.isMe).length;
+    const rows = members.map(m => `<div class="ac-item" onclick="closeOverlay('packView');acGoProfile(${jsAttr(m.username)})">
+      ${acAvatarHtml(m.name, m.avatar, 'user-avatar', m.accountType === 'business')}
+      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(m.name)}${vbadge(acIsVerified(m))}</span>${m.isMe ? '<span class="inv-chip st-sent">You</span>' : (m.following ? '<span class="inv-chip st-paid">Following</span>' : '')}</div>
+        <div class="ac-item-last">@${escHtml(m.username)}${m.headline ? ' · ' + escHtml(m.headline) : ''}</div></div>
+    </div>`).join('');
+    body.innerHTML = `
+      <div class="jp-title" style="margin:0 0 2px;">${escHtml(pack.title)}</div>
+      <div class="ac-disc-sub" style="margin:0 0 4px;">A starter pack by <b>${escHtml(pack.creator.name)}</b> @${escHtml(pack.creator.username)}</div>
+      ${pack.description ? `<div class="ev-desc" style="margin:0 0 8px;">${escHtml(pack.description)}</div>` : ''}
+      ${notYet ? `<button class="ac-pill-btn accent" style="width:100%;margin:8px 0 4px;" id="packFollowAllBtn" onclick="acPackFollowAll(${pack.id})">Follow all · ${notYet} ${notYet === 1 ? 'person' : 'people'}</button>` : `<div class="auc-won" style="margin:8px 0 4px;">You follow everyone in this pack ✓</div>`}
+      <div style="display:flex;gap:8px;margin:4px 0 10px;">
+        <button class="ac-pill-btn" style="flex:1;" onclick="acSharePack(${pack.id}, ${jsAttr(pack.title)})">Share pack</button>
+        ${pack.mine ? `<button class="ac-pill-btn" style="flex:1;" onclick="closeOverlay('packView');acPackFormOpen(AC._packCur.pack, AC._packCur.members)">Edit</button>
+        <button class="ac-pill-btn" style="flex:0 0 auto;color:var(--red);" onclick="acPackDelete(${pack.id})">Delete</button>` : ''}
+      </div>
+      ${rows}`;
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Pack not available.') + '</div>'; }
+}
+async function acPackFollowAll(id) {
+  const btn = document.getElementById('packFollowAllBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Following…'; }
+  try {
+    const r = await API.req('POST', '/api/starter-packs/' + id + '/follow-all');
+    showNotif(r.followed ? ('You’re now following ' + r.followed + ' new ' + (r.followed === 1 ? 'person' : 'people') + '.') : 'You already follow everyone here.');
+    acOpenPack(id);
+  } catch (e) { showNotif(e.message || 'Could not follow the pack.'); if (btn) { btn.disabled = false; } }
+}
+function acSharePack(id, title) {
+  const link = location.origin + '/?pack=' + id;
+  if (navigator.share) navigator.share({ title: title || 'A starter pack on Atwe', text: 'Follow this whole crew in one tap', url: link }).catch(() => {});
+  else { acCopyText(link); showNotif('Pack link copied — share it anywhere.'); }
+}
+async function acPackDelete(id) {
+  if (!(await appConfirm({ title: 'Delete this pack?', message: 'The link stops working. Nobody is unfollowed.', confirmText: 'Delete' }))) return;
+  try { await API.req('DELETE', '/api/starter-packs/' + id); closeOverlay('packView'); showNotif('Pack deleted.'); const lv = document.getElementById('starterPacksView'); if (lv && !lv.classList.contains('hidden')) acOpenStarterPacks(); }
+  catch (e) { showNotif(e.message || 'Could not delete.'); }
+}
+
 /* ── About this account (IG/X-style transparency sheet) ── */
 // Identity facts a stranger can check before trusting an account: joined date,
 // account type, verification, location. Fetches fresh so it works from any

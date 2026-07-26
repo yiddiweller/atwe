@@ -18021,6 +18021,123 @@ app.delete('/api/products/:id', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the product.' }); }
 });
 
+/* ─── Starter packs (Bluesky model) ───
+   A curated, shareable set of accounts followed in one tap — the highest-
+   leverage onboarding tool a network can give its members. */
+const PACK_MEMBER_CAP = 25;
+// Validate a member list: real, handled, not deactivated, deduped, capped.
+// The creator is always the first member (Bluesky includes the curator).
+async function readPackMembers(creatorId, userIds) {
+  const ids = [...new Set([creatorId, ...(Array.isArray(userIds) ? userIds : []).map(x => parseInt(x, 10)).filter(Number.isInteger)])].slice(0, PACK_MEMBER_CAP);
+  const { rows } = await db.query('SELECT id FROM users WHERE id = ANY($1) AND username IS NOT NULL AND NOT COALESCE(deactivated, false)', [ids]);
+  const ok = new Set(rows.map(r => r.id));
+  return ids.filter(id => ok.has(id));
+}
+async function savePackMembers(packId, ids) {
+  await db.query('DELETE FROM starter_pack_members WHERE pack_id = $1', [packId]);
+  for (let i = 0; i < ids.length; i++) {
+    await db.query('INSERT INTO starter_pack_members (pack_id, user_id, position) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [packId, ids[i], i]);
+  }
+}
+app.post('/api/starter-packs', auth.requireAuth, rateLimit(15, 60000, 'pack-create'), async (req, res) => {
+  const title = (req.body.title || '').toString().trim().slice(0, 80);
+  if (!title) return res.status(400).json({ error: 'Name your starter pack.' });
+  const description = (req.body.description || '').toString().trim().slice(0, 300) || null;
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const cnt = (await db.query('SELECT COUNT(*)::int AS n FROM starter_packs WHERE creator_id = $1', [req.user.id])).rows[0].n;
+    if (cnt >= 20) return res.status(400).json({ error: 'You’ve reached the maximum number of packs.' });
+    const members = await readPackMembers(req.user.id, req.body.userIds);
+    if (members.length < 2) return res.status(400).json({ error: 'Add at least one other person to the pack.' });
+    const ins = await db.query('INSERT INTO starter_packs (creator_id, title, description) VALUES ($1,$2,$3) RETURNING id', [req.user.id, title, description]);
+    await savePackMembers(ins.rows[0].id, members);
+    res.status(201).json({ id: ins.rows[0].id, memberCount: members.length });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the pack.' }); }
+});
+app.get('/api/starter-packs', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT p.id, p.title, p.description, p.created_at,
+              (SELECT COUNT(*)::int FROM starter_pack_members m WHERE m.pack_id = p.id) AS members
+       FROM starter_packs p WHERE p.creator_id = $1 ORDER BY p.created_at DESC LIMIT 50`, [req.user.id]);
+    res.json({ packs: rows.map(r => ({ id: r.id, title: r.title, description: r.description || null, memberCount: r.members, createdAt: r.created_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your packs.' }); }
+});
+// Pack detail (anyone signed-in — packs are made to be shared). Members carry
+// the viewer's follow state so "Follow all" can say what it'll actually do.
+app.get('/api/starter-packs/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid pack.' });
+  try {
+    const p = (await db.query(
+      `SELECT p.id, p.title, p.description, p.created_at, p.creator_id, u.name AS c_name, u.username AS c_username, u.avatar AS c_avatar
+       FROM starter_packs p JOIN users u ON u.id = p.creator_id WHERE p.id = $1`, [id])).rows[0];
+    if (!p) return res.status(404).json({ error: 'Pack not found.' });
+    const members = (await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.account_type, u.headline,
+              EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $2 AND f.following_id = u.id) AS following
+       FROM starter_pack_members m JOIN users u ON u.id = m.user_id
+       WHERE m.pack_id = $1 AND u.username IS NOT NULL AND NOT COALESCE(u.deactivated, false)
+         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $2 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = $2))
+       ORDER BY m.position`, [id, req.user.id])).rows;
+    res.json({
+      pack: { id: p.id, title: p.title, description: p.description || null, createdAt: p.created_at, mine: p.creator_id === req.user.id,
+        creator: { id: p.creator_id, name: p.c_name, username: p.c_username, avatar: mediaRef(p.c_avatar, 'avatar', p.creator_id) } },
+      members: members.map(m => ({ id: m.id, name: m.name, username: m.username, avatar: mediaRef(m.avatar, 'avatar', m.id), verified: !!m.verified, accountType: m.account_type, headline: m.headline || null, following: !!m.following, isMe: m.id === req.user.id })),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the pack.' }); }
+});
+app.patch('/api/starter-packs/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid pack.' });
+  try {
+    const own = (await db.query('SELECT id FROM starter_packs WHERE id = $1 AND creator_id = $2', [id, req.user.id])).rows[0];
+    if (!own) return res.status(404).json({ error: 'Pack not found.' });
+    const fields = [], vals = [];
+    if ('title' in req.body) { const t = (req.body.title || '').toString().trim().slice(0, 80); if (!t) return res.status(400).json({ error: 'Title can’t be empty.' }); vals.push(t); fields.push(`title = $${vals.length}`); }
+    if ('description' in req.body) { vals.push((req.body.description || '').toString().trim().slice(0, 300) || null); fields.push(`description = $${vals.length}`); }
+    if (fields.length) { vals.push(id); await db.query(`UPDATE starter_packs SET ${fields.join(', ')} WHERE id = $${vals.length}`, vals); }
+    if ('userIds' in req.body) {
+      const members = await readPackMembers(req.user.id, req.body.userIds);
+      if (members.length < 2) return res.status(400).json({ error: 'Keep at least one other person in the pack.' });
+      await savePackMembers(id, members);
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the pack.' }); }
+});
+app.delete('/api/starter-packs/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid pack.' });
+  try {
+    const r = await db.query('DELETE FROM starter_packs WHERE id = $1 AND creator_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Pack not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the pack.' }); }
+});
+// Follow everyone in the pack the viewer doesn't already follow (blocks-aware,
+// self-skipping). Each new follow notifies normally — that's the point of a pack.
+app.post('/api/starter-packs/:id/follow-all', auth.requireAuth, rateLimit(10, 60000, 'pack-follow'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid pack.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const exists = (await db.query('SELECT id FROM starter_packs WHERE id = $1', [id])).rows[0];
+    if (!exists) return res.status(404).json({ error: 'Pack not found.' });
+    const { rows } = await db.query(
+      `SELECT u.id FROM starter_pack_members m JOIN users u ON u.id = m.user_id
+       WHERE m.pack_id = $1 AND u.id <> $2 AND u.username IS NOT NULL AND NOT COALESCE(u.deactivated, false)
+         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $2 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = $2))
+         AND NOT EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $2 AND f.following_id = u.id)
+       ORDER BY m.position`, [id, req.user.id]);
+    let followed = 0;
+    for (const m of rows) {
+      const f = await db.query('INSERT INTO follows (follower_id, following_id) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING following_id', [req.user.id, m.id]);
+      if (f.rowCount) { followed++; notify(m.id, req.user.id, 'follow', null); }
+    }
+    res.json({ ok: true, followed });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not follow the pack.' }); }
+});
+
 /* ─── Auctions (eBay model) ───
    A bid is a COMMITMENT, never held funds — exactly eBay's model. Bids rise on
    an increment ladder; a bid in the final 2 minutes extends the clock 2 minutes
