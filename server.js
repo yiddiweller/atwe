@@ -23498,6 +23498,15 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
       // Personalized: among matches, rank people in your network first (followed by
       // people you follow), then verified, then the name/handle match quality. Each
       // row also carries "Followed by people you follow" social proof.
+      // Advanced filters (LinkedIn-style): account type, verified-only,
+      // open-to-work, and a location match — all parameterized.
+      const fParams = [like, q, me];
+      let fConds = '';
+      if (req.query.ptype === 'personal' || req.query.ptype === 'business') { fParams.push(req.query.ptype); fConds += ` AND account_type = $${fParams.length}`; }
+      if (req.query.verified === '1') fConds += ' AND verified = true';
+      if (req.query.otw === '1') fConds += ` AND otw_visibility = 'everyone'`;
+      const loc = (req.query.loc || '').toString().trim().slice(0, 80);
+      if (loc) { fParams.push('%' + loc.replace(/[%_\\]/g, '\\$&') + '%'); fConds += ` AND location ILIKE $${fParams.length}`; }
       const r = await db.query(
         `SELECT id, name, username, avatar, verified, categories, account_type, headline, business_verify_status,
                 (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = users.id AND f.follower_id IN (SELECT following_id FROM follows WHERE follower_id = $3)) AS mutuals,
@@ -23508,9 +23517,9 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
            OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $1)
          )
          AND id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $3)
-         AND id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $3)
+         AND id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $3)${fConds}
          ORDER BY (lower(username) = lower($2)) DESC, mutuals DESC, verified DESC, (username ILIKE $1) DESC, lower(username) LIMIT 40`,
-        [like, q, me]
+        fParams
       );
       return res.json({ users: r.rows.map((u) => ({ ...mapSearchUser(u), ...socialProof(u) })) });
     }
