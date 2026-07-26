@@ -10851,6 +10851,147 @@ app.get('/api/feedposts/u/:username', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 
+/* ─── Playlists / series: a creator's ORDERED collections of their own feed
+   posts (YouTube-playlist / IG-series style). Shown on the profile's Media
+   tab; tapping one plays the items in order in the immersive viewer. Reads
+   follow the same visibility as the user feed (blocks + follow gate); the
+   list itself shows titles/counts to anyone not blocked, covers only to
+   viewers who could watch. ─── */
+async function playlistCanView(viewerId, ownerId) {
+  if (viewerId === ownerId) return true;
+  const b = await db.query('SELECT 1 FROM blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1)', [viewerId, ownerId]);
+  if (b.rowCount) return null; // blocked either way: hide entirely
+  const f = await db.query('SELECT 1 FROM follows WHERE follower_id=$1 AND following_id=$2', [viewerId, ownerId]);
+  return f.rowCount > 0;
+}
+app.get('/api/playlists', auth.requireAuth, async (req, res) => {
+  try {
+    const uname = String(req.query.user || '').replace(/^@/, '').toLowerCase();
+    if (!uname) return res.status(400).json({ error: 'Whose series?' });
+    const u = (await db.query('SELECT id FROM users WHERE lower(username) = $1 AND NOT COALESCE(deactivated, false)', [uname])).rows[0];
+    if (!u) return res.status(404).json({ error: 'Account not found.' });
+    const canView = await playlistCanView(req.user.id, u.id);
+    if (canView === null) return res.status(403).json({ error: 'You can’t view this.' });
+    const { rows } = await db.query(
+      `SELECT p.id, p.title, p.description, p.created_at,
+              (SELECT COUNT(*)::int FROM playlist_items i JOIN feed_posts fp ON fp.id = i.feed_post_id
+                 WHERE i.playlist_id = p.id AND (fp.expires_at IS NULL OR fp.expires_at > now())) AS items,
+              (SELECT fp.id FROM playlist_items i JOIN feed_posts fp ON fp.id = i.feed_post_id
+                 WHERE i.playlist_id = p.id AND (fp.expires_at IS NULL OR fp.expires_at > now())
+                 ORDER BY i.position, i.added_at LIMIT 1) AS cover_id,
+              (SELECT fp.media FROM playlist_items i JOIN feed_posts fp ON fp.id = i.feed_post_id
+                 WHERE i.playlist_id = p.id AND (fp.expires_at IS NULL OR fp.expires_at > now())
+                 ORDER BY i.position, i.added_at LIMIT 1) AS cover_media,
+              (SELECT fp.kind FROM playlist_items i JOIN feed_posts fp ON fp.id = i.feed_post_id
+                 WHERE i.playlist_id = p.id AND (fp.expires_at IS NULL OR fp.expires_at > now())
+                 ORDER BY i.position, i.added_at LIMIT 1) AS cover_kind
+         FROM playlists p WHERE p.owner_id = $1 ORDER BY p.created_at DESC LIMIT 50`, [u.id]);
+    res.json({ playlists: rows.map((p) => ({ id: p.id, title: p.title, description: p.description || null, items: p.items, createdAt: p.created_at,
+      cover: canView && p.cover_id ? mediaRef(p.cover_media, 'feed-media', p.cover_id) : null,
+      coverKind: canView && p.cover_id ? p.cover_kind : null })), canWatch: !!canView });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load series.' }); }
+});
+app.post('/api/playlists', auth.requireAuth, rateLimit(30, 60000, 'playlist'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const title = (req.body.title || '').toString().trim().slice(0, 80);
+  if (!title) return res.status(400).json({ error: 'Give the series a title.' });
+  const description = (req.body.description || '').toString().trim().slice(0, 500) || null;
+  try {
+    const cnt = (await db.query('SELECT COUNT(*)::int AS n FROM playlists WHERE owner_id = $1', [req.user.id])).rows[0].n;
+    if (cnt >= 30) return res.status(400).json({ error: 'You’ve reached the maximum number of series.' });
+    const { rows } = await db.query('INSERT INTO playlists (owner_id, title, description) VALUES ($1,$2,$3) RETURNING id, title, description, created_at', [req.user.id, title, description]);
+    res.status(201).json({ playlist: { id: rows[0].id, title: rows[0].title, description: rows[0].description, items: 0, createdAt: rows[0].created_at } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the series.' }); }
+});
+app.patch('/api/playlists/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const fields = [], vals = [];
+  if ('title' in req.body) { const t = (req.body.title || '').toString().trim().slice(0, 80); if (!t) return res.status(400).json({ error: 'Title can’t be empty.' }); vals.push(t); fields.push(`title = $${vals.length}`); }
+  if ('description' in req.body) { vals.push((req.body.description || '').toString().trim().slice(0, 500) || null); fields.push(`description = $${vals.length}`); }
+  if (!fields.length) return res.json({ ok: true });
+  try {
+    vals.push(id, req.user.id);
+    const r = await db.query(`UPDATE playlists SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND owner_id = $${vals.length}`, vals);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save.' }); }
+});
+app.delete('/api/playlists/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM playlists WHERE id = $1 AND owner_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete.' }); }
+});
+// Series detail: the ordered, still-live items as full playable feed posts.
+app.get('/api/playlists/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const p = (await db.query('SELECT id, owner_id, title, description FROM playlists WHERE id = $1', [id])).rows[0];
+    if (!p) return res.status(404).json({ error: 'Not found.' });
+    const canView = await playlistCanView(req.user.id, p.owner_id);
+    if (canView === null) return res.status(404).json({ error: 'Not found.' });
+    if (!canView) return res.status(403).json({ error: 'Follow this account to watch their series.' });
+    const { rows } = await db.query(
+      FEEDPOST_SELECT + ` JOIN playlist_items pi ON pi.feed_post_id = fp.id
+        WHERE pi.playlist_id = $2 AND (fp.expires_at IS NULL OR fp.expires_at > now())
+        ORDER BY pi.position, pi.added_at LIMIT 200`,
+      [req.user.id, id]);
+    res.json({ playlist: { id: p.id, title: p.title, description: p.description || null, mine: p.owner_id === req.user.id }, posts: rows.map(mapFeedPost) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the series.' }); }
+});
+app.post('/api/playlists/:id/items', auth.requireAuth, rateLimit(60, 60000, 'playlist-add'), async (req, res) => {
+  const id = routeId(req.params.id);
+  const fpId = parseInt(req.body.feedPostId, 10);
+  if (!Number.isInteger(id) || !Number.isInteger(fpId)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const p = (await db.query('SELECT id FROM playlists WHERE id = $1 AND owner_id = $2', [id, req.user.id])).rows[0];
+    if (!p) return res.status(404).json({ error: 'Not found.' });
+    // Only the creator's OWN posts can go in their series.
+    const fp = (await db.query('SELECT id FROM feed_posts WHERE id = $1 AND user_id = $2 AND (expires_at IS NULL OR expires_at > now())', [fpId, req.user.id])).rows[0];
+    if (!fp) return res.status(404).json({ error: 'That post isn’t available.' });
+    const cnt = (await db.query('SELECT COUNT(*)::int AS n FROM playlist_items WHERE playlist_id = $1', [id])).rows[0].n;
+    if (cnt >= 200) return res.status(400).json({ error: 'This series is full.' });
+    await db.query(
+      `INSERT INTO playlist_items (playlist_id, feed_post_id, position)
+       VALUES ($1, $2, COALESCE((SELECT MAX(position) FROM playlist_items WHERE playlist_id = $1), 0) + 1)
+       ON CONFLICT DO NOTHING`, [id, fpId]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add it.' }); }
+});
+app.delete('/api/playlists/:id/items/:fpId', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id), fpId = routeId(req.params.fpId);
+  if (!Number.isInteger(id) || !Number.isInteger(fpId)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const p = (await db.query('SELECT id FROM playlists WHERE id = $1 AND owner_id = $2', [id, req.user.id])).rows[0];
+    if (!p) return res.status(404).json({ error: 'Not found.' });
+    await db.query('DELETE FROM playlist_items WHERE playlist_id = $1 AND feed_post_id = $2', [id, fpId]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove it.' }); }
+});
+// Reorder: the full id list, validated as exactly the current member set.
+app.post('/api/playlists/:id/reorder', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  const ids = Array.isArray(req.body.ids) ? req.body.ids.map((x) => parseInt(x, 10)) : null;
+  if (!Number.isInteger(id) || !ids || ids.some((x) => !Number.isInteger(x))) return res.status(400).json({ error: 'Invalid order.' });
+  try {
+    const p = (await db.query('SELECT id FROM playlists WHERE id = $1 AND owner_id = $2', [id, req.user.id])).rows[0];
+    if (!p) return res.status(404).json({ error: 'Not found.' });
+    const cur = (await db.query('SELECT feed_post_id FROM playlist_items WHERE playlist_id = $1', [id])).rows.map((r) => r.feed_post_id);
+    if (cur.length !== ids.length || new Set(ids).size !== ids.length || !cur.every((x) => ids.includes(x))) {
+      return res.status(400).json({ error: 'That order doesn’t match the series.' });
+    }
+    for (let i = 0; i < ids.length; i++) {
+      await db.query('UPDATE playlist_items SET position = $1 WHERE playlist_id = $2 AND feed_post_id = $3', [i + 1, id, ids[i]]);
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not reorder.' }); }
+});
+
 // Delete my own feed post.
 app.delete('/api/feedposts/:id', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);

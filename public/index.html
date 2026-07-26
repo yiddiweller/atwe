@@ -7214,6 +7214,17 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .shop-setup-row.done .shop-setup-chk{background:rgba(48,209,88,.18);}
 .shop-setup-chk svg{width:13px;height:13px;fill:none;stroke:var(--green);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;}
 .shop-setup-row .iset-chev{margin-inline-start:auto;}
+/* Playlists / series: cover-card strip on the profile Media tab. */
+.series-row{display:flex;gap:10px;overflow-x:auto;padding:8px 0 14px;scrollbar-width:none;}
+.series-row::-webkit-scrollbar{display:none;}
+.series-card{flex:0 0 auto;width:108px;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;text-align:start;}
+.series-cover{position:relative;display:block;width:108px;height:144px;border-radius:14px;background:var(--s1);overflow:hidden;}
+.series-cover img,.series-cover video{width:100%;height:100%;object-fit:cover;display:block;}
+.series-cover.series-add{display:flex;align-items:center;justify-content:center;font-size:30px;color:var(--t2);background:var(--s1);}
+.series-count{position:absolute;bottom:6px;inset-inline-end:6px;font-size:11px;font-weight:800;color:#fff;background:rgba(0,0,0,.62);border-radius:999px;padding:2px 8px;}
+.series-edit{position:absolute;top:6px;inset-inline-end:6px;width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,.62);display:flex;align-items:center;justify-content:center;}
+.series-edit svg{width:13px;height:13px;fill:none;stroke:#fff;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
+.series-title{display:block;font-size:12.5px;font-weight:700;color:var(--t1);margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 /* Recruiter projects: member rows (person + stage select + private note). */
 .recruit-row{padding:6px 0 10px;border-bottom:1px solid var(--bg);}
 .recruit-row:last-of-type{border-bottom:none;}
@@ -13920,6 +13931,32 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Playlists / series: create, manage (owner) and add-to picker -->
+<div class="overlay hidden" id="seriesCreate" onclick="if(event.target===this)closeOverlay('seriesCreate')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="New series">
+    <button class="sheet-close" onclick="closeOverlay('seriesCreate')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">New series</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">An ordered collection of your feed videos — viewers watch it like a playlist.</div>
+    <input class="jp-in" id="seriesTitleIn" type="text" maxlength="80" placeholder="Series title (e.g. Kitchen basics, Ep-by-ep build)"/>
+    <input class="jp-in" id="seriesDescIn" type="text" maxlength="500" placeholder="What is it about? (optional)" style="margin-top:8px;"/>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:14px;" onclick="acSeriesCreateSubmit()">Create series</button>
+  </div>
+</div>
+<div class="overlay hidden" id="seriesManage" onclick="if(event.target===this)closeOverlay('seriesManage')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Edit series">
+    <button class="sheet-close" onclick="closeOverlay('seriesManage')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="seriesManageBody"></div>
+  </div>
+</div>
+<div class="overlay hidden" id="seriesPickSheet" onclick="if(event.target===this)closeOverlay('seriesPickSheet')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Add to series">
+    <button class="sheet-close" onclick="closeOverlay('seriesPickSheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Add to series</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Pick a series — new episodes go at the end.</div>
+    <div id="seriesPickBody"></div>
+  </div>
+</div>
+
 <!-- Report a job / worker / user / post -->
 <div class="overlay hidden" id="reportSheet" onclick="if(event.target===this)closeOverlay('reportSheet')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Report">
@@ -17242,7 +17279,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1575'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1576'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -27815,6 +27852,7 @@ function acFeedMore(id) {
     items.push({ label: 'Not interested', ic: 'eye', fn: () => acFeedNotInterested(id) });
     items.push({ label: 'Report video', ic: 'flag', danger: true, fn: () => acFeedReport(id) });
   } else {
+    items.push({ label: 'Add to series', ic: 'save', fn: () => acSeriesPickOpen(id) });
     items.push({ label: 'Delete', ic: 'trash', danger: true, fn: () => { acFeedDelete(id); closeOverlay('feedMoreSheet'); } });
   }
   const ICS = {
@@ -28082,6 +28120,126 @@ async function acOpenUserFeed(username) {
   }
 }
 function acCloseUserFeed() { closeOverlay('userFeedOverlay'); }
+/* ── Playlists / series: ordered collections of a creator's own feed posts ── */
+async function acLoadSeries(username, mine) {
+  const box = document.getElementById('acSeriesBox'); if (!box) return;
+  try {
+    const { playlists, canWatch } = await API.req('GET', '/api/playlists?user=' + encodeURIComponent(username));
+    AC._seriesUser = username; AC._seriesMine = mine;
+    if (!playlists.length && !mine) { box.innerHTML = ''; return; }
+    const card = (p) => `<button class="series-card" onclick="acOpenPlaylist(${p.id}, ${jsAttr(p.title)})">
+      <span class="series-cover">${p.cover ? (p.coverKind === 'video' ? `<video src="${p.cover}" muted preload="metadata" playsinline></video>` : `<img src="${p.cover}" alt="" loading="lazy" decoding="async"/>`) : ''}<span class="series-count">${p.items}</span>
+        ${mine ? `<span class="series-edit" onclick="event.stopPropagation();acOpenSeriesManage(${p.id})" aria-label="Edit series"><svg viewBox="0 0 24 24"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg></span>` : ''}</span>
+      <span class="series-title">${escHtml(p.title)}</span></button>`;
+    const add = mine ? `<button class="series-card" onclick="acSeriesCreateOpen()"><span class="series-cover series-add">＋</span><span class="series-title">New series</span></button>` : '';
+    box.innerHTML = (playlists.length || mine)
+      ? `<div class="ac-section-row" style="margin:2px 0 0;"><span class="ac-prof-head" style="padding-inline-start:0;">Series</span></div><div class="series-row">${add}${playlists.map(card).join('')}</div>`
+      : '';
+  } catch { box.innerHTML = ''; }
+}
+async function acOpenPlaylist(id, title) {
+  document.getElementById('userFeedTitle').textContent = title || 'Series';
+  const body = document.getElementById('userFeedBody');
+  body.classList.remove('feeds-mode'); body.innerHTML = acSkelRows(3);
+  showOverlay('userFeedOverlay');
+  try {
+    const { playlist, posts } = await API.req('GET', '/api/playlists/' + id);
+    document.getElementById('userFeedTitle').textContent = playlist.title;
+    if (!posts.length) { body.innerHTML = '<div class="ac-empty feed-empty"><div class="feed-empty-t">Nothing here yet</div><div class="feed-empty-s">This series has no episodes yet.</div></div>'; return; }
+    body.classList.add('feeds-mode');
+    body.innerHTML = posts.map(acFeedCardHtml).join('');
+    acFeedAutoplay(body);
+  } catch (e) {
+    body.classList.remove('feeds-mode');
+    body.innerHTML = '<div class="ac-empty feed-empty"><div class="feed-empty-t">Can’t open this series</div><div class="feed-empty-s">' + escHtml(e.message || 'Try again.') + '</div></div>';
+  }
+}
+function acSeriesCreateOpen() {
+  document.getElementById('seriesTitleIn').value = '';
+  document.getElementById('seriesDescIn').value = '';
+  showOverlay('seriesCreate');
+  setTimeout(() => document.getElementById('seriesTitleIn').focus(), 60);
+}
+async function acSeriesCreateSubmit() {
+  const title = (document.getElementById('seriesTitleIn').value || '').trim();
+  if (!title) { showNotif('Give the series a title.'); return; }
+  try {
+    await API.req('POST', '/api/playlists', { title, description: document.getElementById('seriesDescIn').value.trim() });
+    closeOverlay('seriesCreate'); showNotif('Series created — add videos from your feed posts.');
+    if (AC._seriesUser) acLoadSeries(AC._seriesUser, AC._seriesMine);
+  } catch (e) { showNotif(e.message || 'Could not create it.'); }
+}
+async function acOpenSeriesManage(id) {
+  showOverlay('seriesManage');
+  const b = document.getElementById('seriesManageBody'); b.innerHTML = acSkelRows(3);
+  try {
+    const { playlist, posts } = await API.req('GET', '/api/playlists/' + id);
+    AC._seriesEdit = { id, ids: posts.map(p => p.id) };
+    b.innerHTML = `<div class="ac-section-row" style="margin:0 0 2px;"><span class="jp-title" style="margin:0;">${escHtml(playlist.title)}</span>
+        <span style="display:flex;gap:4px;flex:0 0 auto;">
+          <button class="ac-post-more" onclick="acSeriesRename(${id}, ${jsAttr(playlist.title)})" aria-label="Rename"><svg viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:1.8;"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg></button>
+          <button class="ac-post-more" onclick="acSeriesDelete(${id})" aria-label="Delete" style="color:var(--red);"><svg viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:1.8;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+        </span></div>
+      <div class="ac-disc-sub" style="margin:0 0 10px;">${posts.length} episode${posts.length === 1 ? '' : 's'} · viewers watch them in this order.</div>` +
+      (posts.length ? posts.map((p, i) => `<div class="rsk-row" data-fpid="${p.id}">
+        <span class="rsk-img">${p.kind === 'video' ? `<video src="${p.media}" muted preload="metadata" playsinline style="width:100%;height:100%;object-fit:cover;border-radius:12px;"></video>` : (p.media ? `<img src="${p.media}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:12px;" loading="lazy"/>` : '')}</span>
+        <div class="rsk-main"><div class="rsk-name">Episode ${i + 1}</div><div class="rsk-sub">${escHtml((p.text || (p.kind === 'video' ? 'Video' : 'Photo')).slice(0, 40))}</div></div>
+        ${i > 0 ? `<button class="ac-post-more" onclick="acSeriesMoveUp(${id},${p.id})" aria-label="Move up"><svg viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;"><polyline points="18 15 12 9 6 15"/></svg></button>` : ''}
+        <button class="pv-del" onclick="acSeriesRemoveItem(${id},${p.id})" aria-label="Remove">×</button>
+      </div>`).join('') : '<div class="ac-empty" style="padding:18px;">No episodes yet — open one of your feed videos and pick “Add to series”.</div>');
+  } catch (e) { b.innerHTML = '<div class="ac-empty">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+async function acSeriesRename(id, title) {
+  const nn = prompt('Series title:', title);
+  const t = (nn || '').trim();
+  if (!nn || !t || t === title) return;
+  try { await API.req('PATCH', '/api/playlists/' + id, { title: t }); acOpenSeriesManage(id); if (AC._seriesUser) acLoadSeries(AC._seriesUser, AC._seriesMine); }
+  catch (e) { showNotif(e.message || 'Could not rename.'); }
+}
+async function acSeriesDelete(id) {
+  if (!(await appConfirm({ title: 'Delete this series?', message: 'The collection is removed. The videos themselves stay on your feed.', confirmText: 'Delete', danger: true }))) return;
+  try { await API.req('DELETE', '/api/playlists/' + id); closeOverlay('seriesManage'); if (AC._seriesUser) acLoadSeries(AC._seriesUser, AC._seriesMine); }
+  catch (e) { showNotif(e.message || 'Could not delete.'); }
+}
+async function acSeriesMoveUp(id, fpId) {
+  const s = AC._seriesEdit; if (!s || s.id !== id) return;
+  const i = s.ids.indexOf(fpId); if (i < 1) return;
+  const ids = s.ids.slice(); [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]];
+  try { await API.req('POST', `/api/playlists/${id}/reorder`, { ids }); acOpenSeriesManage(id); }
+  catch (e) { showNotif(e.message || 'Could not reorder.'); }
+}
+async function acSeriesRemoveItem(id, fpId) {
+  try { await API.req('DELETE', `/api/playlists/${id}/items/${fpId}`); acOpenSeriesManage(id); if (AC._seriesUser) acLoadSeries(AC._seriesUser, AC._seriesMine); }
+  catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
+// "Add to series" picker — from the ⋯ menu on one of my own feed posts.
+async function acSeriesPickOpen(feedPostId) {
+  showOverlay('seriesPickSheet');
+  const b = document.getElementById('seriesPickBody'); b.innerHTML = acSkelRows(2);
+  try {
+    const { playlists } = await API.req('GET', '/api/playlists?user=' + encodeURIComponent(S.user.username));
+    b.innerHTML = (playlists.length ? playlists.map(p => `<button class="iset-row" onclick="acSeriesPickAdd(${p.id},${feedPostId})">
+        <div class="iset-main"><div class="iset-label">${escHtml(p.title)}</div><div class="iset-sub">${p.items} episode${p.items === 1 ? '' : 's'}</div></div>
+        <svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`).join('') : '') +
+      `<div style="display:flex;gap:8px;margin-top:${playlists.length ? 12 : 0}px;">
+        <input class="jp-in" id="seriesPickNew" type="text" maxlength="80" placeholder="New series title" style="margin:0;flex:1;" onkeydown="if(event.key==='Enter')acSeriesPickCreate(${feedPostId})"/>
+        <button class="ac-pill-btn" style="flex:0 0 auto;" onclick="acSeriesPickCreate(${feedPostId})">Create &amp; add</button>
+      </div>`;
+  } catch (e) { b.innerHTML = '<div class="ac-empty">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+async function acSeriesPickAdd(pid, fpId) {
+  try { await API.req('POST', `/api/playlists/${pid}/items`, { feedPostId: fpId }); closeOverlay('seriesPickSheet'); showNotif('Added to the series.'); }
+  catch (e) { showNotif(e.message || 'Could not add it.'); }
+}
+async function acSeriesPickCreate(fpId) {
+  const title = (document.getElementById('seriesPickNew').value || '').trim();
+  if (!title) { showNotif('Give the series a title.'); return; }
+  try {
+    const { playlist } = await API.req('POST', '/api/playlists', { title });
+    await API.req('POST', `/api/playlists/${playlist.id}/items`, { feedPostId: fpId });
+    closeOverlay('seriesPickSheet'); showNotif('Added to “' + title + '”.');
+  } catch (e) { showNotif(e.message || 'Could not add it.'); }
+}
 // "Discover shorts" — a row of suggested short photos/videos from creators you don't
 // follow (Search page). Tapping one opens the immersive viewer playing them all.
 async function acLoadDiscoverShorts() {
@@ -34075,7 +34233,7 @@ function acBuildProfPane(name) {
   } else if (name === 'media') {
     const hasMedia = (p) => !!((p.images && p.images.length) || p.image || (p.media && p.mediaKind === 'video'));
     const mediaPosts = (d.posts || []).filter(hasMedia);
-    html = mediaPosts.length ? mediaPosts.map(acPostCard).join('') : '<div class="ac-tab-empty">No photos or videos yet.</div>';
+    html = '<div id="acSeriesBox"></div>' + (mediaPosts.length ? mediaPosts.map(acPostCard).join('') : '<div class="ac-tab-empty">No photos or videos yet.</div>');
   } else if (name === 'about') {
     html = acCatChips(u.categories, true) + acCreatorSubCard(d, mine) +
       `<div id="acShowcaseBox"></div>` + `<div id="acCoursesBox"></div>` +
@@ -34091,6 +34249,7 @@ function acBuildProfPane(name) {
   pane.setAttribute('data-built', '1');
   // Now that the pane's boxes exist, fire its lazy content loaders.
   if (name === 'about' && u.username) { acLoadShowcase(u.username, mine); acLoadCoursesProfile(u.username, mine); }
+  if (name === 'media' && u.username) acLoadSeries(u.username, mine);
   if (name === 'business' && u.id != null) { acLoadShop(u.id, mine); acLoadBizQA(u.id, mine); }
   if (name === 'likes' && u.username) acLoadProfileLikes(u.username);
 }

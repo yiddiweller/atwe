@@ -2209,6 +2209,28 @@ async function initSchema() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS feed_posts_user_idx ON feed_posts(user_id, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS feed_posts_exp_idx ON feed_posts(expires_at);`);
+  // Playlists / series (YouTube-playlist / IG-series style): a creator's ORDERED
+  // collections of their own feed posts, shown on the profile Media tab and
+  // played in sequence in the immersive viewer.
+  await query(`
+    CREATE TABLE IF NOT EXISTS playlists (
+      id          SERIAL PRIMARY KEY,
+      owner_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title       TEXT NOT NULL,
+      description TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS playlists_owner_idx ON playlists(owner_id);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS playlist_items (
+      playlist_id  INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+      feed_post_id INTEGER NOT NULL REFERENCES feed_posts(id) ON DELETE CASCADE,
+      position     INTEGER NOT NULL DEFAULT 0,
+      added_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (playlist_id, feed_post_id)
+    );
+  `);
   // TikTok/LinkedIn-Video-style engagement on the immersive shorts/feed viewer:
   // a like/dislike vote, threaded-flat comments (with their own likes), and saves.
   await query(`
