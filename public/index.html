@@ -7214,6 +7214,15 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .shop-setup-row.done .shop-setup-chk{background:rgba(48,209,88,.18);}
 .shop-setup-chk svg{width:13px;height:13px;fill:none;stroke:var(--green);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;}
 .shop-setup-row .iset-chev{margin-inline-start:auto;}
+/* Remix (Duet/Stitch): the credit chip on a remix card + the composer strip. */
+.feed-remix-chip{position:absolute;left:var(--feed-gutter);bottom:104px;display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.6);border:none;border-radius:999px;padding:5px 12px 5px 5px;color:#fff;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;z-index:5;max-width:70%;}
+.feed-remix-chip img,.feed-remix-chip video{width:28px;height:28px;border-radius:50%;object-fit:cover;flex:0 0 auto;}
+.feed-remix-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.feed-remix-src{display:flex;align-items:center;gap:11px;background:var(--s1);border-radius:14px;padding:9px 12px;margin:0 var(--feed-gutter) 8px;}
+.feed-remix-src img,.feed-remix-src video{width:42px;height:42px;border-radius:10px;object-fit:cover;flex:0 0 auto;}
+.feed-remix-txt{display:flex;flex-direction:column;min-width:0;font-size:12.5px;}
+.feed-remix-txt b{font-size:13.5px;font-weight:700;}
+.feed-remix-txt span{color:var(--t3);}
 /* Verified-organization tiers: an honest label for the LEVEL of proof. The seal
    stays the neutral silver one at every tier (design rule 10) — only this chip
    distinguishes domain-verified from a staff-reviewed business. Premium is the
@@ -10850,6 +10859,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <div class="feed-c-mediaph" id="feedCMediaPh" onclick="acFeedCPick()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="m21 15-5-5L5 21"/></svg><span id="feedCPickLabel">Choose a photo</span></div>
     </div>
   </div>
+  <div id="feedCRemix"></div>
   <div class="feed-c-prodrow" id="feedCProdRow">
     <div id="feedProdChip"></div>
     <button class="feed-c-tagbtn" onclick="acTagProductOpen()" type="button">＋ Tag products</button>
@@ -11610,6 +11620,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
 <div class="iset-group">
   <div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 3l2.5 5 5.5.8-4 3.9 1 5.5-5-2.6-5 2.6 1-5.5-4-3.9 5.5-.8z"/></svg></span><div class="iset-main"><div class="iset-label">Share profile updates</div><div class="iset-sub">Notify connections when you update your profile</div></div><label class="ios-switch"><input type="checkbox" id="apShareUpd" onchange="toggleAccPriv('shareProfileUpdates', this.checked)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>
   <div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg></span><div class="iset-main"><div class="iset-label">Personalized feed</div><div class="iset-sub">Use your activity to tailor your For You feed</div></div><label class="ios-switch"><input type="checkbox" id="apPersonalized" onchange="toggleAccPriv('personalized', this.checked)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>
+  <div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="9" height="16" rx="2"/><rect x="13" y="4" width="9" height="16" rx="2"/></svg></span><div class="iset-main"><div class="iset-label">Allow remixes</div><div class="iset-sub">Let others post their own clip alongside yours. You’re always credited</div></div><label class="ios-switch"><input type="checkbox" id="apAllowRemix" onchange="toggleAccPriv('allowRemix', this.checked)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>
 </div>
 <div class="iset-cap">Turn off personalization for a non-tailored feed. Your activity won’t be used to rank your For You posts.</div>
     </div>
@@ -17366,7 +17377,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1582'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1583'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -17926,6 +17937,7 @@ async function acLoadAccountPrivacy() {
     set('apPresence', p.presenceVisibility || 'everyone');
     set('apShareUpd', p.shareProfileUpdates, true);
     set('apPersonalized', p.personalized, true);
+    set('apAllowRemix', p.allowRemix, true);
     set('apSilenceUnknown', p.silenceUnknownCallers, true);
   } catch (e) { /* leave defaults */ }
 }
@@ -27320,7 +27332,7 @@ function openNotifications() {
 // a type-group; tabs only show when there's something to filter.
 const _NOTIF_TABS = [
   ['all', 'All', null],
-  ['social', 'Replies & likes', ['like', 'reply', 'repost', 'mention', 'quote', 'follow', 'tagged', 'coauthor', 'story_reply', 'story_react', 'story_answer', 'feed_like', 'feed_comment']],
+  ['social', 'Replies & likes', ['like', 'reply', 'repost', 'mention', 'quote', 'follow', 'tagged', 'coauthor', 'story_reply', 'story_react', 'story_answer', 'feed_like', 'feed_comment', 'remix']],
   ['jobs', 'Jobs', ['job_application', 'job_match', 'app_reviewed', 'app_shortlisted', 'app_hired', 'app_rejected', 'referral_request', 'connection_request', 'connection_accepted', 'endorsement']],
   ['money', 'Money', ['money_received', 'money_request', 'money_request_paid', 'money_request_declined', 'order', 'order_fulfilled', 'order_shipped', 'order_delivered', 'invoice', 'invoice_paid', 'invoice_reminder', 'tip', 'payment', 'escrow_released', 'escrow_refunded', 'refund_approved', 'refund_declined', 'split_request', 'split_paid', 'split_reminder', 'pool_contribution', 'gift_received', 'affiliate', 'referral']],
 ];
@@ -27495,7 +27507,7 @@ function notifRow(n, i) {
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
-  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', event_reminder: 'is hosting an event starting soon', event_comment: 'commented on your event', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', appt_rescheduled: 'proposed a new appointment time', appt_reminder: 'has an appointment with you soon', call_reminder: 'has a call with you soon', stock_low: 'is running low — only a few left', stock_out: 'has sold out', event_spot: 'a spot opened up — you’re in!', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', invoice_reminder: 'sent a reminder about an unpaid invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', auction_outbid: 'outbid you on an auction. Bid again to stay in it', auction_won: 'you won the auction. Pay to claim it', auction_ended: 'won your auction. They’re paying now', group_join_paid: 'paid your group’s join fee. They’re in', crm_followup: 'is due a follow-up — you set the reminder', rinv_paused: 'a recurring invoice was paused — check the schedule', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', split_reminder: 'sent a reminder about your share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', story_answer: 'responded to your question', story_mention: 'mentioned you in their Daily', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item' };
+  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', event_reminder: 'is hosting an event starting soon', event_comment: 'commented on your event', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', appt_rescheduled: 'proposed a new appointment time', appt_reminder: 'has an appointment with you soon', call_reminder: 'has a call with you soon', stock_low: 'is running low — only a few left', stock_out: 'has sold out', event_spot: 'a spot opened up — you’re in!', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', invoice_reminder: 'sent a reminder about an unpaid invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', auction_outbid: 'outbid you on an auction. Bid again to stay in it', auction_won: 'you won the auction. Pay to claim it', auction_ended: 'won your auction. They’re paying now', group_join_paid: 'paid your group’s join fee. They’re in', crm_followup: 'is due a follow-up — you set the reminder', rinv_paused: 'a recurring invoice was paused — check the schedule', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', split_reminder: 'sent a reminder about your share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', story_answer: 'responded to your question', story_mention: 'mentioned you in their Daily', remix: 'remixed your video', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -27522,6 +27534,7 @@ function notifRow(n, i) {
     : isInvoice ? `acOpenInvoices('${(n.type === 'invoice_paid' || n.type === 'rinv_paused') ? 'sent' : 'received'}')`
     : isSplit ? (n.type === 'split_paid' ? `acOpenSplits();acSplitTab('created')` : `acOpenSplits()`)
     : isMention ? (n.groupId ? `appTab('chat');acOpenGroup(${n.groupId})` : (n.postId ? `acOpenPostView(${n.postId})` : `acGoProfile('${a.username}')`))
+    : (n.type === 'remix' && n.metaNum) ? `acOpenFeedOriginal(${n.metaNum})`
     : isFeed ? `acOpenFeed(${n.feedId})`
     : isGroup ? (n.type === 'group_request' ? `appTab('chat');acOpenGroupRequests(${n.groupId})` : `appTab('chat');acOpenGroup(${n.groupId})`)
     : isChat ? `appTab('chat');acOpenChat(${a.id})`
@@ -27975,6 +27988,7 @@ function acFeedMore(id) {
   items.push({ label: 'Send in a message', ic: 'send', fn: () => acFeedSendInMessage(id) });
   items.push({ label: p.saved ? 'Remove from saved' : 'Save', ic: 'save', fn: () => acFeedSave(id) });
   items.push({ label: 'Copy link', ic: 'link', fn: () => { acCopyText(location.origin + '/' + (p.author.username || '')); showNotif('Link copied'); } });
+  if (p.kind !== 'text') items.push({ label: 'Remix this', ic: 'remix', fn: () => acFeedRemix(id) });
   if (!p.mine) {
     items.push({ label: (p.iFollow ? 'Unfollow' : 'Follow') + ' @' + (p.author.username || ''), ic: p.iFollow ? 'unfollow' : 'follow', fn: () => acFeedToggleFollow(id) });
     items.push({ label: 'Not interested', ic: 'eye', fn: () => acFeedNotInterested(id) });
@@ -27992,6 +28006,7 @@ function acFeedMore(id) {
     eye: '<svg viewBox="0 0 24 24"><path d="M17 17a10 10 0 0 1-5 1.5C5 18.5 1 12 1 12a18 18 0 0 1 4-5m4-2a10 10 0 0 1 3-.5c7 0 11 6.5 11 6.5a18 18 0 0 1-2.2 3.2"/><line x1="1" y1="1" x2="23" y2="23"/></svg>',
     flag: '<svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V4s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>',
     trash: '<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>',
+    remix: '<svg viewBox="0 0 24 24"><rect x="2" y="4" width="9" height="16" rx="2"/><rect x="13" y="4" width="9" height="16" rx="2"/></svg>',
   };
   AC._feedMoreFns = items.map(i => i.fn);
   document.getElementById('feedMoreList').innerHTML = items.map((i, idx) =>
@@ -27999,6 +28014,17 @@ function acFeedMore(id) {
   showOverlay('feedMoreSheet');
 }
 function acFeedMorePick(idx) { const fn = (AC._feedMoreFns || [])[idx]; closeOverlay('feedMoreSheet'); if (fn) setTimeout(fn, 60); }
+// Remix (Duet/Stitch): open the feed composer with the original attached.
+function acFeedRemix(id) {
+  closeOverlay('feedMoreSheet');
+  const p = AC._immPosts && AC._immPosts[id];
+  if (!p) return;
+  if (p.kind === 'text') { showNotif('Only photos and videos can be remixed.'); return; }
+  setTimeout(() => {
+    acFeedCompose({ id: p.id, kind: p.kind, media: p.media, author: p.author });
+    acFeedCType('video');
+  }, 120);
+}
 async function acFeedNotInterested(id) {
   closeOverlay('feedMoreSheet');
   const card = document.querySelector('.feed-card[data-id="' + id + '"]');
@@ -28157,7 +28183,15 @@ function acFeedCardHtml(p) {
     + `<div class="feed-head-txt"><span class="feed-head-name">${escHtml(a.name || '')}${vbadge(acIsVerified(a))}</span>`
     + `<span class="feed-head-handle">@${h} · ${acTime(p.created_at)}</span></div></div>`;
   (AC._immPosts = AC._immPosts || {})[p.id] = p; // lookup for the rail/comments/more menu
-  return `<div class="feed-card" data-id="${p.id}">${body}<div class="feed-overlay">${del}${sound}${head}${acFeedProdTagChip(p)}${acFeedRailHtml(p)}</div></div>`;
+  // Remix credit (Duet/Stitch): the original creator is named on the card and
+  // their clip is a tappable thumbnail that opens the original.
+  const remix = p.remix ? `<button class="feed-remix-chip" onclick="event.stopPropagation();acOpenFeedOriginal(${p.remix.id})" aria-label="Open the original by @${escHtml(p.remix.author.username || '')}">
+      ${p.remix.media ? (p.remix.kind === 'video'
+        ? `<video src="${p.remix.media}" muted playsinline preload="metadata"></video>`
+        : `<img src="${p.remix.media}" alt="" loading="lazy" decoding="async"/>`) : ''}
+      <span>Remix of @${escHtml(p.remix.author.username || '')}</span>
+    </button>` : '';
+  return `<div class="feed-card" data-id="${p.id}">${body}<div class="feed-overlay">${del}${sound}${head}${remix}${acFeedProdTagChip(p)}${acFeedRailHtml(p)}</div></div>`;
 }
 // A tagged-product chip on an immersive reel/short (bottom-left over the media).
 function acFeedProdTagChip(p) {
@@ -28402,6 +28436,22 @@ async function acOpenDiscoverShorts(startId) {
     acFeedAutoplay(body);
   } catch (e) { body.classList.remove('feeds-mode'); body.innerHTML = '<div class="ac-empty feed-empty"><div class="feed-empty-t">Couldn’t load shorts</div></div>'; }
 }
+// Open the ORIGINAL a remix responds to, in the immersive viewer.
+async function acOpenFeedOriginal(id) {
+  const body = document.getElementById('userFeedBody');
+  document.getElementById('userFeedTitle').textContent = 'Original';
+  body.classList.remove('feeds-mode'); body.innerHTML = acSkelRows(2);
+  showOverlay('userFeedOverlay');
+  try {
+    const { post } = await API.req('GET', '/api/feedposts/' + id);
+    body.classList.add('feeds-mode');
+    body.innerHTML = acFeedCardHtml(post);
+    acFeedAutoplay(body);
+  } catch (e) {
+    body.classList.remove('feeds-mode');
+    body.innerHTML = '<div class="ac-empty feed-empty"><div class="feed-empty-t">That video is gone</div><div class="feed-empty-s">' + escHtml(e.message || 'The original is no longer available.') + '</div></div>';
+  }
+}
 async function acFeedDelete(id) {
   const ok = await appConfirm({ title: 'Delete this feed?', message: 'It will be removed for everyone.', confirmText: 'Delete', danger: true });
   if (!ok) return;
@@ -28417,9 +28467,17 @@ let _feedC = { kind: 'text', bg: FEED_BGS[0], media: null };
 function acFeedMediaPh(kind) {
   return '<div class="feed-c-mediaph" onclick="acFeedCPick()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="m21 15-5-5L5 21"/></svg><span>Choose a ' + kind + '</span></div>';
 }
-function acFeedCompose() {
+// `remixSrc` (optional) = the post being remixed: { id, kind, media, author }.
+function acFeedCompose(remixSrc) {
   if (S.guest || !(S.user && S.user.username)) { showNotif('Sign in to share to your feed.'); return; }
-  _feedC = { kind: 'text', bg: FEED_BGS[0], media: null };
+  _feedC = { kind: 'text', bg: FEED_BGS[0], media: null, remixOf: remixSrc ? remixSrc.id : null };
+  const rb = document.getElementById('feedCRemix');
+  if (rb) rb.innerHTML = remixSrc ? `<div class="feed-remix-src">
+      ${remixSrc.media ? (remixSrc.kind === 'video'
+        ? `<video src="${remixSrc.media}" muted playsinline preload="metadata"></video>`
+        : `<img src="${remixSrc.media}" alt="" loading="lazy" decoding="async"/>`) : ''}
+      <div class="feed-remix-txt"><b>Remixing @${escHtml((remixSrc.author && remixSrc.author.username) || '')}</b><span>Your clip is posted alongside theirs — they’re credited and notified.</span></div>
+    </div>` : '';
   document.getElementById('feedCInput').value = '';
   document.getElementById('feedCText').style.background = _feedC.bg;
   document.getElementById('feedCMedia').innerHTML = acFeedMediaPh('photo');
@@ -28478,7 +28536,9 @@ function acFeedCSync() {
 }
 async function acFeedShare() {
   const payload = { kind: _feedC.kind };
+  if (_feedC.remixOf) payload.remixOf = _feedC.remixOf;
   if (_feedC.kind === 'text') {
+    if (_feedC.remixOf) { showNotif('A remix needs a photo or video of your own.'); return; }
     payload.text = document.getElementById('feedCInput').value.trim();
     payload.bg = _feedC.bg;
     if (!payload.text) return;
@@ -28491,7 +28551,7 @@ async function acFeedShare() {
   try {
     await API.req('POST', '/api/feedposts', payload);
     acFeedComposeClose();
-    showNotif('Shared to your feed.');
+    showNotif(_feedC.remixOf ? 'Remix shared — they’ve been credited.' : 'Shared to your feed.');
     if (_acFeedScope === 'feeds') acLoadFeedTimeline();
   } catch (e) { showNotif(e.message || 'Could not share.'); acFeedCSync(); }
 }
