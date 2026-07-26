@@ -7065,6 +7065,21 @@ function logServerError(route, err) {
      ON CONFLICT (route, message) DO UPDATE SET count = server_errors.count + 1, last_at = now(), stack = COALESCE(EXCLUDED.stack, server_errors.stack)`,
     [String(route || '').slice(0, 200), message, stack]).catch(() => {});
 }
+/* ─── Admin: the Complete Product Book (confidential PDF) ───
+   Served ONLY to authenticated admins — the book is internal, so it must never
+   live under public/ where anyone with the URL could fetch it. The file ships
+   in the repo at docs/, which deploys with the app. */
+app.get('/api/admin/product-book', auth.requireAdmin, (_req, res) => {
+  const file = path.join(__dirname, 'docs', 'ATWE-Complete-Product-Book.pdf');
+  res.sendFile(file, {
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="ATWE-Complete-Product-Book.pdf"',
+    },
+  }, (err) => {
+    if (err && !res.headersSent) res.status(404).json({ error: 'The Product Book is not on this deploy.' });
+  });
+});
 app.get('/api/admin/errors', auth.requireAdmin, async (req, res) => {
   try {
     const { rows } = await db.query(
