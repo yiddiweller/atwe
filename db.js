@@ -2433,6 +2433,25 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS saved_candidates_owner_idx ON saved_candidates(owner_id);`);
+  // Workplace verification (LinkedIn-style): a member proves they work somewhere
+  // by receiving a code at a WORK email whose domain isn't a free-mail provider.
+  // A verified row optionally resolves to the business ACCOUNT that owns that
+  // domain (via its website / contact email), which is what the profile shows.
+  await query(`
+    CREATE TABLE IF NOT EXISTS work_verifications (
+      id          SERIAL PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      business_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      domain      TEXT NOT NULL,
+      email       TEXT NOT NULL,
+      code_hash   TEXT,
+      expires_at  TIMESTAMPTZ,
+      attempts    INTEGER NOT NULL DEFAULT 0,
+      verified_at TIMESTAMPTZ,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS work_verif_user_domain_idx ON work_verifications(user_id, domain);`);
   // AI action log (transparency): actions the member confirmed Atwe AI to take
   // ("Do it for me") — private to the owner, listable + clearable.
   await query(`

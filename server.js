@@ -9550,6 +9550,12 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
                AND (c2.requester_id = $2 OR c2.addressee_id = $2) LIMIT 1`,
             [req.user.id, t.id])).rowCount ? 2 : null),
       pinnedPost, isMuted,
+      // Verified workplaces (work-email proof) — public, verified rows only.
+      workVerified: (await db.query(
+        `SELECT w.domain, b.id AS biz_id, b.name AS biz_name, b.username AS biz_username
+           FROM work_verifications w LEFT JOIN users b ON b.id = w.business_id
+          WHERE w.user_id = $1 AND w.verified_at IS NOT NULL ORDER BY w.verified_at DESC LIMIT 5`, [t.id]
+      )).rows.map((w) => ({ domain: w.domain, businessId: w.biz_id || null, businessName: w.biz_name || null, businessUsername: w.biz_username || null })),
       subPrice: t.sub_price_cents || 0, subBlurb: t.sub_blurb || null, isSubscribed, subscriberCount,
       subTiers: tiers, myTierId,
       isFollowing: counts.rows[0].is_following,
@@ -14801,6 +14807,119 @@ async function resolveExpCompany(body, companyText) {
   return { company, companyUserId };
 }
 // Add an experience entry.
+/* ─── Workplace verification (LinkedIn-style) ───────────────────────────────
+   A member proves where they work by receiving a 6-digit code at a WORK email.
+   Free-mail domains are rejected outright — a gmail.com address proves nothing.
+   When the domain belongs to a business ACCOUNT here (its website or contact
+   email), the verification links to that account and the profile says
+   "Verified at <Business>"; otherwise it says "Verified at <domain>". */
+const FREE_MAIL_DOMAINS = new Set([
+  'gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.co.uk', 'hotmail.com', 'hotmail.co.uk',
+  'outlook.com', 'live.com', 'msn.com', 'icloud.com', 'me.com', 'mac.com', 'aol.com',
+  'proton.me', 'protonmail.com', 'gmx.com', 'gmx.de', 'mail.com', 'yandex.com', 'zoho.com',
+  'pm.me', 'fastmail.com', 'hey.com', 'tutanota.com', 'mail.ru', 'qq.com', '163.com',
+]);
+const WORK_CODE_TTL_MS = 15 * 60 * 1000;
+const WORK_MAX_ATTEMPTS = 5;
+function workEmailDomain(email) {
+  const e = String(email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(e)) return null;
+  const d = e.split('@')[1];
+  // A disposable-looking or free-mail domain can't prove employment.
+  if (!d || FREE_MAIL_DOMAINS.has(d) || d.split('.').length < 2) return null;
+  return d;
+}
+function hostDomain(url) {
+  try {
+    const h = new URL(/^https?:\/\//i.test(url) ? url : 'https://' + url).hostname.toLowerCase();
+    return h.replace(/^www\./, '') || null;
+  } catch { return null; }
+}
+// Which business ACCOUNT owns this domain (website host or contact-email domain)?
+async function businessForDomain(domain) {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, name, username, website, contact_email FROM users
+        WHERE account_type = 'business' AND NOT COALESCE(deactivated, false) AND COALESCE(is_demo, false) = false
+          AND (lower(split_part(contact_email, '@', 2)) = $1 OR website ILIKE '%' || $1 || '%')
+        LIMIT 20`, [domain]);
+    for (const r of rows) {
+      const byMail = (r.contact_email || '').toLowerCase().split('@')[1] === domain;
+      if (byMail || hostDomain(r.website) === domain) return { id: r.id, name: r.name, username: r.username };
+    }
+    return null;
+  } catch { return null; }
+}
+app.get('/api/work-verification', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT w.id, w.domain, w.email, w.verified_at, w.expires_at, (w.code_hash IS NOT NULL) AS pending,
+              b.id AS biz_id, b.name AS biz_name, b.username AS biz_username
+         FROM work_verifications w LEFT JOIN users b ON b.id = w.business_id
+        WHERE w.user_id = $1 ORDER BY w.verified_at DESC NULLS LAST, w.created_at DESC`, [req.user.id]);
+    res.json({ verifications: rows.map((r) => ({
+      id: r.id, domain: r.domain, email: r.email, verified: !!r.verified_at, verifiedAt: r.verified_at,
+      pending: !r.verified_at && r.pending && new Date(r.expires_at) > new Date(),
+      business: r.biz_id ? { id: r.biz_id, name: r.biz_name, username: r.biz_username } : null,
+    })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your verifications.' }); }
+});
+app.post('/api/work-verification/start', auth.requireAuth, rateLimit(6, 60 * 60000, 'work-verif'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const email = (req.body.email || '').toString().trim().toLowerCase().slice(0, 160);
+  const domain = workEmailDomain(email);
+  if (!domain) return res.status(400).json({ error: 'Use your work email — a personal address (Gmail, Outlook, iCloud…) can’t prove where you work.' });
+  try {
+    const cnt = (await db.query('SELECT COUNT(*)::int AS n FROM work_verifications WHERE user_id = $1', [req.user.id])).rows[0].n;
+    const existing = (await db.query('SELECT id FROM work_verifications WHERE user_id = $1 AND domain = $2', [req.user.id, domain])).rows[0];
+    if (!existing && cnt >= 10) return res.status(400).json({ error: 'You’ve reached the maximum number of verified workplaces.' });
+    const biz = await businessForDomain(domain);
+    const code = String(_vcrypto.randomInt(0, 1000000)).padStart(6, '0');
+    const codeHash = _vcrypto.createHash('sha256').update(code).digest('hex');
+    const expires = new Date(Date.now() + WORK_CODE_TTL_MS);
+    await db.query(
+      `INSERT INTO work_verifications (user_id, business_id, domain, email, code_hash, expires_at, attempts, verified_at)
+       VALUES ($1,$2,$3,$4,$5,$6,0,NULL)
+       ON CONFLICT (user_id, domain) DO UPDATE SET business_id = EXCLUDED.business_id, email = EXCLUDED.email,
+         code_hash = EXCLUDED.code_hash, expires_at = EXCLUDED.expires_at, attempts = 0`,
+      [req.user.id, biz ? biz.id : null, domain, email, codeHash, expires]);
+    // Best-effort mail (console fallback when SMTP isn't configured, like the rest of the app).
+    mailer.sendMail({ to: email, subject: 'Your Atwe workplace verification code',
+      html: `<h2>Verify your workplace</h2><p>Your code is <b style="font-size:22px;letter-spacing:3px">${code}</b></p><p>It expires in 15 minutes. If you didn’t ask for this, ignore this email.</p>`,
+      text: `Your Atwe workplace verification code is ${code}. It expires in 15 minutes.` }).catch(() => {});
+    res.json({ ok: true, domain, business: biz, emailSent: mailer.isConfigured() });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the code.' }); }
+});
+app.post('/api/work-verification/confirm', auth.requireAuth, rateLimit(20, 60000, 'work-confirm'), async (req, res) => {
+  const domain = String(req.body.domain || '').trim().toLowerCase();
+  const code = String(req.body.code || '').trim();
+  if (!domain || !/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Enter the 6-digit code.' });
+  try {
+    const row = (await db.query('SELECT id, code_hash, expires_at, attempts FROM work_verifications WHERE user_id = $1 AND domain = $2', [req.user.id, domain])).rows[0];
+    if (!row || !row.code_hash) return res.status(404).json({ error: 'Start the verification again.' });
+    if (new Date(row.expires_at) <= new Date()) return res.status(400).json({ error: 'That code expired — send a new one.' });
+    if (row.attempts >= WORK_MAX_ATTEMPTS) return res.status(429).json({ error: 'Too many wrong codes. Send a new one.' });
+    const hash = _vcrypto.createHash('sha256').update(code).digest('hex');
+    if (hash !== row.code_hash) {
+      await db.query('UPDATE work_verifications SET attempts = attempts + 1 WHERE id = $1', [row.id]);
+      return res.status(400).json({ error: 'That code isn’t right.' });
+    }
+    await db.query('UPDATE work_verifications SET verified_at = now(), code_hash = NULL, attempts = 0 WHERE id = $1', [row.id]);
+    const out = (await db.query(
+      `SELECT w.domain, b.id AS biz_id, b.name AS biz_name, b.username AS biz_username
+         FROM work_verifications w LEFT JOIN users b ON b.id = w.business_id WHERE w.id = $1`, [row.id])).rows[0];
+    res.json({ ok: true, verified: true, domain: out.domain, business: out.biz_id ? { id: out.biz_id, name: out.biz_name, username: out.biz_username } : null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not verify that code.' }); }
+});
+app.delete('/api/work-verification/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM work_verifications WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove it.' }); }
+});
 app.post('/api/experiences', auth.requireAuth, rateLimit(40, 60000, 'exp-add'), async (req, res) => {
   if (!(await requireHandle(req, res))) return;
   const title = (req.body.title || '').trim().slice(0, 120);
