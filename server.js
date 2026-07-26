@@ -26416,6 +26416,65 @@ app.post('/api/ai/ask', auth.requireAuth, rateLimit(10, 60000, 'ai-ask'), async 
   } catch (err) { console.error(err); res.status(503).json({ error: 'Atwe AI is unavailable right now.' }); }
 });
 
+// AI analytics analyst: "how's my shop doing?" answered from the seller's REAL,
+// server-computed numbers — the stats bundle is built here (never by the model),
+// then Atwe AI explains it in plain language, strictly grounded (no invention).
+app.post('/api/ai/shop-analyst', auth.requireAuth, rateLimit(10, 60000, 'ai-analyst'), async (req, res) => {
+  const q = (req.body.question || '').toString().trim().slice(0, 300);
+  if (!q) return res.status(400).json({ error: 'Ask a question first.' });
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not available right now.' });
+  try {
+    const me = req.user.id;
+    const PAID = `('paid','fulfilled','delivered','released','escrow','disputed')`;
+    const money = (c) => '$' + (Number(c || 0) / 100).toFixed(2);
+    const win = async (fromDays, toDays = 0) => (await db.query(
+      `SELECT COUNT(*)::int AS orders, COALESCE(SUM(o.total_cents),0)::bigint AS revenue,
+              COUNT(DISTINCT o.buyer_id)::int AS customers
+         FROM orders o WHERE o.seller_id = $1 AND o.status IN ${PAID}
+          AND o.created_at > now() - make_interval(days => $2)
+          AND o.created_at <= now() - make_interval(days => $3)`, [me, fromDays, toDays])).rows[0];
+    const [w7, w7p, m30, m30p, all] = await Promise.all([win(7), win(14, 7), win(30), win(60, 30), win(36500)]);
+    const top = (await db.query(
+      `SELECT oi.name, SUM(oi.qty)::int AS units, SUM(oi.qty * oi.price_cents)::bigint AS revenue
+         FROM order_items oi JOIN orders o ON o.id = oi.order_id
+        WHERE o.seller_id = $1 AND o.status IN ${PAID} AND o.created_at > now() - interval '30 days'
+        GROUP BY oi.name ORDER BY SUM(oi.qty * oi.price_cents) DESC LIMIT 5`, [me])).rows;
+    const repeat = (await db.query(
+      `SELECT COUNT(*)::int AS n FROM (SELECT buyer_id FROM orders WHERE seller_id = $1 AND status IN ${PAID}
+        GROUP BY buyer_id HAVING COUNT(*) > 1) x`, [me])).rows[0];
+    const open = (await db.query(
+      `SELECT COUNT(*) FILTER (WHERE status IN ('paid','escrow'))::int AS to_fulfil,
+              COUNT(*) FILTER (WHERE status = 'disputed')::int AS disputes
+         FROM orders WHERE seller_id = $1`, [me])).rows[0];
+    const rev = (await db.query(
+      `SELECT ROUND(AVG(pr.rating)::numeric, 1) AS avg, COUNT(*)::int AS n
+         FROM product_reviews pr JOIN products p ON p.id = pr.product_id WHERE p.business_id = $1`, [me])).rows[0];
+    const listings = (await db.query(
+      `SELECT COUNT(*) FILTER (WHERE active)::int AS active,
+              COUNT(*) FILTER (WHERE active AND stock IS NOT NULL AND stock <= 0)::int AS sold_out
+         FROM products WHERE business_id = $1`, [me])).rows[0];
+    const stats = {
+      last7Days: { orders: w7.orders, revenue: money(w7.revenue), customers: w7.customers },
+      previous7Days: { orders: w7p.orders, revenue: money(w7p.revenue) },
+      last30Days: { orders: m30.orders, revenue: money(m30.revenue), customers: m30.customers,
+        avgOrderValue: m30.orders ? money(Number(m30.revenue) / m30.orders) : null },
+      previous30Days: { orders: m30p.orders, revenue: money(m30p.revenue) },
+      allTime: { orders: all.orders, revenue: money(all.revenue), customers: all.customers, repeatCustomers: repeat.n },
+      topProductsLast30Days: top.map((t) => ({ name: t.name, units: t.units, revenue: money(t.revenue) })),
+      needsAttention: { ordersToFulfil: open.to_fulfil, openDisputes: open.disputes, soldOutListings: listings.sold_out },
+      activeListings: listings.active,
+      productReviews: rev.n ? { average: Number(rev.avg), count: rev.n } : null,
+    };
+    const msg = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 450,
+      system: 'You are Atwe AI, a friendly business analyst answering a seller’s question about THEIR OWN shop using ONLY the stats JSON provided — every number you state must appear in (or be directly computed from) it. Be concise, concrete and plain-spoken: lead with the answer, compare periods when relevant (say "up/down X%" only if both numbers are present), and end with ONE practical suggestion when the data clearly supports it. If the stats can’t answer the question, say so — NEVER invent numbers. No markdown headers. Never mention "Claude" or "Anthropic".',
+      messages: [{ role: 'user', content: `My shop stats:\n${JSON.stringify(stats, null, 1)}\n\nQuestion: ${q}` }],
+    });
+    const answer = (msg.content.find((b) => b.type === 'text')?.text || '').trim().slice(0, 2000);
+    res.json({ answer: answer || 'I couldn’t work that out from your stats.' });
+  } catch (err) { console.error(err); res.status(503).json({ error: 'Atwe AI is unavailable right now.' }); }
+});
+
 // Photo-to-listing (eBay "magic listing"): Atwe AI drafts a marketplace listing
 // from one product photo — name, description, category, condition, and a price
 // suggestion the seller always reviews. Strict JSON; brand-safe; 503 keyless.
