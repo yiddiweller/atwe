@@ -70,26 +70,123 @@ app.use((req, _res, next) => {
     : p.replace(/^\/api\//, '').split('/')[0].slice(0, 40);
   _aiCtx.run({ feature: name || 'other' }, next);
 });
+/* ─── Model choice + failover (admin-configurable, no deploy) ──────────────
+   Two tiers are hardcoded across ~32 call sites: a "smart" model and a "fast"
+   one. Rather than touch every site, the tier NAME is remapped here, in the one
+   wrapper every call already passes through — so switching a model, or adding a
+   standby to fall back to when a provider is having a bad hour, is a dashboard
+   toggle. Stored in app_settings ('ai_models'), cached, loaded on boot. */
+const AI_MODELS_KEY = 'ai_models';
+const AI_TIER_DEFAULTS = { smart: 'claude-sonnet-4-6', fast: 'claude-haiku-4-5-20251001' };
+// The models an admin may pick. Deliberately a whitelist: a typo in a free-text
+// field would break every AI feature at once, silently, until someone noticed.
+const AI_MODEL_CHOICES = [
+  { id: 'claude-opus-4-1-20250805', label: 'Atwe Max', help: 'Deepest reasoning. Slowest and dearest.' },
+  { id: 'claude-sonnet-4-6', label: 'Atwe Advanced', help: 'The everyday default — strong and quick.' },
+  { id: 'claude-haiku-4-5-20251001', label: 'Atwe Fast', help: 'Cheapest and fastest. Best for short tasks.' },
+];
+const AI_MODEL_IDS = AI_MODEL_CHOICES.map((m) => m.id);
+let _aiModels = { smart: null, fast: null, smartFallback: null, fastFallback: null, failover: true };
+function normalizeAiModels(v) {
+  const src = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+  const pick = (x) => (AI_MODEL_IDS.includes(x) ? x : null);
+  return {
+    smart: pick(src.smart), fast: pick(src.fast),
+    smartFallback: pick(src.smartFallback), fastFallback: pick(src.fastFallback),
+    failover: src.failover !== false,
+  };
+}
+// Which tier a hardcoded model id belongs to, so the override applies wherever
+// that id appears without every call site having to be rewritten.
+function aiTierOf(model) {
+  if (model === AI_TIER_DEFAULTS.fast) return 'fast';
+  if (model === AI_TIER_DEFAULTS.smart) return 'smart';
+  return null;
+}
+function aiResolveModel(model) {
+  const tier = aiTierOf(model);
+  return (tier && _aiModels[tier]) || model;
+}
+function aiFallbackModel(model) {
+  const tier = aiTierOf(model);
+  if (!tier || !_aiModels.failover) return null;
+  const alt = _aiModels[tier + 'Fallback'] || (tier === 'smart' ? AI_TIER_DEFAULTS.fast : null);
+  const live = aiResolveModel(model);
+  return alt && alt !== live ? alt : null;
+}
+// A provider hiccup (429/5xx/overloaded/timeout) is worth one retry on the
+// standby model. A bad request is our own fault and must NOT be retried.
+function aiShouldFailover(err) {
+  const st = err && (err.status || err.statusCode);
+  if (st === 400 || st === 401 || st === 403 || st === 404 || st === 422) return false;
+  if (st === 429 || (st >= 500 && st < 600)) return true;
+  const m = String((err && err.message) || '').toLowerCase();
+  return /overload|timeout|timed out|econnreset|fetch failed|socket hang up|network/.test(m);
+}
 {
   const realCreate = anthropic.messages.create.bind(anthropic.messages);
-  anthropic.messages.create = async function (params, ...rest) {
-    const feature = (_aiCtx.getStore() || {}).feature || 'other';
-    try {
-      const out = await realCreate(params, ...rest);
-      const u = (out && out.usage) || {};
-      if (db.isConfigured()) {
-        db.query(`INSERT INTO ai_usage (feature, model, in_tokens, out_tokens, ok) VALUES ($1,$2,$3,$4,true)`,
-          [feature, params && params.model, u.input_tokens || 0, u.output_tokens || 0]).catch(() => {});
-      }
-      return out;
-    } catch (err) {
-      if (db.isConfigured()) {
-        db.query(`INSERT INTO ai_usage (feature, model, ok) VALUES ($1,$2,false)`,
-          [feature, params && params.model]).catch(() => {});
-      }
-      throw err;
+  const meter = (feature, model, out) => {
+    if (!db.isConfigured()) return;
+    if (out) {
+      const u = out.usage || {};
+      db.query(`INSERT INTO ai_usage (feature, model, in_tokens, out_tokens, ok) VALUES ($1,$2,$3,$4,true)`,
+        [feature, model, u.input_tokens || 0, u.output_tokens || 0]).catch(() => {});
+    } else {
+      db.query(`INSERT INTO ai_usage (feature, model, ok) VALUES ($1,$2,false)`, [feature, model]).catch(() => {});
     }
   };
+  anthropic.messages.create = async function (params, ...rest) {
+    const feature = (_aiCtx.getStore() || {}).feature || 'other';
+    const asked = params && params.model;
+    const model = aiResolveModel(asked);
+    const first = (model === asked) ? params : { ...params, model };
+    try {
+      const out = await realCreate(first, ...rest);
+      meter(feature, model, out);
+      return out;
+    } catch (err) {
+      meter(feature, model, null);
+      const standby = aiFallbackModel(asked);
+      if (!standby || !aiShouldFailover(err)) throw err;
+      try {
+        const out = await realCreate({ ...params, model: standby }, ...rest);
+        meter(feature + ':failover', standby, out);
+        return out;
+      } catch (err2) { meter(feature + ':failover', standby, null); throw err2; }
+    }
+  };
+}
+
+/* ─── Atwe AI's own words (admin-editable system prompts) ──────────────────
+   The assistant's personality lives in a handful of system prompts. Editing
+   one used to mean a code change and a deploy; now it's a text box. Each slot
+   ships with the exact prompt that was hardcoded, so an untouched install
+   behaves identically — an override only applies once it's actually saved. */
+const AI_PROMPTS_KEY = 'ai_prompts';
+const AI_PROMPT_SLOTS = [
+  { key: 'chat', label: 'Atwe AI assistant', help: 'The main assistant in the Atwe AI tab — the voice most people meet.' },
+  { key: 'support', label: 'Support assistant', help: 'Answers members\u2019 help questions about how Atwe works.' },
+  { key: 'write', label: 'Writing helper', help: 'Improve / rephrase / shorten, used across composers.' },
+  { key: 'moderation', label: 'Content moderation', help: 'Classifies posts for the safety scanner. Change with care.' },
+];
+const AI_PROMPT_KEYS = AI_PROMPT_SLOTS.map((p) => p.key);
+const _aiPromptDefaults = {}; // filled by aiPrompt() the first time each slot is used
+let _aiPrompts = {};
+function normalizeAiPrompts(v) {
+  const src = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+  const out = {};
+  for (const k of AI_PROMPT_KEYS) {
+    const t = typeof src[k] === 'string' ? src[k].trim() : '';
+    if (t) out[k] = t.slice(0, 6000);
+  }
+  return out;
+}
+// Returns the admin's override for a slot, else the shipped default. Recording
+// the default here is what lets the dashboard show "here's what it says now"
+// and offer a real Reset, without duplicating the text in two places.
+function aiPrompt(key, fallback) {
+  _aiPromptDefaults[key] = fallback;
+  return _aiPrompts[key] || fallback;
 }
 
 // Lightweight in-memory per-IP rate limiter for abuse-prone routes.
@@ -160,12 +257,184 @@ function normalizeFeatureFlags(v) {
   for (const k of FEATURE_KEYS) out[k] = src[k] !== false; // default ON
   return out;
 }
-// Middleware: block a route when its feature is switched off.
+/* ─── Gradual rollout ──────────────────────────────────────────────────────
+   A switch is all-or-nothing; shipping to everyone at once is how a small bug
+   becomes a platform-wide one. A rollout percentage lets a feature reach 5% of
+   members, then 25%, then everyone. The bucket is a stable hash of who you are
+   plus the feature key, so a member who is in the rollout STAYS in it (nothing
+   flickers on and off between requests), and two features at 10% reach two
+   different tenths of the audience rather than the same unlucky ones twice. */
+const ROLLOUT_KEY = 'feature_rollout';
+let _featureRollout = {}; // { key: 0..100 } — anything absent means 100 (everyone)
+function normalizeRollout(v) {
+  const src = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+  const out = {};
+  for (const k of FEATURE_KEYS) {
+    const n = Math.round(Number(src[k]));
+    if (Number.isFinite(n) && n >= 0 && n < 100) out[k] = Math.max(0, n);
+  }
+  return out;
+}
+function _rolloutBucket(seed) { // FNV-1a → 0..99, deterministic and cheap
+  let h = 2166136261;
+  const str = String(seed);
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return Math.abs(h) % 100;
+}
+// Who this request is, for bucketing. A signed-in member buckets by id so it is
+// stable across their devices; a visitor buckets by IP so a signup page doesn't
+// flip on every reload.
+function rolloutSeed(req) {
+  if (req && req.user && req.user.id) return 'u' + req.user.id;
+  const fwd = String((req && req.headers && req.headers['x-forwarded-for']) || '').split(',')[0].trim();
+  return 'a' + (fwd || (req && req.ip) || '0');
+}
+function featureEnabledFor(key, req) {
+  if (!featureEnabled(key)) return false;
+  const pct = _featureRollout[key];
+  if (pct == null || pct >= 100) return true;
+  if (pct <= 0) return false;
+  return _rolloutBucket(rolloutSeed(req) + ':' + key) < pct;
+}
+// Middleware: block a route when its feature is switched off — or when this
+// particular caller isn't in the rollout yet.
 function requireFeature(key) {
   return function (req, res, next) {
-    if (!featureEnabled(key)) return res.status(503).json({ error: 'This feature is temporarily unavailable. Please try again later.', featureOff: key });
+    if (!featureEnabledFor(key, req)) return res.status(503).json({ error: 'This feature is temporarily unavailable. Please try again later.', featureOff: key });
     next();
   };
+}
+
+/* ─── Four-eyes rule (dual approval for dangerous actions) ─────────────────
+   Some actions can't be undone: deleting an account takes its posts, orders and
+   history with it; a large refund moves real money. When this is on, the action
+   opens a ticket instead of running, and a SECOND admin has to approve before it
+   executes — the standard control in any bank's back office. (Wallet
+   adjustments already carry their own two-approver flow, built earlier; this is
+   the general one.) Off by default, because a one-person team can't approve
+   their own work and would lock themselves out of their own dashboard. */
+const DUAL_KEY = 'dual_approval';
+const DUAL_ACTIONS = [
+  { key: 'user_delete', label: 'Delete an account', help: 'Permanently removes a member and everything they posted.' },
+  { key: 'refund_large', label: 'Large refunds', help: 'Approving a refund over the threshold below.' },
+];
+const DUAL_ACTION_KEYS = DUAL_ACTIONS.map((a) => a.key);
+let _dualApproval = { enabled: false, actions: {}, refundThresholdCents: 20000 };
+function normalizeDual(v) {
+  const src = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+  const actions = {};
+  const a = (src.actions && typeof src.actions === 'object') ? src.actions : {};
+  for (const k of DUAL_ACTION_KEYS) actions[k] = a[k] !== false; // on by default once the rule itself is on
+  let th = Math.round(Number(src.refundThresholdCents));
+  if (!Number.isFinite(th) || th < 0) th = 20000;
+  return { enabled: src.enabled === true, actions, refundThresholdCents: Math.min(th, 100000000) };
+}
+function dualRequired(action) { return _dualApproval.enabled && _dualApproval.actions[action] !== false; }
+/* Gate a dangerous action. Returns:
+     { ok: true }                   → go ahead (rule off, or a second admin already approved)
+     { pending: true, id, ... }     → a ticket is waiting; the caller should stop and report it
+   `approvalId` on the request is how the approving admin re-runs the action:
+   the ticket is claimed here, atomically, so it can never execute twice. */
+async function dualGate(req, action, targetType, targetId, label, payload) {
+  if (!dualRequired(action)) return { ok: true };
+  const wanted = parseInt(req.body && req.body.approvalId, 10);
+  if (Number.isInteger(wanted)) {
+    // Claim-first: only an APPROVED ticket, for this exact action and target,
+    // and only once — a second attempt finds nothing to claim.
+    const { rows } = await db.query(
+      `UPDATE admin_approvals SET status = 'executed', resolved_at = now()
+        WHERE id = $1 AND status = 'approved' AND action = $2
+          AND COALESCE(target_id,'') = COALESCE($3,'') AND expires_at > now()
+        RETURNING id, approved_by, requested_by`,
+      [wanted, action, targetId != null ? String(targetId) : null]);
+    if (rows[0]) return { ok: true, approvalId: rows[0].id };
+    return { pending: true, error: 'That approval is no longer valid. Ask for a fresh one.' };
+  }
+  // Already approved for this exact action + target? Then the authorisation
+  // exists — consume it and go. Claimed atomically, so it can only ever be
+  // spent once no matter how many staff (or retries) arrive at the same moment.
+  const ready = (await db.query(
+    `UPDATE admin_approvals SET status = 'executed', resolved_at = now()
+      WHERE id = (SELECT id FROM admin_approvals
+                   WHERE action = $1 AND COALESCE(target_id,'') = COALESCE($2,'')
+                     AND status = 'approved' AND expires_at > now()
+                   ORDER BY id ASC LIMIT 1)
+      RETURNING id`,
+    [action, targetId != null ? String(targetId) : null])).rows[0];
+  if (ready) return { ok: true, approvalId: ready.id };
+  // Still waiting on someone? Point at that ticket rather than opening a second.
+  const existing = (await db.query(
+    `SELECT id, status FROM admin_approvals
+      WHERE action = $1 AND COALESCE(target_id,'') = COALESCE($2,'')
+        AND status = 'pending' AND expires_at > now()
+      ORDER BY id DESC LIMIT 1`,
+    [action, targetId != null ? String(targetId) : null])).rows[0];
+  if (existing) {
+    return { pending: true, id: existing.id, status: 'pending',
+      error: 'A second admin has to approve this first. It is waiting in Approvals.' };
+  }
+  const reason = String((req.body && req.body.reason) || '').trim().slice(0, 500) || null;
+  const { rows } = await db.query(
+    `INSERT INTO admin_approvals (action, target_type, target_id, label, payload, reason, requested_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+    [action, targetType || null, targetId != null ? String(targetId) : null, (label || '').slice(0, 200),
+      payload || {}, reason, req.user && req.user.id]);
+  adminAudit(req, 'approval.request', targetType || 'settings', targetId, { action, approvalId: rows[0].id });
+  return { pending: true, id: rows[0].id, status: 'pending',
+    error: 'A second admin has to approve this first. It is waiting in Approvals.' };
+}
+
+/* ─── Admin IP allowlist ───────────────────────────────────────────────────
+   Restrict the dashboard to trusted networks. Deliberately fail-OPEN when it is
+   off or the list is empty, and enabling is refused unless the admin turning it
+   on is already covered — locking yourself out of your own admin panel from a
+   hotel wifi is a far more likely accident than an attacker with a valid
+   staff password AND a valid 2FA code. */
+const ADMIN_IP_KEY = 'admin_ip_allow';
+let _adminIpAllow = { enabled: false, entries: [] };
+function normalizeAdminIps(v) {
+  const src = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+  const seen = new Set();
+  const entries = (Array.isArray(src.entries) ? src.entries : []).map((e) => {
+    const cidr = String((e && e.cidr) || e || '').trim().toLowerCase().slice(0, 60);
+    const note = String((e && e.note) || '').trim().slice(0, 80);
+    return { cidr, note };
+  }).filter((e) => e.cidr && !seen.has(e.cidr) && seen.add(e.cidr)).slice(0, 100);
+  return { enabled: src.enabled === true, entries };
+}
+function _ip4ToInt(ip) {
+  const p = String(ip).split('.');
+  if (p.length !== 4) return null;
+  let n = 0;
+  for (const part of p) {
+    const b = Number(part);
+    if (!Number.isInteger(b) || b < 0 || b > 255 || !/^\d+$/.test(part)) return null;
+    n = (n * 256) + b;
+  }
+  return n;
+}
+// Matches a bare IP (v4 or v6, exact) or an IPv4 CIDR block like 203.0.113.0/24.
+function ipMatches(ip, rule) {
+  if (!ip || !rule) return false;
+  const clean = String(ip).replace(/^::ffff:/, '').trim().toLowerCase();
+  const r = String(rule).trim().toLowerCase();
+  if (!r.includes('/')) return clean === r.replace(/^::ffff:/, '');
+  const [base, bitsRaw] = r.split('/');
+  const bits = Number(bitsRaw);
+  if (!Number.isInteger(bits) || bits < 0 || bits > 32) return false;
+  const a = _ip4ToInt(clean), b = _ip4ToInt(base);
+  if (a == null || b == null) return false;
+  const mask = bits === 0 ? 0 : (~0 << (32 - bits)) >>> 0;
+  return ((a & mask) >>> 0) === ((b & mask) >>> 0);
+}
+function reqIp(req) {
+  const fwd = String((req && req.headers && req.headers['x-forwarded-for']) || '').split(',')[0].trim();
+  return (fwd || (req && req.ip) || '').replace(/^::ffff:/, '');
+}
+function adminIpAllowed(req) {
+  if (!_adminIpAllow.enabled || !_adminIpAllow.entries.length) return true; // fail open
+  const ip = reqIp(req);
+  return _adminIpAllow.entries.some((e) => ipMatches(ip, e.cidr));
 }
 
 // ── Content blocklists — admin-managed banned words + link/domain blacklist ──
@@ -666,6 +935,15 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
 
 app.use(express.json({ limit: '25mb' })); // large enough for base64 images + PDFs
 
+// Admin IP allowlist. Mounted here so it covers EVERY /api/admin/* route no
+// matter where in this file it is defined. Fails open when the rule is off or
+// the list is empty; the enable route refuses to lock out the admin turning it
+// on, so this can't become an accidental one-way door.
+app.use('/api/admin', (req, res, next) => {
+  if (adminIpAllowed(req)) return next();
+  res.status(403).json({ error: 'The dashboard is restricted to approved networks. You are on ' + (reqIp(req) || 'an unknown address') + '.', ipBlocked: true });
+});
+
 // On the admin subdomain (admin.atwe.com), the dashboard is the homepage.
 app.use((req, res, next) => {
   if (req.hostname === ADMIN_HOST && (req.path === '/' || req.path === '/index.html')) {
@@ -1021,7 +1299,7 @@ app.get('/api/admin/client-crashes', auth.requireAdmin, async (_req, res) => {
 });
 
 // Public feature flags so the frontend can adapt its UI.
-app.get('/api/config', (_req, res) => {
+app.get('/api/config', auth.optionalAuth, (req, res) => {
   res.json({
     billingEnabled: billing.isConfigured(),
     emailEnabled: mailer.isConfigured(),
@@ -1035,7 +1313,10 @@ app.get('/api/config', (_req, res) => {
     googleClientId: GOOGLE_CLIENT_ID || null, // public — used to start Google sign-in
     appleClientId: apple.clientId(),          // public — Services ID used to start Apple sign-in
     demoMode: _demoMode,                       // admin "demo mode" is populating the platform
-    features: normalizeFeatureFlags(_featureFlags), // kill switches — client hides disabled UI
+    // Kill switches AS THEY APPLY TO THIS CALLER — a feature at 25% rollout reads
+    // as off for the three-quarters who aren't in it yet, so the client hides the
+    // UI for exactly the people the server would turn away.
+    features: Object.fromEntries(FEATURE_KEYS.map((k) => [k, featureEnabledFor(k, req)])),
     disabledFeatures: disabledFeatureKeys(), // module-level Feature Controls that are OFF → client shows "Unavailable"
     requireAdmin2fa: process.env.REQUIRE_ADMIN_2FA === 'true', // staff must have 2FA to use the dashboard
     // What the locked-out screen should say during planned downtime (empty = the default wording).
@@ -15957,6 +16238,506 @@ app.put('/api/admin/feature-flags', auth.requireAdmin, async (req, res) => {
     res.json({ flags: next });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save feature flags.' }); }
 });
+/* ═══════════════════════════════════════════════
+   BATCH 34 — AI governance + ops guardrails (admin)
+═══════════════════════════════════════════════ */
+
+// ── Prompt manager: edit Atwe AI's own words without a deploy ──
+// Returns each slot with the shipped default AND the current override, so the
+// dashboard can show a real diff and offer Reset. A default is only known once
+// that slot has actually been used since boot, so unseen ones report null.
+app.get('/api/admin/ai-prompts', auth.requireAdmin, (_req, res) => {
+  res.json({
+    slots: AI_PROMPT_SLOTS.map((sl) => ({
+      ...sl,
+      value: _aiPrompts[sl.key] || '',
+      def: _aiPromptDefaults[sl.key] || null,
+      overridden: !!_aiPrompts[sl.key],
+    })),
+  });
+});
+app.put('/api/admin/ai-prompts', auth.requireAdmin, async (req, res) => {
+  try {
+    const incoming = (req.body && req.body.prompts && typeof req.body.prompts === 'object') ? req.body.prompts : {};
+    // An empty string is a deliberate "reset this one", not a no-op.
+    const merged = { ..._aiPrompts };
+    for (const k of AI_PROMPT_KEYS) {
+      if (!(k in incoming)) continue;
+      const t = typeof incoming[k] === 'string' ? incoming[k].trim() : '';
+      if (t) merged[k] = t.slice(0, 6000); else delete merged[k];
+    }
+    const next = normalizeAiPrompts(merged);
+    if (db.isConfigured()) await db.setSetting(AI_PROMPTS_KEY, next);
+    _aiPrompts = next;
+    adminAudit(req, 'ai.prompts', 'settings', AI_PROMPTS_KEY, { keys: Object.keys(next) });
+    res.json({ ok: true, prompts: next });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the prompts.' }); }
+});
+
+// ── Model + failover: swap the model, or name a standby, from the dashboard ──
+app.get('/api/admin/ai-models', auth.requireAdmin, (_req, res) => {
+  res.json({ config: _aiModels, defaults: AI_TIER_DEFAULTS, choices: AI_MODEL_CHOICES,
+    hasKey: !!process.env.ANTHROPIC_API_KEY });
+});
+app.put('/api/admin/ai-models', auth.requireAdmin, async (req, res) => {
+  try {
+    const next = normalizeAiModels(req.body && req.body.config);
+    if (db.isConfigured()) await db.setSetting(AI_MODELS_KEY, next);
+    _aiModels = next;
+    adminAudit(req, 'ai.models', 'settings', AI_MODELS_KEY, next);
+    res.json({ ok: true, config: next });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the model settings.' }); }
+});
+
+// ── AI feedback: a thumb from a member, a review queue for the thumbs-down ──
+app.post('/api/ai/feedback', auth.requireAuth, rateLimit(30, 60000, 'ai-fb'), async (req, res) => {
+  const rating = Number(req.body.rating) > 0 ? 1 : -1;
+  const feature = String(req.body.feature || 'chat').replace(/[^a-z0-9_:-]/gi, '').slice(0, 40) || 'chat';
+  const question = String(req.body.question || '').trim().slice(0, 1000) || null;
+  const answer = String(req.body.answer || '').trim().slice(0, 3000) || null;
+  const note = String(req.body.note || '').trim().slice(0, 500) || null;
+  try {
+    // A thumbs-UP is a signal, not a task — it lands already reviewed so the
+    // queue only ever holds the answers that actually need looking at.
+    await db.query(
+      `INSERT INTO ai_feedback (user_id, feature, rating, question, answer, note, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [req.user.id, feature, rating, question, answer, note, rating > 0 ? 'reviewed' : 'open']);
+    res.status(201).json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send that. Please try again.' }); }
+});
+app.get('/api/admin/ai-feedback', auth.requireAdmin, async (req, res) => {
+  const status = ['open', 'reviewed', 'all'].includes(req.query.status) ? req.query.status : 'open';
+  const rating = req.query.rating === 'up' ? 1 : req.query.rating === 'down' ? -1 : null;
+  try {
+    const where = [], args = [];
+    if (status !== 'all') { args.push(status); where.push(`f.status = $${args.length}`); }
+    if (rating != null) { args.push(rating); where.push(`f.rating = $${args.length}`); }
+    const { rows } = await db.query(
+      `SELECT f.*, u.name AS user_name, u.username AS user_username,
+              r.name AS reviewer_name
+         FROM ai_feedback f
+         LEFT JOIN users u ON u.id = f.user_id
+         LEFT JOIN users r ON r.id = f.reviewed_by
+        ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+        ORDER BY f.created_at DESC LIMIT 200`, args);
+    const sum = (await db.query(
+      `SELECT COUNT(*) FILTER (WHERE rating > 0)::int AS up,
+              COUNT(*) FILTER (WHERE rating < 0)::int AS down,
+              COUNT(*) FILTER (WHERE status = 'open')::int AS open
+         FROM ai_feedback WHERE created_at > now() - interval '30 days'`)).rows[0];
+    const total = (sum.up || 0) + (sum.down || 0);
+    res.json({ feedback: rows, summary: { ...sum, satisfactionPct: total ? Math.round((sum.up / total) * 100) : null } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load AI feedback.' }); }
+});
+app.post('/api/admin/ai-feedback/:id/resolve', auth.requireAdmin, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const note = String(req.body.note || '').trim().slice(0, 500) || null;
+  try {
+    const { rowCount } = await db.query(
+      `UPDATE ai_feedback SET status = 'reviewed', reviewed_by = $2, staff_note = $3, resolved_at = now()
+        WHERE id = $1 AND status = 'open'`, [id, req.user.id, note]);
+    if (!rowCount) return res.status(409).json({ error: 'That item is already reviewed.' });
+    adminAudit(req, 'ai.feedback_review', 'ai_feedback', id, { note });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+
+// ── Four-eyes: the approvals queue ──
+app.get('/api/admin/dual-approval', auth.requireAdmin, (_req, res) => {
+  res.json({ config: _dualApproval, actions: DUAL_ACTIONS });
+});
+app.put('/api/admin/dual-approval', auth.requireAdmin, async (req, res) => {
+  try {
+    const next = normalizeDual(req.body && req.body.config);
+    // Turning it on with nobody to approve would brick these actions for good.
+    if (next.enabled && !_dualApproval.enabled) {
+      const others = (await db.query(
+        `SELECT COUNT(*)::int AS n FROM users
+          WHERE id <> $1 AND NOT COALESCE(deactivated,false)
+            AND (is_admin = true OR jsonb_array_length(COALESCE(admin_perms,'[]'::jsonb)) > 0)`, [req.user.id])).rows[0];
+      if (!others || others.n < 1) return res.status(400).json({
+        error: 'You are the only person with dashboard access — there would be nobody to approve. Add a second admin in Staff first.' });
+    }
+    if (db.isConfigured()) await db.setSetting(DUAL_KEY, next);
+    _dualApproval = next;
+    adminAudit(req, 'approval.settings', 'settings', DUAL_KEY, next);
+    res.json({ ok: true, config: next });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+app.get('/api/admin/approvals', auth.requireAdmin, async (req, res) => {
+  const status = ['pending', 'approved', 'rejected', 'executed', 'all'].includes(req.query.status) ? req.query.status : 'pending';
+  try {
+    const args = [], where = ['a.expires_at > now() OR a.status <> \'pending\''];
+    if (status !== 'all') { args.push(status); where.push(`a.status = $${args.length}`); }
+    const { rows } = await db.query(
+      `SELECT a.*, rq.name AS requested_by_name, rq.username AS requested_by_username,
+              ap.name AS approved_by_name
+         FROM admin_approvals a
+         LEFT JOIN users rq ON rq.id = a.requested_by
+         LEFT JOIN users ap ON ap.id = a.approved_by
+        WHERE ${where.join(' AND ')}
+        ORDER BY a.created_at DESC LIMIT 200`, args);
+    res.json({ approvals: rows, meta: DUAL_ACTIONS, config: _dualApproval, me: req.user.id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load approvals.' }); }
+});
+app.post('/api/admin/approvals/:id/:action', auth.requireAdmin, async (req, res) => {
+  const id = routeId(req.params.id);
+  const action = req.params.action === 'approve' ? 'approve' : req.params.action === 'reject' ? 'reject' : null;
+  if (!Number.isInteger(id) || !action) return res.status(400).json({ error: 'Invalid request.' });
+  const note = String(req.body.note || '').trim().slice(0, 500) || null;
+  try {
+    const a = (await db.query('SELECT * FROM admin_approvals WHERE id = $1', [id])).rows[0];
+    if (!a) return res.status(404).json({ error: 'Not found.' });
+    if (a.status !== 'pending') return res.status(409).json({ error: 'That request is no longer pending.' });
+    // THE control. Everything else here is bookkeeping; this line is the feature.
+    if (action === 'approve' && a.requested_by === req.user.id)
+      return res.status(403).json({ error: 'You asked for this — a different admin has to approve it.' });
+    const { rowCount } = await db.query(
+      `UPDATE admin_approvals SET status = $2, approved_by = $3, staff_note = $4,
+              resolved_at = CASE WHEN $2 = 'rejected' THEN now() ELSE NULL END
+        WHERE id = $1 AND status = 'pending'`,
+      [id, action === 'approve' ? 'approved' : 'rejected', req.user.id, note]);
+    if (!rowCount) return res.status(409).json({ error: 'That request is no longer pending.' });
+    adminAudit(req, 'approval.' + action, a.target_type || 'settings', a.target_id, { approvalId: id, action: a.action });
+    res.json({ ok: true, status: action === 'approve' ? 'approved' : 'rejected' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+
+// ── Admin IP allowlist ──
+app.get('/api/admin/ip-allowlist', auth.requireAdmin, (req, res) => {
+  res.json({ config: _adminIpAllow, myIp: reqIp(req), covered: _adminIpAllow.entries.some((e) => ipMatches(reqIp(req), e.cidr)) });
+});
+app.put('/api/admin/ip-allowlist', auth.requireAdmin, async (req, res) => {
+  try {
+    const next = normalizeAdminIps(req.body && req.body.config);
+    const me = reqIp(req);
+    // The anti-lockout guard: you cannot switch this on from an address the
+    // list doesn't already cover.
+    if (next.enabled && next.entries.length && !next.entries.some((e) => ipMatches(me, e.cidr)))
+      return res.status(400).json({ error: 'Add your own address (' + (me || 'unknown') + ') first — otherwise this would lock you out.', myIp: me });
+    if (next.enabled && !next.entries.length)
+      return res.status(400).json({ error: 'Add at least one address before switching this on.' });
+    if (db.isConfigured()) await db.setSetting(ADMIN_IP_KEY, next);
+    _adminIpAllow = next;
+    adminAudit(req, 'admin.ip_allowlist', 'settings', ADMIN_IP_KEY, { enabled: next.enabled, count: next.entries.length });
+    res.json({ ok: true, config: next, myIp: me });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the allowlist.' }); }
+});
+
+// ── Gradual rollout ──
+app.get('/api/admin/feature-rollout', auth.requireAdmin, (_req, res) => {
+  const pct = {};
+  for (const k of FEATURE_KEYS) pct[k] = _featureRollout[k] == null ? 100 : _featureRollout[k];
+  res.json({ rollout: pct, meta: FEATURE_FLAGS, flags: normalizeFeatureFlags(_featureFlags) });
+});
+app.put('/api/admin/feature-rollout', auth.requireAdmin, async (req, res) => {
+  try {
+    const incoming = (req.body && req.body.rollout && typeof req.body.rollout === 'object') ? req.body.rollout : {};
+    const merged = { ..._featureRollout };
+    for (const k of FEATURE_KEYS) {
+      if (!(k in incoming)) continue;
+      const n = Math.round(Number(incoming[k]));
+      if (Number.isFinite(n) && n >= 0 && n < 100) merged[k] = Math.max(0, n); else delete merged[k];
+    }
+    const next = normalizeRollout(merged);
+    if (db.isConfigured()) await db.setSetting(ROLLOUT_KEY, next);
+    _featureRollout = next;
+    adminAudit(req, 'feature.rollout', 'settings', ROLLOUT_KEY, next);
+    const pct = {};
+    for (const k of FEATURE_KEYS) pct[k] = next[k] == null ? 100 : next[k];
+    res.json({ ok: true, rollout: pct });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the rollout.' }); }
+});
+
+// ── Customizable Overview ──
+// The catalog of cards the Overview can show. Saving null (or an empty pick)
+// means "the default set", so a staffer who never customises sees the full page.
+const OVERVIEW_CARDS = [
+  { key: 'users', label: 'Total users', group: 'Members' },
+  { key: 'pro', label: 'Pro', group: 'Members' },
+  { key: 'free', label: 'Free', group: 'Members' },
+  { key: 'admins', label: 'Admins', group: 'Members' },
+  { key: 'verified', label: 'Verified', group: 'Members' },
+  { key: 'withUsername', label: 'Has @username', group: 'Members' },
+  { key: 'newToday', label: 'New today', group: 'Members' },
+  { key: 'new7d', label: 'New · 7 days', group: 'Members' },
+  { key: 'posts', label: 'Posts', group: 'Content' },
+  { key: 'replies', label: 'Replies', group: 'Content' },
+  { key: 'circles', label: 'Circles', group: 'Content' },
+  { key: 'groups', label: 'Groups', group: 'Content' },
+  { key: 'dms', label: 'DMs sent', group: 'Activity' },
+  { key: 'calls', label: 'Calls', group: 'Activity' },
+  { key: 'locks', label: 'Locked names', group: 'Activity' },
+];
+const OVERVIEW_KEYS = OVERVIEW_CARDS.map((c) => c.key);
+app.get('/api/admin/overview-prefs', auth.requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT admin_overview FROM users WHERE id = $1', [req.user.id]);
+    const saved = rows[0] && Array.isArray(rows[0].admin_overview) ? rows[0].admin_overview.filter((k) => OVERVIEW_KEYS.includes(k)) : null;
+    res.json({ cards: OVERVIEW_CARDS, picked: saved && saved.length ? saved : null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your layout.' }); }
+});
+app.put('/api/admin/overview-prefs', auth.requireAdmin, async (req, res) => {
+  try {
+    const raw = Array.isArray(req.body.picked) ? req.body.picked : null;
+    const picked = raw ? [...new Set(raw.filter((k) => OVERVIEW_KEYS.includes(k)))] : null;
+    await db.query('UPDATE users SET admin_overview = $2 WHERE id = $1',
+      [req.user.id, picked && picked.length ? JSON.stringify(picked) : null]);
+    res.json({ ok: true, picked: picked && picked.length ? picked : null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save your layout.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   BATCH 34 — copyright takedowns + impersonation fast-track
+   Both are reports, but neither belongs in the general report queue: a
+   copyright claim is a sworn legal statement that carries a counter-notice
+   right, and an impersonation claim needs the two accounts side by side.
+═══════════════════════════════════════════════ */
+const DMCA_TARGETS = ['post', 'listing', 'showcase', 'feedpost'];
+const DMCA_TARGET_LABEL = { post: 'Post', listing: 'Listing', showcase: 'Showcase item', feedpost: 'Video' };
+// Who owns the content a claim points at, and a short excerpt to show a staffer.
+async function dmcaTargetInfo(type, id) {
+  const q = {
+    post: 'SELECT user_id AS owner_id, left(body, 160) AS excerpt, image FROM posts WHERE id = $1',
+    listing: 'SELECT business_id AS owner_id, name AS excerpt, image FROM products WHERE id = $1',
+    showcase: 'SELECT user_id AS owner_id, title AS excerpt, (images)[1] AS image FROM showcases WHERE id = $1',
+    feedpost: 'SELECT user_id AS owner_id, left(COALESCE(text,\'\'), 160) AS excerpt, media AS image FROM feed_posts WHERE id = $1',
+  }[type];
+  if (!q) return null;
+  try { return (await db.query(q, [id])).rows[0] || null; } catch (e) { return null; }
+}
+/* A copyright takedown is REVERSIBLE by law — the person who posted it can
+   file a counter-notice and have it put back. So nothing is deleted: the
+   material is copied into the claim, then withheld (blanked and pulled off the
+   feed). Reinstating writes it straight back onto the same row, so replies,
+   likes and links all survive the round trip. Which fields each kind of content
+   carries is declared once, here, and drives both directions. */
+// Each column names the value it is blanked TO. This matters: posts.body is
+// NOT NULL, so blanking it to null throws — and an earlier version swallowed
+// that error, leaving the content up while the claim read "removed".
+const DMCA_FIELDS = {
+  post: { table: 'posts', cols: { body: '', image: null, images: null }, hide: { to_main: false } },
+  listing: { table: 'products', cols: {}, hide: { active: false } },
+  showcase: { table: 'showcases', cols: { description: null, images: null }, hide: {} },
+  feedpost: { table: 'feed_posts', cols: { text: null, media: null }, hide: {} },
+};
+async function dmcaTakedown(type, id) {
+  const f = DMCA_FIELDS[type];
+  if (!f) return null;
+  const names = Object.keys(f.cols);
+  const sel = names.length ? names.join(', ') : '1 AS ok';
+  const row = (await db.query(`SELECT ${sel} FROM ${f.table} WHERE id = $1`, [id]).catch(() => ({ rows: [] }))).rows[0];
+  if (!row) return null;
+  const sets = [], args = [id];
+  names.forEach((c) => { args.push(f.cols[c]); sets.push(`${c} = $${args.length}`); });
+  Object.entries(f.hide).forEach(([k, v]) => { args.push(v); sets.push(`${k} = $${args.length}`); });
+  // Deliberately NOT caught: if the material can't actually be withheld, the
+  // caller must know, because marking a claim "removed" when it wasn't is worse
+  // than an error message.
+  if (sets.length) await db.query(`UPDATE ${f.table} SET ${sets.join(', ')} WHERE id = $1`, args);
+  return row;   // the snapshot, stored on the claim
+}
+async function dmcaRestore(type, id, snapshot) {
+  const f = DMCA_FIELDS[type];
+  if (!f || !snapshot) return false;
+  const sets = [], args = [id];
+  Object.keys(f.cols).forEach((c) => {
+    if (!(c in snapshot)) return;
+    args.push(snapshot[c]); sets.push(`${c} = $${args.length}`);
+  });
+  // Put the hide flags back the other way round (to_main → true, active → true).
+  Object.keys(f.hide).forEach((k) => { args.push(!f.hide[k]); sets.push(`${k} = $${args.length}`); });
+  if (!sets.length) return false;
+  const r = await db.query(`UPDATE ${f.table} SET ${sets.join(', ')} WHERE id = $1`, args).catch(() => null);
+  return !!(r && r.rowCount);
+}
+
+// File a copyright claim. Authed (a sworn statement needs a name behind it) and
+// rate-limited; one open claim per person per item.
+app.post('/api/dmca', auth.requireAuth, rateLimit(6, 3600000, 'dmca'), async (req, res) => {
+  const targetType = String(req.body.targetType || '');
+  const targetId = parseInt(req.body.targetId, 10);
+  if (!DMCA_TARGETS.includes(targetType) || !Number.isInteger(targetId)) return res.status(400).json({ error: 'Invalid claim.' });
+  const workDesc = String(req.body.workDesc || '').trim().slice(0, 1000);
+  const note = String(req.body.note || '').trim().slice(0, 1000) || null;
+  if (!workDesc) return res.status(400).json({ error: 'Describe the work you own.' });
+  if (req.body.sworn !== true) return res.status(400).json({ error: 'You must confirm the statement to file a claim.' });
+  try {
+    const t = await dmcaTargetInfo(targetType, targetId);
+    if (!t) return res.status(404).json({ error: 'That content no longer exists.' });
+    if (t.owner_id === req.user.id) return res.status(400).json({ error: 'That is your own content.' });
+    const me = (await db.query('SELECT name, email FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+    const { rows } = await db.query(
+      `INSERT INTO dmca_claims (claimant_id, claimant_name, claimant_email, target_type, target_id, owner_id, work_desc, note, sworn)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true)
+       ON CONFLICT (claimant_id, target_type, target_id) WHERE status = 'open' DO NOTHING
+       RETURNING id`,
+      [req.user.id, me.name || null, me.email || null, targetType, targetId, t.owner_id || null, workDesc, note]);
+    logEvent('moderation', 'dmca.filed', { req, subjectType: targetType, subjectId: targetId });
+    res.status(201).json({ ok: true, id: rows[0] ? rows[0].id : null, duplicate: !rows[0] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not file the claim.' }); }
+});
+// The counter-notice: the content owner contests a removal. Only they can, and
+// only on a claim that actually resulted in a removal.
+app.post('/api/dmca/:id/counter', auth.requireAuth, rateLimit(6, 3600000, 'dmca-counter'), async (req, res) => {
+  const id = routeId(req.params.id);
+  const text = String(req.body.statement || '').trim().slice(0, 2000);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  if (!text) return res.status(400).json({ error: 'Explain why this was not infringing.' });
+  try {
+    const { rowCount } = await db.query(
+      `UPDATE dmca_claims SET status = 'counter', counter_at = now(), counter_text = $3
+        WHERE id = $1 AND owner_id = $2 AND status = 'removed'`, [id, req.user.id, text]);
+    if (!rowCount) return res.status(409).json({ error: 'There is nothing to contest on that claim.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not file the counter-notice.' }); }
+});
+// What the content owner can see + contest (drives the in-app notice).
+app.get('/api/dmca/mine', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, target_type, target_id, work_desc, status, created_at, counter_at, resolved_at
+         FROM dmca_claims WHERE owner_id = $1 ORDER BY created_at DESC LIMIT 50`, [req.user.id]);
+    res.json({ claims: rows });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load that.' }); }
+});
+app.get('/api/admin/dmca', auth.requirePerm('moderation'), async (req, res) => {
+  const status = ['open', 'removed', 'rejected', 'counter', 'reinstated', 'all'].includes(req.query.status) ? req.query.status : 'open';
+  try {
+    const args = [], where = [];
+    if (status !== 'all') { args.push(status); where.push(`d.status = $${args.length}`); }
+    const { rows } = await db.query(
+      `SELECT d.*, ow.name AS owner_name, ow.username AS owner_username, h.name AS handled_by_name
+         FROM dmca_claims d
+         LEFT JOIN users ow ON ow.id = d.owner_id
+         LEFT JOIN users h ON h.id = d.handled_by
+        ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+        ORDER BY (d.status = 'counter') DESC, d.created_at ASC LIMIT 200`, args);
+    // Pull a live excerpt so the reviewer sees what is actually being claimed.
+    const claims = await Promise.all(rows.map(async (r) => {
+      const t = await dmcaTargetInfo(r.target_type, r.target_id);
+      return { ...r, targetLabel: DMCA_TARGET_LABEL[r.target_type] || r.target_type,
+        excerpt: t ? t.excerpt : null, gone: !t };
+    }));
+    const counts = (await db.query(
+      `SELECT COUNT(*) FILTER (WHERE status = 'open')::int AS open,
+              COUNT(*) FILTER (WHERE status = 'counter')::int AS counter FROM dmca_claims`)).rows[0];
+    res.json({ claims, counts });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the claims.' }); }
+});
+app.post('/api/admin/dmca/:id/resolve', auth.requirePerm('moderation'), async (req, res) => {
+  const id = routeId(req.params.id);
+  const action = ['remove', 'reject', 'reinstate'].includes(req.body.action) ? req.body.action : null;
+  if (!Number.isInteger(id) || !action) return res.status(400).json({ error: 'Pick an action.' });
+  const note = String(req.body.note || '').trim().slice(0, 500) || null;
+  try {
+    // Claim-first so two staff can't act on the same notice twice.
+    const c = (await db.query(
+      `UPDATE dmca_claims SET status = 'resolving' WHERE id = $1 AND status IN ('open','counter') RETURNING *`, [id])).rows[0];
+    if (!c) return res.status(409).json({ error: 'That claim is no longer waiting.' });
+    const unclaim = async (to) => { await db.query('UPDATE dmca_claims SET status = $2 WHERE id = $1', [id, to]).catch(() => {}); };
+    try {
+      if (action === 'remove') {
+        // Only snapshot on the FIRST takedown — a "keep it down" after a
+        // counter-notice must not overwrite the saved copy with the blanks.
+        const snap = c.snapshot || await dmcaTakedown(c.target_type, c.target_id);
+        await db.query(`UPDATE dmca_claims SET status = 'removed', handled_by = $2, staff_note = $3, snapshot = COALESCE(snapshot, $4), resolved_at = now() WHERE id = $1`,
+          [id, req.user.id, note, snap ? JSON.stringify(snap) : null]);
+        if (c.owner_id) notify(c.owner_id, req.user.id, 'dmca_removed', null, null, null, null, null, id);
+      } else if (action === 'reject') {
+        await db.query(`UPDATE dmca_claims SET status = 'rejected', handled_by = $2, staff_note = $3, resolved_at = now() WHERE id = $1`, [id, req.user.id, note]);
+      } else { // reinstate — put the material back exactly as it was
+        const back = await dmcaRestore(c.target_type, c.target_id, c.snapshot);
+        await db.query(`UPDATE dmca_claims SET status = 'reinstated', handled_by = $2, staff_note = $3, resolved_at = now() WHERE id = $1`, [id, req.user.id, note]);
+        if (c.owner_id) notify(c.owner_id, req.user.id, 'dmca_reinstated', null, null, null, null, null, id);
+        if (!back) console.warn('[dmca] nothing to restore for claim', id);
+      }
+    } catch (e) { await unclaim(c.status); throw e; }
+    adminAudit(req, 'dmca.' + action, c.target_type, c.target_id, { claimId: id, note });
+    res.json({ ok: true, status: action === 'remove' ? 'removed' : action === 'reject' ? 'rejected' : 'reinstated' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not resolve the claim.' }); }
+});
+
+// ── Impersonation fast-track ──
+app.post('/api/impersonation', auth.requireAuth, rateLimit(6, 3600000, 'imp-claim'), async (req, res) => {
+  const targetId = parseInt(req.body.targetId, 10);
+  const evidence = String(req.body.evidence || '').trim().slice(0, 1500);
+  if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'Invalid claim.' });
+  if (targetId === req.user.id) return res.status(400).json({ error: 'That is your own account.' });
+  if (!evidence) return res.status(400).json({ error: 'Tell us what they are copying.' });
+  try {
+    const t = (await db.query('SELECT id FROM users WHERE id = $1', [targetId])).rows[0];
+    if (!t) return res.status(404).json({ error: 'That account no longer exists.' });
+    const { rows } = await db.query(
+      `INSERT INTO impersonation_claims (claimant_id, target_id, evidence) VALUES ($1,$2,$3)
+       ON CONFLICT (claimant_id, target_id) WHERE status = 'open' DO NOTHING RETURNING id`,
+      [req.user.id, targetId, evidence]);
+    logEvent('moderation', 'impersonation.filed', { req, subjectType: 'user', subjectId: targetId });
+    res.status(201).json({ ok: true, id: rows[0] ? rows[0].id : null, duplicate: !rows[0] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not file the claim.' }); }
+});
+// The side-by-side payload: both profiles, the same fields, so a staffer can
+// see the copy at a glance instead of opening two tabs.
+const IMP_PROFILE_COLS = `id, name, username, avatar, banner, headline, bio, verified, account_type,
+  created_at, email_verified, status,
+  (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = u.id) AS followers,
+  (SELECT COUNT(*)::int FROM posts p WHERE p.user_id = u.id) AS posts`;
+app.get('/api/admin/impersonation', auth.requirePerm('moderation'), async (req, res) => {
+  const status = ['open', 'upheld', 'rejected', 'all'].includes(req.query.status) ? req.query.status : 'open';
+  try {
+    const args = [], where = [];
+    if (status !== 'all') { args.push(status); where.push(`c.status = $${args.length}`); }
+    const { rows } = await db.query(
+      `SELECT c.*, h.name AS handled_by_name,
+              (SELECT row_to_json(x) FROM (SELECT ${IMP_PROFILE_COLS} FROM users u WHERE u.id = c.claimant_id) x) AS claimant,
+              (SELECT row_to_json(x) FROM (SELECT ${IMP_PROFILE_COLS} FROM users u WHERE u.id = c.target_id) x) AS target
+         FROM impersonation_claims c
+         LEFT JOIN users h ON h.id = c.handled_by
+        ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+        ORDER BY c.created_at ASC LIMIT 200`, args);
+    const open = (await db.query(`SELECT COUNT(*)::int AS n FROM impersonation_claims WHERE status = 'open'`)).rows[0].n;
+    res.json({ claims: rows, open });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the claims.' }); }
+});
+app.post('/api/admin/impersonation/:id/resolve', auth.requirePerm('moderation'), async (req, res) => {
+  const id = routeId(req.params.id);
+  const action = ['uphold', 'reject'].includes(req.body.action) ? req.body.action : null;
+  if (!Number.isInteger(id) || !action) return res.status(400).json({ error: 'Pick an action.' });
+  const note = String(req.body.note || '').trim().slice(0, 500) || null;
+  // Upholding suspends the impostor by default; ban is available for a repeat.
+  const enforce = ['suspended', 'banned', 'none'].includes(req.body.enforce) ? req.body.enforce : 'suspended';
+  try {
+    const c = (await db.query(
+      `UPDATE impersonation_claims SET status = 'resolving' WHERE id = $1 AND status = 'open' RETURNING *`, [id])).rows[0];
+    if (!c) return res.status(409).json({ error: 'That claim is no longer open.' });
+    try {
+      if (action === 'uphold' && enforce !== 'none') {
+        // Never let a moderation staffer enforce against an admin.
+        const t = (await db.query('SELECT is_admin FROM users WHERE id = $1', [c.target_id])).rows[0];
+        if (t && t.is_admin && !req.user.is_admin) {
+          await db.query(`UPDATE impersonation_claims SET status = 'open' WHERE id = $1`, [id]);
+          return res.status(403).json({ error: 'You can’t action an admin’s account.' });
+        }
+        await db.query(
+          `UPDATE users SET status = $2, status_reason = $3, status_by = $4, status_at = now(),
+                  suspended_until = CASE WHEN $2 = 'suspended' THEN now() + interval '30 days' ELSE NULL END
+            WHERE id = $1`,
+          [c.target_id, enforce, 'Impersonation — upheld after review', req.user.id]);
+        await db.query('DELETE FROM auth_sessions WHERE user_id = $1', [c.target_id]).catch(() => {});
+        try { rtKickUser(c.target_id); } catch (e) { /* best effort */ }
+      }
+      await db.query(
+        `UPDATE impersonation_claims SET status = $2, handled_by = $3, staff_note = $4, resolved_at = now() WHERE id = $1`,
+        [id, action === 'uphold' ? 'upheld' : 'rejected', req.user.id, note]);
+      if (c.claimant_id) notify(c.claimant_id, req.user.id, action === 'uphold' ? 'imp_upheld' : 'imp_rejected');
+    } catch (e) { await db.query(`UPDATE impersonation_claims SET status = 'open' WHERE id = $1`, [id]).catch(() => {}); throw e; }
+    adminAudit(req, 'impersonation.' + action, 'user', c.target_id, { claimId: id, enforce, note });
+    res.json({ ok: true, status: action === 'uphold' ? 'upheld' : 'rejected' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not resolve the claim.' }); }
+});
+
 // Admin: content blocklists (moderation scope). Get / replace the banned-word +
 // link-domain lists; the cache is swapped so the very next post-create enforces them.
 app.get('/api/admin/moderation-lists', auth.requirePerm('moderation'), (_req, res) => {
@@ -16242,7 +17023,7 @@ async function moderateBatch(texts) {
   if (!process.env.ANTHROPIC_API_KEY) return { verdicts: out, ai: false };
   try {
     const numbered = texts.map((t, i) => `[${i}] ${String(t || '').replace(/\s+/g, ' ').slice(0, 500)}`).join('\n');
-    const sys = 'You are a strict content-safety auditor for a professional business platform. Review each numbered item and flag genuinely inappropriate content of ANY kind: harassment/bullying/abuse (harassment), hate speech (hate), credible threats or violence (violence), pornography or sexual/explicit content (sexual), sexual content involving minors (underage), prostitution or solicitation of sex-for-hire (prostitution), sale/promotion of illegal drugs (drugs), scams or fraud (scam), spam or inauthentic/repetitive junk (spam), other illegal activity or illegal-goods sales (illegal), doxxing or privacy violations (privacy). Ordinary criticism, profanity, opinions or normal business/marketing text are NOT inappropriate. Reply with STRICT JSON only: {"flags":[{"i":number,"category":"harassment|hate|violence|sexual|underage|prostitution|drugs|scam|spam|illegal|privacy|other","severity":"low|medium|high","reason":"3-6 words"}]}. Only include items that are genuinely inappropriate. Never mention "Claude" or "Anthropic".';
+    const sys = aiPrompt('moderation', 'You are a strict content-safety auditor for a professional business platform. Review each numbered item and flag genuinely inappropriate content of ANY kind: harassment/bullying/abuse (harassment), hate speech (hate), credible threats or violence (violence), pornography or sexual/explicit content (sexual), sexual content involving minors (underage), prostitution or solicitation of sex-for-hire (prostitution), sale/promotion of illegal drugs (drugs), scams or fraud (scam), spam or inauthentic/repetitive junk (spam), other illegal activity or illegal-goods sales (illegal), doxxing or privacy violations (privacy). Ordinary criticism, profanity, opinions or normal business/marketing text are NOT inappropriate. Reply with STRICT JSON only: {"flags":[{"i":number,"category":"harassment|hate|violence|sexual|underage|prostitution|drugs|scam|spam|illegal|privacy|other","severity":"low|medium|high","reason":"3-6 words"}]}. Only include items that are genuinely inappropriate. Never mention "Claude" or "Anthropic".');
     const msg = await anthropic.messages.create({ model: 'claude-haiku-4-5-20251001', max_tokens: 700, system: sys, messages: [{ role: 'user', content: numbered }] });
     const raw = (msg.content.find((b) => b.type === 'text')?.text || '').trim();
     const parsed = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
@@ -22864,6 +23645,126 @@ async function flushReengagement() {
 }
 // Every 6h; the per-member cooldown is what actually bounds frequency.
 registerJob('reengagement', 'Re-engagement push', 6*60*60*1000); setInterval(trackJob('reengagement', flushReengagement), 6 * 60 * 60 * 1000).unref?.();
+
+/* ─── Anomaly alerts ("something changed, look at it") ─────────────────────
+   Every dashboard here shows a number. None of them shout. This job compares
+   the last 24 hours of each headline metric against the trailing 7-day daily
+   average and raises an alert when the gap is big enough to be worth a look —
+   a signup collapse, a revenue spike, a wave of refunds, an error storm.
+   Deliberately conservative: a small baseline (a quiet platform) needs a much
+   larger absolute move before it counts, so a day with 1 signup instead of 2
+   doesn't page anyone. */
+const ANOMALY_FLUSH_MS = Math.max(300000, parseInt(process.env.ANOMALY_FLUSH_MS, 10) || 30 * 60000);
+const ANOMALY_METRICS = [
+  { key: 'signups', label: 'New signups', floor: 5, sql:
+    `SELECT COUNT(*) FILTER (WHERE created_at > now() - interval '24 hours')::numeric AS cur,
+            COUNT(*) FILTER (WHERE created_at BETWEEN now() - interval '8 days' AND now() - interval '24 hours')::numeric / 7 AS base
+       FROM users WHERE NOT COALESCE(is_demo,false)` },
+  { key: 'revenue', label: 'Revenue', floor: 2000, money: true, sql:
+    `SELECT COALESCE(SUM(amount_cents) FILTER (WHERE created_at > now() - interval '24 hours'),0)::numeric AS cur,
+            COALESCE(SUM(amount_cents) FILTER (WHERE created_at BETWEEN now() - interval '8 days' AND now() - interval '24 hours'),0)::numeric / 7 AS base
+       FROM company_revenue` },
+  { key: 'orders', label: 'Orders placed', floor: 5, sql:
+    `SELECT COUNT(*) FILTER (WHERE created_at > now() - interval '24 hours')::numeric AS cur,
+            COUNT(*) FILTER (WHERE created_at BETWEEN now() - interval '8 days' AND now() - interval '24 hours')::numeric / 7 AS base
+       FROM orders` },
+  { key: 'refunds', label: 'Refund requests', floor: 3, upOnly: true, sql:
+    `SELECT COUNT(*) FILTER (WHERE created_at > now() - interval '24 hours')::numeric AS cur,
+            COUNT(*) FILTER (WHERE created_at BETWEEN now() - interval '8 days' AND now() - interval '24 hours')::numeric / 7 AS base
+       FROM refund_requests` },
+  { key: 'disputes', label: 'Order disputes', floor: 2, upOnly: true, sql:
+    `SELECT COUNT(*) FILTER (WHERE disputed_at > now() - interval '24 hours')::numeric AS cur,
+            COUNT(*) FILTER (WHERE disputed_at BETWEEN now() - interval '8 days' AND now() - interval '24 hours')::numeric / 7 AS base
+       FROM orders WHERE disputed_at IS NOT NULL` },
+  { key: 'errors', label: 'Server errors', floor: 10, upOnly: true, sql:
+    `SELECT COUNT(*) FILTER (WHERE created_at > now() - interval '24 hours')::numeric AS cur,
+            COUNT(*) FILTER (WHERE created_at BETWEEN now() - interval '8 days' AND now() - interval '24 hours')::numeric / 7 AS base
+       FROM server_errors` },
+  { key: 'reports', label: 'Content reports', floor: 5, upOnly: true, sql:
+    `SELECT COUNT(*) FILTER (WHERE created_at > now() - interval '24 hours')::numeric AS cur,
+            COUNT(*) FILTER (WHERE created_at BETWEEN now() - interval '8 days' AND now() - interval '24 hours')::numeric / 7 AS base
+       FROM reports` },
+];
+const ANOMALY_METRIC_LABEL = Object.fromEntries(ANOMALY_METRICS.map((m) => [m.key, m.label]));
+// Don't re-raise the same alert every half hour while a genuine spike lasts.
+const ANOMALY_COOLDOWN_HOURS = 12;
+async function flushAnomalies() {
+  if (!db.isConfigured()) return 0;
+  let raised = 0;
+  for (const m of ANOMALY_METRICS) {
+    try {
+      const r = (await db.query(m.sql)).rows[0];
+      const cur = Number(r.cur || 0), base = Number(r.base || 0);
+      // Both sides must clear the floor before a ratio means anything — 1 → 3
+      // is a "200% spike" that tells you nothing on a quiet day.
+      if (cur < m.floor && base < m.floor) continue;
+      const pct = base > 0 ? Math.round(((cur - base) / base) * 100) : (cur >= m.floor ? 100 : 0);
+      const up = cur > base;
+      if (!up && m.upOnly) continue;            // fewer refunds is good news
+      if (Math.abs(pct) < 60) continue;          // ordinary day-to-day movement
+      // A collapse only counts if there WAS something to collapse from.
+      if (!up && base < m.floor) continue;
+      const severity = Math.abs(pct) >= 150 ? 'high' : 'warn';
+      const recent = await db.query(
+        `SELECT 1 FROM anomaly_alerts WHERE metric = $1 AND direction = $2
+           AND created_at > now() - ($3 || ' hours')::interval LIMIT 1`,
+        [m.key, up ? 'up' : 'down', String(ANOMALY_COOLDOWN_HOURS)]);
+      if (recent.rowCount) continue;
+      const fmt = (n) => (m.money ? '$' + (n / 100).toLocaleString(undefined, { maximumFractionDigits: 0 }) : Math.round(n).toLocaleString());
+      const detail = `${m.label} ${up ? 'up' : 'down'} ${Math.abs(pct)}% in the last 24h — ${fmt(cur)} vs a usual ${fmt(base)}.`;
+      await db.query(
+        `INSERT INTO anomaly_alerts (metric, direction, severity, current, baseline, pct, detail)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [m.key, up ? 'up' : 'down', severity, cur, base, pct, detail]);
+      raised++;
+      // Tell the owners, best-effort. Email degrades to a console line without
+      // SMTP, exactly like every other mail in the app.
+      try {
+        const admins = (await db.query(
+          `SELECT email, name FROM users WHERE is_admin = true AND email IS NOT NULL AND NOT COALESCE(deactivated,false) LIMIT 5`)).rows;
+        for (const a of admins) {
+          await mailer.sendMail({
+            to: a.email,
+            subject: `Atwe alert — ${m.label} ${up ? 'spike' : 'drop'}`,
+            html: `<p>${escapeHtml(detail)}</p><p>Open the dashboard to look into it.</p>`,
+          }).catch(() => {});
+        }
+      } catch (e) { /* alerting must never break the scan */ }
+    } catch (e) { /* one metric failing must not stop the rest */ }
+  }
+  return raised;
+}
+registerJob('anomalies', 'Anomaly detection', ANOMALY_FLUSH_MS);
+setInterval(trackJob('anomalies', flushAnomalies), ANOMALY_FLUSH_MS).unref?.();
+app.get('/api/admin/anomalies', auth.requireAdmin, async (req, res) => {
+  const showAll = req.query.state === 'all';
+  try {
+    const { rows } = await db.query(
+      `SELECT a.*, u.name AS acked_by_name FROM anomaly_alerts a
+         LEFT JOIN users u ON u.id = a.acked_by
+        ${showAll ? '' : 'WHERE a.acked_at IS NULL'}
+        ORDER BY a.created_at DESC LIMIT 100`);
+    const open = (await db.query('SELECT COUNT(*)::int AS n FROM anomaly_alerts WHERE acked_at IS NULL')).rows[0].n;
+    res.json({ alerts: rows.map((a) => ({ ...a, metricLabel: ANOMALY_METRIC_LABEL[a.metric] || a.metric })), open,
+      nextScanMins: Math.round(ANOMALY_FLUSH_MS / 60000) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load alerts.' }); }
+});
+app.post('/api/admin/anomalies/:id/ack', auth.requireAdmin, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    await db.query('UPDATE anomaly_alerts SET acked_by = $2, acked_at = now() WHERE id = $1 AND acked_at IS NULL', [id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+// Run the scan on demand, so a suspicious morning doesn't wait for the timer.
+app.post('/api/admin/anomalies/scan', auth.requireAdmin, async (req, res) => {
+  try {
+    const raised = await trackJob('anomalies', flushAnomalies, { manual: true })();
+    adminAudit(req, 'anomaly.scan', 'settings', null, {});
+    res.json({ ok: true, raised: raised || 0 });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not run the scan.' }); }
+});
 // Daily morning briefing ("your day ahead"): appointments + events today, money
 // requests waiting, orders to ship, new followers — pushed once per member per
 // local day around 8am (local time via the stored device UTC offset; UTC when
@@ -27878,6 +28779,13 @@ app.delete('/api/admin/users/:id', auth.requirePerm('users'), async (req, res) =
   }
   try {
     const u = await db.query('SELECT name, email, username FROM users WHERE id = $1', [id]);
+    if (!u.rows[0]) return res.status(404).json({ error: 'Account not found.' });
+    // Four-eyes: when the rule is on, this opens a ticket for a second admin
+    // instead of running. Deleting an account takes everything they ever posted.
+    const gate = await dualGate(req, 'user_delete', 'user', id,
+      'Delete ' + (u.rows[0].username ? '@' + u.rows[0].username : (u.rows[0].name || 'account #' + id)),
+      { name: u.rows[0].name, email: u.rows[0].email, username: u.rows[0].username });
+    if (!gate.ok) return res.status(202).json({ needsApproval: true, approvalId: gate.id || null, status: gate.status || null, error: gate.error });
     await db.query('DELETE FROM users WHERE id = $1', [id]);
     adminAudit(req, 'user.delete', 'user', id, u.rows[0] || {});
     res.json({ ok: true });
@@ -29266,6 +30174,17 @@ app.post('/api/admin/refunds/:id/resolve', auth.requirePerm('refunds'), async (r
     if (!Number.isInteger(amount) || amount <= 0) amount = rr.amount_cents;
     amount = Math.min(amount, Math.max(rr.amount_cents, 0) || amount); // never refund more than paid
     if (!amount || amount <= 0) { await db.query(`UPDATE refund_requests SET status='open' WHERE id=$1`, [id]); return res.status(400).json({ error: 'Nothing to refund on this payment.' }); }
+    // Four-eyes on a LARGE refund. Release the claim first — the request must go
+    // back to 'open' so the second admin has something to approve, and so a
+    // waiting ticket can never leave the queue stuck mid-resolve.
+    if (amount >= (_dualApproval.refundThresholdCents || 0) && dualRequired('refund_large')) {
+      const gate = await dualGate(req, 'refund_large', 'refund', id,
+        'Refund $' + (amount / 100).toFixed(2) + ' · ' + rr.kind, { amountCents: amount, kind: rr.kind, refId: rr.ref_id });
+      if (!gate.ok) {
+        await db.query(`UPDATE refund_requests SET status='open' WHERE id=$1`, [id]).catch(() => {});
+        return res.status(202).json({ needsApproval: true, approvalId: gate.id || null, status: gate.status || null, error: gate.error });
+      }
+    }
     // Never pay out twice for the SAME underlying payment: if another request for this exact
     // (kind, ref_id) was already approved — or is mid-resolve — decline this one instead of
     // paying again. Orders are additionally protected by the atomic claim inside executeRefund;
@@ -30047,8 +30966,8 @@ app.post('/api/chat', auth.requireAuth, rateLimit(30, 60000, 'chat'), requireFea
     const msg = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: maxTokens,
-      system:
-        'You are Atwe AI, an intelligent assistant for modern businesses. Give clear, accurate, well-structured answers. Be professional, concise, and genuinely helpful — thorough when it matters, brief when it does not. Use markdown (bold, lists, headings, code) only when it improves clarity. Keep a clean, classy, understated tone; do not use emojis unless the user uses them first.',
+      system: aiPrompt('chat',
+        'You are Atwe AI, an intelligent assistant for modern businesses. Give clear, accurate, well-structured answers. Be professional, concise, and genuinely helpful — thorough when it matters, brief when it does not. Use markdown (bold, lists, headings, code) only when it improves clarity. Keep a clean, classy, understated tone; do not use emojis unless the user uses them first.'),
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
     });
     const text = msg.content.find((b) => b.type === 'text')?.text ?? '';
@@ -30330,7 +31249,7 @@ app.post('/api/support/ask', auth.optionalAuth, rateLimit(20, 60000), async (req
     const msg = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 700,
-      system: SUPPORT_SYSTEM,
+      system: aiPrompt('support', SUPPORT_SYSTEM),
       messages: convo,
     });
     res.json({ content: msg.content.find((b) => b.type === 'text')?.text ?? '' });
@@ -30391,7 +31310,8 @@ app.post('/api/ai/write', auth.requireAuth, rateLimit(40, 60000, 'ai-write'), re
   if (!text && task !== 'generate') return res.status(400).json({ error: 'Nothing to work with.' });
   if (task === 'generate' && !instruction && !text) return res.status(400).json({ error: 'Tell Atwe AI what to write.' });
   if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not available right now.' });
-  let sys = 'You are Atwe AI, a writing assistant inside the Atwe business app. ' + AI_WRITE_TASKS[task]
+  let sys = aiPrompt('write', 'You are Atwe AI, a writing assistant inside the Atwe business app.')
+    + ' ' + AI_WRITE_TASKS[task]
     + ' Never add commentary, labels, or markdown fences. You are Atwe AI — never mention "Claude" or "Anthropic".';
   if (task === 'translate') sys += ' Target language: ' + (req.body.lang ? String(req.body.lang).slice(0, 40) : 'English') + '.';
   let userMsg = text;
@@ -30965,5 +31885,10 @@ db.init()
   .then(() => { if (db.isConfigured()) return loadIpBlocks().catch(() => {}); })
   .then(() => { if (db.isConfigured()) return recordDeploy().catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(MAINT_KEY).then((v) => { if (v && typeof v === 'object') _maintenance = v; }).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return db.getSetting(AI_MODELS_KEY).then((v) => { _aiModels = normalizeAiModels(v); }).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return db.getSetting(AI_PROMPTS_KEY).then((v) => { _aiPrompts = normalizeAiPrompts(v); }).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return db.getSetting(ROLLOUT_KEY).then((v) => { _featureRollout = normalizeRollout(v); }).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return db.getSetting(DUAL_KEY).then((v) => { _dualApproval = normalizeDual(v); }).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return db.getSetting(ADMIN_IP_KEY).then((v) => { _adminIpAllow = normalizeAdminIps(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) console.log('🗄️   Schema + settings ready.'); })
   .catch((err) => console.error('Post-init setup failed:', err.message));
