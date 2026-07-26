@@ -63,9 +63,29 @@
   <!-- View 1: just the mark + one line -->
   <div class="view on" id="vMsg">
     <button class="logo" id="logoBtn" aria-label="Enter access code"><img src="/logo-mark.png" alt="Atwe" /></button>
-    <div class="unavail">Atwe is currently unavailable</div>
-    <div class="unavail-sub">Please check back soon.</div>
+    <div class="unavail" id="mTitle">Atwe is currently unavailable</div>
+    <div class="unavail-sub" id="mBody">Please check back soon.</div>
   </div>
+
+  <script>
+    // If the owner has written a maintenance message, show that instead of the
+    // generic wording — and a plain countdown if they gave a time.
+    fetch('/api/config').then((r) => r.json()).then((c) => {
+      const m = c && c.maintenance; if (!m) return;
+      if (m.title) document.getElementById('mTitle').textContent = m.title;
+      const body = document.getElementById('mBody');
+      if (m.body) body.textContent = m.body;
+      if (!m.until) return;
+      const tick = () => {
+        const left = new Date(m.until) - Date.now();
+        if (left <= 0) { body.textContent = m.body || 'Should be back any moment.'; return; }
+        const h = Math.floor(left / 3600000), min = Math.floor((left % 3600000) / 60000);
+        const when = h ? (h + 'h ' + min + 'm') : (min + ' minute' + (min === 1 ? '' : 's'));
+        body.textContent = (m.body ? m.body + ' · ' : '') + 'Back in about ' + when + '.';
+      };
+      tick(); setInterval(tick, 30000);
+    }).catch(() => {});
+  </script>
 
   <!-- View 2: enter your code -->
   <div class="view" id="vCode">

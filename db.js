@@ -1836,6 +1836,23 @@ async function initSchema() {
     CREATE UNIQUE INDEX IF NOT EXISTS chat_form_responses_once_idx
       ON chat_form_responses (form_id, responder_id, message_id) WHERE message_id IS NOT NULL;
   `);
+  // Recent server errors, so a problem is visible in the dashboard instead of
+  // only in the hosting logs. Bounded and swept — this is a window, not an
+  // archive.
+  await query(`
+    CREATE TABLE IF NOT EXISTS server_errors (
+      id         SERIAL PRIMARY KEY,
+      route      TEXT,
+      message    TEXT NOT NULL,
+      stack      TEXT,
+      user_id    INTEGER,
+      count      INTEGER NOT NULL DEFAULT 1,
+      last_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS server_errors_last_idx ON server_errors (last_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS server_errors_dedupe_idx ON server_errors (route, message);
+  `);
   // Topic threads inside a big group: a named sub-conversation. A message with
   // no topic_id is the main room, so every existing message is unaffected.
   await query(`

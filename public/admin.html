@@ -492,6 +492,18 @@
 .bc-aud.on b{color:#fff;}
 .bc-chans{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:13px;color:var(--muted);}
 .bc-chans label{display:flex;align-items:center;gap:6px;cursor:pointer;}
+/* Header actions: search everything, and what needs you. */
+.main-top{display:flex;align-items:center;gap:10px;}
+  .main-top h1{flex:1;min-width:0;}
+  .hdr-btn{position:relative;flex:0 0 auto;width:38px;height:38px;border:none;border-radius:999px;background:var(--s2);
+    color:var(--t2);cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .hdr-btn svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
+  .hdr-btn:hover{background:var(--s3);color:var(--t1);}
+  /* A count of things waiting is information, not an alarm — amber, not red. */
+  .hdr-badge{position:absolute;top:-3px;inset-inline-end:-3px;min-width:18px;height:18px;border-radius:999px;
+    background:var(--amber);color:#1b1300;font-size:10.5px;font-weight:800;display:flex;align-items:center;
+    justify-content:center;padding:0 5px;}
+  .hdr-badge.hidden{display:none;}
 /* Trending curation rows — a real grid so every column lines up down the list,
    whatever length the buttons' labels happen to be. */
 .tr-row{display:grid;grid-template-columns:1fr 200px 92px 92px;align-items:center;gap:12px;}
@@ -997,6 +1009,7 @@
       <button class="tab" data-v="traffic" onclick="switchTab('traffic')">Traffic</button>
       <button class="tab" data-v="growth" onclick="switchTab('growth')">Growth</button>
       <button class="tab" data-v="demand" onclick="switchTab('demand')">Demand</button>
+      <button class="tab" data-v="groups" onclick="switchTab('groups')">Groups</button>
       <button class="tab" data-v="audit" onclick="switchTab('audit')">Audit log</button>
 
       <div class="nav-label" data-group="product">Product</div>
@@ -1007,6 +1020,7 @@
       <button class="tab" data-v="vault" onclick="switchTab('vault')">Vault</button>
 
       <div class="nav-label" data-group="system">System</div>
+      <button class="tab" data-v="ops" onclick="switchTab('ops')">Operations</button>
       <button class="tab" data-v="site" onclick="switchTab('site')">Site</button>
     </nav>
     <div class="side-foot">
@@ -1027,6 +1041,11 @@
           <svg viewBox="0 0 24 24"><line x1="4" y1="8" x2="19" y2="8"/><line x1="4" y1="16" x2="19" y2="16"/></svg>
         </button>
         <h1 id="viewTitle">Overview</h1>
+        <button class="hdr-btn" id="paletteBtn" onclick="openPalette()" aria-label="Search everything" title="Search everything (Ctrl/Cmd + K)">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg></button>
+        <button class="hdr-btn" id="attnBtn" onclick="openAttention()" aria-label="What needs you">
+          <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+          <span class="hdr-badge hidden" id="attnBadge">0</span></button>
       </div>
       <div class="stat-row" id="stats"></div>
       <div id="content"><div class="boot-load"><span class="ab-mark"></span><div class="ab-word">Atwe Admin</div></div></div>
@@ -1451,7 +1470,7 @@ const TAB_PERM = {
   finance: 'revenue', growth: 'growth', audit: 'super', staff: 'super',
   refunds: 'refunds', appeals: 'users', datareq: 'users', activity: 'super', investigate: 'moderation', moderate: 'moderation', orders: 'support', adjust: 'revenue', payouts: 'revenue', risk: 'revenue', retention: 'growth', curate: 'moderation', catalog: 'moderation',
   cards: 'revenue', features: 'super', featurecontrols: 'super', vault: 'super',
-  announcements: 'super', demand: 'growth',
+  announcements: 'super', demand: 'growth', groups: 'moderation', ops: 'super',
 };
 function canSee(tab){ const p = TAB_PERM[tab]; if (ME.superadmin) return true; return p !== 'super' && ME.perms.includes(p); }
 
@@ -1476,6 +1495,10 @@ async function load(){
     if (!canSee(VIEW)) VIEW = firstVisibleTab();
     if (canSee('users')) { try { const { users } = await api('GET', '/api/admin/users' + userFilterQS()); USERS = users || []; } catch (_) {} }
     renderView();
+    // The bell is superadmin-only (its counts span every queue), and refreshes
+    // quietly so a decision waiting is never invisible.
+    if (ME.superadmin) { loadAttention(); clearInterval(window._attnT); window._attnT = setInterval(loadAttention, 60000); }
+    else document.getElementById('attnBtn')?.classList.add('hidden');
   } catch (e) {
     if (e.data && e.data.needs2fa) { show2faGate(); return; }
     if (e.status === 401) { token = null; localStorage.removeItem('atwe_token'); showLogin('Your session has expired — please sign in.'); }
@@ -1523,7 +1546,7 @@ const NAV_TITLES = {
   investigate:'Investigate', moderate:'AI content scan', disputes:'Disputes', appeals:'Appeals', support:'Support', datareq:'Data requests',
   posts:'Posts', circles:'Circles', feed:'Feed', activity:'Activity', traffic:'Traffic', growth:'Growth',
   orders:'Orders', adjust:'Wallet adjustments', payouts:'Payout review', risk:'Risk', retention:'Retention', curate:'Curate', catalog:'Catalog', audit:'Audit log', site:'Site', cards:'Cards', features:'Features', featurecontrols:'Feature Controls', vault:'Vault',
-  announcements:'Announcements', demand:'Demand',
+  announcements:'Announcements', demand:'Demand', groups:'Groups & channels', ops:'Operations',
 };
 // Mobile: slide the sidebar in/out.
 function toggleNav(open){
@@ -1558,6 +1581,8 @@ function renderView(){
   else if (VIEW === 'retention') renderRetentionView();
   else if (VIEW === 'curate') renderCurateView();
   else if (VIEW === 'demand') renderDemandView();
+  else if (VIEW === 'groups') renderGroupsView();
+  else if (VIEW === 'ops') renderOpsView();
   else if (VIEW === 'catalog') renderCatalogView();
   else if (VIEW === 'disputes') renderDisputesView();
   else if (VIEW === 'circles') renderCirclesView();
@@ -2057,6 +2082,7 @@ let JOBS = { jobs:[] };
 async function renderSiteView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = '<div class="ld"><span class="ab-mark"></span></div>';
+  await loadMaintenance();
   await loadSite();
 }
 async function loadSite(){
@@ -2090,11 +2116,16 @@ function renderSite(){
   const status = s.effectiveLocked
     ? `<span class="dot red"></span> Site is <b>locked</b>${s.lockUntil ? ` until ${esc(fmtDateTime(s.lockUntil))} <span class="muted">· auto-unlocks</span>` : ''}`
     : `<span class="dot green"></span> Site is <b>live</b> — anyone can visit`;
+  const maint = (typeof MAINT !== 'undefined' && MAINT) || { title: '', body: '', until: null };
   const jobRows = (JOBS.jobs||[]).map(j => {
     const cls = j.status==='ok'?'green':(j.status==='error'?'red':(j.status==='stale'?'amber':'grey'));
+    // A paused job is deliberate, so it shows as off rather than as a fault.
+    const acts = `<div style="display:flex;gap:6px;flex:0 0 auto;">`
+      + (j.runnable ? `<button class="act" onclick="jobAct(${jstr(j.name)},'run')">Run now</button>` : '')
+      + `<button class="act${j.paused ? ' accent' : ''}" onclick="jobAct(${jstr(j.name)},${j.paused ? "'resume'" : "'pause'"})">${j.paused ? 'Resume' : 'Pause'}</button></div>`;
     const last = j.lastRunAt ? relTime(j.ageMs) : 'not yet';
     const sub = j.status==='error' ? esc(j.lastError||'last run failed') : (j.status==='stale' ? ('overdue — last ran '+last) : ('ran '+last+' · every '+jobEvery(j.intervalMs)));
-    return `<div class="site-row" style="border-top:1px solid var(--b1);"><div style="display:flex;align-items:center;gap:11px;min-width:0;"><span class="jdot ${cls}"></span><div><div class="srt">${esc(j.label)}</div><div class="srs">${sub}${j.lastProcessed!=null?' · '+j.lastProcessed+' handled':''}</div></div></div><span class="pill ${j.status==='ok'?'pro':(j.status==='error'?'ban':(j.status==='stale'?'susp':''))}">${esc(j.status)}</span></div>`;
+    return `<div class="site-row" style="border-top:1px solid var(--b1);"><div style="display:flex;align-items:center;gap:11px;min-width:0;"><span class="jdot ${cls}"></span><div><div class="srt">${esc(j.label)}</div><div class="srs">${sub}${j.lastProcessed!=null?' · '+j.lastProcessed+' handled':''}</div></div></div><span class="pill ${j.status==='ok'?'pro':(j.status==='error'?'ban':(j.status==='stale'?'susp':''))}">${esc(j.status)}</span>${acts}</div>`;
   }).join('');
   const crashes = (typeof CRASHES !== 'undefined' && CRASHES.crashes) || [];
   const iosVer = (ua) => { const m = /OS (\d+)[._](\d+)/.exec(ua||''); const m2 = /Version\/(\d+\.\d+)/.exec(ua||''); return m ? ('iOS ' + m[1] + '.' + m[2]) : (m2 ? ('Safari ' + m2[1]) : ''); };
@@ -2106,6 +2137,15 @@ function renderSite(){
       ${crashRows || '<div class="empty" style="padding:14px 0;">No crash reports yet.</div>'}
     </div>`;
   document.getElementById('content').innerHTML = crashPanel + `
+    <div class="panel">
+      <h3>What the closed sign says</h3>
+      <div class="sub">While the site is locked, visitors see this instead of the app. Leave it blank for the plain wording.</div>
+      <input class="in" id="mtTitle" maxlength="80" placeholder="Heading (e.g. Back shortly)" value="${esc(maint.title || '')}" style="width:100%;margin-top:10px;"/>
+      <input class="in" id="mtBody" maxlength="400" placeholder="A line explaining why" value="${esc(maint.body || '')}" style="width:100%;margin-top:8px;"/>
+      <label class="ann-f" style="margin-top:8px;display:block;"><span>Back by <span class="muted">(optional — shows a countdown)</span></span>
+        <input id="mtUntil" type="datetime-local" value="${maint.until ? new Date(new Date(maint.until) - new Date().getTimezoneOffset()*60000).toISOString().slice(0,16) : ''}"/></label>
+      <div class="custom-row" style="margin-top:12px;"><button class="act accent" onclick="saveMaintenance()">Save the message</button></div>
+    </div>
     <div class="panel">
       <h3>Background jobs <span class="muted">· system health</span></h3>
       <div class="sub">The scheduled workers that release escrow, run subscriptions + standing payments, deliver scheduled messages and sweep stale orders. If one goes <b>stale</b> or <b>error</b>, money-related work may be stuck.</div>
@@ -3478,10 +3518,42 @@ async function renderPostsView(){
   document.getElementById('stats').innerHTML = '';
   const content = document.getElementById('content');
   content.innerHTML = `
-    <div class="toolbar"><div class="muted" style="flex:1;align-self:center;">Most recent posts &amp; replies across the platform.</div>
-      <button class="refresh" onclick="renderPostsView()">↻ Refresh</button></div>
+    <div class="panel"><h3>Posts</h3>
+      <div class="sub">Everything posted on Atwe. Search it rather than scrolling from the newest.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <input class="in" id="postQ" placeholder="Words in the post…" oninput="postSearch()" style="flex:1;min-width:180px;margin:0;"/>
+        <input class="in" id="postAuthor" placeholder="@handle" oninput="postSearch()" style="width:150px;margin:0;"/>
+        <select class="in" id="postDays" onchange="postSearch()" style="width:140px;margin:0;">
+          <option value="">Any time</option><option value="1">Last day</option>
+          <option value="7">Last week</option><option value="30">Last month</option></select>
+      </div>
+      <div class="tf-ranges" style="margin-top:8px;flex-wrap:wrap;">
+        <button class="tf-r on" id="pfAll" onclick="postFilter('')">Everything</button>
+        <button class="tf-r" id="pfTop" onclick="postFilter('topOnly')">Posts only</button>
+        <button class="tf-r" id="pfRep" onclick="postFilter('repliesOnly')">Replies only</button>
+        <button class="tf-r" id="pfMed" onclick="postFilter('hasMedia')">With a photo</button>
+      </div></div>
     <div id="postList"><div class="ld"><span class="ab-mark"></span></div></div>`;
-  try { const { posts } = await api('GET', '/api/admin/posts'); APOSTS = posts || []; renderPostList(); }
+  loadPosts();
+}
+let _postT = null, POST_FILTER = '';
+function postSearch(){ clearTimeout(_postT); _postT = setTimeout(loadPosts, 300); }
+function postFilter(f){
+  POST_FILTER = (POST_FILTER === f) ? '' : f;
+  ['pfAll','pfTop','pfRep','pfMed'].forEach(id => document.getElementById(id)?.classList.remove('on'));
+  document.getElementById({ '': 'pfAll', topOnly: 'pfTop', repliesOnly: 'pfRep', hasMedia: 'pfMed' }[POST_FILTER])?.classList.add('on');
+  loadPosts();
+}
+async function loadPosts(){
+  const qs = [];
+  const q = (document.getElementById('postQ')?.value || '').trim();
+  const a = (document.getElementById('postAuthor')?.value || '').trim();
+  const d = document.getElementById('postDays')?.value || '';
+  if (q.length >= 2) qs.push('q=' + encodeURIComponent(q));
+  if (a) qs.push('author=' + encodeURIComponent(a));
+  if (d) qs.push('days=' + d);
+  if (POST_FILTER) qs.push(POST_FILTER + '=1');
+  try { const { posts } = await api('GET', '/api/admin/posts' + (qs.length ? '?' + qs.join('&') : '')); APOSTS = posts || []; renderPostList(); }
   catch (e) { const el = document.getElementById('postList'); if (el) el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 function renderPostList(){
@@ -3917,6 +3989,236 @@ async function addCollectionItem(id, kind){
   catch (e){ notify(e.message); }
 }
 async function removeCollectionItem(id, itemId){ try { await api('DELETE', '/api/admin/collections/' + id + '/items/' + itemId); loadCollections(); } catch (e){ notify(e.message); } }
+let MAINT = { title: '', body: '', until: null };
+async function loadMaintenance(){
+  try { const r = await api('GET', '/api/admin/maintenance'); MAINT = r.maintenance || MAINT; } catch (e) {}
+}
+async function saveMaintenance(){
+  const until = document.getElementById('mtUntil')?.value;
+  try {
+    const r = await api('PUT', '/api/admin/maintenance', {
+      title: document.getElementById('mtTitle').value,
+      body: document.getElementById('mtBody').value,
+      until: until ? new Date(until).toISOString() : '',
+    });
+    MAINT = r.maintenance; notify('Saved.');
+  } catch (e){ notify(e.message); }
+}
+// Run a background job on the spot, or pause it while something is fixed.
+async function jobAct(name, action){
+  try {
+    await api('POST', '/api/admin/jobs/' + encodeURIComponent(name) + '/' + action);
+    notify(action === 'run' ? 'Running it now.' : (action === 'pause' ? 'Paused.' : 'Resumed.'));
+    if (typeof loadSite === 'function') loadSite(); else renderView();
+  } catch (e){ notify(e.message); }
+}
+/* ═══ What needs you ═══
+   One count of everything actually waiting on a decision, so nothing sits in a
+   queue nobody thought to open. */
+let ATTN = { total: 0, items: [] };
+async function loadAttention(){
+  try {
+    ATTN = await api('GET', '/api/admin/attention');
+    const b = document.getElementById('attnBadge'); if (!b) return;
+    b.textContent = ATTN.total > 99 ? '99+' : String(ATTN.total);
+    b.classList.toggle('hidden', !ATTN.total);
+  } catch (e){ /* the bell is a convenience — never break the page over it */ }
+}
+function openAttention(){
+  const c = document.getElementById('modalCard'); if (!c) return;
+  c.innerHTML = `<h3 style="margin:0 0 6px;">What needs you</h3>
+    <div class="sub" style="margin-bottom:12px;">Everything currently waiting on a decision.</div>
+    ${ATTN.items.length ? ATTN.items.map(i => `
+      <button class="site-row" style="width:100%;background:none;border:none;text-align:start;cursor:pointer;"
+              onclick="closeModal();switchTab(${jstr(i.tab)})">
+        <div class="srt">${esc(i.label)}</div><span class="pill pro">${i.n}</span>
+      </button>`).join('')
+      : '<div class="empty">Nothing is waiting. Everything is handled.</div>'}
+    <div class="dur-row" style="margin-top:14px;"><button class="act" onclick="closeModal()">Close</button></div>`;
+  document.getElementById('modal').classList.add('show');
+}
+function closeModal(){ document.getElementById('modal').classList.remove('show'); }
+/* ═══ Search everything (Ctrl/Cmd + K) ═══
+   One box that finds a person, a post or a listing without knowing which tab
+   they live in. */
+function openPalette(){
+  const c = document.getElementById('modalCard'); if (!c) return;
+  c.innerHTML = `<h3 style="margin:0 0 6px;">Search everything</h3>
+    <div class="sub" style="margin-bottom:10px;">People, posts and listings — anywhere on Atwe.</div>
+    <input class="in" id="palQ" placeholder="Type a name, @handle, email or a few words…" oninput="palSearch(this.value)" style="width:100%;margin:0;"/>
+    <div id="palBox" style="margin-top:10px;max-height:50vh;overflow-y:auto;"></div>
+    <div class="dur-row" style="margin-top:12px;"><button class="act" onclick="closeModal()">Close</button></div>`;
+  document.getElementById('modal').classList.add('show');
+  setTimeout(() => document.getElementById('palQ')?.focus(), 60);
+}
+let _palT = null;
+function palSearch(v){ clearTimeout(_palT); _palT = setTimeout(() => palRun(v.trim()), 250); }
+async function palRun(q){
+  const box = document.getElementById('palBox'); if (!box) return;
+  if (q.length < 2) { box.innerHTML = ''; return; }
+  try {
+    const { results } = await api('GET', '/api/admin/search-content?type=all&q=' + encodeURIComponent(q));
+    box.innerHTML = results.length ? results.map(r => `
+      <button class="site-row" style="width:100%;background:none;border:none;text-align:start;cursor:pointer;"
+              onclick="palOpen(${jstr(r.kind)}, ${r.id}, ${jstr(r.username || '')})">
+        <div style="min-width:0;"><div class="srt">${esc(r.label)}</div><div class="srs">${esc(r.sub || r.kind)}</div></div>
+        <span class="pill">${esc(r.kind)}</span>
+      </button>`).join('') : '<div class="empty">Nothing found.</div>';
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function palOpen(kind, id){
+  closeModal();
+  if (kind === 'user') { switchTab('users'); setTimeout(() => openUser && openUser(id), 200); }
+  else if (kind === 'post') switchTab('posts');
+  else switchTab('catalog');
+}
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); if (document.body.classList.contains('authed')) openPalette(); }
+  else if (e.key === 'Escape') closeModal();
+});
+/* ═══ Operations: what broke, what's stuck, and who's signed in as staff ═══ */
+function renderOpsView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="panel"><h3>Recent errors</h3>
+      <div class="sub">Problems the server hit, newest first. The same fault happening a thousand times is shown once with a count, so a burst can't bury the rest.</div>
+      <div class="dur-row" style="margin-top:10px;"><button class="act danger" onclick="clearErrors()">Clear the list</button></div></div>
+    <div id="errBox"><div class="ld"><span class="ab-mark"></span></div></div>
+    <div class="panel"><h3>Staff signed in</h3>
+      <div class="sub">Every device with a staff or admin session. These are the accounts that can move money and read reports — sign one out the moment it shouldn't be there.</div></div>
+    <div id="sessBox"><div class="ld"><span class="ab-mark"></span></div></div>
+    <div class="panel"><h3>Audit trail</h3>
+      <div class="sub">Every staff action, ever. Download it for your records, an insurer, or an auditor.</div>
+      <div class="dur-row" style="margin-top:10px;">
+        <button class="act accent" onclick="downloadAudit(30)">Last 30 days</button>
+        <button class="act" onclick="downloadAudit(365)">Last year</button>
+      </div></div>`;
+  loadErrors(); loadStaffSessions();
+}
+async function loadErrors(){
+  const box = document.getElementById('errBox'); if (!box) return;
+  try {
+    const { errors } = await api('GET', '/api/admin/errors');
+    box.innerHTML = errors.length ? '<div class="panel">' + errors.map(e => `
+      <div class="site-row" style="align-items:flex-start;">
+        <div style="min-width:0;flex:1;">
+          <div class="srt" style="white-space:normal;">${esc(e.message)}</div>
+          <div class="srs" style="margin-top:4px;">${esc(e.route || 'unknown')} · ${e.count}× · last ${fmtDateTime(e.lastAt)}</div>
+        </div>
+        <button class="act" onclick="clearErrors(${e.id})">Dismiss</button>
+      </div>`).join('') + '</div>'
+      : '<div class="empty">Nothing has gone wrong lately.</div>';
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function clearErrors(id){
+  if (!id && !confirm('Clear every recorded error?')) return;
+  try { await api('DELETE', '/api/admin/errors' + (id ? '?id=' + id : '')); loadErrors(); }
+  catch (e){ notify(e.message); }
+}
+async function loadStaffSessions(){
+  const box = document.getElementById('sessBox'); if (!box) return;
+  try {
+    const { sessions } = await api('GET', '/api/admin/staff-sessions');
+    box.innerHTML = sessions.length ? '<div class="panel">' + sessions.map(x => `
+      <div class="site-row">
+        <div style="min-width:0;">
+          <div class="srt">${esc(x.name)} <span class="muted">@${esc(x.username || '')}</span> <span class="pill${x.superadmin ? ' pro' : ''}">${x.superadmin ? 'owner' : esc(x.role || 'staff')}</span></div>
+          <div class="srs">${esc(x.userAgent || 'Unknown device')}${x.location ? ' · ' + esc(x.location) : (x.ip ? ' · ' + esc(x.ip) : '')} · last seen ${fmtDateTime(x.lastSeen)}</div>
+        </div>
+        <button class="act danger" onclick="revokeSession(${jstr(x.tokenHash)})">Sign out</button>
+      </div>`).join('') + '</div>'
+      : '<div class="empty">No staff sessions.</div>';
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function revokeSession(hash){
+  if (!confirm('Sign this device out?')) return;
+  try { await api('POST', '/api/admin/staff-sessions/revoke', { tokenHash: hash }); loadStaffSessions(); }
+  catch (e){ notify(e.message); }
+}
+// The CSV is behind the admin token, so it can't just be a plain link.
+async function downloadAudit(days){
+  try {
+    const r = await fetch('/api/admin/audit.csv?days=' + days, { headers: { Authorization: 'Bearer ' + token } });
+    if (!r.ok) throw new Error('Could not build the export.');
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'atwe-audit-' + days + 'd.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  } catch (e){ notify(e.message); }
+}
+/* ═══ Circles ═══ */
+async function loadCircles(){
+  const box = document.getElementById('circList'); if (!box) return;
+  try {
+    const { circles } = await api('GET', '/api/admin/circles');
+    CIRCLES = circles;
+    box.innerHTML = circles.length ? '<div class="panel">' + circles.map(c => `
+      <div class="site-row">
+        <div style="min-width:0;">
+          <div class="srt">${esc(c.name)} ${c.official ? '<span class="pill pro">official</span>' : '<span class="pill">unofficial</span>'}</div>
+          <div class="srs">${c.members} member${c.members === 1 ? '' : 's'} · ${c.posts} post${c.posts === 1 ? '' : 's'}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex:0 0 auto;">
+          <button class="act" onclick="renameCircle(${c.id}, ${jstr(c.name)})">Rename</button>
+          <button class="act" onclick="mergeCircle(${c.id}, ${jstr(c.name)})">Merge…</button>
+        </div>
+      </div>`).join('') + '</div>' : '<div class="empty">No circles yet.</div>';
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+let CIRCLES = [];
+async function createCircle(){
+  const el = document.getElementById('circName');
+  const name = (el.value || '').trim();
+  if (!name) { notify('Give the circle a name.'); return; }
+  try { await api('POST', '/api/admin/circles', { name }); el.value = ''; loadCircles(); }
+  catch (e){ notify(e.message); }
+}
+async function renameCircle(id, cur){
+  const name = prompt('Rename the circle:', cur);
+  if (!name || !name.trim()) return;
+  try { await api('PATCH', '/api/admin/circles/' + id, { name: name.trim() }); loadCircles(); }
+  catch (e){ notify(e.message); }
+}
+// Merging moves the members and the posts across, then removes the empty one.
+async function mergeCircle(id, name){
+  const others = CIRCLES.filter(c => c.id !== id);
+  if (!others.length) { notify('There is nothing to merge into.'); return; }
+  const into = prompt('Merge "' + name + '" INTO which circle? Type its exact name:\n\n' + others.map(c => c.name).join('\n'));
+  if (!into) return;
+  const target = others.find(c => c.name.toLowerCase() === into.trim().toLowerCase());
+  if (!target) { notify('No circle by that name.'); return; }
+  if (!confirm('Move everyone and every post from "' + name + '" into "' + target.name + '", then delete "' + name + '"?')) return;
+  try { await api('POST', '/api/admin/circles/' + id + '/merge', { into: target.id }); notify('Merged.'); loadCircles(); }
+  catch (e){ notify(e.message); }
+}
+/* ═══ Groups & channels ═══ */
+function renderGroupsView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="panel"><h3>Groups &amp; channels</h3>
+      <div class="sub">Every group on Atwe, biggest first. Until now you could only see one if somebody reported it.</div>
+      <input class="in" id="grpQ" placeholder="Search by name or @handle…" oninput="grpSearch(this.value)" style="max-width:420px;margin-top:10px;"/>
+    </div>
+    <div id="grpBox"><div class="ld"><span class="ab-mark"></span></div></div>`;
+  loadGroups('');
+}
+let _grpT = null;
+function grpSearch(v){ clearTimeout(_grpT); _grpT = setTimeout(() => loadGroups(v.trim()), 300); }
+async function loadGroups(q){
+  const box = document.getElementById('grpBox'); if (!box) return;
+  try {
+    const { groups } = await api('GET', '/api/admin/groups' + (q ? '?q=' + encodeURIComponent(q) : ''));
+    box.innerHTML = groups.length ? '<div class="panel">' + groups.map(g => `
+      <div class="site-row">
+        <div style="min-width:0;">
+          <div class="srt">${esc(g.name)}${g.username ? ' <span class="muted">@' + esc(g.username) + '</span>' : ''} ${g.channel ? '<span class="pill">channel</span>' : ''}</div>
+          <div class="srs">${g.members} member${g.members === 1 ? '' : 's'} · ${g.messages} message${g.messages === 1 ? '' : 's'}${g.lastAt ? ' · last ' + fmtDate(g.lastAt) : ' · never used'}${g.owner ? ' · by @' + esc(g.owner.username) : ''}</div>
+        </div>
+      </div>`).join('') + '</div>'
+      : '<div class="empty">No groups found.</div>';
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
 /* Demand — what members are asking for that Atwe doesn't have yet. Two halves:
    searches that came back empty (the unprompted signal) and waiting lists
    (the explicit one). */
@@ -4371,8 +4673,16 @@ let CIRCLEREQS = [];
 async function renderCirclesView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
+    <div class="panel"><h3>Industry circles</h3>
+      <div class="sub">Circles are the industries Atwe defines — members join them, nobody creates them. This is where they come from.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <input class="in" id="circName" maxlength="60" placeholder="New circle (e.g. Hospitality)" style="flex:1;min-width:200px;margin:0;"/>
+        <button class="act accent" onclick="createCircle()">Create</button>
+      </div></div>
+    <div id="circList"><div class="ld"><span class="ab-mark"></span></div></div>
     <div class="ov-section">Circle deletion requests</div>
     <div id="circReqList"><div class="ld"><span class="ab-mark"></span></div></div>`;
+  loadCircles();
   try { const { requests } = await api('GET', '/api/admin/circle-requests'); CIRCLEREQS = requests || []; renderCircleReqList(); }
   catch (e) { const el = document.getElementById('circReqList'); if (el) el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }

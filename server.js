@@ -312,8 +312,17 @@ const jobHealth = {};
 function registerJob(name, label, intervalMs) {
   jobHealth[name] = { name, label, intervalMs, lastRunAt: null, lastMs: null, lastOk: null, lastError: null, lastProcessed: null, runs: 0, errors: 0 };
 }
-function trackJob(name, fn) {
+// Every job's real function, recorded as it is wired up, so the dashboard can
+// run one on demand without each site having to register itself twice.
+const _jobRunners = {};
+function trackJob(name, fn, opts) {
+  if (!opts || !opts.manual) _jobRunners[name] = fn;
+  const ignorePause = !!(opts && opts.manual);
   return async function (...args) {
+    // A job paused from the dashboard is skipped on its TIMER, but its timer
+    // keeps ticking — resuming needs no restart. Running it by hand from the
+    // dashboard is deliberate, so that path ignores the pause.
+    if (!ignorePause && typeof jobIsPaused === 'function' && jobIsPaused(name)) return;
     const j = jobHealth[name]; const t0 = Date.now();
     try {
       const r = await fn(...args);
@@ -986,6 +995,8 @@ app.get('/api/config', (_req, res) => {
     features: normalizeFeatureFlags(_featureFlags), // kill switches — client hides disabled UI
     disabledFeatures: disabledFeatureKeys(), // module-level Feature Controls that are OFF → client shows "Unavailable"
     requireAdmin2fa: process.env.REQUIRE_ADMIN_2FA === 'true', // staff must have 2FA to use the dashboard
+    // What the locked-out screen should say during planned downtime (empty = the default wording).
+    maintenance: (_maintenance && (_maintenance.title || _maintenance.body)) ? _maintenance : null,
   });
 });
 
@@ -6051,6 +6062,250 @@ app.put('/api/atchat/sounds', auth.requireAuth, rateLimit(60, 60000, 'chat-sound
     }
     res.json({ ok: true, key, sound: sound || 'default' });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the sound.' }); }
+});
+/* ═══════════════════════════════════════════════
+   BACK-OFFICE OPERATIONS
+   The screens a founder needs to actually run the place: what broke, what is
+   stuck, who is signed in as staff, and one box that finds anything.
+═══════════════════════════════════════════════ */
+/* ─── Maintenance message ───────────────────────────────────────────────────
+   The site lock already keeps people out during planned downtime; it just
+   couldn't tell them why or for how long. This is the words on that screen. */
+const MAINT_KEY = 'maintenance_notice';
+let _maintenance = { title: '', body: '', until: null };
+app.get('/api/admin/maintenance', auth.requireAdmin, async (_req, res) => {
+  res.json({ maintenance: _maintenance });
+});
+app.put('/api/admin/maintenance', auth.requireAdmin, async (req, res) => {
+  const m = {
+    title: (req.body.title || '').toString().trim().slice(0, 80),
+    body: (req.body.body || '').toString().trim().slice(0, 400),
+    until: req.body.until && !isNaN(Date.parse(req.body.until)) ? new Date(req.body.until).toISOString() : null,
+  };
+  try {
+    await db.setSetting(MAINT_KEY, m);
+    _maintenance = m;
+    adminAudit(req, 'maintenance.set', 'system', null, m);
+    res.json({ ok: true, maintenance: m });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the message.' }); }
+});
+/* ─── Circles manager ───────────────────────────────────────────────────────
+   Circles are company-defined industries, so they can only come from here.
+   Until now the tab could only field deletion requests — you couldn't actually
+   make one. */
+app.get('/api/admin/circles', auth.requirePerm('moderation'), async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT c.id, c.name, c.username, c.avatar, c.official, c.created_at,
+              (SELECT COUNT(*)::int FROM circle_members m WHERE m.circle_id = c.id) AS members,
+              (SELECT COUNT(*)::int FROM post_circles pc WHERE pc.circle_id = c.id) AS posts
+         FROM circles c ORDER BY c.official DESC, members DESC, c.name LIMIT 300`);
+    res.json({ circles: rows.map((c) => ({ id: c.id, name: c.name, username: c.username || null,
+      official: !!c.official, members: c.members, posts: c.posts, createdAt: c.created_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the circles.' }); }
+});
+app.post('/api/admin/circles', auth.requirePerm('moderation'), async (req, res) => {
+  const name = (req.body.name || '').toString().trim().slice(0, 60);
+  if (!name) return res.status(400).json({ error: 'Give the circle a name.' });
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO circles (name, created_by, official) VALUES ($1, $2, true) RETURNING id`, [name, req.user.id]);
+    adminAudit(req, 'circle.create', 'circle', rows[0].id, { name });
+    res.status(201).json({ ok: true, id: rows[0].id, name });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the circle.' }); }
+});
+app.patch('/api/admin/circles/:id', auth.requirePerm('moderation'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const sets = [], params = [id];
+  if (typeof req.body.name === 'string' && req.body.name.trim()) { params.push(req.body.name.trim().slice(0, 60)); sets.push(`name = $${params.length}`); }
+  if (typeof req.body.official === 'boolean') { params.push(req.body.official); sets.push(`official = $${params.length}`); }
+  if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
+  try {
+    const r = await db.query(`UPDATE circles SET ${sets.join(', ')} WHERE id = $1`, params);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    adminAudit(req, 'circle.update', 'circle', id, req.body);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the circle.' }); }
+});
+// Merge one circle into another: move the members and the posts, then remove
+// the empty one. Done in a transaction so a half-merge can't leave both broken.
+app.post('/api/admin/circles/:id/merge', auth.requirePerm('moderation'), async (req, res) => {
+  const from = routeId(req.params.id), into = routeId(req.body.into);
+  if (!Number.isInteger(from) || !Number.isInteger(into) || from === into) return res.status(400).json({ error: 'Pick two different circles.' });
+  const client = await db.getPool().connect();
+  try {
+    await client.query('BEGIN');
+    const ok = (await client.query('SELECT id FROM circles WHERE id = ANY($1)', [[from, into]])).rowCount === 2;
+    if (!ok) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Not found.' }); }
+    await client.query(`INSERT INTO circle_members (circle_id, user_id)
+                        SELECT $2, user_id FROM circle_members WHERE circle_id = $1 ON CONFLICT DO NOTHING`, [from, into]);
+    await client.query(`INSERT INTO post_circles (post_id, circle_id)
+                        SELECT post_id, $2 FROM post_circles WHERE circle_id = $1 ON CONFLICT DO NOTHING`, [from, into]);
+    await client.query('DELETE FROM circles WHERE id = $1', [from]);
+    await client.query('COMMIT');
+    adminAudit(req, 'circle.merge', 'circle', from, { into });
+    res.json({ ok: true });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error(err); res.status(500).json({ error: 'Could not merge them.' });
+  } finally { client.release(); }
+});
+/* ─── Groups & channels overview ────────────────────────────────────────────
+   Every group on the platform, searchable, so moderation isn't limited to
+   whatever turns up in a report. */
+app.get('/api/admin/groups', auth.requirePerm('moderation'), async (req, res) => {
+  const q = (req.query.q || '').toString().trim().slice(0, 80);
+  const params = [];
+  let where = '';
+  if (q.length >= 2) { params.push('%' + q.replace(/[%_\\]/g, (c) => '\\' + c) + '%'); where = ` WHERE (g.name ILIKE $1 OR g.username ILIKE $1)`; }
+  try {
+    const { rows } = await db.query(
+      `SELECT g.id, g.name, g.username, g.broadcast, g.created_at, u.name AS owner_name, u.username AS owner_username,
+              (SELECT COUNT(*)::int FROM at_group_members m WHERE m.group_id = g.id) AS members,
+              (SELECT COUNT(*)::int FROM at_group_messages m WHERE m.group_id = g.id) AS messages,
+              (SELECT MAX(m.created_at) FROM at_group_messages m WHERE m.group_id = g.id) AS last_at
+         FROM at_groups g LEFT JOIN users u ON u.id = g.created_by${where}
+        ORDER BY members DESC, g.created_at DESC LIMIT 150`, params);
+    res.json({ groups: rows.map((g) => ({ id: g.id, name: g.name, username: g.username || null,
+      channel: !!g.broadcast, members: g.members, messages: g.messages, lastAt: g.last_at,
+      owner: g.owner_username ? { name: g.owner_name, username: g.owner_username } : null, createdAt: g.created_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the groups.' }); }
+});
+/* ─── Error log ─────────────────────────────────────────────────────────────
+   The same error hitting a thousand times is ONE problem, so errors are folded
+   together by (route, message) with a count and a last-seen — a burst can't
+   flush the useful history out of the window. Recording never throws and never
+   blocks the request that failed. */
+function logServerError(route, err) {
+  if (!db.isConfigured()) return;
+  const message = String((err && err.message) || err || 'Unknown error').slice(0, 400);
+  const stack = String((err && err.stack) || '').slice(0, 2000) || null;
+  db.query(
+    `INSERT INTO server_errors (route, message, stack) VALUES ($1,$2,$3)
+     ON CONFLICT (route, message) DO UPDATE SET count = server_errors.count + 1, last_at = now(), stack = COALESCE(EXCLUDED.stack, server_errors.stack)`,
+    [String(route || '').slice(0, 200), message, stack]).catch(() => {});
+}
+app.get('/api/admin/errors', auth.requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT * FROM server_errors WHERE last_at > now() - interval '30 days' ORDER BY last_at DESC LIMIT 200`);
+    res.json({ errors: rows.map((e) => ({ id: e.id, route: e.route, message: e.message, stack: e.stack,
+      count: e.count, lastAt: e.last_at, firstAt: e.created_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the errors.' }); }
+});
+app.delete('/api/admin/errors', auth.requireAdmin, async (req, res) => {
+  try {
+    if (req.query.id) await db.query('DELETE FROM server_errors WHERE id = $1', [routeId(req.query.id)]);
+    else await db.query('DELETE FROM server_errors');
+    adminAudit(req, 'errors.clear', 'system', null, {});
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not clear the errors.' }); }
+});
+/* ─── Background-job controls ───────────────────────────────────────────────
+   The health panel could only watch. Now a stuck job can be run on the spot,
+   or paused while something is being fixed. A paused job is skipped by its
+   own timer — the timer itself keeps ticking, so nothing needs restarting. */
+const _jobPaused = new Set();
+function jobIsPaused(name) { return _jobPaused.has(name); }
+app.post('/api/admin/jobs/:name/:action', auth.requireAdmin, async (req, res) => {
+  const name = String(req.params.name || '').slice(0, 60);
+  const action = req.params.action;
+  if (!jobHealth[name]) return res.status(404).json({ error: 'No such job.' });
+  if (!['run', 'pause', 'resume'].includes(action)) return res.status(400).json({ error: 'Unknown action.' });
+  try {
+    if (action === 'pause') { _jobPaused.add(name); jobHealth[name].paused = true; }
+    else if (action === 'resume') { _jobPaused.delete(name); jobHealth[name].paused = false; }
+    else {
+      const fn = _jobRunners[name];
+      if (!fn) return res.status(400).json({ error: 'That job can’t be run by hand.' });
+      // Run it now, but never make the dashboard wait on a long sweep.
+      trackJob(name, fn, { manual: true })().catch(() => {});
+    }
+    adminAudit(req, 'job.' + action, 'job', null, { name });
+    res.json({ ok: true, action, name });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not do that.' }); }
+});
+/* ─── Staff sessions ────────────────────────────────────────────────────────
+   Members have had a devices list for a long time; staff never did — and staff
+   accounts are the ones that can move money and read reports. */
+app.get('/api/admin/staff-sessions', auth.requireAdmin, async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT s.token_hash, s.user_agent, s.ip, s.location, s.last_seen, u.id, u.name, u.username, u.is_admin, u.admin_role
+         FROM auth_sessions s JOIN users u ON u.id = s.user_id
+        WHERE u.is_admin = true OR (jsonb_typeof(u.admin_perms) = 'array' AND jsonb_array_length(u.admin_perms) > 0)
+        ORDER BY s.last_seen DESC NULLS LAST LIMIT 200`);
+    res.json({ sessions: rows.map((r) => ({ tokenHash: r.token_hash, userId: r.id, name: r.name, username: r.username,
+      superadmin: !!r.is_admin, role: r.admin_role || null, userAgent: r.user_agent || null,
+      ip: r.ip || null, location: r.location || null, lastSeen: r.last_seen })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the sessions.' }); }
+});
+app.post('/api/admin/staff-sessions/revoke', auth.requireAdmin, async (req, res) => {
+  const hash = (req.body.tokenHash || '').toString().slice(0, 128);
+  const userId = routeId(req.body.userId);
+  try {
+    if (hash) await db.query('DELETE FROM auth_sessions WHERE token_hash = $1', [hash]);
+    else if (Number.isInteger(userId)) { await db.query('DELETE FROM auth_sessions WHERE user_id = $1', [userId]); rtKickUser(userId); }
+    else return res.status(400).json({ error: 'Nothing to revoke.' });
+    adminAudit(req, 'staff.session_revoke', 'user', userId || null, { hash: hash ? hash.slice(0, 12) : null });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not sign them out.' }); }
+});
+/* ─── Audit log export ──────────────────────────────────────────────────────
+   Append-only is good; downloadable is what an insurer or an auditor asks for. */
+function csvCell(v) {
+  const s = v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : String(v));
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+app.get('/api/admin/audit.csv', auth.requireAdmin, async (req, res) => {
+  const days = Math.max(1, Math.min(400, parseInt(req.query.days, 10) || 90));
+  try {
+    const { rows } = await db.query(
+      `SELECT created_at, actor_name, actor_id, action, target_type, target_id, ip, meta
+         FROM admin_audit WHERE created_at > now() - make_interval(days => $1)
+        ORDER BY created_at DESC LIMIT 20000`, [days]);
+    const head = 'when,who,who_id,action,target_type,target_id,ip,details\n';
+    const body = rows.map((r) => [r.created_at.toISOString(), r.actor_name, r.actor_id, r.action,
+      r.target_type, r.target_id, r.ip, r.meta].map(csvCell).join(',')).join('\n');
+    adminAudit(req, 'audit.export', 'system', null, { days, rows: rows.length });
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="atwe-audit-${days}d.csv"`);
+    res.send(head + body + '\n');
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build the export.' }); }
+});
+/* ─── What needs YOU ────────────────────────────────────────────────────────
+   One count of everything actually waiting on a decision, so nothing sits in a
+   queue nobody thought to open. */
+app.get('/api/admin/attention', auth.requireAdmin, async (_req, res) => {
+  try {
+    const q = (sql) => db.query(sql).then((r) => r.rows[0].n).catch(() => 0);
+    const [reports, disputes, appeals, refunds, cashouts, adjustments, dataReqs, ads, aff, jobsBad] = await Promise.all([
+      q(`SELECT COUNT(*)::int AS n FROM reports WHERE status = 'open'`),
+      q(`SELECT COUNT(*)::int AS n FROM orders WHERE status = 'disputed'`),
+      q(`SELECT COUNT(*)::int AS n FROM appeals WHERE state = 'open'`),
+      q(`SELECT COUNT(*)::int AS n FROM refund_requests WHERE status = 'open'`),
+      q(`SELECT COUNT(*)::int AS n FROM cashout_reviews WHERE status = 'pending'`),
+      q(`SELECT COUNT(*)::int AS n FROM wallet_adjustments WHERE status = 'pending'`),
+      q(`SELECT COUNT(*)::int AS n FROM data_requests WHERE state = 'open'`),
+      q(`SELECT COUNT(*)::int AS n FROM ad_campaigns WHERE status = 'requested'`),
+      q(`SELECT COUNT(*)::int AS n FROM aff_uploads WHERE status = 'pending'`),
+      Promise.resolve(Object.values(jobHealth).filter((j) => j.lastOk === false).length),
+    ]);
+    const items = [
+      { key: 'reports', label: 'Reports to review', n: reports, tab: 'reports' },
+      { key: 'disputes', label: 'Disputes to settle', n: disputes, tab: 'disputes' },
+      { key: 'appeals', label: 'Appeals to answer', n: appeals, tab: 'appeals' },
+      { key: 'refunds', label: 'Refunds to approve', n: refunds, tab: 'refunds' },
+      { key: 'cashouts', label: 'Payouts to release', n: cashouts, tab: 'payouts' },
+      { key: 'adjustments', label: 'Wallet adjustments to approve', n: adjustments, tab: 'adjust' },
+      { key: 'datareq', label: 'Data requests to fulfil', n: dataReqs, tab: 'datareq' },
+      { key: 'ads', label: 'Ads to review', n: ads, tab: 'ads' },
+      { key: 'affiliations', label: 'Affiliation badges to review', n: aff, tab: 'affiliations' },
+      { key: 'jobs', label: 'Background jobs failing', n: jobsBad, tab: 'site' },
+    ].filter((i) => i.n > 0);
+    res.json({ total: items.reduce((a, i) => a + i.n, 0), items });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load.' }); }
 });
 /* ─── Group topic threads ───────────────────────────────────────────────────
    A named sub-conversation inside a busy group. A message with no topic is the
@@ -14961,10 +15216,12 @@ app.get('/api/admin/jobs', auth.requireAdmin, (_req, res) => {
   const jobs = Object.values(jobHealth).map((j) => {
     let status = 'ok';
     const age = j.lastRunAt ? now - new Date(j.lastRunAt).getTime() : null;
-    if (!j.lastRunAt) status = 'pending';          // hasn't fired yet (long-interval jobs)
+    const paused = jobIsPaused(j.name);
+    if (paused) status = 'paused';                 // deliberately off — not a fault
+    else if (!j.lastRunAt) status = 'pending';     // hasn't fired yet (long-interval jobs)
     else if (j.lastOk === false) status = 'error';
     else if (age != null && age > j.intervalMs * 2.5) status = 'stale';
-    return { name: j.name, label: j.label, intervalMs: j.intervalMs, lastRunAt: j.lastRunAt, lastMs: j.lastMs, lastProcessed: j.lastProcessed, runs: j.runs, errors: j.errors, lastError: j.lastError, ageMs: age, status };
+    return { paused, runnable: !!_jobRunners[j.name], name: j.name, label: j.label, intervalMs: j.intervalMs, lastRunAt: j.lastRunAt, lastMs: j.lastMs, lastProcessed: j.lastProcessed, runs: j.runs, errors: j.errors, lastError: j.lastError, ageMs: age, status };
   });
   res.json({ jobs });
 });
@@ -28566,14 +28823,29 @@ app.get('/api/admin/analytics', auth.requirePerm('growth'), async (req, res) => 
 });
 
 /* ─── Admin: content moderation (recent posts) ─── */
-app.get('/api/admin/posts', auth.requirePerm('moderation'), async (_req, res) => {
+app.get('/api/admin/posts', auth.requirePerm('moderation'), async (req, res) => {
   try {
+    // Searchable + filterable: newest-first with a delete button was fine for a
+    // hundred posts and useless past that.
+    const params = [];
+    const conds = [];
+    const q = (req.query.q || '').toString().trim().slice(0, 80);
+    if (q.length >= 2) { params.push('%' + q.replace(/[%_\\]/g, (c) => '\\' + c) + '%'); conds.push(`p.body ILIKE $${params.length}`); }
+    const author = (req.query.author || '').toString().trim().replace(/^@/, '').slice(0, 40);
+    if (author) { params.push(author.toLowerCase()); conds.push(`lower(u.username) = $${params.length}`); }
+    if (req.query.hasMedia === '1') conds.push(`(p.image IS NOT NULL OR p.media IS NOT NULL)`);
+    if (req.query.repliesOnly === '1') conds.push('p.parent_id IS NOT NULL');
+    else if (req.query.topOnly === '1') conds.push('p.parent_id IS NULL');
+    const days = parseInt(req.query.days, 10);
+    if (Number.isInteger(days) && days > 0 && days <= 400) { params.push(Math.min(days, 400)); conds.push(`p.created_at > now() - make_interval(days => $${params.length})`); }
+    const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
     const { rows } = await db.query(
       `SELECT p.id, p.body, p.image, p.created_at, p.parent_id,
               u.name AS author_name, u.username AS author_username,
               (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)::int AS likes
        FROM posts p JOIN users u ON u.id = p.user_id
-       ORDER BY p.created_at DESC LIMIT 60`
+       ${where}
+       ORDER BY p.created_at DESC LIMIT 100`, params
     );
     res.json({ posts: rows });
   } catch (err) {
@@ -29779,5 +30051,6 @@ db.init()
   .then(() => { if (db.isConfigured()) return db.getSetting(FEE_KEY).then((v) => { _platformFee = normalizeFee(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(TAXONOMY_KEY).then((v) => { _taxonomy = normalizeTaxonomy(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return backfillSkillCanonicals().catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return db.getSetting(MAINT_KEY).then((v) => { if (v && typeof v === 'object') _maintenance = v; }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) console.log('🗄️   Schema + settings ready.'); })
   .catch((err) => console.error('Post-init setup failed:', err.message));
