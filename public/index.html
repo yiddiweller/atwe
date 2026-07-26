@@ -9291,6 +9291,20 @@ button.ac-skill.endorse.on .ac-skill-c{background:rgba(255,255,255,.15);color:va
   .skill-chip{background:var(--s2);border:none;border-radius:999px;padding:7px 13px;font-size:12.5px;
     font-weight:600;color:var(--t1);cursor:pointer;}
   @media(hover:hover){.skill-chip:hover{background:var(--s3);}}
+/* The full reaction set: a plain grid, big enough to hit with a thumb. */
+.react-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(46px,1fr));gap:6px;max-height:60vh;overflow-y:auto;}
+  .react-cell{background:none;border:none;font-size:26px;line-height:1;padding:8px 0;cursor:pointer;border-radius:12px;}
+  @media(hover:hover){.react-cell:hover{background:var(--s2);}}
+  .mm-reax-more{font-weight:700;color:var(--t2);}
+/* AI disclosure. Stated plainly, never dressed up as a badge — it is a fact
+   about the post, not a decoration on it. */
+.ai-disclosed{font-size:11.5px;color:var(--t4);margin-top:6px;}
+.ai-disclose-chip{display:inline-flex;align-items:center;gap:8px;background:var(--s2);border:none;border-radius:999px;
+  padding:6px 12px;font-size:12px;font-weight:600;color:var(--t2);cursor:pointer;margin-top:8px;}
+  .ai-disclose-chip span{color:var(--t4);font-size:14px;}
+  .ai-disclose-chip.hidden{display:none;}
+/* A topic that's been closed reads quieter, but is still there. */
+.topic-closed{opacity:.55;}
 /* Form cards in a chat: what was asked, and one clear way to answer. */
 .mc-form{padding:13px 14px;}
   .mc-form-title{font-weight:700;font-size:14px;color:var(--t1);}
@@ -15302,6 +15316,39 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Any emoji as a reaction, not just the ten favourites -->
+<div class="overlay hidden" id="reactPickerView" onclick="if(event.target===this)closeOverlay('reactPickerView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Pick a reaction">
+    <button class="sheet-close" onclick="closeOverlay('reactPickerView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Pick a reaction</div>
+    <div id="reactPickerBody" class="react-grid"></div>
+  </div>
+</div>
+
+<!-- Topics: named sub-conversations inside a busy group -->
+<div class="overlay hidden" id="topicsView" onclick="if(event.target===this)closeOverlay('topicsView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Topics">
+    <button class="sheet-close" onclick="closeOverlay('topicsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Topics</div>
+    <div class="ac-disc-sub" style="margin:0 0 10px;">Give a side conversation its own place, so the main chat doesn't get buried.</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;">
+      <input class="jp-in" id="topicName" maxlength="60" placeholder="New topic (e.g. Deliveries)" style="flex:1;margin:0;"/>
+      <button class="ac-pill-btn accent" style="flex:0 0 auto;padding:9px 16px;" onclick="acCreateTopic()">Add</button>
+    </div>
+    <div id="topicsBody"></div>
+  </div>
+</div>
+
+<!-- What one conversation sounds like -->
+<div class="overlay hidden" id="chatSoundView" onclick="if(event.target===this)closeOverlay('chatSoundView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Notification sound">
+    <button class="sheet-close" onclick="closeOverlay('chatSoundView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Notification sound</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Give this chat its own sound so you know who it is without looking.</div>
+    <div id="chatSoundBody"></div>
+  </div>
+</div>
+
 <!-- Saved replies + forms: the things a business sends over and over -->
 <div class="overlay hidden" id="bizToolsView" onclick="if(event.target===this)closeOverlay('bizToolsView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Saved replies and forms">
@@ -16898,6 +16945,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <div id="acPostQuote"></div>
         <div id="acOccasionChip"></div>
         <div id="acPostProdChip"></div>
+        <button id="acAiDiscloseChip" class="ai-disclose-chip hidden" onclick="acToggleAiDisclose()" aria-label="Remove the Atwe AI label">✦ Atwe AI helped write this <span>×</span></button>
         <div class="msg-imgprev" id="acPostImgPrev" style="padding:0;"></div>
         <div class="ac-alt-row hidden" id="acPostAltRow" style="margin-top:8px;">
           <input class="jp-in" id="acPostAlt" type="text" maxlength="1000" placeholder="Describe the image (alt text, for accessibility)"/>
@@ -17692,7 +17740,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1606'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1607'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -23164,7 +23212,8 @@ function acMsgMenu(id, btn) {
   if (scroll && canReact) {
     const cur = (mm && mm.reactions && mm.reactions[String(S.user?.id)]) || null;
     scroll.innerHTML = _REAX_EMOJIS.map(e =>
-      `<button class="mm-reax-btn${e === cur ? ' on' : ''}" onclick="acMsgReactSet(${id},'${e}')">${e}</button>`).join('');
+      `<button class="mm-reax-btn${e === cur ? ' on' : ''}" onclick="acMsgReactSet(${id},'${e}')">${e}</button>`).join('')
+      + `<button class="mm-reax-btn mm-reax-more" onclick="acOpenReactPicker(${id})" aria-label="More reactions">+</button>`;
     scroll.scrollLeft = 0;
   }
   _glideClearHl();
@@ -31214,6 +31263,7 @@ function acPostCard(p) {
     </div>
     <div class="ac-post-body">
       ${(!p.locked && p.occasion) ? acOccasionBanner(p.occasion) : ''}
+      ${(!p.locked && p.aiAssisted) ? '<div class="ai-disclosed">\u2726 Atwe AI helped write this</div>' : ''}
       ${(p.circles && p.circles.length) ? `<div class="ac-post-circle" onclick="event.stopPropagation();acOpenCircle(${p.circles[0].id})">in circle@${escHtml(p.circles[0].username)}</div>` : ''}
       ${p.locked ? (p.ppvLocked || p.ppvCents
         ? `<div class="ac-post-locked" onclick="event.stopPropagation();acUnlockPost(${p.id})"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Unlock this post for $${((p.ppvCents || 0) / 100).toFixed(2)}</span></div>`
@@ -33255,6 +33305,7 @@ function acOpenPost(circleId) {
   _acPostAtt = null; _acPostImgs = []; _acPostGif = null;
   AC._postProducts = []; acRenderPostProdChip();
   AC._postOccasion = null; acRenderOccasionChip(); // fresh occasion per composer open
+  AC._postAiAssisted = false; acSyncAiDiscloseChip(); // the AI label never carries over to the next post
   acSetPostEditMode(false);
   AC._postCircleCtx = (typeof circleId === 'number') ? circleId : null;
   AC._postFeedCtx = null;
@@ -33657,7 +33708,7 @@ async function acAiRun(task, getText, setText) {
 }
 function acComposeAi(e) {
   const btn = e && e.currentTarget;
-  acAiAssist(btn, () => document.getElementById('acPostText').value, (s) => { const t = document.getElementById('acPostText'); t.value = s; acPostInput(); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 300) + 'px'; });
+  acAiAssist(btn, () => document.getElementById('acPostText').value, (s) => { const t = document.getElementById('acPostText'); t.value = s; acPostInput(); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 300) + 'px'; acMarkAiAssisted(true); });
 }
 // Atwe AI profile optimizer — polish the headline or "about" from current details.
 async function acProfileAi(field) {
@@ -33947,6 +33998,7 @@ async function acSubmitPost() {
   if (AC._postCoAuth && AC._postCoAuth.length) payload.coAuthorIds = AC._postCoAuth.map(u => u.id);
   if ((AC._postProducts || []).length) payload.productIds = AC._postProducts.map((p) => p.id); // tagged products → chip / quick-buy on media
   if (AC._postOccasion && !AC._quoteId && AC._postToMain !== false) payload.occasion = AC._postOccasion; // celebration banner
+  if (AC._postAiAssisted) payload.aiAssisted = true;   // AI disclosure (see acAiDisclose)
   const loc = acLocationValue(); if (loc) payload.location = loc;
   const sched = acScheduleValue(); if (sched) payload.scheduledAt = sched;
   try {
@@ -38878,6 +38930,119 @@ function acShowDraft(title, text, onGo) {
 function acDraftCopy() {
   const a = document.getElementById('draftMsgText'); if (!a) return;
   acCopyText(a.value); showNotif('Copied.');
+}
+/* ─── AI disclosure ─────────────────────────────────────────────────────────
+   A post Atwe AI helped write says so. The flag is set automatically whenever
+   one of the composer's AI tools rewrites the draft — nobody has to remember —
+   and can be turned off by hand if the words ended up being their own. */
+function acMarkAiAssisted(on) {
+  AC._postAiAssisted = on !== false;
+  acSyncAiDiscloseChip();
+}
+function acSyncAiDiscloseChip() {
+  const el = document.getElementById('acAiDiscloseChip'); if (!el) return;
+  el.classList.toggle('hidden', !AC._postAiAssisted);
+}
+function acToggleAiDisclose() {
+  AC._postAiAssisted = false;                 // the chip is a "remove it" control
+  acSyncAiDiscloseChip();
+  showNotif('Removed the Atwe AI label.');
+}
+/* Silent send (Telegram-style): the next messages in this chat arrive without
+   ringing. Per-conversation, and cleared when you leave it. */
+function acToggleSilentMode() {
+  AC._silentMode = !AC._silentMode;
+  showNotif(AC._silentMode ? 'Messages will arrive quietly.' : 'Messages will notify as usual.');
+  const bar = document.getElementById('acSilentBar');
+  if (bar) bar.classList.toggle('hidden', !AC._silentMode);
+}
+/* ─── Any-emoji reactions ───────────────────────────────────────────────────
+   The server has always accepted any emoji; the ten favourites were only ever
+   a client limit. The "+" opens the rest. */
+const REACT_ALL = ('❤️ 🧡 💛 💚 💙 💜 🖤 🤍 👍 👎 👏 🙌 🙏 🤝 💪 ✌️ 🤞 👌 🔥 ⭐ ✨ 🎉 🎊 🏆 💯 ⚡ 💡 ✅ ❌ ⚠️ '
+  + '😂 🤣 😅 😊 😍 🥰 😘 😎 🤔 🤯 😮 😲 😢 😭 😤 😡 🥳 🤩 🙃 😴 🤗 🫶 👀 🧠 '
+  + '💰 💸 🛍️ 📦 📈 📉 📌 📝 ✍️ 📚 ☕ 🍕 🎂 🚀 🌟 🌈 ☀️ 🌙 🎯 🧵').split(' ').filter(Boolean);
+function acOpenReactPicker(id) {
+  AC._reactFor = id;
+  const box = document.getElementById('reactPickerBody'); if (!box) return;
+  box.innerHTML = REACT_ALL.map((e) =>
+    `<button class="react-cell" onclick="acPickReaction(${jsAttr(e)})" aria-label="React ${e}">${e}</button>`).join('');
+  showOverlay('reactPickerView');
+}
+function acPickReaction(emoji) {
+  const id = AC._reactFor;
+  closeOverlay('reactPickerView');
+  closeOverlay('msgMenu');
+  if (id != null) acMsgReactSet(id, emoji);
+}
+/* ─── Topics ────────────────────────────────────────────────────────────────
+   A named side conversation inside a busy group, so one thread of talk stops
+   burying everything else. A message with no topic is still the main room. */
+async function acOpenTopics() {
+  if (AC.mode !== 'group' || !AC.groupId) { showNotif('Topics are for groups.'); return; }
+  showOverlay('topicsView');
+  acLoadTopics();
+}
+async function acLoadTopics() {
+  const box = document.getElementById('topicsBody'); if (!box) return;
+  box.innerHTML = acSkelRows(2);
+  try {
+    const { topics } = await API.req('GET', '/api/atchat/groups/' + AC.groupId + '/topics');
+    box.innerHTML = topics.length ? topics.map((t) => `
+      <div class="lead-row${t.closed ? ' topic-closed' : ''}">
+        <div style="font-weight:700;color:var(--t1);font-size:14.5px;">${escHtml(t.name)}${t.closed ? ' <span class="ti-wait" style="color:var(--t3);">closed</span>' : ''}</div>
+        <div class="ti-sub" style="margin-top:3px;">${t.messages} message${t.messages === 1 ? '' : 's'}${t.lastAt ? ' \u00b7 ' + acTime(t.lastAt) : ''}</div>
+        <div class="lead-acts">
+          <button class="ac-pill-btn" onclick="acToggleTopic(${t.id}, ${t.closed ? 'false' : 'true'})">${t.closed ? 'Reopen' : 'Close'}</button>
+        </div></div>`).join('')
+      : '<div class="ac-empty" style="padding:14px;">No topics yet. Add one above.</div>';
+  } catch (e) { box.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load the topics.')}</div>`; }
+}
+async function acCreateTopic() {
+  const el = document.getElementById('topicName');
+  const name = (el.value || '').trim();
+  if (!name) { showNotif('Give the topic a name.'); return; }
+  try { await API.req('POST', '/api/atchat/groups/' + AC.groupId + '/topics', { name }); el.value = ''; acLoadTopics(); }
+  catch (e) { showNotif(e.message || 'Could not add the topic.'); }
+}
+async function acToggleTopic(id, closed) {
+  try { await API.req('PATCH', '/api/atchat/groups/' + AC.groupId + '/topics/' + id, { closed }); acLoadTopics(); }
+  catch (e) { showNotif(e.message || 'Could not update the topic.'); }
+}
+/* ─── Per-conversation notification sound ───────────────────────────────────
+   Silent send is the sender choosing not to ring anyone. This is the other
+   half: you deciding what one chat sounds like. */
+const CHAT_SOUND_OPTS = [
+  ['default', 'Default', 'The same as everything else'],
+  ['none', 'Silent', 'Never makes a sound'],
+  ['chime', 'Chime', 'Soft and short'],
+  ['ping', 'Ping', 'Bright and quick'],
+  ['knock', 'Knock', 'Low and dull'],
+  ['pop', 'Pop', 'Light and playful'],
+];
+async function acOpenChatSound() {
+  const box = document.getElementById('chatSoundBody'); if (!box) return;
+  const key = _acThreadKey();
+  AC._soundKey = key;
+  box.innerHTML = acSkelRows(2);
+  showOverlay('chatSoundView');
+  try {
+    const { sounds } = await API.req('GET', '/api/atchat/sounds');
+    const cur = (sounds || {})[key] || 'default';
+    box.innerHTML = '<div class="iset-group">' + CHAT_SOUND_OPTS.map(([id, name, sub]) => `
+      <button class="iset-row" onclick="acSetChatSound(${jsAttr(id)})">
+        <div class="iset-main"><div class="iset-label">${name}</div><div class="iset-sub">${sub}</div></div>
+        ${id === cur ? '<svg class="iset-chev" viewBox="0 0 24 24" style="stroke:var(--accent);"><polyline points="20 6 9 17 4 12"/></svg>'
+                     : '<span style="width:18px;"></span>'}
+      </button>`).join('') + '</div>';
+  } catch (e) { box.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load.')}</div>`; }
+}
+async function acSetChatSound(sound) {
+  try {
+    await API.req('PUT', '/api/atchat/sounds', { key: AC._soundKey, sound });
+    acOpenChatSound();                      // redraw so the tick moves
+    showNotif(sound === 'default' ? 'Using the default sound.' : 'Sound saved.');
+  } catch (e) { showNotif(e.message || 'Could not save the sound.'); }
 }
 /* ─── Saved replies & in-chat forms ─────────────────────────────────────────
    The two things a business ends up doing all day: sending the same answer
@@ -45362,6 +45527,7 @@ async function acOpenChat(id, threadId) {
   AC.threadId = threadId || null; // which conversation (null = main)
   acThreadSearchClose(); // never carry an open in-chat search across conversations
   AC._secret = false; acRenderSecretBar && acRenderSecretBar(); // secret mode doesn't carry between chats
+  AC._silentMode = false; // nor does silent send — it must never quietly swallow a message elsewhere
   AC._selBusy = false; acHideSelToolbar && acHideSelToolbar(); // drop any selection toolbar
   AC.mode = 'dm'; AC.peer = null; AC.group = null; AC.messages = []; AC._unreadDivId = null; acClearImage(); acStopMic();
   AC._selectMode = false; document.getElementById('acThreadScreen')?.classList.remove('selecting');
@@ -46077,12 +46243,15 @@ function acThreadMenu(btn) {
   if (AC.mode === 'group') {
     sheet.innerHTML =
       `<button class="mm-item" onclick="acHeadAct('info')">${IC.info}<span class="mm-label">Group info</span></button>`
+      + `<button class="mm-item" onclick="acHeadAct('topics')">${IC.info}<span class="mm-label">Topics</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('ai')"><span class="mm-logo"></span><span class="mm-label">Atwe AI</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('search')">${IC.search}<span class="mm-label">Search in chat</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('media')">${IC.media}<span class="mm-label">Media</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('disappear')">${IC.disappear}<span class="mm-label">Disappearing messages${AC.disappearing ? ' · ' + acDisLabel(AC.disappearing) : ''}</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('scheduled')">${IC.scheduled}<span class="mm-label">Scheduled messages</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('label')">${IC.label}<span class="mm-label">Label chat</span></button>`
+      + `<button class="mm-item" onclick="acHeadAct('silent')">${IC.wallpaper}<span class="mm-label">Send silently${AC._silentMode ? ' \u2713' : ''}</span></button>`
+      + `<button class="mm-item" onclick="acHeadAct('sound')">${IC.wallpaper}<span class="mm-label">Notification sound</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('wallpaper')">${IC.wallpaper}<span class="mm-label">Wallpaper</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('export')">${IC.xport}<span class="mm-label">Export chat</span></button>`
       + `<div class="mm-sep"></div>`
@@ -46114,6 +46283,8 @@ function acThreadMenu(btn) {
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('split')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18"/><path d="M7.5 8.5h3M13.5 15.5h3"/></svg><span class="mm-label">Split a bill</span></button>`)
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('invoice')">${IC.invoice}<span class="mm-label">Send an invoice</span></button>`)
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('quote')">${IC.quote}<span class="mm-label">Send a quote</span></button>`)
+      + `<button class="mm-item" onclick="acHeadAct('silent')">${IC.wallpaper}<span class="mm-label">Send silently${AC._silentMode ? ' \u2713' : ''}</span></button>`
+      + `<button class="mm-item" onclick="acHeadAct('sound')">${IC.wallpaper}<span class="mm-label">Notification sound</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('wallpaper')">${IC.wallpaper}<span class="mm-label">Wallpaper</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('export')">${IC.xport}<span class="mm-label">Export chat</span></button>`
       + ((!self && AC.peer && AC.peer.accountType === 'business') ? `<button class="mm-item" onclick="acHeadAct('cartmute')"><svg viewBox="0 0 24 24"><path d="M13.7 21a2 2 0 0 1-3.4 0"/><path d="M18 8a6 6 0 0 0-9.3-5"/><path d="M6 9v4l-2 3h12"/><line x1="3" y1="3" x2="21" y2="21"/></svg><span class="mm-label">Mute reminders from this shop</span></button>` : '')
@@ -46145,6 +46316,9 @@ function acHeadAct(a) {
     else if (a === 'scheduled') acOpenScheduled();
     else if (a === 'label') acLabelChatOpen();
     else if (a === 'wallpaper') acOpenWallpaper();
+    else if (a === 'sound') acOpenChatSound();
+    else if (a === 'silent') acToggleSilentMode();
+    else if (a === 'topics') acOpenTopics();
     else if (a === 'export') acExportChat();
     else if (a === 'invoice' && AC.peer) acInvoiceCreateOpen(AC.peer.id, AC.peer.name);
     else if (a === 'quote' && AC.peer) acQuoteCreateOpen(AC.peer.id, AC.peer.name);
@@ -49392,6 +49566,7 @@ async function acOpenGroup(id) {
   const _gRow = (AC.groupsList || []).find(g => g.id === id);
   if (_gRow && _gRow.unread) { _gRow.unread = 0; try { acRenderChats(); } catch {} }
   acThreadSearchClose(); // never carry an open in-chat search across conversations
+  AC._silentMode = false; // silent send never carries between conversations
   AC.mode = 'group'; AC.peer = null; AC.group = null; AC.groupId = id; AC.messages = []; AC._unreadDivId = null; acClearImage(); acStopMic();
   acClearTyping(); // drop any lingering "X is typing" from the previous thread
   AC._selectMode = false; document.getElementById('acThreadScreen')?.classList.remove('selecting');
@@ -50617,6 +50792,10 @@ async function acSendOne(tmp) {
   const payload = isSticker
     ? { stickerId: tmp._payload.stickerId, clientId: tmp._payload.clientId, ...(tmp._target.group ? { groupId: tmp._target.group } : { to: tmp._target.peer, threadId: AC.threadId || undefined }) }
     : tmp._payload;
+  // Silent send: deliver it, but don't make their phone go off. The mode is
+  // per-conversation and clears when you leave, so it can't be left on by
+  // accident and quietly swallow a message someone was waiting for.
+  if (AC._silentMode) payload.silent = true;
   try {
     const { message } = await API.req('POST', url, payload);
     const i = AC.messages.indexOf(tmp);
