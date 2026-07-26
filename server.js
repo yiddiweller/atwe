@@ -26383,6 +26383,68 @@ app.delete('/api/admin/support/:id', auth.requirePerm('support'), async (req, re
 
 /* ─── Admin: broadcast to every user — lands in their in-app inbox AND, when
        SMTP is configured, emails them a branded message from team@atwe.com ─── */
+/* ─── "What's new" changelog ────────────────────────────────────────────────
+   Staff write release notes; members read them in-app and get a quiet unread
+   dot until they do. Drafts stay invisible to members until published. */
+function mapChangelog(c) {
+  return { id: c.id, title: c.title, body: c.body, version: c.version || null,
+    publishedAt: c.published_at || null, published: !!c.published_at, createdAt: c.created_at };
+}
+app.get('/api/changelog', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT * FROM changelog_entries WHERE published_at IS NOT NULL AND published_at <= now() ORDER BY published_at DESC LIMIT 30');
+    const seen = (await db.query('SELECT changelog_seen_at FROM users WHERE id = $1', [req.user.id])).rows[0];
+    const seenAt = seen && seen.changelog_seen_at ? new Date(seen.changelog_seen_at) : null;
+    const unread = rows.filter((r) => !seenAt || new Date(r.published_at) > seenAt).length;
+    res.json({ entries: rows.map(mapChangelog), unread });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the updates.' }); }
+});
+app.post('/api/changelog/seen', auth.requireAuth, async (req, res) => {
+  try { await db.query('UPDATE users SET changelog_seen_at = now() WHERE id = $1', [req.user.id]); res.json({ ok: true }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not save.' }); }
+});
+// Staff: write, publish and remove entries (superadmin — it speaks for Atwe).
+app.get('/api/admin/changelog', auth.requireAdmin, async (_req, res) => {
+  try {
+    const { rows } = await db.query('SELECT * FROM changelog_entries ORDER BY COALESCE(published_at, created_at) DESC LIMIT 100');
+    res.json({ entries: rows.map(mapChangelog) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the changelog.' }); }
+});
+app.post('/api/admin/changelog', auth.requireAdmin, rateLimit(30, 60000, 'changelog'), async (req, res) => {
+  const title = (req.body.title || '').toString().trim().slice(0, 140);
+  const body = (req.body.body || '').toString().trim().slice(0, 5000);
+  const version = (req.body.version || '').toString().trim().slice(0, 30) || null;
+  if (!title || !body) return res.status(400).json({ error: 'Give it a title and some detail.' });
+  try {
+    const { rows } = await db.query(
+      'INSERT INTO changelog_entries (title, body, version, published_at, created_by) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [title, body, version, req.body.publish === true ? new Date() : null, req.user.id]);
+    adminAudit(req, 'changelog.create', 'changelog', rows[0].id, { title, published: req.body.publish === true });
+    res.status(201).json({ entry: mapChangelog(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the entry.' }); }
+});
+app.post('/api/admin/changelog/:id/publish', auth.requireAdmin, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const on = req.body.published !== false;
+  try {
+    const { rows } = await db.query('UPDATE changelog_entries SET published_at = $2 WHERE id = $1 RETURNING *', [id, on ? new Date() : null]);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found.' });
+    adminAudit(req, on ? 'changelog.publish' : 'changelog.unpublish', 'changelog', id, {});
+    res.json({ entry: mapChangelog(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update it.' }); }
+});
+app.delete('/api/admin/changelog/:id', auth.requireAdmin, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM changelog_entries WHERE id = $1', [id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    adminAudit(req, 'changelog.delete', 'changelog', id, {});
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete it.' }); }
+});
 app.post('/api/admin/broadcast', auth.requireAdmin, rateLimit(10, 60000, 'admin-broadcast'), async (req, res) => {
   const body = (req.body.body || '').trim();
   const subject = (req.body.subject || '').trim().slice(0, 160);

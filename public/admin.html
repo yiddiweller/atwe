@@ -2066,7 +2066,54 @@ function renderSite(){
         return `<div class="site-row"><div><div class="srt">${esc(f.label)}${on ? '' : ' <span class="pill ban">off</span>'}</div><div class="srs">${esc(f.help)}</div></div>
         <button class="switch flag ${on ? 'on' : ''}" onclick="toggleFlag('${f.key}')" aria-label="${esc(f.label)}"><span></span></button></div>`;
       }).join('')}
+    </div>
+    <div class="panel">
+      <h3>What's new <span class="muted">· release notes</span></h3>
+      <div class="sub">Write a short note after each release. Members read it in the app; a quiet dot marks it unread until they do. Drafts stay invisible until you publish.</div>
+      <input class="in" id="clTitle" maxlength="140" placeholder="Title (e.g. Shipping zones, A/B tests)"/>
+      <input class="in" id="clVersion" maxlength="30" placeholder="Version (optional, e.g. 1588)" style="margin-top:8px;"/>
+      <textarea class="in" id="clBody" rows="4" maxlength="5000" placeholder="What changed, in plain language." style="margin-top:8px;"></textarea>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="act accent" onclick="saveChangelog(true)">Publish now</button>
+        <button class="act" onclick="saveChangelog(false)">Save as draft</button>
+      </div>
+      <div id="clList" style="margin-top:14px;"></div>
     </div>`;
+  loadChangelog();
+}
+async function loadChangelog(){
+  const box = document.getElementById('clList'); if (!box) return;
+  try {
+    const { entries } = await api('GET', '/api/admin/changelog');
+    box.innerHTML = entries.length ? entries.map(e => `<div class="site-row">
+      <div><div class="srt">${esc(e.title)}${e.version ? ` <span class="pill">${esc(e.version)}</span>` : ''}${e.published ? '' : ' <span class="pill admin">draft</span>'}</div>
+        <div class="srs">${e.published ? 'Published ' + fmtDate(e.publishedAt) : 'Not published'}</div></div>
+      <div style="display:flex;gap:6px;">
+        <button class="act" onclick="publishChangelog(${e.id}, ${e.published ? 'false' : 'true'})">${e.published ? 'Unpublish' : 'Publish'}</button>
+        <button class="act danger" onclick="deleteChangelog(${e.id})">Delete</button>
+      </div></div>`).join('') : '<div class="muted" style="padding:6px 0;">No entries yet.</div>';
+  } catch (e){ box.innerHTML = '<div class="muted">' + esc(e.message) + '</div>'; }
+}
+async function saveChangelog(publish){
+  const title = document.getElementById('clTitle').value.trim();
+  const body = document.getElementById('clBody').value.trim();
+  const version = document.getElementById('clVersion').value.trim();
+  if (!title || !body) { notify('Give it a title and some detail.'); return; }
+  try {
+    await api('POST', '/api/admin/changelog', { title, body, version, publish });
+    document.getElementById('clTitle').value = ''; document.getElementById('clBody').value = ''; document.getElementById('clVersion').value = '';
+    notify(publish ? 'Published to everyone.' : 'Saved as a draft.');
+    loadChangelog();
+  } catch (e){ notify(e.message); }
+}
+async function publishChangelog(id, on){
+  try { await api('POST', '/api/admin/changelog/' + id + '/publish', { published: on }); loadChangelog(); notify(on ? 'Published.' : 'Unpublished.'); }
+  catch (e){ notify(e.message); }
+}
+async function deleteChangelog(id){
+  if (!confirm('Delete this entry?')) return;
+  try { await api('DELETE', '/api/admin/changelog/' + id); loadChangelog(); }
+  catch (e){ notify(e.message); }
 }
 async function toggleFlag(key){
   const cur = (FLAGS.flags || {})[key] !== false;
