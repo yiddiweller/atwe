@@ -3730,6 +3730,10 @@ async function initSchema() {
   await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS disappearing INTEGER NOT NULL DEFAULT 0;`);
   // Slow mode (Telegram-style): non-admins wait N seconds between messages. 0 = off.
   await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS slow_mode_seconds INTEGER NOT NULL DEFAULT 0;`);
+  // Group permissions v2 (WhatsApp-style): who can send media / add members —
+  // 'all' (default) or 'admins'. Enforced at the send + add-member routes.
+  await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS perm_send_media TEXT NOT NULL DEFAULT 'all';`);
+  await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS perm_add_members TEXT NOT NULL DEFAULT 'all';`);
   // Rich attachments on group messages (see at_messages above).
   await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS media TEXT;`);
   await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS media_kind TEXT;`);
