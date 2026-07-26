@@ -1808,6 +1808,8 @@ const PUSH_VERBS = {
   sched_pay_failed: 'a scheduled payment couldn’t be sent',
   rinv_paused: 'a recurring invoice was paused',
   pot_saved: 'auto-saved into your pot', pot_save_skipped: 'an auto-save was skipped — balance too low',
+  auction_outbid: 'outbid you — bid again to stay in it', auction_won: 'you won the auction — pay to claim it',
+  auction_ended: 'your auction ended — the winner is paying', auction_no_bids: 'your auction ended without bids',
   payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review',
   ad_approved: 'approved your ad — it’s ready to pay', ad_rejected: 'reviewed your ad',
   aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation',
@@ -16824,8 +16826,9 @@ app.post('/api/offers', auth.requireAuth, rateLimit(30, 60000, 'offer'), async (
   if (!(amountCents >= 100 && amountCents <= OFFER_MAX_CENTS)) return res.status(400).json({ error: 'Enter an offer between $1 and $50,000.' });
   try {
     if (!(await requireHandle(req, res))) return;
-    const p = (await db.query('SELECT p.id, p.business_id, p.name, p.active, u.is_demo AS seller_demo FROM products p JOIN users u ON u.id = p.business_id WHERE p.id = $1', [productId])).rows[0];
+    const p = (await db.query('SELECT p.id, p.business_id, p.name, p.active, p.auction_ends_at, p.auction_settled, u.is_demo AS seller_demo FROM products p JOIN users u ON u.id = p.business_id WHERE p.id = $1', [productId])).rows[0];
     if (!p || !p.active) return res.status(404).json({ error: 'That listing isn’t available.' });
+    if (p.auction_ends_at) return res.status(400).json({ error: auctionLive(p) ? 'This listing sells by auction — place a bid instead.' : 'This auction has ended.', auction: true });
     if (p.seller_demo) return res.status(400).json({ demo: true, error: 'This is a demo listing.' });
     if (p.business_id === req.user.id) return res.status(400).json({ error: 'You can’t make an offer on your own listing.' });
     { const sp = await shopPausedMessage(p.business_id); if (sp) return res.status(400).json({ error: sp, shopPaused: true }); }
@@ -17113,6 +17116,13 @@ function mapProduct(p, opts) {
     // URL — selects carry only (video IS NOT NULL) AS has_video + video_ver, so
     // multi-MB base64 never rides a list payload OR gets detoasted per row.
     video: p.has_video ? `/api/media/prod-video/${p.id}/0/${mediaSig('prod-video', p.id, 0)}?v=${p.video_ver || 0}` : null,
+    // Auction (eBay model): live while ends_at is future and unsettled. Live bid
+    // totals ride only the listing DETAIL (one extra query there), never lists.
+    auctionEndsAt: p.auction_ends_at || null,
+    auctionMinCents: p.auction_ends_at ? (p.auction_min_cents || 0) : null,
+    auctionLive: !!(p.auction_ends_at && !p.auction_settled && new Date(p.auction_ends_at) > new Date()),
+    auctionSettled: !!p.auction_settled,
+    auctionWinnerId: p.auction_winner_id || null,
   };
 }
 const PRODUCT_CONDITIONS = ['new', 'like_new', 'good', 'fair'];
@@ -17132,7 +17142,7 @@ app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
   try {
     const owner = bid === req.user.id;
     const { rows } = await db.query(
-      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.pinned DESC, p.created_at DESC LIMIT 200`,
+      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.pinned DESC, p.created_at DESC LIMIT 200`,
       [bid]
     );
     const products = rows.map((r) => mapProduct(r, { owner }));
@@ -17165,7 +17175,7 @@ function mapListing(r) {
   });
 }
 const LISTING_SELECT = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
-  p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, ${RATING_COLS},
+  p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS},
   u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified, u.free_ship_over_cents AS seller_free_ship_over
   FROM products p JOIN users u ON u.id = p.business_id`;
 
@@ -17245,7 +17255,7 @@ async function getSponsoredListings(viewerId, { q, kind }) {
     }
     const { rows } = await db.query(
       `SELECT pa.id AS ad_id, pa.bid_cents, pa.keywords, p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
-        p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, ${RATING_COLS},
+        p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS},
         u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified
        FROM product_ads pa JOIN products p ON p.id = pa.product_id JOIN users u ON u.id = pa.seller_id
        WHERE ${conds.join(' AND ')} LIMIT 40`, params);
@@ -17630,7 +17640,7 @@ app.post('/api/admin/product-ads/:id/:action', auth.requirePerm('ads'), async (r
 // My own listings (any account) — for the Sell / manage surface.
 app.get('/api/my-listings', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.pinned DESC, p.created_at DESC LIMIT 300`, [req.user.id]);
+    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.pinned DESC, p.created_at DESC LIMIT 300`, [req.user.id]);
     res.json({ products: rows.map((r) => mapProduct(r, { owner: true })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your listings.' }); }
 });
@@ -17677,6 +17687,22 @@ app.get('/api/listings/:id', auth.requireAuth, async (req, res) => {
     if (!l || (!l.active && l.business_id !== req.user.id)) return res.status(404).json({ error: 'That listing is no longer available.' });
     const listing = mapListing(l);
     listing.saved = (await db.query('SELECT 1 FROM saved_products WHERE user_id = $1 AND product_id = $2', [req.user.id, id])).rowCount > 0;
+    // Auction detail: live top bid + count, whether I lead, and — once won — the
+    // winner's pay path (their accepted offer id) so the detail can offer "Pay now".
+    if (l.auction_ends_at) {
+      const top = (await db.query('SELECT bidder_id, amount_cents FROM auction_bids WHERE product_id = $1 ORDER BY amount_cents DESC, id ASC LIMIT 1', [id])).rows[0];
+      const cnt = (await db.query('SELECT COUNT(*)::int AS n FROM auction_bids WHERE product_id = $1', [id])).rows[0].n;
+      listing.auction = {
+        endsAt: l.auction_ends_at, minCents: l.auction_min_cents || 0, settled: !!l.auction_settled,
+        live: auctionLive(l), topBidCents: top ? top.amount_cents : null, bidCount: cnt,
+        iLead: !!(top && top.bidder_id === req.user.id), winnerId: l.auction_winner_id || null,
+        iWon: l.auction_winner_id === req.user.id,
+      };
+      if (listing.auction.iWon) {
+        const off = (await db.query("SELECT id, status FROM offers WHERE product_id = $1 AND buyer_id = $2 AND status IN ('accepted','paying','paid') ORDER BY id DESC LIMIT 1", [id, req.user.id])).rows[0];
+        if (off) { listing.auction.myOfferId = off.id; listing.auction.myOfferStatus = off.status; }
+      }
+    }
     // Social proof: units sold across paid-state orders ("N sold", Amazon/eBay-style).
     listing.soldCount = Number((await db.query(
       `SELECT COALESCE(SUM(oi.qty), 0) AS n FROM order_items oi JOIN orders o ON o.id = oi.order_id
@@ -17885,12 +17911,21 @@ app.post('/api/products', auth.requireAuth, rateLimit(40, 60000, 'product-add'),
   // capped at the same size ceiling as story/feed clips.
   const video = cleanProductVideo(req.body.video);
   if (video === undefined) return res.status(400).json({ error: 'That video could not be used — keep it under ~3.5 MB.' });
+  // Auction (physical items): a starting bid + a whitelisted duration.
+  let auctionEndsAt = null, auctionMinCents = null;
+  if (req.body.auctionDays != null && kind === 'physical') {
+    const days = parseInt(req.body.auctionDays, 10);
+    if (!AUCTION_DAYS.includes(days)) return res.status(400).json({ error: 'Pick an auction length.' });
+    auctionMinCents = Math.round(Number(req.body.auctionMinCents) || 0);
+    if (!(auctionMinCents >= 100 && auctionMinCents <= 5000000)) return res.status(400).json({ error: 'Set a starting bid between $1 and $50,000.' });
+    auctionEndsAt = new Date(Date.now() + days * 86400000).toISOString();
+  }
   try {
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM products WHERE business_id = $1', [req.user.id]);
     if (cnt.rows[0].n >= 300) return res.status(400).json({ error: 'You’ve reached the maximum number of products.' });
     const { rows } = await db.query(
-      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, video, video_ver) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, (video IS NOT NULL) AS has_video, video_ver`,
-      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, pickup, pickupLocation, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct, amenities, JSON.stringify(specs), rentalPeriod, category, condition, compareAtCents, procDays.min, procDays.max, video, video ? 1 : 0]
+      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, video, video_ver, auction_ends_at, auction_min_cents) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, (video IS NOT NULL) AS has_video, video_ver, auction_ends_at, auction_min_cents, auction_settled, auction_winner_id`,
+      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, pickup, pickupLocation, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct, amenities, JSON.stringify(specs), rentalPeriod, category, condition, compareAtCents, procDays.min, procDays.max, video, video ? 1 : 0, auctionEndsAt, auctionMinCents]
     );
     if (rows[0].active !== false) notifyMarketMatch(rows[0]); // alert saved-search watchers
     res.status(201).json({ product: mapProduct(rows[0], { owner: true }) });
@@ -17936,12 +17971,33 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
     vals.push(v); fields.push(`video = $${vals.length}`);
     fields.push(`video_ver = video_ver + 1`); // busts the immutable-cached streaming URL
   }
-  if (!fields.length) return res.json({ ok: true });
+  // Auction changes: start/restart (fresh window + starting bid) or turn off —
+  // but NEVER once a bid exists (changing terms under bidders breaks trust).
+  let auctionChange = null;
+  if (req.body.auctionOff === true) auctionChange = { off: true };
+  else if ('auctionDays' in req.body) {
+    const days = parseInt(req.body.auctionDays, 10);
+    const minC = Math.round(Number(req.body.auctionMinCents) || 0);
+    if (!AUCTION_DAYS.includes(days)) return res.status(400).json({ error: 'Pick an auction length.' });
+    if (!(minC >= 100 && minC <= 5000000)) return res.status(400).json({ error: 'Set a starting bid between $1 and $50,000.' });
+    auctionChange = { days, minC };
+  }
+  if (!fields.length && !auctionChange) return res.json({ ok: true });
   try {
     // Snapshot the pre-edit state so we can detect a sold-out → in-stock flip and a price drop.
     const before = (await db.query('SELECT stock, variants, active, price_cents FROM products WHERE id = $1 AND business_id = $2', [id, req.user.id])).rows[0];
+    if (auctionChange) {
+      const cur = (await db.query('SELECT auction_settled, (SELECT COUNT(*)::int FROM auction_bids b WHERE b.product_id = products.id) AS bids FROM products WHERE id = $1 AND business_id = $2', [id, req.user.id])).rows[0];
+      if (cur && cur.bids > 0 && !cur.auction_settled) return res.status(400).json({ error: 'This auction already has bids — it can’t be changed or cancelled.' });
+      if (auctionChange && !auctionChange.off) await db.query('DELETE FROM auction_bids WHERE product_id = $1', [id]); // relist starts a clean bid sheet
+      vals.push(auctionChange.off ? null : new Date(Date.now() + auctionChange.days * 86400000).toISOString());
+      fields.push(`auction_ends_at = $${vals.length}`);
+      vals.push(auctionChange.off ? null : auctionChange.minC);
+      fields.push(`auction_min_cents = $${vals.length}`);
+      fields.push('auction_settled = false', 'auction_winner_id = NULL');
+    }
     vals.push(id, req.user.id);
-    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, (video IS NOT NULL) AS has_video, video_ver`, vals);
+    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, (video IS NOT NULL) AS has_video, video_ver, auction_ends_at, auction_min_cents, auction_settled, auction_winner_id`, vals);
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
     const after = r.rows[0];
     // Back-in-stock alert: was sold-out (or hidden), now active + in stock → notify watchers.
@@ -17962,6 +18018,113 @@ app.delete('/api/products/:id', auth.requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the product.' }); }
 });
+
+/* ─── Auctions (eBay model) ───
+   A bid is a COMMITMENT, never held funds — exactly eBay's model. Bids rise on
+   an increment ladder; a bid in the final 2 minutes extends the clock 2 minutes
+   (anti-sniping); at close, the winner gets an accepted OFFER at the winning
+   price and pays through the existing offer checkout — stock, shipping, escrow
+   and idempotency all ride the proven rails. */
+const AUCTION_DAYS = [1, 3, 5, 7];
+const AUCTION_SNIPE_MS = 2 * 60000; // a late bid extends the clock this much
+// eBay-style increment ladder: small steps on small amounts, bigger up high.
+function auctionIncrement(topCents) {
+  if (topCents < 1000) return 50;       // under $10 → 50¢
+  if (topCents < 10000) return 100;     // under $100 → $1
+  if (topCents < 100000) return 500;    // under $1,000 → $5
+  return 2500;                          // $1,000+ → $25
+}
+function auctionLive(p) {
+  return !!(p.auction_ends_at && !p.auction_settled && new Date(p.auction_ends_at) > new Date());
+}
+// Place a bid. The product row lock serializes concurrent bids per auction, so
+// "beats the current top by the increment" can never be checked against a stale top.
+app.post('/api/products/:id/bid', auth.requireAuth, rateLimit(60, 60000, 'auction-bid'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid listing.' });
+  const amount = Math.round(Number(req.body.amountCents) || 0);
+  if (!(amount >= 100 && amount <= 5000000)) return res.status(400).json({ error: 'Bid between $1 and $50,000.' });
+  const client = await db.getPool().connect();
+  let out, outbid = null;
+  try {
+    if (!(await requireHandle(req, res))) { client.release(); return; }
+    await client.query('BEGIN');
+    const p = (await client.query('SELECT id, business_id, name, active, auction_ends_at, auction_min_cents, auction_settled FROM products WHERE id = $1 FOR UPDATE', [id])).rows[0];
+    if (!p || p.active === false) { await client.query('ROLLBACK'); client.release(); return res.status(404).json({ error: 'Listing not found.' }); }
+    if (!p.auction_ends_at) { await client.query('ROLLBACK'); client.release(); return res.status(400).json({ error: 'This listing isn’t an auction.' }); }
+    if (p.business_id === req.user.id) { await client.query('ROLLBACK'); client.release(); return res.status(400).json({ error: 'You can’t bid on your own auction.' }); }
+    if (!auctionLive(p)) { await client.query('ROLLBACK'); client.release(); return res.status(400).json({ error: 'This auction has ended.' }); }
+    if (await blockedEither(req.user.id, p.business_id)) { await client.query('ROLLBACK'); client.release(); return res.status(403).json({ error: 'You can’t bid on this auction.' }); }
+    const top = (await client.query('SELECT bidder_id, amount_cents FROM auction_bids WHERE product_id = $1 ORDER BY amount_cents DESC, id ASC LIMIT 1', [id])).rows[0];
+    const minAllowed = top ? top.amount_cents + auctionIncrement(top.amount_cents) : p.auction_min_cents;
+    if (amount < minAllowed) {
+      await client.query('ROLLBACK'); client.release();
+      return res.status(400).json({ error: 'Bid at least ' + (minAllowed / 100).toFixed(2).replace(/\.00$/, '') + ' dollars.', minCents: minAllowed });
+    }
+    await client.query('INSERT INTO auction_bids (product_id, bidder_id, amount_cents) VALUES ($1,$2,$3)', [id, req.user.id, amount]);
+    // Anti-snipe: a bid landing in the final window pushes the close out so
+    // others get a fair chance to respond (Yahoo/Whatnot style).
+    let endsAt = p.auction_ends_at;
+    if (new Date(p.auction_ends_at).getTime() - Date.now() < AUCTION_SNIPE_MS) {
+      const r2 = await client.query("UPDATE products SET auction_ends_at = now() + interval '2 minutes' WHERE id = $1 RETURNING auction_ends_at", [id]); // matches AUCTION_SNIPE_MS
+      endsAt = r2.rows[0].auction_ends_at;
+    }
+    await client.query('COMMIT');
+    if (top && top.bidder_id !== req.user.id) outbid = top.bidder_id;
+    const count = (await db.query('SELECT COUNT(*)::int AS n FROM auction_bids WHERE product_id = $1', [id])).rows[0].n;
+    out = { ok: true, topBidCents: amount, bidCount: count, endsAt, youLead: true };
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    client.release();
+    console.error(e);
+    return res.status(500).json({ error: 'Could not place the bid.' });
+  }
+  client.release();
+  if (outbid) notify(outbid, req.user.id, 'auction_outbid', null, null, null, id);
+  res.json(out);
+});
+// Bid history (top bids, newest-leading first) — social proof on the detail.
+app.get('/api/products/:id/bids', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid listing.' });
+  try {
+    const { rows } = await db.query(
+      `SELECT b.amount_cents, b.created_at, u.id AS uid, u.name, u.username
+       FROM auction_bids b JOIN users u ON u.id = b.bidder_id
+       WHERE b.product_id = $1 ORDER BY b.amount_cents DESC, b.id ASC LIMIT 10`, [id]);
+    res.json({ bids: rows.map(r => ({ amountCents: r.amount_cents, at: r.created_at, bidder: { id: r.uid, name: r.name, username: r.username } })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load bids.' }); }
+});
+// Settlement: claim ended auctions (claim-first — the settled flag flips in the
+// same UPDATE that selects them, so overlapping ticks can never double-settle),
+// then hand each winner an accepted offer to pay.
+async function flushAuctions() {
+  if (!db.isConfigured()) return 0;
+  let n = 0;
+  const { rows } = await db.query(
+    `UPDATE products SET auction_settled = true
+      WHERE auction_ends_at IS NOT NULL AND NOT auction_settled AND auction_ends_at <= now()
+      RETURNING id, business_id, name`);
+  for (const p of rows) {
+    try {
+      const top = (await db.query('SELECT bidder_id, amount_cents FROM auction_bids WHERE product_id = $1 ORDER BY amount_cents DESC, id ASC LIMIT 1', [p.id])).rows[0];
+      if (!top) { notifySelf(p.business_id, 'auction_no_bids', p.id); n++; continue; }
+      await db.query('UPDATE products SET auction_winner_id = $2 WHERE id = $1', [p.id, top.bidder_id]);
+      const off = await db.query(
+        `INSERT INTO offers (product_id, buyer_id, seller_id, amount_cents, status, turn) VALUES ($1,$2,$3,$4,'accepted','buyer') RETURNING id`,
+        [p.id, top.bidder_id, p.business_id, top.amount_cents]);
+      notify(top.bidder_id, p.business_id, 'auction_won', null, null, null, p.id);
+      notify(p.business_id, top.bidder_id, 'auction_ended', null, null, null, p.id);
+      // The winner's pay card lands in the DM thread (the same offer card the
+      // negotiate flow uses — tapping it opens Accept-state → Pay).
+      pushMetaCard(p.business_id, top.bidder_id, offerMeta({ id: off.rows[0].id, product_id: p.id, name: p.name, amount_cents: top.amount_cents, status: 'accepted' }, 'accepted')).catch(() => {});
+      n++;
+    } catch (e) { console.error('auction settle', p.id, e.message); }
+  }
+  return n;
+}
+const AUCTION_FLUSH_MS = Math.max(5000, parseInt(process.env.AUCTION_FLUSH_MS, 10) || 60000);
+registerJob('auctions', 'Auction settlement', AUCTION_FLUSH_MS); setInterval(trackJob('auctions', flushAuctions), AUCTION_FLUSH_MS).unref?.();
 
 /* ─── Rentals — date-range bookings against a rental product (kind='rental') ─── */
 const RENT_DAY_MS = 86400000;
@@ -18143,8 +18306,9 @@ app.post('/api/cart', auth.requireAuth, async (req, res) => {
   const rawQty = Number(req.body.qty);
   const qty = Number.isFinite(rawQty) ? Math.max(0, Math.min(99, Math.round(rawQty))) : 1;
   try {
-    const p = (await db.query('SELECT business_id, active, variants FROM products WHERE id = $1', [productId])).rows[0];
+    const p = (await db.query('SELECT business_id, active, variants, auction_ends_at, auction_settled FROM products WHERE id = $1', [productId])).rows[0];
     if (!p || !p.active) return res.status(404).json({ error: 'That product isn’t available.' });
+    if (p.auction_ends_at) return res.status(400).json({ error: auctionLive(p) ? 'This listing sells by auction — place a bid instead.' : 'This auction has ended.', auction: true });
     if (p.business_id === req.user.id) return res.status(400).json({ error: 'You can’t buy your own product.' });
     const rv = resolveVariant(p, req.body.variantId);
     if (!rv.ok) return res.status(400).json({ error: rv.error });
@@ -19439,8 +19603,9 @@ app.post('/api/orders/buy', auth.requireAuth, blockImpersonation, rateLimit(20, 
   const qty = Math.max(1, Math.min(99, Math.round(Number(req.body.qty) || 1)));
   try {
     if (!(await requireHandle(req, res))) return;
-    const p = (await db.query('SELECT p.business_id, p.name, p.price_cents, p.active, p.kind, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, u.is_demo AS seller_demo FROM products p JOIN users u ON u.id = p.business_id WHERE p.id = $1', [productId])).rows[0];
+    const p = (await db.query('SELECT p.business_id, p.name, p.price_cents, p.active, p.kind, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.auction_ends_at, p.auction_settled, u.is_demo AS seller_demo FROM products p JOIN users u ON u.id = p.business_id WHERE p.id = $1', [productId])).rows[0];
     if (!p || !p.active) return res.status(404).json({ error: 'That listing isn’t available.' });
+    if (p.auction_ends_at) return res.status(400).json({ error: auctionLive(p) ? 'This listing sells by auction — place a bid instead.' : 'This auction has ended.', auction: true });
     if (p.seller_demo) return res.status(400).json({ demo: true, error: 'This is a demo listing — buying is disabled in demo mode.' });
     { const sp = await shopPausedMessage(p.business_id); if (sp) return res.status(400).json({ error: sp, shopPaused: true }); }
     if (p.business_id === req.user.id) return res.status(400).json({ error: 'You can’t buy your own listing.' });
