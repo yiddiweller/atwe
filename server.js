@@ -18125,6 +18125,16 @@ function pacedBudgetCapCents(dailyBudgetCents, hour) {
   const h = (hour == null) ? new Date().getUTCHours() : hour;
   return Math.min(dailyBudgetCents, Math.ceil(dailyBudgetCents * (h + 1) / 24));
 }
+// Read audience targeting from a campaign write. Empty = untargeted (matches
+// everyone), which is what every existing campaign already is.
+const AD_TARGET_ACCOUNTS = ['all', 'personal', 'business'];
+function readAdTargeting(body) {
+  const cats = Array.isArray(body.targetCategories) ? body.targetCategories : [];
+  const targetCategories = [...new Set(cats.map((c) => String(c || '').trim()).filter(Boolean))].slice(0, 20);
+  const targetCountries = cleanCountryList(body.targetCountries).slice(0, 60);
+  const targetAccount = AD_TARGET_ACCOUNTS.includes(body.targetAccount) ? body.targetAccount : 'all';
+  return { targetCategories, targetCountries, targetAccount };
+}
 function mapProductAd(a) {
   // Prefer the DB's own is_today (computed via spend_date = CURRENT_DATE, same
   // time basis as everywhere else this matters) when the caller's SELECT
@@ -18134,6 +18144,8 @@ function mapProductAd(a) {
   const spentToday = isToday ? a.spent_today_cents : 0;
   return {
     id: a.id, productId: a.product_id, keywords: a.keywords || null,
+    targetCategories: a.target_categories || [], targetCountries: a.target_countries || [],
+    targetAccount: AD_TARGET_ACCOUNTS.includes(a.target_account) ? a.target_account : 'all',
     bidCents: a.bid_cents, dailyBudgetCents: a.daily_budget_cents, spentTodayCents: spentToday,
     totalSpentCents: a.total_spent_cents, impressions: a.impressions, clicks: a.clicks,
     ctr: a.impressions ? +(a.clicks / a.impressions * 100).toFixed(1) : 0,
@@ -18141,6 +18153,19 @@ function mapProductAd(a) {
   };
 }
 // Pick up to PRODUCT_AD_SLOTS sponsored listings for a marketplace serve.
+// The viewer's audience facts, used ONLY to narrow which ads may be shown.
+// Country comes from their default saved address — real data, never a guess.
+async function viewerAudience(viewerId) {
+  try {
+    const u = (await db.query('SELECT account_type, categories FROM users WHERE id = $1', [viewerId])).rows[0] || {};
+    const a = (await db.query('SELECT country FROM addresses WHERE user_id = $1 ORDER BY is_default DESC, id LIMIT 1', [viewerId])).rows[0];
+    return {
+      accountType: u.account_type === 'business' ? 'business' : 'personal',
+      categories: Array.isArray(u.categories) ? u.categories : [],
+      country: a && a.country ? String(a.country).trim().toUpperCase() : null,
+    };
+  } catch { return { accountType: 'personal', categories: [], country: null }; }
+}
 async function getSponsoredListings(viewerId, { q, kind }) {
   try {
     // Lazy daily-budget reset (same pattern as clearExpiredSuspension) — cheap,
@@ -18156,6 +18181,17 @@ async function getSponsoredListings(viewerId, { q, kind }) {
       `u.balance_cents >= pa.bid_cents`,
       `NOT COALESCE(u.wallet_frozen, false)`, // a frozen wallet can't move money out at all — see walletVelocityCheck
     ];
+    // Audience targeting (v2): an untargeted campaign matches everyone; a targeted
+    // one only shows to viewers who fit. Unknown facts (no categories set, no saved
+    // address) simply don't match a campaign that targets on them — an advertiser
+    // who narrows their audience never gets accidental reach.
+    const aud = await viewerAudience(viewerId);
+    params.push(aud.accountType);
+    conds.push(`(pa.target_account = 'all' OR pa.target_account = $${params.length})`);
+    params.push(aud.categories);
+    conds.push(`(cardinality(pa.target_categories) = 0 OR pa.target_categories && $${params.length}::text[])`);
+    params.push(aud.country);
+    conds.push(`(cardinality(pa.target_countries) = 0 OR ($${params.length}::text IS NOT NULL AND $${params.length}::text = ANY(pa.target_countries)))`);
     if (kind) { params.push(kind); conds.push(`p.kind = $${params.length}`); }
     if (q) {
       params.push('%' + q.replace(/[%_\\]/g, '\\$&') + '%');
@@ -18344,9 +18380,11 @@ app.post('/api/product-ads', auth.requireAuth, blockImpersonation, rateLimit(20,
     if (!p.rows[0].active) return res.status(400).json({ error: 'Only an active listing can be advertised.' });
     const cnt = await db.query(`SELECT COUNT(*)::int c FROM product_ads WHERE seller_id = $1 AND status <> 'ended'`, [req.user.id]);
     if (cnt.rows[0].c >= PRODUCT_AD_CAP) return res.status(400).json({ error: 'You have reached the limit of active sponsored campaigns.' });
+    const t = readAdTargeting(req.body);
     const r = await db.query(
-      `INSERT INTO product_ads (seller_id, product_id, keywords, bid_cents, daily_budget_cents) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [req.user.id, productId, keywords, bidCents, dailyBudgetCents]);
+      `INSERT INTO product_ads (seller_id, product_id, keywords, bid_cents, daily_budget_cents, target_categories, target_countries, target_account)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [req.user.id, productId, keywords, bidCents, dailyBudgetCents, t.targetCategories, t.targetCountries, t.targetAccount]);
     res.json({ ok: true, campaign: mapProductAd(r.rows[0]) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not start the campaign.' }); }
 });
@@ -18420,6 +18458,13 @@ app.patch('/api/product-ads/:id', auth.requireAuth, blockImpersonation, async (r
       params.push(d); sets.push(`daily_budget_cents = $${params.length}`);
     }
     if (req.body.keywords !== undefined) { params.push((req.body.keywords || '').toString().trim().slice(0, 300) || null); sets.push(`keywords = $${params.length}`); }
+    // Audience targeting (v2) — editable while a campaign runs.
+    if (req.body.targetCategories !== undefined || req.body.targetCountries !== undefined || req.body.targetAccount !== undefined) {
+      const t = readAdTargeting(req.body);
+      params.push(t.targetCategories); sets.push(`target_categories = $${params.length}`);
+      params.push(t.targetCountries); sets.push(`target_countries = $${params.length}`);
+      params.push(t.targetAccount); sets.push(`target_account = $${params.length}`);
+    }
     if (!sets.length) return res.status(400).json({ error: 'Nothing to update.' });
     sets.push('updated_at = now()');
     const r = await db.query(`UPDATE product_ads SET ${sets.join(', ')} WHERE id = $1 RETURNING *`, params);
