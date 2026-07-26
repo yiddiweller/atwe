@@ -17501,6 +17501,14 @@ async function getSponsoredListings(viewerId, { q, kind }) {
 // single signal. Up to PRODUCT_AD_SLOTS auction-won sponsored listings are then
 // spliced to the very front and labeled, exactly where Amazon/Etsy show their
 // sponsored slots. See "Marketplace ranking & sponsored ads" in CLAUDE.md.
+// Is pg_trgm installed? Checked once, cached — gates the fuzzy fallback.
+let _trgmAvailable = null;
+async function trgmAvailable() {
+  if (_trgmAvailable !== null) return _trgmAvailable;
+  try { _trgmAvailable = (await db.query("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'")).rowCount > 0; }
+  catch (e) { _trgmAvailable = false; }
+  return _trgmAvailable;
+}
 app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
   const q = (req.query.q || '').toString().trim().slice(0, 80);
   const kind = PRODUCT_KINDS.includes(req.query.kind) ? req.query.kind : null;
@@ -17578,6 +17586,21 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
     // Mark which the viewer has saved (wishlist heart on cards).
     const saved = new Set((await db.query('SELECT product_id FROM saved_products WHERE user_id = $1', [req.user.id])).rows.map((r) => r.product_id));
     let listings = rows.map((r) => Object.assign(mapListing(r), { saved: saved.has(r.id) }));
+    // Typo tolerance: an empty text search retries by trigram similarity
+    // ("weel chair" still finds the wheelchair) — only when pg_trgm exists,
+    // flagged so the client can say "showing close matches".
+    let fuzzy = false;
+    if (q && !listings.length && (await trgmAvailable())) {
+      const fParams = [req.user.id, q];
+      let fCond = `p.active = true AND p.business_id NOT IN (SELECT id FROM users WHERE deactivated)
+        AND p.business_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+        AND p.business_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)
+        AND similarity(p.name, $2) > 0.25`;
+      if (kind) { fParams.push(kind); fCond += ` AND p.kind = $${fParams.length}`; }
+      const fz = await db.query(`${LISTING_SELECT} WHERE ${fCond} ORDER BY similarity(p.name, $2) DESC, p.created_at DESC LIMIT 24`, fParams);
+      listings = fz.rows.map((r) => Object.assign(mapListing(r), { saved: saved.has(r.id) }));
+      fuzzy = listings.length > 0;
+    }
     // Sponsored slots: auction winners spliced to the front and de-duplicated
     // against the organic results (a product never appears twice on one page).
     const sponsored = (await getSponsoredListings(req.user.id, { q, kind })).map((s) => Object.assign(s, { saved: saved.has(s.id) }));
@@ -17585,7 +17608,7 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
       const sponsoredIds = new Set(sponsored.map((s) => s.id));
       listings = sponsored.concat(listings.filter((l) => !sponsoredIds.has(l.id)));
     }
-    res.json({ listings, sort: sortKey });
+    res.json({ listings, sort: sortKey, fuzzy });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the marketplace.' }); }
 });
 
