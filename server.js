@@ -25705,6 +25705,117 @@ app.post('/api/admin/users/bulk', auth.requirePerm('users'), async (req, res) =>
     res.json({ ok: true, affected, skipped: ids.length - safe.length });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not complete the bulk action.' }); }
 });
+/* ─── Editorial curation: featured collections + profile picks ──────────────
+   Hand-picked shelves that appear in Discover. One system covers both a set of
+   LISTINGS ("Featured this week") and a set of PROFILES ("Makers to follow"),
+   so merchandising and editorial picks can't drift into two half-features. */
+async function loadEditorial(activeOnly, viewerId) {
+  const cols = (await db.query(
+    `SELECT * FROM editorial_collections ${activeOnly ? 'WHERE active = true' : ''} ORDER BY position, id LIMIT 30`)).rows;
+  if (!cols.length) return [];
+  const ids = cols.map((c) => c.id);
+  const items = (await db.query(
+    `SELECT i.collection_id, i.id AS item_id, i.position,
+            p.id AS p_id, p.name AS p_name, p.price_cents, p.image, p.active AS p_active, p.kind AS p_kind, p.business_id,
+            u.id AS u_id, u.name AS u_name, u.username, u.avatar, u.verified, u.account_type, u.headline,
+            u.deactivated AS u_off
+       FROM editorial_items i
+       LEFT JOIN products p ON p.id = i.product_id
+       LEFT JOIN users u ON u.id = i.user_id
+      WHERE i.collection_id = ANY($1) ORDER BY i.position, i.id`, [ids])).rows;
+  const byCol = new Map(cols.map((c) => [c.id, []]));
+  for (const r of items) {
+    // A shelf must never surface something that's since been hidden or deactivated.
+    if (r.p_id) {
+      if (activeOnly && r.p_active === false) continue;
+      byCol.get(r.collection_id).push({ itemId: r.item_id, type: 'product', id: r.p_id, name: r.p_name,
+        priceCents: r.price_cents, image: mediaRef(r.image, 'product-img', r.p_id), kind: r.p_kind, sellerId: r.business_id });
+    } else if (r.u_id) {
+      if (activeOnly && r.u_off) continue;
+      byCol.get(r.collection_id).push({ itemId: r.item_id, type: 'profile', id: r.u_id, name: r.u_name,
+        username: r.username, avatar: mediaRef(r.avatar, 'avatar', r.u_id), verified: !!r.verified,
+        accountType: r.account_type === 'business' ? 'business' : 'personal', headline: r.headline || null });
+    }
+  }
+  return cols.map((c) => ({ id: c.id, title: c.title, subtitle: c.subtitle || null, kind: c.kind,
+    active: c.active, position: c.position, items: byCol.get(c.id) || [] }))
+    // An empty shelf is worse than no shelf — never show one to a member.
+    .filter((c) => !activeOnly || c.items.length);
+}
+app.get('/api/discover/collections', auth.requireAuth, async (req, res) => {
+  try { res.json({ collections: await loadEditorial(true, req.user.id) }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the collections.' }); }
+});
+app.get('/api/admin/collections', auth.requirePerm('moderation'), async (_req, res) => {
+  try { res.json({ collections: await loadEditorial(false) }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the collections.' }); }
+});
+app.post('/api/admin/collections', auth.requirePerm('moderation'), async (req, res) => {
+  const title = (req.body.title || '').toString().trim().slice(0, 80);
+  const subtitle = (req.body.subtitle || '').toString().trim().slice(0, 140) || null;
+  const kind = req.body.kind === 'profiles' ? 'profiles' : 'products';
+  if (!title) return res.status(400).json({ error: 'Give the shelf a title.' });
+  try {
+    const { rows } = await db.query('INSERT INTO editorial_collections (title, subtitle, kind, created_by) VALUES ($1,$2,$3,$4) RETURNING id', [title, subtitle, kind, req.user.id]);
+    adminAudit(req, 'collection.create', 'collection', rows[0].id, { title, kind });
+    res.status(201).json({ ok: true, id: rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create it.' }); }
+});
+app.patch('/api/admin/collections/:id', auth.requirePerm('moderation'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const sets = [], params = [id];
+  if ('active' in req.body) { params.push(req.body.active !== false); sets.push(`active = $${params.length}`); }
+  if ('position' in req.body) { params.push(Math.max(0, Math.min(999, parseInt(req.body.position, 10) || 0))); sets.push(`position = $${params.length}`); }
+  if ('title' in req.body) { const t = (req.body.title || '').toString().trim().slice(0, 80); if (!t) return res.status(400).json({ error: 'Title can’t be empty.' }); params.push(t); sets.push(`title = $${params.length}`); }
+  if (!sets.length) return res.json({ ok: true });
+  try {
+    const r = await db.query(`UPDATE editorial_collections SET ${sets.join(', ')} WHERE id = $1`, params);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update it.' }); }
+});
+app.delete('/api/admin/collections/:id', auth.requirePerm('moderation'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM editorial_collections WHERE id = $1', [id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    adminAudit(req, 'collection.delete', 'collection', id, {});
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete it.' }); }
+});
+// Add a listing (by id) or a profile (by @username) to a shelf.
+app.post('/api/admin/collections/:id/items', auth.requirePerm('moderation'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const col = (await db.query('SELECT kind FROM editorial_collections WHERE id = $1', [id])).rows[0];
+    if (!col) return res.status(404).json({ error: 'Shelf not found.' });
+    if (col.kind === 'profiles') {
+      const uname = String(req.body.username || '').replace(/^@/, '').trim().toLowerCase();
+      const u = (await db.query('SELECT id FROM users WHERE lower(username) = $1', [uname])).rows[0];
+      if (!u) return res.status(404).json({ error: 'No account with that @username.' });
+      await db.query('INSERT INTO editorial_items (collection_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, u.id]);
+    } else {
+      const pid = parseInt(req.body.productId, 10);
+      if (!Number.isInteger(pid)) return res.status(400).json({ error: 'Enter a listing id.' });
+      const p = (await db.query('SELECT id FROM products WHERE id = $1', [pid])).rows[0];
+      if (!p) return res.status(404).json({ error: 'No listing with that id.' });
+      await db.query('INSERT INTO editorial_items (collection_id, product_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, pid]);
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add it.' }); }
+});
+app.delete('/api/admin/collections/:id/items/:itemId', auth.requirePerm('moderation'), async (req, res) => {
+  const id = parseInt(req.params.id, 10), itemId = parseInt(req.params.itemId, 10);
+  if (!Number.isInteger(id) || !Number.isInteger(itemId)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM editorial_items WHERE id = $1 AND collection_id = $2', [itemId, id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove it.' }); }
+});
 /* ─── Platform promo codes (admin) ─── */
 app.get('/api/admin/promos', auth.requirePerm('revenue'), async (_req, res) => {
   try {

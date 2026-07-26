@@ -7262,6 +7262,16 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .feed-remix-txt{display:flex;flex-direction:column;min-width:0;font-size:12.5px;}
 .feed-remix-txt b{font-size:13.5px;font-weight:700;}
 .feed-remix-txt span{color:var(--t3);}
+/* Editorial shelves in Discover — hand-picked listings or profiles. */
+.ed-shelf{margin:6px 0 14px;}
+.ed-sub{font-size:12.5px;color:var(--t3);margin:-2px 0 8px;}
+.ed-row{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;}
+.ed-row::-webkit-scrollbar{display:none;}
+.ed-card{flex:0 0 auto;width:132px;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;text-align:start;color:var(--t1);}
+.ed-img{width:132px;height:132px;border-radius:14px;object-fit:cover;background:var(--s1);display:block;}
+.ed-name{font-size:13px;font-weight:700;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ed-meta{font-size:12px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ed-ava{width:132px !important;height:132px !important;border-radius:14px !important;}
 /* Seller performance tier — earned from real orders, so it means something. */
 .seller-tier{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:800;border-radius:999px;padding:4px 11px;background:rgba(48,209,88,.13);color:var(--green);}
 .seller-tier.great{background:var(--accent-dim);color:var(--accent);}
@@ -17485,7 +17495,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1600'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1601'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24785,6 +24795,7 @@ function acSearchDiscover() {
     ${discover.trim() ? '<div class="xp-catlabel">Discover</div><div class="xp-grid xp-grid-tiles">' + discover + '</div>' : ''}
     ${more.trim() ? '<div class="xp-catlabel">More to explore</div><div class="xp-grid xp-grid-tiles">' + more + '</div>' : ''}
     ${askAi}
+    <div id="acCollections"></div>
     <div id="acTrending"></div>
     <div id="acNearYou"></div>
   </div>`;
@@ -27194,7 +27205,7 @@ function acDoSearch(q) {
   if (_searchScope === 'companies') { if (!q) acLoadCompanies(''); else _searchT = setTimeout(() => acLoadCompanies(q), 250); return; }
   if (_searchScope === 'services') { if (!q) acLoadServices(''); else _searchT = setTimeout(() => acLoadServices(q), 250); return; } // services show even with no query
   if (!q && _searchScope === 'posts') { el.innerHTML = acPostSearchHelp(); return; }
-  if (!q) { el.innerHTML = '<div id="acRecentProfiles"></div><div id="acRecentSearches" class="xp-recent"></div>' + acSearchDiscover(); acRenderRecentProfiles(); acLoadRecentSearches(); acLoadTrending(); acLoadNearYou(); return; }
+  if (!q) { el.innerHTML = '<div id="acRecentProfiles"></div><div id="acRecentSearches" class="xp-recent"></div>' + acSearchDiscover(); acRenderRecentProfiles(); acLoadRecentSearches(); acLoadCollections(); acLoadTrending(); acLoadNearYou(); return; }
   _searchT = setTimeout(async () => {
     try {
       const d = await API.req('GET', '/api/search?scope=' + _searchScope + '&q=' + encodeURIComponent(q) + (_searchScope === 'people' ? acPeopleFilterQS() : ''));
@@ -36492,6 +36503,26 @@ function acBindGallery() {
     const i = Math.round(g.scrollLeft / g.clientWidth);
     if (dots) [...dots.children].forEach((d, n) => d.classList.toggle('on', n === i));
   }, { passive: true });
+}
+// Editorial shelves: hand-picked listings and profiles, curated in admin. Loaded
+// lazily so Explore paints first, and silently absent when nothing is curated.
+async function acLoadCollections() {
+  const box = document.getElementById('acCollections'); if (!box) return;
+  try {
+    const { collections } = await API.req('GET', '/api/discover/collections');
+    if (!collections || !collections.length) { box.innerHTML = ''; return; }
+    box.innerHTML = collections.map(c => `<div class="ed-shelf">
+      <div class="ac-section-row"><span class="ac-prof-head" style="padding-inline-start:0;">${escHtml(c.title)}</span></div>
+      ${c.subtitle ? `<div class="ed-sub">${escHtml(c.subtitle)}</div>` : ''}
+      <div class="ed-row">${c.items.map(i => i.type === 'product'
+        ? `<button class="ed-card" onclick="acOpenListing(${i.id})">
+             ${i.image ? `<img class="ed-img" src="${i.image}" alt="" loading="lazy" decoding="async"/>` : '<span class="ed-img"></span>'}
+             <span class="ed-name">${escHtml(i.name)}</span><span class="ed-meta">${acMoney(i.priceCents)}</span></button>`
+        : `<button class="ed-card" onclick="acGoProfile(${jsAttr(i.username || '')})">
+             ${acAvatarHtml(i.name, i.avatar, 'user-avatar ed-ava', i.accountType === 'business')}
+             <span class="ed-name">${escHtml(i.name)}${vbadge(acIsVerified(i))}</span><span class="ed-meta">${escHtml(i.headline || '@' + (i.username || ''))}</span></button>`
+      ).join('')}</div></div>`).join('');
+  } catch (e) { box.innerHTML = ''; }
 }
 // Seller performance tier — a badge earned from real orders (ship speed, disputes,
 // reviews), loaded lazily so the listing paints first.
