@@ -7214,6 +7214,17 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .shop-setup-row.done .shop-setup-chk{background:rgba(48,209,88,.18);}
 .shop-setup-chk svg{width:13px;height:13px;fill:none;stroke:var(--green);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;}
 .shop-setup-row .iset-chev{margin-inline-start:auto;}
+/* Live gifts: picker grid + on-stream float/banner. */
+.lg-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.lg-cell{display:flex;flex-direction:column;align-items:center;gap:3px;background:var(--s1);border:none;border-radius:16px;padding:14px 6px 11px;cursor:pointer;font-family:inherit;color:var(--t1);}
+.lg-cell:disabled{opacity:.4;cursor:default;}
+.lg-emoji{font-size:30px;line-height:1;}
+.lg-label{font-size:12.5px;font-weight:700;}
+.lg-price{font-size:11.5px;font-weight:800;color:var(--green);}
+.live-gift-float{position:absolute;bottom:120px;font-size:44px;pointer-events:none;z-index:6;animation:liveGiftUp 2.5s ease-out forwards;}
+@keyframes liveGiftUp{0%{transform:translateY(0) scale(.6);opacity:0;}12%{opacity:1;transform:translateY(-30px) scale(1.15);}100%{transform:translateY(-46vh) scale(1);opacity:0;}}
+.live-gift-banner{position:absolute;bottom:96px;inset-inline-start:14px;max-width:78%;background:rgba(0,0,0,.62);color:#fff;font-size:13px;font-weight:700;border-radius:999px;padding:7px 14px;pointer-events:none;z-index:6;animation:fadeIn .25s ease;}
+body.reduce-motion .live-gift-float{animation:none;opacity:0;}
 /* Playlists / series: cover-card strip on the profile Media tab. */
 .series-row{display:flex;gap:10px;overflow-x:auto;padding:8px 0 14px;scrollbar-width:none;}
 .series-row::-webkit-scrollbar{display:none;}
@@ -12736,6 +12747,9 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <svg class="ic-on" viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
         <svg class="ic-off" viewBox="0 0 24 24"><path d="M16 16v2a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2m4 0h5a2 2 0 0 1 2 2v3l4-3v8"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
       </button>
+      <button class="call-btn viewer-only" id="liveGiftBtn" onclick="liveGiftOpen()" aria-label="Send a gift">
+        <svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+      </button>
       <button class="call-btn viewer-only" id="liveSoundBtn" onclick="liveToggleSound()" aria-label="Sound">
         <svg class="ic-on" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14"/></svg>
         <svg class="ic-off" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
@@ -12744,6 +12758,16 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
       </button>
     </div>
+  </div>
+</div>
+
+<!-- Live gifts: viewer picks a small wallet-funded gift for the host -->
+<div class="overlay hidden" id="liveGiftSheet" onclick="if(event.target===this)closeOverlay('liveGiftSheet')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Send a gift">
+    <button class="sheet-close" onclick="closeOverlay('liveGiftSheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Send a gift</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Show the host some love — everyone on the live sees it.</div>
+    <div id="liveGiftBody"></div>
   </div>
 </div>
 
@@ -17279,7 +17303,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1576'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1577'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -47500,6 +47524,7 @@ function liveOnSignal(d) {
   if (d.kind === 'group-ended') return acOnGroupLiveEnded(d);
   if (!LIVE) return;
   if (d.kind === 'pin' && d.streamId === LIVE.streamId) return liveRenderShop(d.product);
+  if (d.kind === 'gift' && d.streamId === LIVE.streamId) return liveShowGift(d);
   if (typeof d.viewers === 'number') document.getElementById('liveCount').textContent = d.viewers;
   if (LIVE.role === 'broadcaster') {
     const vid = d.from.id;
@@ -47519,6 +47544,46 @@ function liveEnd() {
     else liveSignal(LIVE.broadcaster.id, 'leave', {});
   }
   liveCleanup();
+}
+/* ── Live gifts: a viewer sends the host a small wallet-funded gift ── */
+async function liveGiftOpen() {
+  if (!LIVE || LIVE.role === 'broadcaster') return;
+  showOverlay('liveGiftSheet');
+  const b = document.getElementById('liveGiftBody'); b.innerHTML = acSkelRows(2);
+  try {
+    const { gifts } = await API.req('GET', '/api/live/gifts');
+    const bal = (S.user && S.user.balanceCents) || 0;
+    b.innerHTML = `<div class="lg-grid">${gifts.map(g => `<button class="lg-cell" ${bal < g.cents ? 'disabled' : ''} onclick="liveGiftSend(${jsAttr(g.id)}, this)">
+        <span class="lg-emoji">${g.emoji}</span><span class="lg-label">${escHtml(g.label)}</span><span class="lg-price">${acMoney(g.cents)}</span>
+      </button>`).join('')}</div>
+      <div class="ac-disc-sub" style="margin:10px 2px 0;">Paid from your balance (${acMoney(bal)})${bal < gifts[0].cents ? ' — add money in your Wallet first' : ''}. The host receives the full amount.</div>`;
+  } catch (e) { b.innerHTML = '<div class="ac-empty">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+async function liveGiftSend(giftId, btn) {
+  if (!LIVE) return;
+  if (btn) btn.disabled = true;
+  try {
+    await API.req('POST', '/api/live/gift', { streamId: LIVE.streamId, giftId, clientId: acPayCid() });
+    closeOverlay('liveGiftSheet');
+    acRefreshBalance();
+  } catch (e) { if (btn) btn.disabled = false; showNotif(e.message || 'Could not send the gift.'); }
+}
+// Everyone on the stream sees the gift: a floating emoji + a small banner line.
+function liveShowGift(d) {
+  const card = document.getElementById('liveCard'); if (!card || !d.gift) return;
+  const f = document.createElement('div');
+  f.className = 'live-gift-float';
+  f.textContent = d.gift.emoji;
+  f.style.insetInlineStart = (18 + Math.random() * 55) + '%';
+  card.appendChild(f);
+  setTimeout(() => f.remove(), 2600);
+  const line = document.createElement('div');
+  line.className = 'live-gift-banner';
+  const mine = LIVE && LIVE.role === 'broadcaster';
+  line.textContent = `${d.gift.emoji} ${(d.from && d.from.name) || 'Someone'} sent ${d.gift.label}${mine ? ' · +' + acMoney(d.gift.cents) : ''}`;
+  card.appendChild(line);
+  setTimeout(() => line.remove(), 3800);
+  try { announce(line.textContent); } catch {}
 }
 function liveCleanup() {
   if (LIVE) {

@@ -2551,6 +2551,52 @@ app.post('/api/live/pin', auth.requireAuth, async (req, res) => {
   for (const uid of [s.userId, ...s.viewers]) { if (seen.has(uid)) continue; seen.add(uid); rtPush(uid, 'live', payload); }
   res.json({ ok: true, product });
 });
+// Live gifts (TikTok-LIVE-style): a viewer sends the host a small wallet-funded
+// gift during a broadcast. Balance-only (top up first), velocity-checked, frozen-
+// wallet-aware and double-tap idempotent; recorded as a tip so it lands in the
+// host's wallet + tip summary like any other support money. An SSE 'gift' event
+// fans the animation to the host and every viewer.
+const LIVE_GIFTS = [
+  { id: 'rose', emoji: '🌹', label: 'Rose', cents: 100 },
+  { id: 'clap', emoji: '👏', label: 'Applause', cents: 200 },
+  { id: 'fire', emoji: '🔥', label: 'On fire', cents: 500 },
+  { id: 'star', emoji: '🌟', label: 'Superstar', cents: 1000 },
+  { id: 'diamond', emoji: '💎', label: 'Diamond', cents: 2000 },
+];
+app.get('/api/live/gifts', auth.requireAuth, (_req, res) => res.json({ gifts: LIVE_GIFTS }));
+app.post('/api/live/gift', auth.requireAuth, blockImpersonation, rateLimit(30, 60000, 'live-gift'), async (req, res) => {
+  const s = liveStreams.get(req.body.streamId);
+  if (!s) return res.status(404).json({ error: 'That live has ended.' });
+  const gift = LIVE_GIFTS.find((g) => g.id === req.body.giftId);
+  if (!gift) return res.status(400).json({ error: 'Pick a gift.' });
+  if (s.userId === req.user.id) return res.status(400).json({ error: 'You can’t send gifts on your own live.' });
+  try {
+    const me = await chatIdentity(req.user.id);
+    if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
+    if (await blockedEither(req.user.id, s.userId)) return res.status(403).json({ error: 'You can’t send gifts here.' });
+    const vel = await walletVelocityCheck(req.user.id, gift.cents);
+    if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
+    const cid = req.body.clientId;
+    const idem = await walletClaimIdem(req.user.id, cid, 'livegift');
+    if (!idem.claimed) return res.json(idem.result || { ok: true, sent: true, deduped: true });
+    const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
+    if (bal < gift.cents) { await walletReleaseIdem(req.user.id, cid, 'livegift'); return res.status(400).json({ error: 'Not enough wallet balance — add money first.', insufficientBalance: true }); }
+    const t = await walletTransfer(req.user.id, s.userId, gift.cents, 'Live gift: ' + gift.label, false);
+    if (!t.ok) { await walletReleaseIdem(req.user.id, cid, 'livegift'); return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance.' : 'Could not send the gift.', insufficientBalance: !!t.insufficient }); }
+    await recordTip(req.user.id, s.userId, gift.cents, 'Live gift: ' + gift.emoji + ' ' + gift.label);
+    rtPush(req.user.id, 'wallet', { type: 'update' });
+    rtPush(s.userId, 'wallet', { type: 'update' });
+    const payload = { kind: 'gift', streamId: s.id, gift: { id: gift.id, emoji: gift.emoji, label: gift.label, cents: gift.cents },
+      from: { id: me.id, name: me.name, username: me.username } };
+    // Sender included explicitly — their own animation must fire even if their
+    // watch signal hasn't registered them in the viewers set yet.
+    const seen = new Set();
+    for (const uid of [s.userId, req.user.id, ...s.viewers]) { if (seen.has(uid)) continue; seen.add(uid); rtPush(uid, 'live', payload); }
+    const result = { ok: true, sent: true };
+    await walletStoreIdem(req.user.id, cid, 'livegift', result);
+    res.json(result);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the gift.' }); }
+});
 // List active streams (newest first). Group streams are private to their group,
 // so they're excluded from this global list.
 app.get('/api/live', auth.requireAuth, (_req, res) => {
