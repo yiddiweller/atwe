@@ -22,6 +22,48 @@ screenshots), stay patient and warm, never assume tooling familiarity, and give
 honest trade-offs. This is the same hand-held approach that first got the app
 live on their phone — preserve it. (Full context also lives in `PROJECT-STATUS.md`.)
 
+## 🧱 Feature buildout campaign — resume protocol ("go" / "next 10")
+
+**Trigger — when the owner says "go", "next 10", or otherwise asks to continue
+building features:** this is the standing feature campaign against their own
+checklist. Pick up exactly where the last batch left off. Nothing else is needed
+from them; "go" is the whole instruction.
+
+**Where the state lives (all in the repo — no session memory required):**
+- `features-data.js` — THE source of truth for what is built. Every item has a
+  `phase`: `inv` (live in the app) · `admin_have` (live in the dashboard) ·
+  `roadmap` / `admin_idea` (still to build) · `excluded` (deliberately skipped).
+- The owner sees this as the **Features** tab in the admin dashboard.
+- `git log` — every batch is one commit whose message says what was built, what
+  was found already built, and what bugs were caught.
+- Progress as of batch 33: **405 built · 18 skipped · 96 to build.**
+
+**The working agreement (follow it exactly):**
+1. **Existence-check FIRST, always.** Grep the codebase for each candidate before
+   building it. Roughly one in five checklist items turns out to be already
+   built — nine were found this way across batches 22–33. If it exists, mark it
+   `inv`/`admin_have` and say so; never rebuild it, and never quietly pad the
+   count with it.
+2. Research how the best apps solve it, then build to the **Atwe Design System**
+   above (white = the ONE primary action, blue = identity only, green = success/
+   money, amber = information, red = destructive; full pills; no outlines).
+3. **Ship complete features, not surfaces.** A route with no screen is not done —
+   say so plainly rather than counting it. Fewer finished features beat ten
+   half-wired ones.
+4. Test end-to-end against a real Postgres + a real browser: the happy path, the
+   permission boundaries, and the races. Then a full-app + all-admin-tabs sweep
+   for page errors.
+5. Bump `ATWE_BUILD` + `sw.js` `CACHE` in lockstep, commit, push to the working
+   branch, cherry-pick to `main`, verify the divergence markers, push `main`.
+6. Update `features-data.js` for what genuinely shipped, then report to the owner
+   in **plain, non-technical language**: what it does and why it matters, what
+   was already built, what broke and how it was caught, and what is NOT done.
+   Then wait for the next "go".
+
+**Tone with this owner:** they are non-technical and test on a real iPhone.
+Explain plainly, never oversell, always volunteer the limitation or the bug
+before they find it. Honest small numbers beat flattering big ones.
+
 ## What this is
 
 **Atwe AI** — a single-page web chat application: an "intelligent assistant for
