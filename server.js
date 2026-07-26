@@ -5592,6 +5592,7 @@ app.get('/api/cart-recovery/mute/:businessId', auth.requireAuth, async (req, res
 app.post('/api/atchat/with/:id', auth.requireAuth, blockLimited, rateLimit(40, 60000, 'atchat-send'), async (req, res) => {
   const other = routeId(req.params.id);
   if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user id.' });
+  { const g = await writeGuard(req.user.id, req.body.body); if (g) return res.status(400).json({ error: g, blockedLink: true }); }
   await resolveMediaRefs(req.body); // a forwarded photo arrives as its /api/media URL — resolve to the stored bytes
   const body = (req.body.body || '').trim();
   const imgs = cleanImages(req.body.images);
@@ -7216,6 +7217,7 @@ app.post('/api/atchat/groups/:id/permissions', auth.requireAuth, async (req, res
 app.post('/api/atchat/groups/:id/messages', auth.requireAuth, blockLimited, rateLimit(60, 60000, 'group-send'), async (req, res) => {
   const gid = routeId(req.params.id);
   if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  { const g = await writeGuard(req.user.id, req.body.body); if (g) return res.status(400).json({ error: g, blockedLink: true }); }
   await resolveMediaRefs(req.body); // a forwarded photo arrives as its /api/media URL — resolve to the stored bytes
   const body = (req.body.body || '').trim();
   const imgs = cleanImages(req.body.images);
@@ -8191,6 +8193,103 @@ app.post('/api/atchat/invite/:code/join', auth.requireAuth, async (req, res) => 
 
 /* ─── Group AutoMod (Discord model: blocked words, enforced at send) ─── */
 // Case-insensitive WHOLE-WORD match ("class" never trips a block on "ass").
+/* ─── Link & domain blacklist + new-account probation ───────────────────────
+   Two guards on the same choke point (anything a member writes):
+   • A staff-managed blacklist of scam/phishing hosts, matched across
+     subdomains, blocked platform-wide.
+   • Brand-new accounts (under PROBATION_HOURS) can't post links at all —
+     the single cheapest defence against signup-and-spam, and it lifts
+     itself automatically. */
+const PROBATION_HOURS = parseInt(process.env.PROBATION_HOURS, 10) || 48;
+let _blockedDomains = new Set();
+async function loadBlockedDomains() {
+  try {
+    const { rows } = await db.query('SELECT domain FROM blocked_domains');
+    _blockedDomains = new Set(rows.map((r) => r.domain));
+  } catch { /* keep whatever we had */ }
+}
+// Hosts mentioned in a piece of text, lowercased and www- stripped. Real links
+// (http(s)// or www.) are collected for BOTH guards; bare "host.tld" mentions are
+// collected separately, because a scammer sharing "badhost.co" without a scheme
+// is still sharing it — but a bare mention must never trip new-account probation,
+// which is about LINKS. `linked` is what probation looks at; `all` is what the
+// blacklist looks at.
+function extractHosts(text, opts) {
+  const linkedOnly = !!(opts && opts.linkedOnly);
+  const out = [];
+  const s = String(text || '');
+  const re = /\b((?:https?:\/\/|www\.)[^\s<>"']+)/gi;
+  let m;
+  while ((m = re.exec(s))) {
+    try {
+      const u = new URL(/^https?:\/\//i.test(m[1]) ? m[1] : 'https://' + m[1]);
+      out.push(u.hostname.toLowerCase().replace(/^www\./, ''));
+    } catch { /* not a usable URL */ }
+  }
+  if (linkedOnly) return out;
+  // Bare domains: a conservative host-shaped token with a plausible TLD.
+  const bare = /\b((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,24})\b/gi;
+  while ((m = bare.exec(s))) out.push(m[1].toLowerCase().replace(/^www\./, ''));
+  return out;
+}
+// A blocked host, or null. Subdomains of a blocked domain are blocked too.
+function blockedDomainIn(text) {
+  if (!_blockedDomains.size) return null;
+  for (const h of extractHosts(text)) {
+    if (_blockedDomains.has(h)) return h;
+    const parts = h.split('.');
+    for (let i = 1; i < parts.length - 1; i++) {
+      const parent = parts.slice(i).join('.');
+      if (_blockedDomains.has(parent)) return h;
+    }
+  }
+  return null;
+}
+// One gate for everything a member writes. Returns an error string or null.
+async function writeGuard(userId, text) {
+  if (!text) return null;
+  const bad = blockedDomainIn(text);
+  if (bad) return `Links to ${bad} aren’t allowed on Atwe.`;
+  if (extractHosts(text, { linkedOnly: true }).length) {
+    try {
+      const u = (await db.query('SELECT created_at FROM users WHERE id = $1', [userId])).rows[0];
+      if (u && (Date.now() - new Date(u.created_at).getTime()) < PROBATION_HOURS * 3600000) {
+        return `New accounts can’t post links for the first ${PROBATION_HOURS} hours. You can post everything else in the meantime.`;
+      }
+    } catch { /* fail open — never block a good member over a lookup error */ }
+  }
+  return null;
+}
+app.get('/api/admin/blocked-domains', auth.requirePerm('moderation'), async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT b.domain, b.note, b.created_at, u.name AS by_name FROM blocked_domains b
+         LEFT JOIN users u ON u.id = b.added_by ORDER BY b.created_at DESC LIMIT 500`);
+    res.json({ domains: rows.map((r) => ({ domain: r.domain, note: r.note || null, createdAt: r.created_at, by: r.by_name || null })), probationHours: PROBATION_HOURS });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the blocklist.' }); }
+});
+app.post('/api/admin/blocked-domains', auth.requirePerm('moderation'), async (req, res) => {
+  const raw = (req.body.domain || '').toString().trim().toLowerCase();
+  const domain = raw.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].slice(0, 190);
+  const note = (req.body.note || '').toString().trim().slice(0, 200) || null;
+  if (!domain || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) return res.status(400).json({ error: 'Enter a domain like scam-site.com.' });
+  try {
+    await db.query('INSERT INTO blocked_domains (domain, note, added_by) VALUES ($1,$2,$3) ON CONFLICT (domain) DO UPDATE SET note = EXCLUDED.note', [domain, note, req.user.id]);
+    await loadBlockedDomains();
+    adminAudit(req, 'domain.block', 'domain', null, { domain, note });
+    res.status(201).json({ ok: true, domain });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not block that domain.' }); }
+});
+app.delete('/api/admin/blocked-domains/:domain', auth.requirePerm('moderation'), async (req, res) => {
+  const domain = String(req.params.domain || '').toLowerCase().slice(0, 190);
+  try {
+    const r = await db.query('DELETE FROM blocked_domains WHERE domain = $1', [domain]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not on the list.' });
+    await loadBlockedDomains();
+    adminAudit(req, 'domain.unblock', 'domain', null, { domain });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove it.' }); }
+});
 function automodHit(text, words) {
   if (!text || !Array.isArray(words) || !words.length) return null;
   const low = String(text).toLowerCase();
@@ -11342,6 +11441,7 @@ app.get('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
 
 // Create a post — or a reply when `parentId` is given.
 app.post('/api/social/posts', auth.requireAuth, blockLimited, rateLimit(40, 60000, 'post'), requireFeature('posting'), async (req, res) => {
+  { const g = await writeGuard(req.user.id, req.body.body); if (g) return res.status(400).json({ error: g, blockedLink: true }); }
   await resolveMediaRefs(req.body); // a shared/forwarded photo may arrive as its /api/media URL
   const body = (req.body.body || '').trim();
   // Multiple images (carousel) or a single one (back-compat). `image` stays the
@@ -27535,5 +27635,6 @@ db.init()
   .then(() => { if (db.isConfigured()) return db.getSetting(FLAGS_KEY).then((v) => { _featureFlags = normalizeFeatureFlags(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(MODLISTS_KEY).then((v) => applyModLists(v)).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(CONTROLS_KEY).then((v) => { _featureControls = normalizeControls(v); }).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return loadBlockedDomains().catch(() => {}); })
   .then(() => { if (db.isConfigured()) console.log('🗄️   Schema + settings ready.'); })
   .catch((err) => console.error('Post-init setup failed:', err.message));
