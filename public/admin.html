@@ -1098,6 +1098,7 @@
       <button class="tab" data-v="ops" onclick="switchTab('ops')">Operations</button>
       <button class="tab" data-v="site" onclick="switchTab('site')">Site</button>
       <button class="tab" data-v="storage" onclick="switchTab('storage')">Storage</button>
+      <button class="tab" data-v="webinars" onclick="switchTab('webinars')">Webinars</button>
       <button class="tab" data-v="cluster" onclick="switchTab('cluster')">Servers</button>
     </nav>
     <div class="side-foot">
@@ -1552,7 +1553,7 @@ const TAB_PERM = {
   approvals: 'super', copyright: 'moderation', impersonation: 'moderation',
   alerts: 'super', aistudio: 'super',
   fraud: 'revenue', modqa: 'moderation', broadcasts: 'super',
-  storage: 'super', cluster: 'super',
+  storage: 'super', cluster: 'super', webinars: 'moderation',
   developers: 'super', apilog: 'super', incidents: 'super',
   chargebacks: 'refunds', reports2: 'growth', churn: 'growth',
   campaigns: 'super', experiments: 'super', wording: 'super',
@@ -1643,7 +1644,7 @@ const NAV_TITLES = {
   campaigns:'Campaigns', experiments:'Experiments', wording:'Wording',
   places:'Countries', emailbrand:'Email design',
   revshare:'Creator share', authenticate:'Item authentication',
-  storage:'Media storage', cluster:'Servers',
+  storage:'Media storage', cluster:'Servers', webinars:'Webinars',
 };
 // Mobile: slide the sidebar in/out.
 function toggleNav(open){
@@ -1661,6 +1662,7 @@ function renderView(){
   const statRow = document.getElementById('stats'); if (statRow) statRow.style.display = (VIEW === 'features') ? 'none' : '';
   const inner = document.querySelector('.main-inner'); if (inner) inner.scrollTop = 0;
   window.scrollTo(0, 0);
+  if (VIEW === 'webinars') return renderWebinarsAdmin();
   if (VIEW === 'storage') return renderStorageView();
   if (VIEW === 'cluster') return renderClusterView();
   if (VIEW === 'revshare') renderRevShareView();
@@ -7727,6 +7729,39 @@ async function renderClusterView(){
     ${d.clusterMode ? '' : `<div class="card"><div class="card-h">When to switch it on</div>
       <div class="muted">Only when you actually run more than one copy of Atwe at once. Single-server mode is faster,
       so leave it alone until you need to. Then set <code>CLUSTER_MODE=true</code> on every copy and restart them.</div></div>`}`;
+}
+
+
+/* ─── Webinars, from the outside ──────────────────────────────────────────
+   Scheduled broadcasts with people signed up in advance, which means somebody
+   has made a promise to an audience. Worth being able to see, and to cancel if
+   it turns out to be something it should not be. */
+async function renderWebinarsAdmin(){
+  const c = document.getElementById('content');
+  document.getElementById('stats').innerHTML = '';
+  c.innerHTML = '<div class="muted">Loading…</div>';
+  let d = null;
+  try { d = await api('/api/admin/webinars'); } catch(e){ c.innerHTML = '<div class="muted">Could not load.</div>'; return; }
+  const rows = d.webinars || [];
+  c.innerHTML = `
+    <div class="stat-grid">
+      <div class="stat"><b>${d.scheduled||0}</b><span>scheduled</span></div>
+      <div class="stat"><b>${d.live||0}</b><span>live now</span></div>
+      <div class="stat"><b>${d.signups||0}</b><span>people signed up</span></div>
+      <div class="stat"><b>${jstr(d.paidCents ? '$'+(d.paidCents/100).toFixed(2) : '$0.00')}</b><span>taken in tickets</span></div>
+    </div>
+    <div class="card"><div class="card-h">Coming up and recent</div>
+    ${rows.length ? rows.map(w => `<div class="ad-row">
+      <div><b>${jstr(w.title)}</b>
+        <div class="muted">@${jstr(w.hostUsername)} · ${jstr(new Date(w.startsAt).toLocaleString())} · ${w.signups} signed up${w.priceCents ? ' · $'+(w.priceCents/100).toFixed(2) : ' · free'}</div></div>
+      <span class="ad-badge ${w.status==='live'?'ok':w.status==='cancelled'?'bad':''}">${jstr(w.status)}</span>
+      ${w.status==='scheduled'||w.status==='live' ? `<button class="btn danger" onclick="cancelWebinar(${w.id})">Cancel it</button>` : ''}
+    </div>`).join('') : '<div class="muted">Nothing scheduled.</div>'}</div>`;
+}
+async function cancelWebinar(id){
+  if (!confirm('Cancel this webinar? Everyone who signed up will be told.')) return;
+  try { await api('/api/admin/webinars/'+id+'/cancel', 'POST', {}); renderWebinarsAdmin(); }
+  catch(e){ alert('Could not cancel it.'); }
 }
 
 </script>

@@ -11087,6 +11087,56 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
 .call-recnotice{position:absolute;top:calc(env(safe-area-inset-top,0px) + 14px);left:14px;right:14px;z-index:8;
   background:var(--red);color:#fff;border-radius:14px;padding:8px 13px;font-size:13px;font-weight:700;text-align:center;}
 #callRecBtn.on{background:var(--red);color:#fff;}
+
+/* ═══ Batch 40 ═══ */
+.wf-row{display:flex;gap:10px;margin-top:8px;}
+.wf-row label{flex:1;font-size:12.5px;color:var(--t3);display:block;}
+.wf-row .jp-in{margin-top:4px;}
+.web-card{background:var(--s1);border-radius:18px;padding:14px;margin-bottom:10px;cursor:pointer;}
+.web-when{font-size:12.5px;color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
+.web-title{font-size:16px;font-weight:700;margin:4px 0 3px;}
+.web-meta{font-size:12.5px;color:var(--t3);}
+.web-q{background:var(--s1);border-radius:14px;padding:11px 13px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start;}
+.web-q-body{flex:1;min-width:0;font-size:14.5px;line-height:1.5;}
+.web-q-who{font-size:12px;color:var(--t3);margin-top:3px;}
+.web-q.done{opacity:.5;}
+.web-vote{flex:none;border:none;background:var(--s2);color:var(--t2);border-radius:12px;padding:6px 10px;cursor:pointer;text-align:center;min-width:44px;}
+.web-vote.on{background:var(--accent);color:#fff;}
+.web-vote b{display:block;font-size:14px;font-weight:800;}
+.web-vote span{font-size:10px;text-transform:uppercase;letter-spacing:.05em;}
+.camp-row{background:var(--s1);border-radius:16px;padding:13px 14px;margin-bottom:9px;}
+.camp-stats{display:flex;gap:14px;margin-top:8px;font-size:12.5px;color:var(--t3);}
+.camp-stats b{color:var(--t1);}
+.cam-looks{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;}
+.cam-look{flex:none;width:64px;text-align:center;border:none;background:none;cursor:pointer;padding:0;}
+.cam-look i{display:block;width:60px;height:60px;border-radius:16px;background:linear-gradient(140deg,#6b7280,#d1d5db 55%,#9ca3af);}
+.cam-look span{display:block;font-size:11.5px;color:var(--t3);margin-top:5px;}
+.cam-look.on span{color:var(--t1);font-weight:700;}
+.cam-look.on i{outline:2px solid var(--accent);outline-offset:2px;}
+.cam-tpl{background:var(--s1);border-radius:14px;padding:12px 13px;margin-bottom:8px;cursor:pointer;}
+.cam-tpl b{font-size:14.5px;}
+.cam-tpl ol{margin:6px 0 0;padding-left:18px;font-size:13px;color:var(--t3);line-height:1.6;}
+.cam-tpl.on{outline:2px solid var(--accent);}
+.pf-styles{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+.pf-style{padding:7px 13px;border-radius:999px;border:none;background:var(--s1);color:var(--t2);font-size:13px;cursor:pointer;}
+.pf-style.on{background:var(--accent);color:#fff;}
+.pf-pair{display:flex;gap:10px;margin-top:12px;}
+.pf-pair figure{flex:1;margin:0;}
+.pf-pair img{width:100%;border-radius:14px;display:block;}
+.pf-pair figcaption{font-size:11.5px;color:var(--t3);text-align:center;margin-top:5px;}
+.del-run{background:var(--s1);border-radius:16px;padding:13px 14px;margin-bottom:9px;}
+.del-steps{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;}
+.del-steps button{flex:1;min-width:76px;padding:8px;border-radius:999px;border:none;background:var(--s2);color:var(--t2);font-size:12.5px;cursor:pointer;}
+.del-steps button.on{background:var(--green);color:var(--green-ink);font-weight:700;}
+.del-track{background:var(--s1);border-radius:16px;padding:13px 14px;margin:10px 0;}
+.del-track b{display:block;font-size:14.5px;}
+.del-track span{font-size:12.5px;color:var(--t3);}
+.cap-bar{position:absolute;left:14px;right:14px;bottom:120px;z-index:7;text-align:center;pointer-events:none;}
+.cap-line{display:inline-block;background:rgba(0,0,0,.72);color:#fff;border-radius:12px;padding:7px 13px;font-size:15px;line-height:1.4;max-width:100%;}
+.cap-line.live{opacity:.75;}
+#callCapBtn.on{background:var(--accent);color:#fff;}
+.brk-room{background:var(--s1);border-radius:14px;padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;gap:10px;}
+.brk-room b{flex:1;font-size:14.5px;}
 </style>
 </head>
 <body style="background:#000">
@@ -13300,6 +13350,8 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <span class="call-min-hint" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></span>
     <video id="callRemoteVid" class="call-remote" autoplay playsinline></video>
     <!-- Recording is never quiet: your own badge, and the other side's warning. -->
+    <div class="cap-bar hidden" id="callCaptions" role="status" aria-live="polite"></div>
+    <div class="hidden" id="callBreakouts" style="position:absolute;left:14px;right:14px;top:64px;z-index:7;"></div>
     <div class="call-recbadge hidden" id="callRecBadge">● Recording</div>
     <div class="call-recnotice hidden" id="callRecNotice" role="status"></div>
     <div class="call-info" id="callInfo">
@@ -13322,6 +13374,12 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       </button>
       <button class="call-btn" id="callScreenBtn" onclick="callToggleScreen()" aria-label="Share screen" style="display:none;">
         <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><polyline points="9 8.5 12 5.5 15 8.5"/><line x1="12" y1="5.5" x2="12" y2="12"/></svg>
+      </button>
+      <button class="call-btn" id="callCapBtn" onclick="acCaptionsToggle()" aria-label="Live captions">
+        <svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M9 10.5a2.2 2.2 0 1 0 0 3M16 10.5a2.2 2.2 0 1 0 0 3"/></svg>
+      </button>
+      <button class="call-btn" id="callBrkBtn" onclick="acOpenBreakouts()" aria-label="Breakout rooms">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>
       </button>
       <button class="call-btn" id="callRecBtn" onclick="acCallRecToggle()" aria-label="Record this call">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.2" fill="currentColor" stroke="none"/></svg>
@@ -14486,6 +14544,99 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <div id="applExportBody"></div>
   </div>
 </div>
+<!-- ═══ BATCH 40 · webinars · shop campaigns · delivery · camera · photos ═══ -->
+<div class="overlay hidden" id="webinarsView" onclick="if(event.target===this)closeOverlay('webinarsView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Webinars">
+    <button class="sheet-close" onclick="closeOverlay('webinarsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Webinars &amp; town halls</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Announced in advance, people sign up, and there is a proper question queue.</div>
+    <div class="ac-jv-row" id="webTabs"></div>
+    <div id="webBody"></div>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="acWebinarFormOpen()">Schedule one</button>
+  </div>
+</div>
+<div class="overlay hidden" id="webinarForm" onclick="if(event.target===this)closeOverlay('webinarForm')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Schedule a webinar">
+    <button class="sheet-close" onclick="closeOverlay('webinarForm')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Schedule a webinar</div>
+    <input class="jp-in" id="wfTitle" maxlength="140" placeholder="What is it about?" aria-label="Title"/>
+    <textarea class="jp-in" id="wfDesc" rows="3" maxlength="4000" placeholder="What will you cover?" aria-label="Description" style="margin-top:8px;"></textarea>
+    <div class="wf-row">
+      <label>Starts<input class="jp-in" type="datetime-local" id="wfStart" aria-label="Start time"/></label>
+      <label>Minutes<input class="jp-in" type="number" id="wfMins" value="60" min="5" max="480" aria-label="Length in minutes"/></label>
+    </div>
+    <div class="wf-row">
+      <label>Seats (blank = unlimited)<input class="jp-in" type="number" id="wfCap" min="1" placeholder="Unlimited" aria-label="Seats"/></label>
+      <label>Price<input class="jp-in" type="number" id="wfPrice" min="0" step="0.01" value="0" aria-label="Price"/></label>
+    </div>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="acSaveWebinar()">Schedule it</button>
+  </div>
+</div>
+<div class="overlay hidden" id="webinarView" onclick="if(event.target===this)closeOverlay('webinarView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Webinar">
+    <button class="sheet-close" onclick="closeOverlay('webinarView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="webinarBody"></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="shopCampaignsView" onclick="if(event.target===this)closeOverlay('shopCampaignsView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Message your customers">
+    <button class="sheet-close" onclick="closeOverlay('shopCampaignsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Message your customers</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">One a day, only to people who have actually dealt with you, and always with a way out. That is what keeps them opening it.</div>
+    <div id="shopCampBody"></div>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="acCampaignFormOpen()">Write one</button>
+  </div>
+</div>
+<div class="overlay hidden" id="campaignForm" onclick="if(event.target===this)closeOverlay('campaignForm')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Write a message">
+    <button class="sheet-close" onclick="closeOverlay('campaignForm')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Write a message</div>
+    <input class="jp-in" id="cfName" maxlength="80" placeholder="Name it (only you see this)" aria-label="Campaign name"/>
+    <div class="st-h">Who gets it</div>
+    <select class="jp-in iset-select" id="cfAudience" onchange="acCampAudience()" aria-label="Audience"></select>
+    <div class="ac-disc-sub" id="cfCount" style="margin:8px 0 0;"></div>
+    <div class="st-h">The message</div>
+    <input class="jp-in" id="cfSubject" maxlength="140" placeholder="Subject line (optional)" aria-label="Subject"/>
+    <textarea class="jp-in" id="cfBody" rows="4" maxlength="1200" placeholder="Keep it short and say what is actually new." aria-label="Message" style="margin-top:8px;"></textarea>
+    <div class="st-h">Where it goes</div>
+    <label class="dev-check"><input type="checkbox" id="cfBeam" checked/><span>Beam<small>Where people actually are</small></span></label>
+    <label class="dev-check"><input type="checkbox" id="cfPush"/><span>A push notification<small>Only reaches people who installed the app</small></span></label>
+    <label class="dev-check"><input type="checkbox" id="cfEmail"/><span>Email<small>Only where you have an address</small></span></label>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="acSaveCampaign()">Save it as a draft</button>
+  </div>
+</div>
+
+<div class="overlay hidden" id="deliveryView" onclick="if(event.target===this)closeOverlay('deliveryView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Local delivery">
+    <button class="sheet-close" onclick="closeOverlay('deliveryView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Local delivery</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Taking it round yourself, to people close enough. Not a courier service — your own runs, tracked properly.</div>
+    <div id="deliveryBody"></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="cameraView" onclick="if(event.target===this)closeOverlay('cameraView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Camera looks">
+    <button class="sheet-close" onclick="closeOverlay('cameraView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Camera</div>
+    <div class="st-h">Look</div>
+    <div class="cam-looks" id="camLooks"></div>
+    <div class="st-h">Give me a shape to follow</div>
+    <div class="ac-disc-sub" style="margin:0 0 10px;">A few timed prompts, so you are not staring at a blank camera wondering what to say.</div>
+    <div id="camTemplates"></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="photoFixView" onclick="if(event.target===this)closeOverlay('photoFixView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Tidy up a photo">
+    <button class="sheet-close" onclick="closeOverlay('photoFixView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Tidy up this photo</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Atwe AI looks at what you photographed and draws it again properly. Check it kept the right thing before you use it.</div>
+    <div id="photoFixBody"></div>
+  </div>
+</div>
+
 <div class="overlay hidden" id="passkeysView" onclick="if(event.target===this)closeOverlay('passkeysView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Passkeys">
     <button class="sheet-close" onclick="closeOverlay('passkeysView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -15286,6 +15437,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">Guests pick dates and request to book. You confirm, then they pay from their Atwe balance. Add amenities &amp; details below (Wi-Fi, bedrooms…).</div>
     </div>
     <textarea class="jp-in" id="prodDesc" maxlength="1000" placeholder="Description (optional)" style="margin-top:8px;min-height:54px;"></textarea>
+    <button class="ac-ai-mini hidden" id="prodPhotoFix" type="button" onclick="acProdTidyPhoto()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg>Tidy up the photo</button>
     <button class="ac-ai-mini" id="prodDescAi" type="button" onclick="acProdDescAi()"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg>Write with Atwe AI</button>
     <input class="jp-in" id="prodStock" type="number" min="0" max="1000000" step="1" placeholder="Stock / quantity (leave blank = unlimited)" style="margin-top:8px;"/>
     <!-- Digital auto-delivery (digital kind only) -->
@@ -18249,7 +18401,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1621'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1622'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24392,7 +24544,7 @@ function acJumpToPinned(id) {
 /* ─── Starred messages (aggregate view across every DM + group) ─── */
 function _starredPreview(m) {
   if (m.body) return escHtml(m.body);
-  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'quote' ? '📋 Quote' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'product' ? '🛍️ Product' : m.meta.t === 'deal' ? '🏷️ Deal' : m.meta.t === 'callschedule' ? '📅 Call invite' : m.meta.t === 'split' ? '🧮 Split request' : m.meta.t === 'pool' ? '🫙 Money pool' : m.meta.t === 'offer' ? '🏷️ Offer' : m.meta.t === 'storyreply' ? (m.meta.emoji ? '↩ Daily reaction' : '↩ Daily reply') : m.meta.t === 'gift' ? '🎁 Gift card' : m.meta.t === 'digital' ? '⚡ Download' : m.meta.t === 'money' ? '💸 Money' : m.meta.t === 'moneyrequest' ? '💰 Money request' : m.meta.t === 'cartrecovery' ? '🛍️ Your cart is waiting' : 'Message';
+  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'quote' ? '📋 Quote' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'product' ? '🛍️ Product' : m.meta.t === 'deal' ? '🏷️ Deal' : m.meta.t === 'callschedule' ? '📅 Call invite' : m.meta.t === 'split' ? '🧮 Split request' : m.meta.t === 'pool' ? '🫙 Money pool' : m.meta.t === 'offer' ? '🏷️ Offer' : m.meta.t === 'storyreply' ? (m.meta.emoji ? '↩ Daily reaction' : '↩ Daily reply') : m.meta.t === 'gift' ? '🎁 Gift card' : m.meta.t === 'digital' ? '⚡ Download' : m.meta.t === 'money' ? '💸 Money' : m.meta.t === 'moneyrequest' ? '💰 Money request' : m.meta.t === 'cartrecovery' ? '🛍️ Your cart is waiting' : m.meta.t === 'shopcampaign' ? '📣 News from a shop' : 'Message';
   if (m.image || m.mediaKind === 'image') return '📷 Photo';
   if (m.mediaKind === 'video') return '🎬 Video';
   if (m.mediaKind === 'audio') return '🎤 Voice message';
@@ -26640,6 +26792,7 @@ function acSearchDiscover() {
     T("acOpenDirectory()", 'Businesses', I.businesses),
     T("acOpenEvents()", 'Events', I.events),
     T("acOpenCourses('discover')", 'Courses', I.courses),
+    T("acOpenWebinars()", 'Webinars', I.events),
     T("appTab('home');acSetFeed('circles')", 'Circles', I.circles), // same Circles hub as Home
     T("acOpenDiscoverShorts()", 'Shorts', I.shorts),
   ].join('');
@@ -29535,7 +29688,7 @@ function notifRow(n, i) {
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
-  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', event_reminder: 'is hosting an event starting soon', event_comment: 'commented on your event', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', appt_rescheduled: 'proposed a new appointment time', appt_reminder: 'has an appointment with you soon', call_reminder: 'has a call with you soon', stock_low: 'is running low — only a few left', stock_out: 'has sold out', event_spot: 'a spot opened up — you’re in!', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', invoice_reminder: 'sent a reminder about an unpaid invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', strike: 'issued a warning on your account', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', referral_milestone: 'you hit a referral milestone — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', listing_hidden: 'a listing of yours was hidden — check your messages', waitlist_invite: 'you’re off the waiting list — it’s ready for you', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', auction_outbid: 'outbid you on an auction. Bid again to stay in it', auction_won: 'you won the auction. Pay to claim it', auction_ended: 'won your auction. They’re paying now', group_join_paid: 'paid your group’s join fee. They’re in', crm_followup: 'is due a follow-up — you set the reminder', rinv_paused: 'a recurring invoice was paused — check the schedule', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', split_reminder: 'sent a reminder about your share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', story_answer: 'responded to your question', story_mention: 'mentioned you in their Daily', remix: 'remixed your video', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_adjustment: 'your wallet balance was adjusted by our team', cashout_released: 'your cash-out was approved and is on its way to your bank', cashout_returned: 'your cash-out wasn’t approved — the money is back in your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item', lead_active: 'posted something new — they\u2019re on one of your lead lists', lead_hiring: 'is hiring — they\u2019re on one of your lead lists', inbox_assigned: 'gave you a conversation to handle', dmca_removed: 'removed something of yours after a copyright claim. Tap to contest it', dmca_reinstated: 'put your content back after reviewing your counter-notice', imp_upheld: 'agreed — the account impersonating you has been actioned', imp_rejected: 'reviewed your impersonation report' };
+  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', event_reminder: 'is hosting an event starting soon', event_comment: 'commented on your event', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', appt_rescheduled: 'proposed a new appointment time', appt_reminder: 'has an appointment with you soon', call_reminder: 'has a call with you soon', stock_low: 'is running low — only a few left', stock_out: 'has sold out', event_spot: 'a spot opened up — you’re in!', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', invoice_reminder: 'sent a reminder about an unpaid invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', strike: 'issued a warning on your account', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', referral_milestone: 'you hit a referral milestone — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', listing_hidden: 'a listing of yours was hidden — check your messages', waitlist_invite: 'you’re off the waiting list — it’s ready for you', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', auction_outbid: 'outbid you on an auction. Bid again to stay in it', auction_won: 'you won the auction. Pay to claim it', auction_ended: 'won your auction. They’re paying now', group_join_paid: 'paid your group’s join fee. They’re in', crm_followup: 'is due a follow-up — you set the reminder', rinv_paused: 'a recurring invoice was paused — check the schedule', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', split_reminder: 'sent a reminder about your share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', story_answer: 'responded to your question', story_mention: 'mentioned you in their Daily', remix: 'remixed your video', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_adjustment: 'your wallet balance was adjusted by our team', cashout_released: 'your cash-out was approved and is on its way to your bank', cashout_returned: 'your cash-out wasn’t approved — the money is back in your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item', lead_active: 'posted something new — they\u2019re on one of your lead lists', lead_hiring: 'is hiring — they\u2019re on one of your lead lists', inbox_assigned: 'gave you a conversation to handle', dmca_removed: 'removed something of yours after a copyright claim. Tap to contest it', dmca_reinstated: 'put your content back after reviewing your counter-notice', imp_upheld: 'agreed — the account impersonating you has been actioned', imp_rejected: 'reviewed your impersonation report', webinar_signup: 'signed up for your webinar', webinar_live: 'is live now — the webinar you signed up for has started', webinar_updated: 'changed a webinar you signed up for', webinar_cancelled: 'cancelled a webinar you signed up for', delivery_on_way: 'is on the way with your order' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -31473,6 +31626,8 @@ function acGoProfileHub() {
     html += item('My listings', _ME_IC.sell, "acOpenSell()", null);
     if (acIsBiz(u)) html += item('Manage store', _ME_IC.store, "acOpenStoreManage()", null);
     html += item('The till', _ME_IC.till, "acOpenTill()", null);
+    html += item('Message your customers', _ME_IC.bcast, "acOpenShopCampaigns()", null);
+    html += item('Local delivery', _ME_IC.till, "acOpenDelivery()", null);
     html += item('Sales & analytics', _ME_IC.sales, "acOpenShopAnalytics()", null);
     html += item('Export your customers', _ME_IC.co, "acExportCustomers()", null);
     if (acIsBiz(u)) html += item('Business analytics', _ME_IC.analytics, "acOpenBizAnalytics()", null);
@@ -31543,6 +31698,8 @@ function acGoProfileHub() {
     html += item('Events', _ME_IC.events, "acOpenEvents()", null);
     html += '</div>';
     html += '<div class="me-catlabel">App</div><div class="me-group">';
+    html += item('Webinars', _ME_IC.bcast, "acOpenWebinars()", null);
+    html += item('Camera looks', _ME_IC.picture, "acOpenCamera()", null);
     html += item('Talk to Atwe AI', _ME_IC.mic, "acOpenVoice()", null);
     html += item('Make a picture', _ME_IC.picture, "acOpenAiImage()", null);
     html += item('Call recordings', _ME_IC.rec, "acOpenRecordings()", null);
@@ -39964,6 +40121,18 @@ function acRenderProdThumbs() {
   const t = document.getElementById('prodThumbs'); if (!t) return;
   t.innerHTML = imgs.map((u, i) => `<div class="prod-thumb" style="background-image:url('${u}')"><button onclick="acRemoveProdImg(${i})" aria-label="Remove">×</button></div>`).join('')
     + (imgs.length < 4 ? `<div class="prod-thumb add" onclick="document.getElementById('prodImgFile').click()">＋</div>` : '');
+  const fix = document.getElementById('prodPhotoFix');
+  if (fix) fix.classList.toggle('hidden', !imgs.length);
+}
+// Hand the first photo to Atwe AI, and put whatever comes back in its place.
+function acProdTidyPhoto() {
+  const imgs = AC._prodImgs || [];
+  if (!imgs.length) { showNotif('Add a photo first.'); return; }
+  acOpenPhotoFix(imgs[0], (tidied) => {
+    AC._prodImgs[0] = tidied; AC._prodImg = tidied;
+    acRenderProdThumbs();
+    showNotif('Swapped in. The original is gone from the form — re-pick it if you preferred it.');
+  });
 }
 function acRemoveProdImg(i) { AC._prodImgs = (AC._prodImgs || []).filter((_, n) => n !== i); AC._prodImg = (AC._prodImgs[0]) || undefined; acRenderProdThumbs(); }
 /* ── Product video (one per listing) ── */
@@ -40201,6 +40370,7 @@ async function acOpenOrder(id) {
         } else if (o.shippedAt && !o.deliveredAt) action += `<button class="ac-pill-btn" style="width:100%;" onclick="acDeliverOrder()">Mark delivered</button>`;
         if (o.labelUrl) action += `<a class="ac-pill-btn" style="width:100%;margin-top:8px;display:block;box-sizing:border-box;text-align:center;" href="${escHtml(o.labelUrl)}" target="_blank" rel="noopener">📄 Shipping label${o.labelCostCents ? ' · $' + (o.labelCostCents / 100).toFixed(2) : ''}</a>`;
         if (o.shipTo) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acPackingSlip()">🖨 Packing slip</button>`;
+        if (o.localDelivery) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acOpenDelivery()">🚗 Local delivery runs</button>`;
       } else {
         if (o.shippedAt && !o.deliveredAt) action += `<button class="ac-pill-btn accent" style="width:100%;" onclick="acDeliverOrder()">I’ve received it</button>`;
       }
@@ -41527,6 +41697,7 @@ async function acDeleteAddress(id) {
 // ctx: { mode:'buy'|'cart', productId|sellerId, qty, name, subtotalCents, shippingCents, needsShipping }
 async function acOpenCheckout(ctx) {
   AC._co = ctx; AC._coAddrId = null; AC._coCoupon = null; AC._coDiscount = 0; AC._coQuote = null; AC._coRateId = null; AC._coPickup = false; AC._coNote = ''; AC._coGift = false; AC._coGiftNote = '';
+  AC._coLocal = null; AC._coLocalOn = false;
   AC._coGiftCards = []; AC._coSource = null;
   showOverlay('checkoutView');
   const b = document.getElementById('checkoutBody'); b.innerHTML = acSkelRows(3);
@@ -41536,6 +41707,7 @@ async function acOpenCheckout(ctx) {
   if (ctx.mode !== 'bundle') { try { const { cards } = await API.req('GET', '/api/gift-cards'); AC._coGiftCards = (cards || []).filter(c => c.ownedByMe && !c.depleted && !c.frozen && c.balanceCents > 0); } catch (e) {} }
   acRenderCheckout();
   if (acQuoteActive()) acRefreshQuote();
+  if (ctx.needsShipping && ctx.sellerId) acCheckLocalDelivery();
   // A deal card's "Shop now" stashes its code — auto-apply it at checkout.
   if (AC._pendingPromo) { const code = AC._pendingPromo; AC._pendingPromo = null; setTimeout(() => { const inp = document.getElementById('coPromoIn'); if (inp) { inp.value = code; acApplyCoupon(); } }, 250); }
   // A coupon saved from a share link auto-applies for THAT seller (and quietly
@@ -41565,7 +41737,14 @@ async function acRefreshQuote() {
   acRenderCheckout();
 }
 function acPickRate(id) { AC._coRateId = id; acRefreshQuote(); }
-function acPickAddress(id) { AC._coAddrId = id; const sub = document.getElementById('subscribeSheet'); if (sub && !sub.classList.contains('hidden')) acRenderSubscribe(); else if (acQuoteActive()) acRefreshQuote(); else acRenderCheckout(); }
+function acPickAddress(id) {
+  AC._coAddrId = id;
+  const sub = document.getElementById('subscribeSheet');
+  if (sub && !sub.classList.contains('hidden')) { acRenderSubscribe(); return; }
+  // Whether the shop will drive to it depends on WHICH address, so re-ask.
+  acCheckLocalDelivery();
+  if (acQuoteActive()) acRefreshQuote();
+}
 function acRenderCheckout() {
   const b = document.getElementById('checkoutBody'); const c = AC._co; if (!b || !c) return;
   const q = (acQuoteActive() && AC._coQuote) ? AC._coQuote : null;
@@ -41577,9 +41756,18 @@ function acRenderCheckout() {
   const taxCents = pickupMode ? 0 : (q ? (q.taxCents || 0) : 0);
   const shippingCents = pickupMode ? 0 : (q ? q.shippingCents : (c.needsShipping ? c.shippingCents : 0));
   const total = pickupMode ? Math.max(0, subtotalCents - discount) : (q ? q.totalCents : (Math.max(0, c.subtotalCents - discount) + (c.needsShipping ? c.shippingCents : 0)));
-  // Fulfillment toggle (only when the listing offers pickup AND it needs shipping).
-  const fulfill = (c.pickupAvail && c.needsShipping)
-    ? `<div class="co-sec-h">Fulfillment</div><div class="co-rates"><button class="co-rate${!pickupMode ? ' on' : ''}" onclick="acSetFulfillment('ship')"><span class="co-rate-main"><span class="co-rate-name">Ship to me</span></span></button><button class="co-rate${pickupMode ? ' on' : ''}" onclick="acSetFulfillment('pickup')"><span class="co-rate-main"><span class="co-rate-name">Local pickup</span>${c.pickupLocation ? `<span class="co-rate-days">${escHtml(c.pickupLocation)}</span>` : ''}</span><span class="co-rate-price">Free</span></button></div>` : '';
+  // Fulfillment toggle. Pickup shows when the listing offers it; local delivery
+  // shows only once the shop has confirmed it will drive to THIS address.
+  const ld = AC._coLocal;
+  const localMode = !!AC._coLocalOn;
+  const fulfillOpts = [];
+  if (c.needsShipping && (c.pickupAvail || (ld && ld.available))) {
+    fulfillOpts.push(`<button class="co-rate${!pickupMode && !localMode ? ' on' : ''}" onclick="acSetFulfillment('ship')"><span class="co-rate-main"><span class="co-rate-name">Post it to me</span></span></button>`);
+    if (ld && ld.available) fulfillOpts.push(`<button class="co-rate${localMode ? ' on' : ''}" onclick="acSetFulfillment('local')"><span class="co-rate-main"><span class="co-rate-name">${escHtml(ld.name || 'Local delivery')}</span><span class="co-rate-days">About ${ld.etaMinutes} min · ${ld.distanceKm}km away</span></span><span class="co-rate-price">${ld.feeCents ? acMoney(ld.feeCents) : 'Free'}</span></button>`);
+    if (c.pickupAvail) fulfillOpts.push(`<button class="co-rate${pickupMode ? ' on' : ''}" onclick="acSetFulfillment('pickup')"><span class="co-rate-main"><span class="co-rate-name">Local pickup</span>${c.pickupLocation ? `<span class="co-rate-days">${escHtml(c.pickupLocation)}</span>` : ''}</span><span class="co-rate-price">Free</span></button>`);
+  }
+  const fulfill = fulfillOpts.length > 1
+    ? `<div class="co-sec-h">Fulfillment</div><div class="co-rates">${fulfillOpts.join('')}</div>` : '';
   let addrBlock = '';
   if (pickupMode) {
     addrBlock = `<div class="co-sec-h">Pickup</div><div class="ac-disc-sub" style="padding:6px 2px;">Collect in person${c.pickupLocation ? ' · ' + escHtml(c.pickupLocation) : ''}. The seller will coordinate the time in chat.</div>`;
@@ -41652,7 +41840,27 @@ function acRenderCheckout() {
   b.innerHTML = `${c.name ? `<div class="co-item">${escHtml(c.name)}${c.qty > 1 ? ' × ' + c.qty : ''}</div>` : ''}${fulfill}${addrBlock}${rateBlock}${etaBlock}${promo}${noteRow}${coGiftRow}${summary}${pay}`;
 }
 // Switch checkout between shipping and local pickup.
-function acSetFulfillment(mode) { AC._coPickup = (mode === 'pickup'); if (acQuoteActive() && !AC._coPickup) acRefreshQuote(); else acRenderCheckout(); }
+function acSetFulfillment(mode) {
+  AC._coPickup = (mode === 'pickup');
+  AC._coLocalOn = (mode === 'local');
+  if (acQuoteActive() && !AC._coPickup && !AC._coLocalOn) acRefreshQuote(); else acRenderCheckout();
+}
+/* Ask the shop whether it will drive to the chosen address. Called whenever the
+   address changes, because the answer depends entirely on where it is going. */
+async function acCheckLocalDelivery() {
+  const c = AC._co;
+  AC._coLocal = null;
+  if (!c || !c.needsShipping || !c.sellerId || !AC._coAddrId) { acRenderCheckout(); return; }
+  try {
+    const r = await API.req('POST', '/api/delivery/check', {
+      sellerId: c.sellerId, addressId: AC._coAddrId, subtotalCents: c.subtotalCents,
+    });
+    AC._coLocal = r.offer || null;
+  } catch (e) { AC._coLocal = null; }
+  // A shop that has stopped delivering there must not leave the option selected.
+  if (!(AC._coLocal && AC._coLocal.available)) AC._coLocalOn = false;
+  acRenderCheckout();
+}
 // Validate + apply a seller promo code against the current subtotal.
 async function acApplyCoupon() {
   const c = AC._co; if (!c || !c.sellerId) return;
@@ -42862,6 +43070,8 @@ async function acOpenStoreManage() {
     ${isBiz ? row(SI.megaphone, 'Featured placement', 'Appear at the top of the business directory', 'acOpenPlacement()') : ''}
     ${row(SI.store, 'Customers', 'Everyone who has bought from you', 'closeOverlay(\'storeManageView\');acOpenCustomers()')}
     ${row(SI.megaphone, 'Cart recovery', 'Win back abandoned carts via Beam', 'closeOverlay(\'storeManageView\');acOpenCartRecovery()')}
+    ${row(SI.megaphone, 'Message your customers', 'One a day, only to people who bought from you', 'closeOverlay(\'storeManageView\');acOpenShopCampaigns()')}
+    ${row(SI.box, 'Local delivery', 'Take it round yourself to people nearby', 'closeOverlay(\'storeManageView\');acOpenDelivery()')}
     ${row(SI.wallet, 'Wallet & payouts', 'Your balance and cash-out', 'closeOverlay(\'storeManageView\');acOpenWallet()')}
     ${row(SI.megaphone, 'Announcement', (S.user && S.user.storeBanner) ? '“' + escHtml(S.user.storeBanner.slice(0, 42)) + (S.user.storeBanner.length > 42 ? '…' : '') + '”' : 'One line pinned atop your shop', 'acOpenStoreBanner()')}
     ${row(SI.box, 'Free shipping', (S.user && S.user.freeShipOverCents) ? 'Free on orders over $' + (S.user.freeShipOverCents / 100).toFixed(0) : 'Offer free shipping over an amount', 'acOpenFreeShip()')}
@@ -43593,7 +43803,7 @@ async function acCheckoutPay(payWith, giftCardId) {
   if (!AC._buyCids[key]) AC._buyCids[key] = acPayCid();
   const body = { clientId: AC._buyCids[key] };
   if (pickupMode) body.pickup = true;
-  else if (c.needsShipping) body.addressId = AC._coAddrId;
+  else if (c.needsShipping) { body.addressId = AC._coAddrId; if (AC._coLocalOn) body.localDelivery = true; }
   if (!pickupMode && AC._coRateId) body.shipRateId = AC._coRateId;
   if (AC._coCoupon) body.couponCode = AC._coCoupon.code;
   if (AC._coNote && AC._coNote.trim()) body.note = AC._coNote.trim().slice(0, 500); // note to seller
@@ -47666,8 +47876,14 @@ async function rtConnect() {
       acApplyPresence();
     } catch {}
   });
-  rtSource.addEventListener('call', e => { try { const d = JSON.parse(e.data); if (d && d.kind === 'recording') acOnRecordingNotice(d); else callOnSignal(d); } catch {} });
-  rtSource.addEventListener('group-call', e => { try { groupCallOnSignal(JSON.parse(e.data)); } catch {} });
+  rtSource.addEventListener('call', e => { try { const d = JSON.parse(e.data);
+    if (d && d.kind === 'recording') acOnRecordingNotice(d);
+    else if (d && d.kind === 'caption') acOnCaption(d);
+    else callOnSignal(d); } catch {} });
+  rtSource.addEventListener('group-call', e => { try { const d = JSON.parse(e.data);
+    if (d && d.kind === 'breakout') acOnBreakout(d);
+    else if (d && d.kind === 'breakout-moved') acOnBreakoutMoved(d);
+    else groupCallOnSignal(d); } catch {} });
   rtSource.addEventListener('call-link', e => { try { callLinkOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('group-removed', e => { try { onGroupRemoved(JSON.parse(e.data)); } catch {} });
   // Added to a group → the list + badges update instantly (no reload needed).
@@ -47679,7 +47895,9 @@ async function rtConnect() {
   });
   rtSource.addEventListener('liveloc', e => { try { acOnLiveLoc(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('live', e => { try { liveOnSignal(JSON.parse(e.data)); } catch {} });
-  rtSource.addEventListener('cloud', e => { try { cloudOnSignal(JSON.parse(e.data)); } catch {} });
+  rtSource.addEventListener('cloud', e => { try { const d = JSON.parse(e.data);
+    if (d && d.kind === 'doc-presence') acOnDocPresence(d);
+    else cloudOnSignal(d); } catch {} });
   rtSource.addEventListener('notif', () => { refreshNotifCount(); });
   rtSource.addEventListener('story', () => { if (S.user && S.user.username) acLoadStoryTray(); });
   rtSource.addEventListener('wallet', e => {
@@ -53278,7 +53496,7 @@ function acSketchSend() {
 
 /* ── Render a rich message card + handle voting / RSVPs ── */
 function acMetaLabel(t) {
-  return t === 'form' ? '📋 Form' : t === 'formreply' ? '📋 Form answers' : t === 'buttons' ? '💬 Quick question' : t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'livelocation' ? '📍 Live location' : t === 'sticker' ? '🌟 Sticker' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'quote' ? '📋 Quote' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'pool' ? '🫙 Money pool' : t === 'offer' ? '🏷️ Offer' : t === 'storyreply' ? '↩ Daily reply' : t === 'gift' ? '🎁 Gift card' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'moneyrequest' ? '💰 Money request' : t === 'cartrecovery' ? '🛍️ Your cart is waiting' : t === 'doc' ? '📄 Document' : t === 'call' ? '📞 Call' : 'Message';
+  return t === 'form' ? '📋 Form' : t === 'formreply' ? '📋 Form answers' : t === 'buttons' ? '💬 Quick question' : t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'livelocation' ? '📍 Live location' : t === 'sticker' ? '🌟 Sticker' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'quote' ? '📋 Quote' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'pool' ? '🫙 Money pool' : t === 'offer' ? '🏷️ Offer' : t === 'storyreply' ? '↩ Daily reply' : t === 'gift' ? '🎁 Gift card' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'moneyrequest' ? '💰 Money request' : t === 'cartrecovery' ? '🛍️ Your cart is waiting' : t === 'shopcampaign' ? '📣 News from a shop' : t === 'doc' ? '📄 Document' : t === 'call' ? '📞 Call' : 'Message';
 }
 function acMetaCard(m) {
   const meta = m.meta; if (!meta) return '';
@@ -53455,6 +53673,20 @@ function acMetaCard(m) {
       <div class="mc-cs-ic">${_csMediaIcon(meta.media)}</div>
       <div class="mc-prod-main"><div class="mc-prod-name">${meta.media === 'audio' ? 'Voice' : 'Video'} call${meta.title ? ' · ' + escHtml(meta.title) : ''}</div><div class="mc-cs-when">${escHtml(whenStr)}</div><div class="mc-prod-cta">${m.mine ? 'Invite sent · tap to view' : 'Tap to respond'}</div></div>
     </div>`;
+  }
+  if (meta.t === 'shopcampaign') {
+    // A shop writing to its customers. The customer's copy carries the way out
+    // right there on the card — a marketing message you cannot stop is spam.
+    const cta = meta.productId
+      ? `<button class="btn-white mc-cart-cta" onclick="event.stopPropagation();acOpenListing(${meta.productId})">${escHtml(meta.ctaLabel || 'Take a look')}</button>`
+      : '';
+    const coupon = meta.coupon ? `<div class="mc-cart-sub">Use code <b>${escHtml(meta.coupon)}</b></div>` : '';
+    const out = m.mine ? '' : `<button class="ac-pill-btn" style="font-size:12px;padding:6px 12px;margin-top:8px;"
+        onclick="event.stopPropagation();acShopOptOut(${meta.shopId})">Stop messages from this shop</button>`;
+    return `<div class="meta-card mc-cart">
+      <div class="mc-prod-name">${escHtml(meta.subject || (meta.shop ? meta.shop + ' has news' : 'News'))}</div>
+      <div class="mc-cart-sub" style="margin-top:4px;white-space:pre-wrap;">${escHtml(meta.body || '')}</div>
+      ${coupon}${cta}${out}</div>`;
   }
   if (meta.t === 'cartrecovery') {
     // Abandoned-cart nudge from a shop. Only the CUSTOMER gets a "Complete checkout"
@@ -57063,6 +57295,688 @@ function acApplExport(jobId, format) {
   closeOverlay('applExportView');
   acExportCsv('/api/jobs/' + jobId + '/applicants/export?format=' + encodeURIComponent(format),
     'applicants-' + format + '.csv');
+}
+
+
+/* ═══════════════════════════════════════════════
+   BATCH 40 — bigger media, better calls, marketing your own shop
+═══════════════════════════════════════════════ */
+
+/* ─── Big files, straight to the bucket ────────────────────────────────────
+   The old way read a file into memory, turned it into base64 (a third bigger
+   again) and posted the lot inside a JSON request. That is why a long video
+   could not be shared. This asks the server for a permission slip and sends the
+   file straight to storage, so nothing large ever passes through a request body.
+
+   When storage is not configured it falls back to the old way, honestly, with
+   the old limits — because without somewhere to put it a big file has nowhere
+   to go, and pretending otherwise would just fail later and more confusingly. */
+let UPLOADS = { direct: false, limitsMb: { image: 16, video: 16, audio: 16, doc: 16 }, videoMinutes: 2, loaded: false };
+async function acLoadUploadLimits() {
+  if (UPLOADS.loaded) return UPLOADS;
+  try { UPLOADS = { ...(await API.req('GET', '/api/uploads/limits')), loaded: true }; } catch (e) { UPLOADS.loaded = true; }
+  return UPLOADS;
+}
+function acUploadCapMb(family) { return (UPLOADS.limitsMb || {})[family] || 16; }
+/* Returns a URL when it went to the bucket, or a data: URL when it did not.
+   Either way the caller gets one string it can put in a media field. */
+async function acUploadFile(file, kind, onProgress) {
+  await acLoadUploadLimits();
+  const type = (file.type || '').split(';')[0];
+  const family = type.startsWith('image/') ? 'image' : type.startsWith('video/') ? 'video'
+    : type.startsWith('audio/') ? 'audio' : 'doc';
+  const capMb = acUploadCapMb(family);
+  if (file.size > capMb * 1024 * 1024) {
+    throw new Error(`That file is ${(file.size / 1048576).toFixed(0)}MB. The limit is ${capMb}MB.`);
+  }
+  if (UPLOADS.direct) {
+    const sign = await API.req('POST', '/api/uploads/sign', { contentType: type, sizeBytes: file.size, kind });
+    await new Promise((resolve, reject) => {
+      // XHR rather than fetch, purely because it reports progress and a big
+      // upload with no progress bar feels broken.
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', sign.uploadUrl, true);
+      xhr.setRequestHeader('Content-Type', type);
+      if (onProgress) xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+      xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error('The upload was refused.')));
+      xhr.onerror = () => reject(new Error('The upload failed.'));
+      xhr.send(file);
+    });
+    return sign.url;
+  }
+  return await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = () => rej(new Error('Could not read that file.'));
+    r.readAsDataURL(file);
+  });
+}
+/* How long a clip runs and which way round it is — read from the file itself,
+   so the player can size correctly and a list can show the running time. */
+function acVideoFacts(file) {
+  return new Promise((res) => {
+    try {
+      const v = document.createElement('video');
+      v.preload = 'metadata';
+      v.onloadedmetadata = () => {
+        const w = v.videoWidth || 0, h = v.videoHeight || 0;
+        const aspect = !w || !h ? null : (w > h * 1.15 ? 'landscape' : h > w * 1.15 ? 'portrait' : 'square');
+        URL.revokeObjectURL(v.src);
+        res({ durationSec: Math.round(v.duration) || null, aspect });
+      };
+      v.onerror = () => res({ durationSec: null, aspect: null });
+      v.src = URL.createObjectURL(file);
+    } catch (e) { res({ durationSec: null, aspect: null }); }
+  });
+}
+function acDur(sec) {
+  if (!sec) return '';
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return m + ':' + String(s).padStart(2, '0');
+}
+
+/* ─── Webinars ─── */
+let WEB = { tab: 'upcoming', list: [], now: null };
+const _WEB_TABS = [['upcoming', 'Coming up'], ['signed', 'I am going'], ['mine', 'Mine'], ['past', 'Past']];
+async function acOpenWebinars(tab) {
+  WEB.tab = tab || 'upcoming';
+  showOverlay('webinarsView');
+  acRenderWebTabs();
+  await acLoadWebinars();
+}
+function acRenderWebTabs() {
+  const el = document.getElementById('webTabs'); if (!el) return;
+  el.innerHTML = _WEB_TABS.map(([k, l]) =>
+    `<button class="ac-jv ${WEB.tab === k ? 'on' : ''}" onclick="acWebTab('${k}')">${l}</button>`).join('');
+}
+function acWebTab(t) { WEB.tab = t; acRenderWebTabs(); acLoadWebinars(); }
+async function acLoadWebinars() {
+  const b = document.getElementById('webBody'); if (b) b.innerHTML = acSkelRows(3);
+  try { WEB.list = (await API.req('GET', '/api/webinars?scope=' + WEB.tab)).webinars || []; } catch (e) { WEB.list = []; }
+  if (!b) return;
+  b.innerHTML = WEB.list.length ? WEB.list.map((w) => `<div class="web-card" onclick="acOpenWebinar(${w.id})">
+      <div class="web-when">${escHtml(acWebWhen(w))}</div>
+      <div class="web-title">${escHtml(w.title)}</div>
+      <div class="web-meta">${escHtml(w.host.name)} · ${w.minutes} min${w.priceCents ? ' · ' + acMoney(w.priceCents) : ' · free'}${
+        w.capacity != null ? (w.full ? ' · <b>full</b>' : ' · ' + w.spotsLeft + ' left') : ''}${w.signedUp ? ' · you are going' : ''}</div>
+    </div>`).join('')
+    : '<div class="ac-empty-sm">' + (WEB.tab === 'mine' ? 'You have not scheduled one yet.' : 'Nothing here yet.') + '</div>';
+}
+function acWebWhen(w) {
+  if (w.status === 'live') return 'LIVE NOW';
+  if (w.status === 'ended') return 'Finished';
+  if (w.status === 'cancelled') return 'Cancelled';
+  try { return new Date(w.startsAt).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+  catch (e) { return ''; }
+}
+function acWebinarFormOpen() {
+  showOverlay('webinarForm');
+  const d = new Date(Date.now() + 86400000);
+  d.setMinutes(0, 0, 0);
+  const el = document.getElementById('wfStart');
+  if (el) el.value = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+async function acSaveWebinar() {
+  const v = (id) => (document.getElementById(id) || {}).value || '';
+  const title = v('wfTitle').trim();
+  if (!title) { showNotif('Give it a title.'); return; }
+  const startsAt = v('wfStart');
+  if (!startsAt) { showNotif('When does it start?'); return; }
+  try {
+    await API.req('POST', '/api/webinars', {
+      title, description: v('wfDesc').trim(), startsAt: new Date(startsAt).toISOString(),
+      minutes: parseInt(v('wfMins'), 10) || 60,
+      capacity: v('wfCap') ? parseInt(v('wfCap'), 10) : null,
+      priceCents: Math.round((parseFloat(v('wfPrice')) || 0) * 100),
+    });
+    closeOverlay('webinarForm');
+    showNotif('Scheduled.');
+    acOpenWebinars('mine');
+  } catch (e) { showNotif((e && e.message) || 'Could not schedule that.'); }
+}
+async function acOpenWebinar(id) {
+  showOverlay('webinarView');
+  const b = document.getElementById('webinarBody'); if (b) b.innerHTML = acSkelRows(3);
+  try { WEB.now = await API.req('GET', '/api/webinars/' + id); acRenderWebinar(); }
+  catch (e) { if (b) b.innerHTML = '<div class="ac-empty-sm">Could not open that.</div>'; }
+}
+function acRenderWebinar() {
+  const b = document.getElementById('webinarBody'); if (!b || !WEB.now) return;
+  const w = WEB.now.webinar, qs = WEB.now.questions || [];
+  const canAsk = w.signedUp && w.qaOpen;
+  b.innerHTML = `
+    <div class="web-when">${escHtml(acWebWhen(w))}</div>
+    <div class="jp-title" style="margin-top:4px;">${escHtml(w.title)}</div>
+    <div class="web-meta" style="margin-bottom:10px;">${escHtml(w.host.name)} · ${w.minutes} min · ${w.signups} signed up${
+      w.capacity != null ? (w.full ? ' · full' : ' · ' + w.spotsLeft + ' left') : ''}</div>
+    ${w.description ? `<div style="font-size:15px;line-height:1.6;margin-bottom:12px;">${acLinkifyPost(escHtml(w.description))}</div>` : ''}
+    <div class="b39-acts">
+      ${w.isHost
+        ? (w.status === 'live'
+            ? `<button class="ac-pill-btn accent" onclick="acWebinarEnd(${w.id})">End it</button>`
+            : (w.status === 'ended' || w.status === 'cancelled' ? ''
+               : `<button class="ac-pill-btn accent" onclick="acWebinarStart(${w.id})">Go live</button>
+                  <button class="ac-pill-btn" onclick="acWebinarCancel(${w.id})">Call it off</button>`))
+        : (w.status === 'live' && w.signedUp
+            ? `<button class="ac-pill-btn accent" onclick="acWebinarWatch()">Watch now</button>`
+            : (w.signedUp
+                ? `<button class="ac-pill-btn" onclick="acWebinarLeave(${w.id})">I cannot make it</button>`
+                : `<button class="ac-pill-btn accent" ${w.full ? 'disabled' : ''} onclick="acWebinarSignup(${w.id})">${
+                    w.full ? 'Full' : (w.priceCents ? 'Get a place · ' + acMoney(w.priceCents) : 'Save me a place')}</button>`))}
+    </div>
+    <div class="st-h">Questions</div>
+    ${canAsk ? `<div style="display:flex;gap:8px;margin-bottom:10px;">
+        <input class="jp-in" id="webQ" maxlength="400" style="flex:1;" placeholder="Ask the host something" aria-label="Ask a question"
+               onkeydown="if(event.key==='Enter')acWebAsk(${w.id})"/>
+        <button class="ac-pill-btn accent" onclick="acWebAsk(${w.id})">Ask</button></div>`
+      : `<div class="ac-disc-sub" style="margin-bottom:10px;">${w.qaOpen ? 'Sign up to ask a question.' : 'Questions are closed for this one.'}</div>`}
+    ${qs.length ? qs.map((q) => `<div class="web-q ${q.answered ? 'done' : ''}">
+        <button class="web-vote ${q.voted ? 'on' : ''}" onclick="acWebVote(${q.id}, ${q.voted ? 'false' : 'true'})" aria-label="Upvote">
+          <b>${q.votes}</b><span>up</span></button>
+        <div class="web-q-body">${escHtml(q.body)}
+          <div class="web-q-who">${escHtml(q.from.name)}${q.answered ? ' · answered' : ''}</div></div>
+        ${w.isHost && !q.answered ? `<button class="ac-pill-btn" style="font-size:12px;padding:6px 11px;" onclick="acWebAnswered(${q.id})">Done</button>` : ''}
+      </div>`).join('')
+      : '<div class="ac-empty-sm">No questions yet. The most upvoted go first.</div>'}`;
+}
+async function acWebinarSignup(id) {
+  try {
+    const r = await API.req('POST', '/api/webinars/' + id + '/signup', { clientId: acPayCid('webinar') });
+    showNotif(r.paid ? 'You have a place.' : 'Saved you a place.');
+    if (r.paid && typeof acRefreshBalance === 'function') acRefreshBalance();
+    acOpenWebinar(id);
+  } catch (e) { showNotif((e && e.message) || 'Could not sign you up.'); }
+}
+async function acWebinarLeave(id) {
+  try { await API.req('DELETE', '/api/webinars/' + id + '/signup'); acOpenWebinar(id); }
+  catch (e) { showNotif((e && e.message) || 'Could not do that.'); }
+}
+async function acWebinarStart(id) {
+  const ok = await appConfirm({ title: 'Go live now?', message: 'Everyone who signed up will be told straight away.', confirmText: 'Go live' });
+  if (!ok) return;
+  try {
+    await API.req('POST', '/api/webinars/' + id + '/start', {});
+    closeOverlay('webinarView'); closeOverlay('webinarsView');
+    // The webinar rides on the normal broadcast, so this is the ordinary path.
+    if (typeof goLive === 'function') goLive();
+    else showNotif('You are live. Open Go Live to start your camera.');
+  } catch (e) { showNotif((e && e.message) || 'Could not start it.'); }
+}
+async function acWebinarCancel(id) {
+  const ok = await appConfirm({ title: 'Call it off?',
+    message: 'Everyone who signed up will be told. Anyone who paid will need a refund through Help & refunds.',
+    confirmText: 'Call it off', danger: true });
+  if (!ok) return;
+  try { await API.req('PATCH', '/api/webinars/' + id, { status: 'cancelled' }); showNotif('Called off.'); acOpenWebinar(id); }
+  catch (e) { showNotif((e && e.message) || 'Could not do that.'); }
+}
+async function acWebinarEnd(id) {
+  try { await API.req('POST', '/api/webinars/' + id + '/end', {}); showNotif('Ended.'); acOpenWebinar(id); }
+  catch (e) { showNotif((e && e.message) || 'Could not end it.'); }
+}
+function acWebinarWatch() {
+  closeOverlay('webinarView'); closeOverlay('webinarsView');
+  if (typeof acLoadLiveStrip === 'function') acLoadLiveStrip();
+  showNotif('Opening the broadcast…');
+}
+async function acWebAsk(id) {
+  const el = document.getElementById('webQ');
+  const body = ((el && el.value) || '').trim();
+  if (!body) return;
+  if (el) el.value = '';
+  try { await API.req('POST', '/api/webinars/' + id + '/questions', { body }); acOpenWebinar(id); }
+  catch (e) { showNotif((e && e.message) || 'Could not ask that.'); }
+}
+async function acWebVote(qid, on) {
+  try { await API.req('POST', '/api/webinars/questions/' + qid + '/vote', { on }); acOpenWebinar(WEB.now.webinar.id); }
+  catch (e) { showNotif((e && e.message) || 'Could not vote.'); }
+}
+async function acWebAnswered(qid) {
+  try { await API.req('POST', '/api/webinars/questions/' + qid + '/answered', {}); acOpenWebinar(WEB.now.webinar.id); }
+  catch (e) { showNotif((e && e.message) || 'Could not do that.'); }
+}
+
+/* ─── Messaging your own customers ─── */
+let CAMP = { list: [], audiences: [] };
+async function acOpenShopCampaigns() {
+  showOverlay('shopCampaignsView');
+  const b = document.getElementById('shopCampBody'); if (b) b.innerHTML = acSkelRows(3);
+  try { const r = await API.req('GET', '/api/shop-campaigns'); CAMP.list = r.campaigns || []; CAMP.audiences = r.audiences || []; }
+  catch (e) { CAMP.list = []; }
+  acRenderCampaigns();
+}
+function acRenderCampaigns() {
+  const b = document.getElementById('shopCampBody'); if (!b) return;
+  b.innerHTML = CAMP.list.length ? CAMP.list.map((c) => `<div class="camp-row">
+      <div class="b39-row-top"><span class="b39-name">${escHtml(c.name)}</span>
+        <span class="b39-tag ${c.status === 'sent' ? 'ok' : ''}">${escHtml(c.status)}</span></div>
+      <div class="b39-sub">${escHtml((c.subject || c.body || '').slice(0, 70))}</div>
+      ${c.status === 'sent'
+        ? `<div class="camp-stats"><span>Reached <b>${c.reached || 0}</b></span>
+             <span>Bought after <b>${c.ordered || 0}</b></span>
+             <span>Worth <b>${acMoney(c.orderedCents || 0)}</b></span></div>`
+        : `<div class="b39-acts">
+             <button class="ac-pill-btn accent" onclick="acSendCampaign(${c.id})">Send it</button>
+             <button class="ac-pill-btn" onclick="acDeleteCampaign(${c.id})">Delete</button></div>`}
+    </div>`).join('')
+    : '<div class="ac-empty-sm">Nothing written yet.</div>';
+}
+function acCampaignFormOpen() {
+  showOverlay('campaignForm');
+  const sel = document.getElementById('cfAudience');
+  if (sel) sel.innerHTML = CAMP.audiences.map((a) => `<option value="${escHtml(a.key)}">${escHtml(a.label)}</option>`).join('');
+  acCampAudience();
+}
+async function acCampAudience() {
+  const sel = document.getElementById('cfAudience');
+  const out = document.getElementById('cfCount');
+  if (!sel || !out) return;
+  out.textContent = 'Counting…';
+  try {
+    const r = await API.req('GET', '/api/shop-campaigns/audience?audience=' + encodeURIComponent(sel.value));
+    out.textContent = r.count === 0 ? 'Nobody is in that group yet.'
+      : 'That is ' + r.count + ' ' + (r.count === 1 ? 'person' : 'people') + '. Anyone who asked you to stop is already left out.';
+  } catch (e) { out.textContent = ''; }
+}
+async function acSaveCampaign() {
+  const v = (id) => (document.getElementById(id) || {}).value || '';
+  const ck = (id) => !!(document.getElementById(id) || {}).checked;
+  try {
+    await API.req('POST', '/api/shop-campaigns', {
+      name: v('cfName').trim() || 'Message', audience: v('cfAudience'),
+      subject: v('cfSubject').trim(), body: v('cfBody').trim(),
+      byBeam: ck('cfBeam'), byPush: ck('cfPush'), byEmail: ck('cfEmail'),
+    });
+    closeOverlay('campaignForm');
+    acOpenShopCampaigns();
+  } catch (e) { showNotif((e && e.message) || 'Could not save that.'); }
+}
+async function acSendCampaign(id) {
+  const c = CAMP.list.find((x) => x.id === id);
+  const ok = await appConfirm({ title: 'Send it now?',
+    message: 'This goes out once and cannot be taken back. You can send one campaign a day.',
+    confirmText: 'Send' });
+  if (!ok) return;
+  try { const r = await API.req('POST', '/api/shop-campaigns/' + id + '/send', {}); showNotif('Sent to ' + r.reached + '.'); acOpenShopCampaigns(); }
+  catch (e) { showNotif((e && e.message) || 'Could not send that.'); }
+}
+async function acDeleteCampaign(id) {
+  try { await API.req('DELETE', '/api/shop-campaigns/' + id); acOpenShopCampaigns(); }
+  catch (e) { showNotif((e && e.message) || 'Could not delete that.'); }
+}
+// The way out, offered inside the message itself.
+async function acShopOptOut(shopId) {
+  const ok = await appConfirm({ title: 'Stop messages from this shop?',
+    message: 'You will still get anything about an actual order. Only their marketing stops.', confirmText: 'Stop them' });
+  if (!ok) return;
+  try { await API.req('POST', '/api/shop-marketing/optout', { shopId, on: true }); showNotif('Stopped. You will not hear from them again.'); }
+  catch (e) { showNotif((e && e.message) || 'Could not do that.'); }
+}
+
+/* ─── Local delivery ─── */
+let DELIV = { zones: [], runs: [] };
+async function acOpenDelivery() {
+  showOverlay('deliveryView');
+  const b = document.getElementById('deliveryBody'); if (b) b.innerHTML = acSkelRows(3);
+  try {
+    const [z, r] = await Promise.all([
+      API.req('GET', '/api/delivery-zones').catch(() => ({ zones: [] })),
+      API.req('GET', '/api/delivery-runs').catch(() => ({ runs: [] })),
+    ]);
+    DELIV = { zones: z.zones || [], runs: r.runs || [] };
+  } catch (e) {}
+  acRenderDelivery();
+}
+function acRenderDelivery() {
+  const b = document.getElementById('deliveryBody'); if (!b) return;
+  const steps = [['picked_up', 'Picked up'], ['on_the_way', 'On the way'], ['delivered', 'Delivered']];
+  b.innerHTML = `
+    <div class="st-h">Today's runs</div>
+    ${DELIV.runs.length ? DELIV.runs.map((r) => `<div class="del-run">
+        <div class="b39-row-top"><span class="b39-name">${escHtml(r.buyerName || 'Order #' + r.orderId)}</span>
+          <span class="b39-tag">${escHtml((r.status || '').replace(/_/g, ' '))}</span></div>
+        <div class="b39-sub">${escHtml(r.shipTo || '')}</div>
+        <div class="del-steps">${steps.map(([k, l]) =>
+          `<button class="${r.status === k ? 'on' : ''}" onclick="acDelivStep(${r.orderId},'${k}')">${l}</button>`).join('')}</div>
+      </div>`).join('')
+      : '<div class="ac-empty-sm">Nothing to take round right now.</div>'}
+    <div class="st-h">Where you deliver</div>
+    ${DELIV.zones.length ? DELIV.zones.map((z) => `<div class="b39-row">
+        <div class="b39-row-top"><span class="b39-name">${escHtml(z.name)}</span>
+          <span class="b39-tag ${z.active ? 'ok' : ''}">${z.active ? 'on' : 'off'}</span></div>
+        <div class="b39-sub">Within ${z.radiusKm}km · ${z.feeCents ? acMoney(z.feeCents) : 'free'}${
+          z.freeOverCents ? ', free over ' + acMoney(z.freeOverCents) : ''} · about ${z.etaMinutes} min${
+          z.minOrderCents ? ' · from ' + acMoney(z.minOrderCents) : ''}</div>
+        <div class="b39-acts"><button class="ac-pill-btn" onclick="acDelivZoneToggle(${z.id}, ${!z.active})">${z.active ? 'Turn off' : 'Turn on'}</button>
+          <button class="ac-pill-btn" onclick="acDelivZoneDelete(${z.id})">Remove</button></div>
+      </div>`).join('')
+      : '<div class="ac-empty-sm">No delivery area yet. Add one and nearby buyers will see it at checkout.</div>'}
+    <div class="b39-row" style="margin-top:10px;">
+      <div class="b39-name" style="margin-bottom:8px;">Add an area</div>
+      <input class="jp-in" id="dzName" maxlength="60" placeholder="What to call it (e.g. Round the corner)"/>
+      <div class="wf-row">
+        <label>How far (km)<input class="jp-in" type="number" id="dzRadius" value="5" min="0.5" step="0.5"/></label>
+        <label>Charge<input class="jp-in" type="number" id="dzFee" value="3" min="0" step="0.5"/></label>
+      </div>
+      <div class="wf-row">
+        <label>Free over<input class="jp-in" type="number" id="dzFree" placeholder="—" min="0" step="1"/></label>
+        <label>Usually takes (min)<input class="jp-in" type="number" id="dzEta" value="90" min="15"/></label>
+      </div>
+      <button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="acDelivZoneAdd()">Add it</button>
+    </div>`;
+}
+async function acDelivZoneAdd() {
+  const v = (id) => (document.getElementById(id) || {}).value || '';
+  try {
+    await API.req('POST', '/api/delivery-zones', {
+      name: v('dzName').trim() || 'Local delivery',
+      radiusKm: parseFloat(v('dzRadius')) || 5,
+      feeCents: Math.round((parseFloat(v('dzFee')) || 0) * 100),
+      freeOverCents: v('dzFree') ? Math.round(parseFloat(v('dzFree')) * 100) : null,
+      etaMinutes: parseInt(v('dzEta'), 10) || 90,
+    });
+    acOpenDelivery();
+  } catch (e) {
+    if (e && e.body && e.body.needLocation) {
+      showNotif('Set your shop’s location on your profile first.');
+      closeOverlay('deliveryView'); openProfileEdit();
+      return;
+    }
+    showNotif((e && e.message) || 'Could not add that.');
+  }
+}
+async function acDelivZoneToggle(id, active) {
+  try { await API.req('PATCH', '/api/delivery-zones/' + id, { active }); acOpenDelivery(); }
+  catch (e) { showNotif((e && e.message) || 'Could not change that.'); }
+}
+async function acDelivZoneDelete(id) {
+  const ok = await appConfirm({ title: 'Remove this area?', message: 'Buyers there will no longer be offered delivery.', confirmText: 'Remove', danger: true });
+  if (!ok) return;
+  try { await API.req('DELETE', '/api/delivery-zones/' + id); acOpenDelivery(); }
+  catch (e) { showNotif((e && e.message) || 'Could not remove it.'); }
+}
+async function acDelivStep(orderId, status) {
+  try {
+    await API.req('POST', '/api/orders/' + orderId + '/delivery',
+      { status, etaMinutes: status === 'on_the_way' ? 25 : null });
+    acOpenDelivery();
+  } catch (e) { showNotif((e && e.message) || 'Could not update that.'); }
+}
+// What the buyer sees on their order.
+function acDeliveryTrackHtml(run) {
+  if (!run) return '';
+  const label = { waiting: 'Being got ready', picked_up: 'Picked up', on_the_way: 'On the way to you',
+    delivered: 'Delivered', failed: 'Could not be delivered' }[run.status] || run.status;
+  const eta = run.etaAt && run.status === 'on_the_way'
+    ? 'Arriving about ' + new Date(run.etaAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  return `<div class="del-track"><b>🚗 ${escHtml(label)}</b><span>${escHtml(eta || 'Delivered by the shop itself')}</span></div>`;
+}
+
+/* ─── The camera ─── */
+let CAMERA = { looks: [], templates: [], prefs: { look: 'none', template: null } };
+async function acOpenCamera() {
+  showOverlay('cameraView');
+  try { const r = await API.req('GET', '/api/camera'); CAMERA = { ...CAMERA, ...r }; } catch (e) {}
+  acRenderCamera();
+}
+function acRenderCamera() {
+  const l = document.getElementById('camLooks');
+  if (l) l.innerHTML = (CAMERA.looks || []).map((k) =>
+    `<button class="cam-look ${CAMERA.prefs.look === k.id ? 'on' : ''}" onclick="acPickLook('${k.id}')">
+       <i style="filter:${k.css}"></i><span>${escHtml(k.label)}</span></button>`).join('');
+  const t = document.getElementById('camTemplates');
+  if (t) t.innerHTML = (CAMERA.templates || []).map((tp) =>
+    `<div class="cam-tpl ${CAMERA.prefs.template === tp.id ? 'on' : ''}" onclick="acPickTemplate('${tp.id}')">
+       <b>${escHtml(tp.label)}</b>
+       <ol>${tp.beats.map((x) => `<li>${escHtml(x.say)}</li>`).join('')}</ol></div>`).join('');
+}
+function acPickLook(id) { CAMERA.prefs.look = id; acSaveCamera(); acRenderCamera(); acApplyLook(); }
+function acPickTemplate(id) { CAMERA.prefs.template = CAMERA.prefs.template === id ? null : id; acSaveCamera(); acRenderCamera(); }
+function acSaveCamera() { API.req('PUT', '/api/camera', CAMERA.prefs).catch(() => {}); }
+function acLookCss(id) {
+  const k = (CAMERA.looks || []).find((x) => x.id === (id || CAMERA.prefs.look));
+  return k ? k.css : 'none';
+}
+// The look is a CSS filter on the preview, which is also what gets recorded
+// when the recording is drawn through a canvas.
+function acApplyLook() {
+  for (const id of ['liveVideo', 'callLocalVid', 'camPreview']) {
+    const el = document.getElementById(id);
+    if (el) el.style.filter = acLookCss();
+  }
+}
+
+/* ─── Tidying up a listing photo ─── */
+let PHOTOFIX = { styles: [], style: 'clean', before: null, after: null, cb: null };
+async function acOpenPhotoFix(image, onUse) {
+  PHOTOFIX = { ...PHOTOFIX, before: image || null, after: null, cb: typeof onUse === 'function' ? onUse : null };
+  showOverlay('photoFixView');
+  const b = document.getElementById('photoFixBody'); if (b) b.innerHTML = acSkelRows(2);
+  try { const r = await API.req('GET', '/api/ai/photo-styles'); PHOTOFIX.styles = r.styles || []; PHOTOFIX.enabled = r.enabled; }
+  catch (e) {}
+  acRenderPhotoFix();
+}
+function acRenderPhotoFix() {
+  const b = document.getElementById('photoFixBody'); if (!b) return;
+  if (PHOTOFIX.enabled === false) {
+    b.innerHTML = '<div class="ac-empty-sm">Tidying up photos is not set up on this server yet.</div>';
+    return;
+  }
+  b.innerHTML = `
+    <div class="pf-styles">${PHOTOFIX.styles.map((s) =>
+      `<button class="pf-style ${PHOTOFIX.style === s.key ? 'on' : ''}" onclick="acPhotoStyle('${s.key}')">${escHtml(s.label)}</button>`).join('')}</div>
+    <button class="ac-pill-btn accent" style="width:100%;" id="pfGo" onclick="acPhotoFixGo()">Tidy it up</button>
+    <div id="pfOut">${PHOTOFIX.before ? `<div class="pf-pair"><figure><img src="${escHtml(PHOTOFIX.before)}" alt="Your photo"/><figcaption>Yours</figcaption></figure></div>` : ''}</div>`;
+}
+function acPhotoStyle(k) { PHOTOFIX.style = k; acRenderPhotoFix(); }
+async function acPhotoFixGo() {
+  if (!PHOTOFIX.before) { showNotif('Pick a photo first.'); return; }
+  const btn = document.getElementById('pfGo');
+  const out = document.getElementById('pfOut');
+  if (btn) { btn.disabled = true; btn.textContent = 'Working…'; }
+  try {
+    const r = await API.req('POST', '/api/ai/product-photo', { image: PHOTOFIX.before, style: PHOTOFIX.style });
+    PHOTOFIX.after = r.image;
+    if (out) out.innerHTML = `
+      <div class="pf-pair">
+        <figure><img src="${escHtml(PHOTOFIX.before)}" alt="Your photo"/><figcaption>Yours</figcaption></figure>
+        <figure><img src="${escHtml(r.image)}" alt="Tidied up"/><figcaption>Tidied up</figcaption></figure>
+      </div>
+      <div class="ac-disc-sub" style="margin-top:10px;">It understood: “${escHtml(r.understood || '')}”. If that is not your product, try again — it works from what it can see.</div>
+      <div class="b39-acts">
+        ${PHOTOFIX.cb ? '<button class="ac-pill-btn accent" onclick="acPhotoFixUse()">Use the tidy one</button>' : ''}
+        <button class="ac-pill-btn" onclick="acPhotoFixGo()">Try again</button></div>`;
+  } catch (e) {
+    if (out) out.innerHTML = `<div class="ac-disc-sub" style="margin-top:12px;">${escHtml((e && e.message) || 'Could not do that.')}</div>`;
+  } finally { if (btn) { btn.disabled = false; btn.textContent = 'Tidy it up'; } }
+}
+function acPhotoFixUse() { if (PHOTOFIX.cb && PHOTOFIX.after) { PHOTOFIX.cb(PHOTOFIX.after); closeOverlay('photoFixView'); } }
+
+/* ─── Live captions ────────────────────────────────────────────────────────
+   The speaking device listens and sends the words; the listening device shows
+   them. Not stored anywhere — a caption helps the person in the call now, and
+   keeping a copy is what recording is for, which announces itself. */
+let CAPTIONS = { on: false, rec: null, lines: [], timer: null };
+function acCaptionsSupported() { return !!(window.SpeechRecognition || window.webkitSpeechRecognition); }
+function acCaptionsToggle() {
+  if (CAPTIONS.on) return acCaptionsStop();
+  acCaptionsStart();
+}
+function acCaptionsStart() {
+  if (!acCaptionsSupported()) { showNotif('This browser cannot do captions.'); return; }
+  const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const rec = new Rec();
+  rec.lang = navigator.language || 'en-GB';
+  rec.interimResults = true;
+  rec.continuous = true;
+  let sent = '';
+  rec.onresult = (e) => {
+    let interim = '', final = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) final += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    const text = (final || interim).trim();
+    if (!text || text === sent) return;
+    sent = text;
+    acCaptionShow({ text, final: !!final, from: { name: 'You' } }, true);
+    API.req('POST', '/api/rt/caption', {
+      text, final: !!final,
+      peerId: (typeof CALL !== 'undefined' && CALL) ? CALL.peerId : null,
+      groupId: (typeof CALL !== 'undefined' && CALL) ? CALL.groupId : null,
+      callId: (typeof CALL !== 'undefined' && CALL) ? CALL.callId : null,
+    }).catch(() => {});
+  };
+  // Continuous recognition stops itself after a pause; restart while captions
+  // are meant to be on, or they quietly die halfway through a call.
+  rec.onend = () => { if (CAPTIONS.on) { try { rec.start(); } catch (e) {} } };
+  CAPTIONS.rec = rec; CAPTIONS.on = true;
+  try { rec.start(); } catch (e) { CAPTIONS.on = false; }
+  const b = document.getElementById('callCapBtn'); if (b) b.classList.toggle('on', CAPTIONS.on);
+  const bar = document.getElementById('callCaptions'); if (bar) bar.classList.remove('hidden');
+}
+function acCaptionsStop() {
+  CAPTIONS.on = false;
+  try { CAPTIONS.rec && CAPTIONS.rec.stop(); } catch (e) {}
+  const b = document.getElementById('callCapBtn'); if (b) b.classList.remove('on');
+  const bar = document.getElementById('callCaptions'); if (bar) { bar.classList.add('hidden'); bar.innerHTML = ''; }
+  CAPTIONS.lines = [];
+}
+function acOnCaption(d) { acCaptionShow(d, false); }
+function acCaptionShow(d, mine) {
+  const bar = document.getElementById('callCaptions'); if (!bar) return;
+  bar.classList.remove('hidden');
+  const who = mine ? 'You' : ((d.from && d.from.name) || 'Them');
+  // One live line per speaker, replaced as they talk; a finished sentence stays
+  // for a few seconds and then gets out of the way.
+  CAPTIONS.lines = CAPTIONS.lines.filter((l) => l.who !== who || l.final);
+  CAPTIONS.lines.push({ who, text: d.text, final: !!d.final, at: Date.now() });
+  CAPTIONS.lines = CAPTIONS.lines.slice(-3);
+  bar.innerHTML = CAPTIONS.lines.map((l) =>
+    `<div class="cap-line ${l.final ? '' : 'live'}">${escHtml(l.text)}</div>`).join('');
+  clearTimeout(CAPTIONS.timer);
+  CAPTIONS.timer = setTimeout(() => {
+    CAPTIONS.lines = CAPTIONS.lines.filter((l) => Date.now() - l.at < 6000);
+    if (!CAPTIONS.lines.length && bar) bar.innerHTML = '';
+    else if (bar) bar.innerHTML = CAPTIONS.lines.map((l) => `<div class="cap-line ${l.final ? '' : 'live'}">${escHtml(l.text)}</div>`).join('');
+  }, 6000);
+}
+
+/* ─── Breakout rooms ─── */
+let BREAK = { rooms: [], openedBy: null, mine: null };
+async function acOpenBreakouts() {
+  if (typeof CALL === 'undefined' || !CALL || !CALL.groupId) { showNotif('Breakout rooms are for group calls.'); return; }
+  const ok = await appConfirm({ title: 'Split into rooms?',
+    message: 'Three rooms will open and everyone can pick one. You can bring them all back whenever you like.',
+    confirmText: 'Open rooms' });
+  if (!ok) return;
+  acBreakoutOpen(CALL.groupId, 3);
+}
+async function acBreakoutOpen(groupId, rooms) {
+  try {
+    const r = await API.req('POST', '/api/rt/breakout/open', { groupId, rooms: rooms || 3 });
+    BREAK = { ...(r.breakout || {}), mine: null };
+    acRenderBreakouts();
+    showNotif('Rooms open. Tap one to join it.');
+  } catch (e) { showNotif((e && e.message) || 'Could not open rooms.'); }
+}
+function acOnBreakout(d) {
+  BREAK = { ...(d.breakout || { rooms: [], openedBy: null }), mine: BREAK.mine };
+  acRenderBreakouts();
+}
+function acOnBreakoutMoved(d) {
+  BREAK.mine = d.roomId || null;
+  const room = (BREAK.rooms || []).find((r) => r.id === d.roomId);
+  showNotif(d.roomId ? 'You are now in ' + (room ? room.name : 'a room') : 'Back with everyone');
+  acRenderBreakouts();
+}
+function acRenderBreakouts() {
+  const el = document.getElementById('callBreakouts'); if (!el) return;
+  const rooms = BREAK.rooms || [];
+  if (!rooms.length) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+  el.classList.remove('hidden');
+  const meId = (S.user && S.user.id) || 0;
+  el.innerHTML = rooms.map((r) => `<div class="brk-room">
+      <b>${escHtml(r.name)}</b>
+      <span class="b39-tag">${r.members.length}</span>
+      <button class="ac-pill-btn ${r.members.includes(meId) ? 'accent' : ''}" style="font-size:12.5px;padding:6px 13px;"
+        onclick="acBreakoutJoin('${r.id}')">${r.members.includes(meId) ? 'Here' : 'Join'}</button>
+    </div>`).join('')
+    + `<div class="b39-acts"><button class="ac-pill-btn" onclick="acBreakoutJoin(null)">Back with everyone</button>
+       ${BREAK.openedBy === meId ? '<button class="ac-pill-btn" onclick="acBreakoutClose()">Close the rooms</button>' : ''}</div>`;
+}
+async function acBreakoutJoin(roomId) {
+  const gid = (typeof CALL !== 'undefined' && CALL) ? CALL.groupId : null;
+  if (!gid) return;
+  try { await API.req('POST', '/api/rt/breakout/move', { groupId: gid, roomId }); }
+  catch (e) { showNotif((e && e.message) || 'Could not move.'); }
+}
+async function acBreakoutClose() {
+  const gid = (typeof CALL !== 'undefined' && CALL) ? CALL.groupId : null;
+  if (!gid) return;
+  try { await API.req('POST', '/api/rt/breakout/close', { groupId: gid }); }
+  catch (e) { showNotif((e && e.message) || 'Could not close them.'); }
+}
+
+/* ─── Two people in one document ───────────────────────────────────────────
+   While a shared note is open, everybody in it is shown, and every save says
+   which version it started from — so a save that would erase somebody else's
+   work is refused, and they are offered the newer copy instead. */
+let DOCEDIT = { nodeId: null, groupId: null, version: 0, timer: null, people: [] };
+function acDocOpen(groupId, nodeId, version) {
+  acDocClose();
+  DOCEDIT = { groupId, nodeId, version: version || 0, people: [], timer: null };
+  const beat = () => {
+    API.req('POST', `/api/atchat/groups/${groupId}/cloud/${nodeId}/here`, {})
+      .then((r) => { DOCEDIT.people = r.people || []; acRenderDocPeople(); })
+      .catch(() => {});
+  };
+  beat();
+  DOCEDIT.timer = setInterval(beat, 10000);
+}
+function acDocClose() {
+  if (DOCEDIT.timer) clearInterval(DOCEDIT.timer);
+  if (DOCEDIT.nodeId) {
+    API.req('POST', `/api/atchat/groups/${DOCEDIT.groupId}/cloud/${DOCEDIT.nodeId}/here`, { leaving: true }).catch(() => {});
+  }
+  DOCEDIT = { nodeId: null, groupId: null, version: 0, timer: null, people: [] };
+  acRenderDocPeople();
+}
+function acOnDocPresence(d) {
+  if (!DOCEDIT.nodeId || d.nodeId !== DOCEDIT.nodeId) return;
+  DOCEDIT.people = d.people || [];
+  acRenderDocPeople();
+}
+function acRenderDocPeople() {
+  const el = document.getElementById('docPeople'); if (!el) return;
+  const others = (DOCEDIT.people || []).filter((p) => p.id !== ((S.user && S.user.id) || 0));
+  el.textContent = others.length
+    ? (others.length === 1 ? others[0].name + ' is also in here' : others.map((p) => p.name).join(', ') + ' are also in here')
+    : '';
+  el.classList.toggle('hidden', !others.length);
+}
+/* Save, refusing to lose anybody's work. */
+async function acDocSave(groupId, nodeId, data, onConflict) {
+  try {
+    const r = await API.req('PATCH', `/api/atchat/groups/${groupId}/cloud/${nodeId}`,
+      { data, baseVersion: DOCEDIT.nodeId === nodeId ? DOCEDIT.version : undefined });
+    if (DOCEDIT.nodeId === nodeId) DOCEDIT.version = r.version;
+    return { ok: true, version: r.version };
+  } catch (e) {
+    const body = (e && e.body) || {};
+    if (body.conflict) {
+      if (DOCEDIT.nodeId === nodeId) DOCEDIT.version = body.version;
+      const ok = await appConfirm({
+        title: 'Somebody else saved first',
+        message: 'Your text is still here — nothing has been lost. Do you want to see their version? If you say no, save again and yours will go in on top.',
+        confirmText: 'Show me theirs',
+      });
+      if (ok && typeof onConflict === 'function') onConflict(body.data, body.version);
+      return { ok: false, conflict: true, data: body.data, version: body.version };
+    }
+    showNotif((e && e.message) || 'Could not save that.');
+    return { ok: false };
+  }
 }
 
 </script>
