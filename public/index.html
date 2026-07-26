@@ -2895,6 +2895,37 @@ body.reduce-motion .brand-menu{animation-duration:.01s;}
 .dev-check{display:flex;align-items:flex-start;gap:9px;padding:9px 0;font-size:14px;color:var(--t1);cursor:pointer;}
 .dev-check input{margin-top:2px;width:17px;height:17px;flex:none;accent-color:var(--accent);}
 .dev-check span small{display:block;color:var(--t3);font-size:12.5px;margin-top:1px;}
+/* A chart the assistant drew. Sits on the page like a card, not a screenshot. */
+.ai-chart{background:var(--s1);border-radius:16px;padding:14px;margin-top:10px;}
+.ai-chart-title{font-size:13px;font-weight:700;color:var(--t2);margin-bottom:8px;}
+/* What Atwe AI remembers, and what it is scheduled to do. */
+.mem-row{display:flex;gap:10px;align-items:flex-start;background:var(--s1);border-radius:14px;padding:12px 14px;margin-bottom:8px;}
+.mem-txt{flex:1;font-size:14.5px;line-height:1.5;}
+.mem-src{font-size:11px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:var(--t3);margin-top:3px;}
+.mem-x{background:none;border:none;color:var(--t3);cursor:pointer;padding:2px 4px;font-size:18px;line-height:1;}
+/* A document attached to a post. */
+.post-doc{display:flex;gap:12px;align-items:center;background:var(--s1);border-radius:16px;padding:14px;margin-top:10px;cursor:pointer;}
+.post-doc-ic{width:40px;height:40px;border-radius:10px;background:var(--s2);display:flex;align-items:center;justify-content:center;flex:none;}
+.post-doc-ic svg{width:20px;height:20px;stroke:var(--t2);stroke-width:1.7;fill:none;}
+.post-doc-n{font-weight:600;font-size:14.5px;word-break:break-word;}
+.post-doc-s{color:var(--t3);font-size:12.5px;margin-top:2px;}
+/* The arrival promise at checkout. */
+.eta-line{display:flex;gap:8px;align-items:center;background:rgba(136,255,0,.08);border-radius:12px;
+  padding:10px 12px;margin:10px 0;font-size:13.5px;color:var(--t1);}
+.eta-line b{color:var(--green);}
+/* Store look picker. */
+.st-looks{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+.st-look{border:none;background:var(--s1);color:var(--t2);font-family:inherit;font-size:13px;font-weight:600;
+  padding:9px 14px;border-radius:999px;cursor:pointer;}
+.st-look.on{background:var(--accent);color:var(--accent-tint,#fff);}
+/* What Pro gets you. */
+.pro-perk{display:flex;gap:11px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--b1);}
+.pro-perk:last-child{border-bottom:none;}
+.pro-tick{width:20px;height:20px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:rgba(136,255,0,.16);color:var(--green);font-size:12px;font-weight:800;margin-top:1px;}
+.pro-perk.off .pro-tick{background:var(--s2);color:var(--t3);}
+.pro-perk-t{font-weight:650;font-size:14.5px;}
+.pro-perk-h{color:var(--t3);font-size:13px;margin-top:2px;line-height:1.45;}
 @media(hover:hover){.aifb-r:hover{background:var(--s2);}.aifb-r.on:hover{background:var(--accent);}}
 .msg-act svg{width:11px;height:11px;stroke:currentColor;stroke-width:2;fill:none;}
 .msg-act.icon-only{padding:4px 6px;}
@@ -14242,6 +14273,55 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- What Atwe AI remembers, and what it is scheduled to do for you. -->
+<div class="overlay hidden" id="aiBrainView" onclick="if(event.target===this)closeOverlay('aiBrainView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Atwe AI">
+    <button class="sheet-close" onclick="closeOverlay('aiBrainView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Atwe AI</div>
+    <div class="ac-job-views" id="brainTabs" style="margin-bottom:12px;"></div>
+    <div id="brainBody"></div>
+  </div>
+</div>
+
+<!-- The front desk: answer customers from what the business actually has. -->
+<div class="overlay hidden" id="receptionView" onclick="if(event.target===this)closeOverlay('receptionView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Front desk">
+    <button class="sheet-close" onclick="closeOverlay('receptionView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Front desk</div>
+    <div class="ac-disc-sub" style="margin:0 0 14px;">When a customer messages you and you can’t reply yet, Atwe AI answers for you — but <b>only from what you’ve told it</b>: your hours, your listings, what’s in stock, your saved answers. If it can’t answer properly it stays quiet and waits for you.</div>
+    <div id="receptionBody"></div>
+  </div>
+</div>
+
+<!-- What this business has right now. -->
+<div class="overlay hidden" id="availView" onclick="if(event.target===this)closeOverlay('availView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="What you have">
+    <button class="sheet-close" onclick="closeOverlay('availView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="availTitle">What you have</div>
+    <div class="ac-disc-sub" style="margin:0 0 14px;" id="availSub">List what you actually have in — the cars on the lot, the sizes in stock, the slots left. Customers get a straight answer instead of “we’ll get back to you”.</div>
+    <div id="availBody"></div>
+  </div>
+</div>
+
+<!-- How the shop looks. -->
+<div class="overlay hidden" id="storeLookView" onclick="if(event.target===this)closeOverlay('storeLookView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Shop look">
+    <button class="sheet-close" onclick="closeOverlay('storeLookView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">How your shop looks</div>
+    <div class="ac-disc-sub" style="margin:0 0 14px;">A few safe choices, so your shop looks like yours without anything being able to break.</div>
+    <div id="storeLookBody"></div>
+  </div>
+</div>
+
+<!-- What Pro actually gets you. -->
+<div class="overlay hidden" id="proView" onclick="if(event.target===this)closeOverlay('proView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Atwe Pro">
+    <button class="sheet-close" onclick="closeOverlay('proView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="proTitle">Atwe Pro</div>
+    <div id="proBody"></div>
+  </div>
+</div>
+
 <!-- Connect your systems: API keys + webhooks, for a business that runs
      other software and wants it talking to Atwe. -->
 <div class="overlay hidden" id="devToolsView" onclick="if(event.target===this)closeOverlay('devToolsView')">
@@ -17222,6 +17302,10 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
         <button class="msg-attach" id="acCelebrateBtn" onclick="acOccasionOpen()" aria-label="Celebrate an occasion">
           <svg viewBox="0 0 24 24"><path d="M2 22l4.5-11 6.5 6.5z"/><line x1="14" y1="2" x2="14" y2="5"/><line x1="20" y1="8" x2="17" y2="8"/><path d="M13 4.5c1.5 0 2 1.5 3.5 1.5"/><path d="M18.5 11c0 1.5 1.5 2 1.5 3.5"/></svg>
         </button>
+        <button class="msg-attach" id="acDocBtn" onclick="document.getElementById('acPostDocFile').click()" aria-label="Attach a document" title="Attach a document">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </button>
+        <input type="file" id="acPostDocFile" class="hidden-input" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,application/pdf" onchange="acPickPostDoc(event)"/>
         <button class="msg-attach" id="acArticleBtn" onclick="acOpenArticleComposer((document.getElementById('acPostText')||{}).value||'')" aria-label="Write a long-form article">
           <svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z" fill="none"/><line x1="7" y1="8" x2="17" y2="8"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="7" y1="16" x2="13" y2="16"/></svg>
         </button>
@@ -17916,7 +18000,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1618'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1619'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24582,6 +24666,335 @@ async function acSubmitReport() {
   } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not submit the report.'); }
 }
 
+/* An arrival window in the words a person would use. Same day both ends means
+   one date, not a range that says the same thing twice. */
+function acEtaText(eta) {
+  if (!eta || !eta.minAt) return '';
+  const opts = { weekday: 'short', month: 'short', day: 'numeric' };
+  const a = new Date(eta.minAt), b = eta.maxAt ? new Date(eta.maxAt) : null;
+  const sa = a.toLocaleDateString([], opts);
+  if (!b || sa === b.toLocaleDateString([], opts)) return sa;
+  return sa + ' – ' + b.toLocaleDateString([], opts);
+}
+
+/* ─── A document on a post ───────────────────────────────────────────────── */
+let _acPostDoc = null;
+const _POST_DOC_MAX = 12 * 1024 * 1024;
+function acPickPostDoc(e) {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  if (f.size > _POST_DOC_MAX) { showNotif('That file is too big — up to 12 MB.'); return; }
+  const r = new FileReader();
+  r.onload = () => {
+    _acPostDoc = { data: r.result, name: f.name };
+    acRenderPostDocChip();
+  };
+  r.onerror = () => showNotif('Could not read that file.');
+  r.readAsDataURL(f);
+}
+function acRenderPostDocChip() {
+  let el = document.getElementById('acPostDocChip');
+  if (!_acPostDoc) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'acPostDocChip';
+    el.className = 'post-doc';
+    el.style.marginBottom = '10px';
+    const row = document.querySelector('#acPostScreen .ac-compose-row');
+    if (row && row.parentNode) row.parentNode.insertBefore(el, row.nextSibling);
+    else return;
+  }
+  el.innerHTML = `<div class="post-doc-ic"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+    <div style="min-width:0;flex:1;"><div class="post-doc-n">${escHtml(_acPostDoc.name)}</div>
+    <div class="post-doc-s">Attached to this post</div></div>
+    <button class="mem-x" onclick="_acPostDoc=null;acRenderPostDocChip();" aria-label="Remove">×</button>`;
+}
+
+/* ─── What Atwe AI remembers, and what it does on a schedule ─────────────── */
+let BRAIN = { tab: 'memory', memories: [], enabled: true, tasks: [], cadences: [] };
+function acOpenAiBrain(tab) {
+  BRAIN.tab = tab || 'memory';
+  showOverlay('aiBrainView');
+  acRenderBrainTabs();
+  acLoadBrain();
+}
+function acRenderBrainTabs() {
+  const el = document.getElementById('brainTabs'); if (!el) return;
+  el.innerHTML = [['memory', 'What it remembers'], ['tasks', 'What it does for you']]
+    .map(([k, l]) => `<button class="ac-jv ${BRAIN.tab === k ? 'on' : ''}" onclick="acBrainTab('${k}')">${l}</button>`).join('');
+}
+function acBrainTab(t) { BRAIN.tab = t; acRenderBrainTabs(); acRenderBrain(); }
+async function acLoadBrain() {
+  const b = document.getElementById('brainBody'); if (b) b.innerHTML = acSkelRows(3);
+  try {
+    const [m, t] = await Promise.all([
+      API.req('GET', '/api/ai/memory').catch(() => ({ memories: [], enabled: true })),
+      API.req('GET', '/api/ai/tasks').catch(() => ({ tasks: [], cadences: [] })),
+    ]);
+    BRAIN = { ...BRAIN, ...m, ...t };
+  } catch (e) {}
+  acRenderBrain();
+}
+function acRenderBrain() {
+  const b = document.getElementById('brainBody'); if (!b) return;
+  if (BRAIN.tab === 'tasks') return acRenderBrainTasks(b);
+  const rows = (BRAIN.memories || []).map(m => `<div class="mem-row">
+      <div class="mem-txt">${escHtml(m.fact)}<div class="mem-src">${m.source === 'learned' ? 'Atwe AI noticed this' : 'you told it'}</div></div>
+      <button class="mem-x" onclick="acForget(${m.id})" aria-label="Forget this">×</button>
+    </div>`).join('') || '<div class="ac-empty-sm">Nothing yet. Tell Atwe AI something about you or your business and it will keep it in mind.</div>';
+  b.innerHTML = `
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Everything Atwe AI knows about you is on this screen. Nothing is hidden, and you can delete any of it.</div>
+    <label class="dev-check" style="margin-bottom:10px;">
+      <input type="checkbox" ${BRAIN.enabled ? 'checked' : ''} onchange="acMemoryToggle(this.checked)"/>
+      <span>Let Atwe AI remember things<small>Turn this off and it starts every conversation fresh.</small></span>
+    </label>
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <input class="jp-in" id="memNew" maxlength="240" placeholder="e.g. I run a bakery in Leeds" style="flex:1;margin:0;"/>
+      <button class="ac-pill-btn accent" onclick="acRemember()">Add</button>
+    </div>
+    ${rows}
+    ${(BRAIN.memories || []).length ? '<button class="ac-pill-btn" style="width:100%;margin-top:10px;" onclick="acForgetAll()">Forget everything</button>' : ''}`;
+}
+async function acRemember() {
+  const fact = (document.getElementById('memNew').value || '').trim();
+  if (!fact) return;
+  try { await API.req('POST', '/api/ai/memory', { fact }); document.getElementById('memNew').value = ''; acLoadBrain(); }
+  catch (e) { showNotif(e.message || 'Could not save that.'); }
+}
+async function acForget(id) {
+  try { await API.req('DELETE', '/api/ai/memory/' + id); acLoadBrain(); } catch (e) { showNotif(e.message); }
+}
+async function acForgetAll() {
+  const ok = await appConfirm({ title: 'Forget everything?', message: 'Atwe AI will start fresh next time you talk to it.', confirmText: 'Forget it all', danger: true });
+  if (!ok) return;
+  try { await API.req('DELETE', '/api/ai/memory'); acLoadBrain(); } catch (e) { showNotif(e.message); }
+}
+async function acMemoryToggle(on) {
+  try { await API.req('PUT', '/api/ai/memory/enabled', { enabled: on }); BRAIN.enabled = on; }
+  catch (e) { showNotif(e.message); acLoadBrain(); }
+}
+const _BRAIN_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+function acRenderBrainTasks(b) {
+  const rows = (BRAIN.tasks || []).map(t => `<div class="dev-item">
+      <div class="dev-item-top"><span class="dev-name">${escHtml(t.name)}</span>
+        <span class="dev-pill ${t.status === 'active' ? 'ok' : 'off'}">${t.status === 'active' ? 'on' : 'paused'}</span></div>
+      <div class="dev-sub">${escHtml(t.cadenceLabel)}${t.cadence === 'weekly' ? ' on ' + _BRAIN_DAYS[t.weekday] : ''} at ${String(t.hour).padStart(2, '0')}:00${t.lastRunAt ? ' · last ran ' + acTime(t.lastRunAt) : ' · not run yet'}</div>
+      <div class="dev-sub" style="margin-top:6px;">“${escHtml(t.prompt)}”</div>
+      ${t.lastResult ? `<div class="ref-note" style="margin-top:8px;color:var(--t2);font-size:13px;line-height:1.5;">${escHtml(t.lastResult.slice(0, 300))}</div>` : ''}
+      <div class="dev-acts">
+        <button class="ac-pill-btn" onclick="acRunTask(${t.id})">Run it now</button>
+        <button class="ac-pill-btn" onclick="acTaskToggle(${t.id}, '${t.status === 'active' ? 'paused' : 'active'}')">${t.status === 'active' ? 'Pause' : 'Turn on'}</button>
+        <button class="ac-pill-btn" onclick="acDeleteTask(${t.id})">Delete</button>
+      </div></div>`).join('') || '<div class="ac-empty-sm">No scheduled tasks yet.</div>';
+  b.innerHTML = `
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Ask Atwe AI to do something on a schedule and the answer is waiting in your Atwe inbox — you never have to remember to ask.</div>
+    ${rows}
+    <div class="dev-item" style="margin-top:14px;">
+      <div class="dev-name" style="margin-bottom:8px;">Set one up</div>
+      <input class="jp-in" id="taskName" maxlength="80" placeholder="Name it (e.g. Monday round-up)"/>
+      <textarea class="jp-in" id="taskPrompt" rows="3" maxlength="1000" placeholder="What should it do? (e.g. Summarise how last week went and suggest one thing to try)" style="margin-top:8px;"></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+        <select class="jp-in jp-sel" id="taskCadence" style="flex:1;min-width:130px;margin:0;">
+          ${(BRAIN.cadences || [{ key: 'weekly', label: 'Every week' }]).map(c => `<option value="${escHtml(c.key)}"${c.key === 'weekly' ? ' selected' : ''}>${escHtml(c.label)}</option>`).join('')}
+        </select>
+        <select class="jp-in jp-sel" id="taskDay" style="flex:1;min-width:120px;margin:0;">
+          ${_BRAIN_DAYS.map((d, i) => `<option value="${i}"${i === 1 ? ' selected' : ''}>${d}</option>`).join('')}
+        </select>
+        <select class="jp-in jp-sel" id="taskHour" style="width:110px;margin:0;">
+          ${Array.from({ length: 24 }, (_, h) => `<option value="${h}"${h === 8 ? ' selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('')}
+        </select>
+      </div>
+      <button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="acCreateTask()">Schedule it</button>
+    </div>`;
+}
+async function acCreateTask() {
+  const name = (document.getElementById('taskName').value || '').trim();
+  const prompt = (document.getElementById('taskPrompt').value || '').trim();
+  if (!name || !prompt) { showNotif('Give it a name and say what it should do.'); return; }
+  try {
+    await API.req('POST', '/api/ai/tasks', { name, prompt,
+      cadence: document.getElementById('taskCadence').value,
+      weekday: Number(document.getElementById('taskDay').value),
+      hour: Number(document.getElementById('taskHour').value) });
+    showNotif('Scheduled.'); acLoadBrain();
+  } catch (e) {
+    // A cap that Pro would lift should say so, not just refuse.
+    if (e.body && e.body.upgrade) { showNotif(e.message); acOpenPro(); return; }
+    showNotif(e.message || 'Could not schedule that.');
+  }
+}
+async function acRunTask(id) {
+  showNotif('Running…');
+  try { await API.req('POST', '/api/ai/tasks/' + id + '/run', {}); showNotif('Done — the answer is in your Atwe inbox.'); acLoadBrain(); }
+  catch (e) { showNotif(e.message || 'Could not run it.'); }
+}
+async function acTaskToggle(id, status) {
+  try { await API.req('PATCH', '/api/ai/tasks/' + id, { status }); acLoadBrain(); } catch (e) { showNotif(e.message); }
+}
+async function acDeleteTask(id) {
+  const ok = await appConfirm({ title: 'Delete this task?', message: 'It will stop running.', confirmText: 'Delete', danger: true });
+  if (!ok) return;
+  try { await API.req('DELETE', '/api/ai/tasks/' + id); acLoadBrain(); } catch (e) { showNotif(e.message); }
+}
+
+/* ─── The front desk + what the business has ─────────────────────────────── */
+async function acOpenReception() {
+  showOverlay('receptionView');
+  const b = document.getElementById('receptionBody'); if (b) b.innerHTML = acSkelRows(2);
+  try {
+    const d = await API.req('GET', '/api/reception');
+    const k = d.knows || {};
+    b.innerHTML = `
+      ${d.isBusiness ? '' : '<div class="ac-empty-sm" style="margin-bottom:12px;">The front desk is for business accounts.</div>'}
+      ${d.aiEnabled ? '' : '<div class="ac-empty-sm" style="margin-bottom:12px;">Atwe AI is not switched on for this server yet.</div>'}
+      <label class="dev-check">
+        <input type="checkbox" id="recOn" ${d.enabled ? 'checked' : ''} ${d.isBusiness ? '' : 'disabled'} onchange="acSaveReception()"/>
+        <span>Answer customers when I can’t<small>It only ever answers from what you’ve told Atwe. If it isn’t sure, it stays quiet.</small></span>
+      </label>
+      <div class="ac-disc-sub" style="margin:12px 0 6px;">What it can answer from right now</div>
+      <div class="dev-scopes">
+        <span class="dev-scope">${k.hours ? 'Your opening hours' : 'No opening hours set'}</span>
+        <span class="dev-scope">${k.faq || 0} saved answer${k.faq === 1 ? '' : 's'}</span>
+        <span class="dev-scope">${k.items || 0} thing${k.items === 1 ? '' : 's'} listed as available</span>
+      </div>
+      <label class="ja-flabel" style="margin-top:14px;">Anything else it should know</label>
+      <textarea class="jp-in jp-desc" id="recNote" maxlength="600" placeholder="e.g. We do free local delivery within 5 miles. Parking is behind the shop.">${escHtml(d.note || '')}</textarea>
+      <button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="acSaveReception()">Save</button>
+      <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="closeOverlay('receptionView');acOpenAvailability()">What you have in →</button>`;
+  } catch (e) { b.innerHTML = '<div class="ac-empty-sm">' + escHtml(e.message) + '</div>'; }
+}
+async function acSaveReception() {
+  try {
+    await API.req('PUT', '/api/reception', {
+      enabled: !!document.getElementById('recOn').checked,
+      note: (document.getElementById('recNote').value || '').trim() });
+    showNotif('Saved.');
+  } catch (e) { showNotif(e.message || 'Could not save that.'); }
+}
+async function acOpenAvailability(businessId) {
+  const id = businessId || (S.user && S.user.id);
+  AC._availBiz = id;
+  showOverlay('availView');
+  const b = document.getElementById('availBody'); if (b) b.innerHTML = acSkelRows(3);
+  try {
+    const d = await API.req('GET', '/api/availability/' + id);
+    AC._availMine = !!d.mine;
+    const rows = (d.items || []).map(it => `<div class="dev-item">
+        <div class="dev-item-top"><span class="dev-name">${escHtml(it.name)}</span>
+          ${it.qty != null ? `<span class="dev-pill ${it.qty > 0 ? 'ok' : 'off'}">${it.qty > 0 ? it.qty + ' left' : 'none left'}</span>` : ''}
+          ${it.priceCents != null ? `<span class="dev-pill">${acMoney(it.priceCents)}</span>` : ''}</div>
+        ${it.detail ? `<div class="dev-sub">${escHtml(it.detail)}</div>` : ''}
+        ${d.mine ? `<div class="dev-acts">
+          <button class="ac-pill-btn" onclick="acAvailToggle(${it.id}, ${it.available ? 'false' : 'true'})">${it.available ? 'Mark unavailable' : 'Mark available'}</button>
+          <button class="ac-pill-btn" onclick="acAvailDelete(${it.id})">Remove</button></div>` : ''}
+      </div>`).join('') || '<div class="ac-empty-sm">Nothing listed yet.</div>';
+    b.innerHTML = rows + (d.mine ? `
+      <div class="dev-item" style="margin-top:14px;">
+        <div class="dev-name" style="margin-bottom:8px;">Add something</div>
+        <input class="jp-in" id="avName" maxlength="120" placeholder="What is it? (e.g. Blue Ford Focus, 2019)"/>
+        <input class="jp-in" id="avDetail" maxlength="300" placeholder="Anything worth knowing (optional)" style="margin-top:8px;"/>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <input class="jp-in" id="avQty" type="number" min="0" placeholder="How many" style="flex:1;margin:0;"/>
+          <input class="jp-in" id="avPrice" type="number" min="0" step="0.01" placeholder="Price" style="flex:1;margin:0;"/>
+        </div>
+        <button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="acAvailAdd()">Add</button>
+      </div>` : '');
+  } catch (e) { b.innerHTML = '<div class="ac-empty-sm">' + escHtml(e.message) + '</div>'; }
+}
+async function acAvailAdd() {
+  const name = (document.getElementById('avName').value || '').trim();
+  if (!name) { showNotif('What is it called?'); return; }
+  const qtyRaw = (document.getElementById('avQty').value || '').trim();
+  const priceRaw = (document.getElementById('avPrice').value || '').trim();
+  try {
+    await API.req('POST', '/api/availability', { name,
+      detail: (document.getElementById('avDetail').value || '').trim(),
+      qty: qtyRaw === '' ? null : Math.max(0, Math.round(Number(qtyRaw))),
+      priceCents: priceRaw === '' ? null : Math.round(Number(priceRaw) * 100) });
+    acOpenAvailability(AC._availBiz);
+  } catch (e) { showNotif(e.message || 'Could not add that.'); }
+}
+async function acAvailToggle(id, available) {
+  try { await API.req('PATCH', '/api/availability/' + id, { available }); acOpenAvailability(AC._availBiz); }
+  catch (e) { showNotif(e.message); }
+}
+async function acAvailDelete(id) {
+  try { await API.req('DELETE', '/api/availability/' + id); acOpenAvailability(AC._availBiz); }
+  catch (e) { showNotif(e.message); }
+}
+
+/* ─── How the shop looks ─────────────────────────────────────────────────── */
+const _STORE_LOOK_NAMES = { classic: 'Classic', bold: 'Bold', quiet: 'Quiet', warm: 'Warm' };
+const _STORE_LAYOUT_NAMES = { grid: 'Grid', list: 'List', showcase: 'Big pictures' };
+let STORE_LOOK = null;
+async function acOpenStoreLook() {
+  showOverlay('storeLookView');
+  const b = document.getElementById('storeLookBody'); if (b) b.innerHTML = acSkelRows(2);
+  try {
+    const d = await API.req('GET', '/api/store-theme/' + (S.user && S.user.id));
+    STORE_LOOK = d.theme || { look: 'classic', layout: 'grid', accent: null, tagline: null, featured: [] };
+    b.innerHTML = `
+      <label class="ja-flabel">The feel</label>
+      <div class="st-looks">${(d.looks || []).map(l =>
+        `<button class="st-look ${STORE_LOOK.look === l ? 'on' : ''}" onclick="acStoreLookSet('look','${l}')">${escHtml(_STORE_LOOK_NAMES[l] || l)}</button>`).join('')}</div>
+      <label class="ja-flabel" style="margin-top:14px;">How items are laid out</label>
+      <div class="st-looks">${(d.layouts || []).map(l =>
+        `<button class="st-look ${STORE_LOOK.layout === l ? 'on' : ''}" onclick="acStoreLookSet('layout','${l}')">${escHtml(_STORE_LAYOUT_NAMES[l] || l)}</button>`).join('')}</div>
+      <label class="ja-flabel" style="margin-top:14px;">A line under your shop name</label>
+      <input class="jp-in" id="stTagline" maxlength="120" value="${escHtml(STORE_LOOK.tagline || '')}" placeholder="e.g. Handmade in Leeds since 2019"/>
+      <label class="ja-flabel" style="margin-top:14px;">Your colour</label>
+      <input class="jp-in" id="stAccent" maxlength="7" value="${escHtml(STORE_LOOK.accent || '')}" placeholder="#0088FF — leave empty for the Atwe blue"/>
+      <button class="ac-pill-btn accent" style="width:100%;margin-top:14px;" onclick="acStoreLookSave()">Save</button>
+      <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acStoreLookReset()">Back to the standard look</button>`;
+  } catch (e) { b.innerHTML = '<div class="ac-empty-sm">' + escHtml(e.message) + '</div>'; }
+}
+function acStoreLookSet(key, val) { STORE_LOOK[key] = val; acOpenStoreLookRefresh(); }
+function acOpenStoreLookRefresh() {
+  // Keep what is typed in the boxes while re-drawing the chips.
+  STORE_LOOK.tagline = (document.getElementById('stTagline') || {}).value || STORE_LOOK.tagline;
+  STORE_LOOK.accent = (document.getElementById('stAccent') || {}).value || STORE_LOOK.accent;
+  document.querySelectorAll('#storeLookBody .st-look').forEach(btn => {
+    const txt = btn.textContent;
+    const isLook = Object.values(_STORE_LOOK_NAMES).includes(txt);
+    const map = isLook ? _STORE_LOOK_NAMES : _STORE_LAYOUT_NAMES;
+    const key = Object.keys(map).find(k => map[k] === txt);
+    btn.classList.toggle('on', key === (isLook ? STORE_LOOK.look : STORE_LOOK.layout));
+  });
+}
+async function acStoreLookSave() {
+  try {
+    await API.req('PUT', '/api/store-theme', { theme: { ...STORE_LOOK,
+      tagline: (document.getElementById('stTagline').value || '').trim(),
+      accent: (document.getElementById('stAccent').value || '').trim() } });
+    showNotif('Saved.'); closeOverlay('storeLookView');
+  } catch (e) { showNotif(e.message || 'Could not save that.'); }
+}
+async function acStoreLookReset() {
+  try { await API.req('DELETE', '/api/store-theme'); showNotif('Back to the standard look.'); closeOverlay('storeLookView'); }
+  catch (e) { showNotif(e.message); }
+}
+
+/* ─── What Pro actually gets you ─────────────────────────────────────────── */
+async function acOpenPro() {
+  showOverlay('proView');
+  const b = document.getElementById('proBody'); if (b) b.innerHTML = acSkelRows(3);
+  try {
+    const d = await API.req('GET', '/api/pro');
+    const pro = d.plan === 'pro';
+    document.getElementById('proTitle').textContent = pro ? 'You’re on Atwe Pro' : 'Atwe Pro';
+    b.innerHTML = `
+      <div class="ac-disc-sub" style="margin:0 0 14px;">${pro
+        ? 'Everything below is switched on for you.'
+        : 'Here is exactly what changes when you upgrade — no vague promises.'}</div>
+      ${(d.perks || []).map(p => `<div class="pro-perk ${pro ? '' : 'off'}">
+          <span class="pro-tick">${pro ? '✓' : '·'}</span>
+          <div><div class="pro-perk-t">${escHtml(p.label)}</div><div class="pro-perk-h">${escHtml(p.help)}</div></div>
+        </div>`).join('')}
+      ${pro ? '' : '<button class="ac-pill-btn accent" style="width:100%;margin-top:16px;" onclick="closeOverlay(\'proView\');upgradeToPro()">Upgrade to Pro</button>'}`;
+  } catch (e) { b.innerHTML = '<div class="ac-empty-sm">' + escHtml(e.message) + '</div>'; }
+}
+
 /* ─── Your number: security and money texts ─────────────────────────────── */
 // Kept deliberately small. A phone number is the one contact detail people
 // change most and trust least, so nothing here happens without a code.
@@ -30282,6 +30695,7 @@ function acGoGroups() { acGoMessages(); }
 // "Me" page on professional networks. Reuses the existing settings/account actions.
 const _ME_IC = {
   edit: '<svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+  spark: '<svg viewBox="0 0 24 24"><path d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15.5l-1.9-4.6L5.5 9l4.6-1.4z"/><path d="M18 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>',
   star: '<svg viewBox="0 0 24 24"><path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z"/></svg>',
   badge: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="8.5 12.5 11 15 15.5 9.5"/></svg>',
   gear: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
@@ -30376,7 +30790,8 @@ function acGoProfileHub() {
       </button>`;
     html += '<div class="me-group">';
     html += item('Edit profile', _ME_IC.edit, "openProfileEdit()", null);
-    html += item(S.plan === 'pro' ? 'Manage plan' : 'Upgrade to Pro', _ME_IC.star, "profilePlanAction()", null);
+    html += item(S.plan === 'pro' ? 'Manage plan' : 'Upgrade to Pro', _ME_IC.star, "acOpenPro()", null);
+    html += item('Atwe AI · memory & tasks', _ME_IC.spark, "acOpenAiBrain()", null);
     if (!verified) html += item('Get verified', _ME_IC.badge, "acGetVerified()", null);
     html += '</div>';
     // Everything personal that used to live in Engine now lives here, grouped
@@ -31446,7 +31861,17 @@ function acPostMedia(p, inFeed) {
       <svg class="ac-doc-card-dl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
     </a>`;
   }
+  // A document attached to the post (a PDF, a deck, a price list).
+  if (p.doc && p.doc.url) return acPostDocCard(p.doc, stop);
   return '';
+}
+function acPostDocCard(doc, stop) {
+  const kb = doc.size ? (doc.size > 1048576 ? (doc.size / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(doc.size / 1024)) + ' KB') : '';
+  const ext = (doc.name || '').split('.').pop().toUpperCase().slice(0, 4);
+  return `<div class="post-doc" onclick="${stop}window.open('${jsAttr(doc.url)}','_blank','noopener')">
+    <div class="post-doc-ic"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+    <div style="min-width:0;"><div class="post-doc-n">${escHtml(doc.name || 'Document')}</div>
+    <div class="post-doc-s">${escHtml(ext)}${kb ? ' · ' + kb : ''} · tap to open</div></div></div>`;
 }
 // Video duration chip (blueprint §Home) — filled once the clip's metadata loads.
 function _fmtDur(s) { s = Math.max(0, Math.round(s)); const m = Math.floor(s / 60), ss = s % 60; return m + ':' + String(ss).padStart(2, '0'); }
@@ -33877,6 +34302,7 @@ function acOpenPost(circleId) {
   const cav = document.getElementById('acComposeAv');
   if (cav && S.user) cav.innerHTML = acAvatarHtml(S.user.name, S.user.avatar, 'user-avatar', acIsBiz(S.user));
   _acPostAtt = null; _acPostImgs = []; _acPostGif = null;
+  _acPostDoc = null; acRenderPostDocChip();  // a document never carries over
   AC._postProducts = []; acRenderPostProdChip();
   AC._postOccasion = null; acRenderOccasionChip(); // fresh occasion per composer open
   AC._postAiAssisted = false; acSyncAiDiscloseChip(); // the AI label never carries over to the next post
@@ -34182,7 +34608,7 @@ function acChatMentionPick(username) {
 function acChatMentionClose() { const box = document.getElementById('acChatMentionBox'); if (box) { box.classList.add('hidden'); box.innerHTML = ''; } AC._chatMentionTok = null; }
 const POST_IMG_MAX = 4;
 let _acPostGif = null; // a GIF URL attached to the post (mutually exclusive with images/video)
-function _acHasMedia() { return _acPostImgs.length > 0 || !!_acPostAtt || !!_acPostGif; }
+function _acHasMedia() { return _acPostImgs.length > 0 || !!_acPostAtt || !!_acPostGif || !!_acPostDoc; }
 function acOnPostFile(e, kind) {
   _acPostGif = null;
   const files = [...(e.target.files || [])]; e.target.value = '';
@@ -34558,6 +34984,8 @@ async function acSubmitPost() {
   else if (_acPostGif) payload.gifUrl = _acPostGif;
   const altVal = (document.getElementById('acPostAlt')?.value || '').trim();
   if (_acPostImgs.length && altVal) payload.imageAlt = altVal;
+  // A document attached to the post (a PDF, a deck, a price list).
+  if (_acPostDoc) { payload.doc = _acPostDoc.data; payload.docName = _acPostDoc.name; }
   if (poll.length >= 2) { payload.poll = poll; payload.pollDays = parseInt(document.getElementById('acPollDur')?.value, 10) || 7; }
   if (AC._quoteId) payload.quoteId = AC._quoteId;
   if (AC._replyScope && AC._replyScope !== 'everyone') payload.replyScope = AC._replyScope;
@@ -38037,8 +38465,15 @@ async function acAgentGo() {
   result.innerHTML = '';
   try {
     const r = await API.req('POST', '/api/ai/agent', { message });
-    if (r.action) { AC._agentAction = r.action; result.innerHTML = acAgentActionCard(r.action); }
-    else { result.innerHTML = `<div class="ai-shop-summary">${escHtml(r.text || '')}</div>`; }
+    if (r.action) {
+      AC._agentAction = r.action;
+      result.innerHTML = (r.text ? `<div class="ai-shop-summary">${escHtml(r.text)}</div>` : '') + acAgentActionCard(r.action);
+    } else if (r.chart) {
+      // Numbers are easier to see than to read.
+      result.innerHTML = (r.text ? `<div class="ai-shop-summary">${escHtml(r.text)}</div>` : '')
+        + `<div class="ai-chart" id="aiChartBox"></div>`;
+      acDrawAiChart(document.getElementById('aiChartBox'), r.chart);
+    } else { result.innerHTML = `<div class="ai-shop-summary">${escHtml(r.text || '')}</div>`; }
   } catch (e) { result.innerHTML = '<div class="ac-empty" style="padding:14px;">' + escHtml(e.message || 'Atwe AI is unavailable.') + '</div>'; }
   finally { if (btn) { btn.disabled = false; btn.textContent = 'Ask Atwe AI'; } }
 }
@@ -38048,6 +38483,13 @@ function acAgentActionCard(a) {
   if (a.tool === 'create_event') rows = `<b>${escHtml(i.title || '')}</b><div>${escHtml(acAgentWhen(i.startsAt))}</div>${i.location ? '<div>' + escHtml(i.location) + '</div>' : ''}${i.description ? '<div class="ac-disc-sub">' + escHtml(i.description) + '</div>' : ''}`;
   else if (a.tool === 'draft_invoice') rows = `<b>${escHtml(i.title || '')}</b><div>To @${escHtml(i.customerUsername || '')} · ${acMoney(i.amountCents || 0)}</div>`;
   else if (a.tool === 'schedule_post') rows = `<div>${escHtml(i.body || '')}</div><div class="ac-disc-sub">Publishes ${escHtml(acAgentWhen(i.scheduledAt))}</div>`;
+  else if (a.tool === 'create_listing') rows = `<b>${escHtml(i.name || '')}</b><div>${acMoney(i.priceCents || 0)} · ${escHtml(i.kind || 'physical')}</div>${i.description ? '<div class="ac-disc-sub">' + escHtml(i.description) + '</div>' : ''}`;
+  else if (a.tool === 'change_price') rows = `<b>${escHtml(i.listingName || '')}</b><div>New price: ${acMoney(i.priceCents || 0)}</div>`;
+  else if (a.tool === 'set_stock') rows = `<b>${escHtml(i.listingName || '')}</b><div>${i.stock === 0 ? 'Mark as sold out' : i.stock + ' left in stock'}</div>`;
+  else if (a.tool === 'add_service') rows = `<b>${escHtml(i.name || '')}</b><div>${i.durationMin || 0} minutes${i.depositCents ? ' · ' + acMoney(i.depositCents) + ' deposit' : ''}</div>`;
+  else if (a.tool === 'set_vacation') rows = `<b>${i.on ? 'Pause new orders' : 'Reopen the shop'}</b>${i.note ? '<div class="ac-disc-sub">' + escHtml(i.note) + '</div>' : ''}`;
+  else if (a.tool === 'send_money') rows = `<b>${acMoney(i.amountCents || 0)}</b><div>To @${escHtml((i.toUsername || '').replace(/^@/, ''))}</div>${i.note ? '<div class="ac-disc-sub">' + escHtml(i.note) + '</div>' : ''}`;
+  else if (a.tool === 'remember') rows = `<div>“${escHtml(i.fact || '')}”</div><div class="ac-disc-sub">Atwe AI will keep this in mind next time.</div>`;
   else if (a.tool === 'draft_reply') return `<div class="ai-shop-summary"><b>Drafted reply</b><div style="margin-top:6px;">${escHtml(i.text || '')}</div></div><div class="mkt-detail-buy" style="margin-top:8px;"><button class="ac-pill-btn" onclick="acAgentCopy()">Copy</button></div>`;
   return `<div class="ai-shop-summary"><div class="ac-disc-sub" style="margin-bottom:6px;">Atwe AI wants to: <b>${escHtml(a.label)}</b></div>${rows}</div>
     <div class="mkt-detail-buy" style="margin-top:10px;"><button class="ac-pill-btn" onclick="acAgentCancel()">Cancel</button><button class="ac-pill-btn accent" onclick="acAgentConfirm()">Confirm</button></div>`;
@@ -38076,10 +38518,117 @@ async function acAgentConfirm() {
       await API.req('POST', '/api/invoices', { customerId: cid, title: i.title, amountCents: i.amountCents });
       acAiLog('draft_invoice', 'Sent an invoice to @' + (i.customerUsername || '').replace(/^@/, ''), (i.title || '') + (i.amountCents ? ' · ' + acMoney(i.amountCents) : ''));
       showNotif('Invoice sent.'); closeOverlay('agentView'); acOpenInvoices('sent');
+    } else if (a.tool === 'create_listing') {
+      const { product } = await API.req('POST', '/api/products', {
+        name: i.name, priceCents: i.priceCents,
+        kind: ['physical', 'digital', 'service'].includes(i.kind) ? i.kind : 'physical',
+        description: i.description || '' });
+      acAiLog('create_listing', 'Added the listing “' + (i.name || '') + '”', acMoney(i.priceCents || 0));
+      showNotif('Listing added.'); closeOverlay('agentView');
+      if (product && product.id) acOpenListing(product.id); else acOpenSell();
+    } else if (a.tool === 'change_price' || a.tool === 'set_stock') {
+      const p = await acFindMyListing(i.listingName);
+      if (!p) { showNotif('Couldn’t find a listing called “' + (i.listingName || '') + '”.'); return; }
+      const patch = a.tool === 'change_price' ? { priceCents: i.priceCents } : { stock: i.stock };
+      await API.req('PATCH', '/api/products/' + p.id, patch);
+      acAiLog(a.tool, (a.tool === 'change_price' ? 'Repriced ' : 'Updated stock on ') + '“' + p.name + '”',
+        a.tool === 'change_price' ? acMoney(i.priceCents || 0) : (i.stock + ' left'));
+      showNotif('Done.'); closeOverlay('agentView'); acOpenSell();
+    } else if (a.tool === 'add_service') {
+      await API.req('POST', '/api/business/services', { name: i.name, durationMin: i.durationMin, depositCents: i.depositCents || 0 });
+      acAiLog('add_service', 'Added the service “' + (i.name || '') + '”', (i.durationMin || 0) + ' min');
+      showNotif('Service added.'); closeOverlay('agentView'); acOpenAppointments();
+    } else if (a.tool === 'set_vacation') {
+      await API.req('PUT', '/api/auth/profile', { name: S.user.name, username: S.user.username,
+        vacationUntil: i.on ? new Date(Date.now() + 30 * 86400000).toISOString() : null,
+        vacationNote: i.note || null });
+      acAiLog('set_vacation', i.on ? 'Paused the shop' : 'Reopened the shop', i.note || null);
+      showNotif(i.on ? 'Shop paused.' : 'Shop reopened.'); closeOverlay('agentView');
+    } else if (a.tool === 'send_money') {
+      // Money always goes through the real, velocity-checked wallet route.
+      await API.req('POST', '/api/wallet/send', { to: (i.toUsername || '').replace(/^@/, ''),
+        amount: (i.amountCents || 0) / 100, note: i.note || '', clientId: acPayCid() });
+      acAiLog('send_money', 'Sent ' + acMoney(i.amountCents || 0) + ' to @' + (i.toUsername || '').replace(/^@/, ''), i.note || null);
+      showNotif('Sent.'); closeOverlay('agentView'); acOpenWallet();
+    } else if (a.tool === 'remember') {
+      await API.req('POST', '/api/ai/memory', { fact: i.fact, source: 'learned' });
+      acAiLog('remember', 'Remembered something', i.fact || null);
+      showNotif('Noted.'); closeOverlay('agentView');
     }
     AC._agentAction = null;
   } catch (e) { showNotif(e.message || 'Could not complete that action.'); }
 }
+/* Find one of MY listings by the name a person said out loud. Exact match
+   first, then a contains match — "the blue mug" should find "Blue Mug". */
+async function acFindMyListing(name) {
+  const want = String(name || '').trim().toLowerCase();
+  if (!want) return null;
+  try {
+    const { products } = await API.req('GET', '/api/my-listings');
+    const list = products || [];
+    return list.find((p) => (p.name || '').toLowerCase() === want)
+      || list.find((p) => (p.name || '').toLowerCase().includes(want))
+      || list.find((p) => want.includes((p.name || '').toLowerCase())) || null;
+  } catch (e) { return null; }
+}
+/* Draw the assistant's chart. Canvas 2D, no library — the same approach the
+   Postshot painter uses, and it reads the live theme so it belongs on the page
+   rather than looking like something pasted in. */
+function acDrawAiChart(host, spec) {
+  if (!host || !spec) return;
+  const cs = getComputedStyle(document.body);
+  const accent = (cs.getPropertyValue('--accent') || '#0088FF').trim();
+  const ink = (cs.getPropertyValue('--t1') || '#e7e9ea').trim();
+  const dim = (cs.getPropertyValue('--t3') || '#71767b').trim();
+  const dpr = Math.min(3, window.devicePixelRatio || 1);
+  const W = Math.max(280, host.clientWidth || 320), H = 210;
+  const c = document.createElement('canvas');
+  c.width = W * dpr; c.height = H * dpr;
+  c.style.width = '100%'; c.style.height = H + 'px';
+  host.innerHTML = '';
+  if (spec.title) {
+    const t = document.createElement('div');
+    t.className = 'ai-chart-title'; t.textContent = spec.title;
+    host.appendChild(t);
+  }
+  host.appendChild(c);
+  const g = c.getContext('2d'); g.scale(dpr, dpr);
+  const pad = { l: 44, r: 10, t: 10, b: 26 };
+  const vals = spec.values, n = vals.length;
+  const max = Math.max(...vals, 0), min = Math.min(...vals, 0);
+  const span = (max - min) || 1;
+  const x = (i) => pad.l + (n === 1 ? 0 : (i * (W - pad.l - pad.r)) / (n - 1));
+  const y = (v) => pad.t + (H - pad.t - pad.b) * (1 - (v - min) / span);
+  const fmt = (v) => spec.unit === 'money' ? '$' + (v / 100).toFixed(v % 100 ? 2 : 0)
+    : spec.unit === 'percent' ? v + '%' : String(Math.round(v * 100) / 100);
+  // Baselines + the two edge values, so the numbers are readable without a legend.
+  g.strokeStyle = dim; g.globalAlpha = .25; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(pad.l, y(max)); g.lineTo(W - pad.r, y(max)); g.stroke();
+  g.beginPath(); g.moveTo(pad.l, y(min)); g.lineTo(W - pad.r, y(min)); g.stroke();
+  g.globalAlpha = 1;
+  g.fillStyle = dim; g.font = '11px -apple-system,system-ui,sans-serif'; g.textAlign = 'right';
+  g.fillText(fmt(max), pad.l - 6, y(max) + 4);
+  g.fillText(fmt(min), pad.l - 6, y(min) + 4);
+  if (spec.kind === 'line') {
+    g.strokeStyle = accent; g.lineWidth = 2.2; g.lineJoin = 'round';
+    g.beginPath(); vals.forEach((v, i) => (i ? g.lineTo(x(i), y(v)) : g.moveTo(x(i), y(v)))); g.stroke();
+    g.fillStyle = accent;
+    vals.forEach((v, i) => { g.beginPath(); g.arc(x(i), y(v), 3, 0, Math.PI * 2); g.fill(); });
+  } else {
+    const bw = Math.max(4, ((W - pad.l - pad.r) / n) * 0.62);
+    g.fillStyle = accent;
+    vals.forEach((v, i) => {
+      const bx = pad.l + ((i + 0.5) * (W - pad.l - pad.r)) / n - bw / 2;
+      const top = y(Math.max(v, 0)), base = y(Math.min(0, min));
+      g.fillRect(bx, top, bw, Math.max(2, base - top));
+    });
+  }
+  // Only the first and last label — anything more is unreadable at this size.
+  g.fillStyle = dim; g.textAlign = 'left';
+  g.fillText(String(spec.labels[0] || ''), pad.l, H - 8);
+  if (n > 1) { g.textAlign = 'right'; g.fillText(String(spec.labels[n - 1] || ''), W - pad.r, H - 8); }
+}
+
 // ── AI action log (transparency): what Atwe AI has done, on your say-so ──
 function acAiLog(tool, label, detail) {
   API.req('POST', '/api/ai/actions/log', { tool, label, detail: detail || undefined }).catch(() => {});
@@ -39074,6 +39623,7 @@ async function acOpenOrder(id) {
       <div class="inv-head"><span class="mc-inv-ic">${o.escrow ? '<svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>'}</span>
         <div><div class="jp-title" style="padding:0;">Order #${o.id}${o.escrow ? ' · Protected' : ''}</div>${acOrdStatusChip(o.status)}</div></div>
       <div class="inv-parties">${o.mine ? 'From ' : 'Sold by '}<b>${escHtml(other.name)}</b> @${escHtml(other.username)}</div>
+      ${(o.eta && !o.deliveredAt) ? `<div class="eta-line"><svg viewBox="0 0 24 24" style="width:17px;height:17px;stroke:var(--green);stroke-width:1.8;fill:none;flex:none;"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg><span>${o.shippedAt ? 'Should arrive' : 'Expected'} <b>${escHtml(acEtaText(o.eta))}</b></span></div>` : ''}
       ${o.pickup ? `<div class="ord-shipto"><div class="co-sec-h">Local pickup</div><div class="addr-lines">Collect in person${o.pickupLocation ? ' · ' + escHtml(o.pickupLocation) + ` · <a class="ac-pm-map" href="${acMapsUrl(o.pickupLocation)}" target="_blank" rel="noopener">Get directions</a>` : ''}. Coordinate the time in chat.</div></div>` : ''}
       ${shipBlock}
       ${totals}
@@ -40369,6 +40919,11 @@ function acRenderCheckout() {
   if (!pickupMode && q && c.needsShipping && q.shippingOptions && q.shippingOptions.length > 1) {
     rateBlock = `<div class="co-sec-h">Shipping</div><div class="co-rates">${q.shippingOptions.map(o => `<button class="co-rate${(AC._coRateId === o.id || q.selectedRateId === o.id) ? ' on' : ''}" onclick="acPickRate('${o.id}')"><span class="co-rate-main"><span class="co-rate-name">${escHtml(o.label)}</span>${o.days ? `<span class="co-rate-days">${escHtml(o.days)} days</span>` : ''}</span><span class="co-rate-price">${o.amountCents ? acMoney(o.amountCents) : 'Free'}</span></button>`).join('')}</div>`;
   }
+  // When it should land. "Ships in 1-2 days" is a fact about the seller;
+  // "arrives Tuesday to Thursday" is what the buyer actually wants to know.
+  const etaBlock = (!pickupMode && q && q.eta) ? `<div class="eta-line">
+      <svg viewBox="0 0 24 24" style="width:17px;height:17px;stroke:var(--green);stroke-width:1.8;fill:none;flex:none;"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+      <span>Arrives <b>${escHtml(acEtaText(q.eta))}</b></span></div>` : '';
   // Promo code — only when we know which seller's coupons to check against
   // (never on a bundle: its discount is already baked into the price).
   const promo = (c.sellerId && !c.noCoupon) ? `<div class="co-promo">
@@ -40419,7 +40974,7 @@ function acRenderCheckout() {
     ${bal ? `<button class="ac-pill-btn pay-prot" style="width:100%;margin-top:8px;" ${canPay ? '' : 'disabled'} onclick="acCheckoutPay('escrow')"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-inline-end:5px;"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>Buy with protection</button>
     <div class="esc-note"><span class="esc-dot"></span>With protection, your money is held in escrow and released when you confirm delivery.</div>` : ''}
     ${(c.needsShipping && !pickupMode && !AC._coAddrId) ? '<div class="ac-disc-sub" style="margin-top:8px;text-align:center;">Add a shipping address to continue.</div>' : ''}`;
-  b.innerHTML = `${c.name ? `<div class="co-item">${escHtml(c.name)}${c.qty > 1 ? ' × ' + c.qty : ''}</div>` : ''}${fulfill}${addrBlock}${rateBlock}${promo}${noteRow}${coGiftRow}${summary}${pay}`;
+  b.innerHTML = `${c.name ? `<div class="co-item">${escHtml(c.name)}${c.qty > 1 ? ' × ' + c.qty : ''}</div>` : ''}${fulfill}${addrBlock}${rateBlock}${etaBlock}${promo}${noteRow}${coGiftRow}${summary}${pay}`;
 }
 // Switch checkout between shipping and local pickup.
 function acSetFulfillment(mode) { AC._coPickup = (mode === 'pickup'); if (acQuoteActive() && !AC._coPickup) acRefreshQuote(); else acRenderCheckout(); }
@@ -41636,6 +42191,9 @@ async function acOpenStoreManage() {
     ${row(SI.megaphone, 'Announcement', (S.user && S.user.storeBanner) ? '“' + escHtml(S.user.storeBanner.slice(0, 42)) + (S.user.storeBanner.length > 42 ? '…' : '') + '”' : 'One line pinned atop your shop', 'acOpenStoreBanner()')}
     ${row(SI.box, 'Free shipping', (S.user && S.user.freeShipOverCents) ? 'Free on orders over $' + (S.user.freeShipOverCents / 100).toFixed(0) : 'Offer free shipping over an amount', 'acOpenFreeShip()')}
     ${row(SI.store, 'Vacation mode', 'Pause new orders while you’re away', 'acOpenVacation()')}
+    ${row(SI.store, 'How your shop looks', 'A feel, a layout, your colour', 'acOpenStoreLook()')}
+    ${isBiz ? row(SI.megaphone, 'Front desk', 'Let Atwe AI answer customers when you can’t', 'closeOverlay(\'storeManageView\');acOpenReception()') : ''}
+    ${isBiz ? row(SI.box, 'What you have in', 'So customers get a straight answer', 'closeOverlay(\'storeManageView\');acOpenAvailability()') : ''}
     ${row(SI.chart, 'Connect your systems', 'API keys and webhooks for your own software', 'acOpenDevTools()')}
   </div>`;
   });
