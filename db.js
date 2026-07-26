@@ -1758,6 +1758,47 @@ async function initSchema() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS condition TEXT;`); // new | like_new | good | fair (physical resale)
   // "Was" price (compare-at, Shopify-style) — shown struck through when > price.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS compare_at_cents INTEGER;`);
+  // Generic waitlists: a named list anyone can join, with their position. Used
+  // for features that aren't live yet, so interest is captured instead of lost.
+  await query(`
+    CREATE TABLE IF NOT EXISTS waitlists (
+      id          SERIAL PRIMARY KEY,
+      slug        TEXT NOT NULL,
+      title       TEXT NOT NULL,
+      description TEXT,
+      open        BOOLEAN NOT NULL DEFAULT true,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS waitlists_slug_idx ON waitlists(lower(slug));`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS waitlist_members (
+      waitlist_id INTEGER NOT NULL REFERENCES waitlists(id) ON DELETE CASCADE,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      invited_at  TIMESTAMPTZ,
+      joined_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (waitlist_id, user_id)
+    );
+  `);
+  // Searches that returned nothing — a free roadmap of what members want and
+  // can't find. Aggregated by term, never tied back to a person.
+  await query(`
+    CREATE TABLE IF NOT EXISTS search_misses (
+      term       TEXT PRIMARY KEY,
+      hits       INTEGER NOT NULL DEFAULT 1,
+      last_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  // Curated trends: pin a tag to the top, or hide one entirely.
+  await query(`
+    CREATE TABLE IF NOT EXISTS trend_overrides (
+      tag        TEXT PRIMARY KEY,
+      pinned     BOOLEAN NOT NULL DEFAULT false,
+      hidden     BOOLEAN NOT NULL DEFAULT false,
+      label      TEXT,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
   // Editorial curation: hand-picked shelves that appear in Discover — either a
   // set of LISTINGS ("Featured this week") or a set of PROFILES ("Makers to
   // follow"). One system for both, so merchandising and editorial picks don't
