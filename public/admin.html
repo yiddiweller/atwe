@@ -3721,7 +3721,7 @@ async function openUser(id){
       <div class="m"><span class="k">Chats</span><span class="v">${u.chat_count || 0}</span></div>
       <div class="m"><span class="k">Joined</span><span class="v">${fmtDate(u.created_at)}</span></div>
       <div class="m"><span class="k">Last login</span><span class="v">${u.last_login_at ? fmtDateTime(u.last_login_at) : 'never'}</span></div>
-      <div class="m"><span class="k">Account status</span><span class="v">${u.status === 'banned' ? '<span class="pill ban">banned</span>' : (u.status === 'suspended' ? '<span class="pill susp">suspended'+(u.suspended_until ? ' · until '+fmtDate(u.suspended_until) : '')+'</span>' : '<span class="pill">active</span>')}</span></div>
+      <div class="m"><span class="k">Account status</span><span class="v">${u.status === 'banned' ? '<span class="pill ban">banned</span>' : (u.status === 'suspended' ? '<span class="pill susp">suspended'+(u.suspended_until ? ' · until '+fmtDate(u.suspended_until) : '')+'</span>' : (u.status === 'limited' ? '<span class="pill admin">limited'+(u.suspended_until ? ' · until '+fmtDate(u.suspended_until) : '')+'</span>' : '<span class="pill">active</span>'))}</span></div>
       ${u.status && u.status !== 'active' && u.status_reason ? `<div class="m"><span class="k">Reason</span><span class="v">${esc(u.status_reason)}</span></div>` : ''}
       ${u.account_type === 'business' ? `<div class="m"><span class="k">Org tier</span><span class="v">${esc(BIZ_TIER_LABEL[u.business_verify_tier] || 'Not verified')}</span></div>` : ''}
       ${u.business_legal_name ? `<div class="m"><span class="k">Legal name</span><span class="v">${esc(u.business_legal_name)}</span></div>` : ''}
@@ -3738,7 +3738,8 @@ async function openUser(id){
       ${u.account_type === 'business' ? BIZ_TIER_BTNS.map(([t, lbl]) => `<button class="act${(u.business_verify_tier || 'none') === t ? ' accent' : ''}${t === 'none' ? ' danger' : ''}" onclick="setBizTier(${u.id}, '${t}')">${lbl}</button>`).join('') : ''}
       ${u.status && u.status !== 'active'
         ? `<button class="act accent" onclick="setUserStatus(${u.id}, 'active')">Reinstate account</button>`
-        : `<button class="act" onclick="setUserStatus(${u.id}, 'suspended')">Suspend…</button><button class="act danger" onclick="setUserStatus(${u.id}, 'banned')">Ban…</button>`}
+        : `<button class="act" onclick="setUserStatus(${u.id}, 'limited')">Limit…</button><button class="act" onclick="setUserStatus(${u.id}, 'suspended')">Suspend…</button><button class="act danger" onclick="setUserStatus(${u.id}, 'banned')">Ban…</button>`}
+      <button class="act" onclick="openStrikes(${u.id})">Strikes…</button>
       <button class="act${u.wallet_frozen ? ' accent' : ''}" onclick="setWalletFreeze(${u.id}, ${u.wallet_frozen ? 'false' : 'true'})">${u.wallet_frozen ? 'Unfreeze wallet' : 'Freeze wallet…'}</button>
       ${u.is_admin ? '' : `<button class="act" onclick="impersonateUser(${u.id})">View as user…</button>`}
       <button class="act danger" onclick="removeUser(${u.id})">Delete user</button>
@@ -3978,12 +3979,58 @@ async function setBizVerify(id, status){
 }
 // Suspend (temporary), ban (permanent), or reinstate an account. The account + its
 // content stay; the person is locked out and their live sessions are dropped.
+// Graduated enforcement: issue a strike and let the ladder decide the
+// consequence, instead of jumping straight from "fine" to "banned".
+async function openStrikes(id){
+  try {
+    const d = await api('GET', '/api/admin/users/' + id + '/strikes');
+    const list = d.strikes.length ? d.strikes.map(s => `<div class="site-row">
+        <div><div class="srt">${esc(s.reason)}${s.severity === 'major' ? ' <span class="pill ban">major</span>' : ''}${s.active ? '' : ' <span class="pill">expired</span>'}</div>
+          <div class="srs">${fmtDate(s.createdAt)}${s.by ? ' · by ' + esc(s.by) : ''}${s.expiresAt ? ' · expires ' + fmtDate(s.expiresAt) : ''}</div></div>
+        <button class="act danger" onclick="removeStrike(${id}, ${s.id})">Remove</button></div>`).join('')
+      : '<div class="muted" style="padding:6px 0;">No strikes on this account.</div>';
+    const ladder = d.ladder.map(r => `<span class="pill${d.activeCount >= r.at ? ' ban' : ''}">${r.at}: ${esc(r.label)}</span>`).join(' ');
+    document.getElementById('modalCard').innerHTML = `
+      <div class="modal-head"><div><h2>Strikes</h2><div class="u-email">${d.activeCount} active</div></div><button class="close-x" onclick="closeModal()">&times;</button></div>
+      <div style="padding:0 20px 20px;">
+      <div class="sub">Strikes expire after ${d.ttlDays} days, so good behaviour clears the record. The ladder applies the consequence automatically.</div>
+      <div style="margin:10px 0;display:flex;flex-wrap:wrap;gap:6px;">${ladder}</div>
+      ${d.next ? `<div class="sub">Next strike → <b>${esc(d.next.label)}</b></div>` : ''}
+      <input class="in" id="stReason" maxlength="500" placeholder="What was it for? (the member is told)" style="margin-top:10px;"/>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="act accent" onclick="addStrike(${id}, 'minor')">Add strike</button>
+        <button class="act danger" onclick="addStrike(${id}, 'major')">Add major strike (counts double)</button>
+      </div>
+      <div style="margin-top:14px;">${list}</div></div>`;
+    document.getElementById('modal').classList.add('show');
+    document.body.style.overflow = 'hidden';
+  } catch (e){ notify(e.message); }
+}
+async function addStrike(id, severity){
+  const reason = (document.getElementById('stReason').value || '').trim();
+  if (!reason) { notify('Give a reason — the member is told what it was for.'); return; }
+  try {
+    const r = await api('POST', '/api/admin/users/' + id + '/strikes', { reason, severity });
+    notify(r.applied ? ('Strike ' + r.activeCount + ' → ' + r.label + '.') : ('Strike ' + r.activeCount + ' — warning issued.'));
+    openStrikes(id); load();
+  } catch (e){ notify(e.message); }
+}
+async function removeStrike(uid, id){
+  try { await api('DELETE', '/api/admin/users/' + uid + '/strikes/' + id); openStrikes(uid); }
+  catch (e){ notify(e.message); }
+}
 async function setUserStatus(id, status){
   const u = USERS.find(x => x.id === id); if (!u) return;
   const body = { status };
   if (status === 'banned') {
     if (!confirm('Ban ' + u.email + '? They\'ll be locked out permanently and signed out everywhere. Their content stays (use Delete to remove it).')) return;
     body.reason = prompt('Reason for the ban (shown to them at login, optional):', '') || '';
+  } else if (status === 'limited') {
+    if (!confirm('Limit ' + u.email + '? They can still sign in and read, but can\'t post, message or sell.')) return;
+    const d = prompt('Limit for how many days?', '7');
+    if (d === null) return;
+    body.days = Math.max(1, parseInt(d, 10) || 7);
+    body.reason = prompt('Reason (shown to them, optional):', '') || '';
   } else if (status === 'suspended') {
     const days = prompt('Suspend for how many days?', '7');
     if (days === null) return;
