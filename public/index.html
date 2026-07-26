@@ -7262,6 +7262,10 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .feed-remix-txt{display:flex;flex-direction:column;min-width:0;font-size:12.5px;}
 .feed-remix-txt b{font-size:13.5px;font-weight:700;}
 .feed-remix-txt span{color:var(--t3);}
+/* Seller performance tier — earned from real orders, so it means something. */
+.seller-tier{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:800;border-radius:999px;padding:4px 11px;background:rgba(48,209,88,.13);color:var(--green);}
+.seller-tier.great{background:var(--accent-dim);color:var(--accent);}
+.seller-tier.good{background:var(--s2);color:var(--t2);}
 /* Verified-organization tiers: an honest label for the LEVEL of proof. The seal
    stays the neutral silver one at every tier (design rule 10) — only this chip
    distinguishes domain-verified from a staff-reviewed business. Premium is the
@@ -17481,7 +17485,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1599'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1600'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -36489,6 +36493,16 @@ function acBindGallery() {
     if (dots) [...dots.children].forEach((d, n) => d.classList.toggle('on', n === i));
   }, { passive: true });
 }
+// Seller performance tier — a badge earned from real orders (ship speed, disputes,
+// reviews), loaded lazily so the listing paints first.
+async function acLoadSellerTier(sellerId, elId) {
+  try {
+    const d = await API.req('GET', '/api/seller-performance/' + sellerId);
+    const el = document.getElementById(elId); if (!el) return;
+    if (!d.enough || !d.tier) { el.innerHTML = ''; return; }
+    el.innerHTML = `<span class="seller-tier ${escHtml(d.tier.key)}" title="${d.orders} orders in 90 days${d.rating ? ' · ' + d.rating + '★' : ''}${d.avgShipDays != null ? ' · ships in ~' + d.avgShipDays + 'd' : ''}">★ ${escHtml(d.tier.label)}</span>`;
+  } catch (e) { /* a missing badge is never worth an error */ }
+}
 // Wishlist toggle (heart).
 async function acToggleSave(id, btn) {
   const on = btn.classList.contains('on');
@@ -36589,6 +36603,7 @@ async function acOpenListing(id) {
         <div class="mkt-detail-head" onclick="closeOverlay('listingView');closeOverlay('marketplaceView');appTab('home');acGoProfile(${jsAttr(l.seller.username || '')})">
           ${acAvatarHtml(l.seller.name, l.seller.avatar, 'user-avatar sm', biz)}
           <span>${escHtml(l.seller.name)}${l.seller.username ? ` · @${escHtml(l.seller.username)}` : ''}</span>
+          <span id="mktSellerTier"></span>
         </div>
         <div class="jp-title" style="margin:8px 0 2px;">${escHtml(l.name)}</div>
         ${ratingLine}
@@ -36604,6 +36619,7 @@ async function acOpenListing(id) {
       <div id="prodQA" style="margin-top:16px;"></div>
       ${moreSeller}${similar}`;
     if (media.length > 1) acBindGallery();
+    if (l.seller && l.seller.id) acLoadSellerTier(l.seller.id, 'mktSellerTier');
     if (l.auction) { acLoadBids(l.id); if (l.auction.live) acStartAucTicker(l.id, l.auction.endsAt); }
     acLoadProductReviews(l.id);
     acLoadProductQA(l.id);
