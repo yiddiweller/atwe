@@ -4189,6 +4189,24 @@ function renderSafetyView(){
       </div></div>
     <div id="ipBox"><div class="ld"><span class="ab-mark"></span></div></div>
 
+    <div class="panel"><h3>Send a notification</h3>
+      <div class="sub">Write it once and it goes to people's phones. Only members who installed Atwe and allowed notifications can receive one, so the number below is who it can actually reach — not how many members there are.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <input class="in" id="pbTitle" maxlength="80" placeholder="Title" style="flex:1;min-width:180px;margin:0;"/>
+        <select class="in" id="pbAud" onchange="pushReach()" style="width:190px;margin:0;">
+          <option value="all">Everyone</option><option value="business">Businesses</option>
+          <option value="personal">People</option><option value="pro">Pro members</option>
+          <option value="inactive">Away 30+ days</option><option value="new">Joined this week</option></select>
+      </div>
+      <input class="in" id="pbBody" maxlength="200" placeholder="The one line they'll see" style="width:100%;margin:8px 0 0;"/>
+      <input class="in" id="pbUrl" maxlength="300" placeholder="Where it opens (e.g. /wallet)" style="width:100%;margin:8px 0 0;"/>
+      <div class="srs" id="pbReach" style="margin-top:8px;">…</div>
+      <div class="custom-row" style="margin-top:10px;"><button class="act accent" onclick="sendPush()">Send it</button></div></div>
+
+    <div class="panel"><h3>Possible ban evasion</h3>
+      <div class="sub">New accounts signing in from an address a suspended or banned account also used. This is a lead worth a look, never a verdict — households and offices share addresses.</div></div>
+    <div id="beBox"><div class="ld"><span class="ab-mark"></span></div></div>
+
     <div class="panel"><h3>Enforcement report</h3>
       <div class="sub">The numbers a platform is increasingly expected to publish. Built from the record, not typed up by hand.</div>
       <div class="tf-ranges" style="margin-top:10px;">
@@ -4209,7 +4227,41 @@ function renderSafetyView(){
       <textarea id="lgBody" rows="5" placeholder="The wording…" style="width:100%;box-sizing:border-box;background:var(--s1);border:1px solid var(--b1);border-radius:12px;color:var(--t1);padding:11px 13px;font:inherit;resize:vertical;margin-top:8px;"></textarea>
       <div class="custom-row" style="margin-top:10px;"><button class="act accent" onclick="saveLegal()">Save this version</button></div></div>
     <div id="lgBox"><div class="ld"><span class="ab-mark"></span></div></div>`;
-  loadIpBlocks(); loadTransparency(30); loadLegal();
+  loadIpBlocks(); loadTransparency(30); loadLegal(); loadBanEvasion(); pushReach();
+}
+async function pushReach(){
+  const el = document.getElementById('pbReach'); if (!el) return;
+  try {
+    const d = await api('GET', '/api/admin/push-reach?audience=' + (document.getElementById('pbAud')?.value || 'all'));
+    el.textContent = d.pushEnabled
+      ? `Can reach ${d.reachable} of ${d.members} in this group.`
+      : 'Push isn\u2019t set up on this server yet, so nothing can be sent.';
+  } catch (e){ el.textContent = ''; }
+}
+async function sendPush(){
+  const title = (document.getElementById('pbTitle').value || '').trim();
+  const body = (document.getElementById('pbBody').value || '').trim();
+  if (!title || !body) { notify('A title and a line of text are both needed.'); return; }
+  const aud = document.getElementById('pbAud').value;
+  if (!confirm('Send this to everyone in "' + aud + '" who has notifications on?')) return;
+  try {
+    const r = await api('POST', '/api/admin/push-broadcast', { title, body, audience: aud,
+      url: document.getElementById('pbUrl').value });
+    notify('Going out to ' + r.sending + ' ' + (r.sending === 1 ? 'device' : 'devices') + '.');
+    document.getElementById('pbTitle').value = ''; document.getElementById('pbBody').value = '';
+  } catch (e){ notify(e.message); }
+}
+async function loadBanEvasion(){
+  const box = document.getElementById('beBox'); if (!box) return;
+  try {
+    const { leads } = await api('GET', '/api/admin/ban-evasion');
+    box.innerHTML = leads.length ? '<div class="panel">' + leads.map(l => `
+      <div class="site-row"><div style="min-width:0;">
+        <div class="srt">${esc(l.name)} <span class="muted">@${esc(l.username || '')}</span></div>
+        <div class="srs">Joined ${fmtDate(l.joinedAt)} · same address as @${esc(l.sharedWith || '?')}</div>
+      </div><button class="act" onclick="openUser(${l.id})">Look at them</button></div>`).join('') + '</div>'
+      : '<div class="empty">Nothing to look at.</div>';
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
 }
 async function loadIpBlocks(){
   const box = document.getElementById('ipBox'); if (!box) return;
@@ -4388,12 +4440,54 @@ async function loadNumbers(){
           `<div class="site-row"><div><div class="srt">${esc(f.feature)}</div><div class="srs">${(f.inTokens + f.outTokens).toLocaleString()} tokens${f.failed ? ' · ' + f.failed + ' failed' : ''}</div></div><span class="pill">${f.calls}</span></div>`).join('')
           : '<div class="empty">Nobody has used Atwe AI in this period.</div>'}</div></div>
 
+      <div class="panel"><h3>Money that has stopped moving</h3>
+        <div class="sub">Balances nobody has touched in a year, gift cards nobody claimed, and escrow held a long time. Money sitting still is money somebody has forgotten about.</div>
+        <div id="dormBox" style="margin-top:12px;"></div></div>
+
+      <div class="panel"><h3>What each seller earned</h3>
+        <div class="sub">Gross taken through Atwe, by year — the figure a seller needs at tax time.</div>
+        <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
+          <input class="in" id="seYear" type="number" min="2020" max="2100" value="${new Date().getFullYear()}" style="width:120px;margin:0;"/>
+          <button class="act" onclick="loadSellerEarnings()">Show</button>
+        </div>
+        <div id="seBox" style="margin-top:12px;"></div></div>
+
       <div class="panel"><h3>Take it with you</h3>
         <div class="sub">Any of these as a spreadsheet.</div>
         <div class="dur-row" style="margin-top:10px;flex-wrap:wrap;">
           ${[['members','Members'],['revenue','Revenue'],['orders','Orders'],['ledger','Wallet ledger'],['jobsposted','Jobs'],['aiusage','AI usage']]
             .map(([k,l]) => `<button class="act" onclick="exportTable(${jstr(k)})">${l}</button>`).join('')}
         </div></div>`;
+    loadDormant(); loadSellerEarnings();
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function loadDormant(){
+  const box = document.getElementById('dormBox'); if (!box) return;
+  try {
+    const d = await api('GET', '/api/admin/dormant');
+    const stat = (v, l) => `<div class="ci-stat"><div class="ci-v">${v}</div><div class="ci-l">${esc(l)}</div></div>`;
+    box.innerHTML = `<div class="ci-row">
+        ${stat(money0(d.dormantBalances.cents), 'untouched a year')}
+        ${stat(money0(d.unclaimedGiftCards.cents), 'gift cards unclaimed')}
+        ${stat(money0(d.longHeldEscrow.cents), 'escrow held 60+ days')}
+        ${stat(money0(d.savingsPots.cents), 'in savings pots')}
+      </div>
+      ${d.dormantBalances.people.length ? '<div style="margin-top:14px;">' + d.dormantBalances.people.slice(0, 10).map(p =>
+        `<div class="site-row"><div><div class="srt">${esc(p.name)} <span class="muted">@${esc(p.username || '')}</span></div>
+          <div class="srs">last seen ${p.lastSeen ? fmtDate(p.lastSeen) : 'never'}</div></div>
+          <span class="pill">${money0(p.cents)}</span></div>`).join('') + '</div>' : ''}`;
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function loadSellerEarnings(){
+  const box = document.getElementById('seBox'); if (!box) return;
+  const year = document.getElementById('seYear')?.value || new Date().getFullYear();
+  try {
+    const d = await api('GET', '/api/admin/seller-earnings?year=' + year);
+    box.innerHTML = d.sellers.length ? d.sellers.slice(0, 20).map(x =>
+      `<div class="site-row"><div><div class="srt">${esc(x.name)} <span class="muted">@${esc(x.username || '')}</span></div>
+        <div class="srs">${x.orders} order${x.orders === 1 ? '' : 's'}</div></div>
+        <span class="pill pro">${money0(x.grossCents)}</span></div>`).join('')
+      : '<div class="empty">No sales in ' + esc(String(year)) + '.</div>';
   } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
 }
 // Downloads need the admin token, so they can't be a plain link.

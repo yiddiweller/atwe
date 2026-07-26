@@ -6131,6 +6131,121 @@ app.put('/api/admin/maintenance', auth.requireAdmin, async (req, res) => {
     res.json({ ok: true, maintenance: m });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the message.' }); }
 });
+/* ─── Push composer ─────────────────────────────────────────────────────────
+   Write a notification and send it to a slice of members' phones. It reuses
+   the audiences the email broadcast already uses, so "businesses only" means
+   the same thing in both places. Sending is chunked and never blocks the
+   dashboard — you get the count it will reach, then it goes out. */
+app.post('/api/admin/push-broadcast', auth.requireAdmin, rateLimit(10, 3600000, 'pushcast'), async (req, res) => {
+  const title = (req.body.title || '').toString().trim().slice(0, 80);
+  const body = (req.body.body || '').toString().trim().slice(0, 200);
+  const url = (req.body.url || '').toString().trim().slice(0, 300) || '/';
+  const audience = BROADCAST_AUDIENCES[req.body.audience] ? req.body.audience : 'all';
+  if (!title || !body) return res.status(400).json({ error: 'A title and a line of text are both needed.' });
+  if (!push.isConfigured()) return res.status(503).json({ error: 'Push isn’t set up on this server yet.' });
+  try {
+    // Only people who actually installed the app and allowed notifications can
+    // receive one — so the honest count is subscribers, not members.
+    const { rows } = await db.query(
+      `SELECT DISTINCT u.id FROM users u JOIN push_subscriptions s ON s.user_id = u.id
+        WHERE ${audienceWhere(audience)}`);
+    adminAudit(req, 'push.broadcast', 'system', null, { audience, title, recipients: rows.length });
+    res.json({ ok: true, sending: rows.length });
+    // Fire after responding: a big send must never hold the dashboard open.
+    (async () => {
+      for (const r of rows) {
+        await pushToUser(r.id, { title, body, url, tag: 'atwe-broadcast' }).catch(() => {});
+      }
+    })();
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send it.' }); }
+});
+app.get('/api/admin/push-reach', auth.requireAdmin, async (req, res) => {
+  const audience = BROADCAST_AUDIENCES[req.query.audience] ? req.query.audience : 'all';
+  try {
+    const n = (await db.query(
+      `SELECT COUNT(DISTINCT u.id)::int AS n FROM users u JOIN push_subscriptions s ON s.user_id = u.id
+        WHERE ${audienceWhere(audience)}`)).rows[0].n;
+    const members = (await db.query(`SELECT COUNT(*)::int AS n FROM users WHERE ${audienceWhere(audience)}`)).rows[0].n;
+    res.json({ audience, reachable: n, members, pushEnabled: push.isConfigured() });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not count.' }); }
+});
+/* ─── Money that has stopped moving ─────────────────────────────────────────
+   Balances nobody has touched in a year, gift cards nobody ever claimed, and
+   escrow that has been held too long. Money sitting still is money somebody
+   has forgotten about — and eventually, in most places, money you owe an
+   answer for. */
+app.get('/api/admin/dormant', auth.requirePerm('revenue'), async (_req, res) => {
+  try {
+    const [balances, gifts, escrow, pots] = await Promise.all([
+      db.query(`SELECT u.id, u.name, u.username, u.balance_cents, u.last_login_at
+                  FROM users u WHERE u.balance_cents > 0
+                    AND (u.last_login_at IS NULL OR u.last_login_at < now() - interval '365 days')
+                  ORDER BY u.balance_cents DESC LIMIT 100`),
+      db.query(`SELECT COUNT(*)::int AS n, COALESCE(SUM(balance_cents),0)::int AS cents FROM gift_cards
+                 WHERE status = 'active' AND balance_cents > 0 AND owner_id IS NULL
+                   AND created_at < now() - interval '180 days'`),
+      db.query(`SELECT COUNT(*)::int AS n, COALESCE(SUM(total_cents),0)::int AS cents FROM orders
+                 WHERE status = 'escrow' AND created_at < now() - interval '60 days'`),
+      db.query(`SELECT COUNT(*)::int AS n, COALESCE(SUM(balance_cents),0)::int AS cents FROM wallet_pots
+                 WHERE balance_cents > 0`),
+    ]);
+    const dormantTotal = balances.rows.reduce((a, r) => a + r.balance_cents, 0);
+    res.json({
+      dormantBalances: { count: balances.rows.length, cents: dormantTotal,
+        people: balances.rows.map((r) => ({ id: r.id, name: r.name, username: r.username,
+          cents: r.balance_cents, lastSeen: r.last_login_at })) },
+      unclaimedGiftCards: gifts.rows[0],
+      longHeldEscrow: escrow.rows[0],
+      savingsPots: pots.rows[0],
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build the report.' }); }
+});
+/* ─── What each seller earned, by year ──────────────────────────────────────
+   The figure a seller needs at tax time and the one you'd need if reporting
+   thresholds ever apply. Gross taken, plus what the platform kept. */
+app.get('/api/admin/seller-earnings', auth.requirePerm('revenue'), async (req, res) => {
+  const year = Math.max(2020, Math.min(2100, parseInt(req.query.year, 10) || new Date().getFullYear()));
+  try {
+    const { rows } = await db.query(
+      `SELECT u.id, u.name, u.username, u.email,
+              COUNT(DISTINCT o.id)::int AS orders,
+              COALESCE(SUM(o.total_cents),0)::int AS gross_cents
+         FROM orders o JOIN users u ON u.id = o.seller_id
+        WHERE o.status IN ('paid','fulfilled','delivered','released')
+          AND EXTRACT(YEAR FROM o.created_at) = $1
+        GROUP BY u.id, u.name, u.username, u.email
+        HAVING COALESCE(SUM(o.total_cents),0) > 0
+        ORDER BY gross_cents DESC LIMIT 500`, [year]);
+    res.json({ year, sellers: rows.map((r) => ({ id: r.id, name: r.name, username: r.username,
+      email: r.email, orders: r.orders, grossCents: r.gross_cents })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build the report.' }); }
+});
+/* ─── Ban evasion ───────────────────────────────────────────────────────────
+   New accounts signing in from an address a suspended or banned account also
+   used. It is a LEAD, not a verdict — households and offices share addresses,
+   so it is deliberately presented as "worth a look", never acted on
+   automatically. */
+app.get('/api/admin/ban-evasion', auth.requirePerm('moderation'), async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `WITH banned AS (
+         SELECT DISTINCT s.ip FROM auth_sessions s JOIN users u ON u.id = s.user_id
+          WHERE COALESCE(u.status,'active') IN ('suspended','banned') AND s.ip IS NOT NULL
+       )
+       SELECT u.id, u.name, u.username, u.created_at, s.ip,
+              (SELECT string_agg(DISTINCT bu.username, ', ') FROM auth_sessions bs
+                 JOIN users bu ON bu.id = bs.user_id
+                WHERE bs.ip = s.ip AND COALESCE(bu.status,'active') IN ('suspended','banned')) AS matches
+         FROM auth_sessions s JOIN users u ON u.id = s.user_id
+        WHERE s.ip IN (SELECT ip FROM banned)
+          AND COALESCE(u.status,'active') = 'active'
+          AND u.created_at > now() - interval '90 days'
+        GROUP BY u.id, u.name, u.username, u.created_at, s.ip
+        ORDER BY u.created_at DESC LIMIT 100`);
+    res.json({ leads: rows.map((r) => ({ id: r.id, name: r.name, username: r.username,
+      joinedAt: r.created_at, ip: r.ip, sharedWith: r.matches })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build the list.' }); }
+});
 /* ═══ Trust, safety and support ═══ */
 /* ─── IP blocking ───────────────────────────────────────────────────────────
    Turn away an abusive network at the door. Every block carries an expiry, so
