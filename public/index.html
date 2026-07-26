@@ -6076,6 +6076,15 @@ body.reduce-motion .ac-react-bar,body.reduce-motion .ac-rb-btn{animation:none;}
 .ord-shipnote{margin:10px 0;background:var(--s2);border-radius:14px;padding:12px 14px;}
 .ord-shipnote .co-sec-h{margin:0 0 4px;}
 .ord-shipnote-body{font-size:14px;line-height:1.45;white-space:pre-wrap;}
+/* Chat link-preview card (unfurl) — inherits the bubble's text colour so it
+   reads on both my/their bubbles and every theme; the tint darkens the fill. */
+.lp-card{display:block;margin-top:6px;border-radius:12px;overflow:hidden;background:rgba(0,0,0,.16);text-decoration:none;color:inherit;max-width:280px;}
+body.light .lp-card{background:rgba(0,0,0,.06);}
+.lp-img{width:100%;max-height:140px;object-fit:cover;display:block;}
+.lp-tx{display:block;padding:8px 10px;}
+.lp-title{font-size:13px;font-weight:700;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.lp-desc{font-size:12px;opacity:.75;margin-top:2px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.lp-dom{display:block;font-size:11px;opacity:.6;margin-top:4px;}
 .pot-bar{height:7px;border-radius:4px;background:var(--s3);overflow:hidden;margin:8px 0 4px;}
 .pot-bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--violet));border-radius:4px;transition:width var(--t-slow) var(--ease);}
 .pot-actions{display:flex;align-items:center;gap:7px;margin-top:8px;}
@@ -16889,7 +16898,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1548'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1549'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -46462,6 +46471,40 @@ async function acHydrateVoiceTranscripts() {
     finally { AC._vtInflight[id] = false; }
   });
 }
+/* ── Chat link previews (WhatsApp-style unfurl) ── */
+const _LP_URL_RE = /https?:\/\/[^\s<>"']+/;
+function acFirstUrl(text) { const m = _LP_URL_RE.exec(text || ''); return m ? m[0].replace(/[),.;!?]+$/, '') : null; }
+function acLpCardHtml(url, p) {
+  return `<a class="lp-card" href="${escHtml(url)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">
+    ${p.image ? `<img class="lp-img" src="${escHtml(p.image)}" alt="" loading="lazy" decoding="async" onerror="this.remove()"/>` : ''}
+    <span class="lp-tx"><span class="lp-title">${escHtml(p.title)}</span>${p.description ? `<span class="lp-desc">${escHtml(p.description)}</span>` : ''}<span class="lp-dom">${escHtml(p.domain || '')}</span></span>
+  </a>`;
+}
+// Fill preview cards under text bubbles that contain a link — the same
+// render-then-hydrate pattern as the voice-transcript captions above. The
+// preview data comes from ONE cached server fetch, session-cached per URL.
+async function acHydrateLinkPreviews() {
+  AC._lp = AC._lp || {}; AC._lpInflight = AC._lpInflight || {};
+  (AC.messages || []).forEach(async (m) => {
+    if (!m || !m.body || m.deleted_all || m.image || (m.images && m.images.length) || m.media || m.meta) return;
+    const url = acFirstUrl(m.body); if (!url) return;
+    const bub = document.querySelector(`#acThread .msg-bubble[data-mid="${m.id}"]`);
+    if (!bub || bub.querySelector('.lp-card')) return;
+    let data = AC._lp[url];
+    if (data === undefined) {
+      if (AC._lpInflight[url]) return;
+      AC._lpInflight[url] = true;
+      try { const r = await API.req('GET', '/api/link-preview?url=' + encodeURIComponent(url)); data = AC._lp[url] = r.preview || null; }
+      catch (e) { data = AC._lp[url] = null; }
+      finally { AC._lpInflight[url] = false; }
+    }
+    if (!data) return;
+    const cur = document.querySelector(`#acThread .msg-bubble[data-mid="${m.id}"]`); // thread may have re-rendered
+    if (!cur || cur.querySelector('.lp-card')) return;
+    cur.insertAdjacentHTML('beforeend', acLpCardHtml(url, data));
+    cur.style.width = ''; // undo the text-hug width so the bubble can fit the card
+  });
+}
 // Open a view-once photo/video — fetch the bytes once, show full-screen, then
 // the placeholder flips to "Opened".
 async function acOpenViewOnce(id) {
@@ -47048,6 +47091,7 @@ function acRenderThread() {
   el.classList.toggle('chat-private', acChatExportBlocked()); // hide download affordances on a privacy-locked chat
   acHydrateVoiceTranscripts(); // auto-fill AI transcript captions under voice notes
   _hugBubbleLines(el);   // iMessage-style: shrink each wrapped text bubble to its longest line
+  acHydrateLinkPreviews(); // unfurl cards under link messages (after hug, so the card can re-widen its bubble)
   acBindScrollDown(el);
   if (atBottom && !SC.busy()) SC.toBottom(); else SC.reclamp(); // never yank to bottom mid-scroll
   acUpdateScrollDown();
