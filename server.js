@@ -6052,53 +6052,6 @@ app.put('/api/atchat/sounds', auth.requireAuth, rateLimit(60, 60000, 'chat-sound
     res.json({ ok: true, key, sound: sound || 'default' });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the sound.' }); }
 });
-/* ─── Chat folders ──────────────────────────────────────────────────────────
-   Tabs across the top of the chat list. Labels tag a conversation; a folder is
-   the tab you actually switch to. Kept separate so an existing label set isn't
-   silently repurposed as navigation. */
-const FOLDER_CAP = 12;
-app.get('/api/atchat/folders', auth.requireAuth, async (req, res) => {
-  try {
-    const { rows } = await db.query(
-      `SELECT f.*, COALESCE(json_agg(json_build_object('kind', i.kind, 'id', i.target_id))
-                FILTER (WHERE i.folder_id IS NOT NULL), '[]'::json) AS items
-         FROM chat_folders f LEFT JOIN chat_folder_items i ON i.folder_id = f.id
-        WHERE f.user_id = $1 GROUP BY f.id ORDER BY f.position, f.id`, [req.user.id]);
-    res.json({ folders: rows.map((f) => ({ id: f.id, name: f.name, items: f.items || [] })) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your folders.' }); }
-});
-app.post('/api/atchat/folders', auth.requireAuth, rateLimit(30, 60000, 'folder'), async (req, res) => {
-  const name = (req.body.name || '').toString().trim().slice(0, 30);
-  if (!name) return res.status(400).json({ error: 'Give the folder a name.' });
-  try {
-    const n = (await db.query('SELECT COUNT(*)::int AS n FROM chat_folders WHERE user_id = $1', [req.user.id])).rows[0].n;
-    if (n >= FOLDER_CAP) return res.status(400).json({ error: 'You’ve reached the maximum number of folders.' });
-    const { rows } = await db.query('INSERT INTO chat_folders (user_id, name, position) VALUES ($1,$2,$3) RETURNING id',
-      [req.user.id, name, n]);
-    res.status(201).json({ ok: true, id: rows[0].id, name });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the folder.' }); }
-});
-app.delete('/api/atchat/folders/:id', auth.requireAuth, async (req, res) => {
-  const id = routeId(req.params.id);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
-  try {
-    const r = await db.query('DELETE FROM chat_folders WHERE id = $1 AND user_id = $2', [id, req.user.id]);
-    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
-    res.json({ ok: true });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the folder.' }); }
-});
-app.post('/api/atchat/folders/:id/assign', auth.requireAuth, async (req, res) => {
-  const id = routeId(req.params.id), targetId = routeId(req.body.targetId);
-  const kind = req.body.kind === 'group' ? 'group' : 'dm';
-  if (!Number.isInteger(id) || !Number.isInteger(targetId)) return res.status(400).json({ error: 'Invalid id.' });
-  try {
-    const f = (await db.query('SELECT id FROM chat_folders WHERE id = $1 AND user_id = $2', [id, req.user.id])).rows[0];
-    if (!f) return res.status(404).json({ error: 'Not found.' });
-    if (req.body.on === false) await db.query('DELETE FROM chat_folder_items WHERE folder_id = $1 AND kind = $2 AND target_id = $3', [id, kind, targetId]);
-    else await db.query('INSERT INTO chat_folder_items (folder_id, kind, target_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [id, kind, targetId]);
-    res.json({ ok: true });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the folder.' }); }
-});
 /* ─── Group topic threads ───────────────────────────────────────────────────
    A named sub-conversation inside a busy group. A message with no topic is the
    main room, so every message that already exists is untouched. */

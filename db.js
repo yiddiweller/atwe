@@ -1836,23 +1836,6 @@ async function initSchema() {
     CREATE UNIQUE INDEX IF NOT EXISTS chat_form_responses_once_idx
       ON chat_form_responses (form_id, responder_id, message_id) WHERE message_id IS NOT NULL;
   `);
-  // Custom folder tabs across the chat list, on top of the existing labels.
-  await query(`
-    CREATE TABLE IF NOT EXISTS chat_folders (
-      id         SERIAL PRIMARY KEY,
-      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      name       TEXT NOT NULL,
-      position   INTEGER NOT NULL DEFAULT 0,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
-    CREATE INDEX IF NOT EXISTS chat_folders_user_idx ON chat_folders (user_id);
-    CREATE TABLE IF NOT EXISTS chat_folder_items (
-      folder_id  INTEGER NOT NULL REFERENCES chat_folders(id) ON DELETE CASCADE,
-      kind       TEXT NOT NULL,         -- dm | group
-      target_id  INTEGER NOT NULL,
-      PRIMARY KEY (folder_id, kind, target_id)
-    );
-  `);
   // Topic threads inside a big group: a named sub-conversation. A message with
   // no topic_id is the main room, so every existing message is unaffected.
   await query(`
