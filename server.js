@@ -1532,6 +1532,17 @@ function cleanMeta(meta) {
     if (!name) return undefined;
     return { t: 'contact', name, phone: metaStr(meta.phone, 40) || null, email: metaStr(meta.email, 160) || null, username: metaStr(meta.username, 40) || null };
   }
+  if (t === 'buttons') {
+    // Interactive reply buttons (WhatsApp Business style). Only a BUSINESS may
+    // send one — the DM send route enforces the sender check (cleanMeta can't
+    // know the sender).
+    const text = metaStr(meta.text, 500);
+    const options = Array.isArray(meta.options)
+      ? meta.options.map((o) => metaStr(o, 60)).filter(Boolean).slice(0, 3)
+      : [];
+    if (!text || !options.length) return undefined;
+    return { t: 'buttons', text, options };
+  }
   if (t === 'poll') {
     const q = metaStr(meta.q, 200);
     const opts = Array.isArray(meta.opts)
@@ -5499,6 +5510,13 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
   if (media === undefined) return res.status(400).json({ error: 'That file could not be attached (unsupported type or too large — 16 MB max).' });
   const meta = cleanMeta(req.body.meta);
   if (meta === undefined) return res.status(400).json({ error: 'That couldn’t be attached.' });
+  // Interactive reply buttons are a BUSINESS tool (WhatsApp Business model).
+  if (meta && meta.t === 'buttons') {
+    try {
+      const acct = (await db.query('SELECT account_type FROM users WHERE id = $1', [req.user.id])).rows[0];
+      if (!acct || acct.account_type !== 'business') return res.status(403).json({ error: 'Quick buttons are a business-account tool.' });
+    } catch (e) { return res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+  }
   let replyTo = Number.isInteger(req.body.replyTo) ? req.body.replyTo : null;
   const clientId = (typeof req.body.clientId === 'string' && req.body.clientId.length <= 64) ? req.body.clientId : null;
   // View-once is only meaningful for a photo/video — never for plain text.
