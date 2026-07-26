@@ -5311,11 +5311,11 @@ function businessOpenNow(hours, specialHours) {
   const cur = now.getHours() * 60 + now.getMinutes();
   return c > o ? (cur >= o && cur < c) : (cur >= o || cur < c); // c<=o → overnight span
 }
-async function maybeAutoReply(businessId, customerId) {
+async function maybeAutoReply(businessId, customerId, inboundBody) {
   if (businessId === customerId) return;
   try {
     const b = (await db.query(
-      'SELECT account_type, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, business_hours, special_hours FROM users WHERE id = $1',
+      'SELECT account_type, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, business_hours, special_hours, faq FROM users WHERE id = $1',
       [businessId]
     )).rows[0];
     if (!b || b.account_type !== 'business') return;
@@ -5342,6 +5342,24 @@ async function maybeAutoReply(businessId, customerId) {
         [businessId, customerId, kind]
       );
     };
+    // Instant answers (FAQ): a question the business pre-answered replies
+    // itself — the MOST SPECIFIC auto-message, so it outranks greeting/away.
+    // One FAQ auto-answer per customer per 6h keeps it from ever feeling bot-y.
+    const faqs = Array.isArray(b.faq) ? b.faq : [];
+    if (inboundBody && faqs.length && dueFor('faq', 6 * 3600000)) {
+      const tok = (s) => new Set(String(s || '').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(w => w.length >= 3));
+      const inTok = tok(inboundBody);
+      let best = null, bestScore = 0;
+      for (const f of faqs) {
+        if (!f || !f.q || !f.a) continue;
+        const qTok = [...tok(f.q)];
+        if (!qTok.length) continue;
+        const shared = qTok.filter(w => inTok.has(w)).length;
+        const score = shared / qTok.length;
+        if (shared >= 2 && score >= 0.6 && score > bestScore) { best = f; bestScore = score; }
+      }
+      if (best) { await send('faq', String(best.a).slice(0, 500)); return; }
+    }
     if (b.greeting_enabled && b.greeting_message && dueFor('greeting', AUTO_GREETING_COOLDOWN_MS)) {
       await send('greeting', b.greeting_message);
       return; // one auto-message per incoming customer message — greeting takes priority
@@ -5585,7 +5603,7 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
       // Silent send (Telegram-style): deliver the message live + keep it unread, but
       // skip the push/bell so the recipient's phone stays quiet.
       if (req.body.silent !== true) notify(other, req.user.id, 'message', null);
-      maybeAutoReply(other, req.user.id).catch(() => {});
+      maybeAutoReply(other, req.user.id, body).catch(() => {});
     }
     res.json({ message: { ...msg, mine: true } });
   } catch (err) {
@@ -14286,6 +14304,25 @@ app.post('/api/business/team/:businessId/respond', auth.requireAuth, async (req,
 // Company analytics dashboard (LinkedIn-style) — aggregate reach for a business
 // account: profile views (+14-day trend), followers, connections, post reach,
 // and hiring stats across all their jobs. Business accounts only.
+/* ─── Instant answers (business FAQ auto-replies) ─── */
+app.get('/api/business/faq', auth.requireAuth, async (req, res) => {
+  try {
+    const r = (await db.query('SELECT faq, account_type FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!r || r.account_type !== 'business') return res.status(403).json({ error: 'Instant answers are a business-account tool.' });
+    res.json({ faq: Array.isArray(r.faq) ? r.faq : [] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load.' }); }
+});
+app.put('/api/business/faq', auth.requireAuth, rateLimit(30, 60000, 'faq-save'), async (req, res) => {
+  const faq = (Array.isArray(req.body.faq) ? req.body.faq : []).slice(0, 10)
+    .map(f => ({ q: String((f && f.q) || '').trim().slice(0, 120), a: String((f && f.a) || '').trim().slice(0, 500) }))
+    .filter(f => f.q && f.a);
+  try {
+    const r = (await db.query('SELECT account_type FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!r || r.account_type !== 'business') return res.status(403).json({ error: 'Instant answers are a business-account tool.' });
+    await db.query('UPDATE users SET faq = $2 WHERE id = $1', [req.user.id, JSON.stringify(faq)]);
+    res.json({ ok: true, faq });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save.' }); }
+});
 app.get('/api/business/analytics', auth.requireAuth, async (req, res) => {
   const uid = req.user.id;
   try {
