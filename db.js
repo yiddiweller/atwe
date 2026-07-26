@@ -1795,6 +1795,61 @@ async function initSchema() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
+  // Team inbox: which staff member owns a business's conversation with one
+  // customer. One owner per (business, customer) — a shared inbox where two
+  // people can't quietly both think they're handling it.
+  await query(`
+    CREATE TABLE IF NOT EXISTS dm_assignments (
+      business_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      peer_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      assignee_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      state       TEXT NOT NULL DEFAULT 'open',   -- open | done
+      assigned_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (business_id, peer_id)
+    );
+    CREATE INDEX IF NOT EXISTS dm_assignments_assignee_idx ON dm_assignments (assignee_id) WHERE assignee_id IS NOT NULL;
+  `);
+  // Lead lists — a salesperson saves prospects into named lists and gets told
+  // when one of them does something worth reaching out about (posts, hires,
+  // lists something new). The alert is derived from activity that already
+  // exists, so there is no separate tracking pipeline to keep in sync.
+  await query(`
+    CREATE TABLE IF NOT EXISTS lead_lists (
+      id         SERIAL PRIMARY KEY,
+      owner_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name       TEXT NOT NULL,
+      alerts     BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS lead_lists_owner_idx ON lead_lists (owner_id);
+    CREATE TABLE IF NOT EXISTS lead_list_members (
+      list_id    INTEGER NOT NULL REFERENCES lead_lists(id) ON DELETE CASCADE,
+      lead_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      note       TEXT,
+      added_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (list_id, lead_id)
+    );
+    CREATE INDEX IF NOT EXISTS lead_list_members_lead_idx ON lead_list_members (lead_id);
+  `);
+  // The last activity id each owner has already been alerted about, so a lead's
+  // new post/job is announced once and never re-announced on the next sweep.
+  await query(`
+    CREATE TABLE IF NOT EXISTS lead_alert_marks (
+      owner_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      lead_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      last_post  INTEGER NOT NULL DEFAULT 0,
+      last_job   INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (owner_id, lead_id)
+    );
+  `);
+  // A skill's canonical name (see SKILL_TAXONOMY in server.js). "JS", "Javascript"
+  // and "JavaScript" all resolve to one entry so matching and search agree.
+  await query(`ALTER TABLE user_skills ADD COLUMN IF NOT EXISTS canonical TEXT`);
+  await query(`CREATE INDEX IF NOT EXISTS user_skills_canonical_idx ON user_skills (canonical)`);
+  // A milestone post ("started a new role", "opened a store") — a normal post
+  // with a structured header, so the feed, replies and moderation are unchanged.
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS celebration JSONB`);
   // Editorial curation: hand-picked shelves that appear in Discover — either a
   // set of LISTINGS ("Featured this week") or a set of PROFILES ("Makers to
   // follow"). One system for both, so merchandising and editorial picks don't

@@ -6106,7 +6106,10 @@ body.light .mc-btnrow{background:rgba(0,0,0,.07);}
 .deg-chip{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;background:var(--s2);color:var(--t3);font-size:11px;font-weight:700;vertical-align:1px;}
 /* People-search filter chips */
 .ppl-filters{display:flex;gap:8px;flex-wrap:wrap;padding:2px var(--feed-gutter) 10px;}
-.ppl-chip{padding:7px 14px;border:none;border-radius:999px;background:var(--s2);color:var(--t2);font-size:12.5px;font-weight:700;cursor:pointer;}
+.ppl-chip{padding:7px 14px;border:none;border-radius:999px;background:var(--s2);color:var(--t2);font-size:12.5px;font-weight:700;cursor:pointer;
+  max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  /* Clearing every filter at once is a quiet escape hatch, not an action. */
+  .ppl-chip.ppl-clear{background:none;color:var(--t3);}
 .ppl-chip.on{background:var(--accent);color:var(--accent-tint,#fff);}
 /* Group rules */
 .grp-rules{margin-top:12px;background:var(--s1);border-radius:14px;padding:12px 14px;text-align:left;max-height:180px;overflow-y:auto;}
@@ -8856,7 +8859,15 @@ body.light .ac-job-tag.featured{color:var(--accent);}
 .simjob-chev{width:16px;height:16px;flex-shrink:0;fill:none;stroke:var(--t3);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 .simjob-row:active{transform:scale(.99);}
 .ac-job-report:active{color:var(--red);}
-.ac-prof-mutual{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--t3);margin-top:8px;}
+.ac-prof-mutual{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--t3);margin-top:8px;flex-wrap:wrap;}
+  /* Overlapping faces, then the names — the names are the point, so they read
+     as links (blue = identity), not as another button. */
+  .mutual-avs{display:flex;flex:0 0 auto;}
+  .mutual-avs .mutual-av{width:20px;height:20px;border-radius:50%;background-size:cover;background-position:center;
+    box-shadow:0 0 0 2px var(--bg);margin-inline-end:-6px;font-size:9px;}
+  .mutual-avs .mutual-av:last-child{margin-inline-end:6px;}
+  .ac-mutual-name{background:none;border:none;padding:0;font:inherit;color:var(--accent);font-weight:600;cursor:pointer;}
+  @media(hover:hover){.ac-mutual-name:hover{text-decoration:underline;}}
 /* "X viewed your profile this week" stat (own profile) */
 .ac-prof-views{display:flex;align-items:center;gap:7px;margin-top:12px;font-size:13.5px;color:var(--t2);cursor:pointer;background:var(--s1);border-radius:12px;padding:9px 13px;}
 .ac-prof-views svg{width:16px;height:16px;stroke:var(--accent);stroke-width:2;fill:none;flex:0 0 auto;}
@@ -9261,6 +9272,59 @@ button.ac-skill.endorse.on .ac-skill-c{background:rgba(255,255,255,.15);color:va
 .asq-result.fail .asq-result-ic svg{stroke:var(--t3);}
 .asq-result-t{font-size:20px;font-weight:800;color:var(--t1);margin-top:8px;}
 .asq-result-s{font-size:14px;color:var(--t2);margin-top:6px;line-height:1.5;}
+/* Company insights — small honest numbers about a business, on its profile. */
+.ci-card{background:var(--s2);border-radius:var(--r-xl);padding:16px;margin:0 2px;}
+  .ci-row{display:flex;gap:10px;}
+  .ci-stat{flex:1;min-width:0;text-align:center;}
+  .ci-v{font-size:22px;font-weight:800;letter-spacing:-.02em;color:var(--t1);font-variant-numeric:tabular-nums;}
+  .ci-l{font-size:11.5px;color:var(--t3);margin-top:3px;}
+  .ci-bars{display:flex;align-items:flex-end;gap:8px;height:58px;margin-top:16px;}
+  .ci-bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;gap:5px;}
+  .ci-fill{background:var(--accent);border-radius:5px 5px 3px 3px;min-height:5px;}
+  .ci-zero{height:2px;background:var(--b2);border-radius:2px;}
+  .ci-yr{font-size:10px;color:var(--t4);text-align:center;font-variant-numeric:tabular-nums;}
+  .ci-hire{margin-top:14px;font-size:13px;color:var(--t2);}
+  .ci-hire.up{color:var(--green);} .ci-hire.down{color:var(--t3);}
+  .ci-note{margin-top:10px;font-size:11.5px;color:var(--t4);}
+/* Skill suggestions — tap one to use the shared name everyone else uses. */
+.skill-sugg{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px;}
+  .skill-chip{background:var(--s2);border:none;border-radius:999px;padding:7px 13px;font-size:12.5px;
+    font-weight:600;color:var(--t1);cursor:pointer;}
+  @media(hover:hover){.skill-chip:hover{background:var(--s3);}}
+/* Lead rows. The person gets a full line to themselves so a real name and job
+   title aren't crushed into an ellipsis by the buttons beside them. */
+.lead-row{padding:14px 2px;border-bottom:1px solid var(--b1);}
+  .lead-row:last-child{border-bottom:none;}
+  .lead-top{display:flex;align-items:center;gap:11px;cursor:pointer;}
+  .lead-top .ac-item-last{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  /* The activity line is the reason to write today, so it reads warm. */
+  .lead-activity{font-size:12.5px;color:var(--green);margin-top:8px;font-weight:600;}
+  .lead-note{font-size:12.5px;color:var(--t3);margin-top:4px;font-style:italic;}
+  .lead-acts{display:flex;gap:8px;margin-top:10px;}
+  .lead-acts .ac-pill-btn{flex:1;padding:8px;}
+/* Interest heat: a quiet dot, green when something is actually in a basket. */
+.intent-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-inline-start:6px;background:var(--amber);}
+  .intent-dot.hot{background:var(--green);}
+/* Inbox rows. The status line wraps rather than truncating — "who has this"
+   is the whole reason to look at the row. */
+.ti-row{padding:12px 2px;border-bottom:1px solid var(--b1);}
+  .ti-row:last-child{border-bottom:none;}
+  .ti-top{display:flex;align-items:center;gap:11px;cursor:pointer;}
+  .ti-sub{font-size:12.5px;color:var(--t3);margin-top:3px;line-height:1.35;}
+  /* A conversation nobody has answered yet. */
+  .ti-wait{font-size:10.5px;font-weight:800;color:var(--amber);margin-inline-start:7px;text-transform:uppercase;letter-spacing:.04em;}
+/* Career page */
+.cp-hero{border-radius:var(--r-xl);overflow:hidden;background:var(--s2);margin-bottom:14px;}
+  .cp-banner{height:104px;background:var(--s3);background-size:cover;background-position:center;}
+  .cp-head{padding:14px;display:flex;gap:12px;align-items:center;}
+  .cp-name{font-size:18px;font-weight:800;letter-spacing:-.02em;color:var(--t1);display:flex;align-items:center;}
+  .cp-sub{font-size:13px;color:var(--t3);margin-top:2px;}
+  .cp-team{display:flex;flex-wrap:wrap;gap:10px;margin:2px;}
+  .cp-person{display:flex;align-items:center;gap:9px;background:var(--s2);border-radius:999px;padding:6px 13px 6px 6px;
+    border:none;cursor:pointer;color:var(--t1);font:inherit;max-width:100%;}
+  .cp-person .user-avatar{width:28px;height:28px;font-size:12px;flex:0 0 auto;}
+  .cp-pname{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .cp-ptitle{font-size:11.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 /* Waiting list — your place in line. The number is the whole point, so it gets
    Display type on a plain grey card; green only once you're actually through. */
 .wl-card{background:var(--s2);border-radius:var(--r-xl);padding:22px 18px;text-align:center;}
@@ -13999,7 +14063,9 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Add skill">
     <button class="sheet-close" onclick="closeOverlay('skillForm')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title">Add a skill</div>
-    <input class="jp-in" id="skillInput" type="text" placeholder="e.g. Welding, Carpentry, Sales" maxlength="40" onkeydown="if(event.key==='Enter')acSubmitSkill()"/>
+    <input class="jp-in" id="skillInput" type="text" placeholder="e.g. Welding, Carpentry, Sales" maxlength="40" autocomplete="off"
+      oninput="acSkillSuggest(this.value)" onkeydown="if(event.key==='Enter')acSubmitSkill()"/>
+    <div id="skillSuggest" class="skill-sugg"></div>
     <button class="ac-pill-btn accent jp-submit" id="skillSubmit" onclick="acSubmitSkill()">Add skill</button>
   </div>
 </div>
@@ -14198,6 +14264,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <button class="as-item" onclick="acBmkMoveFromMenu()"><svg viewBox="0 0 24 24"><path d="M6 4h12a1 1 0 0 1 1 1v15.5a.5.5 0 0 1-.78.42L12 17l-6.22 3.92A.5.5 0 0 1 5 20.5V5a1 1 0 0 1 1-1z"/></svg> <span>Save to folder</span></button>
     <button class="as-item" onclick="paScheduleCall()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15.05 5A5 5 0 0 1 19 8.95M15.05 1A9 9 0 0 1 23 8.94m-1 7.98v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg> <span>Schedule a call</span></button>
     <button class="as-item" onclick="paMoney()"><svg viewBox="0 0 24 24"><path d="M21 4 3 11l6 2.5L11 20z"/><path d="M21 4 11 14"/></svg> <span>Send money</span></button>
+    <button class="as-item" onclick="paLead()"><svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg> <span>Add to a lead list</span></button>
     <button class="as-item" onclick="paPrivateNote()"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h4"/></svg> <span>Private note</span></button>
     <button class="as-item" onclick="paTip()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M14.5 9.3a2.6 2.6 0 0 0-2.5-1.6c-1.5 0-2.6.8-2.6 2 0 2.8 5.4 1.5 5.4 4.4 0 1.3-1.2 2.2-2.8 2.2a2.8 2.8 0 0 1-2.7-1.7"/><path d="M12 6.4v1.3M12 16.3v1.3"/></svg> <span>Send a tip</span></button>
     <button class="as-item" onclick="paInvoice()"><svg viewBox="0 0 24 24"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M15 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M9 13h6M9 17h4"/></svg> <span>Send an invoice</span></button>
@@ -15200,6 +15267,90 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <button class="ac-pill-btn accent jp-submit" id="plCreateBtn" onclick="acPayLinkCreate()">Create link</button>
     <div class="ac-section-row" style="margin:16px 0 4px;"><span class="ac-prof-head" style="margin:0;">Your links</span><button class="ac-link-btn" onclick="acPayLinkPayPrompt()">Pay a link</button></div>
     <div id="plList"></div>
+  </div>
+</div>
+
+<!-- A drafted message, for review — nothing is ever sent on your behalf -->
+<div class="overlay hidden" id="draftMsgView" onclick="if(event.target===this)closeOverlay('draftMsgView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Drafted message">
+    <button class="sheet-close" onclick="closeOverlay('draftMsgView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="draftMsgTitle">Draft</div>
+    <textarea class="jp-in" id="draftMsgText" rows="6" style="width:100%;box-sizing:border-box;resize:vertical;"></textarea>
+    <div class="ac-disc-sub" style="margin:8px 0 12px;">Read it over and change anything you like — nothing sends until you press send in the chat.</div>
+    <div style="display:flex;gap:8px;">
+      <button class="ac-pill-btn accent" style="flex:1;" id="draftMsgGo">Open the chat</button>
+      <button class="ac-pill-btn" style="flex:0 0 auto;padding:9px 16px;" onclick="acDraftCopy()">Copy</button>
+    </div>
+  </div>
+</div>
+
+<!-- A plain "pick one" sheet, reused wherever a short choice is needed -->
+<div class="overlay hidden" id="pickOneView" onclick="if(event.target===this)acPickCancel()">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Choose">
+    <button class="sheet-close" onclick="acPickCancel()" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="pickOneTitle">Choose</div>
+    <div id="pickOneBody"></div>
+  </div>
+</div>
+
+<!-- Lead lists: the people you want to sell to, and what they've been up to -->
+<div class="overlay hidden" id="leadsView" onclick="if(event.target===this)closeOverlay('leadsView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Lead lists">
+    <button class="sheet-close" onclick="closeOverlay('leadsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Lead lists</div>
+    <div class="ac-disc-sub" style="margin:0 0 10px;">Save the people and businesses you want to reach, and we'll tell you when one of them posts or starts hiring.</div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <input class="jp-in" id="leadListName" maxlength="60" placeholder="New list (e.g. Autumn prospects)" style="flex:1;margin:0;"/>
+      <button class="ac-pill-btn accent" style="flex:0 0 auto;padding:8px 16px;" onclick="acCreateLeadList()">Create</button>
+    </div>
+    <div id="leadsBody"></div>
+  </div>
+</div>
+
+<!-- One lead list: who's on it and what they've done lately -->
+<div class="overlay hidden" id="leadListView" onclick="if(event.target===this)closeOverlay('leadListView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Leads">
+    <button class="sheet-close" onclick="closeOverlay('leadListView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="leadListBody"></div>
+  </div>
+</div>
+
+<!-- Buyer intent: who is showing interest in you right now -->
+<div class="overlay hidden" id="intentView" onclick="if(event.target===this)closeOverlay('intentView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Interested in you">
+    <button class="sheet-close" onclick="closeOverlay('intentView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Interested in you</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">People who looked at your profile, your listings, or left something in a basket. Warmest first.</div>
+    <div id="intentBody"></div>
+  </div>
+</div>
+
+<!-- Conversation analytics: how a business handles its messages -->
+<div class="overlay hidden" id="convStatsView" onclick="if(event.target===this)closeOverlay('convStatsView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Message insights">
+    <button class="sheet-close" onclick="closeOverlay('convStatsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Message insights</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">How quickly you get back to people, and how much is coming in.</div>
+    <div id="convStatsBody"></div>
+  </div>
+</div>
+
+<!-- Team inbox: a shared inbox with an owner per conversation -->
+<div class="overlay hidden" id="teamInboxView" onclick="if(event.target===this)closeOverlay('teamInboxView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Team inbox">
+    <button class="sheet-close" onclick="closeOverlay('teamInboxView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Team inbox</div>
+    <div class="ac-disc-sub" style="margin:0 0 10px;">Hand a conversation to someone on your team so it's clear who's answering.</div>
+    <div id="teamInboxTabs" class="ac-job-views" style="margin-bottom:10px;"></div>
+    <div id="teamInboxBody"></div>
+  </div>
+</div>
+
+<!-- Career page — a business's roles, people and culture in one place -->
+<div class="overlay hidden" id="careersView" onclick="if(event.target===this)closeOverlay('careersView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Career page">
+    <button class="sheet-close" onclick="closeOverlay('careersView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="careersBody"></div>
   </div>
 </div>
 
@@ -17511,7 +17662,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1604'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1605'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -27184,7 +27335,37 @@ function acPeopleFilterQS() {
   if (f.verified) qs += '&verified=1';
   if (f.otw) qs += '&otw=1';
   if (f.loc) qs += '&loc=' + encodeURIComponent(f.loc);
+  // The stacked professional filters — each one narrows, none of them conflict.
+  for (const k of ['title', 'industry', 'company', 'school', 'skill']) {
+    if (f[k]) qs += '&' + k + '=' + encodeURIComponent(f[k]);
+  }
+  if (f.years) qs += '&years=' + encodeURIComponent(f.years);
   return qs;
+}
+// Every professional filter is the same shape: tap to type a value, tap again
+// to clear it. One handler instead of five near-identical ones.
+const PPL_TEXT_FILTERS = [
+  ['title',    'Job title',  'Filter by job title (e.g. designer):'],
+  ['industry', 'Industry',   'Filter by industry (e.g. Design):'],
+  ['company',  'Company',    'Filter by company they work at:'],
+  ['school',   'Education',  'Filter by school or university:'],
+  ['skill',    'Skill',      'Filter by skill (e.g. JavaScript):'],
+];
+function acPplText(key, label, ask) {
+  const f = AC._pplF;
+  if (f[key]) { f[key] = ''; _pplRerun(); return; }
+  const v = prompt(ask);
+  if (v == null) return;
+  f[key] = String(v).trim().slice(0, 80);
+  _pplRerun();
+}
+function acPplYears() {
+  const f = AC._pplF;
+  if (f.years) { f.years = 0; _pplRerun(); return; }
+  const v = prompt('Minimum years of experience:');
+  if (v == null) return;
+  const n = Math.max(0, Math.min(50, parseInt(v, 10) || 0));
+  f.years = n; _pplRerun();
 }
 function acRenderPeopleFilters() {
   const box = document.getElementById('peopleFilters'); if (!box) return;
@@ -27198,9 +27379,14 @@ function acRenderPeopleFilters() {
     chip(!!f.ptype, typeLbl, "acPplCycleType()") +
     chip(f.verified, 'Verified', "acPplToggle('verified')") +
     chip(f.otw, 'Open to work', "acPplToggle('otw')") +
-    chip(!!f.loc, f.loc ? 'Near: ' + escHtml(f.loc) : 'Location', "acPplLoc()");
+    chip(!!f.loc, f.loc ? 'Near: ' + escHtml(f.loc) : 'Location', "acPplLoc()") +
+    PPL_TEXT_FILTERS.map(([k, lbl, ask]) =>
+      chip(!!f[k], f[k] ? escHtml(f[k]) : lbl, `acPplText(${jsAttr(k)},${jsAttr(lbl)},${jsAttr(ask)})`)).join('') +
+    chip(!!f.years, f.years ? f.years + '+ years' : 'Experience', 'acPplYears()') +
+    (Object.keys(f).some((k) => f[k]) ? `<button class="ppl-chip ppl-clear" onclick="acPplClear()">Clear all</button>` : '');
 }
 function _pplRerun() { acRenderPeopleFilters(); const q = document.getElementById('tbSearchInput') || document.getElementById('acSearchInput'); acDoSearch(q ? q.value : ''); }
+function acPplClear() { AC._pplF = {}; _pplRerun(); }
 function acPplCycleType() { const f = AC._pplF; f.ptype = f.ptype === '' || !f.ptype ? 'personal' : f.ptype === 'personal' ? 'business' : ''; _pplRerun(); }
 function acPplToggle(k) { AC._pplF[k] = !AC._pplF[k]; _pplRerun(); }
 function acPplLoc() {
@@ -27645,7 +27831,7 @@ function notifRow(n, i) {
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
-  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', event_reminder: 'is hosting an event starting soon', event_comment: 'commented on your event', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', appt_rescheduled: 'proposed a new appointment time', appt_reminder: 'has an appointment with you soon', call_reminder: 'has a call with you soon', stock_low: 'is running low — only a few left', stock_out: 'has sold out', event_spot: 'a spot opened up — you’re in!', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', invoice_reminder: 'sent a reminder about an unpaid invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', strike: 'issued a warning on your account', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', referral_milestone: 'you hit a referral milestone — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', listing_hidden: 'a listing of yours was hidden — check your messages', waitlist_invite: 'you’re off the waiting list — it’s ready for you', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', auction_outbid: 'outbid you on an auction. Bid again to stay in it', auction_won: 'you won the auction. Pay to claim it', auction_ended: 'won your auction. They’re paying now', group_join_paid: 'paid your group’s join fee. They’re in', crm_followup: 'is due a follow-up — you set the reminder', rinv_paused: 'a recurring invoice was paused — check the schedule', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', split_reminder: 'sent a reminder about your share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', story_answer: 'responded to your question', story_mention: 'mentioned you in their Daily', remix: 'remixed your video', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_adjustment: 'your wallet balance was adjusted by our team', cashout_released: 'your cash-out was approved and is on its way to your bank', cashout_returned: 'your cash-out wasn’t approved — the money is back in your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item' };
+  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', event_reminder: 'is hosting an event starting soon', event_comment: 'commented on your event', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', appt_rescheduled: 'proposed a new appointment time', appt_reminder: 'has an appointment with you soon', call_reminder: 'has a call with you soon', stock_low: 'is running low — only a few left', stock_out: 'has sold out', event_spot: 'a spot opened up — you’re in!', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', invoice_reminder: 'sent a reminder about an unpaid invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', strike: 'issued a warning on your account', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', referral_milestone: 'you hit a referral milestone — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', listing_hidden: 'a listing of yours was hidden — check your messages', waitlist_invite: 'you’re off the waiting list — it’s ready for you', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', auction_outbid: 'outbid you on an auction. Bid again to stay in it', auction_won: 'you won the auction. Pay to claim it', auction_ended: 'won your auction. They’re paying now', group_join_paid: 'paid your group’s join fee. They’re in', crm_followup: 'is due a follow-up — you set the reminder', rinv_paused: 'a recurring invoice was paused — check the schedule', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', split_reminder: 'sent a reminder about your share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', story_answer: 'responded to your question', story_mention: 'mentioned you in their Daily', remix: 'remixed your video', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_adjustment: 'your wallet balance was adjusted by our team', cashout_released: 'your cash-out was approved and is on its way to your bank', cashout_returned: 'your cash-out wasn’t approved — the money is back in your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item', lead_active: 'posted something new — they\u2019re on one of your lead lists', lead_hiring: 'is hiring — they\u2019re on one of your lead lists', inbox_assigned: 'gave you a conversation to handle' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -29591,6 +29777,10 @@ function acGoProfileHub() {
     html += item('Job alerts', _ME_IC.bell, "acOpenSavedSearches()", null);
     html += item('Saved candidates', _ME_IC.bmk, "acOpenSavedCandidates()", null);
     html += item('Recruiter projects', _ME_IC.bmk, "acOpenRecruitProjects()", null);
+    html += item('Lead lists', _ME_IC.bmk, "acOpenLeads()", null);
+    if (acIsBiz(S.user)) html += item('Interested in you', _ME_IC.eye || _ME_IC.people, "acOpenIntent()", null);
+    if (acIsBiz(S.user)) html += item('Team inbox', _ME_IC.people, "acOpenTeamInbox()", null);
+    html += item('Message insights', _ME_IC.chart || _ME_IC.people, "acOpenConvStats()", null);
     html += item('Resumes', _ME_IC.resumes, "acOpenResumes()", null);
     html += item('Open to work', _ME_IC.otw, "acOpenPrefs()", null);
     html += '</div>';
@@ -32579,6 +32769,23 @@ async function acAddUidToList(listId, name) {
   try { await API.req('POST', '/api/social/lists/' + listId + '/members', { uid: AC._addToUid }); showNotif('Added to ' + name); closeOverlay('addToList'); }
   catch (e) { showNotif(e.message || 'Could not add.'); }
 }
+/* Mutual connections, by name. A bare count tells you nothing you can act on;
+   the names are the introduction. Tapping one opens their profile. */
+function acMutualLine(d) {
+  const n = d.mutualConnections || 0, people = (d.mutualPeople || []).filter((p) => p && p.username);
+  const ic = '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+  if (!people.length) return `<div class="ac-prof-mutual">${ic}${n} mutual connection${n === 1 ? '' : 's'}</div>`;
+  const link = (p) => `<button class="ac-mutual-name" onclick="acGoProfile(${jsAttr(p.username)})">${escHtml(p.name || ('@' + p.username))}</button>`;
+  const rest = n - people.length;
+  let names;
+  if (people.length === 1) names = link(people[0]);
+  else if (people.length === 2) names = link(people[0]) + ' and ' + link(people[1]);
+  else names = link(people[0]) + ', ' + link(people[1]) + ' and ' + link(people[2]);
+  const tail = rest > 0 ? ` and ${rest} other${rest === 1 ? '' : 's'}` : '';
+  const avs = people.map((p) => acAvatarHtml(p.name, p.avatar, 'mutual-av')).join('');
+  return `<div class="ac-prof-mutual"><span class="mutual-avs">${avs}</span>${people.length ? '' : ic}<span>${names}${tail}${
+    n === 1 ? ' is a mutual connection' : ' are mutual connections'}</span></div>`;
+}
 // Trending + followed hashtags widget (loaded on the Search Discover surface).
 // A staff-curated trend can carry its own context line ("Trending in Design")
 // and be pinned to the top — both come straight off the trending payload.
@@ -34457,7 +34664,7 @@ function acRenderProfile(d, mine) {
       </div>` : ''}
       ${u.headline ? `<div class="ac-prof-headline">${escHtml(u.headline)}</div>` : ''}
       ${u.status ? `<div class="ac-prof-status"${mine ? ' onclick="acStatusOpen()" style="cursor:pointer;"' : ''}><span class="ac-prof-status-em">${u.status.emoji || '💬'}</span>${u.status.text ? `<span>${escHtml(u.status.text)}</span>` : ''}</div>` : (mine ? `<div class="ac-prof-status ac-prof-status-set" onclick="acStatusOpen()"><span class="ac-prof-status-em">😊</span><span>Set a status</span></div>` : '')}
-      ${(!mine && d.mutualConnections) ? `<div class="ac-prof-mutual"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>${d.mutualConnections} mutual connection${d.mutualConnections === 1 ? '' : 's'}</div>` : ''}
+      ${(!mine && d.mutualConnections) ? acMutualLine(d) : ''}
       ${!mine ? acFollowedByLine({ followedBy: d.followedBy, followedByCount: d.followedByCount }) : ''}
       ${acProfNote(u)}
       ${u.bio ? `<div class="ac-prof-bio">${acLinkifyPost(u.bio)}</div>` : ''}
@@ -34585,7 +34792,7 @@ function acBuildProfPane(name) {
   // Now that the pane's boxes exist, fire its lazy content loaders.
   if (name === 'about' && u.username) { acLoadShowcase(u.username, mine); acLoadCoursesProfile(u.username, mine); }
   if (name === 'media' && u.username) acLoadSeries(u.username, mine);
-  if (name === 'business' && u.id != null) { acLoadShop(u.id, mine); acLoadBizQA(u.id, mine); }
+  if (name === 'business' && u.id != null) { acLoadShop(u.id, mine); acLoadBizQA(u.id, mine); acLoadBizInsights(u.id); }
   if (name === 'likes' && u.username) acLoadProfileLikes(u.username);
 }
 // The public "Likes" profile tab — fetched lazily on first tab tap so the initial
@@ -34653,7 +34860,9 @@ function acBizSections(d, mine) {
   const contactRow = mine
     ? `<div class="ac-section-row"><span class="ac-prof-head">Leads</span><button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acOpenLeads()">Inbox</button></div>`
     : (d.user.inquiryEnabled ? `<div class="ac-section-row"><span class="ac-prof-head">Contact</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 14px;" onclick="acContactBizOpen(${d.user.id}, ${jsAttr(d.user.name)}, ${jsAttr(d.user.inquiryIntro || '')})">Contact</button></div>` : '');
-  return acBizReviewBar(d, mine) + acBizHoursHtml(d, mine) + storeRow + `<div id="acShopBox"></div>` + bookRow + contactRow + `<div class="ac-section-row"><span class="ac-prof-head">Jobs</span>${postBtn}</div>${jobsHtml}
+  const careersRow = `<div class="ac-section-row"><span class="ac-prof-head">Working here</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 13px;" onclick="acOpenCareers(${d.user.id})">Career page</button></div>
+    <div id="acBizInsights"></div>`;
+  return acBizReviewBar(d, mine) + acBizHoursHtml(d, mine) + storeRow + `<div id="acShopBox"></div>` + bookRow + contactRow + careersRow + `<div class="ac-section-row"><span class="ac-prof-head">Jobs</span>${postBtn}</div>${jobsHtml}
     <div class="ac-section-row"><span class="ac-prof-head">People here</span>${hereBtn}</div>${peopleHtml}
     <div class="ac-section-row" style="margin-top:14px;"><span class="ac-prof-head">Questions & answers</span></div><div id="acBizQA"></div>`;
 }
@@ -34735,6 +34944,41 @@ function acBizHoursHtml(d, mine) {
   return `<div class="ac-section-row"><span class="ac-prof-head">Hours ${badge}</span>${edit}</div><div class="biz-hours">${rows}${spHead}${upcoming}${note}</div>`;
 }
 /* ─── Business Q&A ─── */
+/* Company insights — how big the team is, whether it's growing, and whether
+   they're hiring. Every figure comes from what members published themselves,
+   so a young business shows a small honest picture rather than a fake one. */
+async function acLoadBizInsights(bizId) {
+  const box = document.getElementById('acBizInsights'); if (!box) return;
+  box.innerHTML = '';
+  try {
+    const d = await API.req('GET', '/api/business/' + bizId + '/insights');
+    // Nothing published yet — say nothing rather than show a row of zeros.
+    if (!d.headcount && !d.jobsPosted) return;
+    const dir = d.hiring.direction;
+    const hire = dir === 'up' ? { t: 'Hiring is picking up', c: 'up' }
+      : dir === 'down' ? { t: 'Hiring has slowed', c: 'down' }
+      : dir === 'steady' ? { t: 'Hiring is steady', c: '' } : null;
+    const stat = (v, l) => `<div class="ci-stat"><div class="ci-v">${v}</div><div class="ci-l">${escHtml(l)}</div></div>`;
+    // A small bar per year — the shape of the team over time, no chart library.
+    const yrs = d.joinersByYear || [];
+    const top = Math.max(1, ...yrs.map((y) => y.joined));
+    const bars = yrs.length > 1 ? `<div class="ci-bars">${yrs.map((y) => `
+      <div class="ci-bar" title="${y.joined} joined in ${y.year}">
+        <div class="ci-fill" style="height:${Math.max(8, Math.round((y.joined / top) * 100))}%"></div>
+        <div class="ci-yr">${String(y.year).slice(2)}</div></div>`).join('')}</div>` : '';
+    box.innerHTML = `<div class="ac-section-row" style="margin-top:14px;"><span class="ac-prof-head">Company insights</span></div>
+      <div class="ci-card">
+        <div class="ci-row">
+          ${stat(d.headcount, d.headcount === 1 ? 'person here' : 'people here')}
+          ${stat(d.openRoles, d.openRoles === 1 ? 'open role' : 'open roles')}
+          ${d.avgTenureYears ? stat(d.avgTenureYears + 'y', 'average stay') : ''}
+        </div>
+        ${bars}
+        ${hire ? `<div class="ci-hire ${hire.c}">${escHtml(hire.t)} \u00b7 ${d.hiring.last90} role${d.hiring.last90 === 1 ? '' : 's'} posted in the last 90 days</div>` : ''}
+        <div class="ci-note">From what people and this business have published on Atwe.</div>
+      </div>`;
+  } catch (e) { /* insights are a bonus — never break the profile over them */ }
+}
 async function acLoadBizQA(bizId, mine) {
   const box = document.getElementById('acBizQA'); if (!box) return;
   AC._qaBiz = bizId; AC._qaMine = mine;
@@ -34945,6 +35189,7 @@ async function acSendTip(payWith) {
 }
 /* ─── Wallet — peer-to-peer money (send to a @username) ─── */
 function paMoney() { const a = AC._paAuthor; closeOverlay('postActions'); if (a) acOpenSendMoney(a.id, a.name, a.username); }
+function paLead() { const a = AC._paAuthor; closeOverlay('postActions'); if (a) acAddToLeadList(a.id); }
 // ── Private note about a person (only YOU ever see it) ──
 function paPrivateNote() {
   const a = AC._paAuthor; closeOverlay('postActions');
@@ -38563,6 +38808,305 @@ async function acOpenPayLink(code) {
     showNotif('Paid $' + (r.amountCents / 100).toFixed(2) + ' to ' + link.owner.name); acRefreshBalance();
   } catch (e) { acHandlePayErr ? acHandlePayErr(e) : showNotif(e.message || 'Could not pay the link.'); }
 }
+/* A small "pick one of these" sheet. Resolves to the chosen option, or null if
+   the person backs out — so callers can just `await` it and stop on null. */
+function acPickFromList(options, title) {
+  return new Promise((resolve) => {
+    const body = document.getElementById('pickOneBody'), t = document.getElementById('pickOneTitle');
+    if (!body) { resolve(null); return; }
+    if (t) t.textContent = title || 'Choose';
+    AC._pickResolve = resolve;
+    body.innerHTML = options.map((o, i) => `
+      <button class="ac-item" style="width:100%;text-align:start;border:none;background:none;cursor:pointer;" onclick="acPickChoose(${i})">
+        <div class="ac-item-inner"><div class="ac-item-main"><div class="ac-item-name">${escHtml(o.label)}</div></div></div>
+      </button>`).join('');
+    AC._pickOptions = options;
+    showOverlay('pickOneView');
+  });
+}
+function acPickChoose(i) {
+  const o = (AC._pickOptions || [])[i];
+  closeOverlay('pickOneView');
+  const r = AC._pickResolve; AC._pickResolve = null;
+  if (r) r(o || null);
+}
+function acPickCancel() {
+  closeOverlay('pickOneView');
+  const r = AC._pickResolve; AC._pickResolve = null;
+  if (r) r(null);
+}
+// Show a drafted message for review. `onGo` runs when they choose to continue.
+function acShowDraft(title, text, onGo) {
+  const t = document.getElementById('draftMsgTitle'), a = document.getElementById('draftMsgText');
+  const go = document.getElementById('draftMsgGo');
+  if (t) t.textContent = title;
+  if (a) a.value = text || '';
+  if (go) go.onclick = onGo;
+  showOverlay('draftMsgView');
+}
+function acDraftCopy() {
+  const a = document.getElementById('draftMsgText'); if (!a) return;
+  acCopyText(a.value); showNotif('Copied.');
+}
+/* ─── Lead lists ────────────────────────────────────────────────────────────
+   Your prospects, and what they've been up to. The "what they've been up to"
+   is the whole point — a name on a list is a to-do, a name that just posted
+   about hiring is a reason to write today. */
+async function acOpenLeads() {
+  showOverlay('leadsView');
+  acLoadLeadLists();
+}
+async function acLoadLeadLists() {
+  const box = document.getElementById('leadsBody'); if (!box) return;
+  box.innerHTML = acSkelRows(2);
+  try {
+    const { lists } = await API.req('GET', '/api/lead-lists');
+    box.innerHTML = lists.length ? lists.map((l) => `
+      <div class="ac-item" style="cursor:pointer;" onclick="acOpenLeadList(${l.id})">
+        <div class="ac-item-inner"><div class="ac-item-main">
+          <div class="ac-item-name">${escHtml(l.name)}</div>
+          <div class="ac-item-last">${l.members} ${l.members === 1 ? 'lead' : 'leads'}${l.alerts ? ' \u00b7 alerts on' : ''}</div>
+        </div></div></div>`).join('')
+      : '<div class="ac-empty" style="padding:16px;">No lists yet. Make one above, then add people from their profile.</div>';
+  } catch (e) { box.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load your lists.')}</div>`; }
+}
+async function acCreateLeadList() {
+  const el = document.getElementById('leadListName');
+  const name = (el.value || '').trim();
+  if (!name) { showNotif('Give the list a name.'); return; }
+  try { await API.req('POST', '/api/lead-lists', { name }); el.value = ''; acLoadLeadLists(); }
+  catch (e) { showNotif(e.message || 'Could not create the list.'); }
+}
+async function acOpenLeadList(id) {
+  AC._leadList = id;
+  const box = document.getElementById('leadListBody'); if (!box) return;
+  box.innerHTML = acSkelRows(3);
+  showOverlay('leadListView');
+  try {
+    const d = await API.req('GET', '/api/lead-lists/' + id + '/leads');
+    const rows = d.leads.length ? d.leads.map((l) => {
+      // Say what they DID, not when they were added — that's the reason to write.
+      const bits = [];
+      if (l.lastJob) bits.push('Hiring \u00b7 ' + acTime(l.lastJob));
+      if (l.lastListing) bits.push('New listing \u00b7 ' + acTime(l.lastListing));
+      if (l.lastPost) bits.push('Posted ' + acTime(l.lastPost));
+      return `<div class="lead-row">
+        <div class="lead-top" onclick="acGoProfile(${jsAttr(l.username)})">
+          ${acAvatarHtml(l.name, l.avatar, 'user-avatar', l.accountType === 'business')}
+          <div style="min-width:0;flex:1;">
+            <div class="ac-item-name">${escHtml(l.name)}${vbadge(l.verified)}</div>
+            <div class="ac-item-last">${escHtml(l.headline || ('@' + l.username))}</div>
+          </div>
+        </div>
+        ${bits.length ? `<div class="lead-activity">${bits.slice(0, 2).map(escHtml).join(' \u00b7 ')}</div>` : ''}
+        ${l.note ? `<div class="lead-note">${escHtml(l.note)}</div>` : ''}
+        <div class="lead-acts">
+          <button class="ac-pill-btn" onclick="acProspect(${l.id})">✦ Write a message</button>
+          <button class="ac-pill-btn danger" onclick="acRemoveLead(${l.id})">Remove</button>
+        </div></div>`;
+    }).join('') : '<div class="ac-empty" style="padding:16px;">Nobody on this list yet. Open someone\u2019s profile and add them from the ⋯ menu.</div>';
+    box.innerHTML = `<div class="jp-title">${escHtml(d.list.name)}</div>
+      <div class="iset-group" style="margin-bottom:14px;"><div class="iset-row" data-static>
+        <div class="iset-main"><div class="iset-label">Tell me when they're active</div>
+          <div class="iset-sub">A quiet nudge when someone here posts or starts hiring</div></div>
+        <label class="ios-switch"><input type="checkbox" id="leadAlertsSw"${d.list.alerts ? ' checked' : ''}
+          onchange="acToggleLeadAlerts(${id}, this.checked)"/><span class="ios-track"></span><span class="ios-knob"></span></label>
+      </div></div>${rows}`;
+  } catch (e) { box.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load the leads.')}</div>`; }
+}
+async function acToggleLeadAlerts(id, on) {
+  try { await API.req('PATCH', '/api/lead-lists/' + id, { alerts: !!on }); }
+  catch (e) {
+    const sw = document.getElementById('leadAlertsSw');
+    if (sw) sw.checked = !on;                      // put the switch back if it didn't save
+    showNotif(e.message || 'Could not update.');
+  }
+}
+async function acRemoveLead(leadId) {
+  try { await API.req('DELETE', '/api/lead-lists/' + AC._leadList + '/leads/' + leadId); acOpenLeadList(AC._leadList); }
+  catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
+// Add someone to a list, from their profile's ⋯ menu.
+async function acAddToLeadList(userId) {
+  try {
+    const { lists } = await API.req('GET', '/api/lead-lists');
+    if (!lists.length) { showNotif('Make a lead list first.'); acOpenLeads(); return; }
+    const pick = lists.length === 1 ? lists[0] : await acPickFromList(lists.map((l) => ({ id: l.id, label: l.name })), 'Add to which list?');
+    if (!pick) return;
+    await API.req('POST', '/api/lead-lists/' + (pick.id || pick) + '/leads', { leadId: userId });
+    showNotif('Added to your leads.');
+  } catch (e) { showNotif(e.message || 'Could not add them.'); }
+}
+/* ─── Who's interested in you ───────────────────────────────────────────────
+   The people already circling your business, ranked by how close they are to
+   buying: something in a basket beats a saved listing, which beats a look. */
+async function acOpenIntent() {
+  const box = document.getElementById('intentBody'); if (!box) return;
+  box.innerHTML = acSkelRows(3);
+  showOverlay('intentView');
+  try {
+    const d = await API.req('GET', '/api/intent');
+    const LBL = { in_cart: 'In their basket', saved_listing: 'Saved a listing', viewed_listing: 'Viewed a listing', profile_view: 'Viewed your profile' };
+    box.innerHTML = d.leads.length ? d.leads.map((l) => {
+      const kinds = (l.kinds || []).map((k) => LBL[k] || k);
+      const hot = l.kinds.includes('in_cart') ? 'hot' : (l.kinds.includes('saved_listing') ? 'warm' : '');
+      return `<div class="ti-row">
+        <div class="ti-top" onclick="acGoProfile(${jsAttr(l.username)})">
+          ${acAvatarHtml(l.name, l.avatar, 'user-avatar', l.accountType === 'business')}
+          <div style="min-width:0;flex:1;">
+            <div class="ac-item-name">${escHtml(l.name)}${vbadge(l.verified)}${hot ? `<span class="intent-dot ${hot}"></span>` : ''}</div>
+            <div class="ti-sub">${escHtml(kinds.slice(0, 2).join(' \u00b7 '))}${l.signals > 2 ? ` \u00b7 ${l.signals} signals` : ''}</div>
+          </div>
+          <button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 14px;" onclick="event.stopPropagation();acProspect(${l.id})">✦ Write</button>
+        </div></div>`;
+    }).join('') : '<div class="ac-empty" style="padding:16px;">Nobody has looked yet. Once people view your profile or your listings, they show up here.</div>';
+  } catch (e) { box.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load.')}</div>`; }
+}
+/* ─── AI prospecting ────────────────────────────────────────────────────────
+   A first message drafted from what the person actually published — shown for
+   review, never sent on your behalf. */
+async function acProspect(leadId) {
+  showNotif('Atwe AI is writing\u2026');
+  try {
+    const r = await API.req('POST', '/api/ai/prospect', { leadId });
+    acShowDraft('Message to ' + (r.lead ? r.lead.name : 'them'), r.text, () => acProspectSend(leadId));
+  } catch (e) { showNotif(e.message || 'Atwe AI could not write that.'); }
+}
+// Drop the draft into the real chat composer — the person still presses send.
+async function acProspectSend(leadId) {
+  const a = document.getElementById('draftMsgText');
+  const t = a ? a.value : '';
+  closeOverlay('draftMsgView');
+  await acOpenChat(leadId);
+  setTimeout(() => {
+    const inp = document.getElementById('acInput');
+    if (inp && t) { inp.value = t; inp.focus(); inp.dispatchEvent(new Event('input')); }
+  }, 400);
+}
+/* ─── Message insights ──────────────────────────────────────────────────────
+   How fast you reply and how much is coming in. "First reply" is measured per
+   conversation per day, so one long thread isn't counted as one huge delay. */
+function _convDur(s) {
+  if (s == null) return '\u2014';
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.round(s / 60) + 'm';
+  if (s < 86400) return (s / 3600).toFixed(1) + 'h';
+  return (s / 86400).toFixed(1) + 'd';
+}
+async function acOpenConvStats() {
+  const box = document.getElementById('convStatsBody'); if (!box) return;
+  box.innerHTML = acSkelRows(2);
+  showOverlay('convStatsView');
+  try {
+    const d = await API.req('GET', '/api/atchat/analytics?days=30');
+    const stat = (v, l) => `<div class="ci-stat"><div class="ci-v">${v}</div><div class="ci-l">${escHtml(l)}</div></div>`;
+    const top = Math.max(1, ...d.trend.map((t) => t.received + t.sent));
+    // A quiet day is a flat baseline, not a dot — otherwise a mostly-empty month
+    // reads as a row of noise instead of "nothing much happened, then this".
+    const bars = `<div class="ci-bars" style="height:64px;">${d.trend.slice(-30).map((t) => {
+      const n = t.received + t.sent;
+      const h = n ? Math.max(9, Math.round((n / top) * 100)) : 0;
+      return `<div class="ci-bar" title="${t.day}: ${t.received} in, ${t.sent} out">
+        <div class="${n ? 'ci-fill' : 'ci-zero'}"${n ? ` style="height:${h}%"` : ''}></div></div>`;
+    }).join('')}</div>`;
+    box.innerHTML = `
+      <div class="ci-card">
+        <div class="ci-row">
+          ${stat(_convDur(d.medianResponseSecs), 'usual first reply')}
+          ${stat(d.responseRate == null ? '\u2014' : d.responseRate + '%', 'you replied')}
+          ${stat(d.conversations, d.conversations === 1 ? 'conversation' : 'conversations')}
+        </div>
+        ${bars}
+        <div class="ci-note">Last 30 days \u00b7 ${d.received} in, ${d.sent} out \u00b7 ${d.newConversations} new</div>
+      </div>
+      ${d.needingReply && d.answered < d.needingReply
+        ? `<div class="ci-card" style="margin-top:12px;"><div style="font-size:13.5px;color:var(--t2);">You didn\u2019t get back to ${d.needingReply - d.answered} of ${d.needingReply} conversations that were waiting on you.</div></div>` : ''}`;
+  } catch (e) { box.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load.')}</div>`; }
+}
+/* ─── Team inbox ────────────────────────────────────────────────────────────
+   The business's conversations with an owner each, so two people never both
+   think they're handling it — and nobody's message quietly goes unanswered. */
+const TEAM_INBOX_TABS = [['all', 'Open'], ['mine', 'Mine'], ['unassigned', 'Unassigned'], ['done', 'Done']];
+async function acOpenTeamInbox() {
+  AC._tiFilter = AC._tiFilter || 'all';
+  showOverlay('teamInboxView');
+  acLoadTeamInbox();
+}
+function acTeamInboxTab(f) { AC._tiFilter = f; acLoadTeamInbox(); }
+async function acLoadTeamInbox() {
+  const box = document.getElementById('teamInboxBody'), tabs = document.getElementById('teamInboxTabs');
+  if (!box) return;
+  box.innerHTML = acSkelRows(3);
+  try {
+    const d = await API.req('GET', '/api/atchat/inbox?filter=' + (AC._tiFilter || 'all'));
+    if (tabs) tabs.innerHTML = TEAM_INBOX_TABS.map(([k, l]) =>
+      `<button class="ac-jv${AC._tiFilter === k ? ' on' : ''}" onclick="acTeamInboxTab(${jsAttr(k)})">${l}${d.counts[k] ? ' ' + d.counts[k] : ''}</button>`).join('');
+    box.innerHTML = d.conversations.length ? d.conversations.map((c) => `
+      <div class="ti-row">
+        <div class="ti-top" onclick="acOpenChat(${c.peer.id})">
+          ${acAvatarHtml(c.peer.name, c.peer.avatar, 'user-avatar', c.peer.accountType === 'business')}
+          <div style="min-width:0;flex:1;">
+            <div class="ac-item-name">${escHtml(c.peer.name)}${vbadge(c.peer.verified)}${c.waiting ? '<span class="ti-wait">waiting</span>' : ''}</div>
+            <div class="ti-sub">${c.assignee ? escHtml(c.assignee.name) + ' has this' : 'Nobody has picked this up'}${c.unread ? ` \u00b7 ${c.unread} unread` : ''}</div>
+          </div>
+          <button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 14px;" onclick="event.stopPropagation();acAssignConv(${c.peer.id})">${c.assignee ? 'Reassign' : 'Assign'}</button>
+        </div>
+      </div>`).join('')
+      : '<div class="ac-empty" style="padding:16px;">Nothing here.</div>';
+  } catch (e) { box.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load the inbox.')}</div>`; }
+}
+async function acAssignConv(peerId) {
+  try {
+    const { members } = await API.req('GET', '/api/business/team').catch(() => ({ members: [] }));
+    const opts = [{ id: S.user.id, label: 'Me' }]
+      .concat((members || []).filter((m) => m.status === 'active').map((m) => ({ id: m.id, label: m.name })))
+      .concat([{ id: '', label: 'Nobody (put it back)' }, { id: 'done', label: 'Mark as done' }]);
+    const pick = await acPickFromList(opts, 'Who should handle this?');
+    if (pick == null) return;
+    const id = pick.id !== undefined ? pick.id : pick;
+    const body = id === 'done' ? { assigneeId: null, state: 'done' } : { assigneeId: id === '' ? null : id };
+    await API.req('POST', '/api/atchat/inbox/' + peerId + '/assign', body);
+    acLoadTeamInbox();
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+/* Career page — everything a jobseeker wants about a business on one screen:
+   the open roles, who works there, and what the business itself has been
+   posting (the closest honest thing to "what it's like here"). */
+async function acOpenCareers(bizId) {
+  const body = document.getElementById('careersBody'); if (!body) return;
+  body.innerHTML = acSkelRows(3);
+  showOverlay('careersView');
+  try {
+    const d = await API.req('GET', '/api/business/' + bizId + '/careers');
+    const b = d.business;
+    const jobs = d.jobs.length ? d.jobs.map(acJobCard).join('')
+      : '<div class="ac-empty" style="padding:14px;">No open roles right now.</div>';
+    const team = d.team.length ? `<div class="cp-team">${d.team.map((t) => `
+      <button class="cp-person" onclick="acGoProfile(${jsAttr(t.username)})">
+        ${acAvatarHtml(t.name, t.avatar)}
+        <span style="min-width:0;text-align:start;"><span class="cp-pname">${escHtml(t.name)}${vbadge(t.verified)}</span>
+        ${t.title ? `<span class="cp-ptitle" style="display:block;">${escHtml(t.title)}</span>` : ''}</span>
+      </button>`).join('')}</div>`
+      : '<div class="ac-empty" style="padding:12px;">No one has added this business yet.</div>';
+    const posts = d.posts.length ? d.posts.map((p) => acPostCard(p)).join('') : '';
+    body.innerHTML = `
+      <div class="cp-hero">
+        <div class="cp-banner"${b.banner ? ` style="background-image:url('${b.banner}')"` : ''}></div>
+        <div class="cp-head">
+          ${acAvatarHtml(b.name, b.avatar, 'user-avatar big', true)}
+          <div style="min-width:0;">
+            <div class="cp-name">${escHtml(b.name)}${b.businessVerifyStatus === 'verified' ? BIZ_VBADGE : vbadge(b.verified)}</div>
+            <div class="cp-sub">${escHtml(b.headline || ('@' + b.username))}${b.location ? ' \u00b7 ' + escHtml(b.location) : ''}</div>
+          </div>
+        </div>
+      </div>
+      <div class="ac-section-row"><span class="ac-prof-head">Open roles</span></div>${jobs}
+      <div class="ac-section-row" style="margin-top:16px;"><span class="ac-prof-head">The team</span></div>${team}
+      ${posts ? `<div class="ac-section-row" style="margin-top:16px;"><span class="ac-prof-head">Life here</span></div>${posts}` : ''}`;
+  } catch (e) {
+    body.innerHTML = `<div class="jp-title">Career page</div><div class="ac-empty">${escHtml(e.message || 'Could not load the page.')}</div>`;
+  }
+}
 /* ─── Waiting lists ─────────────────────────────────────────────────────────
    Something isn't ready yet, so people join a line for it and see their real
    place in it. Opened by a ?waitlist=<slug> link. */
@@ -41381,6 +41925,29 @@ function acAddSkillOpen() {
   document.getElementById('skillSubmit').disabled = false;
   showOverlay('skillForm');
   setTimeout(() => document.getElementById('skillInput')?.focus(), 60);
+}
+/* Skill type-ahead. Everyone typing the same thing lands on the same name, so
+   "JS" and "Javascript" become one skill people can actually be found by. */
+let _skillSuggestT = null;
+function acSkillSuggest(q) {
+  clearTimeout(_skillSuggestT);
+  _skillSuggestT = setTimeout(async () => {
+    const box = document.getElementById('skillSuggest'); if (!box) return;
+    const v = String(q || '').trim();
+    if (!v) { box.innerHTML = ''; return; }
+    try {
+      const { skills } = await API.req('GET', '/api/skills/suggest?q=' + encodeURIComponent(v));
+      // Don't suggest what they've already typed exactly.
+      const list = (skills || []).filter((sk) => sk.toLowerCase() !== v.toLowerCase());
+      box.innerHTML = list.slice(0, 6).map((sk) =>
+        `<button class="skill-chip" onclick="acSkillPick(${jsAttr(sk)})">${escHtml(sk)}</button>`).join('');
+    } catch (e) { box.innerHTML = ''; }
+  }, 200);
+}
+function acSkillPick(name) {
+  const inp = document.getElementById('skillInput');
+  if (inp) inp.value = name;
+  const box = document.getElementById('skillSuggest'); if (box) box.innerHTML = '';
 }
 async function acSubmitSkill() {
   const name = document.getElementById('skillInput').value.trim();

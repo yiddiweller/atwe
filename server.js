@@ -1757,7 +1757,7 @@ async function blockedEither(a, b) {
 // permission? True for the owner (the business account itself), an active 'admin'
 // team member (all perms), or an active member whose permissions[perm] is set.
 // `perm` ∈ jobs | qa | orders | reviews. Owner is always full-admin.
-const TEAM_PERMS = ['jobs', 'qa', 'orders', 'reviews'];
+const TEAM_PERMS = ['jobs', 'qa', 'orders', 'reviews', 'inbox'];
 async function canActAs(userId, businessId, perm) {
   if (!userId || !businessId) return false;
   if (userId === businessId) return true; // the owner
@@ -9658,20 +9658,31 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     }
     const reviewSummary = t.account_type === 'business' ? await businessReviewSummary(t.id) : null;
     const trustScore = await userTrustScore(t.id); // unified marketplace trust signal
-    // Mutual connections: people connected to BOTH me and this profile.
-    let mutualConnections = 0;
+    // Mutual connections: people connected to BOTH me and this profile. A bare
+    // count ("3 mutual connections") is far less useful than the names — "via
+    // Sarah" is what makes an introduction possible — so return up to three
+    // named people alongside the total.
+    let mutualConnections = 0, mutualPeople = [];
     if (t.id !== req.user.id) {
       const mc = await db.query(
-        `SELECT COUNT(*)::int AS n FROM (
+        `WITH shared AS (
            SELECT CASE WHEN requester_id = $2 THEN addressee_id ELSE requester_id END AS uid
            FROM connections WHERE (requester_id = $2 OR addressee_id = $2) AND status = 'accepted'
            INTERSECT
            SELECT CASE WHEN requester_id = $1 THEN addressee_id ELSE requester_id END AS uid
            FROM connections WHERE (requester_id = $1 OR addressee_id = $1) AND status = 'accepted'
-         ) z WHERE uid <> $1 AND uid <> $2`,
+         ), m AS (SELECT uid FROM shared WHERE uid <> $1 AND uid <> $2)
+         SELECT (SELECT COUNT(*)::int FROM m) AS n,
+                (SELECT COALESCE(json_agg(x), '[]'::json) FROM (
+                   SELECT u.name, u.username, u.avatar, u.verified
+                   FROM m JOIN users u ON u.id = m.uid
+                   WHERE NOT u.deactivated
+                   ORDER BY u.verified DESC, u.id LIMIT 3) x) AS people`,
         [t.id, req.user.id]
       );
       mutualConnections = mc.rows[0].n;
+      mutualPeople = (mc.rows[0].people || []).map((u) => ({
+        name: u.name, username: u.username, avatar: mediaRef(u.avatar, 'avatar', 0, 0), verified: !!u.verified }));
     }
     // "Followed by people you follow" social proof (X-style): up to 3 of the viewer's
     // follows who also follow this profile (verified first) + the total count.
@@ -9698,7 +9709,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     }
     res.json({
       myNote,
-      businessJobs, businessPeople, mutualConnections, reviewSummary, trustScore, followedBy, followedByCount,
+      businessJobs, businessPeople, mutualConnections, mutualPeople, reviewSummary, trustScore, followedBy, followedByCount,
       user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, pronouns: t.pronouns || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', businessTier: bizTier(t), businessTierLabel: BIZ_TIER_LABEL[bizTier(t)] || null, openToWork: t.otw_visibility === 'everyone', profileCta: ['book', 'order', 'message'].includes(t.profile_cta) ? t.profile_cta : null, joinedAt: t.created_at || null, paused: !!t.paused, pauseMessage: t.paused ? (t.pause_message || null) : null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null, specialHours: Array.isArray(t.special_hours) ? t.special_hours : [], hoursNote: t.hours_note || null, shopPaused: !!t.shop_paused, shopPauseMessage: t.shop_paused ? (t.shop_pause_message || null) : null, storeBanner: t.store_banner || null, hiring: !!t.hiring, inquiryEnabled: !!t.inquiry_enabled, inquiryIntro: t.inquiry_intro || null, status: userStatus(t), affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: t.aff_business_username || null } : null },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       education: edu.rows.map(mapEducation),
@@ -9788,7 +9799,7 @@ app.get('/api/public/profile/:username', async (req, res) => {
       posts: posts.rows.map(mapPost),
       replies: [], skills: [], recommendations: [], featured: [], experiences: [], education: [], certifications: [],
       connectionState: 'none', isFollowing: false, isBlocked: false, isNotifying: false, isMe: false,
-      pinnedPost: null, mutualConnections: 0, followedBy: [], followedByCount: 0, trustScore: null,
+      pinnedPost: null, mutualConnections: 0, mutualPeople: [], followedBy: [], followedByCount: 0, trustScore: null,
       subPrice: 0, subBlurb: null, isSubscribed: false, subscriberCount: 0, subTiers: [], myTierId: null,
       isMuted: false, isPeek: true,
     });
@@ -24017,9 +24028,522 @@ app.get('/api/newsletters/issues/:id', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the issue.' }); }
 });
 
+/* ─── Team inbox ────────────────────────────────────────────────────────────
+   A business's DMs, but as a shared inbox: each conversation can be handed to
+   one staff member, who then owns it. Nothing about messaging itself changes —
+   this is a layer of ownership over the conversations that already exist, so a
+   customer never notices, and two staff can't both silently think they've got
+   it. Reading the inbox needs the 'inbox' permission (the owner always has it). */
+app.get('/api/atchat/inbox', auth.requireAuth, async (req, res) => {
+  const businessId = routeId(req.query.businessId) || req.user.id;
+  try {
+    if (!(await canActAs(req.user.id, businessId, 'inbox'))) return res.status(403).json({ error: 'You don’t have access to this inbox.' });
+    const filter = ['all', 'mine', 'unassigned', 'done'].includes(req.query.filter) ? req.query.filter : 'all';
+    // One row per customer: the last message, who owns it, and whether it's waiting.
+    const { rows } = await db.query(
+      `WITH conv AS (
+         SELECT CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END AS peer,
+                MAX(m.created_at) AS last_at,
+                MAX(m.created_at) FILTER (WHERE m.sender_id <> $1) AS their_last,
+                MAX(m.created_at) FILTER (WHERE m.sender_id = $1)  AS our_last,
+                COUNT(*) FILTER (WHERE m.recipient_id = $1 AND m.read_at IS NULL)::int AS unread
+           FROM at_messages m
+          WHERE (m.sender_id = $1 OR m.recipient_id = $1) AND m.sender_id <> m.recipient_id
+            AND m.deleted_all IS NOT TRUE AND m.thread_id IS NULL
+          GROUP BY peer
+       )
+       SELECT c.*, u.name, u.username, u.avatar, u.verified, u.account_type,
+              a.assignee_id, COALESCE(a.state, 'open') AS state,
+              au.name AS assignee_name, au.username AS assignee_username
+         FROM conv c
+         JOIN users u ON u.id = c.peer AND NOT u.deactivated
+         LEFT JOIN dm_assignments a ON a.business_id = $1 AND a.peer_id = c.peer
+         LEFT JOIN users au ON au.id = a.assignee_id
+        ORDER BY c.last_at DESC LIMIT 200`, [businessId]);
+    let list = rows;
+    if (filter === 'mine') list = rows.filter((r) => r.assignee_id === req.user.id && r.state !== 'done');
+    else if (filter === 'unassigned') list = rows.filter((r) => !r.assignee_id && r.state !== 'done');
+    else if (filter === 'done') list = rows.filter((r) => r.state === 'done');
+    else list = rows.filter((r) => r.state !== 'done');
+    res.json({
+      businessId,
+      counts: {
+        all: rows.filter((r) => r.state !== 'done').length,
+        mine: rows.filter((r) => r.assignee_id === req.user.id && r.state !== 'done').length,
+        unassigned: rows.filter((r) => !r.assignee_id && r.state !== 'done').length,
+        done: rows.filter((r) => r.state === 'done').length,
+      },
+      conversations: list.map((r) => ({
+        peer: { id: r.peer, name: r.name, username: r.username, avatar: mediaRef(r.avatar, 'avatar', 0, 0),
+                verified: !!r.verified, accountType: r.account_type },
+        lastAt: r.last_at, unread: r.unread, state: r.state,
+        // "waiting" = they wrote last and nobody has answered since.
+        waiting: !!(r.their_last && (!r.our_last || r.our_last < r.their_last)),
+        assignee: r.assignee_id ? { id: r.assignee_id, name: r.assignee_name, username: r.assignee_username } : null,
+      })),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the inbox.' }); }
+});
+// Hand a conversation to a teammate (or take it yourself / release it).
+app.post('/api/atchat/inbox/:peerId/assign', auth.requireAuth, rateLimit(120, 60000, 'inbox-assign'), async (req, res) => {
+  const peerId = routeId(req.params.peerId);
+  const businessId = routeId(req.body.businessId) || req.user.id;
+  if (!Number.isInteger(peerId)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    if (!(await canActAs(req.user.id, businessId, 'inbox'))) return res.status(403).json({ error: 'You don’t have access to this inbox.' });
+    let assignee = null;
+    if (req.body.assigneeId !== null && req.body.assigneeId !== undefined && req.body.assigneeId !== '') {
+      assignee = routeId(req.body.assigneeId);
+      if (!Number.isInteger(assignee)) return res.status(400).json({ error: 'Invalid id.' });
+      // Only the owner or an active teammate can be given a conversation.
+      if (assignee !== businessId && !(await canActAs(assignee, businessId, 'inbox'))) {
+        return res.status(400).json({ error: 'That person isn’t on the team.' });
+      }
+    }
+    const state = req.body.state === 'done' ? 'done' : 'open';
+    await db.query(
+      `INSERT INTO dm_assignments (business_id, peer_id, assignee_id, state, assigned_by, updated_at)
+       VALUES ($1,$2,$3,$4,$5, now())
+       ON CONFLICT (business_id, peer_id) DO UPDATE
+         SET assignee_id = EXCLUDED.assignee_id, state = EXCLUDED.state,
+             assigned_by = EXCLUDED.assigned_by, updated_at = now()`,
+      [businessId, peerId, assignee, state, req.user.id]);
+    // Tell the teammate it's theirs — but never ping yourself for your own pickup.
+    if (assignee && assignee !== req.user.id) notify(assignee, req.user.id, 'inbox_assigned');
+    res.json({ ok: true, assigneeId: assignee, state });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the conversation.' }); }
+});
+/* ─── Conversation analytics ────────────────────────────────────────────────
+   How a business actually handles its messages: how many conversations came
+   in, how many it answered, and how fast. "First response" is measured per
+   conversation per day — the gap between a customer's first message that day
+   and the business's first reply after it — so a long-running thread is not
+   counted as one enormous delay, and a customer who writes three times before
+   anyone replies is still one wait, not three. Only DMs (at_messages), never
+   group chat, and only the caller's own conversations. */
+app.get('/api/atchat/analytics', auth.requireAuth, async (req, res) => {
+  const days = Math.max(1, Math.min(365, parseInt(req.query.days, 10) || 30));
+  try {
+    const { rows } = await db.query(
+      `WITH win AS (
+         SELECT sender_id, recipient_id, created_at,
+                CASE WHEN sender_id = $1 THEN recipient_id ELSE sender_id END AS peer,
+                (created_at AT TIME ZONE 'UTC')::date AS d
+           FROM at_messages
+          WHERE (sender_id = $1 OR recipient_id = $1) AND sender_id <> recipient_id
+            AND deleted_all IS NOT TRUE
+            AND created_at > now() - make_interval(days => $2)
+       ),
+       -- one row per peer per day: when they first wrote, when we first replied after that
+       pairs AS (
+         SELECT peer, d,
+                MIN(created_at) FILTER (WHERE sender_id <> $1) AS their_first,
+                MIN(created_at) FILTER (WHERE sender_id = $1)  AS my_first
+           FROM win GROUP BY peer, d
+       ),
+       answered AS (
+         SELECT peer, d, their_first,
+                (SELECT MIN(w.created_at) FROM win w
+                  WHERE w.peer = p.peer AND w.d = p.d AND w.sender_id = $1 AND w.created_at > p.their_first) AS replied_at
+           FROM pairs p WHERE their_first IS NOT NULL
+       )
+       SELECT (SELECT COUNT(*)::int FROM win) AS messages,
+              (SELECT COUNT(*)::int FROM win WHERE sender_id = $1) AS sent,
+              (SELECT COUNT(*)::int FROM win WHERE sender_id <> $1) AS received,
+              (SELECT COUNT(DISTINCT peer)::int FROM win) AS conversations,
+              (SELECT COUNT(*)::int FROM answered) AS inbound_days,
+              (SELECT COUNT(*)::int FROM answered WHERE replied_at IS NOT NULL) AS answered_days,
+              (SELECT EXTRACT(EPOCH FROM AVG(replied_at - their_first))::int FROM answered WHERE replied_at IS NOT NULL) AS avg_secs,
+              (SELECT EXTRACT(EPOCH FROM PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY replied_at - their_first))::int
+                 FROM answered WHERE replied_at IS NOT NULL) AS median_secs,
+              (SELECT COUNT(DISTINCT peer)::int FROM win w2
+                WHERE NOT EXISTS (SELECT 1 FROM at_messages a
+                                   WHERE ((a.sender_id = $1 AND a.recipient_id = w2.peer) OR (a.sender_id = w2.peer AND a.recipient_id = $1))
+                                     AND a.created_at <= now() - make_interval(days => $2))) AS new_conversations`,
+      [req.user.id, days]);
+    const r = rows[0] || {};
+    const inbound = r.inbound_days || 0, answered = r.answered_days || 0;
+    // A day-by-day volume trend, zero-filled so the chart has no gaps.
+    const trend = await db.query(
+      `SELECT g.d::date AS day,
+              COUNT(m.id) FILTER (WHERE m.sender_id <> $1)::int AS received,
+              COUNT(m.id) FILTER (WHERE m.sender_id = $1)::int AS sent
+         FROM generate_series((now() - make_interval(days => $2))::date, now()::date, interval '1 day') g(d)
+         LEFT JOIN at_messages m ON (m.created_at AT TIME ZONE 'UTC')::date = g.d::date
+              AND (m.sender_id = $1 OR m.recipient_id = $1) AND m.sender_id <> m.recipient_id AND m.deleted_all IS NOT TRUE
+        GROUP BY g.d ORDER BY g.d`, [req.user.id, Math.min(days, 60)]);
+    res.json({
+      days,
+      messages: r.messages || 0, sent: r.sent || 0, received: r.received || 0,
+      conversations: r.conversations || 0, newConversations: r.new_conversations || 0,
+      // "response rate" is over conversation-days that actually needed a reply.
+      needingReply: inbound, answered,
+      responseRate: inbound ? Math.round((answered / inbound) * 100) : null,
+      avgResponseSecs: r.avg_secs != null ? r.avg_secs : null,
+      medianResponseSecs: r.median_secs != null ? r.median_secs : null,
+      trend: trend.rows.map((t) => ({ day: t.day, received: t.received, sent: t.sent })),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the analytics.' }); }
+});
+/* ─── Lead lists ────────────────────────────────────────────────────────────
+   Save the people and businesses you want to sell to, and be told when one of
+   them does something worth a message. The signal is their PUBLIC activity — a
+   new post, a new job posted, a new listing — never anything private. */
+const LEAD_LIST_CAP = 30, LEAD_MEMBER_CAP = 500;
+app.get('/api/lead-lists', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT l.*, (SELECT COUNT(*)::int FROM lead_list_members m WHERE m.list_id = l.id) AS members
+         FROM lead_lists l WHERE l.owner_id = $1 ORDER BY l.created_at DESC`, [req.user.id]);
+    res.json({ lists: rows.map((l) => ({ id: l.id, name: l.name, alerts: l.alerts, members: l.members, createdAt: l.created_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your lists.' }); }
+});
+app.post('/api/lead-lists', auth.requireAuth, rateLimit(30, 60000, 'lead-list'), async (req, res) => {
+  const name = (req.body.name || '').toString().trim().slice(0, 60);
+  if (!name) return res.status(400).json({ error: 'Give the list a name.' });
+  try {
+    const n = (await db.query('SELECT COUNT(*)::int AS n FROM lead_lists WHERE owner_id = $1', [req.user.id])).rows[0].n;
+    if (n >= LEAD_LIST_CAP) return res.status(400).json({ error: 'You’ve reached the maximum number of lists.' });
+    const { rows } = await db.query('INSERT INTO lead_lists (owner_id, name) VALUES ($1,$2) RETURNING id', [req.user.id, name]);
+    res.status(201).json({ ok: true, id: rows[0].id, name });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the list.' }); }
+});
+app.patch('/api/lead-lists/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const sets = [], params = [id, req.user.id];
+  if (typeof req.body.name === 'string' && req.body.name.trim()) { params.push(req.body.name.trim().slice(0, 60)); sets.push(`name = $${params.length}`); }
+  if (typeof req.body.alerts === 'boolean') { params.push(req.body.alerts); sets.push(`alerts = $${params.length}`); }
+  if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
+  try {
+    const r = await db.query(`UPDATE lead_lists SET ${sets.join(', ')} WHERE id = $1 AND owner_id = $2`, params);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the list.' }); }
+});
+app.delete('/api/lead-lists/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM lead_lists WHERE id = $1 AND owner_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the list.' }); }
+});
+// The people on a list, each with what they've been up to lately.
+app.get('/api/lead-lists/:id/leads', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const list = (await db.query('SELECT * FROM lead_lists WHERE id = $1 AND owner_id = $2', [id, req.user.id])).rows[0];
+    if (!list) return res.status(404).json({ error: 'Not found.' });
+    const { rows } = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.account_type, u.headline, m.note, m.added_at,
+              (SELECT MAX(p.created_at) FROM posts p WHERE p.user_id = u.id AND p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()) AS last_post,
+              (SELECT MAX(j.created_at) FROM jobs j WHERE j.posted_by = u.id) AS last_job,
+              (SELECT MAX(pr.created_at) FROM products pr WHERE pr.business_id = u.id AND pr.active = true) AS last_listing
+         FROM lead_list_members m JOIN users u ON u.id = m.lead_id
+        WHERE m.list_id = $1 AND NOT u.deactivated ORDER BY m.added_at DESC`, [id]);
+    res.json({ list: { id: list.id, name: list.name, alerts: list.alerts },
+      leads: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: mediaRef(u.avatar, 'avatar', 0, 0),
+        verified: !!u.verified, accountType: u.account_type, headline: u.headline || null, note: u.note || null,
+        addedAt: u.added_at, lastPost: u.last_post, lastJob: u.last_job, lastListing: u.last_listing })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the leads.' }); }
+});
+app.post('/api/lead-lists/:id/leads', auth.requireAuth, rateLimit(120, 60000, 'lead-add'), async (req, res) => {
+  const id = routeId(req.params.id);
+  const leadId = routeId(req.body.leadId);
+  if (!Number.isInteger(id) || !Number.isInteger(leadId)) return res.status(400).json({ error: 'Invalid id.' });
+  if (leadId === req.user.id) return res.status(400).json({ error: 'That’s you.' });
+  try {
+    const list = (await db.query('SELECT id FROM lead_lists WHERE id = $1 AND owner_id = $2', [id, req.user.id])).rows[0];
+    if (!list) return res.status(404).json({ error: 'Not found.' });
+    const lead = (await db.query('SELECT id FROM users WHERE id = $1 AND username IS NOT NULL AND NOT deactivated', [leadId])).rows[0];
+    if (!lead) return res.status(404).json({ error: 'No such account.' });
+    if (await blockedEither(req.user.id, leadId)) return res.status(403).json({ error: 'Not available.' });
+    const n = (await db.query('SELECT COUNT(*)::int AS n FROM lead_list_members WHERE list_id = $1', [id])).rows[0].n;
+    if (n >= LEAD_MEMBER_CAP) return res.status(400).json({ error: 'That list is full.' });
+    await db.query(`INSERT INTO lead_list_members (list_id, lead_id, note) VALUES ($1,$2,$3)
+                    ON CONFLICT (list_id, lead_id) DO UPDATE SET note = COALESCE(EXCLUDED.note, lead_list_members.note)`,
+      [id, leadId, (req.body.note || '').toString().trim().slice(0, 300) || null]);
+    // Start the alert watermark at "now" so adding a lead never replays their
+    // whole back catalogue as brand-new activity.
+    await db.query(
+      `INSERT INTO lead_alert_marks (owner_id, lead_id, last_post, last_job)
+       VALUES ($1, $2,
+         COALESCE((SELECT MAX(id) FROM posts WHERE user_id = $2 AND parent_id IS NULL AND to_main = true), 0),
+         COALESCE((SELECT MAX(id) FROM jobs WHERE posted_by = $2), 0))
+       ON CONFLICT (owner_id, lead_id) DO NOTHING`, [req.user.id, leadId]);
+    res.status(201).json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the lead.' }); }
+});
+app.delete('/api/lead-lists/:id/leads/:leadId', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id), leadId = routeId(req.params.leadId);
+  if (!Number.isInteger(id) || !Number.isInteger(leadId)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query(
+      `DELETE FROM lead_list_members m USING lead_lists l
+        WHERE m.list_id = l.id AND l.id = $1 AND l.owner_id = $2 AND m.lead_id = $3`, [id, req.user.id, leadId]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the lead.' }); }
+});
+/* Lead alerts. Every few hours, tell an owner when someone on a list with
+   alerts on has posted or advertised a role since the last time we looked.
+   The watermark is per (owner, lead) and only ever moves forward, so a lead is
+   announced once — and a quiet sweep costs one query, not one per lead. */
+const LEADALERT_FLUSH_MS = Math.max(60000, parseInt(process.env.LEADALERT_FLUSH_MS, 10) || 3 * 3600 * 1000);
+async function flushLeadAlerts() {
+  if (!db.isConfigured()) return 0;
+  let sent = 0;
+  const { rows } = await db.query(
+    `SELECT l.owner_id, m.lead_id, u.name AS lead_name,
+            COALESCE(k.last_post, 0) AS seen_post, COALESCE(k.last_job, 0) AS seen_job,
+            COALESCE((SELECT MAX(id) FROM posts p WHERE p.user_id = m.lead_id AND p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()), 0) AS max_post,
+            COALESCE((SELECT MAX(id) FROM jobs j WHERE j.posted_by = m.lead_id), 0) AS max_job
+       FROM lead_list_members m
+       JOIN lead_lists l ON l.id = m.list_id AND l.alerts = true
+       JOIN users u ON u.id = m.lead_id AND NOT u.deactivated
+       LEFT JOIN lead_alert_marks k ON k.owner_id = l.owner_id AND k.lead_id = m.lead_id
+      LIMIT 5000`);
+  for (const r of rows) {
+    const newPost = r.max_post > r.seen_post, newJob = r.max_job > r.seen_job;
+    if (!newPost && !newJob) continue;
+    await db.query(
+      `INSERT INTO lead_alert_marks (owner_id, lead_id, last_post, last_job) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (owner_id, lead_id) DO UPDATE SET last_post = EXCLUDED.last_post, last_job = EXCLUDED.last_job`,
+      [r.owner_id, r.lead_id, r.max_post, r.max_job]).catch(() => {});
+    if (await blockedEither(r.owner_id, r.lead_id)) continue;
+    // A job posting is the stronger buying signal, so it wins when both happened.
+    notify(r.owner_id, r.lead_id, newJob ? 'lead_hiring' : 'lead_active', null, null, null, null, null, newJob ? r.max_job : r.max_post);
+    sent++;
+  }
+  return sent;
+}
+registerJob('lead_alerts', 'Lead alerts', LEADALERT_FLUSH_MS);
+setInterval(trackJob('lead_alerts', flushLeadAlerts), LEADALERT_FLUSH_MS).unref?.();
+/* ─── Buyer-intent signals ──────────────────────────────────────────────────
+   Who is showing interest in you right now, in one place: people who viewed
+   your profile, viewed or saved one of your listings, or left something in a
+   cart. All of it is activity Atwe already records — this only gathers it. */
+app.get('/api/intent', auth.requireAuth, async (req, res) => {
+  const days = Math.max(1, Math.min(90, parseInt(req.query.days, 10) || 30));
+  try {
+    const { rows } = await db.query(
+      `WITH sig AS (
+         SELECT viewer_id AS uid, 'profile_view' AS kind, viewed_at AS at, NULL::int AS product_id
+           FROM profile_views WHERE viewed_id = $1 AND viewed_at > now() - make_interval(days => $2)
+         UNION ALL
+         SELECT rv.user_id, 'viewed_listing', rv.viewed_at, rv.product_id
+           FROM recent_product_views rv JOIN products p ON p.id = rv.product_id
+          WHERE p.business_id = $1 AND rv.viewed_at > now() - make_interval(days => $2)
+         UNION ALL
+         SELECT sp.user_id, 'saved_listing', sp.created_at, sp.product_id
+           FROM saved_products sp JOIN products p ON p.id = sp.product_id
+          WHERE p.business_id = $1 AND sp.created_at > now() - make_interval(days => $2)
+         UNION ALL
+         SELECT c.user_id, 'in_cart', c.created_at, c.product_id
+           FROM cart_items c JOIN products p ON p.id = c.product_id
+          WHERE p.business_id = $1 AND c.created_at > now() - make_interval(days => $2)
+       )
+       SELECT s.uid, u.name, u.username, u.avatar, u.verified, u.account_type, u.headline,
+              MAX(s.at) AS last_at, COUNT(*)::int AS signals,
+              COALESCE(json_agg(DISTINCT s.kind), '[]'::json) AS kinds,
+              -- weighted: a cart is near-purchase, a profile view is curiosity
+              SUM(CASE s.kind WHEN 'in_cart' THEN 8 WHEN 'saved_listing' THEN 5
+                              WHEN 'viewed_listing' THEN 2 ELSE 1 END)::int AS score
+         FROM sig s JOIN users u ON u.id = s.uid
+        WHERE s.uid <> $1 AND NOT u.deactivated AND u.username IS NOT NULL
+          AND s.uid NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+          AND s.uid NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)
+        GROUP BY s.uid, u.name, u.username, u.avatar, u.verified, u.account_type, u.headline
+        ORDER BY score DESC, last_at DESC LIMIT 50`, [req.user.id, days]);
+    res.json({ days, leads: rows.map((u) => ({
+      id: u.uid, name: u.name, username: u.username, avatar: mediaRef(u.avatar, 'avatar', 0, 0),
+      verified: !!u.verified, accountType: u.account_type, headline: u.headline || null,
+      signals: u.signals, kinds: u.kinds || [], score: u.score, lastAt: u.last_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the signals.' }); }
+});
+/* ─── Company insights (public, on a business profile) ──────────────────────
+   What a jobseeker or supplier wants to know before they engage: how many
+   people work here, is that growing, and are they hiring. Every number comes
+   from what members themselves published — the team is people who listed this
+   business as their employer, hiring is the jobs the business actually posted.
+   Nothing is estimated or bought in, so it is honest even when it is small. */
+app.get('/api/business/:id/insights', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const biz = (await db.query("SELECT id, account_type FROM users WHERE id = $1 AND NOT deactivated", [id])).rows[0];
+    if (!biz || biz.account_type !== 'business') return res.status(404).json({ error: 'Not found.' });
+    if (await blockedEither(req.user.id, id)) return res.status(404).json({ error: 'Not found.' });
+    const [head, trend, hiring, roles, tenure] = await Promise.all([
+      // Headcount = people who list this business as a CURRENT employer.
+      db.query(`SELECT COUNT(DISTINCT e.user_id)::int AS n FROM experiences e JOIN users u ON u.id = e.user_id
+                 WHERE e.company_user_id = $1 AND e.end_year IS NULL AND NOT u.deactivated`, [id]),
+      // Joiners per year over the last 5 — the shape of the team over time.
+      db.query(`SELECT e.start_year AS y, COUNT(DISTINCT e.user_id)::int AS n FROM experiences e JOIN users u ON u.id = e.user_id
+                 WHERE e.company_user_id = $1 AND NOT u.deactivated AND e.start_year IS NOT NULL
+                   AND e.start_year >= EXTRACT(YEAR FROM now())::int - 5
+                 GROUP BY e.start_year ORDER BY e.start_year`, [id]),
+      // Hiring velocity: roles posted in the last 90 days vs the 90 before it.
+      db.query(`SELECT COUNT(*) FILTER (WHERE created_at > now() - interval '90 days')::int AS recent,
+                       COUNT(*) FILTER (WHERE created_at <= now() - interval '90 days'
+                                          AND created_at > now() - interval '180 days')::int AS prior,
+                       COUNT(*)::int AS total FROM jobs WHERE posted_by = $1`, [id]),
+      db.query(`SELECT COUNT(*)::int AS n FROM jobs WHERE posted_by = $1 AND (closes_at IS NULL OR closes_at > now())`, [id]),
+      // How long people stay — only from roles that have actually ended.
+      db.query(`SELECT AVG(GREATEST(0, e.end_year - e.start_year))::numeric(4,1) AS avg FROM experiences e
+                 WHERE e.company_user_id = $1 AND e.start_year IS NOT NULL AND e.end_year IS NOT NULL`, [id]),
+    ]);
+    const recent = hiring.rows[0].recent, prior = hiring.rows[0].prior;
+    res.json({
+      headcount: head.rows[0].n,
+      joinersByYear: trend.rows.map((r) => ({ year: r.y, joined: r.n })),
+      openRoles: roles.rows[0].n,
+      jobsPosted: hiring.rows[0].total,
+      hiring: { last90: recent, prior90: prior,
+        // Only call it a trend when there is something to compare against.
+        direction: (!prior && !recent) ? 'none' : (recent > prior ? 'up' : (recent < prior ? 'down' : 'steady')) },
+      avgTenureYears: tenure.rows[0].avg != null ? Number(tenure.rows[0].avg) : null,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the insights.' }); }
+});
+/* ─── Career page ───────────────────────────────────────────────────────────
+   A business's open roles, its people, and its own recent posts — what it is
+   like to work there — on one page, instead of scattered across three tabs. */
+app.get('/api/business/:id/careers', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const biz = (await db.query(
+      `SELECT id, name, username, avatar, banner, headline, bio, location, website, verified, business_verify_status, account_type
+         FROM users WHERE id = $1 AND NOT deactivated`, [id])).rows[0];
+    if (!biz || biz.account_type !== 'business') return res.status(404).json({ error: 'Not found.' });
+    if (await blockedEither(req.user.id, id)) return res.status(404).json({ error: 'Not found.' });
+    const [jobs, team, posts] = await Promise.all([
+      db.query(`SELECT ${JOB_COLS} ${JOB_FROM} WHERE j.posted_by = $2
+                 ORDER BY (j.closes_at IS NULL OR j.closes_at > now()) DESC,
+                          (j.featured_until IS NOT NULL AND j.featured_until > now()) DESC,
+                          j.created_at DESC LIMIT 25`, [req.user.id, id]),
+      db.query(`SELECT u.id, u.name, u.username, u.avatar, u.verified, e.title
+                  FROM experiences e JOIN users u ON u.id = e.user_id
+                 WHERE e.company_user_id = $1 AND e.end_year IS NULL AND NOT u.deactivated
+                 ORDER BY u.verified DESC, e.start_year NULLS LAST LIMIT 24`, [id]),
+      db.query(POSTS_SELECT + ` WHERE p.user_id = $2 AND p.parent_id IS NULL AND p.to_main = true
+                                  AND p.created_at <= now() ORDER BY p.created_at DESC LIMIT 6`, [req.user.id, id]),
+    ]);
+    res.json({
+      business: { id: biz.id, name: biz.name, username: biz.username, avatar: mediaRef(biz.avatar, 'avatar', 0, 0),
+        banner: mediaRef(biz.banner, 'banner', 0, 0), headline: biz.headline || null, bio: biz.bio || null,
+        location: biz.location || null, website: biz.website || null, verified: !!biz.verified,
+        businessVerifyStatus: biz.business_verify_status || 'none' },
+      jobs: jobs.rows.map((j) => mapJob(j, req.user.id)),
+      team: team.rows.map((u) => ({ id: u.id, name: u.name, username: u.username,
+        avatar: mediaRef(u.avatar, 'avatar', 0, 0), verified: !!u.verified, title: u.title || null })),
+      posts: posts.rows.map((r) => mapPost(r, req.user.id)),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the career page.' }); }
+});
 /* ═══════════════════════════════════════════════
    SKILLS + ENDORSEMENTS
 ═══════════════════════════════════════════════ */
+/* ─── Skill taxonomy ────────────────────────────────────────────────────────
+   Skills are typed by hand, so "JS", "Javascript" and "Java Script" all mean
+   the same thing while sorting into three unrelated buckets — matching, search
+   and endorsements each see a different world. Every skill now resolves to ONE
+   canonical name, stored alongside what the member actually typed (their
+   spelling is never overwritten — only what we match on). A skill outside the
+   list canonicalises to its own lowercased, whitespace-collapsed form, so an
+   unknown skill still matches another member who typed it slightly differently. */
+const SKILL_TAXONOMY = (() => {
+  // canonical → the spellings people actually type
+  const T = {
+    'JavaScript': ['js', 'java script', 'javascript', 'ecmascript', 'es6'],
+    'TypeScript': ['ts', 'type script'],
+    'Python': ['py', 'python3'],
+    'Node.js': ['node', 'nodejs', 'node js'],
+    'React': ['react.js', 'reactjs', 'react js'],
+    'SQL': ['postgres', 'postgresql', 'mysql', 'sql server'],
+    'HTML': ['html5'], 'CSS': ['css3'],
+    'Graphic design': ['graphics design', 'graphic designer', 'graphics'],
+    'UI/UX design': ['ux', 'ui', 'ui design', 'ux design', 'ui/ux', 'product design'],
+    'Photography': ['photographer', 'photo'],
+    'Videography': ['video', 'videographer', 'video editing', 'video editor'],
+    'Copywriting': ['copy writing', 'copywriter', 'copy'],
+    'Social media marketing': ['social media', 'smm', 'social marketing'],
+    'SEO': ['search engine optimisation', 'search engine optimization'],
+    'Digital marketing': ['online marketing', 'internet marketing'],
+    'Sales': ['selling', 'salesperson', 'business development', 'bizdev', 'biz dev'],
+    'Customer service': ['customer support', 'support', 'customer care', 'client service'],
+    'Accounting': ['accountant', 'bookkeeping', 'book keeping', 'book-keeping'],
+    'Project management': ['pm', 'project manager', 'project mgmt'],
+    'Cooking': ['chef', 'cook', 'culinary'], 'Baking': ['baker', 'pastry'],
+    'Carpentry': ['carpenter', 'woodwork', 'woodworking'],
+    'Plumbing': ['plumber'], 'Electrical': ['electrician', 'electrics'],
+    'Painting & decorating': ['painter', 'decorator', 'painting'],
+    'Hairdressing': ['hairdresser', 'hair stylist', 'hairstylist', 'barber'],
+    'Makeup artistry': ['makeup', 'mua', 'make up', 'make-up artist'],
+    'Nail technician': ['nails', 'nail tech', 'manicure'],
+    'Driving': ['driver', 'delivery driver'],
+    'Cleaning': ['cleaner', 'housekeeping'],
+    'Childcare': ['nanny', 'babysitting', 'babysitter', 'child care'],
+    'Teaching': ['teacher', 'tutor', 'tutoring', 'lecturer'],
+    'Translation': ['translator', 'interpreting', 'interpreter'],
+    'Writing': ['writer', 'content writing', 'content writer'],
+    'Data analysis': ['data analyst', 'analytics', 'data analytics'],
+    'Excel': ['spreadsheets', 'microsoft excel', 'ms excel'],
+    'Event planning': ['events', 'event management', 'event planner'],
+    'Personal training': ['fitness', 'pt', 'personal trainer', 'gym instructor'],
+    'Tailoring': ['tailor', 'sewing', 'seamstress', 'dressmaking'],
+    'Welding': ['welder'], 'Mechanic': ['car mechanic', 'auto mechanic', 'motor mechanic'],
+    'Construction': ['builder', 'building'],
+    'Landscaping': ['gardening', 'gardener', 'landscaper'],
+    'Real estate': ['realtor', 'estate agent', 'property'],
+    'Recruiting': ['recruiter', 'recruitment', 'talent acquisition'],
+    'Public speaking': ['presenting', 'speaking'],
+    'Leadership': ['team leadership', 'people management', 'management'],
+  };
+  const alias = new Map();
+  for (const [canon, list] of Object.entries(T)) {
+    alias.set(canon.toLowerCase(), canon);
+    for (const a of list) alias.set(a, canon);
+  }
+  return { canonicals: Object.keys(T).sort(), alias };
+})();
+// The name a skill is MATCHED on. Never shown in place of what the member typed.
+function canonicalSkill(name) {
+  const k = String(name || '').toLowerCase().replace(/[._]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!k) return null;
+  return SKILL_TAXONOMY.alias.get(k) || k;
+}
+// Skills added before the taxonomy existed have no canonical name yet, so they
+// would match nobody. Fill them in once, in batches, on boot — it is a no-op on
+// every later start because the column is only null for pre-taxonomy rows.
+async function backfillSkillCanonicals() {
+  for (let i = 0; i < 50; i++) {
+    const { rows } = await db.query('SELECT id, name FROM user_skills WHERE canonical IS NULL LIMIT 500');
+    if (!rows.length) return;
+    for (const r of rows) {
+      await db.query('UPDATE user_skills SET canonical = $2 WHERE id = $1', [r.id, canonicalSkill(r.name)]).catch(() => {});
+    }
+  }
+}
+// Type-ahead over the taxonomy, so people land on the shared name by default.
+app.get('/api/skills/suggest', auth.requireAuth, (req, res) => {
+  const q = String(req.query.q || '').toLowerCase().trim().slice(0, 40);
+  if (!q) return res.json({ skills: SKILL_TAXONOMY.canonicals.slice(0, 12) });
+  const starts = [], contains = [];
+  for (const c of SKILL_TAXONOMY.canonicals) {
+    const lc = c.toLowerCase();
+    if (lc.startsWith(q)) starts.push(c);
+    else if (lc.includes(q)) contains.push(c);
+  }
+  // An alias match ("js") should surface its canonical name too.
+  const viaAlias = SKILL_TAXONOMY.alias.get(q);
+  if (viaAlias && !starts.includes(viaAlias) && !contains.includes(viaAlias)) starts.unshift(viaAlias);
+  res.json({ skills: starts.concat(contains).slice(0, 12) });
+});
 app.post('/api/skills', auth.requireAuth, rateLimit(40, 60000, 'skill-add'), async (req, res) => {
   if (!(await requireHandle(req, res))) return;
   const name = (req.body.name || '').trim().slice(0, 40);
@@ -24027,12 +24551,16 @@ app.post('/api/skills', auth.requireAuth, rateLimit(40, 60000, 'skill-add'), asy
   try {
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM user_skills WHERE user_id = $1', [req.user.id]);
     if (cnt.rows[0].n >= 30) return res.status(400).json({ error: 'You’ve reached the maximum number of skills.' });
+    const canon = canonicalSkill(name);
+    // Adding the same skill under a different spelling is still a duplicate.
+    const dupe = await db.query('SELECT 1 FROM user_skills WHERE user_id = $1 AND canonical = $2', [req.user.id, canon]);
+    if (dupe.rowCount) return res.status(409).json({ error: 'You already added that skill.' });
     const { rows } = await db.query(
-      'INSERT INTO user_skills (user_id, name) VALUES ($1, $2) ON CONFLICT (user_id, lower(name)) DO NOTHING RETURNING id',
-      [req.user.id, name]
+      'INSERT INTO user_skills (user_id, name, canonical) VALUES ($1, $2, $3) ON CONFLICT (user_id, lower(name)) DO NOTHING RETURNING id',
+      [req.user.id, name, canon]
     );
     if (!rows[0]) return res.status(409).json({ error: 'You already added that skill.' });
-    res.status(201).json({ id: rows[0].id, name });
+    res.status(201).json({ id: rows[0].id, name, canonical: canon });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the skill.' }); }
 });
 app.delete('/api/skills/:id', auth.requireAuth, async (req, res) => {
@@ -25168,6 +25696,44 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
       if (req.query.otw === '1') fConds += ` AND otw_visibility = 'everyone'`;
       const loc = (req.query.loc || '').toString().trim().slice(0, 80);
       if (loc) { fParams.push('%' + loc.replace(/[%_\\]/g, '\\$&') + '%'); fConds += ` AND location ILIKE $${fParams.length}`; }
+      // Professional filters (the stacked LinkedIn set). Each one is a separate
+      // parameterized clause — wildcards escaped — so a search can combine
+      // "designer, in tech, 5+ years, studied at X" without any string building.
+      const esc = (v) => '%' + v.replace(/[%_\\]/g, '\\$&') + '%';
+      const title = (req.query.title || '').toString().trim().slice(0, 80);
+      if (title) {                       // current role: headline, or a job title they hold now
+        fParams.push(esc(title));
+        fConds += ` AND (headline ILIKE $${fParams.length} OR EXISTS (
+          SELECT 1 FROM experiences e WHERE e.user_id = users.id AND e.title ILIKE $${fParams.length}))`;
+      }
+      const ind = (req.query.industry || '').toString().trim().slice(0, 60);
+      if (ind) {                         // their own industry tags
+        fParams.push(ind);
+        fConds += ` AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE lower(c) = lower($${fParams.length}))`;
+      }
+      const company = (req.query.company || '').toString().trim().slice(0, 80);
+      if (company) {                     // worked (or works) at a named company
+        fParams.push(esc(company));
+        fConds += ` AND EXISTS (SELECT 1 FROM experiences e WHERE e.user_id = users.id AND e.company ILIKE $${fParams.length})`;
+      }
+      const school = (req.query.school || '').toString().trim().slice(0, 80);
+      if (school) {
+        fParams.push(esc(school));
+        fConds += ` AND EXISTS (SELECT 1 FROM education ed WHERE ed.user_id = users.id AND ed.school ILIKE $${fParams.length})`;
+      }
+      const skill = (req.query.skill || '').toString().trim().slice(0, 40);
+      if (skill) {                       // matched on the CANONICAL name, so spelling doesn't matter
+        fParams.push(canonicalSkill(skill));
+        fConds += ` AND EXISTS (SELECT 1 FROM user_skills sk WHERE sk.user_id = users.id AND sk.canonical = $${fParams.length})`;
+      }
+      // Years of experience: summed across their history, counting an ongoing
+      // role up to today. A rough but honest number — it is what they listed.
+      const years = Math.max(0, Math.min(50, parseInt(req.query.years, 10) || 0));
+      if (years) {
+        fParams.push(years);
+        fConds += ` AND (SELECT COALESCE(SUM(GREATEST(0, COALESCE(e.end_year, EXTRACT(YEAR FROM now())::int) - e.start_year)), 0)
+                          FROM experiences e WHERE e.user_id = users.id AND e.start_year IS NOT NULL) >= $${fParams.length}`;
+      }
       const r = await db.query(
         `SELECT id, name, username, avatar, verified, categories, account_type, headline, business_verify_status,
                 (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = users.id AND f.follower_id IN (SELECT following_id FROM follows WHERE follower_id = $3)) AS mutuals,
@@ -28380,6 +28946,53 @@ app.post('/api/ai/cs-answer', auth.requireAuth, rateLimit(30, 60000, 'ai-cs'), a
   } catch (err) { console.error(err); res.status(503).json({ error: 'Atwe AI is unavailable right now. Please try again.' }); }
 });
 
+/* ─── AI prospecting ────────────────────────────────────────────────────────
+   A first message to a lead that reads like a person wrote it, because it is
+   grounded in what that lead has actually published — their headline, what
+   they do, their recent posts and whether they are hiring. Nothing private is
+   used: only what any signed-in member could already see on their profile. */
+app.post('/api/ai/prospect', auth.requireAuth, rateLimit(20, 60000, 'ai-prospect'), async (req, res) => {
+  const leadId = routeId(req.body.leadId);
+  if (!Number.isInteger(leadId)) return res.status(400).json({ error: 'Pick someone to write to.' });
+  if (leadId === req.user.id) return res.status(400).json({ error: 'That’s you.' });
+  try {
+    if (await blockedEither(req.user.id, leadId)) return res.status(404).json({ error: 'Not available.' });
+    const lead = (await db.query(
+      `SELECT id, name, username, headline, bio, location, categories, account_type FROM users
+        WHERE id = $1 AND username IS NOT NULL AND NOT deactivated`, [leadId])).rows[0];
+    if (!lead) return res.status(404).json({ error: 'No such account.' });
+    if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not available right now.' });
+    const [me, posts, jobs] = await Promise.all([
+      db.query('SELECT name, headline, bio, categories, account_type FROM users WHERE id = $1', [req.user.id]),
+      db.query(`SELECT body FROM posts WHERE user_id = $1 AND parent_id IS NULL AND to_main = true
+                  AND created_at <= now() AND body <> '' ORDER BY created_at DESC LIMIT 5`, [leadId]),
+      db.query(`SELECT title FROM jobs WHERE posted_by = $1 ORDER BY created_at DESC LIMIT 3`, [leadId]),
+    ]);
+    const m = me.rows[0] || {};
+    const ctx = {
+      you: { name: m.name, headline: m.headline || null, about: (m.bio || '').slice(0, 400),
+             industries: Array.isArray(m.categories) ? m.categories : [], type: m.account_type },
+      them: { name: lead.name, headline: lead.headline || null, about: (lead.bio || '').slice(0, 400),
+              location: lead.location || null, industries: Array.isArray(lead.categories) ? lead.categories : [],
+              type: lead.account_type,
+              recentPosts: posts.rows.map((p) => (p.body || '').slice(0, 220)),
+              hiringFor: jobs.rows.map((j) => j.title) },
+      goal: (req.body.goal || '').toString().trim().slice(0, 200) || null,
+    };
+    const sys = 'You are Atwe AI helping someone write a FIRST message to a business contact on Atwe. ' +
+      'Write ONE short message (max 70 words, 2–3 sentences) they can send as-is. Open with a specific, ' +
+      'genuine reference to something the recipient actually published (a recent post, what they do, or a ' +
+      'role they are hiring for) — never a generic compliment. State plainly why the sender is reaching out ' +
+      'and end with one easy question. No subject line, no bullet points, no emojis, no flattery, no hard ' +
+      'sell, and never invent a fact that is not in the data. Plain, warm, professional. ' +
+      'Return the message text only. Never mention being an AI, or any AI company.';
+    const msg = await anthropic.messages.create({ model: 'claude-sonnet-4-6', max_tokens: 400, system: sys,
+      messages: [{ role: 'user', content: JSON.stringify(ctx) }] });
+    const out = (msg.content.find((x) => x.type === 'text')?.text || '').trim();
+    if (!out) return res.status(503).json({ error: 'Atwe AI couldn’t draft a message. Please try again.' });
+    res.json({ text: out.slice(0, 900), lead: { id: lead.id, name: lead.name, username: lead.username } });
+  } catch (err) { console.error(err); res.status(503).json({ error: 'Atwe AI is unavailable right now. Please try again.' }); }
+});
 // Atwe AI reply suggestions for a chat: summarize the recent messages + offer 2–3
 // short replies to pick from (the "Write with Atwe AI" item in the chat + menu).
 app.post('/api/ai/chat-replies', auth.requireAuth, rateLimit(30, 60000, 'ai-replies'), async (req, res) => {
@@ -28859,5 +29472,6 @@ db.init()
   .then(() => { if (db.isConfigured()) return loadBlockedDomains().catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(FEE_KEY).then((v) => { _platformFee = normalizeFee(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(TAXONOMY_KEY).then((v) => { _taxonomy = normalizeTaxonomy(v); }).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return backfillSkillCanonicals().catch(() => {}); })
   .then(() => { if (db.isConfigured()) console.log('🗄️   Schema + settings ready.'); })
   .catch((err) => console.error('Post-init setup failed:', err.message));
