@@ -470,7 +470,11 @@
   .bc-box input{margin-bottom:8px;font-weight:600;}
   .bc-box textarea:focus,.bc-box input:focus{border-color:var(--b3);}
   .bc-box textarea::placeholder,.bc-box input::placeholder{color:var(--t4);font-weight:400;}
-  /* Bulk user actions: the selection bar that appears once anything is ticked. */
+  /* Account timeline: one chronological column of everything about an account. */
+.tl-row{display:flex;gap:11px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--line,#222);}
+.tl-row:last-child{border-bottom:none;}
+.tl-ic{width:26px;flex:0 0 auto;text-align:center;font-size:15px;line-height:1.5;}
+/* Bulk user actions: the selection bar that appears once anything is ticked. */
 .bulk-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:var(--panel2,#1c1c1e);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:13px;}
 .u-card .usel{margin-inline-end:10px;flex:0 0 auto;width:16px;height:16px;cursor:pointer;}
 .pill.tag{background:rgba(0,136,255,.16);color:var(--accent);}
@@ -939,6 +943,7 @@
       <button class="tab" data-v="moderate" onclick="switchTab('moderate')">AI Scan</button>
       <button class="tab" data-v="reports" onclick="switchTab('reports')">Reports</button>
       <button class="tab" data-v="investigate" onclick="switchTab('investigate')">Investigate</button>
+      <button class="tab" data-v="orders" onclick="switchTab('orders')">Orders</button>
       <button class="tab" data-v="disputes" onclick="switchTab('disputes')">Disputes</button>
       <button class="tab" data-v="appeals" onclick="switchTab('appeals')">Appeals</button>
       <button class="tab" data-v="support" onclick="switchTab('support')">Support</button>
@@ -1403,7 +1408,7 @@ const TAB_PERM = {
   traffic: 'growth', site: 'super', usernames: 'handles', posts: 'moderation', support: 'support',
   reports: 'moderation', disputes: 'refunds', circles: 'moderation', feed: 'super',
   finance: 'revenue', growth: 'growth', audit: 'super', staff: 'super',
-  refunds: 'refunds', appeals: 'users', datareq: 'users', activity: 'super', investigate: 'moderation', moderate: 'moderation',
+  refunds: 'refunds', appeals: 'users', datareq: 'users', activity: 'super', investigate: 'moderation', moderate: 'moderation', orders: 'support',
   cards: 'revenue', features: 'super', featurecontrols: 'super', vault: 'super',
   announcements: 'super',
 };
@@ -1476,7 +1481,7 @@ const NAV_TITLES = {
   refunds:'Refunds', users:'Users', staff:'Staff', usernames:'Usernames', reports:'Reports',
   investigate:'Investigate', moderate:'AI content scan', disputes:'Disputes', appeals:'Appeals', support:'Support', datareq:'Data requests',
   posts:'Posts', circles:'Circles', feed:'Feed', activity:'Activity', traffic:'Traffic', growth:'Growth',
-  audit:'Audit log', site:'Site', cards:'Cards', features:'Features', featurecontrols:'Feature Controls', vault:'Vault',
+  orders:'Orders', audit:'Audit log', site:'Site', cards:'Cards', features:'Features', featurecontrols:'Feature Controls', vault:'Vault',
   announcements:'Announcements',
 };
 // Mobile: slide the sidebar in/out.
@@ -1505,6 +1510,7 @@ function renderView(){
   else if (VIEW === 'posts') renderPostsView();
   else if (VIEW === 'support') renderSupportView();
   else if (VIEW === 'reports') renderReportsView();
+  else if (VIEW === 'orders') renderOrdersView();
   else if (VIEW === 'disputes') renderDisputesView();
   else if (VIEW === 'circles') renderCirclesView();
   else if (VIEW === 'feed') renderFeedSignalsView();
@@ -3498,6 +3504,51 @@ async function dismissReport(id){
 }
 /* ─── Escrow disputes ─── */
 let DISPUTES = [];
+// Global order search: find ANY order across every seller by id, buyer, seller
+// or tracking number — the first thing support needs.
+let ORD_Q = '', ORD_STATUS = '';
+const ORD_STATUSES = ['', 'pending', 'paid', 'escrow', 'fulfilled', 'delivered', 'released', 'disputed', 'refunded', 'cancelled'];
+function renderOrdersView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="toolbar">
+      <input id="ordQ" placeholder="Order #, buyer, seller, or tracking number…" value="${esc(ORD_Q)}"/>
+      <button class="refresh" onclick="loadOrdersAdmin()">Search</button>
+    </div>
+    <div class="bc-auds" style="margin:0 0 12px;">${ORD_STATUSES.map(s =>
+      `<button class="bc-aud${ORD_STATUS === s ? ' on' : ''}" onclick="ORD_STATUS='${s}';loadOrdersAdmin()">${s || 'Any status'}</button>`).join('')}</div>
+    <div id="ordList"><div class="ld"><span class="ab-mark"></span></div></div>`;
+  const inp = document.getElementById('ordQ');
+  if (inp) inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') loadOrdersAdmin(); });
+  loadOrdersAdmin();
+}
+async function loadOrdersAdmin(){
+  const inp = document.getElementById('ordQ'); if (inp) ORD_Q = inp.value.trim();
+  const box = document.getElementById('ordList'); if (!box) return;
+  try {
+    const qs = [ORD_Q ? 'q=' + encodeURIComponent(ORD_Q) : '', ORD_STATUS ? 'status=' + ORD_STATUS : ''].filter(Boolean).join('&');
+    const { orders } = await api('GET', '/api/admin/orders' + (qs ? '?' + qs : ''));
+    box.innerHTML = orders.length ? orders.map(o => `<div class="site-row">
+        <div><div class="srt">#${o.id} · ${esc(o.items || 'Order')} <span class="pill">${esc(o.status)}</span></div>
+          <div class="srs">@${esc(o.buyer.username || '')} → @${esc(o.seller.username || '')} · $${(o.totalCents/100).toFixed(2)} · ${fmtDate(o.createdAt)}${o.tracking ? ' · ' + esc(o.carrier || '') + ' ' + esc(o.tracking) : ''}${o.deliveredAt ? ' · delivered' : (o.shippedAt ? ' · shipped' : '')}</div></div>
+      </div>`).join('') : '<div class="empty">No orders match.</div>';
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+// Everything an account did, and everything done to it, in one column.
+async function openTimeline(id){
+  try {
+    const d = await api('GET', '/api/admin/users/' + id + '/timeline');
+    const ic = { signup:'🎉', post:'✍️', order:'🛍️', money:'💸', strike:'⚠️', note:'📝', report:'🚩', staff:'🛡️', session:'🔑' };
+    document.getElementById('modalCard').innerHTML = `
+      <div class="modal-head"><div><h2>Timeline</h2><div class="u-email">${esc(d.user.name)} · ${d.items.length} events</div></div><button class="close-x" onclick="closeModal()">&times;</button></div>
+      <div style="padding:0 20px 20px;max-height:70vh;overflow:auto;">
+        ${d.items.map(i => `<div class="tl-row"><span class="tl-ic">${ic[i.kind] || '•'}</span>
+          <div><div class="srt">${esc(i.text)}</div><div class="srs">${fmtDateTime(i.at)}</div></div></div>`).join('')}
+      </div>`;
+    document.getElementById('modal').classList.add('show');
+    document.body.style.overflow = 'hidden';
+  } catch (e){ notify(e.message); }
+}
 async function renderDisputesView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
@@ -3858,6 +3909,7 @@ async function openUser(id){
         : `<button class="act" onclick="setUserStatus(${u.id}, 'limited')">Limit…</button><button class="act" onclick="setUserStatus(${u.id}, 'suspended')">Suspend…</button><button class="act danger" onclick="setUserStatus(${u.id}, 'banned')">Ban…</button>`}
       <button class="act" onclick="openStrikes(${u.id})">Strikes…</button>
       <button class="act" onclick="openUserNotes(${u.id})">Notes &amp; tags…</button>
+      <button class="act" onclick="openTimeline(${u.id})">Timeline…</button>
       <button class="act${u.wallet_frozen ? ' accent' : ''}" onclick="setWalletFreeze(${u.id}, ${u.wallet_frozen ? 'false' : 'true'})">${u.wallet_frozen ? 'Unfreeze wallet' : 'Freeze wallet…'}</button>
       ${u.is_admin ? '' : `<button class="act" onclick="impersonateUser(${u.id})">View as user…</button>`}
       <button class="act danger" onclick="removeUser(${u.id})">Delete user</button>
