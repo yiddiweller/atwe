@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>Atwe · Status</title>
+<meta name="description" content="Live status and incident history for Atwe."/>
+<meta name="robots" content="index,follow"/>
+<link rel="icon" href="/icon.png"/>
+<meta name="theme-color" content="#000000"/>
+<style>
+  /* The Atwe colour ladder, kept to the few tokens this page needs. Black
+     background, white as the loud thing, green for good, amber for a heads-up,
+     red for destructive/critical, blue for identity only. */
+  :root{
+    --bg:#000; --s1:#1C1C1E; --s2:#242426;
+    --t1:#e7e9ea; --t2:#a8adb3; --t3:#71767b;
+    --green:#88FF00; --green-ink:#132a00; --amber:#FFBB00; --red:#FF0033; --accent:#0088FF;
+    --b1:rgba(255,255,255,.05);
+    --gutter:18px; --r-lg:20px; --r-pill:999px;
+  }
+  @media (prefers-color-scheme: light){
+    :root{ --bg:#fff; --s1:#f4f5f6; --s2:#eceef0; --t1:#0f1419; --t2:#536471; --t3:#8b98a5;
+           --green:#1a7f37; --green-ink:#fff; --b1:rgba(0,0,0,.06); }
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--t1);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:680px;margin:0 auto;padding:calc(env(safe-area-inset-top,0px) + 40px) var(--gutter) 60px;}
+  .brand{display:flex;align-items:center;gap:10px;margin-bottom:34px;}
+  .brand img{width:26px;height:26px;}
+  .brand b{font-size:16px;font-weight:700;letter-spacing:-.01em;}
+  .brand span{color:var(--t3);font-size:16px;}
+
+  /* The headline: one sentence, no jargon. */
+  .hero{background:var(--s1);border-radius:var(--r-lg);padding:24px;margin-bottom:24px;}
+  .hero-row{display:flex;align-items:center;gap:12px;}
+  .dot{width:12px;height:12px;border-radius:50%;flex:none;background:var(--t3);}
+  .dot.ok{background:var(--green);box-shadow:0 0 0 5px rgba(136,255,0,.14);}
+  .dot.warn{background:var(--amber);box-shadow:0 0 0 5px rgba(255,187,0,.16);}
+  .dot.bad{background:var(--red);box-shadow:0 0 0 5px rgba(255,0,51,.16);}
+  .hero h1{margin:0;font-size:22px;font-weight:800;letter-spacing:-.02em;}
+  .hero p{margin:8px 0 0;color:var(--t2);font-size:15px;line-height:1.5;}
+  .checked{margin-top:14px;color:var(--t3);font-size:12.5px;}
+
+  h2{font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+     color:var(--t3);margin:32px 0 12px;}
+  .inc{background:var(--s1);border-radius:var(--r-lg);padding:18px;margin-bottom:12px;}
+  .inc-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .inc-title{font-size:16px;font-weight:700;flex:1;min-width:200px;}
+  .tag{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+       padding:4px 10px;border-radius:var(--r-pill);background:var(--s2);color:var(--t2);}
+  .tag.minor{background:rgba(255,187,0,.16);color:var(--amber);}
+  .tag.major{background:rgba(255,0,51,.14);color:var(--red);}
+  .tag.critical{background:var(--red);color:#fff;}
+  .tag.maintenance{background:rgba(0,136,255,.16);color:var(--accent);}
+  .tag.resolved{background:var(--green);color:var(--green-ink);}
+  .inc-when{color:var(--t3);font-size:13px;margin-top:6px;}
+  .upd{margin-top:14px;padding-top:14px;border-top:1px solid var(--b1);}
+  .upd-row{margin-bottom:12px;}
+  .upd-row:last-child{margin-bottom:0;}
+  .upd-head{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);}
+  .upd-body{font-size:14.5px;line-height:1.55;color:var(--t1);margin-top:3px;}
+  .empty{color:var(--t3);font-size:14.5px;padding:4px 0 8px;}
+  .foot{margin-top:44px;padding-top:20px;border-top:1px solid var(--b1);
+        color:var(--t3);font-size:13px;line-height:1.6;}
+  .foot a{color:var(--accent);text-decoration:none;}
+  @media(hover:hover){.foot a:hover{text-decoration:underline;}}
+  @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><img src="/logo-mark.png" alt=""/><b>Atwe</b><span>Status</span></div>
+  <div id="hero" class="hero">
+    <div class="hero-row"><span class="dot"></span><h1>Checking…</h1></div>
+  </div>
+  <div id="open"></div>
+  <div id="history"></div>
+  <div class="foot">
+    This page is served separately from the app, so it keeps working when the app does not.
+    It refreshes on its own every minute. <a href="/">Back to Atwe</a>
+  </div>
+</div>
+<script>
+function esc(s){ return String(s == null ? '' : s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function when(t){ try { return new Date(t).toLocaleString(); } catch (e) { return ''; } }
+// Plain English, no jargon. Someone checking a status page is already worried.
+var HEADLINE = {
+  operational: ['ok', 'Everything is working', 'All of Atwe is running normally. If something is not working for you, it may be your connection or your browser.'],
+  maintenance: ['warn', 'Planned maintenance', 'We are working on something on purpose. Parts of Atwe may be briefly unavailable.'],
+  incident:    ['bad', 'We are looking into a problem', 'Something is not working as it should. Here is what we know so far.'],
+  unknown:     ['warn', 'We cannot tell right now', 'The status service could not reach the platform. That may itself be the problem.']
+};
+function tagFor(i){
+  if (i.resolvedAt) return '<span class="tag resolved">resolved</span>';
+  return '<span class="tag ' + esc(i.impact) + '">' + esc(i.impact) + '</span>'
+       + ' <span class="tag">' + esc(i.status) + '</span>';
+}
+function incHtml(i){
+  var ups = (i.updates || []).slice().reverse().map(function(u){
+    return '<div class="upd-row"><div class="upd-head">' + esc(u.status) + ' · ' + when(u.at) + '</div>'
+         + '<div class="upd-body">' + esc(u.body) + '</div></div>';
+  }).join('');
+  return '<div class="inc">'
+    + '<div class="inc-top"><div class="inc-title">' + esc(i.title) + '</div>' + tagFor(i) + '</div>'
+    + '<div class="inc-when">Started ' + when(i.startedAt)
+    + (i.resolvedAt ? ' · resolved ' + when(i.resolvedAt) : '') + '</div>'
+    + (ups ? '<div class="upd">' + ups + '</div>' : '')
+    + '</div>';
+}
+function render(d){
+  var state = d.state || (d.ok ? 'operational' : 'unknown');
+  var h = HEADLINE[state] || HEADLINE.unknown;
+  document.getElementById('hero').innerHTML =
+    '<div class="hero-row"><span class="dot ' + h[0] + '"></span><h1>' + h[1] + '</h1></div>'
+    + '<p>' + h[2] + '</p>'
+    + '<div class="checked">Checked ' + when(d.checkedAt || Date.now()) + '</div>';
+  var open = d.incidents || [];
+  document.getElementById('open').innerHTML = open.length
+    ? '<h2>Happening now</h2>' + open.map(incHtml).join('') : '';
+  var hist = d.history || [];
+  document.getElementById('history').innerHTML = '<h2>Past two weeks</h2>' + (hist.length
+    ? hist.map(incHtml).join('')
+    : '<div class="empty">No incidents in the last fourteen days.</div>');
+}
+function load(){
+  fetch('/api/status', { cache: 'no-store' })
+    .then(function(r){ return r.json(); })
+    .then(render)
+    .catch(function(){ render({ state: 'unknown', incidents: [], history: [] }); });
+}
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>

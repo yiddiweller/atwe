@@ -1946,6 +1946,172 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS ai_usage_at_idx ON ai_usage (created_at DESC);
     CREATE INDEX IF NOT EXISTS ai_usage_feature_idx ON ai_usage (feature);
   `);
+  // ── Batch 35: the developer platform, ops discipline, fraud rules ──────────
+  // A broadcast you write now and send later — or keep as a draft. Today's
+  // broadcast goes out the instant you press the button, to everyone, with no
+  // way to sleep on it.
+  await query(`
+    CREATE TABLE IF NOT EXISTS admin_broadcasts (
+      id          SERIAL PRIMARY KEY,
+      subject     TEXT,
+      body        TEXT NOT NULL,
+      audience    TEXT NOT NULL DEFAULT 'all',
+      by_email    BOOLEAN NOT NULL DEFAULT true,
+      by_push     BOOLEAN NOT NULL DEFAULT false,
+      status      TEXT NOT NULL DEFAULT 'draft',   -- draft | scheduled | sent | cancelled
+      send_at     TIMESTAMPTZ,
+      sent_at     TIMESTAMPTZ,
+      recipients  INTEGER,
+      emailed     INTEGER,
+      pushed      INTEGER,
+      created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS admin_broadcasts_due_idx ON admin_broadcasts (status, send_at);
+  `);
+  // A random second look at a moderation decision — the quality control every
+  // trust team runs once more than one person is deciding things.
+  await query(`
+    CREATE TABLE IF NOT EXISTS qa_reviews (
+      id          SERIAL PRIMARY KEY,
+      audit_id    INTEGER REFERENCES admin_audit(id) ON DELETE CASCADE,
+      reviewer_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      verdict     TEXT NOT NULL,                   -- agree | disagree | unsure
+      note        TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS qa_reviews_one_idx ON qa_reviews (audit_id, reviewer_id);
+  `);
+  // "Tell me if X happens." Which numbers are watched, how far they have to
+  // move, and who hears about it.
+  await query(`
+    CREATE TABLE IF NOT EXISTS alert_rules (
+      id          SERIAL PRIMARY KEY,
+      metric      TEXT NOT NULL,
+      direction   TEXT NOT NULL DEFAULT 'both',    -- up | down | both
+      threshold   INTEGER NOT NULL DEFAULT 60,     -- percent move that counts
+      by_email    BOOLEAN NOT NULL DEFAULT true,
+      by_push     BOOLEAN NOT NULL DEFAULT false,
+      enabled     BOOLEAN NOT NULL DEFAULT true,
+      created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS alert_rules_metric_idx ON alert_rules (metric);
+  `);
+  // Public API keys. Only the HASH is stored — the key itself is shown once, at
+  // creation, and can never be read back, the same way every API platform does it.
+  await query(`
+    CREATE TABLE IF NOT EXISTS api_keys (
+      id           SERIAL PRIMARY KEY,
+      owner_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name         TEXT NOT NULL,
+      key_hash     TEXT NOT NULL UNIQUE,
+      prefix       TEXT NOT NULL,
+      scopes       TEXT[] NOT NULL DEFAULT '{}',
+      last_used_at TIMESTAMPTZ,
+      calls        BIGINT NOT NULL DEFAULT 0,
+      revoked_at   TIMESTAMPTZ,
+      revoked_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS api_keys_owner_idx ON api_keys (owner_id, created_at DESC);
+  `);
+  // Outbound webhooks: where to send an event, and what happened when we did.
+  await query(`
+    CREATE TABLE IF NOT EXISTS webhook_endpoints (
+      id          SERIAL PRIMARY KEY,
+      owner_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      url         TEXT NOT NULL,
+      secret      TEXT NOT NULL,
+      events      TEXT[] NOT NULL DEFAULT '{}',
+      active      BOOLEAN NOT NULL DEFAULT true,
+      failures    INTEGER NOT NULL DEFAULT 0,
+      last_status INTEGER,
+      last_at     TIMESTAMPTZ,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS webhook_endpoints_owner_idx ON webhook_endpoints (owner_id);
+    CREATE TABLE IF NOT EXISTS webhook_deliveries (
+      id          SERIAL PRIMARY KEY,
+      endpoint_id INTEGER NOT NULL REFERENCES webhook_endpoints(id) ON DELETE CASCADE,
+      event       TEXT NOT NULL,
+      payload     JSONB NOT NULL DEFAULT '{}'::jsonb,
+      status      TEXT NOT NULL DEFAULT 'pending', -- pending | delivered | failed
+      attempts    INTEGER NOT NULL DEFAULT 0,
+      http_status INTEGER,
+      error       TEXT,
+      next_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+      delivered_at TIMESTAMPTZ,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS webhook_deliveries_due_idx ON webhook_deliveries (status, next_at);
+    CREATE INDEX IF NOT EXISTS webhook_deliveries_ep_idx ON webhook_deliveries (endpoint_id, created_at DESC);
+  `);
+  // What the API actually did: slow calls and failures, so a problem is visible
+  // instead of only being felt. A window, not an archive — swept like page views.
+  await query(`
+    CREATE TABLE IF NOT EXISTS api_request_log (
+      id          SERIAL PRIMARY KEY,
+      method      TEXT NOT NULL,
+      path        TEXT NOT NULL,
+      status      INTEGER NOT NULL,
+      ms          INTEGER NOT NULL,
+      key_id      INTEGER,
+      user_id     INTEGER,
+      ip          TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS api_request_log_at_idx ON api_request_log (created_at DESC);
+    CREATE INDEX IF NOT EXISTS api_request_log_path_idx ON api_request_log (path);
+  `);
+  // A public status page. Businesses check one before they trust you with money.
+  await query(`
+    CREATE TABLE IF NOT EXISTS incidents (
+      id          SERIAL PRIMARY KEY,
+      title       TEXT NOT NULL,
+      impact      TEXT NOT NULL DEFAULT 'minor',   -- minor | major | critical | maintenance
+      status      TEXT NOT NULL DEFAULT 'investigating',
+      started_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      resolved_at TIMESTAMPTZ,
+      created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS incidents_open_idx ON incidents (resolved_at, started_at DESC);
+    CREATE TABLE IF NOT EXISTS incident_updates (
+      id          SERIAL PRIMARY KEY,
+      incident_id INTEGER NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
+      status      TEXT NOT NULL,
+      body        TEXT NOT NULL,
+      created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS incident_updates_idx ON incident_updates (incident_id, created_at);
+  `);
+  // Fraud rules you write yourself, and a log of every time one fired.
+  await query(`
+    CREATE TABLE IF NOT EXISTS fraud_rules (
+      id          SERIAL PRIMARY KEY,
+      name        TEXT NOT NULL,
+      enabled     BOOLEAN NOT NULL DEFAULT true,
+      conditions  JSONB NOT NULL DEFAULT '{}'::jsonb,
+      action      TEXT NOT NULL DEFAULT 'flag',    -- flag | block | freeze
+      hits        INTEGER NOT NULL DEFAULT 0,
+      created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE TABLE IF NOT EXISTS fraud_hits (
+      id          SERIAL PRIMARY KEY,
+      rule_id     INTEGER REFERENCES fraud_rules(id) ON DELETE CASCADE,
+      user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      amount_cents INTEGER,
+      action      TEXT NOT NULL,
+      detail      TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS fraud_hits_idx ON fraud_hits (created_at DESC);
+  `);
+
   // ── Batch 34: AI governance, trust queues, ops guardrails ──────────────────
   // Thumbs up/down on an Atwe AI answer, with a review queue for the thumbs-downs.
   // The quality loop: the assistant is only as good as what people tell you about it.
