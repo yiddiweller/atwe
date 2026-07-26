@@ -15516,6 +15516,21 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Tune my feed (natural-language feed controls) -->
+<div class="overlay hidden" id="feedTuneView" onclick="if(event.target===this)closeOverlay('feedTuneView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Tune my feed">
+    <button class="sheet-close" onclick="closeOverlay('feedTuneView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Tune my feed</div>
+    <div class="ac-disc-sub" style="margin:0 0 10px;">Say it in plain words — Atwe AI turns it into your mute list and followed topics. Everything it changes is editable in Settings.</div>
+    <div style="display:flex;gap:8px;">
+      <input class="jp-in" id="ftIn" type="text" maxlength="300" placeholder="e.g. less politics, more woodworking" style="margin:0;flex:1;" onkeydown="if(event.key==='Enter')acRunFeedTune()"/>
+      <button class="ac-pill-btn accent" id="ftBtn" style="flex:0 0 auto;" onclick="acRunFeedTune()">Tune</button>
+    </div>
+    <div id="ftChips" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"></div>
+    <div id="ftBody" style="margin-top:12px;"></div>
+  </div>
+</div>
+
 <!-- Collaborative whiteboard (a group Cloud tool) -->
 <div class="overlay hidden" id="whiteboardView" onclick="if(event.target===this)acWbClose()">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Whiteboard" style="max-width:640px;">
@@ -15801,6 +15816,8 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   <button class="aimp-item" role="menuitem" onclick="acFeedAiPick('matters')"><svg viewBox="0 0 24 24"><polygon points="12 2.5 14.7 8.6 21.5 9.3 16.5 13.9 17.9 20.6 12 17.1 6.1 20.6 7.5 13.9 2.5 9.3 9.3 8.6"/></svg><span>Show me what matters</span></button>
   <div class="aimp-sep"></div>
   <button class="aimp-item" role="menuitem" onclick="acFeedAiPick('catchup')"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Catch me up</span></button>
+  <div class="aimp-sep"></div>
+  <button class="aimp-item" role="menuitem" onclick="acFeedAiPick('tune')"><svg viewBox="0 0 24 24"><line x1="4" y1="8" x2="20" y2="8"/><circle cx="9" cy="8" r="2.4"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="15" cy="16" r="2.4"/></svg><span>Tune my feed</span></button>
 </div>
 
 <!-- Send-button hold menu (Telegram-style: Send silently / Schedule) -->
@@ -17116,7 +17133,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1569'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1570'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -30956,6 +30973,7 @@ function acCloseFeedAiMenu() {
 function acFeedAiPick(which) {
   acCloseFeedAiMenu();
   if (which === 'matters') acOpenForYou();
+  else if (which === 'tune') acOpenFeedTune();
   else acFeedDigest();
 }
 // The chat-tab ⋯ opens the same Apple-style popover with the chat tools that used
@@ -45976,6 +45994,40 @@ async function acChecklistReload() {
 }
 
 /* ════════ SHARED NOTES — group docs (SOPs, policies, notes) ════════ */
+/* ── Tune my feed (natural language → real controls) ── */
+const _FT_EXAMPLES = ['Less crypto and politics', 'More design and woodworking', 'Stop hiding cooking posts'];
+function acOpenFeedTune() {
+  showOverlay('feedTuneView');
+  document.getElementById('ftChips').innerHTML = _FT_EXAMPLES.map(e =>
+    `<button class="ppl-chip" onclick="document.getElementById('ftIn').value=${jsAttr(e)};acRunFeedTune()">${escHtml(e)}</button>`).join('');
+  document.getElementById('ftBody').innerHTML = '';
+  setTimeout(() => document.getElementById('ftIn').focus(), 120);
+}
+async function acRunFeedTune() {
+  const instr = (document.getElementById('ftIn').value || '').trim();
+  if (!instr) return;
+  const body = document.getElementById('ftBody'), btn = document.getElementById('ftBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  body.innerHTML = '<div class="ai-shop-think">✦ Tuning your feed…</div>';
+  try {
+    const r = await API.req('POST', '/api/ai/feed-tune', { instruction: instr });
+    const bits = [];
+    if (r.muted.length) bits.push('Hiding: ' + r.muted.map(w => '“' + escHtml(w) + '”').join(', '));
+    if (r.unmuted.length) bits.push('Showing again: ' + r.unmuted.map(w => '“' + escHtml(w) + '”').join(', '));
+    if (r.followed.length) bits.push('Following: ' + r.followed.map(t => '#' + escHtml(t)).join(', '));
+    if (r.unfollowed.length) bits.push('Unfollowed: ' + r.unfollowed.map(t => '#' + escHtml(t)).join(', '));
+    body.innerHTML = `<div class="grp-rules" style="margin-top:0;max-height:none;">
+      <div class="grp-rules-body" style="color:var(--t1);">${escHtml(r.reply || 'Done.')}</div>
+      ${bits.length ? `<div class="ac-disc-sub" style="margin-top:8px;">${bits.join('<br>')}</div>` : '<div class="ac-disc-sub" style="margin-top:8px;">Nothing needed changing.</div>'}
+      <div class="ac-disc-sub" style="margin-top:8px;font-size:12px;">Undo any of this in Settings → Privacy & safety → Muted words.</div>
+    </div>`;
+    document.getElementById('ftIn').value = '';
+    if (typeof acSetFeed === 'function' && (r.muted.length || r.unmuted.length)) setTimeout(() => { try { acSetFeed(AC._feedScope || 'foryou'); } catch (e) {} }, 400);
+  } catch (e) {
+    body.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.status === 503 ? (e.message || 'Atwe AI isn’t available right now.') : (e.message || 'Couldn’t tune that.')) + '</div>';
+  } finally { if (btn) { btn.disabled = false; btn.textContent = 'Tune'; } }
+}
+
 /* ── Collaborative whiteboard (group Cloud tool) ── */
 // Strokes live in normalized 0..1 coordinates so every screen renders the same
 // board. Saving is last-write-wins on the whole doc (like every Cloud tool);

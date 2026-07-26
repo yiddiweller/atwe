@@ -25844,6 +25844,48 @@ app.post('/api/ai/alt-text', auth.requireAuth, rateLimit(20, 60000, 'ai-alt'), a
   } catch (err) { console.error(err); res.status(503).json({ error: 'Atwe AI is unavailable right now.' }); }
 });
 
+// Natural-language feed tuning: "less crypto, more design" → real, reversible
+// controls — muted keywords (less) and followed hashtags (more) — applied via
+// the SAME tables the settings screens edit, so everything shows up there and
+// can be undone by hand. Instagram/TikTok-style instant apply, honestly echoed.
+app.post('/api/ai/feed-tune', auth.requireAuth, rateLimit(10, 60000, 'ai-feedtune'), async (req, res) => {
+  const instr = (req.body.instruction || '').toString().trim().slice(0, 300);
+  if (!instr) return res.status(400).json({ error: 'Say what you’d like more or less of.' });
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not available right now.' });
+  try {
+    const msg = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 300,
+      system: 'You are Atwe AI, translating a member’s feed wish into concrete controls. Reply with ONLY JSON, no fences: {"muteWords": string[] (topics they want LESS of, as plain lowercase words/short phrases), "unmuteWords": string[] (topics they want back), "followTags": string[] (single-word topics they want MORE of, no # prefix), "unfollowTags": string[], "reply": string (one warm sentence confirming what changes)}. Max 5 per list; empty lists when unclear. Never mention "Claude" or "Anthropic".',
+      messages: [{ role: 'user', content: instr }],
+    });
+    const raw = (msg.content.find((b) => b.type === 'text')?.text || '').trim().replace(/^```(?:json)?|```$/g, '');
+    let d; try { d = JSON.parse(raw); } catch (e) { return res.status(503).json({ error: 'Atwe AI couldn’t understand that — try “less crypto” or “more design”.' }); }
+    const clean = (a, f) => (Array.isArray(a) ? a : []).map(f).filter(Boolean).slice(0, 5);
+    const word = (w) => String(w || '').trim().toLowerCase().slice(0, 40) || null;
+    const tag = (t) => (String(t || '').trim().toLowerCase().replace(/^#/, '').replace(/[^a-z0-9_]/g, '') || null);
+    const muted = [], unmuted = [], followed = [], unfollowed = [];
+    for (const w of clean(d.muteWords, word)) {
+      const r = await db.query(
+        `INSERT INTO muted_keywords (user_id, word) VALUES ($1, $2)
+         ON CONFLICT (user_id, lower(word)) DO UPDATE SET expires_at = NULL RETURNING word`, [req.user.id, w]);
+      if (r.rowCount) muted.push(w);
+    }
+    for (const w of clean(d.unmuteWords, word)) {
+      const r = await db.query('DELETE FROM muted_keywords WHERE user_id = $1 AND lower(word) = lower($2)', [req.user.id, w]);
+      if (r.rowCount) unmuted.push(w);
+    }
+    for (const t of clean(d.followTags, tag)) {
+      const r = await db.query('INSERT INTO hashtag_follows (user_id, tag) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING tag', [req.user.id, t]);
+      if (r.rowCount) followed.push(t);
+    }
+    for (const t of clean(d.unfollowTags, tag)) {
+      const r = await db.query('DELETE FROM hashtag_follows WHERE user_id = $1 AND tag = $2', [req.user.id, t]);
+      if (r.rowCount) unfollowed.push(t);
+    }
+    res.json({ reply: (d.reply || '').toString().slice(0, 300), muted, unmuted, followed, unfollowed });
+  } catch (err) { console.error(err); res.status(503).json({ error: 'Atwe AI is unavailable right now.' }); }
+});
+
 // AI search across your data: answers a natural question from the caller's OWN
 // visible rows — their DMs, orders, invoices, appointments, contacts. Retrieval
 // is keyword-scored to keep the context small; the model is instructed to
