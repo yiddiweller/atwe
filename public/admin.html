@@ -2100,6 +2100,19 @@ function renderSite(){
       }).join('')}
     </div>
     <div class="panel">
+      <h3>Promo codes <span class="muted">· Atwe-funded</span></h3>
+      <div class="sub">A discount <b>Atwe pays for</b> — the buyer pays less and the seller is topped back up to the full price, so campaigns never cost your sellers anything. A seller's own coupon always wins if the codes clash. The cost shows in Revenue as a negative line.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <input class="in" id="pmCode" maxlength="24" placeholder="WELCOME10" style="width:150px;margin:0;"/>
+        <select class="in" id="pmKind" style="width:130px;margin:0;"><option value="percent">% off</option><option value="fixed">$ off</option></select>
+        <input class="in" id="pmValue" type="number" placeholder="10" style="width:90px;margin:0;"/>
+        <input class="in" id="pmMax" type="number" placeholder="Max uses" style="width:120px;margin:0;"/>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);"><input type="checkbox" id="pmFirst"/> First order only</label>
+        <button class="act accent" onclick="createPromo()">Create</button>
+      </div>
+      <div id="pmList" style="margin-top:12px;"></div>
+    </div>
+    <div class="panel">
       <h3>Platform fee <span class="muted">· your marketplace take-rate</span></h3>
       <div class="sub">A share of each completed sale, taken from the <b>seller's</b> proceeds when they're paid — never added on top of what the buyer sees, so a listed price stays the price. <b>0% means Atwe takes nothing</b>, which is how it has worked so far.</div>
       <div id="feeStats" class="sub" style="margin-top:8px;"></div>
@@ -2135,6 +2148,36 @@ function renderSite(){
   loadChangelog();
   loadBlockedDomains();
   loadPlatformFee();
+  loadPromos();
+}
+// Atwe-funded promo codes. Distinct from a seller's own coupon: Atwe absorbs it.
+async function loadPromos(){
+  const box = document.getElementById('pmList'); if (!box) return;
+  try {
+    const { promos } = await api('GET', '/api/admin/promos');
+    box.innerHTML = promos.length ? promos.map(p => `<div class="site-row">
+        <div><div class="srt">${esc(p.code)} <span class="pill${p.active ? ' pro' : ''}">${p.active ? 'live' : 'off'}</span> ${p.kind === 'fixed' ? '$' + (p.value/100).toFixed(2) + ' off' : p.value + '% off'}${p.firstOrderOnly ? ' <span class="pill">first order</span>' : ''}</div>
+          <div class="srs">used ${p.usedCount}${p.maxUses ? ' / ' + p.maxUses : ''} · cost so far $${(p.spentCents/100).toFixed(2)}${p.expiresAt ? ' · until ' + fmtDate(p.expiresAt) : ''}</div></div>
+        <button class="act" onclick="togglePromo(${p.id}, ${p.active ? 'false' : 'true'})">${p.active ? 'Turn off' : 'Turn on'}</button>
+      </div>`).join('') : '<div class="muted" style="padding:6px 0;">No promo codes yet.</div>';
+  } catch (e){ box.innerHTML = '<div class="muted">' + esc(e.message) + '</div>'; }
+}
+async function createPromo(){
+  const code = document.getElementById('pmCode').value.trim();
+  const kind = document.getElementById('pmKind').value;
+  const raw = parseFloat(document.getElementById('pmValue').value) || 0;
+  const value = kind === 'fixed' ? Math.round(raw * 100) : Math.round(raw);
+  const maxUses = parseInt(document.getElementById('pmMax').value, 10) || 0;
+  if (!code || !value) { notify('Enter a code and a value.'); return; }
+  try {
+    await api('POST', '/api/admin/promos', { code, kind, value, maxUses, firstOrderOnly: document.getElementById('pmFirst').checked });
+    document.getElementById('pmCode').value = ''; document.getElementById('pmValue').value = ''; document.getElementById('pmMax').value = '';
+    notify('Promo created.'); loadPromos();
+  } catch (e){ notify(e.message); }
+}
+async function togglePromo(id, active){
+  try { await api('PATCH', '/api/admin/promos/' + id, { active }); loadPromos(); }
+  catch (e){ notify(e.message); }
 }
 // Your marketplace take-rate. Shown next to what it would have earned, so the
 // number isn't abstract.

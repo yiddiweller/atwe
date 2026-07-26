@@ -1754,6 +1754,38 @@ async function initSchema() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS condition TEXT;`); // new | like_new | good | fair (physical resale)
   // "Was" price (compare-at, Shopify-style) — shown struck through when > price.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS compare_at_cents INTEGER;`);
+  // Platform promo codes — ATWE-funded discounts (WELCOME10), distinct from a
+  // seller's own coupons. The seller is still paid in full; the discount comes
+  // out of Atwe's pocket and is booked as negative company revenue, so the
+  // Revenue dashboard tells the truth about what a campaign cost.
+  await query(`
+    CREATE TABLE IF NOT EXISTS platform_promos (
+      id              SERIAL PRIMARY KEY,
+      code            TEXT NOT NULL,
+      kind            TEXT NOT NULL DEFAULT 'percent',
+      value           INTEGER NOT NULL,
+      min_order_cents INTEGER NOT NULL DEFAULT 0,
+      max_discount_cents INTEGER,
+      max_uses        INTEGER,
+      used_count      INTEGER NOT NULL DEFAULT 0,
+      first_order_only BOOLEAN NOT NULL DEFAULT false,
+      expires_at      TIMESTAMPTZ,
+      active          BOOLEAN NOT NULL DEFAULT true,
+      created_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS platform_promos_code_idx ON platform_promos(lower(code));`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS platform_promo_uses (
+      promo_id  INTEGER NOT NULL REFERENCES platform_promos(id) ON DELETE CASCADE,
+      user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      order_id  INTEGER,
+      cents     INTEGER NOT NULL DEFAULT 0,
+      used_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (promo_id, user_id)
+    );
+  `);
   // Cash-out review: payouts at or above the review threshold are HELD (the
   // balance is already debited, so the money can't move twice) until staff
   // approve or refund it. Below the threshold nothing changes.

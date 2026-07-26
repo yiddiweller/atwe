@@ -19988,6 +19988,57 @@ function mapCoupon(c) {
 // Validate a coupon for a seller + buyer at a given subtotal → { discountCents, coupon } | { error }.
 // Read-only (no claim) — safe to call from the no-commitment preview route. Real
 // checkout additionally calls claimCouponUse right before creating the order.
+/* ─── Platform promo codes (Atwe-funded) ────────────────────────────────────
+   Distinct from a seller's own coupon: the SELLER is still paid in full and
+   Atwe absorbs the discount, booked as negative company revenue so a campaign's
+   real cost shows up in the Revenue dashboard. Checked only after a seller
+   coupon fails, so a seller's own code always wins. */
+async function resolvePlatformPromo(code, subtotalCents, buyerId) {
+  const clean = (code || '').toString().trim();
+  if (!clean) return { discountCents: 0, promo: null };
+  try {
+    const p = (await db.query('SELECT * FROM platform_promos WHERE lower(code) = lower($1)', [clean])).rows[0];
+    if (!p || !p.active) return { discountCents: 0, promo: null };
+    if (p.expires_at && new Date(p.expires_at) < new Date()) return { error: 'That code has expired.' };
+    if (p.max_uses != null && p.used_count >= p.max_uses) return { error: 'That code has reached its limit.' };
+    if (subtotalCents < (p.min_order_cents || 0)) return { error: `Spend at least $${((p.min_order_cents || 0) / 100).toFixed(2)} to use this code.` };
+    if ((await db.query('SELECT 1 FROM platform_promo_uses WHERE promo_id = $1 AND user_id = $2', [p.id, buyerId])).rowCount) return { error: 'You’ve already used this code.' };
+    if (p.first_order_only) {
+      const prior = await db.query(`SELECT 1 FROM orders WHERE buyer_id = $1 AND status IN ('paid','fulfilled','delivered','released','escrow') LIMIT 1`, [buyerId]);
+      if (prior.rowCount) return { error: 'That code is for a first order only.' };
+    }
+    let discount = p.kind === 'fixed' ? p.value : Math.round(subtotalCents * p.value / 100);
+    if (p.max_discount_cents) discount = Math.min(discount, p.max_discount_cents);
+    discount = Math.max(0, Math.min(discount, subtotalCents));
+    return { discountCents: discount, promo: p };
+  } catch (e) { return { discountCents: 0, promo: null }; }
+}
+// Claim the one-per-person slot BEFORE the order exists (same reasoning as
+// claimCouponUse — checking only at settlement lets one buyer stack it).
+async function claimPlatformPromo(promoId, buyerId, cents) {
+  try {
+    const r = await db.query('INSERT INTO platform_promo_uses (promo_id, user_id, cents) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING RETURNING promo_id', [promoId, buyerId, cents]);
+    return r.rowCount > 0;
+  } catch { return false; }
+}
+async function releasePlatformPromo(promoId, buyerId) {
+  if (!promoId) return;
+  try { await db.query('DELETE FROM platform_promo_uses WHERE promo_id = $1 AND user_id = $2 AND order_id IS NULL', [promoId, buyerId]); } catch (_) {}
+}
+// On payment: make the SELLER whole (this is what "Atwe-funded" means — the
+// buyer paid less, so Atwe tops the seller back up to the undiscounted amount),
+// attach the order, count the use, and book what the campaign cost.
+async function bookPlatformPromo(promoId, buyerId, orderId, cents, sellerId) {
+  if (!promoId || !cents) return;
+  try {
+    if (sellerId) await walletCreditStandalone(sellerId, cents, 'promo', 'Atwe promo — topped up to the full price');
+    await db.query('UPDATE platform_promo_uses SET order_id = $3 WHERE promo_id = $1 AND user_id = $2', [promoId, buyerId, orderId]);
+    await db.query('UPDATE platform_promos SET used_count = used_count + 1 WHERE id = $1 AND (max_uses IS NULL OR used_count < max_uses)', [promoId]);
+    await db.query(
+      'INSERT INTO company_revenue (source, ref_id, payer_id, payer_name, amount_cents, note) VALUES ($1,$2,$3,(SELECT name FROM users WHERE id=$3),$4,$5)',
+      ['promo', orderId, buyerId, -Math.abs(cents), 'Platform promo discount']);
+  } catch (_) { /* the order stands regardless */ }
+}
 async function resolveCoupon(sellerId, code, subtotalCents, buyerId) {
   const clean = (code || '').toString().trim();
   if (!clean) return { discountCents: 0, coupon: null };
@@ -21398,13 +21449,24 @@ app.post('/api/orders/buy', auth.requireAuth, blockImpersonation, rateLimit(20, 
     const subtotal = unitPrice * qty;
     const ship = await resolveShipping(req.user.id, req.body, items, { sellerId: p.business_id, subtotalCents: subtotal });
     if (!ship.ok) return res.status(400).json({ error: ship.error, needAddress: !!ship.needAddress });
-    const cp = await resolveCoupon(p.business_id, req.body.couponCode, subtotal, req.user.id);
+    let cp = await resolveCoupon(p.business_id, req.body.couponCode, subtotal, req.user.id);
+    // A seller's own code always wins. Only if the entered code isn't theirs do
+    // we try an ATWE-funded platform promo with the same code.
+    let promo = null;
+    if (cp.error && req.body.couponCode) {
+      const pp = await resolvePlatformPromo(req.body.couponCode, subtotal, req.user.id);
+      if (pp.promo) { cp = { discountCents: pp.discountCents, coupon: null }; promo = pp.promo; }
+      else if (pp.error) return res.status(400).json({ error: pp.error, couponError: true });
+    }
     if (cp.error) return res.status(400).json({ error: cp.error, couponError: true });
     // Claim the one-time-use slot NOW (before creating the order) — see claimCouponUse.
     let couponClaimId = null;
     if (cp.coupon) {
       couponClaimId = await claimCouponUse(cp.coupon.id, req.user.id);
       if (!couponClaimId) return res.status(400).json({ error: 'You’ve already used this code.', couponError: true });
+    }
+    if (promo && !(await claimPlatformPromo(promo.id, req.user.id, cp.discountCents))) {
+      return res.status(400).json({ error: 'You’ve already used this code.', couponError: true });
     }
     const taxable = subtotal - (cp.discountCents || 0);
     const rt = await applyRatesAndTax(req.body, ship, items, taxable);
@@ -21415,13 +21477,14 @@ app.post('/api/orders/buy', auth.requireAuth, blockImpersonation, rateLimit(20, 
     const commissionCents = affiliateId ? Math.round(subtotal * AFFILIATE_RATE_PCT / 100) : 0;
     const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null, affiliateId, commissionCents, gift: req.body.gift === true, giftNote: req.body.giftNote });
     await attachCouponClaim(couponClaimId, orderId);
+    if (promo) await bookPlatformPromo(promo.id, req.user.id, orderId, cp.discountCents, p.business_id);
     await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty, variant_id, variant_label) VALUES ($1,$2,$3,$4,$5,$6,$7)', [orderId, productId, p.name, unitPrice, qty, items[0].variant_id, items[0].variant_label]);
     const stk = await applyStock(items);
-    if (!stk.ok) { await db.query("DELETE FROM orders WHERE id = $1", [orderId]).catch(() => {}); await releaseCouponClaim(couponClaimId); return res.status(409).json({ error: stk.error, outOfStock: true }); }
+    if (!stk.ok) { await db.query("DELETE FROM orders WHERE id = $1", [orderId]).catch(() => {}); await releaseCouponClaim(couponClaimId); if (promo) await releasePlatformPromo(promo.id, req.user.id); return res.status(409).json({ error: stk.error, outOfStock: true }); }
     // Balance-funded paths are idempotent (claim → pay → store; restore stock + drop the
     // orphan order on duplicate/failure) — see /api/orders for the rationale.
     const cid = req.body.clientId;
-    const dropPending = async () => { await restoreStock(items); await db.query("DELETE FROM orders WHERE id = $1 AND status = 'pending'", [orderId]).catch(() => {}); await releaseCouponClaim(couponClaimId); };
+    const dropPending = async () => { await restoreStock(items); await db.query("DELETE FROM orders WHERE id = $1 AND status = 'pending'", [orderId]).catch(() => {}); await releaseCouponClaim(couponClaimId); if (promo) await releasePlatformPromo(promo.id, req.user.id); };
     if (req.body.protected || req.body.payWith === 'balance') {
       // Optional gift card (non-escrow): apply its balance first, wallet covers the remainder.
       const gp = await resolveGiftFunding(req.user.id, req.body.giftCardId, total, req.body.protected);
@@ -25641,6 +25704,98 @@ app.post('/api/admin/users/bulk', auth.requirePerm('users'), async (req, res) =>
     adminAudit(req, 'user.bulk_' + action, 'user', null, { count: affected, requested: ids.length, ...extra });
     res.json({ ok: true, affected, skipped: ids.length - safe.length });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not complete the bulk action.' }); }
+});
+/* ─── Platform promo codes (admin) ─── */
+app.get('/api/admin/promos', auth.requirePerm('revenue'), async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT p.*, (SELECT COALESCE(SUM(cents),0)::bigint FROM platform_promo_uses u WHERE u.promo_id = p.id AND u.order_id IS NOT NULL) AS spent
+         FROM platform_promos p ORDER BY p.active DESC, p.created_at DESC LIMIT 100`);
+    res.json({ promos: rows.map((p) => ({
+      id: p.id, code: p.code, kind: p.kind, value: p.value, minOrderCents: p.min_order_cents,
+      maxDiscountCents: p.max_discount_cents, maxUses: p.max_uses, usedCount: p.used_count,
+      firstOrderOnly: p.first_order_only, expiresAt: p.expires_at, active: p.active,
+      spentCents: Number(p.spent), createdAt: p.created_at,
+    })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the promos.' }); }
+});
+app.post('/api/admin/promos', auth.requirePerm('revenue'), async (req, res) => {
+  const code = (req.body.code || '').toString().trim().toUpperCase().slice(0, 24);
+  const kind = req.body.kind === 'fixed' ? 'fixed' : 'percent';
+  const value = Math.round(Number(req.body.value) || 0);
+  if (!/^[A-Z0-9]{3,24}$/.test(code)) return res.status(400).json({ error: 'Codes are 3–24 letters and numbers.' });
+  if (kind === 'percent' && !(value > 0 && value <= 50)) return res.status(400).json({ error: 'A percentage promo has to be between 1 and 50.' });
+  if (kind === 'fixed' && !(value > 0 && value <= 20000)) return res.status(400).json({ error: 'A fixed promo can be up to $200.' });
+  const num = (v, max) => { const n = Math.round(Number(v) || 0); return n > 0 && n <= max ? n : null; };
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO platform_promos (code, kind, value, min_order_cents, max_discount_cents, max_uses, first_order_only, expires_at, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [code, kind, value, num(req.body.minOrderCents, 1000000) || 0, num(req.body.maxDiscountCents, 100000),
+       num(req.body.maxUses, 1000000), req.body.firstOrderOnly === true,
+       req.body.expiresAt ? new Date(req.body.expiresAt) : null, req.user.id]);
+    adminAudit(req, 'promo.create', 'promo', rows[0].id, { code, kind, value });
+    res.status(201).json({ ok: true, id: rows[0].id });
+  } catch (err) {
+    if (err && err.code === '23505') return res.status(409).json({ error: 'That code already exists.' });
+    console.error(err); res.status(500).json({ error: 'Could not create the promo.' });
+  }
+});
+app.patch('/api/admin/promos/:id', auth.requirePerm('revenue'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('UPDATE platform_promos SET active = $2 WHERE id = $1 RETURNING active', [id, req.body.active !== false]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    adminAudit(req, 'promo.toggle', 'promo', id, { active: r.rows[0].active });
+    res.json({ ok: true, active: r.rows[0].active });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update it.' }); }
+});
+/* ─── Seller performance tiers ──────────────────────────────────────────────
+   Scored on what a seller actually does — ship on time, avoid disputes, get
+   good reviews — so the badge means something. Computed on read from existing
+   data; nothing new is tracked and nobody is scored into a corner they can't
+   climb out of (every input is a rolling window). */
+const SELLER_TIERS = [
+  { at: 90, key: 'top', label: 'Top rated' },
+  { at: 75, key: 'great', label: 'Great seller' },
+  { at: 55, key: 'good', label: 'Reliable' },
+];
+async function sellerPerformance(sellerId) {
+  try {
+    const s = (await db.query(`
+      SELECT COUNT(*)::int AS orders,
+             COUNT(*) FILTER (WHERE status = 'disputed')::int AS disputes,
+             COUNT(*) FILTER (WHERE shipped_at IS NOT NULL)::int AS shipped,
+             AVG(EXTRACT(EPOCH FROM (shipped_at - paid_at)) / 86400) FILTER (WHERE shipped_at IS NOT NULL AND paid_at IS NOT NULL) AS avg_ship_days
+        FROM orders WHERE seller_id = $1 AND created_at > now() - interval '90 days'
+          AND status IN ('paid','fulfilled','delivered','released','disputed','refunded')`, [sellerId])).rows[0];
+    const r = (await db.query(
+      `SELECT ROUND(AVG(pr.rating)::numeric, 2) AS avg, COUNT(*)::int AS n
+         FROM product_reviews pr JOIN products p ON p.id = pr.product_id WHERE p.business_id = $1`, [sellerId])).rows[0];
+    const orders = s.orders || 0;
+    // Not enough trade to judge — say so instead of inventing a grade.
+    if (orders < 5) return { enough: false, orders, tier: null, score: null };
+    const disputeRate = orders ? s.disputes / orders : 0;
+    const shipDays = s.avg_ship_days == null ? null : Number(s.avg_ship_days);
+    const rating = r.avg == null ? null : Number(r.avg);
+    let score = 60;
+    score += rating == null ? 0 : (rating - 4) * 12;               // 4.0 is par
+    score -= disputeRate * 200;                                     // disputes hurt most
+    if (shipDays != null) score += shipDays <= 1 ? 12 : shipDays <= 3 ? 6 : shipDays > 7 ? -10 : 0;
+    score += Math.min(12, Math.log(orders + 1) * 4);                // volume, gently
+    score = Math.max(0, Math.min(100, Math.round(score)));
+    const tier = SELLER_TIERS.find((t) => score >= t.at) || null;
+    return { enough: true, orders, disputes: s.disputes, disputeRate: Math.round(disputeRate * 1000) / 10,
+      avgShipDays: shipDays == null ? null : Math.round(shipDays * 10) / 10,
+      rating, reviews: r.n || 0, score, tier: tier ? { key: tier.key, label: tier.label } : null };
+  } catch { return { enough: false, orders: 0, tier: null, score: null }; }
+}
+app.get('/api/seller-performance/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try { res.json(await sellerPerformance(id)); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not score that seller.' }); }
 });
 /* ─── Linked-account detection ──────────────────────────────────────────────
    Surface accounts that share a sign-in IP or an email pattern. This is a LEAD,
