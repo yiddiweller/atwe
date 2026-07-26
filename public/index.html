@@ -7214,6 +7214,15 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .shop-setup-row.done .shop-setup-chk{background:rgba(48,209,88,.18);}
 .shop-setup-chk svg{width:13px;height:13px;fill:none;stroke:var(--green);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;}
 .shop-setup-row .iset-chev{margin-inline-start:auto;}
+/* Restock suggestions: product row + amber low-stock chip (amber = heads-up). */
+.rsk-row{display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--bg);}
+.rsk-row:last-of-type{border-bottom:none;}
+.rsk-img{width:44px;height:44px;border-radius:12px;object-fit:cover;background:var(--s2);flex:0 0 auto;}
+.rsk-main{flex:1;min-width:0;}
+.rsk-name{font-size:14.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rsk-sub{font-size:12.5px;color:var(--t3);margin-top:2px;}
+.rsk-chip{font-size:11.5px;font-weight:800;color:#3d2e00;background:var(--amber);border-radius:999px;padding:3px 9px;flex:0 0 auto;}
+.rsk-suggest{font-size:13px;font-weight:800;color:var(--t1);background:var(--s2);border-radius:999px;padding:5px 11px;flex:0 0 auto;white-space:nowrap;}
 /* Free-shipping nudge per seller group (green when earned — money colour). */
 .cart-freeship{font-size:12.5px;font-weight:600;color:var(--t2);margin:2px 0 6px;}
 .cart-freeship.met{color:var(--green);font-weight:700;}
@@ -15244,6 +15253,16 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Restock suggestions (what to reorder, from 30-day sales velocity) -->
+<div class="overlay hidden" id="restockView" onclick="if(event.target===this)closeOverlay('restockView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Restock suggestions">
+    <button class="sheet-close" onclick="closeOverlay('restockView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Restock suggestions</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">What to reorder, based on your last 30 days of sales.</div>
+    <div id="restockBody"></div>
+  </div>
+</div>
+
 <!-- Public storefront (opened from a business profile) -->
 <div class="overlay hidden" id="storefrontView" onclick="if(event.target===this)closeOverlay('storefrontView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Storefront">
@@ -17170,7 +17189,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1572'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1573'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -39165,6 +39184,7 @@ async function acOpenStoreManage() {
     ${row(SI.megaphone, 'Sponsored ads', 'Pay per click for a "Sponsored" search slot', 'closeOverlay(\'storeManageView\');acOpenProductAds()')}
     ${row(SI.receipt, 'Orders', pending ? pending + ' to fulfil' : 'Manage and ship orders', 'closeOverlay(\'storeManageView\');acOpenOrders(\'seller\')', pending || '')}
     ${row(SI.chart, 'Sales & analytics', 'Revenue, orders and top products', 'closeOverlay(\'storeManageView\');acOpenShopAnalytics()')}
+    ${row(SI.box, 'Restock suggestions', 'What to reorder, based on sales', 'acOpenRestock()')}
     ${row(SI.store, 'Customers', 'Everyone who has bought from you', 'closeOverlay(\'storeManageView\');acOpenCustomers()')}
     ${row(SI.megaphone, 'Cart recovery', 'Win back abandoned carts via Beam', 'closeOverlay(\'storeManageView\');acOpenCartRecovery()')}
     ${row(SI.wallet, 'Wallet & payouts', 'Your balance and cash-out', 'closeOverlay(\'storeManageView\');acOpenWallet()')}
@@ -39192,6 +39212,45 @@ async function acOpenCustomers() {
         <button class="ac-post-more" onclick="event.stopPropagation();closeOverlay('customersView');appTab('chat');acOpenChat(${c.id})" aria-label="Message"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
       </div>`).join('');
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+// ── Restock suggestions: 30-day sales velocity vs tracked stock ──
+async function acOpenRestock() {
+  showOverlay('restockView');
+  const b = document.getElementById('restockBody'); if (!b) return;
+  b.innerHTML = acSkelRows(3);
+  let items = [];
+  try { ({ items } = await API.req('GET', '/api/shop/restock')); }
+  catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; return; }
+  if (!items || !items.length) {
+    b.innerHTML = `<div class="ac-empty" style="padding:26px 8px;">
+      <div style="font-size:15px;font-weight:700;margin-bottom:6px;">Nothing to reorder</div>
+      <div class="ac-disc-sub" style="margin:0;">Suggestions appear for products that track a stock count and have sold in the last 30 days. Set a stock number on a listing to start.</div>
+    </div>`;
+    return;
+  }
+  AC._restock = items;
+  const row = (i) => `<div class="rsk-row">
+      ${i.image ? `<img class="rsk-img" src="${jsAttr(i.image)}" alt="" loading="lazy" decoding="async">` : '<span class="rsk-img"></span>'}
+      <div class="rsk-main">
+        <div class="rsk-name">${escHtml(i.name)}</div>
+        <div class="rsk-sub">${i.stock} left · ${i.sold30} sold in 30 days${i.daysLeft !== null ? ' · ~' + i.daysLeft + ' day' + (i.daysLeft === 1 ? '' : 's') + ' of stock' : ''}</div>
+      </div>
+      ${i.urgent ? '<span class="rsk-chip">Low</span>' : ''}
+      ${i.suggest > 0 ? `<span class="rsk-suggest">Reorder ${i.suggest}</span>` : ''}
+    </div>`;
+  const urgent = items.filter(i => i.urgent), rest = items.filter(i => !i.urgent);
+  b.innerHTML =
+    (urgent.length ? '<div class="ac-prof-head" style="margin:2px 0 4px;">Running low</div>' + urgent.map(row).join('') : '') +
+    (rest.length ? `<div class="ac-prof-head" style="margin:${urgent.length ? 16 : 2}px 0 4px;">Everything else</div>` + rest.map(row).join('') : '') +
+    '<button class="ac-pill-btn accent" style="width:100%;margin-top:16px;" onclick="acRestockCopy()">Copy reorder list</button>';
+}
+function acRestockCopy() {
+  const items = (AC._restock || []).filter(i => i.suggest > 0);
+  if (!items.length) { showNotif('Nothing needs reordering right now.'); return; }
+  const text = items.map(i => `${i.name} — reorder ${i.suggest} (${i.stock} left, ${i.sold30} sold in 30 days)`).join('\n');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => showNotif('Reorder list copied — paste it to your supplier.'), () => showNotif('Could not copy on this device.'));
+  } else showNotif('Could not copy on this device.');
 }
 // ── Free shipping over $X (seller-wide) ──
 function acOpenFreeShip() {
