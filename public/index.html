@@ -7214,6 +7214,14 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .shop-setup-row.done .shop-setup-chk{background:rgba(48,209,88,.18);}
 .shop-setup-chk svg{width:13px;height:13px;fill:none;stroke:var(--green);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;}
 .shop-setup-row .iset-chev{margin-inline-start:auto;}
+/* AI action log: rows of confirmed "Do it for me" actions. */
+.ailog-row{display:flex;align-items:flex-start;gap:11px;padding:10px 0;border-bottom:1px solid var(--bg);}
+.ailog-row:last-of-type{border-bottom:none;}
+.ailog-ic{width:34px;height:34px;border-radius:50%;background:var(--accent-dim);flex:0 0 auto;display:flex;align-items:center;justify-content:center;}
+.ailog-ic svg{width:16px;height:16px;fill:none;stroke:var(--accent);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.ailog-main{flex:1;min-width:0;}
+.ailog-label{font-size:14px;font-weight:700;}
+.ailog-sub{font-size:12.5px;color:var(--t3);margin-top:2px;}
 /* AI shop analyst: the grounded answer card under Sales & analytics. */
 .sa-analyst{background:var(--s1);border-radius:16px;padding:13px 15px;margin-top:12px;font-size:14px;line-height:1.55;}
 .sa-analyst-tag{font-size:11px;font-weight:800;color:var(--accent);letter-spacing:.4px;text-transform:uppercase;margin-bottom:5px;}
@@ -15195,6 +15203,17 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <div id="agentChips" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
     <button class="ac-pill-btn accent jp-submit" id="agentGoBtn" onclick="acAgentGo()">Ask Atwe AI</button>
     <div id="agentResult" style="margin-top:12px;"></div>
+    <button class="ac-link-btn" style="margin:12px 2px 0;" onclick="acOpenAiLog()"><svg viewBox="0 0 24 24" style="width:14px;height:14px;vertical-align:-2px;margin-inline-end:5px;fill:none;stroke:currentColor;stroke-width:2;"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>What Atwe AI has done for you</button>
+  </div>
+</div>
+
+<!-- AI action log (transparency): actions you confirmed Atwe AI to take -->
+<div class="overlay hidden" id="aiLogView" onclick="if(event.target===this)closeOverlay('aiLogView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="AI activity">
+    <button class="sheet-close" onclick="closeOverlay('aiLogView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">AI activity</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Every action you confirmed Atwe AI to take, on the record. Nothing runs without your say-so.</div>
+    <div id="aiLogBody"></div>
   </div>
 </div>
 
@@ -17306,7 +17325,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1579'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1580'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -36817,9 +36836,11 @@ async function acAgentConfirm() {
   try {
     if (a.tool === 'create_event') {
       const { event } = await API.req('POST', '/api/events', { title: i.title, startsAt: i.startsAt, location: i.location || '', description: i.description || '', online: !i.location });
+      acAiLog('create_event', 'Created the event “' + (i.title || '') + '”', i.startsAt ? 'Starts ' + new Date(i.startsAt).toLocaleString() : null);
       showNotif('Event created.'); closeOverlay('agentView'); if (event && event.id) acOpenEvent(event.id); else acOpenEvents();
     } else if (a.tool === 'schedule_post') {
       await API.req('POST', '/api/social/posts', { body: i.body, scheduledAt: i.scheduledAt });
+      acAiLog('schedule_post', 'Scheduled a post', (i.body || '').slice(0, 120));
       showNotif('Post scheduled.'); closeOverlay('agentView'); if (typeof acOpenScheduledPosts === 'function') acOpenScheduledPosts();
     } else if (a.tool === 'draft_invoice') {
       // Resolve the @username → id, then create the invoice via the normal route.
@@ -36827,10 +36848,41 @@ async function acAgentConfirm() {
       const cid = prof && prof.user && prof.user.id;
       if (!cid) { showNotif('Couldn’t find that user.'); return; }
       await API.req('POST', '/api/invoices', { customerId: cid, title: i.title, amountCents: i.amountCents });
+      acAiLog('draft_invoice', 'Sent an invoice to @' + (i.customerUsername || '').replace(/^@/, ''), (i.title || '') + (i.amountCents ? ' · ' + acMoney(i.amountCents) : ''));
       showNotif('Invoice sent.'); closeOverlay('agentView'); acOpenInvoices('sent');
     }
     AC._agentAction = null;
   } catch (e) { showNotif(e.message || 'Could not complete that action.'); }
+}
+// ── AI action log (transparency): what Atwe AI has done, on your say-so ──
+function acAiLog(tool, label, detail) {
+  API.req('POST', '/api/ai/actions/log', { tool, label, detail: detail || undefined }).catch(() => {});
+}
+const _AI_LOG_IC = {
+  create_event: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+  schedule_post: '<svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z"/></svg>',
+  draft_invoice: '<svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v6h6"/><line x1="9" y1="13" x2="15" y2="13"/></svg>',
+};
+async function acOpenAiLog() {
+  showOverlay('aiLogView');
+  const b = document.getElementById('aiLogBody'); b.innerHTML = acSkelRows(3);
+  try {
+    const { actions } = await API.req('GET', '/api/ai/actions');
+    if (!actions.length) { b.innerHTML = '<div class="ac-empty" style="padding:24px;">Nothing yet. When you confirm an action in “Do it for me”, it’s recorded here.</div>'; return; }
+    b.innerHTML = actions.map(a => `<div class="ailog-row">
+        <span class="ailog-ic">${_AI_LOG_IC[a.tool] || _AI_LOG_IC.schedule_post}</span>
+        <div class="ailog-main">
+          <div class="ailog-label">${escHtml(a.label)}</div>
+          <div class="ailog-sub">${a.detail ? escHtml(a.detail) + ' · ' : ''}${acTime(a.createdAt)}</div>
+        </div>
+      </div>`).join('') +
+      `<button class="ac-link-btn" style="margin:12px 2px 0;color:var(--t3);" onclick="acClearAiLog()">Clear history</button>`;
+  } catch (e) { b.innerHTML = '<div class="ac-empty">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+async function acClearAiLog() {
+  if (!(await appConfirm({ title: 'Clear AI history?', message: 'The record of actions Atwe AI took for you is removed. The things it created are untouched.', confirmText: 'Clear', danger: true }))) return;
+  try { await API.req('DELETE', '/api/ai/actions'); acOpenAiLog(); }
+  catch (e) { showNotif(e.message || 'Could not clear.'); }
 }
 // Seller sales dashboard.
 async function acOpenShopAnalytics() {
