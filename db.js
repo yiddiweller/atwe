@@ -1741,6 +1741,23 @@ async function initSchema() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS condition TEXT;`); // new | like_new | good | fair (physical resale)
   // "Was" price (compare-at, Shopify-style) — shown struck through when > price.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS compare_at_cents INTEGER;`);
+  // Cash-out review: payouts at or above the review threshold are HELD (the
+  // balance is already debited, so the money can't move twice) until staff
+  // approve or refund it. Below the threshold nothing changes.
+  await query(`
+    CREATE TABLE IF NOT EXISTS cashout_reviews (
+      id           SERIAL PRIMARY KEY,
+      user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      amount_cents INTEGER NOT NULL,
+      tx_id        INTEGER,
+      status       TEXT NOT NULL DEFAULT 'pending',
+      reviewed_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      note         TEXT,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      resolved_at  TIMESTAMPTZ
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS cashout_reviews_status_idx ON cashout_reviews(status, created_at DESC);`);
   // Manual wallet adjustments — the single most dangerous admin power, so it is
   // DUAL-CONTROL: one staffer requests, a DIFFERENT one approves, and only then
   // does money move. The row is the paper trail either way.
