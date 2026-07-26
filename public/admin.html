@@ -944,6 +944,7 @@
       <button class="tab" data-v="reports" onclick="switchTab('reports')">Reports</button>
       <button class="tab" data-v="investigate" onclick="switchTab('investigate')">Investigate</button>
       <button class="tab" data-v="orders" onclick="switchTab('orders')">Orders</button>
+      <button class="tab" data-v="adjust" onclick="switchTab('adjust')">Adjustments</button>
       <button class="tab" data-v="disputes" onclick="switchTab('disputes')">Disputes</button>
       <button class="tab" data-v="appeals" onclick="switchTab('appeals')">Appeals</button>
       <button class="tab" data-v="support" onclick="switchTab('support')">Support</button>
@@ -1408,7 +1409,7 @@ const TAB_PERM = {
   traffic: 'growth', site: 'super', usernames: 'handles', posts: 'moderation', support: 'support',
   reports: 'moderation', disputes: 'refunds', circles: 'moderation', feed: 'super',
   finance: 'revenue', growth: 'growth', audit: 'super', staff: 'super',
-  refunds: 'refunds', appeals: 'users', datareq: 'users', activity: 'super', investigate: 'moderation', moderate: 'moderation', orders: 'support',
+  refunds: 'refunds', appeals: 'users', datareq: 'users', activity: 'super', investigate: 'moderation', moderate: 'moderation', orders: 'support', adjust: 'revenue',
   cards: 'revenue', features: 'super', featurecontrols: 'super', vault: 'super',
   announcements: 'super',
 };
@@ -1481,7 +1482,7 @@ const NAV_TITLES = {
   refunds:'Refunds', users:'Users', staff:'Staff', usernames:'Usernames', reports:'Reports',
   investigate:'Investigate', moderate:'AI content scan', disputes:'Disputes', appeals:'Appeals', support:'Support', datareq:'Data requests',
   posts:'Posts', circles:'Circles', feed:'Feed', activity:'Activity', traffic:'Traffic', growth:'Growth',
-  orders:'Orders', audit:'Audit log', site:'Site', cards:'Cards', features:'Features', featurecontrols:'Feature Controls', vault:'Vault',
+  orders:'Orders', adjust:'Wallet adjustments', audit:'Audit log', site:'Site', cards:'Cards', features:'Features', featurecontrols:'Feature Controls', vault:'Vault',
   announcements:'Announcements',
 };
 // Mobile: slide the sidebar in/out.
@@ -1511,6 +1512,7 @@ function renderView(){
   else if (VIEW === 'support') renderSupportView();
   else if (VIEW === 'reports') renderReportsView();
   else if (VIEW === 'orders') renderOrdersView();
+  else if (VIEW === 'adjust') renderAdjustView();
   else if (VIEW === 'disputes') renderDisputesView();
   else if (VIEW === 'circles') renderCirclesView();
   else if (VIEW === 'feed') renderFeedSignalsView();
@@ -3504,6 +3506,85 @@ async function dismissReport(id){
 }
 /* ─── Escrow disputes ─── */
 let DISPUTES = [];
+// Manual wallet adjustments — dual control. One staffer requests, a DIFFERENT
+// one approves; the UI says so plainly so nobody wonders why their own button
+// won't work.
+let ADJ_STATUS = 'pending';
+function renderAdjustView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="panel">
+      <h3>Adjust a wallet <span class="muted">· needs two admins</span></h3>
+      <div class="sub">You request it with a reason; a <b>different</b> admin approves before any money moves. Use a negative amount to debit. Every step is audit-logged.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <input class="in" id="adjUser" placeholder="Account id" style="width:120px;margin:0;"/>
+        <input class="in" id="adjAmt" placeholder="Amount ($, negative to debit)" style="width:220px;margin:0;"/>
+        <input class="in" id="adjReason" maxlength="500" placeholder="Reason (required)" style="flex:1;min-width:200px;margin:0;"/>
+        <button class="act accent" onclick="requestAdjust()">Request</button>
+      </div>
+    </div>
+    <div class="bc-auds" style="margin:0 0 12px;">${['pending','approved','rejected'].map(s =>
+      `<button class="bc-aud${ADJ_STATUS === s ? ' on' : ''}" onclick="ADJ_STATUS='${s}';loadAdjust()">${s}</button>`).join('')}</div>
+    <div id="adjList"><div class="ld"><span class="ab-mark"></span></div></div>`;
+  loadAdjust();
+}
+async function loadAdjust(){
+  const box = document.getElementById('adjList'); if (!box) return;
+  try {
+    const { adjustments } = await api('GET', '/api/admin/wallet-adjustments?status=' + ADJ_STATUS);
+    box.innerHTML = adjustments.length ? adjustments.map(a => `<div class="site-row">
+        <div><div class="srt">${a.amountCents < 0 ? '−' : '+'}$${Math.abs(a.amountCents/100).toFixed(2)} → ${esc(a.user.name)} <span class="muted">@${esc(a.user.username||'')}</span></div>
+          <div class="srs">${esc(a.reason)} · requested by ${esc(a.requestedBy||'—')} · ${fmtDate(a.createdAt)}${a.approvedBy ? ' · resolved by ' + esc(a.approvedBy) : ''}</div></div>
+        ${a.status === 'pending' ? (a.mine
+          ? `<span class="pill admin">waiting for another admin</span>`
+          : `<div style="display:flex;gap:6px;"><button class="act accent" onclick="resolveAdjust(${a.id},'approve')">Approve</button><button class="act danger" onclick="resolveAdjust(${a.id},'reject')">Reject</button></div>`) : ''}
+      </div>`).join('') : '<div class="empty">Nothing here.</div>';
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function requestAdjust(){
+  const userId = parseInt(document.getElementById('adjUser').value, 10);
+  const amountCents = Math.round(parseFloat(document.getElementById('adjAmt').value) * 100);
+  const reason = document.getElementById('adjReason').value.trim();
+  if (!Number.isInteger(userId) || !Number.isFinite(amountCents) || !reason) { notify('Account id, amount and reason are all required.'); return; }
+  try {
+    await api('POST', '/api/admin/wallet-adjustments', { userId, amountCents, reason });
+    document.getElementById('adjAmt').value = ''; document.getElementById('adjReason').value = '';
+    notify('Requested — another admin has to approve it.'); ADJ_STATUS = 'pending'; renderAdjustView();
+  } catch (e){ notify(e.message); }
+}
+async function resolveAdjust(id, action){
+  if (action === 'approve' && !confirm('Approve this adjustment? Money moves immediately.')) return;
+  try { const r = await api('POST', '/api/admin/wallet-adjustments/' + id + '/' + action); notify('Adjustment ' + r.status + '.'); loadAdjust(); }
+  catch (e){ notify(e.message); }
+}
+// Per-account velocity caps (blank = the platform default).
+async function openLimits(id){
+  try {
+    const d = await api('GET', '/api/admin/users/' + id + '/limits');
+    const dv = (c) => c == null ? '' : (c / 100);
+    document.getElementById('modalCard').innerHTML = `
+      <div class="modal-head"><div><h2>Sending limits</h2><div class="u-email">Blank = platform default ($${(d.defaults.dailyCapCents/100).toLocaleString()} a day, $${(d.defaults.weeklyCapCents/100).toLocaleString()} a week)</div></div><button class="close-x" onclick="closeModal()">&times;</button></div>
+      <div style="padding:0 20px 20px;">
+        <div class="sub">Raise these for a trusted business, or tighten them on a risky account — without changing anyone else.</div>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <input class="in" id="limDay" placeholder="Daily ($)" value="${dv(d.dailyCapCents)}" style="flex:1;margin:0;"/>
+          <input class="in" id="limWeek" placeholder="Weekly ($)" value="${dv(d.weeklyCapCents)}" style="flex:1;margin:0;"/>
+          <button class="act accent" onclick="saveLimits(${id})">Save</button>
+        </div>
+      </div>`;
+    document.getElementById('modal').classList.add('show'); document.body.style.overflow = 'hidden';
+  } catch (e){ notify(e.message); }
+}
+async function saveLimits(id){
+  const d = document.getElementById('limDay').value.trim(), w = document.getElementById('limWeek').value.trim();
+  try {
+    await api('PUT', '/api/admin/users/' + id + '/limits', {
+      dailyCapCents: d === '' ? null : Math.round(parseFloat(d) * 100),
+      weeklyCapCents: w === '' ? null : Math.round(parseFloat(w) * 100),
+    });
+    notify('Limits saved.'); closeModal();
+  } catch (e){ notify(e.message); }
+}
 // Global order search: find ANY order across every seller by id, buyer, seller
 // or tracking number — the first thing support needs.
 let ORD_Q = '', ORD_STATUS = '';
@@ -3910,6 +3991,7 @@ async function openUser(id){
       <button class="act" onclick="openStrikes(${u.id})">Strikes…</button>
       <button class="act" onclick="openUserNotes(${u.id})">Notes &amp; tags…</button>
       <button class="act" onclick="openTimeline(${u.id})">Timeline…</button>
+      <button class="act" onclick="openLimits(${u.id})">Sending limits…</button>
       <button class="act${u.wallet_frozen ? ' accent' : ''}" onclick="setWalletFreeze(${u.id}, ${u.wallet_frozen ? 'false' : 'true'})">${u.wallet_frozen ? 'Unfreeze wallet' : 'Freeze wallet…'}</button>
       ${u.is_admin ? '' : `<button class="act" onclick="impersonateUser(${u.id})">View as user…</button>`}
       <button class="act danger" onclick="removeUser(${u.id})">Delete user</button>

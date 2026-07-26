@@ -15690,7 +15690,16 @@ async function walletVelocityCheck(userId, amountCents) {
     const f = await db.query('SELECT wallet_frozen, wallet_frozen_reason FROM users WHERE id = $1', [userId]);
     if (f.rows[0] && f.rows[0].wallet_frozen) return { ok: false, frozen: true, reason: f.rows[0].wallet_frozen_reason || null };
   } catch (_) { /* if the check fails, fall through to the normal caps */ }
-  const dayCap = WALLET_DAILY_CAP_CENTS, weekCap = WALLET_WEEKLY_CAP_CENTS;
+  // Per-account overrides (NULL = platform default), so a trusted business can be
+  // raised — or a risky one tightened — without touching everyone else.
+  let dayCap = WALLET_DAILY_CAP_CENTS, weekCap = WALLET_WEEKLY_CAP_CENTS;
+  try {
+    const c = (await db.query('SELECT wallet_daily_cap_cents, wallet_weekly_cap_cents FROM users WHERE id = $1', [userId])).rows[0];
+    if (c) {
+      if (Number.isInteger(c.wallet_daily_cap_cents)) dayCap = c.wallet_daily_cap_cents;
+      if (Number.isInteger(c.wallet_weekly_cap_cents)) weekCap = c.wallet_weekly_cap_cents;
+    }
+  } catch (_) { /* fall back to the platform caps */ }
   if (!(dayCap > 0) && !(weekCap > 0)) return { ok: true }; // both disabled
   const { rows } = await db.query(
     `SELECT
@@ -25572,6 +25581,103 @@ app.post('/api/admin/users/bulk', auth.requirePerm('users'), async (req, res) =>
     adminAudit(req, 'user.bulk_' + action, 'user', null, { count: affected, requested: ids.length, ...extra });
     res.json({ ok: true, affected, skipped: ids.length - safe.length });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not complete the bulk action.' }); }
+});
+/* ─── Manual wallet adjustments (DUAL CONTROL) ──────────────────────────────
+   Crediting or debiting a member's wallet by hand is the single most dangerous
+   thing an admin can do, so it takes two people: one requests with a reason,
+   a DIFFERENT one approves, and only then does money move. A staffer approving
+   their own request is refused — that's the entire point of the control. */
+const ADJ_MAX_CENTS = 1000000; // $10,000 per adjustment
+app.get('/api/admin/wallet-adjustments', auth.requirePerm('revenue'), async (req, res) => {
+  const status = ['pending', 'approved', 'rejected'].includes(req.query.status) ? req.query.status : 'pending';
+  try {
+    const { rows } = await db.query(
+      `SELECT a.*, u.name AS user_name, u.username, r.name AS req_name, p.name AS app_name
+         FROM wallet_adjustments a JOIN users u ON u.id = a.user_id
+         LEFT JOIN users r ON r.id = a.requested_by LEFT JOIN users p ON p.id = a.approved_by
+        WHERE a.status = $1 ORDER BY a.created_at DESC LIMIT 200`, [status]);
+    res.json({ adjustments: rows.map((a) => ({
+      id: a.id, userId: a.user_id, user: { name: a.user_name, username: a.username },
+      amountCents: a.amount_cents, reason: a.reason, status: a.status,
+      requestedBy: a.req_name || null, approvedBy: a.app_name || null,
+      createdAt: a.created_at, resolvedAt: a.resolved_at,
+      mine: a.requested_by === req.user.id,
+    })), maxCents: ADJ_MAX_CENTS });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the adjustments.' }); }
+});
+app.post('/api/admin/wallet-adjustments', auth.requirePerm('revenue'), async (req, res) => {
+  const userId = parseInt(req.body.userId, 10);
+  const amountCents = Math.round(Number(req.body.amountCents) || 0);
+  const reason = (req.body.reason || '').toString().trim().slice(0, 500);
+  if (!Number.isInteger(userId)) return res.status(400).json({ error: 'Pick an account.' });
+  if (!amountCents || Math.abs(amountCents) > ADJ_MAX_CENTS) return res.status(400).json({ error: `Enter an amount up to $${(ADJ_MAX_CENTS / 100).toLocaleString()} (negative to debit).` });
+  if (!reason) return res.status(400).json({ error: 'A reason is required — this is a money movement.' });
+  try {
+    const u = (await db.query('SELECT id FROM users WHERE id = $1', [userId])).rows[0];
+    if (!u) return res.status(404).json({ error: 'Account not found.' });
+    const { rows } = await db.query(
+      'INSERT INTO wallet_adjustments (user_id, amount_cents, reason, requested_by) VALUES ($1,$2,$3,$4) RETURNING id',
+      [userId, amountCents, reason, req.user.id]);
+    adminAudit(req, 'wallet.adjust_request', 'user', userId, { amountCents, reason, adjustmentId: rows[0].id });
+    res.status(201).json({ ok: true, id: rows[0].id, needsSecondApproval: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not request the adjustment.' }); }
+});
+app.post('/api/admin/wallet-adjustments/:id/:action', auth.requirePerm('revenue'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const action = req.params.action === 'approve' ? 'approve' : req.params.action === 'reject' ? 'reject' : null;
+  if (!Number.isInteger(id) || !action) return res.status(400).json({ error: 'Invalid request.' });
+  try {
+    // Claim-first, so two approvers racing can't move the money twice.
+    const a = (await db.query(
+      `UPDATE wallet_adjustments SET status = 'resolving' WHERE id = $1 AND status = 'pending' RETURNING *`, [id])).rows[0];
+    if (!a) return res.status(409).json({ error: 'That adjustment is no longer pending.' });
+    const unclaim = async (to) => { await db.query('UPDATE wallet_adjustments SET status = $2 WHERE id = $1', [id, to]).catch(() => {}); };
+    // THE control: the requester can't be the approver.
+    if (action === 'approve' && a.requested_by === req.user.id) {
+      await unclaim('pending');
+      return res.status(403).json({ error: 'A second admin has to approve this — you requested it.', needsSecondApprover: true });
+    }
+    if (action === 'reject') {
+      await db.query(`UPDATE wallet_adjustments SET status = 'rejected', approved_by = $2, resolved_at = now() WHERE id = $1`, [id, req.user.id]);
+      adminAudit(req, 'wallet.adjust_reject', 'user', a.user_id, { adjustmentId: id, amountCents: a.amount_cents });
+      return res.json({ ok: true, status: 'rejected' });
+    }
+    const ok = a.amount_cents > 0
+      ? await walletCreditStandalone(a.user_id, a.amount_cents, 'adjustment', 'Adjustment: ' + a.reason)
+      : await walletDebit(a.user_id, Math.abs(a.amount_cents), 'adjustment', 'Adjustment: ' + a.reason);
+    const moved = a.amount_cents > 0 ? !!ok : !!(ok && !ok.insufficient && !ok.error);
+    if (!moved) { await unclaim('pending'); return res.status(400).json({ error: a.amount_cents < 0 ? 'That account doesn’t have enough balance for this debit.' : 'Could not move the money.' }); }
+    await db.query(`UPDATE wallet_adjustments SET status = 'approved', approved_by = $2, resolved_at = now() WHERE id = $1`, [id, req.user.id]);
+    rtPush(a.user_id, 'wallet', { type: 'update' });
+    notifySelf(a.user_id, 'wallet_adjustment');
+    adminAudit(req, 'wallet.adjust_approve', 'user', a.user_id, { adjustmentId: id, amountCents: a.amount_cents, requestedBy: a.requested_by });
+    res.json({ ok: true, status: 'approved' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not resolve the adjustment.' }); }
+});
+/* ─── Per-account velocity limits ─── */
+app.put('/api/admin/users/:id/limits', auth.requirePerm('revenue'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
+  const norm = (v) => { if (v === null || v === '' || v === undefined) return null; const n = Math.round(Number(v)); return Number.isFinite(n) && n >= 0 && n <= 100000000 ? n : undefined; };
+  const day = norm(req.body.dailyCapCents), week = norm(req.body.weeklyCapCents);
+  if (day === undefined || week === undefined) return res.status(400).json({ error: 'Enter valid limits (or leave blank for the platform default).' });
+  try {
+    const r = await db.query('UPDATE users SET wallet_daily_cap_cents = $2, wallet_weekly_cap_cents = $3 WHERE id = $1 RETURNING wallet_daily_cap_cents, wallet_weekly_cap_cents', [id, day, week]);
+    if (!r.rowCount) return res.status(404).json({ error: 'User not found.' });
+    adminAudit(req, 'wallet.limits', 'user', id, { day, week });
+    res.json({ ok: true, dailyCapCents: r.rows[0].wallet_daily_cap_cents, weeklyCapCents: r.rows[0].wallet_weekly_cap_cents,
+      defaults: { dailyCapCents: WALLET_DAILY_CAP_CENTS, weeklyCapCents: WALLET_WEEKLY_CAP_CENTS } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the limits.' }); }
+});
+app.get('/api/admin/users/:id/limits', auth.requirePerm('revenue'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
+  try {
+    const r = (await db.query('SELECT wallet_daily_cap_cents, wallet_weekly_cap_cents FROM users WHERE id = $1', [id])).rows[0];
+    if (!r) return res.status(404).json({ error: 'User not found.' });
+    res.json({ dailyCapCents: r.wallet_daily_cap_cents, weeklyCapCents: r.wallet_weekly_cap_cents,
+      defaults: { dailyCapCents: WALLET_DAILY_CAP_CENTS, weeklyCapCents: WALLET_WEEKLY_CAP_CENTS } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the limits.' }); }
 });
 /* ─── Full account timeline ─────────────────────────────────────────────────
    One chronological view of everything an account DID and everything done TO
