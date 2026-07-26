@@ -3401,14 +3401,88 @@ function renderSupportView(){
     </div>` : '';
   document.getElementById('content').innerHTML = broadcast + `
     <div class="ov-section">Support requests</div>
+    <div class="bc-auds" style="margin:0 0 12px;" id="supFilters">
+      ${[['state','open','Open'],['state','pending','Waiting'],['state','solved','Solved'],['mine','true','Mine'],['unassigned','true','Unassigned']].map(([k,v,l]) =>
+        `<button class="bc-aud${SUP_FILTER[k] === v ? ' on' : ''}" onclick="supFilter('${k}','${v}')">${l}</button>`).join('')}
+      <button class="bc-aud" onclick="openMacros(0)">Canned replies…</button>
+    </div>
     <div id="supList"><div class="ld"><span class="ab-mark"></span></div></div>`;
   const inp = document.getElementById('bcInput');
   if (inp) inp.addEventListener('input', () => { document.getElementById('bcCount').textContent = inp.value.length + ' / 4000'; });
   if (document.getElementById('bcAudiences')) loadBroadcastAudiences();
   loadSupport();
 }
+// Ticket workflow + canned replies. The inbox is ordered so VIP, business and
+// Pro accounts surface first — a paying or flagged member waiting is worse.
+let SUP_FILTER = {}, SUP_COUNTS = {};
+async function ticketSet(id, patch){
+  try { await api('PATCH', '/api/admin/support/' + id, patch); loadSupport(); }
+  catch (e){ notify(e.message); }
+}
+function supFilter(key, val){
+  if (SUP_FILTER[key] === val) delete SUP_FILTER[key]; else SUP_FILTER[key] = val;
+  syncSupFilters(); loadSupport();
+}
+// The chip bar lives outside the list, so it needs its own sync after a change.
+function syncSupFilters(){
+  document.querySelectorAll('#supFilters .bc-aud').forEach((btn) => {
+    const m = /supFilter\('([^']+)','([^']+)'\)/.exec(btn.getAttribute('onclick') || '');
+    if (m) btn.classList.toggle('on', SUP_FILTER[m[1]] === m[2]);
+  });
+}
+async function openMacros(userId){
+  try {
+    const { macros } = await api('GET', '/api/admin/macros');
+    const list = macros.length ? macros.map(m => `<div class="site-row">
+        <div><div class="srt">${esc(m.title)} <span class="muted">used ${m.uses}×</span></div><div class="srs">${esc(m.body.slice(0, 140))}</div></div>
+        <div style="display:flex;gap:6px;">
+          <button class="act accent" onclick="useMacro(${m.id}, ${userId})">Copy${userId ? ' &amp; message' : ''}</button>
+          <button class="act danger" onclick="deleteMacro(${m.id}, ${userId})">Delete</button></div>
+      </div>`).join('') : '<div class="muted" style="padding:6px 0;">No saved replies yet.</div>';
+    document.getElementById('modalCard').innerHTML = `
+      <div class="modal-head"><div><h2>Canned replies</h2><div class="u-email">Most of support is the same handful of answers</div></div><button class="close-x" onclick="closeModal()">&times;</button></div>
+      <div style="padding:0 20px 20px;">
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+          <input class="in" id="macTitle" maxlength="120" placeholder="Title" style="flex:1;margin:0;"/>
+          <button class="act accent" onclick="saveMacro(${userId})">Save</button>
+        </div>
+        <textarea class="in" id="macBody" rows="3" maxlength="4000" placeholder="The reply itself"></textarea>
+        <div style="margin-top:14px;">${list}</div>
+      </div>`;
+    document.getElementById('modal').classList.add('show'); document.body.style.overflow = 'hidden';
+  } catch (e){ notify(e.message); }
+}
+async function saveMacro(userId){
+  const title = document.getElementById('macTitle').value.trim();
+  const body = document.getElementById('macBody').value.trim();
+  if (!title || !body) { notify('Give it a title and a message.'); return; }
+  try { await api('POST', '/api/admin/macros', { title, body }); openMacros(userId); }
+  catch (e){ notify(e.message); }
+}
+async function deleteMacro(id, userId){
+  try { await api('DELETE', '/api/admin/macros/' + id); openMacros(userId); }
+  catch (e){ notify(e.message); }
+}
+async function useMacro(id, userId){
+  try {
+    const { macros } = await api('GET', '/api/admin/macros');
+    const m = macros.find(x => x.id === id); if (!m) return;
+    await api('POST', '/api/admin/macros/' + id + '/used').catch(() => {});
+    // With a member attached, send it straight into their in-app inbox.
+    if (userId) {
+      await api('POST', '/api/admin/users/bulk', { action: 'message', ids: [userId], body: m.body });
+      notify('Sent to their Atwe inbox.'); closeModal(); return;
+    }
+    try { await navigator.clipboard.writeText(m.body); notify('Copied.'); }
+    catch (_) { notify('Copy it manually — the browser blocked the clipboard.'); }
+  } catch (e){ notify(e.message); }
+}
 async function loadSupport(){
-  try { const { requests } = await api('GET', '/api/admin/support'); SUPPORT = requests || []; renderSupportList(); }
+  try {
+    const qs = Object.entries(SUP_FILTER).map(([k, v]) => k + '=' + encodeURIComponent(v)).join('&');
+    const { requests, counts } = await api('GET', '/api/admin/support' + (qs ? '?' + qs : ''));
+    SUPPORT = requests || []; SUP_COUNTS = counts || {}; renderSupportList();
+  }
   catch (e) { const el = document.getElementById('supList'); if (el) el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 function renderSupportList(){
@@ -3417,7 +3491,12 @@ function renderSupportList(){
   el.innerHTML = SUPPORT.map(r => `
     <div class="sup-item">
       <div class="sup-top">
+        <span class="pill ${r.state === 'solved' ? 'pro' : (r.state === 'pending' ? 'admin' : '')}">${esc(r.state || 'open')}</span>
         <span class="sup-from">${esc(r.user_name || 'Guest')}${r.user_username ? ' · @' + esc(r.user_username) : ''}</span>
+        ${(r.user_tags || []).includes('vip') ? '<span class="pill tag">VIP</span>' : ''}
+        ${r.user_type === 'business' ? '<span class="pill">business</span>' : ''}
+        ${r.user_plan === 'pro' ? '<span class="pill pro">pro</span>' : ''}
+        ${r.assignee_name ? `<span class="pill admin">${esc(r.assignee_name)}</span>` : '<span class="pill">unassigned</span>'}
         ${r.category ? `<span class="sup-cat sup-cat-${esc(r.category)}">${esc(r.category)}</span>` : ''}
         <span class="sup-email">${esc(r.email)}</span>
         <span class="sup-date">${fmtDateTime(r.created_at)}</span>
@@ -3426,6 +3505,10 @@ function renderSupportList(){
       ${r.meta && (r.meta.build || r.meta.platform) ? `<div class="sup-meta">${r.meta.build ? 'build ' + esc(r.meta.build) : ''}${r.meta.build && r.meta.platform ? ' · ' : ''}${r.meta.platform ? esc(r.meta.platform) : ''}</div>` : ''}
       <div class="sup-acts">
         <a class="act" href="mailto:${esc(r.email)}">Reply by email</a>
+        ${r.assigned_to ? `<button class="act" onclick="ticketSet(${r.id}, { assign: null })">Release</button>` : `<button class="act" onclick="ticketSet(${r.id}, { assign: 'me' })">Claim</button>`}
+        ${r.state !== 'pending' ? `<button class="act" onclick="ticketSet(${r.id}, { state: 'pending' })">Waiting on them</button>` : ''}
+        ${r.state !== 'solved' ? `<button class="act accent" onclick="ticketSet(${r.id}, { state: 'solved' })">Solve</button>` : `<button class="act" onclick="ticketSet(${r.id}, { state: 'open' })">Reopen</button>`}
+        <button class="act" onclick="openMacros(${r.user_id || 0})">Canned replies…</button>
         ${r.user_id ? `<button class="act" onclick="messageFromSupport(${r.user_id})">Message in app</button>` : ''}
         <button class="act danger" onclick="dismissSupport(${r.id})">Dismiss</button>
       </div>

@@ -27088,18 +27088,88 @@ app.delete('/api/admin/posts/:id', auth.requirePerm('moderation'), async (req, r
 });
 
 /* ─── Admin: support requests inbox ─── */
-app.get('/api/admin/support', auth.requirePerm('support'), async (_req, res) => {
+app.get('/api/admin/support', auth.requirePerm('support'), async (req, res) => {
   try {
+    const conds = [], params = [];
+    if (['open', 'pending', 'solved'].includes(req.query.state)) { params.push(req.query.state); conds.push(`COALESCE(s.state,'open') = $${params.length}`); }
+    if (req.query.mine === 'true') { params.push(req.user.id); conds.push(`s.assigned_to = $${params.length}`); }
+    if (req.query.unassigned === 'true') conds.push('s.assigned_to IS NULL');
     const { rows } = await db.query(
-      `SELECT s.id, s.email, s.message, s.created_at, s.user_id, s.category, s.meta, u.name AS user_name, u.username AS user_username
+      `SELECT s.id, s.email, s.message, s.created_at, s.user_id, s.category, s.meta,
+              COALESCE(s.state, 'open') AS state, s.assigned_to, s.resolved_at,
+              u.name AS user_name, u.username AS user_username, u.plan AS user_plan,
+              u.account_type AS user_type, u.admin_tags AS user_tags,
+              a.name AS assignee_name
        FROM support_requests s LEFT JOIN users u ON u.id = s.user_id
-       ORDER BY s.created_at DESC LIMIT 200`
-    );
-    res.json({ requests: rows });
+       LEFT JOIN users a ON a.id = s.assigned_to
+       ${conds.length ? 'WHERE ' + conds.join(' AND ') : ''}
+       -- VIPs, businesses and Pro members surface first: a paying or flagged
+       -- account waiting is worse than a free one waiting.
+       ORDER BY (u.admin_tags && ARRAY['vip']::text[]) DESC NULLS LAST,
+                (u.account_type = 'business') DESC NULLS LAST,
+                (u.plan = 'pro') DESC NULLS LAST,
+                s.created_at DESC LIMIT 200`, params);
+    const counts = (await db.query(
+      `SELECT COALESCE(state,'open') AS state, COUNT(*)::int AS n FROM support_requests GROUP BY 1`)).rows;
+    res.json({ requests: rows, counts: Object.fromEntries(counts.map((c) => [c.state, c.n])) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not load support requests.' });
   }
+});
+// Move a ticket through its states, and own it.
+app.patch('/api/admin/support/:id', auth.requirePerm('support'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const sets = [], params = [id];
+  if (['open', 'pending', 'solved'].includes(req.body.state)) {
+    params.push(req.body.state); sets.push(`state = $${params.length}`);
+    sets.push(req.body.state === 'solved' ? 'resolved_at = now()' : 'resolved_at = NULL');
+  }
+  if ('assign' in req.body) {
+    // 'me' claims it, null releases it.
+    if (req.body.assign === null || req.body.assign === '') sets.push('assigned_to = NULL');
+    else { params.push(req.body.assign === 'me' ? req.user.id : parseInt(req.body.assign, 10)); sets.push(`assigned_to = $${params.length}`); }
+  }
+  if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
+  try {
+    const r = await db.query(`UPDATE support_requests SET ${sets.join(', ')} WHERE id = $1 RETURNING id, state, assigned_to`, params);
+    if (!r.rowCount) return res.status(404).json({ error: 'Ticket not found.' });
+    adminAudit(req, 'support.update', 'support', id, { state: req.body.state, assign: req.body.assign });
+    res.json({ ok: true, ticket: r.rows[0] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the ticket.' }); }
+});
+/* ─── Canned replies (macros) ─── */
+app.get('/api/admin/macros', auth.requirePerm('support'), async (_req, res) => {
+  try {
+    const { rows } = await db.query('SELECT id, title, body, uses FROM support_macros ORDER BY uses DESC, id LIMIT 100');
+    res.json({ macros: rows });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the replies.' }); }
+});
+app.post('/api/admin/macros', auth.requirePerm('support'), async (req, res) => {
+  const title = (req.body.title || '').toString().trim().slice(0, 120);
+  const body = (req.body.body || '').toString().trim().slice(0, 4000);
+  if (!title || !body) return res.status(400).json({ error: 'Give it a title and a message.' });
+  try {
+    const { rows } = await db.query('INSERT INTO support_macros (title, body, created_by) VALUES ($1,$2,$3) RETURNING id, title, body, uses', [title, body, req.user.id]);
+    res.status(201).json({ macro: rows[0] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the reply.' }); }
+});
+app.delete('/api/admin/macros/:id', auth.requirePerm('support'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM support_macros WHERE id = $1', [id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete it.' }); }
+});
+// Counting a use is what makes the list self-sort to what staff actually reach for.
+app.post('/api/admin/macros/:id/used', auth.requirePerm('support'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try { await db.query('UPDATE support_macros SET uses = uses + 1 WHERE id = $1', [id]); res.json({ ok: true }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not record it.' }); }
 });
 app.delete('/api/admin/support/:id', auth.requirePerm('support'), async (req, res) => {
   const id = parseInt(req.params.id, 10);
