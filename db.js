@@ -1737,6 +1737,23 @@ async function initSchema() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS condition TEXT;`); // new | like_new | good | fair (physical resale)
   // "Was" price (compare-at, Shopify-style) — shown struck through when > price.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS compare_at_cents INTEGER;`);
+  // Private staff notes on an account ("refunded once as goodwill 3/2026").
+  // Never shown to the member — this is the back-office memory that stops staff
+  // re-litigating the same case from scratch.
+  await query(`
+    CREATE TABLE IF NOT EXISTS admin_user_notes (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body       TEXT NOT NULL,
+      author_id  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS admin_user_notes_idx ON admin_user_notes(user_id, created_at DESC);`);
+  // Staff labels on an account — VIP, partner, watchlist, beta. Filterable, and
+  // (like the notes) invisible to the member.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_tags TEXT[] NOT NULL DEFAULT '{}';`);
+  await query(`CREATE INDEX IF NOT EXISTS users_admin_tags_idx ON users USING GIN (admin_tags);`);
   // Link & domain blacklist: known scam/phishing hosts blocked platform-wide.
   // Matching covers subdomains, so blocking "evil.com" also stops
   // "login.evil.com". Cached in memory and refreshed on every edit.

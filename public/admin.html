@@ -470,7 +470,11 @@
   .bc-box input{margin-bottom:8px;font-weight:600;}
   .bc-box textarea:focus,.bc-box input:focus{border-color:var(--b3);}
   .bc-box textarea::placeholder,.bc-box input::placeholder{color:var(--t4);font-weight:400;}
-  /* Broadcast audiences: pick a slice, with a live member count on each chip. */
+  /* Bulk user actions: the selection bar that appears once anything is ticked. */
+.bulk-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:var(--panel2,#1c1c1e);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:13px;}
+.u-card .usel{margin-inline-end:10px;flex:0 0 auto;width:16px;height:16px;cursor:pointer;}
+.pill.tag{background:rgba(0,136,255,.16);color:var(--accent);}
+/* Broadcast audiences: pick a slice, with a live member count on each chip. */
 .bc-auds{display:flex;flex-wrap:wrap;gap:6px;}
 .bc-aud{background:var(--panel2,#1c1c1e);border:none;border-radius:999px;color:var(--muted);font-family:inherit;font-size:12.5px;font-weight:600;padding:6px 12px;cursor:pointer;}
 .bc-aud b{font-weight:800;color:var(--fg,#fff);margin-left:4px;}
@@ -1424,7 +1428,7 @@ async function load(){
     ME = { perms: user.adminPerms === 'all' ? [] : (user.adminPerms || []), role: user.adminRole || null, superadmin: user.adminPerms === 'all', twoFa: !!user.twoFactorEnabled };
     applyTabPerms();
     if (!canSee(VIEW)) VIEW = firstVisibleTab();
-    if (canSee('users')) { try { const { users } = await api('GET', '/api/admin/users'); USERS = users || []; } catch (_) {} }
+    if (canSee('users')) { try { const { users } = await api('GET', '/api/admin/users' + userFilterQS()); USERS = users || []; } catch (_) {} }
     renderView();
   } catch (e) {
     if (e.data && e.data.needs2fa) { show2faGate(); return; }
@@ -3669,6 +3673,67 @@ async function resolveCircleReq(id, approve){
 }
 
 /* ─── Users ─── */
+// Advanced filters run SERVER-side (the list outgrows the browser), so changing
+// one refetches. Selection powers the bulk bar.
+const USER_FILTERS = [
+  { key: 'type', val: 'business', label: 'Businesses' },
+  { key: 'type', val: 'personal', label: 'People' },
+  { key: 'plan', val: 'pro', label: 'Pro' },
+  { key: 'verified', val: 'true', label: 'Verified' },
+  { key: 'status', val: 'limited', label: 'Limited' },
+  { key: 'status', val: 'suspended', label: 'Suspended' },
+  { key: 'status', val: 'banned', label: 'Banned' },
+  { key: 'frozen', val: 'true', label: 'Wallet frozen' },
+  { key: 'staff', val: 'true', label: 'Staff' },
+  { key: 'joinedDays', val: '7', label: 'New this week' },
+  { key: 'inactiveDays', val: '30', label: 'Away 30d+' },
+  { key: 'tag', val: 'vip', label: 'VIP' },
+  { key: 'tag', val: 'watchlist', label: 'Watchlist' },
+];
+const ADMIN_TAG_LIST = ['vip', 'partner', 'watchlist', 'beta', 'press', 'refunded'];
+let UFILT = {}, USEL = new Set();
+function userFilterQS(){
+  const p = Object.entries(UFILT).filter(([, v]) => v);
+  return p.length ? '?' + p.map(([k, v]) => k + '=' + encodeURIComponent(v)).join('&') : '';
+}
+function toggleUserFilter(key, val){
+  UFILT[key] = UFILT[key] === val ? '' : val;
+  clearUserSel(); load();
+}
+function clearUserSel(){ USEL = new Set(); syncBulkBar(); document.querySelectorAll('.usel').forEach(c => { c.checked = false; }); }
+function toggleUserSel(id, on){ if (on) USEL.add(id); else USEL.delete(id); syncBulkBar(); }
+function syncBulkBar(){
+  const bar = document.getElementById('bulkBar'); if (!bar) return;
+  bar.style.display = USEL.size ? '' : 'none';
+  const c = document.getElementById('bulkCount'); if (c) c.textContent = USEL.size + ' selected';
+}
+async function bulkUsers(action){
+  const ids = [...USEL]; if (!ids.length) return;
+  const body = { action, ids };
+  if (action === 'tag' || action === 'untag') body.tag = document.getElementById('bulkTag').value;
+  if (action === 'message') {
+    const m = prompt('Message to send to ' + ids.length + ' member' + (ids.length === 1 ? '' : 's') + ':', '');
+    if (!m) return; body.body = m;
+  }
+  if (action === 'export') {
+    // A download, not JSON — go through fetch so the CSV lands as a file.
+    try {
+      const res = await fetch('/api/admin/users/bulk', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error('Export failed.');
+      const blob = await res.blob(); const url = URL.createObjectURL(blob);
+      const link = document.createElement('a'); link.href = url; link.download = 'atwe-users.csv';
+      document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+      notify('Exported ' + ids.length + '.');
+    } catch (e){ notify(e.message); }
+    return;
+  }
+  if (!confirm(action + ' ' + ids.length + ' account' + (ids.length === 1 ? '' : 's') + '?')) return;
+  try {
+    const r = await api('POST', '/api/admin/users/bulk', body);
+    notify('Done — ' + r.affected + ' updated' + (r.skipped ? ' (' + r.skipped + ' skipped: admins / yourself)' : '') + '.');
+    clearUserSel(); load();
+  } catch (e){ notify(e.message); }
+}
 function renderUsersView(){
   const total = USERS.length;
   const pro = USERS.filter(u => u.plan === 'pro').length;
@@ -3683,6 +3748,18 @@ function renderUsersView(){
       <input id="search" placeholder="Search by name or email…" value="${esc(FILTER)}"/>
       <button class="refresh" onclick="exportUsersCsv()">⇩ CSV</button>
       <button class="refresh" onclick="load()">↻ Refresh</button>
+    </div>
+    <div class="bc-auds" id="userFilters" style="margin:0 0 12px;">${USER_FILTERS.map(f =>
+      `<button class="bc-aud${UFILT[f.key] === f.val ? ' on' : ''}" onclick="toggleUserFilter('${f.key}','${f.val}')">${esc(f.label)}</button>`).join('')}</div>
+    <div id="bulkBar" class="bulk-bar" style="display:none;">
+      <span id="bulkCount">0 selected</span>
+      <select id="bulkTag" class="in" style="width:auto;margin:0;">${ADMIN_TAG_LIST.map(t => `<option value="${t}">${t}</option>`).join('')}</select>
+      <button class="act" onclick="bulkUsers('tag')">Tag</button>
+      <button class="act" onclick="bulkUsers('untag')">Untag</button>
+      <button class="act" onclick="bulkUsers('verify')">Verify</button>
+      <button class="act" onclick="bulkUsers('message')">Message…</button>
+      <button class="act" onclick="bulkUsers('export')">Export CSV</button>
+      <button class="act" onclick="clearUserSel()">Clear</button>
     </div>
     <div class="users" id="userList"></div>`;
 
@@ -3699,6 +3776,7 @@ function renderList() {
 
   const cards = list.map(u => `
     <div class="u-card" onclick="openUser(${u.id})">
+      <input type="checkbox" class="usel" ${USEL.has(u.id) ? 'checked' : ''} onclick="event.stopPropagation();toggleUserSel(${u.id}, this.checked)" aria-label="Select ${esc(u.name)}"/>
       ${avatarHtml(u)}
       <div class="u-main">
         <div class="u-name">${esc(u.name)}${u.username ? ` <span style="color:var(--t3);font-weight:500;font-size:12.5px;">@${esc(u.username)}</span>` : ''}</div>
@@ -3710,8 +3788,9 @@ function renderList() {
         ${u.is_admin ? '<span class="pill admin">admin</span>' : ''}
         ${u.verified ? '<span class="pill pro">verified</span>' : (u.verify_requested_at ? '<span class="pill admin">pending</span>' : '')}
         ${u.account_type === 'business' ? (u.business_verify_tier === 'premium' ? '<span class="pill pro">premium partner</span>' : u.business_verify_status === 'verified' ? '<span class="pill pro">biz ✓</span>' : u.business_verify_tier === 'basic' ? '<span class="pill">domain ✓</span>' : u.business_verify_status === 'pending' ? '<span class="pill admin">biz pending</span>' : '<span class="pill">business</span>') : ''}
-        ${u.status === 'banned' ? '<span class="pill ban">banned</span>' : (u.status === 'suspended' ? '<span class="pill susp">suspended</span>' : '')}
+        ${u.status === 'banned' ? '<span class="pill ban">banned</span>' : (u.status === 'suspended' ? '<span class="pill susp">suspended</span>' : (u.status === 'limited' ? '<span class="pill admin">limited</span>' : ''))}
         ${u.wallet_frozen ? '<span class="pill susp">wallet frozen</span>' : ''}
+        ${(u.admin_tags || []).map(t => `<span class="pill tag">${esc(t)}</span>`).join('')}
       </div>
       <div class="u-meta">
         <div><div class="mv">${u.chat_count || 0}</div><div class="mk">Chats</div></div>
@@ -3722,6 +3801,7 @@ function renderList() {
 
   const el = document.getElementById('userList');
   if (el) el.innerHTML = cards || `<div class="empty">${q ? 'No matches.' : 'No users yet.'}</div>`;
+  syncBulkBar();
 }
 
 /* ─── User detail modal (info + their chats) ─── */
@@ -3777,6 +3857,7 @@ async function openUser(id){
         ? `<button class="act accent" onclick="setUserStatus(${u.id}, 'active')">Reinstate account</button>`
         : `<button class="act" onclick="setUserStatus(${u.id}, 'limited')">Limit…</button><button class="act" onclick="setUserStatus(${u.id}, 'suspended')">Suspend…</button><button class="act danger" onclick="setUserStatus(${u.id}, 'banned')">Ban…</button>`}
       <button class="act" onclick="openStrikes(${u.id})">Strikes…</button>
+      <button class="act" onclick="openUserNotes(${u.id})">Notes &amp; tags…</button>
       <button class="act${u.wallet_frozen ? ' accent' : ''}" onclick="setWalletFreeze(${u.id}, ${u.wallet_frozen ? 'false' : 'true'})">${u.wallet_frozen ? 'Unfreeze wallet' : 'Freeze wallet…'}</button>
       ${u.is_admin ? '' : `<button class="act" onclick="impersonateUser(${u.id})">View as user…</button>`}
       <button class="act danger" onclick="removeUser(${u.id})">Delete user</button>
@@ -4016,6 +4097,49 @@ async function setBizVerify(id, status){
 }
 // Suspend (temporary), ban (permanent), or reinstate an account. The account + its
 // content stay; the person is locked out and their live sessions are dropped.
+// Private staff notes + labels on an account. Never shown to the member.
+async function openUserNotes(id){
+  try {
+    const d = await api('GET', '/api/admin/users/' + id + '/notes');
+    const tags = d.allTags.map(t => `<button class="bc-aud${d.tags.includes(t) ? ' on' : ''}" onclick="toggleUserTag(${id}, '${t}')">${esc(t)}</button>`).join('');
+    const notes = d.notes.length ? d.notes.map(n => `<div class="site-row">
+        <div><div class="srt">${esc(n.body)}</div><div class="srs">${fmtDate(n.createdAt)}${n.by ? ' · ' + esc(n.by) : ''}</div></div>
+        <button class="act danger" onclick="deleteUserNote(${id}, ${n.id})">Delete</button></div>`).join('')
+      : '<div class="muted" style="padding:6px 0;">No notes yet.</div>';
+    document.getElementById('modalCard').innerHTML = `
+      <div class="modal-head"><div><h2>Notes &amp; tags</h2><div class="u-email">Private to staff — never shown to the member</div></div><button class="close-x" onclick="closeModal()">&times;</button></div>
+      <div style="padding:0 20px 20px;">
+        <div class="sub">Labels</div>
+        <div class="bc-auds" style="margin:8px 0 16px;">${tags}</div>
+        <div class="sub">Notes</div>
+        <div style="display:flex;gap:8px;margin:8px 0 12px;">
+          <input class="in" id="unBody" maxlength="2000" placeholder="e.g. refunded once as goodwill 3/2026" style="flex:1;margin:0;"/>
+          <button class="act accent" onclick="addUserNote(${id})">Add</button>
+        </div>
+        ${notes}
+      </div>`;
+    document.getElementById('modal').classList.add('show');
+    document.body.style.overflow = 'hidden';
+  } catch (e){ notify(e.message); }
+}
+async function toggleUserTag(id, tag){
+  try {
+    const d = await api('GET', '/api/admin/users/' + id + '/notes');
+    const next = d.tags.includes(tag) ? d.tags.filter(t => t !== tag) : d.tags.concat(tag);
+    await api('PUT', '/api/admin/users/' + id + '/tags', { tags: next });
+    openUserNotes(id); load();
+  } catch (e){ notify(e.message); }
+}
+async function addUserNote(id){
+  const body = (document.getElementById('unBody').value || '').trim();
+  if (!body) { notify('Write the note first.'); return; }
+  try { await api('POST', '/api/admin/users/' + id + '/notes', { body }); openUserNotes(id); }
+  catch (e){ notify(e.message); }
+}
+async function deleteUserNote(uid, id){
+  try { await api('DELETE', '/api/admin/users/' + uid + '/notes/' + id); openUserNotes(uid); }
+  catch (e){ notify(e.message); }
+}
 // Graduated enforcement: issue a strike and let the ladder decide the
 // consequence, instead of jumping straight from "fine" to "banned".
 async function openStrikes(id){

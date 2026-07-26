@@ -25275,12 +25275,28 @@ function clearExpiredSuspension(row) {
   return false;
 }
 
-app.get('/api/admin/users', auth.requirePerm('users'), async (_req, res) => {
+app.get('/api/admin/users', auth.requirePerm('users'), async (req, res) => {
   try {
+    // Advanced filters, applied in SQL so they still work once the member list
+    // outgrows what the browser can hold. Every value is whitelisted or bound.
+    const q = req.query || {};
+    const conds = [], params = [];
+    if (['free', 'pro'].includes(q.plan)) { params.push(q.plan); conds.push(`u.plan = $${params.length}`); }
+    if (['personal', 'business'].includes(q.type)) { params.push(q.type); conds.push(`u.account_type = $${params.length}`); }
+    if (ACCOUNT_STATUSES.includes(q.status)) { params.push(q.status); conds.push(`COALESCE(u.status, 'active') = $${params.length}`); }
+    if (q.verified === 'true') conds.push('u.verified = true');
+    if (q.bizVerified === 'true') conds.push(`u.business_verify_status = 'verified'`);
+    if (q.deactivated === 'true') conds.push('COALESCE(u.deactivated, false) = true');
+    if (q.frozen === 'true') conds.push('COALESCE(u.wallet_frozen, false) = true');
+    if (q.staff === 'true') conds.push(`(u.is_admin = true OR (u.admin_perms IS NOT NULL AND jsonb_typeof(u.admin_perms) = 'array' AND jsonb_array_length(u.admin_perms) > 0))`);
+    if (ADMIN_TAGS.includes(q.tag)) { params.push([q.tag]); conds.push(`u.admin_tags && $${params.length}::text[]`); }
+    { const d = parseInt(q.joinedDays, 10); if (Number.isInteger(d) && d > 0) { params.push(d); conds.push(`u.created_at > now() - make_interval(days => $${params.length})`); } }
+    { const d = parseInt(q.inactiveDays, 10); if (Number.isInteger(d) && d > 0) { params.push(d); conds.push(`(u.last_login_at IS NULL OR u.last_login_at < now() - make_interval(days => $${params.length}))`); } }
+    const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
     const { rows } = await db.query(`
       SELECT u.id, u.name, u.email, u.plan, u.is_admin, u.email_verified,
              u.username, u.avatar, u.created_at, u.last_login_at,
-             u.verified, u.verify_requested_at, u.account_type, u.business_verify_status, u.business_verify_tier,
+             u.verified, u.verify_requested_at, u.account_type, u.business_verify_status, u.business_verify_tier, u.admin_tags,
              u.status, u.status_reason, u.suspended_until, u.deactivated,
              u.wallet_frozen, u.wallet_frozen_reason,
              COUNT(c.id)::int AS chat_count,
@@ -25289,9 +25305,10 @@ app.get('/api/admin/users', auth.requirePerm('users'), async (_req, res) => {
                 WHERE am.user_id = u.id AND am.sender = 'user' AND am.read_by_admin = false) AS unread_msgs
       FROM users u
       LEFT JOIN chats c ON c.user_id = u.id
+      ${where}
       GROUP BY u.id
       ORDER BY u.created_at DESC
-    `);
+    `, params);
     res.json({ users: rows });
   } catch (err) {
     console.error(err);
@@ -25504,6 +25521,105 @@ app.delete('/api/admin/users/:id', auth.requirePerm('users'), async (req, res) =
 // Enforcement: suspend (temporary), ban (permanent), or reinstate an account.
 // Distinct from delete — the account and its content stay, but the person is locked
 // out. Live sessions are revoked immediately; login is blocked while suspended/banned.
+/* ─── Bulk user actions ─────────────────────────────────────────────────────
+   Act on many accounts at once. Deliberately narrow: tag, untag, verify,
+   unverify, message and export. Suspend/ban are NOT bulk-able — an enforcement
+   decision should be made per account, with a reason, not swept across a
+   selection. */
+const BULK_ACTIONS = ['tag', 'untag', 'verify', 'unverify', 'message', 'export'];
+app.post('/api/admin/users/bulk', auth.requirePerm('users'), async (req, res) => {
+  const action = BULK_ACTIONS.includes(req.body.action) ? req.body.action : null;
+  const ids = [...new Set((Array.isArray(req.body.ids) ? req.body.ids : []).map((x) => parseInt(x, 10)).filter(Number.isInteger))].slice(0, 500);
+  if (!action) return res.status(400).json({ error: 'Pick an action.' });
+  if (!ids.length) return res.status(400).json({ error: 'Select at least one account.' });
+  try {
+    // Never sweep up staff accounts, and never yourself.
+    const safe = (await db.query('SELECT id FROM users WHERE id = ANY($1) AND NOT COALESCE(is_admin, false) AND id <> $2', [ids, req.user.id])).rows.map((r) => r.id);
+    if (!safe.length) return res.status(400).json({ error: 'Nothing to act on (admins and your own account are skipped).' });
+    let affected = 0, extra = {};
+    if (action === 'tag' || action === 'untag') {
+      const tag = String(req.body.tag || '').toLowerCase();
+      if (!ADMIN_TAGS.includes(tag)) return res.status(400).json({ error: 'Unknown tag.' });
+      const sql = action === 'tag'
+        ? `UPDATE users SET admin_tags = (SELECT ARRAY(SELECT DISTINCT unnest(admin_tags || $2::text[]))) WHERE id = ANY($1)`
+        : `UPDATE users SET admin_tags = array_remove(admin_tags, $2) WHERE id = ANY($1)`;
+      const r = await db.query(sql, [safe, action === 'tag' ? [tag] : tag]);
+      affected = r.rowCount;
+    } else if (action === 'verify' || action === 'unverify') {
+      const r = await db.query('UPDATE users SET verified = $2, verify_requested_at = NULL WHERE id = ANY($1)', [safe, action === 'verify']);
+      affected = r.rowCount;
+    } else if (action === 'message') {
+      const body = (req.body.body || '').toString().trim().slice(0, 4000);
+      if (!body) return res.status(400).json({ error: 'Write the message first.' });
+      const r = await db.query(
+        `INSERT INTO admin_messages (user_id, sender, body, read_by_user, read_by_admin)
+         SELECT id, 'admin', $2, false, true FROM users WHERE id = ANY($1)`, [safe, body]);
+      affected = r.rowCount;
+    } else if (action === 'export') {
+      const { rows } = await db.query(
+        `SELECT id, name, email, username, plan, account_type, COALESCE(status,'active') AS status, verified, created_at, last_login_at
+           FROM users WHERE id = ANY($1) ORDER BY id`, [safe]);
+      const esc = (v) => { const s2 = v == null ? '' : String(v); return /[",\n]/.test(s2) ? '"' + s2.replace(/"/g, '""') + '"' : s2; };
+      const header = 'id,name,email,username,plan,account_type,status,verified,created_at,last_login_at';
+      const csv = [header, ...rows.map((r) => [r.id, r.name, r.email, r.username, r.plan, r.account_type, r.status, r.verified, r.created_at, r.last_login_at].map(esc).join(','))].join('\n');
+      adminAudit(req, 'user.bulk_export', 'user', null, { count: rows.length });
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="atwe-users.csv"');
+      return res.send(csv);
+    }
+    adminAudit(req, 'user.bulk_' + action, 'user', null, { count: affected, requested: ids.length, ...extra });
+    res.json({ ok: true, affected, skipped: ids.length - safe.length });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not complete the bulk action.' }); }
+});
+/* ─── Staff notes + tags on an account (both private to staff) ─── */
+const ADMIN_TAGS = ['vip', 'partner', 'watchlist', 'beta', 'press', 'refunded'];
+app.get('/api/admin/users/:id/notes', auth.requirePerm('users'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
+  try {
+    const notes = (await db.query(
+      `SELECT n.id, n.body, n.created_at, u.name AS by_name FROM admin_user_notes n
+         LEFT JOIN users u ON u.id = n.author_id WHERE n.user_id = $1 ORDER BY n.created_at DESC LIMIT 200`, [id])).rows;
+    const tags = (await db.query('SELECT admin_tags FROM users WHERE id = $1', [id])).rows[0];
+    res.json({
+      notes: notes.map((n) => ({ id: n.id, body: n.body, createdAt: n.created_at, by: n.by_name || null })),
+      tags: (tags && tags.admin_tags) || [], allTags: ADMIN_TAGS,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the notes.' }); }
+});
+app.post('/api/admin/users/:id/notes', auth.requirePerm('users'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const body = (req.body.body || '').toString().trim().slice(0, 2000);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
+  if (!body) return res.status(400).json({ error: 'Write the note first.' });
+  try {
+    const { rows } = await db.query('INSERT INTO admin_user_notes (user_id, body, author_id) VALUES ($1,$2,$3) RETURNING id, created_at', [id, body, req.user.id]);
+    adminAudit(req, 'user.note', 'user', id, {});
+    res.status(201).json({ note: { id: rows[0].id, body, createdAt: rows[0].created_at, by: req.user.name || null } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the note.' }); }
+});
+app.delete('/api/admin/users/:uid/notes/:id', auth.requirePerm('users'), async (req, res) => {
+  const uid = parseInt(req.params.uid, 10), id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(uid) || !Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM admin_user_notes WHERE id = $1 AND user_id = $2', [id, uid]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    adminAudit(req, 'user.note_delete', 'user', uid, { noteId: id });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the note.' }); }
+});
+// Replace an account's staff tags (whitelisted, so the filter list stays sane).
+app.put('/api/admin/users/:id/tags', auth.requirePerm('users'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
+  const tags = [...new Set((Array.isArray(req.body.tags) ? req.body.tags : []).map((t) => String(t || '').toLowerCase()).filter((t) => ADMIN_TAGS.includes(t)))];
+  try {
+    const r = await db.query('UPDATE users SET admin_tags = $2 WHERE id = $1 RETURNING admin_tags', [id, tags]);
+    if (!r.rowCount) return res.status(404).json({ error: 'User not found.' });
+    adminAudit(req, 'user.tags', 'user', id, { tags });
+    res.json({ ok: true, tags: r.rows[0].admin_tags });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the tags.' }); }
+});
 /* ─── Strikes: issue one, and let the ladder apply the consequence ─── */
 // Shared with the status route so a laddered action and a manual one behave
 // identically (sessions dropped, streams kicked, audit written).
