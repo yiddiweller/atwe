@@ -6071,6 +6071,7 @@ body.reduce-motion .ac-react-bar,body.reduce-motion .ac-rb-btn{animation:none;}
 .pot-top{display:flex;align-items:center;justify-content:space-between;gap:8px;}
 .pot-name{font-size:15px;font-weight:700;color:var(--t1);}
 .pot-goal{font-size:13px;color:var(--t3);white-space:nowrap;}
+.pot-auto{font-size:12px;color:var(--accent);font-weight:600;margin-top:4px;}
 .pot-bar{height:7px;border-radius:4px;background:var(--s3);overflow:hidden;margin:8px 0 4px;}
 .pot-bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--violet));border-radius:4px;transition:width var(--t-slow) var(--ease);}
 .pot-actions{display:flex;align-items:center;gap:7px;margin-top:8px;}
@@ -14086,6 +14087,14 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <div class="jp-title" id="potFormTitle">New pot</div>
     <input class="jp-in" id="potName" type="text" maxlength="60" placeholder="What are you saving for?"/>
     <input class="jp-in" id="potTarget" type="number" min="0" step="0.01" placeholder="Goal amount ($), optional" style="margin-top:8px;"/>
+    <div class="ac-disc-sub" style="margin:12px 2px 4px;">Auto-save</div>
+    <div style="display:flex;gap:8px;">
+      <select class="jp-in" id="potAutoFreq" aria-label="Auto-save frequency" style="margin:0;flex:1.2;" onchange="acPotAutoFreqChange()">
+        <option value="">Off</option><option value="1">Daily</option><option value="7">Weekly</option><option value="14">Every 2 weeks</option><option value="30">Monthly</option>
+      </select>
+      <input class="jp-in" id="potAutoAmt" type="number" min="1" max="2000" step="1" placeholder="Amount ($)" aria-label="Auto-save amount" style="margin:0;flex:1;"/>
+    </div>
+    <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">Moves from your spendable balance automatically. If your balance is short it just skips that one — nothing is ever borrowed.</div>
     <button class="ac-pill-btn accent jp-submit" id="potSaveBtn" onclick="acPotSave()">Create pot</button>
   </div>
 </div>
@@ -16875,7 +16884,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1546'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1547'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -26749,6 +26758,15 @@ function notifRow(n, i) {
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
+  // Pot auto-save — a system event (the Atwe mark, no actor): opens the wallet.
+  if (n.type === 'pot_saved' || n.type === 'pot_save_skipped') {
+    const ok = n.type === 'pot_saved';
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');acOpenWallet()">
+      <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
+      <div class="ac-item-main"><div class="notif-text"><b>${ok ? 'Auto-save done' : 'Auto-save skipped'}</b> — ${ok ? 'money moved into your pot' : 'your balance was too low, so we’ll try again next time'} · <span class="notif-time">${acTime(n.created_at)}</span></div></div>
+      ${n.read ? '' : '<span class="notif-dot"></span>'}
+    </div>`;
+  }
   const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', event_reminder: 'is hosting an event starting soon', event_comment: 'commented on your event', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', appt_rescheduled: 'proposed a new appointment time', appt_reminder: 'has an appointment with you soon', call_reminder: 'has a call with you soon', stock_low: 'is running low — only a few left', stock_out: 'has sold out', event_spot: 'a spot opened up — you’re in!', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', invoice_reminder: 'sent a reminder about an unpaid invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', rinv_paused: 'a recurring invoice was paused — check the schedule', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', split_reminder: 'sent a reminder about your share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', story_answer: 'responded to your question', story_mention: 'mentioned you in their Daily', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
@@ -33992,13 +34010,15 @@ async function acLoadPots() {
     el.innerHTML = pots.length ? pots.map(acPotCard).join('') : '<div class="ac-disc-sub" style="padding:6px 2px;">Set money aside for a goal. Create a pot to start saving.</div>';
   } catch (e) { el.innerHTML = ''; }
 }
+const _POT_FREQ = { 1: 'daily', 7: 'weekly', 14: 'every 2 weeks', 30: 'monthly' };
 function acPotCard(p) {
   const pct = p.targetCents ? Math.min(100, Math.round(p.balanceCents / p.targetCents * 100)) : null;
   const goal = p.targetCents ? `<span class="pot-goal">${acMoney(p.balanceCents)} / ${acMoney(p.targetCents)}${pct === 100 ? ' · reached 🎉' : ''}</span>` : `<span class="pot-goal">${acMoney(p.balanceCents)}</span>`;
   const bar = p.targetCents ? `<div class="pot-bar"><div class="pot-bar-fill" style="width:${pct}%"></div></div>` : '';
+  const auto = p.autoAmountCents ? `<div class="pot-auto">Auto-save ${acMoney(p.autoAmountCents)} ${_POT_FREQ[p.autoIntervalDays] || ''}</div>` : '';
   return `<div class="pot-card">
     <div class="pot-top"><span class="pot-name">${escHtml(p.name)}</span>${goal}</div>
-    ${bar}
+    ${bar}${auto}
     <div class="pot-actions">
       <button class="ac-pill-btn" onclick="acPotMoveOpen(${p.id},'in')">Add</button>
       <button class="ac-pill-btn" onclick="acPotMoveOpen(${p.id},'out')">Withdraw</button>
@@ -34011,6 +34031,8 @@ function acPotCreateOpen() {
   document.getElementById('potFormTitle').textContent = 'New pot';
   document.getElementById('potSaveBtn').textContent = 'Create pot';
   document.getElementById('potName').value = ''; document.getElementById('potTarget').value = '';
+  document.getElementById('potAutoFreq').value = ''; document.getElementById('potAutoAmt').value = '';
+  acPotAutoFreqChange();
   showOverlay('potFormView'); setTimeout(() => document.getElementById('potName').focus(), 80);
 }
 function acPotEdit(id) {
@@ -34020,16 +34042,30 @@ function acPotEdit(id) {
   document.getElementById('potSaveBtn').textContent = 'Save';
   document.getElementById('potName').value = p.name;
   document.getElementById('potTarget').value = p.targetCents ? (p.targetCents / 100) : '';
+  document.getElementById('potAutoFreq').value = p.autoIntervalDays ? String(p.autoIntervalDays) : '';
+  document.getElementById('potAutoAmt').value = p.autoAmountCents ? (p.autoAmountCents / 100) : '';
+  acPotAutoFreqChange();
   showOverlay('potFormView');
+}
+// The amount field only matters while a frequency is picked.
+function acPotAutoFreqChange() {
+  const on = !!document.getElementById('potAutoFreq').value;
+  document.getElementById('potAutoAmt').style.display = on ? '' : 'none';
 }
 async function acPotSave() {
   const name = document.getElementById('potName').value.trim();
   if (!name) { showNotif('Name your pot.'); return; }
   const tv = document.getElementById('potTarget').value;
   const targetCents = tv ? Math.round(parseFloat(tv) * 100) : null;
+  const freq = parseInt(document.getElementById('potAutoFreq').value, 10) || 0;
+  const autoAmt = Math.round((parseFloat(document.getElementById('potAutoAmt').value) || 0) * 100);
+  if (freq && !(autoAmt >= 100)) { showNotif('Enter an auto-save amount of at least $1.'); return; }
   try {
-    if (AC._potEdit) await API.req('PATCH', '/api/wallet/pots/' + AC._potEdit, { name, targetCents });
-    else await API.req('POST', '/api/wallet/pots', { name, targetCents });
+    let potId = AC._potEdit;
+    if (potId) await API.req('PATCH', '/api/wallet/pots/' + potId, { name, targetCents });
+    else { const r = await API.req('POST', '/api/wallet/pots', { name, targetCents }); potId = r.pot.id; }
+    // Auto-save schedule: set when a frequency is picked, cleared when Off.
+    await API.req('PUT', '/api/wallet/pots/' + potId + '/auto', freq ? { amountCents: autoAmt, intervalDays: freq } : { amountCents: 0 });
     closeOverlay('potFormView'); acLoadPots();
   } catch (e) { showNotif(e.message || 'Could not save the pot.'); }
 }
