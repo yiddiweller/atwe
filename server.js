@@ -6938,7 +6938,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
     const g = await db.query(
-      `SELECT g.id, g.name, g.username, g.avatar, g.created_by, g.broadcast, g.disappearing, g.slow_mode_seconds, g.description, g.rules,
+      `SELECT g.id, g.name, g.username, g.avatar, g.created_by, g.broadcast, g.disappearing, g.slow_mode_seconds, g.description, g.rules, g.blocked_words,
               (SELECT (m.muted AND (m.muted_until IS NULL OR m.muted_until > now())) FROM at_group_members m WHERE m.group_id = g.id AND m.user_id = $2) AS muted
        FROM at_groups g WHERE g.id = $1`,
       [gid, req.user.id]
@@ -6977,7 +6977,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       requests = rq.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null }));
     }
     res.json({
-      group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by, broadcast: g.rows[0].broadcast, muted: !!g.rows[0].muted, disappearing: g.rows[0].disappearing || 0, slowMode: g.rows[0].slow_mode_seconds || 0, description: g.rows[0].description || null, rules: g.rows[0].rules || null, iAmAdmin },
+      group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by, broadcast: g.rows[0].broadcast, muted: !!g.rows[0].muted, disappearing: g.rows[0].disappearing || 0, slowMode: g.rows[0].slow_mode_seconds || 0, description: g.rows[0].description || null, rules: g.rows[0].rules || null, blockedWords: iAmAdmin ? (g.rows[0].blocked_words || []) : undefined, iAmAdmin },
       requests,
       lastRead,
       live: ls ? liveStreamPublic(ls) : null,
@@ -7031,9 +7031,14 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
     // Broadcast ("channel") groups are admin-post-only.
-    const gb = await db.query('SELECT broadcast, slow_mode_seconds FROM at_groups WHERE id = $1', [gid]);
+    const gb = await db.query('SELECT broadcast, slow_mode_seconds, blocked_words FROM at_groups WHERE id = $1', [gid]);
     if (gb.rows[0] && gb.rows[0].broadcast && !(await isGroupAdmin(gid, req.user.id))) {
       return res.status(403).json({ error: 'Only an admin can post in this channel.' });
+    }
+    // AutoMod: a blocked word stops the message AT SEND (Discord model — it
+    // never lands, and the sender is told why). Admins are exempt.
+    if (body && gb.rows[0] && (gb.rows[0].blocked_words || []).length && automodHit(body, gb.rows[0].blocked_words) && !(await isGroupAdmin(gid, req.user.id))) {
+      return res.status(400).json({ automod: true, error: 'That message includes a word this group doesn’t allow.' });
     }
     // Slow mode (Telegram-style): non-admin members wait N seconds between their
     // own messages. Admins are exempt; a duplicate clientId retry passes through
@@ -7199,6 +7204,11 @@ app.post('/api/atchat/groups/:id/messages/:mid/edit', auth.requireAuth, async (r
   if (!body) return res.status(400).json({ error: 'Message cannot be empty.' });
   if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
   try {
+    // AutoMod applies to edits too — an edit can't sneak a blocked word in.
+    const bw = (await db.query('SELECT blocked_words FROM at_groups WHERE id = $1', [gid])).rows[0];
+    if (bw && (bw.blocked_words || []).length && automodHit(body, bw.blocked_words) && !(await isGroupAdmin(gid, req.user.id))) {
+      return res.status(400).json({ automod: true, error: 'That message includes a word this group doesn’t allow.' });
+    }
     const m = await groupMsgFor(gid, mid, req.user.id);
     if (!m) return res.status(404).json({ error: 'Message not found.' });
     if (m.sender_id !== req.user.id) return res.status(403).json({ error: 'You can only edit your own messages.' });
@@ -7919,6 +7929,30 @@ app.post('/api/atchat/invite/:code/join', auth.requireAuth, async (req, res) => 
     await db.query('INSERT INTO at_group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [gid, req.user.id]);
     res.json({ ok: true, groupId: gid, name: g.rows[0].name });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not join the group.' }); }
+});
+
+/* ─── Group AutoMod (Discord model: blocked words, enforced at send) ─── */
+// Case-insensitive WHOLE-WORD match ("class" never trips a block on "ass").
+function automodHit(text, words) {
+  if (!text || !Array.isArray(words) || !words.length) return null;
+  const low = String(text).toLowerCase();
+  for (const w of words) {
+    if (!w) continue;
+    const esc = w.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp('(^|[^\\p{L}\\p{N}])' + esc + '($|[^\\p{L}\\p{N}])', 'iu').test(low)) return w;
+  }
+  return null;
+}
+app.put('/api/atchat/groups/:id/automod', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  try {
+    if (!(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only a group admin can set blocked words.' });
+    const words = [...new Set((Array.isArray(req.body.words) ? req.body.words : [])
+      .map(w => String(w || '').trim().toLowerCase().slice(0, 40)).filter(Boolean))].slice(0, 50);
+    await db.query('UPDATE at_groups SET blocked_words = $2 WHERE id = $1', [gid, words]);
+    res.json({ ok: true, words });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save blocked words.' }); }
 });
 
 /* ─── Group insights (admin analytics — Discord/Facebook Groups style) ─── */
