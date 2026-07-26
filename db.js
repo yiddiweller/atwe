@@ -1946,6 +1946,120 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS ai_usage_at_idx ON ai_usage (created_at DESC);
     CREATE INDEX IF NOT EXISTS ai_usage_feature_idx ON ai_usage (feature);
   `);
+  // ── Batch 34: AI governance, trust queues, ops guardrails ──────────────────
+  // Thumbs up/down on an Atwe AI answer, with a review queue for the thumbs-downs.
+  // The quality loop: the assistant is only as good as what people tell you about it.
+  await query(`
+    CREATE TABLE IF NOT EXISTS ai_feedback (
+      id          SERIAL PRIMARY KEY,
+      user_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      feature     TEXT NOT NULL DEFAULT 'chat',
+      rating      SMALLINT NOT NULL,
+      question    TEXT,
+      answer      TEXT,
+      note        TEXT,
+      status      TEXT NOT NULL DEFAULT 'open',
+      reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      staff_note  TEXT,
+      resolved_at TIMESTAMPTZ,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS ai_feedback_open_idx ON ai_feedback (status, created_at DESC);
+  `);
+  // Four-eyes rule. A dangerous action opens a ticket instead of running; a
+  // DIFFERENT admin approves it, and only then does it execute. Wallet
+  // adjustments already carry their own bespoke two-approver control — this is
+  // the general one for everything else (delete an account, a large refund).
+  await query(`
+    CREATE TABLE IF NOT EXISTS admin_approvals (
+      id           SERIAL PRIMARY KEY,
+      action       TEXT NOT NULL,
+      target_type  TEXT,
+      target_id    TEXT,
+      label        TEXT,
+      payload      JSONB NOT NULL DEFAULT '{}'::jsonb,
+      reason       TEXT,
+      status       TEXT NOT NULL DEFAULT 'pending',
+      requested_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      approved_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      staff_note   TEXT,
+      expires_at   TIMESTAMPTZ NOT NULL DEFAULT (now() + interval '7 days'),
+      resolved_at  TIMESTAMPTZ,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS admin_approvals_open_idx ON admin_approvals (status, created_at DESC);
+  `);
+  // Copyright takedowns, kept apart from the general report queue because the
+  // process is legally distinct: a sworn claim, a removal, then a counter-notice
+  // window in which the owner can contest it and have the content reinstated.
+  await query(`
+    CREATE TABLE IF NOT EXISTS dmca_claims (
+      id            SERIAL PRIMARY KEY,
+      claimant_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      claimant_name TEXT,
+      claimant_email TEXT,
+      target_type   TEXT NOT NULL,
+      target_id     INTEGER NOT NULL,
+      owner_id      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      work_desc     TEXT,
+      note          TEXT,
+      sworn         BOOLEAN NOT NULL DEFAULT false,
+      status        TEXT NOT NULL DEFAULT 'open',
+      staff_note    TEXT,
+      handled_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      counter_at    TIMESTAMPTZ,
+      counter_text  TEXT,
+      resolved_at   TIMESTAMPTZ,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS dmca_open_idx ON dmca_claims (status, created_at DESC);
+    -- What the content said before it was taken down. A copyright removal must
+    -- be REVERSIBLE — the owner has a right to contest it — so the material is
+    -- withheld and kept here, never destroyed.
+    ALTER TABLE dmca_claims ADD COLUMN IF NOT EXISTS snapshot JSONB;
+    CREATE UNIQUE INDEX IF NOT EXISTS dmca_one_open_idx
+      ON dmca_claims (claimant_id, target_type, target_id) WHERE status = 'open';
+  `);
+  // "Someone is pretending to be me." Its own fast lane, with both profiles
+  // pulled side by side so a staffer can decide in seconds instead of digging.
+  await query(`
+    CREATE TABLE IF NOT EXISTS impersonation_claims (
+      id          SERIAL PRIMARY KEY,
+      claimant_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      target_id   INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      evidence    TEXT,
+      status      TEXT NOT NULL DEFAULT 'open',
+      staff_note  TEXT,
+      handled_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      resolved_at TIMESTAMPTZ,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS imp_open_idx ON impersonation_claims (status, created_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS imp_one_open_idx
+      ON impersonation_claims (claimant_id, target_id) WHERE status = 'open';
+  `);
+  // Automatic "this looks wrong" alerts — a spike or collapse in signups,
+  // revenue, refunds, disputes or errors against the trailing baseline, so the
+  // owner hears about it before members do.
+  await query(`
+    CREATE TABLE IF NOT EXISTS anomaly_alerts (
+      id         SERIAL PRIMARY KEY,
+      metric     TEXT NOT NULL,
+      direction  TEXT NOT NULL,
+      severity   TEXT NOT NULL DEFAULT 'warn',
+      current    NUMERIC NOT NULL DEFAULT 0,
+      baseline   NUMERIC NOT NULL DEFAULT 0,
+      pct        INTEGER NOT NULL DEFAULT 0,
+      detail     TEXT,
+      acked_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      acked_at   TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS anomaly_open_idx ON anomaly_alerts (acked_at, created_at DESC);
+  `);
+  // Which Overview cards a given staffer wants to see (their numbers first).
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_overview JSONB;`);
+
   // A saved filter that stays live — "businesses with no posts in 30 days" is a
   // question, not a fixed list, so the definition is stored and re-run.
   await query(`

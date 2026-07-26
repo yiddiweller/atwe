@@ -266,6 +266,32 @@
   .aud-when{font-size:11.5px;color:var(--t3);margin-top:2px;}
   .pill.ban{background:rgba(255,0,51,.16);color:var(--red);}
   .pill.susp{background:rgba(255,204,0,.16);color:var(--amber);}
+  /* ── Batch 34 ── */
+  /* Alert severity dot (the site-status one is scoped to that panel). */
+  .ref-top .dot{display:inline-block;width:9px;height:9px;border-radius:50%;flex:0 0 auto;background:var(--t3);vertical-align:middle;}
+  .ref-top .dot.red{background:var(--red);box-shadow:0 0 0 4px rgba(255,0,51,.14);}
+  .ref-top .dot.amber{background:var(--amber);box-shadow:0 0 0 4px rgba(255,204,0,.16);}
+  /* Impersonation: two identical columns, so a copy is obvious at a glance. */
+  .imp-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media(max-width:720px){.imp-grid{grid-template-columns:1fr;}}
+  .imp-col{background:var(--s1);border-radius:var(--r-lg,14px);padding:14px;}
+  .imp-tag{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);margin-bottom:10px;}
+  .imp-head{display:flex;gap:10px;align-items:center;margin-bottom:12px;}
+  .imp-av{width:44px;height:44px;border-radius:50%;object-fit:cover;flex:0 0 auto;background:var(--s2);}
+  .imp-av-none{display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--t3);}
+  .imp-name{font-weight:700;font-size:15px;}
+  .imp-row{display:flex;justify-content:space-between;gap:12px;padding:5px 0;font-size:13px;border-top:1px solid var(--b1,rgba(255,255,255,.06));}
+  .imp-k{color:var(--t3);flex:0 0 auto;}
+  .imp-v{color:var(--t2);text-align:right;word-break:break-word;}
+  /* Rollout percentage stepper on the Site tab. */
+  .roll-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;}
+  .roll-pct{width:82px;margin:0;}
+  .roll-bar{flex:1;min-width:120px;height:6px;border-radius:999px;background:var(--s2);overflow:hidden;}
+  .roll-fill{height:100%;background:var(--accent);border-radius:999px;transition:width .25s ease;}
+  /* Overview card picker. */
+  .ovp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-top:10px;}
+  .ovp-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--t2);background:var(--s1);padding:9px 12px;border-radius:var(--r-pill);cursor:pointer;}
+  .ovp-item input{accent-color:var(--accent);}
   .act-filter{display:flex;gap:8px;flex-wrap:wrap;}
   .live-pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green,var(--green));margin-right:5px;vertical-align:middle;animation:livep 1.8s ease-in-out infinite;}
   @keyframes livep{0%,100%{opacity:.35;}50%{opacity:1;}}
@@ -988,6 +1014,7 @@
       <div class="nav-label" data-group="people">People</div>
       <button class="tab" data-v="users" onclick="switchTab('users')">Users</button>
       <button class="tab" data-v="staff" onclick="switchTab('staff')">Staff</button>
+      <button class="tab" data-v="approvals" onclick="switchTab('approvals')">Approvals</button>
       <button class="tab" data-v="usernames" onclick="switchTab('usernames')">Usernames</button>
 
       <div class="nav-label" data-group="safety">Trust &amp; safety</div>
@@ -1005,6 +1032,8 @@
       <button class="tab" data-v="appeals" onclick="switchTab('appeals')">Appeals</button>
       <button class="tab" data-v="support" onclick="switchTab('support')">Support</button>
       <button class="tab" data-v="safety" onclick="switchTab('safety')">Safety tools</button>
+      <button class="tab" data-v="copyright" onclick="switchTab('copyright')">Copyright</button>
+      <button class="tab" data-v="impersonation" onclick="switchTab('impersonation')">Impersonation</button>
       <button class="tab" data-v="datareq" onclick="switchTab('datareq')">Data requests</button>
 
       <div class="nav-label" data-group="content">Content</div>
@@ -1030,6 +1059,8 @@
       <button class="tab" data-v="vault" onclick="switchTab('vault')">Vault</button>
 
       <div class="nav-label" data-group="system">System</div>
+      <button class="tab" data-v="alerts" onclick="switchTab('alerts')">Alerts</button>
+      <button class="tab" data-v="aistudio" onclick="switchTab('aistudio')">AI Studio</button>
       <button class="tab" data-v="ops" onclick="switchTab('ops')">Operations</button>
       <button class="tab" data-v="site" onclick="switchTab('site')">Site</button>
     </nav>
@@ -1482,6 +1513,8 @@ const TAB_PERM = {
   cards: 'revenue', features: 'super', featurecontrols: 'super', vault: 'super',
   announcements: 'super', demand: 'growth', groups: 'moderation', ops: 'super', numbers: 'growth',
   safety: 'moderation',
+  approvals: 'super', copyright: 'moderation', impersonation: 'moderation',
+  alerts: 'super', aistudio: 'super',
 };
 function canSee(tab){ const p = TAB_PERM[tab]; if (ME.superadmin) return true; return p !== 'super' && ME.perms.includes(p); }
 
@@ -1559,6 +1592,8 @@ const NAV_TITLES = {
   orders:'Orders', adjust:'Wallet adjustments', payouts:'Payout review', risk:'Risk', retention:'Retention', curate:'Curate', catalog:'Catalog', audit:'Audit log', site:'Site', cards:'Cards', features:'Features', featurecontrols:'Feature Controls', vault:'Vault',
   announcements:'Announcements', demand:'Demand', groups:'Groups & channels', ops:'Operations', numbers:'Numbers',
   safety:'Safety tools',
+  approvals:'Approvals', copyright:'Copyright claims', impersonation:'Impersonation',
+  alerts:'Alerts', aistudio:'AI Studio',
 };
 // Mobile: slide the sidebar in/out.
 function toggleNav(open){
@@ -1576,7 +1611,12 @@ function renderView(){
   const statRow = document.getElementById('stats'); if (statRow) statRow.style.display = (VIEW === 'features') ? 'none' : '';
   const inner = document.querySelector('.main-inner'); if (inner) inner.scrollTop = 0;
   window.scrollTo(0, 0);
-  if (VIEW === 'users') renderUsersView();
+  if (VIEW === 'approvals') renderApprovalsView();
+  else if (VIEW === 'copyright') renderCopyrightView();
+  else if (VIEW === 'impersonation') renderImpersonationView();
+  else if (VIEW === 'alerts') renderAlertsView();
+  else if (VIEW === 'aistudio') renderAiStudioView();
+  else if (VIEW === 'users') renderUsersView();
   else if (VIEW === 'revenue') renderRevenueView();
   else if (VIEW === 'ads') renderAdsAdminView();
   else if (VIEW === 'affiliations') renderAffAdminView();
@@ -1986,45 +2026,78 @@ const OV_IC = {
 function ovCard(ic, n, label, cls){
   return `<div class="ov-card"><div class="ov-ic ${cls || ''}">${OV_IC[ic]}</div><div><div class="n">${n}</div><div class="l">${esc(label)}</div></div></div>`;
 }
+/* The Overview is your homepage — so it shows YOUR numbers. Pick the cards you
+   care about and the rest fall away; pick none and you get the full page, which
+   is what everyone sees until they choose otherwise. Saved per staffer, so two
+   people can watch two different things. */
+let OV_PICKED = null, OV_CARDS = [], OV_EDIT = false;
+// Which icon a card uses, and which section it belongs to (the server owns the
+// list of cards; the look of them stays here with the rest of the styling).
+const OV_CARD_IC = { users:'users', pro:'pro', free:'free', admins:'shield', verified:'check',
+  withUsername:'at', newToday:'plus', new7d:'cal', posts:'post', replies:'reply',
+  circles:'circle', groups:'group', dms:'dm', calls:'call', locks:'lock' };
 async function renderOverviewView(){
   document.getElementById('stats').innerHTML = '';
   const content = document.getElementById('content');
   content.innerHTML = '<div class="ld"><span class="ab-mark"></span></div>';
   try {
-    const { stats: s } = await api('GET', '/api/admin/stats');
+    const [{ stats: s }, prefs] = await Promise.all([
+      api('GET', '/api/admin/stats'),
+      api('GET', '/api/admin/overview-prefs').catch(() => ({ cards: [], picked: null })),
+    ]);
+    OV_CARDS = prefs.cards || []; OV_PICKED = prefs.picked || null;
+    const shown = OV_PICKED ? new Set(OV_PICKED) : null;   // null = show them all
+    const groups = [];
+    for (const c of OV_CARDS) {
+      if (shown && !shown.has(c.key)) continue;
+      let g = groups.find((x) => x.name === c.group);
+      if (!g) { g = { name: c.group, cards: [] }; groups.push(g); }
+      g.cards.push(c);
+    }
+    const body = groups.map((g) => `<div class="ov-section">${esc(g.name)}</div>
+      <div class="ov-grid">${g.cards.map((c) => ovCard(OV_CARD_IC[c.key] || 'users', s[c.key] == null ? 0 : s[c.key], c.label)).join('')}</div>`).join('')
+      || '<div class="empty">You have hidden every card. Tap “Choose cards” to bring some back.</div>';
     content.innerHTML = `
       <div class="ov-head">
         <div class="muted">Your platform at a glance</div>
-        <button class="refresh" onclick="renderOverviewView()">↻ Refresh</button>
+        <div style="display:flex;gap:8px;">
+          <button class="refresh" onclick="toggleOvEdit()">${OV_EDIT ? 'Done' : 'Choose cards'}</button>
+          <button class="refresh" onclick="renderOverviewView()">↻ Refresh</button>
+        </div>
       </div>
-      <div class="ov-section">Members</div>
-      <div class="ov-grid">
-        ${ovCard('users', s.users, 'Total users')}
-        ${ovCard('pro', s.pro, 'Pro')}
-        ${ovCard('free', s.free, 'Free')}
-        ${ovCard('shield', s.admins, 'Admins')}
-        ${ovCard('check', s.verified, 'Verified')}
-        ${ovCard('at', s.withUsername, 'Has @username')}
-        ${ovCard('plus', s.newToday, 'New today')}
-        ${ovCard('cal', s.new7d, 'New · 7 days')}
-      </div>
-      <div class="ov-section">Content</div>
-      <div class="ov-grid">
-        ${ovCard('post', s.posts, 'Posts')}
-        ${ovCard('reply', s.replies, 'Replies')}
-        ${ovCard('circle', s.circles, 'Circles')}
-        ${ovCard('group', s.groups, 'Groups')}
-      </div>
-      <div class="ov-section">Activity</div>
-      <div class="ov-grid">
-        ${ovCard('dm', s.dms, 'DMs sent')}
-        ${ovCard('call', s.calls, 'Calls')}
-        ${ovCard('lock', s.locks, 'Locked names')}
-      </div>
+      <div id="ovPicker"></div>
+      ${body}
       <div class="ov-section">Calls · TURN relay</div>
       <div id="turnStatus" class="turn-box"><span class="turn-dot" style="background:var(--accent)"></span><div><div class="turn-name">Checking…</div></div></div>`;
+    if (OV_EDIT) renderOvPicker();
     loadTurnStatus();
   } catch (e) { content.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+function toggleOvEdit(){ OV_EDIT = !OV_EDIT; renderOverviewView(); }
+function renderOvPicker(){
+  const el = document.getElementById('ovPicker'); if (!el) return;
+  const shown = OV_PICKED ? new Set(OV_PICKED) : new Set(OV_CARDS.map((c) => c.key));
+  el.innerHTML = `<div class="panel"><h3>Your Overview</h3>
+    <div class="sub">Tick the numbers you want to see first. This is yours alone — it doesn't change what anyone else sees.</div>
+    <div class="ovp-grid">${OV_CARDS.map((c) => `<label class="ovp-item"><input type="checkbox" ${shown.has(c.key)?'checked':''} onchange="ovToggle('${c.key}',this.checked)"/><span>${esc(c.label)}</span></label>`).join('')}</div>
+    <div style="display:flex;gap:8px;margin-top:12px;"><button class="act accent" onclick="saveOvPrefs()">Save</button><button class="act" onclick="resetOvPrefs()">Show everything</button></div>
+  </div>`;
+}
+function ovToggle(key, on){
+  const cur = new Set(OV_PICKED || OV_CARDS.map((c) => c.key));
+  if (on) cur.add(key); else cur.delete(key);
+  // Keep the catalog's order so the page never reshuffles under you.
+  OV_PICKED = OV_CARDS.map((c) => c.key).filter((k) => cur.has(k));
+}
+async function saveOvPrefs(){
+  try { const r = await api('PUT', '/api/admin/overview-prefs', { picked: OV_PICKED });
+    OV_PICKED = r.picked; OV_EDIT = false; renderOverviewView(); notify('Saved.'); }
+  catch (e){ notify(e.message); }
+}
+async function resetOvPrefs(){
+  try { await api('PUT', '/api/admin/overview-prefs', { picked: null });
+    OV_PICKED = null; OV_EDIT = false; renderOverviewView(); notify('Showing everything again.'); }
+  catch (e){ notify(e.message); }
 }
 async function loadTurnStatus(){
   const el = document.getElementById('turnStatus'); if (!el) return;
@@ -2104,6 +2177,8 @@ async function loadSite(){
     SITE = await api('GET', '/api/admin/site');
     try { DEMO = await api('GET', '/api/admin/demo'); } catch { DEMO = { on:false, count:0 }; }
     try { FLAGS = await api('GET', '/api/admin/feature-flags'); } catch { FLAGS = { flags:{}, meta:[] }; }
+    try { ROLLOUT = await api('GET', '/api/admin/feature-rollout'); } catch { ROLLOUT = { rollout:{}, meta:[] }; }
+    try { IPALLOW = await api('GET', '/api/admin/ip-allowlist'); } catch { IPALLOW = { config:{ enabled:false, entries:[] }, myIp:'' }; }
     try { JOBS = await api('GET', '/api/admin/jobs'); } catch { JOBS = { jobs:[] }; }
     try { CRASHES = await api('GET', '/api/admin/client-crashes'); } catch { CRASHES = { crashes: [] }; }
     renderSite();
@@ -2225,6 +2300,39 @@ function renderSite(){
         return `<div class="site-row"><div><div class="srt">${esc(f.label)}${on ? '' : ' <span class="pill ban">off</span>'}</div><div class="srs">${esc(f.help)}</div></div>
         <button class="switch flag ${on ? 'on' : ''}" onclick="toggleFlag('${f.key}')" aria-label="${esc(f.label)}"><span></span></button></div>`;
       }).join('')}
+    </div>
+    <div class="panel">
+      <h3>Roll out gradually <span class="muted">· let a few people try it first</span></h3>
+      <div class="sub">Instead of switching a feature on for everyone at once, give it to a slice — <b>5%</b>, then <b>25%</b>, then everyone — and watch. Whoever is in the trial <b>stays</b> in it, so nothing flickers on and off for them, and two features at 5% reach two different groups rather than picking on the same unlucky few. <b>100% means everyone</b>, which is how it has always worked.</div>
+      ${(ROLLOUT.meta || FLAGS.meta || []).map(f => {
+        const pct = (ROLLOUT.rollout || {})[f.key];
+        const v = pct == null ? 100 : pct;
+        const off = (FLAGS.flags || {})[f.key] === false;
+        return `<div class="site-row" style="display:block;">
+          <div class="srt">${esc(f.label)}${off ? ' <span class="pill ban">switched off</span>' : (v < 100 ? ` <span class="pill susp">${v}% of members</span>` : '')}</div>
+          <div class="roll-row">
+            <input class="in roll-pct" type="number" min="0" max="100" step="5" value="${v}" id="roll-${esc(f.key)}"/>
+            <div class="roll-bar"><div class="roll-fill" style="width:${v}%"></div></div>
+            <button class="act" onclick="saveRollout('${f.key}')">Set</button>
+            ${v < 100 ? `<button class="act" onclick="fullRollout('${f.key}')">Give it to everyone</button>` : ''}
+          </div></div>`;
+      }).join('')}
+    </div>
+    <div class="panel">
+      <h3>Who can open this dashboard <span class="muted">· by network</span></h3>
+      <div class="sub">Lock the admin dashboard to addresses you trust — your office, your home, a VPN. Everything here runs on top of the normal sign-in, never instead of it. <b>You cannot switch this on from an address that isn't on the list</b>, so it can't lock you out by accident.</div>
+      <div class="site-status"><span class="dot ${IPALLOW.config && IPALLOW.config.enabled ? 'green' : ''}"></span>
+        ${IPALLOW.config && IPALLOW.config.enabled ? 'Restricted to <b>' + (IPALLOW.config.entries||[]).length + '</b> address' + ((IPALLOW.config.entries||[]).length === 1 ? '' : 'es') : 'Open — any network with a valid sign-in'}
+        · you are on <b>${esc(IPALLOW.myIp || 'an unknown address')}</b></div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <input class="in" id="ipEntry" maxlength="60" placeholder="203.0.113.9 or 203.0.113.0/24" style="flex:1;min-width:180px;margin:0;"/>
+        <input class="in" id="ipNote" maxlength="80" placeholder="Note (e.g. the office)" style="flex:1;min-width:140px;margin:0;"/>
+        <button class="act" onclick="addIpEntry()">Add</button>
+        <button class="act" onclick="addMyIp()">Add the one I'm on</button>
+      </div>
+      <div style="margin-top:12px;">${((IPALLOW.config && IPALLOW.config.entries) || []).map(e => `<div class="site-row"><div><div class="srt">${esc(e.cidr)}${ipIsMine(e.cidr) ? ' <span class="pill pro">you</span>' : ''}</div><div class="srs">${esc(e.note || 'No note')}</div></div><button class="act danger" onclick="removeIpEntry(${jstr(e.cidr)})">Remove</button></div>`).join('') || '<div class="muted" style="font-size:13px;">No addresses yet.</div>'}</div>
+      <div class="site-row" style="margin-top:10px;"><div><div class="srt">Only allow these addresses</div><div class="srs">Leave off until the list is right. With the list empty this does nothing.</div></div>
+        <button class="switch ${IPALLOW.config && IPALLOW.config.enabled ? 'on':''}" onclick="toggleIpAllow()" aria-label="Restrict by network"><span></span></button></div>
     </div>
     <div class="panel">
       <h3>Promo codes <span class="muted">· Atwe-funded</span></h3>
@@ -2389,6 +2497,51 @@ async function deleteChangelog(id){
   try { await api('DELETE', '/api/admin/changelog/' + id); loadChangelog(); }
   catch (e){ notify(e.message); }
 }
+let ROLLOUT = { rollout:{}, meta:[] }, IPALLOW = { config:{ enabled:false, entries:[] }, myIp:'' };
+// A rough "is this the address I'm on" check for the badge — exact match only,
+// because working out whether one's own IP sits inside a CIDR is the server's
+// job (it's the one that actually enforces it).
+function ipIsMine(cidr){ return !!IPALLOW.myIp && String(cidr) === String(IPALLOW.myIp); }
+async function saveRollout(key){
+  const raw = Number(document.getElementById('roll-' + key)?.value);
+  if (!Number.isFinite(raw) || raw < 0 || raw > 100) { notify('Enter a number from 0 to 100.'); return; }
+  try { const r = await api('PUT', '/api/admin/feature-rollout', { rollout: { [key]: Math.round(raw) } });
+    ROLLOUT.rollout = r.rollout; renderSite();
+    notify(raw >= 100 ? '“' + key + '” is on for everyone.' : '“' + key + '” now reaches ' + Math.round(raw) + '% of members.'); }
+  catch (e){ notify(e.message); }
+}
+async function fullRollout(key){
+  try { const r = await api('PUT', '/api/admin/feature-rollout', { rollout: { [key]: 100 } });
+    ROLLOUT.rollout = r.rollout; renderSite(); notify('“' + key + '” is now on for everyone.'); }
+  catch (e){ notify(e.message); }
+}
+async function saveIpAllow(config, msg){
+  try { const r = await api('PUT', '/api/admin/ip-allowlist', { config });
+    IPALLOW.config = r.config; if (r.myIp) IPALLOW.myIp = r.myIp; renderSite(); if (msg) notify(msg); }
+  catch (e){ notify(e.message); }
+}
+function addIpEntry(){
+  const cidr = (document.getElementById('ipEntry')?.value || '').trim();
+  const note = (document.getElementById('ipNote')?.value || '').trim();
+  if (!cidr) { notify('Enter an address.'); return; }
+  const entries = [...((IPALLOW.config && IPALLOW.config.entries) || []), { cidr, note }];
+  saveIpAllow({ ...IPALLOW.config, entries }, 'Added.');
+}
+function addMyIp(){
+  if (!IPALLOW.myIp) { notify('Your address could not be read.'); return; }
+  const entries = [...((IPALLOW.config && IPALLOW.config.entries) || []), { cidr: IPALLOW.myIp, note: 'This device' }];
+  saveIpAllow({ ...IPALLOW.config, entries }, 'Added your address.');
+}
+function removeIpEntry(cidr){
+  const entries = ((IPALLOW.config && IPALLOW.config.entries) || []).filter(e => e.cidr !== cidr);
+  saveIpAllow({ ...IPALLOW.config, entries }, 'Removed.');
+}
+function toggleIpAllow(){
+  const want = !(IPALLOW.config && IPALLOW.config.enabled);
+  if (want && !confirm('Only the addresses on the list will be able to open this dashboard. Continue?')) return;
+  saveIpAllow({ ...IPALLOW.config, enabled: want }, want ? 'The dashboard is now restricted.' : 'Restriction lifted.');
+}
+
 async function toggleFlag(key){
   const cur = (FLAGS.flags || {})[key] !== false;
   const want = !cur;
@@ -3135,6 +3288,399 @@ async function resolveAppeal(id, action){
   catch (e){ notify(e.message); }
 }
 
+/* ═══════════════════════════════════════════════
+   BATCH 34 — Approvals · Copyright · Impersonation · Alerts · AI Studio
+═══════════════════════════════════════════════ */
+
+/* ─── Approvals (the four-eyes queue) ─── */
+let APV_FILTER = 'pending', APV_ME = null, APV_CFG = null;
+function renderApprovalsView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="tf-head"><div class="tf-ranges">
+      <button class="tf-r ${APV_FILTER==='pending'?'on':''}" onclick="apvFilter('pending')">Waiting</button>
+      <button class="tf-r ${APV_FILTER==='approved'?'on':''}" onclick="apvFilter('approved')">Approved</button>
+      <button class="tf-r ${APV_FILTER==='all'?'on':''}" onclick="apvFilter('all')">All</button>
+    </div></div>
+    <div id="apvSettings"></div>
+    <div id="apvBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
+  loadApprovals();
+}
+function apvFilter(f){ APV_FILTER = f; renderApprovalsView(); }
+async function loadApprovals(){
+  const el = document.getElementById('apvBody'); if (!el) return;
+  try {
+    const d = await api('GET', '/api/admin/approvals?status=' + APV_FILTER);
+    APV_ME = d.me; APV_CFG = d.config;
+    const set = document.getElementById('apvSettings');
+    if (set) set.innerHTML = apvSettingsHtml(d.config, d.meta);
+    if (!d.approvals.length) { el.innerHTML = '<div class="empty">Nothing waiting on a second pair of eyes.</div>'; return; }
+    el.innerHTML = d.approvals.map(a => {
+      const mine = a.requested_by === APV_ME;
+      const when = new Date(a.created_at).toLocaleString();
+      const acts = a.status === 'pending'
+        ? (mine
+            ? '<span class="muted">You asked for this — someone else has to approve it.</span>'
+            : `<div class="ref-acts"><button class="act accent" onclick="resolveApproval(${a.id},'approve')">Approve</button><button class="act danger" onclick="resolveApproval(${a.id},'reject')">Reject</button></div>`)
+        : `<span class="pill ${a.status==='approved'?'pro':(a.status==='rejected'?'ban':'')}">${esc(a.status)}</span>${a.approved_by_name?' <span class="muted">by '+esc(a.approved_by_name)+'</span>':''}`;
+      return `<div class="ref-row"><div class="ref-main">
+        <div class="ref-top"><span class="ref-kind">${esc(a.label || a.action)}</span> <span class="pill">${esc(a.action)}</span></div>
+        <div class="ref-sub">Asked for by ${esc(a.requested_by_name || 'a staffer')}${a.requested_by_username?' (@'+esc(a.requested_by_username)+')':''} · ${when}</div>
+        ${a.reason?`<div class="ref-reason">“${esc(a.reason)}”</div>`:''}
+        ${a.staff_note?`<div class="ref-note">Note: ${esc(a.staff_note)}</div>`:''}
+        ${a.status==='approved'?'<div class="ref-note">Approved — whoever asked can now carry it out.</div>':''}
+      </div><div class="ref-side">${acts}</div></div>`;
+    }).join('');
+  } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function apvSettingsHtml(c, meta){
+  return `<div class="panel">
+    <h3>Four-eyes rule <span class="muted">· two people for the dangerous things</span></h3>
+    <div class="sub">When this is on, the actions below don't run straight away — they open a request that a <b>different</b> admin has to approve. The standard control in any bank's back office. (Wallet adjustments already work this way and always will.)</div>
+    <div class="site-row"><div><div class="srt">Require a second admin${c.enabled?'':' <span class="pill ban">off</span>'}</div><div class="srs">You need at least one other person with dashboard access before this can be switched on.</div></div>
+      <button class="switch ${c.enabled?'on':''}" onclick="toggleDual()" aria-label="Four-eyes rule"><span></span></button></div>
+    ${(meta||[]).map(m => `<div class="site-row"><div><div class="srt">${esc(m.label)}</div><div class="srs">${esc(m.help)}</div></div>
+      <button class="switch ${c.actions[m.key] !== false ? 'on':''}" onclick="toggleDualAction('${m.key}')" aria-label="${esc(m.label)}"><span></span></button></div>`).join('')}
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
+      <label class="muted" style="font-size:13px;">Refunds count as "large" at $</label>
+      <input class="in" id="dualThresh" type="number" min="0" step="1" value="${Math.round((c.refundThresholdCents||0)/100)}" style="width:120px;margin:0;"/>
+      <button class="act" onclick="saveDualThreshold()">Save</button>
+    </div>
+  </div>`;
+}
+async function toggleDual(){
+  const want = !(APV_CFG && APV_CFG.enabled);
+  try {
+    const r = await api('PUT', '/api/admin/dual-approval', { config: { ...APV_CFG, enabled: want } });
+    APV_CFG = r.config; loadApprovals();
+    notify(want ? 'Four-eyes rule is on.' : 'Four-eyes rule is off.');
+  } catch (e){ notify(e.message); }
+}
+async function toggleDualAction(key){
+  const actions = { ...(APV_CFG && APV_CFG.actions) };
+  actions[key] = actions[key] === false;
+  try { const r = await api('PUT', '/api/admin/dual-approval', { config: { ...APV_CFG, actions } }); APV_CFG = r.config; loadApprovals(); }
+  catch (e){ notify(e.message); }
+}
+async function saveDualThreshold(){
+  const dollars = Number(document.getElementById('dualThresh').value);
+  if (!Number.isFinite(dollars) || dollars < 0) { notify('Enter an amount.'); return; }
+  try { const r = await api('PUT', '/api/admin/dual-approval', { config: { ...APV_CFG, refundThresholdCents: Math.round(dollars*100) } }); APV_CFG = r.config; notify('Saved.'); loadApprovals(); }
+  catch (e){ notify(e.message); }
+}
+async function resolveApproval(id, action){
+  const note = prompt(action === 'approve' ? 'Optional note:' : 'Why are you rejecting this?', '');
+  if (action === 'reject' && note === null) return;
+  try { await api('POST', '/api/admin/approvals/' + id + '/' + action, { note: note || null });
+    notify(action === 'approve' ? 'Approved — the person who asked can now carry it out.' : 'Rejected.'); loadApprovals(); }
+  catch (e){ notify(e.message); }
+}
+
+/* ─── Copyright claims (DMCA) ─── */
+let DMCA_FILTER = 'open', DMCA_T = null;
+function renderCopyrightView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="tf-head"><div class="tf-ranges">
+      <button class="tf-r ${DMCA_FILTER==='open'?'on':''}" onclick="dmcaFilter('open')">Open</button>
+      <button class="tf-r ${DMCA_FILTER==='counter'?'on':''}" onclick="dmcaFilter('counter')">Contested</button>
+      <button class="tf-r ${DMCA_FILTER==='removed'?'on':''}" onclick="dmcaFilter('removed')">Removed</button>
+      <button class="tf-r ${DMCA_FILTER==='rejected'?'on':''}" onclick="dmcaFilter('rejected')">Rejected</button>
+      <button class="tf-r ${DMCA_FILTER==='all'?'on':''}" onclick="dmcaFilter('all')">All</button>
+    </div></div>
+    <div id="dmcaBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
+  loadDmca();
+  clearInterval(DMCA_T);
+  DMCA_T = setInterval(() => { if (VIEW === 'copyright') loadDmca(); else clearInterval(DMCA_T); }, 30000);
+}
+function dmcaFilter(f){ DMCA_FILTER = f; renderCopyrightView(); }
+async function loadDmca(){
+  const el = document.getElementById('dmcaBody'); if (!el) return;
+  try {
+    const d = await api('GET', '/api/admin/dmca?status=' + DMCA_FILTER);
+    if (!d.claims.length) { el.innerHTML = '<div class="empty">No ' + (DMCA_FILTER === 'all' ? '' : DMCA_FILTER + ' ') + 'copyright claims.</div>'; return; }
+    el.innerHTML = d.claims.map(c => {
+      const owner = c.owner_username ? '@'+esc(c.owner_username) : esc(c.owner_name || 'unknown');
+      const contested = c.status === 'counter';
+      const acts = (c.status === 'open')
+        ? `<div class="ref-acts"><button class="act danger" onclick="resolveDmca(${c.id},'remove')">Remove content</button><button class="act" onclick="resolveDmca(${c.id},'reject')">Reject claim</button></div>`
+        : contested
+          ? `<div class="ref-acts"><button class="act accent" onclick="resolveDmca(${c.id},'reinstate')">Put it back</button><button class="act danger" onclick="resolveDmca(${c.id},'remove')">Keep it down</button></div>`
+          : `<span class="pill ${c.status==='removed'?'ban':(c.status==='reinstated'?'pro':'')}">${esc(c.status)}</span>${c.handled_by_name?' <span class="muted">by '+esc(c.handled_by_name)+'</span>':''}`;
+      return `<div class="ref-row"><div class="ref-main">
+        <div class="ref-top"><span class="ref-kind">${esc(c.targetLabel)} #${c.target_id}</span> ${contested?'<span class="pill susp">contested</span>':''} ${c.gone?'<span class="pill">already gone</span>':''}</div>
+        <div class="ref-sub">Claimed by ${esc(c.claimant_name || 'a member')}${c.claimant_email?' · '+esc(c.claimant_email):''} · posted by ${owner} · ${new Date(c.created_at).toLocaleString()}</div>
+        ${c.excerpt?`<div class="ref-note">Content: “${esc(c.excerpt)}”</div>`:''}
+        <div class="ref-reason">Their work: ${esc(c.work_desc || '—')}</div>
+        ${c.note?`<div class="ref-note">${esc(c.note)}</div>`:''}
+        ${c.counter_text?`<div class="ref-reason">Counter-notice: “${esc(c.counter_text)}”</div>`:''}
+        ${c.staff_note?`<div class="ref-note">Decision note: ${esc(c.staff_note)}</div>`:''}
+      </div><div class="ref-side">${acts}</div></div>`;
+    }).join('');
+  } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function resolveDmca(id, action){
+  const msg = action === 'remove' ? 'Take this content down? The person who posted it can contest the decision.'
+    : action === 'reject' ? 'Reject this claim? The content stays up.'
+    : 'Put this content back? The claim will be marked reinstated.';
+  if (!confirm(msg)) return;
+  const note = prompt('Note for the record (optional):', '');
+  try { await api('POST', '/api/admin/dmca/' + id + '/resolve', { action, note: note || null }); notify('Done.'); loadDmca(); }
+  catch (e){ notify(e.message); }
+}
+
+/* ─── Impersonation fast-track (side-by-side) ─── */
+let IMP_FILTER = 'open', IMP_T = null;
+function renderImpersonationView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="tf-head"><div class="tf-ranges">
+      <button class="tf-r ${IMP_FILTER==='open'?'on':''}" onclick="impFilter('open')">Open</button>
+      <button class="tf-r ${IMP_FILTER==='upheld'?'on':''}" onclick="impFilter('upheld')">Upheld</button>
+      <button class="tf-r ${IMP_FILTER==='rejected'?'on':''}" onclick="impFilter('rejected')">Rejected</button>
+    </div></div>
+    <div id="impBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
+  loadImp();
+  clearInterval(IMP_T);
+  IMP_T = setInterval(() => { if (VIEW === 'impersonation') loadImp(); else clearInterval(IMP_T); }, 30000);
+}
+function impFilter(f){ IMP_FILTER = f; renderImpersonationView(); }
+// One profile column. The two are rendered identically on purpose — the whole
+// point is that a copy jumps out when the same fields sit next to each other.
+function impProfile(u, tag){
+  if (!u) return `<div class="imp-col"><div class="imp-tag">${esc(tag)}</div><div class="muted">Account no longer exists.</div></div>`;
+  const av = u.avatar ? `<img class="imp-av" src="${esc(u.avatar)}" alt=""/>` : `<div class="imp-av imp-av-none">${esc((u.name||'?').charAt(0).toUpperCase())}</div>`;
+  const age = u.created_at ? Math.round((Date.now() - new Date(u.created_at).getTime())/86400000) : null;
+  const row = (k, v) => `<div class="imp-row"><span class="imp-k">${esc(k)}</span><span class="imp-v">${v}</span></div>`;
+  return `<div class="imp-col">
+    <div class="imp-tag">${esc(tag)}</div>
+    <div class="imp-head">${av}<div><div class="imp-name">${esc(u.name || '—')}${u.verified?' <span class="pill pro">verified</span>':''}</div>
+      <div class="muted">${u.username?'@'+esc(u.username):'no @username'}</div></div></div>
+    ${row('Headline', esc(u.headline || '—'))}
+    ${row('Bio', esc((u.bio || '—').slice(0, 120)))}
+    ${row('Type', esc(u.account_type || 'personal'))}
+    ${row('Age', age == null ? '—' : age + ' day' + (age===1?'':'s'))}
+    ${row('Followers', Number(u.followers||0).toLocaleString())}
+    ${row('Posts', Number(u.posts||0).toLocaleString())}
+    ${row('Email', u.email_verified ? 'verified' : '<span class="pill ban">unverified</span>')}
+    ${row('Status', esc(u.status || 'active'))}
+  </div>`;
+}
+async function loadImp(){
+  const el = document.getElementById('impBody'); if (!el) return;
+  try {
+    const d = await api('GET', '/api/admin/impersonation?status=' + IMP_FILTER);
+    if (!d.claims.length) { el.innerHTML = '<div class="empty">No ' + IMP_FILTER + ' impersonation claims.</div>'; return; }
+    el.innerHTML = d.claims.map(c => {
+      const acts = c.status === 'open'
+        ? `<div class="ref-acts"><button class="act danger" onclick="resolveImp(${c.id},'uphold','suspended')">Uphold · suspend</button><button class="act danger" onclick="resolveImp(${c.id},'uphold','banned')">Uphold · ban</button><button class="act" onclick="resolveImp(${c.id},'reject')">Not impersonation</button></div>`
+        : `<span class="pill ${c.status==='upheld'?'ban':''}">${esc(c.status)}</span>${c.handled_by_name?' <span class="muted">by '+esc(c.handled_by_name)+'</span>':''}`;
+      return `<div class="panel">
+        <div class="ref-top"><span class="ref-kind">Impersonation claim #${c.id}</span> <span class="muted">${new Date(c.created_at).toLocaleString()}</span></div>
+        <div class="ref-reason" style="margin:6px 0 12px;">“${esc(c.evidence || '')}”</div>
+        <div class="imp-grid">${impProfile(c.claimant, 'Says it is them')}${impProfile(c.target, 'Reported account')}</div>
+        ${c.staff_note?`<div class="ref-note">Decision note: ${esc(c.staff_note)}</div>`:''}
+        <div style="margin-top:12px;">${acts}</div>
+      </div>`;
+    }).join('');
+  } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function resolveImp(id, action, enforce){
+  const msg = action === 'uphold'
+    ? (enforce === 'banned' ? 'Ban the reported account permanently?' : 'Suspend the reported account for 30 days?')
+    : 'Close this claim as not impersonation?';
+  if (!confirm(msg)) return;
+  const note = prompt('Note for the record (optional):', '');
+  try { await api('POST', '/api/admin/impersonation/' + id + '/resolve', { action, enforce: enforce || 'none', note: note || null });
+    notify('Done.'); loadImp(); }
+  catch (e){ notify(e.message); }
+}
+
+/* ─── Alerts (anomaly detection) ─── */
+let ALERT_ALL = false, ALERT_T = null;
+function renderAlertsView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="tf-head"><div class="tf-ranges">
+      <button class="tf-r ${!ALERT_ALL?'on':''}" onclick="alertFilter(false)">Needs a look</button>
+      <button class="tf-r ${ALERT_ALL?'on':''}" onclick="alertFilter(true)">Everything</button>
+    </div><button class="refresh" onclick="runAnomalyScan()">↻ Check now</button></div>
+    <div id="alertBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
+  loadAlerts();
+  clearInterval(ALERT_T);
+  ALERT_T = setInterval(() => { if (VIEW === 'alerts') loadAlerts(); else clearInterval(ALERT_T); }, 60000);
+}
+function alertFilter(all){ ALERT_ALL = all; renderAlertsView(); }
+async function loadAlerts(){
+  const el = document.getElementById('alertBody'); if (!el) return;
+  try {
+    const d = await api('GET', '/api/admin/anomalies' + (ALERT_ALL ? '?state=all' : ''));
+    const head = `<div class="panel"><h3>Watching for surprises</h3><div class="sub">Every ${d.nextScanMins} minutes, Atwe compares the last 24 hours against the previous week — signups, revenue, orders, refunds, disputes, errors and reports — and raises a flag when something moves far enough to be worth your attention. Quiet is good news.</div></div>`;
+    if (!d.alerts.length) { el.innerHTML = head + '<div class="empty">' + (ALERT_ALL ? 'No alerts have ever been raised.' : 'Nothing unusual. All quiet.') + '</div>'; return; }
+    el.innerHTML = head + d.alerts.map(a => {
+      const up = a.direction === 'up';
+      const dot = a.severity === 'high' ? 'red' : 'amber';
+      const acts = a.acked_at
+        ? `<span class="pill">seen${a.acked_by_name?' by '+esc(a.acked_by_name):''}</span>`
+        : `<div class="ref-acts"><button class="act" onclick="ackAlert(${a.id})">Mark as seen</button></div>`;
+      return `<div class="ref-row"><div class="ref-main">
+        <div class="ref-top"><span class="dot ${dot}"></span> <span class="ref-kind">${esc(a.metricLabel)}</span>
+          <span class="pill ${up?'':'ban'}">${up?'▲':'▼'} ${Math.abs(a.pct)}%</span></div>
+        <div class="ref-sub">${new Date(a.created_at).toLocaleString()}</div>
+        <div class="ref-reason">${esc(a.detail || '')}</div>
+      </div><div class="ref-side">${acts}</div></div>`;
+    }).join('');
+  } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function ackAlert(id){
+  try { await api('POST', '/api/admin/anomalies/' + id + '/ack', {}); loadAlerts(); } catch (e){ notify(e.message); }
+}
+async function runAnomalyScan(){
+  notify('Checking…');
+  try { const r = await api('POST', '/api/admin/anomalies/scan', {});
+    notify(r.raised ? r.raised + ' new alert' + (r.raised===1?'':'s') + '.' : 'Nothing unusual right now.'); loadAlerts(); }
+  catch (e){ notify(e.message); }
+}
+
+/* ─── AI Studio: prompts · model · feedback ─── */
+let AIS_TAB = 'prompts', AIS_PROMPTS = null, AIS_MODELS = null, AIFB_FILTER = 'open';
+function renderAiStudioView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="tf-head"><div class="tf-ranges">
+      <button class="tf-r ${AIS_TAB==='prompts'?'on':''}" onclick="aisTab('prompts')">What it says</button>
+      <button class="tf-r ${AIS_TAB==='model'?'on':''}" onclick="aisTab('model')">Which brain</button>
+      <button class="tf-r ${AIS_TAB==='feedback'?'on':''}" onclick="aisTab('feedback')">What people think</button>
+    </div></div>
+    <div id="aisBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
+  loadAiStudio();
+}
+function aisTab(t){ AIS_TAB = t; renderAiStudioView(); }
+async function loadAiStudio(){
+  const el = document.getElementById('aisBody'); if (!el) return;
+  try {
+    if (AIS_TAB === 'prompts') { AIS_PROMPTS = await api('GET', '/api/admin/ai-prompts'); el.innerHTML = aisPromptsHtml(); }
+    else if (AIS_TAB === 'model') { AIS_MODELS = await api('GET', '/api/admin/ai-models'); el.innerHTML = aisModelsHtml(); }
+    else { const d = await api('GET', '/api/admin/ai-feedback?status=' + AIFB_FILTER); el.innerHTML = aisFeedbackHtml(d); }
+  } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function aisPromptsHtml(){
+  const slots = (AIS_PROMPTS && AIS_PROMPTS.slots) || [];
+  return `<div class="panel"><h3>Atwe AI's own words</h3>
+    <div class="sub">These are the standing instructions the assistant reads before every reply — its personality, its manners, what it is allowed to say. Change one here and it takes effect on the very next answer, with no code change and no deploy. Leave a box empty to go back to what Atwe ships with.</div></div>` +
+    slots.map(sl => `<div class="panel">
+      <h3>${esc(sl.label)} ${sl.overridden ? '<span class="pill pro">edited</span>' : '<span class="muted">· as shipped</span>'}</h3>
+      <div class="sub">${esc(sl.help)}</div>
+      <textarea class="in" id="aip-${esc(sl.key)}" rows="7" style="width:100%;box-sizing:border-box;resize:vertical;font-family:inherit;line-height:1.5;">${esc(sl.value || sl.def || '')}</textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+        <button class="act accent" onclick="saveAiPrompt('${esc(sl.key)}')">Save</button>
+        ${sl.overridden ? `<button class="act" onclick="resetAiPrompt('${esc(sl.key)}')">Back to default</button>` : ''}
+        ${sl.def ? `<button class="act" onclick="showAiDefault('${esc(sl.key)}')">See the default</button>` : '<span class="muted" style="align-self:center;font-size:12px;">The default loads once this part of Atwe AI has been used since the last restart.</span>'}
+      </div>
+    </div>`).join('');
+}
+function showAiDefault(key){
+  const sl = (AIS_PROMPTS.slots || []).find(x => x.key === key);
+  if (!sl || !sl.def) return;
+  document.getElementById('modalCard').innerHTML = `<h3>${esc(sl.label)} — as shipped</h3>
+    <div class="sub" style="white-space:pre-wrap;line-height:1.55;max-height:50vh;overflow:auto;">${esc(sl.def)}</div>
+    <div style="margin-top:14px;display:flex;gap:8px;"><button class="act" onclick="closeModal()">Close</button>
+    <button class="act accent" onclick="useAiDefault('${esc(key)}')">Put it in the box</button></div>`;
+  document.getElementById('modal').classList.add('show');
+}
+function useAiDefault(key){
+  const sl = (AIS_PROMPTS.slots || []).find(x => x.key === key);
+  const box = document.getElementById('aip-' + key);
+  if (sl && box) box.value = sl.def || '';
+  closeModal();
+}
+async function saveAiPrompt(key){
+  const v = (document.getElementById('aip-' + key)?.value || '').trim();
+  try { await api('PUT', '/api/admin/ai-prompts', { prompts: { [key]: v } }); notify('Saved — the next answer uses it.'); loadAiStudio(); }
+  catch (e){ notify(e.message); }
+}
+async function resetAiPrompt(key){
+  if (!confirm('Go back to the wording Atwe ships with?')) return;
+  try { await api('PUT', '/api/admin/ai-prompts', { prompts: { [key]: '' } }); notify('Back to default.'); loadAiStudio(); }
+  catch (e){ notify(e.message); }
+}
+function aisModelsHtml(){
+  const d = AIS_MODELS || {}; const c = d.config || {}; const ch = d.choices || [];
+  const sel = (id, val, allowNone) => `<select class="in" id="${id}" style="width:100%;margin:0;">
+    ${allowNone ? `<option value=""${!val?' selected':''}>No standby — fail with an error</option>` : `<option value=""${!val?' selected':''}>Whatever Atwe ships with</option>`}
+    ${ch.map(m => `<option value="${esc(m.id)}"${val===m.id?' selected':''}>${esc(m.label)} — ${esc(m.help)}</option>`).join('')}</select>`;
+  return `<div class="panel"><h3>Which brain answers</h3>
+    <div class="sub">Atwe AI uses two speeds: a <b>thoughtful</b> one for real conversation and long work, and a <b>fast</b> one for small jobs like rewriting a sentence. Pick a different model for either, and name a <b>standby</b> to fall back to if the provider is having a bad hour — that way a bad ten minutes upstream doesn't take Atwe AI down with it.
+    ${d.hasKey ? '' : '<br><b>Note:</b> no AI key is set on this server, so nothing here has any effect yet.'}</div></div>
+  <div class="panel"><h3>Thoughtful — conversation &amp; long work</h3>
+    <div class="sub" style="margin-bottom:8px;">Ships with: ${esc((d.defaults||{}).smart || '—')}</div>
+    ${sel('aimSmart', c.smart)}
+    <div class="sub" style="margin:12px 0 8px;">Standby if that one fails</div>
+    ${sel('aimSmartFb', c.smartFallback, true)}
+  </div>
+  <div class="panel"><h3>Fast — short jobs</h3>
+    <div class="sub" style="margin-bottom:8px;">Ships with: ${esc((d.defaults||{}).fast || '—')}</div>
+    ${sel('aimFast', c.fast)}
+    <div class="sub" style="margin:12px 0 8px;">Standby if that one fails</div>
+    ${sel('aimFastFb', c.fastFallback, true)}
+  </div>
+  <div class="panel">
+    <div class="site-row"><div><div class="srt">Use the standby automatically</div><div class="srs">Only for real provider trouble — a timeout, an overload, a server error. A mistake in our own request is never retried.</div></div>
+      <button class="switch ${c.failover !== false ? 'on':''}" onclick="toggleAiFailover()" aria-label="Automatic failover"><span></span></button></div>
+    <button class="act accent" style="margin-top:12px;" onclick="saveAiModels()">Save</button>
+  </div>`;
+}
+function readAiModelForm(){
+  return {
+    smart: document.getElementById('aimSmart')?.value || null,
+    smartFallback: document.getElementById('aimSmartFb')?.value || null,
+    fast: document.getElementById('aimFast')?.value || null,
+    fastFallback: document.getElementById('aimFastFb')?.value || null,
+    failover: (AIS_MODELS.config || {}).failover !== false,
+  };
+}
+async function saveAiModels(){
+  try { const r = await api('PUT', '/api/admin/ai-models', { config: readAiModelForm() }); AIS_MODELS.config = r.config; notify('Saved.'); loadAiStudio(); }
+  catch (e){ notify(e.message); }
+}
+async function toggleAiFailover(){
+  const cfg = readAiModelForm(); cfg.failover = !cfg.failover;
+  try { const r = await api('PUT', '/api/admin/ai-models', { config: cfg }); AIS_MODELS.config = r.config; loadAiStudio(); }
+  catch (e){ notify(e.message); }
+}
+function aisFeedbackHtml(d){
+  const s = d.summary || {};
+  const head = `<div class="panel"><h3>What people think of Atwe AI</h3>
+    <div class="sub">Every answer carries a thumbs up and a thumbs down. A thumbs-down asks what went wrong and lands here. Last 30 days:
+      <b>${s.up||0}</b> good, <b>${s.down||0}</b> bad${s.satisfactionPct != null ? ` — <b>${s.satisfactionPct}%</b> happy` : ''}.</div>
+    <div class="tf-ranges" style="margin-top:12px;">
+      <button class="tf-r ${AIFB_FILTER==='open'?'on':''}" onclick="aifbFilter('open')">Needs a look (${s.open||0})</button>
+      <button class="tf-r ${AIFB_FILTER==='reviewed'?'on':''}" onclick="aifbFilter('reviewed')">Handled</button>
+      <button class="tf-r ${AIFB_FILTER==='all'?'on':''}" onclick="aifbFilter('all')">All</button>
+    </div></div>`;
+  if (!d.feedback.length) return head + '<div class="empty">Nothing here.</div>';
+  return head + d.feedback.map(f => {
+    const good = f.rating > 0;
+    const acts = f.status === 'open'
+      ? `<div class="ref-acts"><button class="act" onclick="resolveAiFeedback(${f.id})">Mark as handled</button></div>`
+      : `<span class="pill">handled${f.reviewer_name?' by '+esc(f.reviewer_name):''}</span>`;
+    return `<div class="ref-row"><div class="ref-main">
+      <div class="ref-top"><span class="pill ${good?'pro':'ban'}">${good?'👍 good':'👎 bad'}</span> <span class="ref-kind">${esc(f.feature)}</span></div>
+      <div class="ref-sub">${esc(f.user_username ? '@'+f.user_username : (f.user_name || 'a member'))} · ${new Date(f.created_at).toLocaleString()}</div>
+      ${f.note?`<div class="ref-reason">“${esc(f.note)}”</div>`:''}
+      ${f.question?`<div class="ref-note"><b>They asked:</b> ${esc(f.question.slice(0,300))}</div>`:''}
+      ${f.answer?`<div class="ref-note"><b>Atwe AI said:</b> ${esc(f.answer.slice(0,400))}</div>`:''}
+      ${f.staff_note?`<div class="ref-note">Your note: ${esc(f.staff_note)}</div>`:''}
+    </div><div class="ref-side">${acts}</div></div>`;
+  }).join('');
+}
+function aifbFilter(f){ AIFB_FILTER = f; loadAiStudio(); }
+async function resolveAiFeedback(id){
+  const note = prompt('What did you do about it? (optional)', '');
+  try { await api('POST', '/api/admin/ai-feedback/' + id + '/resolve', { note: note || null }); loadAiStudio(); }
+  catch (e){ notify(e.message); }
+}
+
 /* ─── Refunds queue ─── */
 let REF_T = null, REF_FILTER = '';
 const REF_KIND = { ad:'📣 Ad', boost:'💼 Job boost', promote:'📈 Promoted post', pro:'⭐ Pro', order:'🛍️ Order', tip:'🎁 Tip' };
@@ -3171,7 +3717,11 @@ async function resolveRefund(id, action, amountCents){
   if (action === 'approve') { if (!confirm('Approve this refund? ' + money(amountCents) + ' will be credited to the member\'s wallet.')) return; }
   const note = prompt(action === 'approve' ? 'Optional note (shown to the member):' : 'Reason for declining (shown to the member):', '') ;
   if (action === 'decline' && note === null) return;
-  try { await api('POST', '/api/admin/refunds/' + id + '/resolve', { action, note: note || null }); notify(action === 'approve' ? 'Refund issued.' : 'Request declined.'); loadRefunds(); }
+  try {
+    const r = await api('POST', '/api/admin/refunds/' + id + '/resolve', { action, note: note || null });
+    if (r && r.needsApproval) { notify(r.error || 'A second admin has to approve a refund this size.'); loadRefunds(); return; }
+    notify(action === 'approve' ? 'Refund issued.' : 'Request declined.'); loadRefunds();
+  }
   catch (e){ notify(e.message); }
 }
 
@@ -5804,7 +6354,13 @@ async function impersonateUser(id){
 async function removeUser(id){
   const u = USERS.find(x => x.id === id); if (!u) return;
   if (!confirm('Delete ' + u.email + '? This permanently removes their account, chats and projects.')) return;
-  try { await api('DELETE', '/api/admin/users/' + id); USERS = USERS.filter(x => x.id !== id); closeModal(); render(); notify('User deleted.'); }
+  try {
+    const r = await api('DELETE', '/api/admin/users/' + id);
+    // The four-eyes rule turned this into a request, not a deletion. Once a
+    // second admin approves it, pressing Delete again just works.
+    if (r && r.needsApproval) { notify(r.error || 'A second admin has to approve this first.'); return; }
+    USERS = USERS.filter(x => x.id !== id); closeModal(); render(); notify('User deleted.');
+  }
   catch (e) { notify(e.message); }
 }
 

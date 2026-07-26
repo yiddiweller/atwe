@@ -2861,6 +2861,22 @@ body.reduce-motion .brand-menu{animation-duration:.01s;}
   transition:all var(--t-fast) var(--ease);
 }
 .msg-act:hover{background:var(--s2);color:var(--t2);}
+/* Thumbs on an Atwe AI answer. Quiet until used, then they hold their colour —
+   the point is that the person can SEE their rating registered. */
+.msg-act.aifb svg{width:13px;height:13px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+.msg-act.aifb.rated.up{color:var(--green);}
+.msg-act.aifb.rated.down{color:var(--red);}
+.msg-act.aifb.dimmed{opacity:.35;pointer-events:none;}
+/* The sworn statement on a copyright claim — a real checkbox, deliberately not
+   a switch: this is a legal attestation, not a preference. */
+.dm-sworn{display:flex;gap:10px;align-items:flex-start;margin:14px 0 4px;font-size:13px;line-height:1.5;color:var(--t2);cursor:pointer;}
+.dm-sworn input{margin-top:2px;width:17px;height:17px;flex:none;accent-color:var(--accent);}
+/* Reason chips on the AI thumbs-down sheet. */
+.aifb-rows{display:flex;flex-wrap:wrap;gap:8px;}
+.aifb-r{border:none;background:var(--s1);color:var(--t2);font-family:inherit;font-size:13px;font-weight:600;
+  padding:9px 14px;border-radius:999px;cursor:pointer;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
+.aifb-r.on{background:var(--accent);color:var(--accent-tint,#fff);}
+@media(hover:hover){.aifb-r:hover{background:var(--s2);}.aifb-r.on:hover{background:var(--accent);}}
 .msg-act svg{width:11px;height:11px;stroke:currentColor;stroke-width:2;fill:none;}
 .msg-act.icon-only{padding:4px 6px;}
 
@@ -14181,6 +14197,65 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Copyright claim (DMCA). Opened when someone picks the IP reason on a
+     report — a sworn legal claim needs its own form, not a free-text note. -->
+<div class="overlay hidden" id="dmcaSheet" onclick="if(event.target===this)closeOverlay('dmcaSheet')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Copyright claim">
+    <button class="sheet-close" onclick="closeOverlay('dmcaSheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Copyright claim</div>
+    <div class="ac-disc-sub" style="margin:0 0 14px;">Tell us what you own and where it appears. We review every claim, and the person who posted it can contest the decision.</div>
+    <label class="ja-flabel">What work of yours is this?</label>
+    <textarea class="jp-in jp-desc" id="dmcaWork" placeholder="e.g. a photograph I took and published on 3 March, or my product listing copy…" maxlength="1000"></textarea>
+    <label class="ja-flabel" style="margin-top:10px;">Anything else we should know? (optional)</label>
+    <textarea class="jp-in jp-desc" id="dmcaNote" placeholder="Links to the original, registration numbers, dates…" maxlength="1000"></textarea>
+    <label class="dm-sworn"><input type="checkbox" id="dmcaSworn"/><span>I have a good-faith belief this use is not authorised by me, the copyright owner, or the law — and the information above is accurate.</span></label>
+    <button class="ac-pill-btn accent jp-submit" id="dmcaSubmit" onclick="acSubmitDmca()">File the claim</button>
+  </div>
+</div>
+
+<!-- Impersonation claim: a fast lane, separate from a general report. -->
+<div class="overlay hidden" id="impSheet" onclick="if(event.target===this)closeOverlay('impSheet')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Impersonation report">
+    <button class="sheet-close" onclick="closeOverlay('impSheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Someone is pretending to be me</div>
+    <div class="ac-disc-sub" style="margin:0 0 14px;">We put both profiles side by side and look at this ahead of ordinary reports.</div>
+    <label class="ja-flabel">What are they copying?</label>
+    <textarea class="jp-in jp-desc" id="impEvidence" placeholder="My name and photo, my business name, my posts…" maxlength="1500"></textarea>
+    <button class="ac-pill-btn accent jp-submit" onclick="acSubmitImpersonation()">Report the account</button>
+  </div>
+</div>
+
+<!-- Counter-notice: contest a copyright removal on your own content. -->
+<div class="overlay hidden" id="dmcaCounter" onclick="if(event.target===this)closeOverlay('dmcaCounter')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Contest a removal">
+    <button class="sheet-close" onclick="closeOverlay('dmcaCounter')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Contest this removal</div>
+    <div class="ac-disc-sub" style="margin:0 0 14px;" id="dmcaCounterSub">If you believe this was removed by mistake, tell us why. We will look again.</div>
+    <textarea class="jp-in jp-desc" id="dmcaCounterText" placeholder="It's my own work, I have a licence, it's fair use…" maxlength="2000"></textarea>
+    <button class="ac-pill-btn accent jp-submit" onclick="acSubmitCounter()">Send counter-notice</button>
+  </div>
+</div>
+
+<!-- "What went wrong?" after a thumbs-down on an Atwe AI answer. -->
+<div class="overlay hidden" id="aiFbSheet" onclick="if(event.target===this)aiFbSkip()">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Feedback on this answer">
+    <button class="sheet-close" onclick="aiFbSkip()" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">What went wrong?</div>
+    <div class="ac-disc-sub" style="margin:0 0 14px;">Optional — it helps us make Atwe AI better.</div>
+    <div class="aifb-rows" id="aiFbReasons">
+      <button class="aifb-r" onclick="aiFbPick(this,'Not accurate')">Not accurate</button>
+      <button class="aifb-r" onclick="aiFbPick(this,'Did not follow the request')">Didn’t follow my request</button>
+      <button class="aifb-r" onclick="aiFbPick(this,'Too long or waffly')">Too long or waffly</button>
+      <button class="aifb-r" onclick="aiFbPick(this,'Unhelpful')">Unhelpful</button>
+      <button class="aifb-r" onclick="aiFbPick(this,'Wrong tone')">Wrong tone</button>
+      <button class="aifb-r" onclick="aiFbPick(this,'Something else')">Something else</button>
+    </div>
+    <textarea class="jp-in jp-desc" id="aiFbNote" placeholder="Add a detail (optional)…" maxlength="400" style="margin-top:12px;"></textarea>
+    <button class="ac-pill-btn accent jp-submit" onclick="aiFbSubmit()">Send</button>
+    <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="aiFbSkip()">Skip</button>
+  </div>
+</div>
+
 <!-- Connections / requests list -->
 <div class="overlay hidden" id="connList" onclick="if(event.target===this)closeOverlay('connList')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Connections">
@@ -17773,7 +17848,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1615'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1616'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -21288,6 +21363,12 @@ function appendBubble(role, content, streaming, imageUrl) {
           <button class="msg-act" title="Regenerate" onclick="regenMsg(this)">
             <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-5.51"/></svg>
           </button>
+          <button class="msg-act icon-only aifb up" title="Good answer" aria-label="Good answer" onclick="aiFeedback(this,1)">
+            <svg viewBox="0 0 24 24"><path d="M7 22V11l5-9a2.5 2.5 0 0 1 2.4 3.2L13.5 9H19a2 2 0 0 1 2 2.4l-1.6 8A2 2 0 0 1 17.4 21H7z"/><path d="M7 11H4a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h3"/></svg>
+          </button>
+          <button class="msg-act icon-only aifb down" title="Bad answer" aria-label="Bad answer" onclick="aiFeedback(this,-1)">
+            <svg viewBox="0 0 24 24"><path d="M17 2v11l-5 9a2.5 2.5 0 0 1-2.4-3.2L10.5 15H5a2 2 0 0 1-2-2.4l1.6-8A2 2 0 0 1 6.6 3H17z"/><path d="M17 13h3a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1h-3"/></svg>
+          </button>
         </div>` : ''}
     </div>
   `;
@@ -21373,6 +21454,61 @@ function copyMsg(btn) {
     btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:11px;height:11px;stroke:var(--green);stroke-width:2.5;fill:none"><polyline points="20 6 9 17 4 12"/></svg>`;
     setTimeout(() => { btn.innerHTML = orig; }, 1800);
   }).catch(() => showNotif('Copy failed.'));
+}
+
+/* Thumbs up/down on an Atwe AI answer. A thumbs-up is a quiet signal; a
+   thumbs-down opens a one-line "what went wrong?" so the review queue gets
+   something a human can act on rather than a bare count. Fire-and-forget —
+   rating the assistant must never interrupt the conversation. */
+function aiFeedback(btn, rating) {
+  const body = btn.closest('.msg-body');
+  if (!body || body.dataset.rated) return;
+  const answer = (body.querySelector('.bubble')?.innerText || '').slice(0, 3000);
+  // The question is the user turn immediately before this answer.
+  let question = '';
+  try {
+    const msg = body.closest('.msg');
+    const prev = msg && msg.previousElementSibling;
+    if (prev && prev.classList.contains('user')) question = (prev.querySelector('.bubble')?.innerText || '').slice(0, 1000);
+  } catch (e) {}
+  const send = (note) => {
+    API.req('POST', '/api/ai/feedback', { rating, feature: 'chat', question, answer, note: note || null })
+      .catch(() => {});
+    body.dataset.rated = '1';
+    btn.classList.add('rated');
+    body.querySelectorAll('.msg-act.aifb').forEach((b) => { if (b !== btn) b.classList.add('dimmed'); });
+    showNotif(rating > 0 ? 'Thanks — noted.' : 'Thanks. We’ll take a look at this one.');
+    try { announce(rating > 0 ? 'Marked as a good answer' : 'Marked as a bad answer'); } catch (e) {}
+  };
+  if (rating > 0) return send(null);
+  aiFbAskWhy(send);
+}
+// A tiny reason picker. Skipping is fine — the thumb alone is still useful.
+function aiFbAskWhy(send) {
+  const el = document.getElementById('aiFbSheet');
+  if (!el) return send(null);
+  AI_FB_SEND = send;
+  const t = document.getElementById('aiFbNote'); if (t) t.value = '';
+  document.querySelectorAll('#aiFbReasons .aifb-r').forEach((b) => b.classList.remove('on'));
+  AI_FB_REASON = '';
+  showOverlay('aiFbSheet');
+}
+let AI_FB_SEND = null, AI_FB_REASON = '';
+function aiFbPick(btn, reason) {
+  AI_FB_REASON = reason;
+  document.querySelectorAll('#aiFbReasons .aifb-r').forEach((b) => b.classList.toggle('on', b === btn));
+}
+function aiFbSubmit() {
+  const extra = (document.getElementById('aiFbNote')?.value || '').trim();
+  const note = [AI_FB_REASON, extra].filter(Boolean).join(' — ').slice(0, 500);
+  closeOverlay('aiFbSheet');
+  if (AI_FB_SEND) AI_FB_SEND(note || null);
+  AI_FB_SEND = null;
+}
+function aiFbSkip() {
+  closeOverlay('aiFbSheet');
+  if (AI_FB_SEND) AI_FB_SEND(null);
+  AI_FB_SEND = null;
 }
 
 function regenMsg(btn) {
@@ -24319,7 +24455,8 @@ async function acSubmitBizVerify() {
 // ── Reporting: flag a job / worker listing / user / post for the Atwe team. ──
 const _REPORT_REASONS = [
   ['illegal', 'Illegal activity and behavior', 'Content that depicts illegal or criminal acts, or threats of violence.'],
-  ['ip', 'Intellectual property infringement', 'Impersonating another account or business, or infringing on intellectual property rights.'],
+  ['ip', 'Copyright infringement', 'This uses my photos, writing, video or other work without permission.'],
+  ['impersonation', 'Impersonation', 'This account is pretending to be me, my business, or someone else.'],
   ['sensitive', 'Sensitive content', 'Depictions of violence, gore or nudity.'],
   ['underage', 'Underage content', 'Sexually explicit content involving minors.'],
   ['prostitution', 'Prostitution', 'Solicitation or advertising for illegal sexual activity or sex for hire.'],
@@ -24343,13 +24480,80 @@ function acReportReason(v, btn) {
   document.querySelectorAll('#reportReasons .rep-row').forEach(b => b.classList.toggle('on', b === btn));
   document.getElementById('reportSubmit').disabled = false;
 }
+// Which report targets a copyright claim can actually name. A job or a review
+// isn't a piece of creative work, so those stay ordinary reports.
+const DMCA_TARGET_MAP = { post: 'post', listing: 'listing', showcase: 'showcase', feedpost: 'feedpost' };
 async function acSubmitReport() {
   const r = AC._report; if (!r) return;
+  // Two reasons are not really "reports" — they're formal claims with their own
+  // process, so they hand off to a proper form instead of a free-text note.
+  if (AC._reportReason === 'ip' && DMCA_TARGET_MAP[r.type]) { acOpenDmca(DMCA_TARGET_MAP[r.type], r.id); return; }
+  if (AC._reportReason === 'impersonation' && r.type === 'user') { acOpenImpersonation(r.id); return; }
   const btn = document.getElementById('reportSubmit'); btn.disabled = true;
   try {
-    await API.req('POST', '/api/reports', { targetType: r.type, targetId: r.id, reason: AC._reportReason, note: document.getElementById('reportNote').value.trim() });
+    // The server's reason list predates the split; 'impersonation' on anything
+    // other than an account is still a legitimate ordinary report, filed as 'ip'.
+    const reason = AC._reportReason === 'impersonation' ? 'ip' : AC._reportReason;
+    await API.req('POST', '/api/reports', { targetType: r.type, targetId: r.id, reason, note: document.getElementById('reportNote').value.trim() });
     closeOverlay('reportSheet'); showNotif('Thanks. Your report was sent to the Atwe team.');
   } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not submit the report.'); }
+}
+
+/* ─── Copyright claims + impersonation fast-track ───────────────────────── */
+function acOpenDmca(targetType, targetId) {
+  AC._dmca = { targetType, targetId };
+  closeOverlay('reportSheet');
+  const w = document.getElementById('dmcaWork'); if (w) w.value = '';
+  const n = document.getElementById('dmcaNote'); if (n) n.value = '';
+  const sw = document.getElementById('dmcaSworn'); if (sw) sw.checked = false;
+  const b = document.getElementById('dmcaSubmit'); if (b) b.disabled = false;
+  showOverlay('dmcaSheet');
+}
+async function acSubmitDmca() {
+  const d = AC._dmca; if (!d) return;
+  const workDesc = (document.getElementById('dmcaWork').value || '').trim();
+  const sworn = !!document.getElementById('dmcaSworn').checked;
+  if (!workDesc) { showNotif('Tell us what work of yours this is.'); return; }
+  if (!sworn) { showNotif('Please confirm the statement to file a claim.'); return; }
+  const btn = document.getElementById('dmcaSubmit'); btn.disabled = true;
+  try {
+    const r = await API.req('POST', '/api/dmca', { targetType: d.targetType, targetId: d.targetId,
+      workDesc, note: (document.getElementById('dmcaNote').value || '').trim(), sworn: true });
+    closeOverlay('dmcaSheet');
+    showNotif(r && r.duplicate ? 'You already have an open claim on this.' : 'Claim filed. We’ll review it and let you know.');
+  } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not file the claim.'); }
+}
+function acOpenImpersonation(targetId) {
+  AC._imp = { targetId };
+  closeOverlay('reportSheet');
+  const t = document.getElementById('impEvidence'); if (t) t.value = '';
+  showOverlay('impSheet');
+}
+async function acSubmitImpersonation() {
+  const i = AC._imp; if (!i) return;
+  const evidence = (document.getElementById('impEvidence').value || '').trim();
+  if (!evidence) { showNotif('Tell us what they are copying.'); return; }
+  try {
+    const r = await API.req('POST', '/api/impersonation', { targetId: i.targetId, evidence });
+    closeOverlay('impSheet');
+    showNotif(r && r.duplicate ? 'You already reported this account.' : 'Reported. We look at these ahead of ordinary reports.');
+  } catch (e) { showNotif(e.message || 'Could not file the claim.'); }
+}
+// Contest a copyright removal on your own content (from the notification).
+function acOpenCounter(claimId) {
+  AC._counter = { claimId };
+  const t = document.getElementById('dmcaCounterText'); if (t) t.value = '';
+  showOverlay('dmcaCounter');
+}
+async function acSubmitCounter() {
+  const c = AC._counter; if (!c) return;
+  const statement = (document.getElementById('dmcaCounterText').value || '').trim();
+  if (!statement) { showNotif('Tell us why this was not infringing.'); return; }
+  try {
+    await API.req('POST', '/api/dmca/' + c.claimId + '/counter', { statement });
+    closeOverlay('dmcaCounter');
+    showNotif('Counter-notice sent. We’ll look at it again.');
+  } catch (e) { showNotif(e.message || 'Could not send the counter-notice.'); }
 }
 
 /* ─── Verified badge (the "V") — shown after a display name for Pro users ─── */
@@ -27943,7 +28147,7 @@ function notifRow(n, i) {
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
-  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', event_reminder: 'is hosting an event starting soon', event_comment: 'commented on your event', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', appt_rescheduled: 'proposed a new appointment time', appt_reminder: 'has an appointment with you soon', call_reminder: 'has a call with you soon', stock_low: 'is running low — only a few left', stock_out: 'has sold out', event_spot: 'a spot opened up — you’re in!', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', invoice_reminder: 'sent a reminder about an unpaid invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', strike: 'issued a warning on your account', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', referral_milestone: 'you hit a referral milestone — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', listing_hidden: 'a listing of yours was hidden — check your messages', waitlist_invite: 'you’re off the waiting list — it’s ready for you', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', auction_outbid: 'outbid you on an auction. Bid again to stay in it', auction_won: 'you won the auction. Pay to claim it', auction_ended: 'won your auction. They’re paying now', group_join_paid: 'paid your group’s join fee. They’re in', crm_followup: 'is due a follow-up — you set the reminder', rinv_paused: 'a recurring invoice was paused — check the schedule', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', split_reminder: 'sent a reminder about your share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', story_answer: 'responded to your question', story_mention: 'mentioned you in their Daily', remix: 'remixed your video', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_adjustment: 'your wallet balance was adjusted by our team', cashout_released: 'your cash-out was approved and is on its way to your bank', cashout_returned: 'your cash-out wasn’t approved — the money is back in your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item', lead_active: 'posted something new — they\u2019re on one of your lead lists', lead_hiring: 'is hiring — they\u2019re on one of your lead lists', inbox_assigned: 'gave you a conversation to handle' };
+  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', event_reminder: 'is hosting an event starting soon', event_comment: 'commented on your event', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', appt_rescheduled: 'proposed a new appointment time', appt_reminder: 'has an appointment with you soon', call_reminder: 'has a call with you soon', stock_low: 'is running low — only a few left', stock_out: 'has sold out', event_spot: 'a spot opened up — you’re in!', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', invoice_reminder: 'sent a reminder about an unpaid invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', strike: 'issued a warning on your account', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', referral_milestone: 'you hit a referral milestone — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', listing_hidden: 'a listing of yours was hidden — check your messages', waitlist_invite: 'you’re off the waiting list — it’s ready for you', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', auction_outbid: 'outbid you on an auction. Bid again to stay in it', auction_won: 'you won the auction. Pay to claim it', auction_ended: 'won your auction. They’re paying now', group_join_paid: 'paid your group’s join fee. They’re in', crm_followup: 'is due a follow-up — you set the reminder', rinv_paused: 'a recurring invoice was paused — check the schedule', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', split_reminder: 'sent a reminder about your share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', story_answer: 'responded to your question', story_mention: 'mentioned you in their Daily', remix: 'remixed your video', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_adjustment: 'your wallet balance was adjusted by our team', cashout_released: 'your cash-out was approved and is on its way to your bank', cashout_returned: 'your cash-out wasn’t approved — the money is back in your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item', lead_active: 'posted something new — they\u2019re on one of your lead lists', lead_hiring: 'is hiring — they\u2019re on one of your lead lists', inbox_assigned: 'gave you a conversation to handle', dmca_removed: 'removed something of yours after a copyright claim. Tap to contest it', dmca_reinstated: 'put your content back after reviewing your counter-notice', imp_upheld: 'agreed — the account impersonating you has been actioned', imp_rejected: 'reviewed your impersonation report' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -27971,6 +28175,7 @@ function notifRow(n, i) {
     : isSplit ? (n.type === 'split_paid' ? `acOpenSplits();acSplitTab('created')` : `acOpenSplits()`)
     : isMention ? (n.groupId ? `appTab('chat');acOpenGroup(${n.groupId})` : (n.postId ? `acOpenPostView(${n.postId})` : `acGoProfile('${a.username}')`))
     : (n.type === 'remix' && n.metaNum) ? `acOpenFeedOriginal(${n.metaNum})`
+    : (n.type === 'dmca_removed' && n.metaNum) ? `acOpenCounter(${n.metaNum})`
     : isFeed ? `acOpenFeed(${n.feedId})`
     : isGroup ? (n.type === 'group_request' ? `appTab('chat');acOpenGroupRequests(${n.groupId})` : `appTab('chat');acOpenGroup(${n.groupId})`)
     : isChat ? `appTab('chat');acOpenChat(${a.id})`
