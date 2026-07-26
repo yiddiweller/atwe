@@ -5991,8 +5991,9 @@ app.post('/api/atchat/sticker', auth.requireAuth, rateLimit(60, 60000, 'sticker-
     const meta = { t: 'sticker', img: st.image };
     if (Number.isInteger(groupId)) {
       if (!(await isGroupMember(groupId, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
-      const gb = await db.query('SELECT broadcast, disappearing FROM at_groups WHERE id = $1', [groupId]);
+      const gb = await db.query('SELECT broadcast, disappearing, perm_send_media FROM at_groups WHERE id = $1', [groupId]);
       if (gb.rows[0] && gb.rows[0].broadcast && !(await isGroupAdmin(groupId, req.user.id))) return res.status(403).json({ error: 'Only an admin can post in this channel.' });
+      if (gb.rows[0] && gb.rows[0].perm_send_media === 'admins' && !(await isGroupAdmin(groupId, req.user.id))) return res.status(403).json({ permission: true, error: 'Only admins can send stickers and media in this group.' });
       const me = await chatIdentity(req.user.id);
       const GCOLS = 'id, body, image, images, media, media_kind, media_name, created_at, forwarded, meta, reply_to';
       const gsec = (gb.rows[0] && gb.rows[0].disappearing) || 0;
@@ -7094,7 +7095,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
     const g = await db.query(
-      `SELECT g.id, g.name, g.username, g.avatar, g.created_by, g.broadcast, g.disappearing, g.slow_mode_seconds, g.description, g.rules, g.blocked_words,
+      `SELECT g.id, g.name, g.username, g.avatar, g.created_by, g.broadcast, g.disappearing, g.slow_mode_seconds, g.description, g.rules, g.blocked_words, g.perm_send_media, g.perm_add_members,
               (SELECT (m.muted AND (m.muted_until IS NULL OR m.muted_until > now())) FROM at_group_members m WHERE m.group_id = g.id AND m.user_id = $2) AS muted
        FROM at_groups g WHERE g.id = $1`,
       [gid, req.user.id]
@@ -7133,7 +7134,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       requests = rq.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null }));
     }
     res.json({
-      group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by, broadcast: g.rows[0].broadcast, muted: !!g.rows[0].muted, disappearing: g.rows[0].disappearing || 0, slowMode: g.rows[0].slow_mode_seconds || 0, description: g.rows[0].description || null, rules: g.rows[0].rules || null, blockedWords: iAmAdmin ? (g.rows[0].blocked_words || []) : undefined, iAmAdmin },
+      group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by, broadcast: g.rows[0].broadcast, muted: !!g.rows[0].muted, disappearing: g.rows[0].disappearing || 0, slowMode: g.rows[0].slow_mode_seconds || 0, description: g.rows[0].description || null, rules: g.rows[0].rules || null, blockedWords: iAmAdmin ? (g.rows[0].blocked_words || []) : undefined, permSendMedia: g.rows[0].perm_send_media === 'admins' ? 'admins' : 'all', permAddMembers: g.rows[0].perm_add_members === 'admins' ? 'admins' : 'all', iAmAdmin },
       requests,
       lastRead,
       live: ls ? liveStreamPublic(ls) : null,
@@ -7168,6 +7169,23 @@ app.post('/api/atchat/groups/:id/slow-mode', auth.requireAuth, async (req, res) 
     res.json({ ok: true, slowMode: seconds });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update slow mode.' }); }
 });
+// Group permissions v2 (WhatsApp-style, admin-only): who can send media and who
+// can add members — 'all' (default) or 'admins'. Enforced server-side at the
+// send / add routes; the info payload exposes both so the UI reflects them.
+app.post('/api/atchat/groups/:id/permissions', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  const fields = [], vals = [];
+  if ('sendMedia' in req.body) { vals.push(req.body.sendMedia === 'admins' ? 'admins' : 'all'); fields.push(`perm_send_media = $${vals.length}`); }
+  if ('addMembers' in req.body) { vals.push(req.body.addMembers === 'admins' ? 'admins' : 'all'); fields.push(`perm_add_members = $${vals.length}`); }
+  if (!fields.length) return res.json({ ok: true });
+  try {
+    if (!(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only an admin can change permissions.' });
+    vals.push(gid);
+    await db.query(`UPDATE at_groups SET ${fields.join(', ')} WHERE id = $${vals.length}`, vals);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update permissions.' }); }
+});
 app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 60000, 'group-send'), async (req, res) => {
   const gid = routeId(req.params.id);
   if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
@@ -7187,7 +7205,7 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
     // Broadcast ("channel") groups are admin-post-only.
-    const gb = await db.query('SELECT broadcast, slow_mode_seconds, blocked_words FROM at_groups WHERE id = $1', [gid]);
+    const gb = await db.query('SELECT broadcast, slow_mode_seconds, blocked_words, perm_send_media FROM at_groups WHERE id = $1', [gid]);
     if (gb.rows[0] && gb.rows[0].broadcast && !(await isGroupAdmin(gid, req.user.id))) {
       return res.status(403).json({ error: 'Only an admin can post in this channel.' });
     }
@@ -7195,6 +7213,10 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
     // never lands, and the sender is told why). Admins are exempt.
     if (body && gb.rows[0] && (gb.rows[0].blocked_words || []).length && automodHit(body, gb.rows[0].blocked_words) && !(await isGroupAdmin(gid, req.user.id))) {
       return res.status(400).json({ automod: true, error: 'That message includes a word this group doesn’t allow.' });
+    }
+    // Permission: media restricted to admins (plain text still allowed for everyone).
+    if ((image || imgs.length || media.data) && gb.rows[0] && gb.rows[0].perm_send_media === 'admins' && !(await isGroupAdmin(gid, req.user.id))) {
+      return res.status(403).json({ permission: true, error: 'Only admins can send photos and media in this group.' });
     }
     // Slow mode (Telegram-style): non-admin members wait N seconds between their
     // own messages. Admins are exempt; a duplicate clientId retry passes through
@@ -7849,9 +7871,13 @@ app.post('/api/atchat/groups/:id/members', auth.requireAuth, async (req, res) =>
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
     // Broadcast channels are admin-controlled (admin-post-only) — only an admin
     // may add subscribers. Regular groups stay open: any member can add people.
-    const gi = await db.query('SELECT broadcast FROM at_groups WHERE id = $1', [gid]);
+    const gi = await db.query('SELECT broadcast, perm_add_members FROM at_groups WHERE id = $1', [gid]);
     if (gi.rows[0] && gi.rows[0].broadcast && !(await isGroupAdmin(gid, req.user.id))) {
       return res.status(403).json({ error: 'Only a channel admin can add members.' });
+    }
+    // Permission v2: a regular group can also restrict adding to admins.
+    if (gi.rows[0] && !gi.rows[0].broadcast && gi.rows[0].perm_add_members === 'admins' && !(await isGroupAdmin(gid, req.user.id))) {
+      return res.status(403).json({ error: 'Only an admin can add members to this group.' });
     }
     // "Who can add you to groups": each candidate's preference can refuse the add
     // (everyone | connections-only | nobody). Existing group members are exempt.
