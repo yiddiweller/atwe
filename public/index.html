@@ -7214,6 +7214,11 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .shop-setup-row.done .shop-setup-chk{background:rgba(48,209,88,.18);}
 .shop-setup-chk svg{width:13px;height:13px;fill:none;stroke:var(--green);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;}
 .shop-setup-row .iset-chev{margin-inline-start:auto;}
+/* Workplace verification: verified-employer chips + the inline ✓ Verified tag. */
+.wv-row{display:flex;flex-wrap:wrap;gap:6px;padding:2px 0 8px;}
+.wv-chip{font-size:12px;font-weight:700;color:var(--green);background:rgba(48,209,88,.13);border-radius:999px;padding:4px 11px;}
+.wv-tag{font-size:10.5px;font-weight:800;color:var(--green);background:rgba(48,209,88,.14);border-radius:999px;padding:2px 7px;margin-inline-start:4px;vertical-align:1px;}
+.wv-code{background:var(--s1);border-radius:16px;padding:13px 14px;}
 /* AI action log: rows of confirmed "Do it for me" actions. */
 .ailog-row{display:flex;align-items:flex-start;gap:11px;padding:10px 0;border-bottom:1px solid var(--bg);}
 .ailog-row:last-of-type{border-bottom:none;}
@@ -15207,6 +15212,16 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Workplace verification: prove where you work with a work-email code -->
+<div class="overlay hidden" id="workVerifyView" onclick="if(event.target===this)closeOverlay('workVerifyView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Verify your workplace">
+    <button class="sheet-close" onclick="closeOverlay('workVerifyView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Verify where you work</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">We’ll send a code to your work email. Your email is never shown — only the verified badge is.</div>
+    <div id="workVerifyBody"></div>
+  </div>
+</div>
+
 <!-- AI action log (transparency): actions you confirmed Atwe AI to take -->
 <div class="overlay hidden" id="aiLogView" onclick="if(event.target===this)closeOverlay('aiLogView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="AI activity">
@@ -17325,7 +17340,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1580'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1581'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -41140,19 +41155,87 @@ function acExpRow(e, mine) {
   const sub = [co, acExpYears(e)].filter(Boolean).join(' · ');
   const edit = mine ? ` onclick="acEditExperienceOpen(${e.id})" style="cursor:pointer;"` : '';
   const del = mine ? `<button class="ac-exp-del" onclick="event.stopPropagation();acDeleteExperience(${e.id})" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : '';
+  // Work-email verified: this role's linked business matches a verified workplace.
+  const wv = (AC._workVerified || []).some(w => w.businessId && e.companyUserId && w.businessId === e.companyUserId);
   return `<div class="ac-exp"${edit}>
     <span class="ac-exp-ic">${_EXP_IC}</span>
-    <div class="ac-exp-main"><div class="ac-exp-title">${escHtml(e.title)}</div>${sub ? `<div class="ac-exp-sub">${sub}</div>` : ''}</div>
+    <div class="ac-exp-main"><div class="ac-exp-title">${escHtml(e.title)}${wv ? ' <span class="wv-tag">✓ Verified</span>' : ''}</div>${sub ? `<div class="ac-exp-sub">${sub}</div>` : ''}</div>
     ${del}
   </div>`;
 }
 function acExperienceSection(d, mine) {
   const exps = d.experiences || [];
+  AC._workVerified = d.workVerified || []; // read by acExpRow for the ✓ Verified tag
   if (mine) AC._experiences = exps; // stash for the edit form to prefill from
-  if (!exps.length && !mine) return ''; // nothing to show on someone else's empty profile
+  if (!exps.length && !mine && !AC._workVerified.length) return ''; // nothing to show on someone else's empty profile
   const addBtn = mine ? `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acAddExperienceOpen()">＋ Add</button>` : '';
   const rows = exps.length ? exps.map(e => acExpRow(e, mine)).join('') : '<div class="ac-empty" style="padding:14px;">No experience added yet.</div>';
-  return `<div class="ac-section-row"><span class="ac-prof-head">Experience</span>${addBtn}</div>${rows}`;
+  // Verified-workplace chips (work-email proof) + a "verify yours" nudge on your own profile.
+  const chips = AC._workVerified.map(w => `<span class="wv-chip">✓ Verified at ${escHtml(w.businessName || w.domain)}</span>`).join('');
+  const verifyBtn = mine ? `<button class="ac-link-btn" style="margin:8px 2px 0;" onclick="acOpenWorkVerify()">${AC._workVerified.length ? 'Manage workplace verification' : 'Verify where you work'}</button>` : '';
+  return `<div class="ac-section-row"><span class="ac-prof-head">Experience</span>${addBtn}</div>${chips ? `<div class="wv-row">${chips}</div>` : ''}${rows}${verifyBtn}`;
+}
+/* ── Workplace verification: prove where you work with a work-email code ── */
+async function acOpenWorkVerify() {
+  showOverlay('workVerifyView');
+  AC._wvPending = null;
+  await acRenderWorkVerify();
+}
+async function acRenderWorkVerify() {
+  const b = document.getElementById('workVerifyBody'); if (!b) return;
+  b.innerHTML = acSkelRows(2);
+  let list = [];
+  try { ({ verifications: list } = await API.req('GET', '/api/work-verification')); } catch (e) {
+    b.innerHTML = '<div class="ac-empty">' + escHtml(e.message || 'Could not load.') + '</div>'; return;
+  }
+  const p = AC._wvPending;
+  const codeStep = p ? `<div class="wv-code">
+      <div class="ac-disc-sub" style="margin:0 0 8px;">We sent a 6-digit code to <b>${escHtml(p.email)}</b>${p.emailSent ? '' : ' (mail isn’t set up on this server — check the server log)'}.</div>
+      <div style="display:flex;gap:8px;">
+        <input class="jp-in" id="wvCodeIn" type="text" inputmode="numeric" maxlength="6" placeholder="6-digit code" style="margin:0;flex:1;" onkeydown="if(event.key==='Enter')acWorkVerifyConfirm()"/>
+        <button class="ac-pill-btn accent" style="flex:0 0 auto;" onclick="acWorkVerifyConfirm()">Verify</button>
+      </div>
+      <button class="ac-link-btn" style="margin-top:8px;color:var(--t3);" onclick="AC._wvPending=null;acRenderWorkVerify()">Use a different email</button>
+    </div>` : `<div style="display:flex;gap:8px;">
+      <input class="jp-in" id="wvEmailIn" type="email" maxlength="160" placeholder="you@yourcompany.com" style="margin:0;flex:1;" onkeydown="if(event.key==='Enter')acWorkVerifyStart()"/>
+      <button class="ac-pill-btn accent" style="flex:0 0 auto;" onclick="acWorkVerifyStart()">Send code</button>
+    </div>
+    <div class="ac-disc-sub" style="margin:8px 2px 0;">Use your work address. Personal providers (Gmail, Outlook, iCloud…) can’t prove where you work.</div>`;
+  const rows = list.length ? `<div class="ac-prof-head" style="margin:18px 0 4px;">Your workplaces</div>` + list.map(v => `<div class="rsk-row">
+      <div class="rsk-main">
+        <div class="rsk-name">${escHtml(v.business ? v.business.name : v.domain)}${v.verified ? ' <span class="wv-tag">✓ Verified</span>' : (v.pending ? ' <span class="rsk-chip">Code sent</span>' : '')}</div>
+        <div class="rsk-sub">${escHtml(v.email)}${v.verified && v.verifiedAt ? ' · ' + acTime(v.verifiedAt) : ''}</div>
+      </div>
+      <button class="pv-del" onclick="acWorkVerifyRemove(${v.id})" aria-label="Remove">×</button>
+    </div>`).join('') : '';
+  b.innerHTML = codeStep + rows;
+  setTimeout(() => { const el = document.getElementById(p ? 'wvCodeIn' : 'wvEmailIn'); if (el) el.focus(); }, 60);
+}
+async function acWorkVerifyStart() {
+  const email = (document.getElementById('wvEmailIn').value || '').trim();
+  if (!email) { showNotif('Enter your work email.'); return; }
+  try {
+    const r = await API.req('POST', '/api/work-verification/start', { email });
+    AC._wvPending = { email, domain: r.domain, emailSent: r.emailSent, business: r.business };
+    await acRenderWorkVerify();
+  } catch (e) { showNotif(e.message || 'Could not send the code.'); }
+}
+async function acWorkVerifyConfirm() {
+  const p = AC._wvPending; if (!p) return;
+  const code = (document.getElementById('wvCodeIn').value || '').trim();
+  if (!/^\d{6}$/.test(code)) { showNotif('Enter the 6-digit code.'); return; }
+  try {
+    const r = await API.req('POST', '/api/work-verification/confirm', { domain: p.domain, code });
+    AC._wvPending = null;
+    showNotif('Verified at ' + ((r.business && r.business.name) || r.domain) + '.');
+    await acRenderWorkVerify();
+    if (S.user && S.user.username) acGoProfile(S.user.username);
+  } catch (e) { showNotif(e.message || 'Could not verify that code.'); }
+}
+async function acWorkVerifyRemove(id) {
+  if (!(await appConfirm({ title: 'Remove this workplace?', message: 'The verified badge disappears from your profile. You can verify again anytime.', confirmText: 'Remove', danger: true }))) return;
+  try { await API.req('DELETE', '/api/work-verification/' + id); acRenderWorkVerify(); }
+  catch (e) { showNotif(e.message || 'Could not remove it.'); }
 }
 // ── Education: schools/degrees, same timeline shape as experience. ──
 const _EDU_IC = '<svg viewBox="0 0 24 24"><path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5"/></svg>';
