@@ -1946,6 +1946,105 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS ai_usage_at_idx ON ai_usage (created_at DESC);
     CREATE INDEX IF NOT EXISTS ai_usage_feature_idx ON ai_usage (feature);
   `);
+  // ── Batch 39: the platform underneath ──────────────────────────────────────
+  // Passkeys. Only the PUBLIC half is stored — there is nothing here worth
+  // stealing, which is the entire point of the design.
+  await query(`
+    CREATE TABLE IF NOT EXISTS passkeys (
+      id            SERIAL PRIMARY KEY,
+      user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      credential_id TEXT NOT NULL UNIQUE,
+      public_key    TEXT NOT NULL,
+      alg           TEXT NOT NULL,
+      sign_count    BIGINT NOT NULL DEFAULT 0,
+      label         TEXT,
+      last_used_at  TIMESTAMPTZ,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS passkeys_user_idx ON passkeys (user_id);
+    -- A challenge is single-use and short-lived; keeping it in the database
+    -- rather than in memory is what lets a second server instance finish a
+    -- sign-in the first one started.
+    CREATE TABLE IF NOT EXISTS webauthn_challenges (
+      challenge  TEXT PRIMARY KEY,
+      user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      kind       TEXT NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL
+    );
+  `);
+  // Rate limiting that survives running on more than one server. The in-memory
+  // limiter is per-process, so with two instances everyone quietly gets double.
+  await query(`
+    CREATE TABLE IF NOT EXISTS rate_counters (
+      bucket     TEXT PRIMARY KEY,
+      count      INTEGER NOT NULL DEFAULT 0,
+      expires_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS rate_counters_exp_idx ON rate_counters (expires_at);
+  `);
+  // A till: selling to somebody standing in front of you.
+  await query(`
+    CREATE TABLE IF NOT EXISTS pos_sales (
+      id           SERIAL PRIMARY KEY,
+      seller_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      buyer_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      order_id     INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+      items        JSONB NOT NULL DEFAULT '[]'::jsonb,
+      total_cents  INTEGER NOT NULL DEFAULT 0,
+      method       TEXT NOT NULL DEFAULT 'atwe',   -- atwe | cash | card
+      status       TEXT NOT NULL DEFAULT 'open',   -- open | paid | void
+      code         TEXT UNIQUE,
+      note         TEXT,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      paid_at      TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS pos_seller_idx ON pos_sales (seller_id, created_at DESC);
+  `);
+  // A broadcast console: what is pinned on screen, and who has been invited up.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS studio_prefs JSONB;`);
+  // What a broadcast looked like once it is over. A live stream itself lives in
+  // memory (correct — it is ephemeral), but the host deserves to see how it went
+  // after the fact, so the summary is written to disk when it ends.
+  await query(`
+    CREATE TABLE IF NOT EXISTS live_recaps (
+      id            SERIAL PRIMARY KEY,
+      user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      stream_id     TEXT,
+      title         TEXT,
+      mode          TEXT NOT NULL DEFAULT 'video',
+      started_at    TIMESTAMPTZ NOT NULL,
+      ended_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+      seconds       INTEGER NOT NULL DEFAULT 0,
+      peak_viewers  INTEGER NOT NULL DEFAULT 0,
+      total_viewers INTEGER NOT NULL DEFAULT 0,
+      gifts_cents   INTEGER NOT NULL DEFAULT 0,
+      comments      INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS live_recaps_user_idx ON live_recaps (user_id, ended_at DESC);
+  `);
+  // Talking to Atwe AI out loud: which voice, how fast, and whether it should
+  // keep listening after it answers. Per account, so it follows you between devices.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS voice_prefs JSONB;`);
+  // A recorded call, and what was said in it. Both sides are told it is being
+  // recorded — that is not optional, and it is enforced in the UI, not just the law.
+  await query(`
+    CREATE TABLE IF NOT EXISTS call_recordings (
+      id           SERIAL PRIMARY KEY,
+      owner_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      peer_id      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      group_id     INTEGER REFERENCES at_groups(id) ON DELETE SET NULL,
+      call_id      TEXT,
+      kind         TEXT NOT NULL DEFAULT 'audio',  -- audio | video
+      media        TEXT,                           -- data URL, or an object-storage URL
+      seconds      INTEGER NOT NULL DEFAULT 0,
+      title        TEXT,
+      transcript   TEXT,
+      notes        JSONB,                          -- { summary, points[], actions[] }
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS call_rec_owner_idx ON call_recordings (owner_id, created_at DESC);
+  `);
+
   // ── Batch 38: paying creators, matching them to brands, and trust ─────────
   // A share of what Atwe earns from ads, paid out to the people whose work
   // carried them. One row per creator per month, so a payout can be looked at,

@@ -1097,6 +1097,8 @@
       <button class="tab" data-v="aistudio" onclick="switchTab('aistudio')">AI Studio</button>
       <button class="tab" data-v="ops" onclick="switchTab('ops')">Operations</button>
       <button class="tab" data-v="site" onclick="switchTab('site')">Site</button>
+      <button class="tab" data-v="storage" onclick="switchTab('storage')">Storage</button>
+      <button class="tab" data-v="cluster" onclick="switchTab('cluster')">Servers</button>
     </nav>
     <div class="side-foot">
       <div class="side-role">Signed in as <b id="sideRole">Admin</b></div>
@@ -1550,6 +1552,7 @@ const TAB_PERM = {
   approvals: 'super', copyright: 'moderation', impersonation: 'moderation',
   alerts: 'super', aistudio: 'super',
   fraud: 'revenue', modqa: 'moderation', broadcasts: 'super',
+  storage: 'super', cluster: 'super',
   developers: 'super', apilog: 'super', incidents: 'super',
   chargebacks: 'refunds', reports2: 'growth', churn: 'growth',
   campaigns: 'super', experiments: 'super', wording: 'super',
@@ -1640,6 +1643,7 @@ const NAV_TITLES = {
   campaigns:'Campaigns', experiments:'Experiments', wording:'Wording',
   places:'Countries', emailbrand:'Email design',
   revshare:'Creator share', authenticate:'Item authentication',
+  storage:'Media storage', cluster:'Servers',
 };
 // Mobile: slide the sidebar in/out.
 function toggleNav(open){
@@ -1657,6 +1661,8 @@ function renderView(){
   const statRow = document.getElementById('stats'); if (statRow) statRow.style.display = (VIEW === 'features') ? 'none' : '';
   const inner = document.querySelector('.main-inner'); if (inner) inner.scrollTop = 0;
   window.scrollTo(0, 0);
+  if (VIEW === 'storage') return renderStorageView();
+  if (VIEW === 'cluster') return renderClusterView();
   if (VIEW === 'revshare') renderRevShareView();
   else if (VIEW === 'authenticate') renderAuthView();
   else if (VIEW === 'chargebacks') renderChargebacksView();
@@ -7637,6 +7643,92 @@ function exportUsersCsv(){
 }
 
 load();
+
+/* ─── Where the media lives ───────────────────────────────────────────────
+   Every photo and video in Atwe currently sits inside the database as text.
+   That works, and it is why Atwe runs with nothing but Postgres — but the
+   database ends up carrying every byte anybody ever uploaded. This screen says
+   plainly whether a proper file store is switched on, and lets you prove the
+   settings actually work before trusting them. */
+async function renderStorageView(){
+  const c = document.getElementById('content');
+  document.getElementById('stats').innerHTML = '';
+  c.innerHTML = '<div class="muted">Checking…</div>';
+  let d = null;
+  try { d = await api('/api/admin/storage'); } catch(e){ c.innerHTML = '<div class="muted">Could not check.</div>'; return; }
+  const inDb = d.inDatabase || {};
+  c.innerHTML = `
+    <div class="card">
+      <div class="card-h">Media storage</div>
+      <div class="ad-row"><div><b>${d.configured ? 'A file store is switched on' : 'Media is stored in the database'}</b>
+        <div class="muted">${d.configured
+          ? 'New photos and videos go to your bucket and are served from there. Anything already in the database keeps working exactly as before — nothing was moved.'
+          : 'This is fine and it is how Atwe has always run. Setting up a bucket lets you take much bigger files and takes the weight off the database.'}</div></div>
+        <span class="ad-badge ${d.configured ? 'ok' : ''}">${d.configured ? 'on' : 'off'}</span></div>
+      ${d.configured ? '<button class="btn" onclick="testStorage()">Test it</button>' : ''}
+      <div id="storageTest"></div>
+    </div>
+    <div class="card">
+      <div class="card-h">Still in the database</div>
+      <div class="stat-grid">
+        <div class="stat"><b>${inDb.posts||0}</b><span>posts</span></div>
+        <div class="stat"><b>${inDb.messages||0}</b><span>messages</span></div>
+        <div class="stat"><b>${inDb.listings||0}</b><span>listings</span></div>
+        <div class="stat"><b>${inDb.stories||0}</b><span>stories</span></div>
+        <div class="stat"><b>${jstr(d.databaseSize||'—')}</b><span>database size</span></div>
+      </div>
+      <div class="muted" style="margin-top:10px;">These carry their pictures inside the database. They are counted here so the number going up (or not) is visible, not guessed at.</div>
+    </div>
+    ${d.configured ? '' : `<div class="card"><div class="card-h">Switching it on</div>
+      <div class="muted">Set <code>S3_BUCKET</code>, <code>S3_ACCESS_KEY</code> and <code>S3_SECRET_KEY</code> — plus
+      <code>S3_ENDPOINT</code> for Cloudflare R2 or Backblaze, or <code>S3_REGION</code> for Amazon. A
+      <code>CDN_URL</code> in front is optional. Restart, then come back and press Test.</div></div>`}`;
+}
+async function testStorage(){
+  const el = document.getElementById('storageTest');
+  el.innerHTML = '<div class="muted" style="margin-top:10px;">Writing a small file, reading it back, deleting it…</div>';
+  try {
+    const r = await api('/api/admin/storage/test', 'POST', {});
+    el.innerHTML = r.ok
+      ? `<div class="ad-row" style="margin-top:10px;"><div><b>It works.</b><div class="muted">Wrote and deleted a test file in <code>${jstr(r.bucket)}</code>${r.readable ? ' and read it back over the public URL' : ' — but could NOT read it back, so the bucket may not be public'}.</div></div><span class="ad-badge ok">pass</span></div>`
+      : `<div class="ad-row" style="margin-top:10px;"><div><b>It did not work.</b><div class="muted">${jstr(r.reason||'')}</div></div><span class="ad-badge bad">fail</span></div>`;
+  } catch(e){ el.innerHTML = '<div class="muted" style="margin-top:10px;">The test could not run.</div>'; }
+}
+
+/* ─── One server, or several ─────────────────────────────────────────────
+   Atwe holds live connections and rate-limit counters in memory, which is
+   correct for one server and quietly wrong for two. Cluster mode moves both
+   through the database so several can run at once. */
+async function renderClusterView(){
+  const c = document.getElementById('content');
+  document.getElementById('stats').innerHTML = '';
+  c.innerHTML = '<div class="muted">Checking…</div>';
+  let d = null;
+  try { d = await api('/api/admin/cluster'); } catch(e){ c.innerHTML = '<div class="muted">Could not check.</div>'; return; }
+  c.innerHTML = `
+    <div class="card">
+      <div class="card-h">Running on more than one server</div>
+      <div class="ad-row"><div><b>${d.clusterMode ? 'Shared mode is on' : 'Single-server mode'}</b>
+        <div class="muted">${jstr(d.note||'')}</div></div>
+        <span class="ad-badge ${d.clusterMode ? 'ok' : ''}">${d.clusterMode ? 'shared' : 'single'}</span></div>
+      ${d.clusterMode ? `<div class="ad-row"><div><b>Listening for the other servers</b>
+        <div class="muted">If this ever says no, live messages would stop crossing between servers.</div></div>
+        <span class="ad-badge ${d.listening ? 'ok' : 'bad'}">${d.listening ? 'yes' : 'no'}</span></div>` : ''}
+    </div>
+    <div class="card">
+      <div class="card-h">This server, right now</div>
+      <div class="stat-grid">
+        <div class="stat"><b>${d.liveConnections}</b><span>people connected here</span></div>
+        <div class="stat"><b>${d.dbConnections == null ? '—' : d.dbConnections}</b><span>database connections</span></div>
+        <div class="stat"><b>${jstr(d.instanceId||'')}</b><span>this server's id</span></div>
+        <div class="stat"><b>${d.storage ? 'yes' : 'no'}</b><span>file store on</span></div>
+      </div>
+    </div>
+    ${d.clusterMode ? '' : `<div class="card"><div class="card-h">When to switch it on</div>
+      <div class="muted">Only when you actually run more than one copy of Atwe at once. Single-server mode is faster,
+      so leave it alone until you need to. Then set <code>CLUSTER_MODE=true</code> on every copy and restart them.</div></div>`}`;
+}
+
 </script>
 </body>
 </html>
