@@ -1737,6 +1737,27 @@ async function initSchema() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS condition TEXT;`); // new | like_new | good | fair (physical resale)
   // "Was" price (compare-at, Shopify-style) — shown struck through when > price.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS compare_at_cents INTEGER;`);
+  // Manual wallet adjustments — the single most dangerous admin power, so it is
+  // DUAL-CONTROL: one staffer requests, a DIFFERENT one approves, and only then
+  // does money move. The row is the paper trail either way.
+  await query(`
+    CREATE TABLE IF NOT EXISTS wallet_adjustments (
+      id            SERIAL PRIMARY KEY,
+      user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      amount_cents  INTEGER NOT NULL,
+      reason        TEXT NOT NULL,
+      requested_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      approved_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      status        TEXT NOT NULL DEFAULT 'pending',
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      resolved_at   TIMESTAMPTZ
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS wallet_adjustments_status_idx ON wallet_adjustments(status, created_at DESC);`);
+  // Per-account velocity caps. NULL = use the platform default, so raising a
+  // trusted business's limit never means hard-coding an exception.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_daily_cap_cents INTEGER;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_weekly_cap_cents INTEGER;`);
   // Private staff notes on an account ("refunded once as goodwill 3/2026").
   // Never shown to the member — this is the back-office memory that stops staff
   // re-litigating the same case from scratch.
