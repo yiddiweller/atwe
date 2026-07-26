@@ -896,6 +896,10 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS contacts_owner_idx ON contacts(owner_id);`);
+  // Lightweight CRM on contacts: a pipeline stage + a one-shot follow-up
+  // reminder (cleared when it fires — never a repeating nag).
+  await query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS stage TEXT;`);
+  await query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS follow_up_at TIMESTAMPTZ;`);
   // Owner-private details attached to a contact (their profile name/handle/avatar
   // still come from the users row; these are extra address-book fields).
   for (const col of ['email', 'phone', 'socials', 'website', 'address', 'about', 'notes', 'nickname']) {

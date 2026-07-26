@@ -1811,6 +1811,7 @@ const PUSH_VERBS = {
   auction_outbid: 'outbid you — bid again to stay in it', auction_won: 'you won the auction — pay to claim it',
   auction_ended: 'your auction ended — the winner is paying', auction_no_bids: 'your auction ended without bids',
   group_join_paid: 'paid your group’s join fee',
+  crm_followup: 'is due a follow-up — you set a reminder',
   payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review',
   ad_approved: 'approved your ad — it’s ready to pay', ad_rejected: 'reviewed your ad',
   aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation',
@@ -4713,6 +4714,70 @@ app.put('/api/contacts/:id/note', auth.requireAuth, rateLimit(60, 60000, 'contac
     res.json({ ok: true, note });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the note.' }); }
 });
+/* ─── Lightweight CRM on contacts (pipeline stage + one-shot follow-up) ─── */
+const CRM_STAGES = ['lead', 'contacted', 'negotiating', 'customer', 'lost'];
+app.put('/api/contacts/:id/crm', auth.requireAuth, rateLimit(60, 60000, 'contact-crm'), async (req, res) => {
+  const other = routeId(req.params.id);
+  if (!Number.isInteger(other) || other === req.user.id) return res.status(400).json({ error: 'Invalid user.' });
+  const fields = [], vals = [req.user.id, other];
+  if ('stage' in req.body) {
+    const st = req.body.stage ? String(req.body.stage).toLowerCase() : null;
+    if (st && !CRM_STAGES.includes(st)) return res.status(400).json({ error: 'Invalid stage.' });
+    vals.push(st); fields.push(`stage = $${vals.length}`);
+  }
+  if ('followUpAt' in req.body) {
+    let fu = null;
+    if (req.body.followUpAt) {
+      const dte = new Date(req.body.followUpAt);
+      if (isNaN(dte.getTime())) return res.status(400).json({ error: 'Invalid follow-up date.' });
+      fu = dte.toISOString();
+    }
+    vals.push(fu); fields.push(`follow_up_at = $${vals.length}`);
+  }
+  if (!fields.length) return res.json({ ok: true });
+  try {
+    const u = (await db.query('SELECT id FROM users WHERE id = $1 AND username IS NOT NULL', [other])).rows[0];
+    if (!u) return res.status(404).json({ error: 'User not found.' });
+    await db.query(
+      `INSERT INTO contacts (owner_id, contact_id) VALUES ($1,$2) ON CONFLICT (owner_id, contact_id) DO NOTHING`,
+      [req.user.id, other]);
+    await db.query(`UPDATE contacts SET ${fields.join(', ')} WHERE owner_id = $1 AND contact_id = $2`, vals);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save.' }); }
+});
+// The pipeline: every contact with a stage or a follow-up, due follow-ups first.
+app.get('/api/crm', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT c.contact_id, c.stage, c.follow_up_at, c.notes, c.nickname,
+              u.name, u.username, u.avatar, u.verified, u.account_type, u.headline
+         FROM contacts c JOIN users u ON u.id = c.contact_id
+        WHERE c.owner_id = $1 AND (c.stage IS NOT NULL OR c.follow_up_at IS NOT NULL)
+          AND u.username IS NOT NULL AND NOT COALESCE(u.deactivated, false)
+        ORDER BY (c.follow_up_at IS NOT NULL AND c.follow_up_at <= now()) DESC, c.follow_up_at ASC NULLS LAST, u.name`,
+      [req.user.id]);
+    res.json({ contacts: rows.map(r => ({
+      id: r.contact_id, name: r.nickname || r.name, username: r.username, avatar: mediaRef(r.avatar, 'avatar', r.contact_id),
+      verified: !!r.verified, accountType: r.account_type, headline: r.headline || null,
+      stage: r.stage || null, followUpAt: r.follow_up_at || null, note: r.notes || null,
+      due: !!(r.follow_up_at && new Date(r.follow_up_at) <= new Date()),
+    })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your pipeline.' }); }
+});
+// Follow-up reminders: one-shot — the reminder notifies (actor = the contact, so
+// the row shows WHO), then clears follow_up_at so it can never nag twice.
+async function flushCrmFollowUps() {
+  if (!db.isConfigured()) return 0;
+  const { rows } = await db.query(
+    `UPDATE contacts SET follow_up_at = NULL
+      WHERE follow_up_at IS NOT NULL AND follow_up_at <= now()
+      RETURNING owner_id, contact_id`);
+  for (const r of rows) notify(r.owner_id, r.contact_id, 'crm_followup');
+  return rows.length;
+}
+const CRM_FLUSH_MS = Math.max(5000, parseInt(process.env.CRM_FLUSH_MS, 10) || 5 * 60000);
+registerJob('crm_followups', 'CRM follow-up reminders', CRM_FLUSH_MS); setInterval(trackJob('crm_followups', flushCrmFollowUps), CRM_FLUSH_MS).unref?.();
+
 // Rename a chat (WhatsApp-contact-style): YOUR private name for a person, shown
 // only to you in Beam (chat list + open thread). Empty clears it — back to their
 // real name. Stored on the owner-scoped contacts row; never visible to them.

@@ -13982,6 +13982,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <button class="as-item" id="paAddDailyBtn" onclick="acAddPostToStory(AC._paPostId)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg> <span>Add to your Daily</span></button>
     <button class="as-item hidden" id="paVcardBtn" onclick="closeOverlay('postActions');acSaveVCard(AC._paAuthor)"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 17a3 3 0 0 1 6 0"/><path d="M15 9h3M15 13h3"/></svg> <span>Save contact card</span></button>
     <button class="as-item" id="paAboutBtn" onclick="closeOverlay('postActions');acOpenAboutAccount(AC._paAuthor && AC._paAuthor.username)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="8" r=".5"/></svg> <span>About this account</span></button>
+    <button class="as-item" id="paCrmBtn" onclick="closeOverlay('postActions');acCrmEditOpen(AC._paAuthor)"><svg viewBox="0 0 24 24"><path d="M3 5h18M6 12h12M10 19h4"/></svg> <span>Add to sales pipeline</span></button>
     <button class="as-item" onclick="acCopyPostText(AC._paPostId)"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg> <span>Copy text</span></button>
     <button class="as-item" onclick="acCopyPostLink(AC._paPostId)"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.5-1.5"/></svg> <span>Copy link</span></button>
     <button class="as-item hidden" id="paInfoBtn" onclick="acPostInfoFrom('other')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5"/><path d="M12 7.6h.01"/></svg> <span>Info</span></button>
@@ -15502,6 +15503,29 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Coupon">
     <button class="sheet-close" onclick="closeOverlay('couponLanding')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div id="couponLandingBody"></div>
+  </div>
+</div>
+
+<!-- Sales pipeline (lightweight CRM on contacts) -->
+<div class="overlay hidden" id="crmView" onclick="if(event.target===this)closeOverlay('crmView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Sales pipeline">
+    <button class="sheet-close" onclick="closeOverlay('crmView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Sales pipeline</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Track leads through to customers, with follow-up reminders. Only you see this.</div>
+    <div id="crmBody"></div>
+  </div>
+</div>
+<div class="overlay hidden" id="crmEdit" onclick="if(event.target===this)closeOverlay('crmEdit')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Pipeline">
+    <button class="sheet-close" onclick="closeOverlay('crmEdit')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="crmEditHead"></div>
+    <div class="co-sec-h" style="margin-top:10px;">Stage</div>
+    <div id="crmStageChips" class="ppl-filters" style="padding:4px 0 0;"></div>
+    <div class="co-sec-h" style="margin-top:12px;">Follow-up reminder</div>
+    <input class="jp-in" id="crmFollowUp" type="datetime-local" style="margin:4px 0 0;"/>
+    <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">You’ll get one reminder at that time — it clears itself after firing.</div>
+    <button class="ac-pill-btn accent jp-submit" onclick="acCrmSave()">Save</button>
+    <button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acCrmRemove()">Remove from pipeline</button>
   </div>
 </div>
 
@@ -17038,7 +17062,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1561'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1562'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -27007,13 +27031,13 @@ function notifRow(n, i) {
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
-  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', event_reminder: 'is hosting an event starting soon', event_comment: 'commented on your event', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', appt_rescheduled: 'proposed a new appointment time', appt_reminder: 'has an appointment with you soon', call_reminder: 'has a call with you soon', stock_low: 'is running low — only a few left', stock_out: 'has sold out', event_spot: 'a spot opened up — you’re in!', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', invoice_reminder: 'sent a reminder about an unpaid invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', auction_outbid: 'outbid you on an auction. Bid again to stay in it', auction_won: 'you won the auction. Pay to claim it', auction_ended: 'won your auction. They’re paying now', group_join_paid: 'paid your group’s join fee. They’re in', rinv_paused: 'a recurring invoice was paused — check the schedule', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', split_reminder: 'sent a reminder about your share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', story_answer: 'responded to your question', story_mention: 'mentioned you in their Daily', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item' };
+  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', event_reminder: 'is hosting an event starting soon', event_comment: 'commented on your event', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', appt_rescheduled: 'proposed a new appointment time', appt_reminder: 'has an appointment with you soon', call_reminder: 'has a call with you soon', stock_low: 'is running low — only a few left', stock_out: 'has sold out', event_spot: 'a spot opened up — you’re in!', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', invoice_reminder: 'sent a reminder about an unpaid invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', auction_outbid: 'outbid you on an auction. Bid again to stay in it', auction_won: 'you won the auction. Pay to claim it', auction_ended: 'won your auction. They’re paying now', group_join_paid: 'paid your group’s join fee. They’re in', crm_followup: 'is due a follow-up — you set the reminder', rinv_paused: 'a recurring invoice was paused — check the schedule', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', split_reminder: 'sent a reminder about your share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', story_answer: 'responded to your question', story_mention: 'mentioned you in their Daily', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
   const isFeed = n.type === 'feed_request' || n.type === 'feed_approved';
   const isGroup = n.type === 'group_join_paid' || n.type === 'group_request' || n.type === 'group_approved' || n.type === 'task_assigned' || n.type === 'group_admin_added' || n.type === 'group_admin_removed';
-  const isChat = n.type === 'message' || n.type === 'call' || n.type === 'video_call' || n.type === 'chat_request' || n.type === 'chat_allowed' || n.type === 'offer';
+  const isChat = n.type === 'message' || n.type === 'call' || n.type === 'video_call' || n.type === 'chat_request' || n.type === 'chat_allowed' || n.type === 'offer' || n.type === 'crm_followup';
   const isMention = n.type === 'mention'; // a group @mention — deep-links to the group thread (else falls back to the post/profile)
   const isJob = n.type === 'job_application' || n.type === 'job_match' || n.type === 'app_reviewed' || n.type === 'app_shortlisted' || n.type === 'app_hired' || n.type === 'app_rejected' || n.type === 'referral_request';
   const isRec = n.type === 'rec_received' || n.type === 'rec_request';
@@ -28759,6 +28783,7 @@ function acGoProfileHub() {
     // Business
     html += '<div class="me-catlabel">Business</div><div class="me-group">';
     html += item('Business dashboard', _ME_IC.grid, "acOpenDashboard()", null);
+    html += item('Sales pipeline', _ME_IC.people, "acOpenCrm()", null);
     html += item('My listings', _ME_IC.sell, "acOpenSell()", null);
     if (acIsBiz(u)) html += item('Manage store', _ME_IC.store, "acOpenStoreManage()", null);
     html += item('Sales & analytics', _ME_IC.sales, "acOpenShopAnalytics()", null);
@@ -35082,6 +35107,74 @@ function acRenderListingBuy(l, own) {
     ? `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acOfferSaversOpen(${l.id}, ${l.priceCents}, ${jsAttr(l.name)})"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-inline-end:6px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M20.6 13.4 12 22l-9-9V4a1 1 0 0 1 1-1h8.6z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>Send a deal to shoppers who saved this</button>` : '';
   return `<div class="mkt-detail-meta"><span class="mkt-price">${priceLbl}</span><span class="shop-kind">${_PROD_KIND[l.kind] || 'Item'}</span>${stockBadge}${l.active ? '' : '<span class="shop-off">Hidden</span>'}</div>${shipLine}${escChip}${qtyRow}${buyRow}${dealRow}${subRow}${offerRow}${earnRow}`;
 }
+/* ── Sales pipeline (lightweight CRM) ── */
+const CRM_STAGES = [['lead', 'Lead'], ['contacted', 'Contacted'], ['negotiating', 'Negotiating'], ['customer', 'Customer'], ['lost', 'Lost']];
+async function acOpenCrm() {
+  showOverlay('crmView');
+  const body = document.getElementById('crmBody'); body.innerHTML = acSkelRows(3);
+  try {
+    const { contacts } = await API.req('GET', '/api/crm');
+    AC._crm = contacts;
+    if (!contacts.length) {
+      body.innerHTML = `<div class="ac-empty" style="padding:26px;">Nobody in the pipeline yet.<br><span class="ac-disc-sub">Open someone’s profile → ⋯ → “Add to sales pipeline”.</span></div>`;
+      return;
+    }
+    const row = (c) => `<div class="ac-item" onclick="acCrmEditOpen(${jsAttr(c)})">
+      ${acAvatarHtml(c.name, c.avatar, 'user-avatar', c.accountType === 'business')}
+      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}${vbadge(acIsVerified(c))}</span>
+        ${c.due ? '<span class="inv-chip st-overdue">Follow up</span>' : (c.followUpAt ? `<span class="inv-chip st-sent">${new Date(c.followUpAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>` : '')}</div>
+        <div class="ac-item-last">@${escHtml(c.username)}${c.note ? ' · ' + escHtml(c.note.slice(0, 40)) : ''}</div></div>
+    </div>`;
+    const due = contacts.filter(c => c.due);
+    let html = due.length ? `<div class="co-sec-h" style="color:var(--amber);">Follow up now</div>` + due.map(row).join('') : '';
+    for (const [key, label] of CRM_STAGES) {
+      const group = contacts.filter(c => c.stage === key && !c.due);
+      if (group.length) html += `<div class="co-sec-h" style="margin-top:12px;">${label} · ${group.length}</div>` + group.map(row).join('');
+    }
+    const unstaged = contacts.filter(c => !c.stage && !c.due);
+    if (unstaged.length) html += `<div class="co-sec-h" style="margin-top:12px;">Reminder only</div>` + unstaged.map(row).join('');
+    body.innerHTML = html;
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+function acCrmEditOpen(person) {
+  if (!person || !person.id) return;
+  AC._crmEdit = person;
+  document.getElementById('crmEditHead').innerHTML = `<div style="display:flex;align-items:center;gap:10px;">
+    ${acAvatarHtml(person.name, person.avatar, 'user-avatar', person.accountType === 'business')}
+    <div><div class="jp-title" style="margin:0;padding:0;">${escHtml(person.name)}</div><div class="ac-disc-sub" style="margin:0;">@${escHtml(person.username || '')}</div></div>
+    <span style="flex:1"></span>
+    <button class="ac-pill-btn sm" onclick="closeOverlay('crmEdit');closeOverlay('crmView');appTab('chat');acOpenChat(${person.id})">Message</button>
+  </div>`;
+  AC._crmStage = person.stage || 'lead';
+  acCrmRenderStages();
+  const fu = document.getElementById('crmFollowUp');
+  fu.value = person.followUpAt ? new Date(new Date(person.followUpAt).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
+  showOverlay('crmEdit');
+}
+function acCrmRenderStages() {
+  document.getElementById('crmStageChips').innerHTML = CRM_STAGES.map(([k, l]) =>
+    `<button class="ppl-chip${AC._crmStage === k ? ' on' : ''}" onclick="AC._crmStage='${k}';acCrmRenderStages()">${l}</button>`).join('');
+}
+async function acCrmSave() {
+  const p = AC._crmEdit; if (!p) return;
+  const fuRaw = document.getElementById('crmFollowUp').value;
+  try {
+    await API.req('PUT', '/api/contacts/' + p.id + '/crm', { stage: AC._crmStage, followUpAt: fuRaw ? new Date(fuRaw).toISOString() : null });
+    closeOverlay('crmEdit');
+    showNotif('Saved to your pipeline.');
+    const v = document.getElementById('crmView'); if (v && !v.classList.contains('hidden')) acOpenCrm();
+  } catch (e) { showNotif(e.message || 'Could not save.'); }
+}
+async function acCrmRemove() {
+  const p = AC._crmEdit; if (!p) return;
+  try {
+    await API.req('PUT', '/api/contacts/' + p.id + '/crm', { stage: null, followUpAt: null });
+    closeOverlay('crmEdit');
+    showNotif('Removed from the pipeline.');
+    const v = document.getElementById('crmView'); if (v && !v.classList.contains('hidden')) acOpenCrm();
+  } catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
+
 /* ── Group AutoMod (blocked words, admin) ── */
 function acOpenGroupAutomod() {
   AC._amWords = [...((AC.group && AC.group.blockedWords) || [])];
