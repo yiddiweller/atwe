@@ -1741,6 +1741,30 @@ async function initSchema() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS condition TEXT;`); // new | like_new | good | fair (physical resale)
   // "Was" price (compare-at, Shopify-style) — shown struck through when > price.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS compare_at_cents INTEGER;`);
+  // Listing A/B tests (Amazon "Manage Your Experiments" model): run ONE
+  // experiment per listing that swaps a single field — the title or the price —
+  // for half of viewers. Assignment is deterministic per viewer, so nobody sees
+  // the listing flip between visits. Counters live on the row (no event table).
+  await query(`
+    CREATE TABLE IF NOT EXISTS product_experiments (
+      id          SERIAL PRIMARY KEY,
+      product_id  INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      seller_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      field       TEXT NOT NULL,
+      value_a     TEXT NOT NULL,
+      value_b     TEXT NOT NULL,
+      views_a     INTEGER NOT NULL DEFAULT 0,
+      views_b     INTEGER NOT NULL DEFAULT 0,
+      orders_a    INTEGER NOT NULL DEFAULT 0,
+      orders_b    INTEGER NOT NULL DEFAULT 0,
+      status      TEXT NOT NULL DEFAULT 'running',
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      ended_at    TIMESTAMPTZ
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS product_experiments_seller_idx ON product_experiments(seller_id, status);`);
+  // One RUNNING experiment per listing.
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS product_experiments_live_idx ON product_experiments(product_id) WHERE status = 'running';`);
   // Wholesale / B2B pricing (Faire-style): a lower unit price for business-account
   // buyers ordering at least wholesale_min_qty. Checkout re-derives eligibility
   // server-side; a wholesale price at/above retail is stored but never applies.

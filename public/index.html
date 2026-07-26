@@ -7214,6 +7214,21 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .shop-setup-row.done .shop-setup-chk{background:rgba(48,209,88,.18);}
 .shop-setup-chk svg{width:13px;height:13px;fill:none;stroke:var(--green);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;}
 .shop-setup-row .iset-chev{margin-inline-start:auto;}
+/* Listing A/B tests: the two-arm comparison card. */
+.exp-card{background:var(--s1);border-radius:16px;padding:13px 14px;margin-bottom:10px;}
+.exp-head{display:flex;align-items:center;gap:8px;margin-bottom:9px;}
+.exp-title{font-size:14.5px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.exp-status{font-size:11px;font-weight:800;color:var(--t3);background:var(--s2);border-radius:999px;padding:3px 9px;flex:0 0 auto;}
+.exp-status.live{color:var(--green);background:rgba(48,209,88,.14);}
+.exp-arms{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.exp-arm{display:flex;flex-direction:column;gap:2px;background:var(--s2);border-radius:12px;padding:9px 11px;}
+.exp-arm.won{background:rgba(48,209,88,.13);}
+.exp-arm-k{font-size:10.5px;font-weight:800;color:var(--t3);letter-spacing:.3px;text-transform:uppercase;}
+.exp-arm-v{font-size:13.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;}
+.exp-arm-n{font-size:11.5px;color:var(--t3);}
+.exp-note{font-size:12.5px;color:var(--t3);margin-top:9px;}
+.exp-acts{display:flex;gap:8px;margin-top:11px;}
+.exp-acts .ac-pill-btn{flex:1;}
 /* Remix (Duet/Stitch): the credit chip on a remix card + the composer strip. */
 .feed-remix-chip{position:absolute;left:var(--feed-gutter);bottom:104px;display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.6);border:none;border-radius:999px;padding:5px 12px 5px 5px;color:#fff;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;z-index:5;max-width:70%;}
 .feed-remix-chip img,.feed-remix-chip video{width:28px;height:28px;border-radius:50%;object-fit:cover;flex:0 0 auto;}
@@ -15441,6 +15456,24 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- Listing A/B tests: run one title-or-price test per listing -->
+<div class="overlay hidden" id="experimentsView" onclick="if(event.target===this)closeOverlay('experimentsView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="A/B tests">
+    <button class="sheet-close" onclick="closeOverlay('experimentsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="ac-section-row" style="margin:0 0 2px;"><span class="jp-title" style="margin:0;">A/B tests</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 14px;" onclick="acExpFormOpen()">＋ New test</button></div>
+    <div class="ac-disc-sub" style="margin:2px 0 12px;">Show half your shoppers a different title or price, then keep whichever sells better.</div>
+    <div id="experimentsBody"></div>
+  </div>
+</div>
+<div class="overlay hidden" id="experimentForm" onclick="if(event.target===this)closeOverlay('experimentForm')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="New A/B test">
+    <button class="sheet-close" onclick="closeOverlay('experimentForm')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">New A/B test</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Pick a listing, then write the version B you want to try against it.</div>
+    <div id="expFormBody"></div>
+  </div>
+</div>
+
 <!-- Restock suggestions (what to reorder, from 30-day sales velocity) -->
 <div class="overlay hidden" id="restockView" onclick="if(event.target===this)closeOverlay('restockView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Restock suggestions">
@@ -17377,7 +17410,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1583'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1584'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -39775,6 +39808,7 @@ async function acOpenStoreManage() {
     ${row(SI.receipt, 'Orders', pending ? pending + ' to fulfil' : 'Manage and ship orders', 'closeOverlay(\'storeManageView\');acOpenOrders(\'seller\')', pending || '')}
     ${row(SI.chart, 'Sales & analytics', 'Revenue, orders and top products', 'closeOverlay(\'storeManageView\');acOpenShopAnalytics()')}
     ${row(SI.box, 'Restock suggestions', 'What to reorder, based on sales', 'acOpenRestock()')}
+    ${row(SI.chart, 'A/B tests', 'Test a title or price and keep the winner', 'acOpenExperiments()')}
     ${row(SI.store, 'Customers', 'Everyone who has bought from you', 'closeOverlay(\'storeManageView\');acOpenCustomers()')}
     ${row(SI.megaphone, 'Cart recovery', 'Win back abandoned carts via Beam', 'closeOverlay(\'storeManageView\');acOpenCartRecovery()')}
     ${row(SI.wallet, 'Wallet & payouts', 'Your balance and cash-out', 'closeOverlay(\'storeManageView\');acOpenWallet()')}
@@ -39802,6 +39836,109 @@ async function acOpenCustomers() {
         <button class="ac-post-more" onclick="event.stopPropagation();closeOverlay('customersView');appTab('chat');acOpenChat(${c.id})" aria-label="Message"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
       </div>`).join('');
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+/* ── Listing A/B tests: one title-or-price test per listing ── */
+function acExpRate(r) { return r == null ? '—' : r.toFixed(1) + '%'; }
+async function acOpenExperiments() {
+  showOverlay('experimentsView');
+  const b = document.getElementById('experimentsBody'); b.innerHTML = acSkelRows(3);
+  try {
+    const { experiments } = await API.req('GET', '/api/experiments');
+    if (!experiments.length) {
+      b.innerHTML = `<div class="ac-empty" style="padding:24px 8px;">
+        <div style="font-size:15px;font-weight:700;margin-bottom:6px;">No tests yet</div>
+        <div class="ac-disc-sub" style="margin:0;">Start one to find out whether a different title or price actually sells better — half your shoppers see each version.</div></div>`;
+      return;
+    }
+    b.innerHTML = experiments.map(e => {
+      const live = e.status === 'running';
+      const label = e.field === 'price' ? 'Price' : 'Title';
+      const show = (v) => e.field === 'price' ? acMoney(parseInt(v, 10) || 0) : v;
+      const win = live && e.enough && e.leader;
+      return `<div class="exp-card">
+        <div class="exp-head">
+          <span class="exp-title">${escHtml(e.productName)}</span>
+          <span class="exp-status ${live ? 'live' : ''}">${live ? 'Running' : (e.status === 'applied' ? 'Applied' : 'Stopped')}</span>
+        </div>
+        <div class="exp-arms">
+          <div class="exp-arm${win === 'a' ? ' won' : ''}"><span class="exp-arm-k">A · ${label}</span><span class="exp-arm-v">${escHtml(show(e.valueA))}</span><span class="exp-arm-n">${e.viewsA} views · ${e.ordersA} sold · ${acExpRate(e.rateA)}</span></div>
+          <div class="exp-arm${win === 'b' ? ' won' : ''}"><span class="exp-arm-k">B · ${label}</span><span class="exp-arm-v">${escHtml(show(e.valueB))}</span><span class="exp-arm-n">${e.viewsB} views · ${e.ordersB} sold · ${acExpRate(e.rateB)}</span></div>
+        </div>
+        <div class="exp-note">${e.enough
+          ? (e.leader ? `Version ${e.leader.toUpperCase()} is ahead.` : 'Dead heat so far.')
+          : 'Still gathering data — we won’t call a winner until enough people have seen it.'}</div>
+        ${live ? `<div class="exp-acts">
+          <button class="ac-pill-btn accent" onclick="acExpStop(${e.id}, true)">Keep version B</button>
+          <button class="ac-pill-btn" onclick="acExpStop(${e.id}, false)">Stop, keep A</button>
+        </div>` : ''}
+      </div>`;
+    }).join('');
+  } catch (e) { b.innerHTML = '<div class="ac-empty">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+async function acExpFormOpen() {
+  showOverlay('experimentForm');
+  const b = document.getElementById('expFormBody'); b.innerHTML = acSkelRows(2);
+  let products = [];
+  try { ({ products } = await API.req('GET', '/api/my-listings')); } catch (e) {}
+  const active = (products || []).filter(p => p.active);
+  if (!active.length) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">Publish a listing first, then you can test it.</div>'; return; }
+  AC._expProducts = active;
+  b.innerHTML = `
+    <select class="jp-in" id="expProduct" aria-label="Listing" onchange="acExpSyncForm()">
+      ${active.map(p => `<option value="${p.id}">${escHtml(p.name)}</option>`).join('')}
+    </select>
+    <div class="co-rates" style="margin-top:10px;">
+      <button class="co-rate on" id="expFieldTitle" onclick="acExpField('title')"><span class="co-rate-main"><span class="co-rate-name">Test the title</span><span class="co-rate-days">Try different wording</span></span></button>
+      <button class="co-rate" id="expFieldPrice" onclick="acExpField('price')"><span class="co-rate-main"><span class="co-rate-name">Test the price</span><span class="co-rate-days">Try a different price</span></span></button>
+    </div>
+    <div id="expCurrent" class="ac-disc-sub" style="margin:10px 2px 6px;"></div>
+    <input class="jp-in" id="expValueB" type="text" maxlength="140" placeholder="Version B"/>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:14px;" onclick="acExpCreate()">Start test</button>`;
+  AC._expField = 'title';
+  acExpSyncForm();
+}
+function acExpField(f) {
+  AC._expField = f;
+  document.getElementById('expFieldTitle').classList.toggle('on', f === 'title');
+  document.getElementById('expFieldPrice').classList.toggle('on', f === 'price');
+  acExpSyncForm();
+}
+function acExpSyncForm() {
+  const id = parseInt(document.getElementById('expProduct').value, 10);
+  const p = (AC._expProducts || []).find(x => x.id === id);
+  const f = AC._expField || 'title';
+  const cur = document.getElementById('expCurrent'), inp = document.getElementById('expValueB');
+  if (!p || !cur || !inp) return;
+  if (f === 'price') {
+    cur.textContent = 'Version A (live now): ' + acMoney(p.priceCents);
+    inp.type = 'number'; inp.placeholder = 'Version B price ($)'; inp.value = '';
+    inp.disabled = !!p.hasVariants;
+    if (p.hasVariants) cur.textContent = 'Price tests aren’t available on listings with options — test the title instead.';
+  } else {
+    cur.textContent = 'Version A (live now): ' + p.name;
+    inp.type = 'text'; inp.placeholder = 'Version B title'; inp.value = ''; inp.disabled = false;
+  }
+}
+async function acExpCreate() {
+  const productId = parseInt(document.getElementById('expProduct').value, 10);
+  const field = AC._expField || 'title';
+  const raw = (document.getElementById('expValueB').value || '').trim();
+  if (!raw) { showNotif('Write version B first.'); return; }
+  const valueB = field === 'price' ? Math.round(parseFloat(raw) * 100) : raw;
+  try {
+    await API.req('POST', '/api/experiments', { productId, field, valueB });
+    closeOverlay('experimentForm');
+    showNotif('Test started — half your shoppers now see version B.');
+    acOpenExperiments();
+  } catch (e) { showNotif(e.message || 'Could not start the test.'); }
+}
+async function acExpStop(id, apply) {
+  const ok = await appConfirm(apply
+    ? { title: 'Keep version B?', message: 'Version B replaces your live listing and the test ends.', confirmText: 'Keep version B' }
+    : { title: 'Stop this test?', message: 'Your listing stays exactly as it is now (version A).', confirmText: 'Stop test' });
+  if (!ok) return;
+  try { await API.req('POST', '/api/experiments/' + id + '/stop', { apply }); acOpenExperiments(); showNotif(apply ? 'Version B is now live.' : 'Test stopped.'); }
+  catch (e) { showNotif(e.message || 'Could not stop the test.'); }
 }
 // ── Restock suggestions: 30-day sales velocity vs tracked stock ──
 async function acOpenRestock() {
