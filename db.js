@@ -3687,6 +3687,8 @@ async function initSchema() {
   // Group rules (WhatsApp/Discord standard): shown in group info; a joiner via
   // invite link / community must send acceptance before they're admitted.
   await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS rules TEXT;`);
+  // Group AutoMod (Discord model): admin-set blocked words, enforced at send.
+  await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS blocked_words TEXT[] NOT NULL DEFAULT '{}';`);
   // Group invite link: a random join code; anyone with it can join (WhatsApp-style).
   await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS invite_code TEXT;`);
   await query(`CREATE UNIQUE INDEX IF NOT EXISTS at_groups_invite_idx ON at_groups(invite_code) WHERE invite_code IS NOT NULL;`);
