@@ -19885,6 +19885,36 @@ app.get('/api/coupons/peek', auth.requireAuth, rateLimit(60, 60000, 'coupon-peek
 // one-time bonus. The referrals row's UNIQUE(referred_id) makes the reward idempotent.
 const REFERRAL_BONUS_CENTS = 500;       // each side gets $5
 const REFERRAL_CLAIM_WINDOW_DAYS = 30;  // only new-ish accounts can claim a referral
+/* ─── Business referral engine ──────────────────────────────────────────────
+   Bringing a BUSINESS onto Atwe is worth more than bringing a single person —
+   they arrive with customers, listings and suppliers — so a business joiner
+   pays the referrer a larger bonus, and a referrer who keeps introducing people
+   hits milestone bonuses. The joiner's own bonus stays flat, so nobody is
+   nudged into picking the wrong account type at signup. */
+const REFERRAL_BUSINESS_BONUS_CENTS = 2000;      // referrer's bonus when the joiner is a business
+const REFERRAL_MILESTONES = [
+  { at: 5,  cents: 2500 },
+  { at: 10, cents: 6000 },
+  { at: 25, cents: 20000 },
+];
+// Pay any milestone the referrer has just reached. Idempotent via a UNIQUE
+// (user, kind, client_id) wallet-idempotency claim, so a re-count never double-pays.
+async function payReferralMilestones(referrerId) {
+  try {
+    const n = (await db.query('SELECT COUNT(*)::int AS n FROM referrals WHERE referrer_id = $1', [referrerId])).rows[0].n;
+    for (const m of REFERRAL_MILESTONES) {
+      if (n < m.at) continue;
+      const key = 'refmile:' + m.at;
+      const claim = await walletClaimIdem(referrerId, key, 'referral_milestone');
+      if (!claim.claimed) continue; // already paid
+      const ok = await walletCreditStandalone(referrerId, m.cents, 'referral', `Referral milestone — ${m.at} sign-ups`);
+      if (!ok) { await walletReleaseIdem(referrerId, key, 'referral_milestone'); continue; }
+      await walletStoreIdem(referrerId, key, 'referral_milestone', { ok: true, at: m.at, cents: m.cents });
+      notifySelf(referrerId, 'referral_milestone');
+      rtPush(referrerId, 'wallet', { type: 'receive', amountCents: m.cents });
+    }
+  } catch (e) { /* milestones are a perk — never break the referral itself */ }
+}
 function genReferralCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no easily-confused chars
   let s = ''; for (let i = 0; i < 8; i++) s += chars[Math.floor(Math.random() * chars.length)];
@@ -19911,14 +19941,25 @@ app.get('/api/referrals', auth.requireAuth, async (req, res) => {
   try {
     const code = await getOrMakeReferralCode(req.user.id);
     const refs = (await db.query(
-      `SELECT r.reward_cents, r.created_at, u.name, u.username, u.avatar
+      `SELECT r.reward_cents, r.created_at, u.name, u.username, u.avatar, u.account_type,
+              -- "Active" = they actually did something (posted, listed or ordered),
+              -- so a referrer can see which introductions really landed.
+              (EXISTS (SELECT 1 FROM posts p WHERE p.user_id = u.id)
+                OR EXISTS (SELECT 1 FROM products pr WHERE pr.business_id = u.id)
+                OR EXISTS (SELECT 1 FROM orders o WHERE o.buyer_id = u.id)) AS active
        FROM referrals r JOIN users u ON u.id = r.referred_id WHERE r.referrer_id = $1 ORDER BY r.created_at DESC LIMIT 200`, [req.user.id])).rows;
     const totalEarned = refs.reduce((s, r) => s + (r.reward_cents || 0), 0);
     const base = (process.env.APP_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
     res.json({
       code, link: `${base}/?ref=${code}`, bonusCents: REFERRAL_BONUS_CENTS,
+      businessBonusCents: REFERRAL_BUSINESS_BONUS_CENTS,
       count: refs.length, totalEarnedCents: totalEarned,
-      referrals: refs.map((r) => ({ name: r.name, username: r.username, avatar: r.avatar || null, rewardCents: r.reward_cents || 0, createdAt: r.created_at })),
+      // Milestone ladder: what's already paid, and how far to the next rung.
+      milestones: REFERRAL_MILESTONES.map((m) => ({ at: m.at, cents: m.cents, reached: refs.length >= m.at })),
+      nextMilestone: REFERRAL_MILESTONES.find((m) => refs.length < m.at) || null,
+      businessCount: refs.filter((r) => r.account_type === 'business').length,
+      referrals: refs.map((r) => ({ name: r.name, username: r.username, avatar: r.avatar || null, rewardCents: r.reward_cents || 0, createdAt: r.created_at,
+        accountType: r.account_type === 'business' ? 'business' : 'personal', active: !!r.active })),
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your referrals.' }); }
 });
@@ -19927,7 +19968,7 @@ app.post('/api/referrals/claim', auth.requireAuth, rateLimit(10, 60000, 'ref-cla
   const code = (req.body.code || '').toString().trim().toUpperCase();
   if (!/^[A-Z0-9]{4,16}$/.test(code)) return res.status(400).json({ error: 'That referral code isn’t valid.' });
   try {
-    const me = (await db.query('SELECT referred_by, created_at FROM users WHERE id = $1', [req.user.id])).rows[0];
+    const me = (await db.query('SELECT referred_by, created_at, account_type FROM users WHERE id = $1', [req.user.id])).rows[0];
     if (!me) return res.status(404).json({ error: 'Account not found.' });
     if (me.referred_by) return res.status(409).json({ error: 'You’ve already used a referral code.', already: true });
     const ageDays = (Date.now() - new Date(me.created_at).getTime()) / 86400000;
@@ -19935,15 +19976,18 @@ app.post('/api/referrals/claim', auth.requireAuth, rateLimit(10, 60000, 'ref-cla
     const ref = (await db.query('SELECT id FROM users WHERE lower(referral_code) = lower($1)', [code])).rows[0];
     if (!ref) return res.status(404).json({ error: 'No one has that referral code.' });
     if (ref.id === req.user.id) return res.status(400).json({ error: 'You can’t refer yourself.' });
+    // A business joiner is worth more to the platform, so the referrer earns more.
+    const joinerIsBiz = me.account_type === 'business';
+    const referrerBonus = joinerIsBiz ? REFERRAL_BUSINESS_BONUS_CENTS : REFERRAL_BONUS_CENTS;
     // Atomic: set referred_by, record the referral (UNIQUE referred_id = idempotent), credit both wallets.
     const client = await db.getPool().connect();
     try {
       await client.query('BEGIN');
       const upd = await client.query('UPDATE users SET referred_by = $2 WHERE id = $1 AND referred_by IS NULL RETURNING id', [req.user.id, ref.id]);
       if (!upd.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'You’ve already used a referral code.', already: true }); }
-      await client.query('INSERT INTO referrals (referrer_id, referred_id, reward_cents) VALUES ($1,$2,$3)', [ref.id, req.user.id, REFERRAL_BONUS_CENTS]);
+      await client.query('INSERT INTO referrals (referrer_id, referred_id, reward_cents) VALUES ($1,$2,$3)', [ref.id, req.user.id, referrerBonus]);
       await walletCredit(client, req.user.id, REFERRAL_BONUS_CENTS, 'referral', ref.id, 'Referral bonus');
-      await walletCredit(client, ref.id, REFERRAL_BONUS_CENTS, 'referral', req.user.id, 'Referral bonus');
+      await walletCredit(client, ref.id, referrerBonus, 'referral', req.user.id, joinerIsBiz ? 'Business referral bonus' : 'Referral bonus');
       await client.query('COMMIT');
     } catch (e) {
       await client.query('ROLLBACK').catch(() => {});
@@ -19951,8 +19995,9 @@ app.post('/api/referrals/claim', auth.requireAuth, rateLimit(10, 60000, 'ref-cla
       throw e;
     } finally { client.release(); }
     notify(ref.id, req.user.id, 'referral');
-    rtPush(ref.id, 'wallet', { type: 'receive', amountCents: REFERRAL_BONUS_CENTS });
+    rtPush(ref.id, 'wallet', { type: 'receive', amountCents: referrerBonus });
     rtPush(req.user.id, 'wallet', { type: 'receive', amountCents: REFERRAL_BONUS_CENTS });
+    payReferralMilestones(ref.id).catch(() => {}); // escalating bonuses for repeat referrers
     res.json({ ok: true, earnedCents: REFERRAL_BONUS_CENTS });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not apply the referral code.' }); }
 });
