@@ -14473,6 +14473,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <div class="prod-img-pick" id="prodImgPick" onclick="document.getElementById('prodImgFile').click()"><span>＋ Add a photo</span></div>
     <input type="file" id="prodImgFile" accept="image/*" multiple class="hidden" onchange="acProdPickImg(event)"/>
     <div class="prod-thumbs" id="prodThumbs"></div>
+    <button class="ac-pill-btn" type="button" id="prodAiDraftBtn" onclick="acProdListingAi()" style="width:100%;margin-top:8px;">✦ Draft the listing from the photo</button>
     <button class="ac-pill-btn" type="button" id="prodVideoBtn" onclick="document.getElementById('prodVideoFile').click()" style="width:100%;margin-top:8px;"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-inline-end:6px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;"><rect x="2" y="6" width="13" height="12" rx="2.5"/><path d="M15 10.5 22 7v10l-7-3.5"/></svg>Add a video (optional)</button>
     <input type="file" id="prodVideoFile" accept="video/*" class="hidden" onchange="acProdPickVideo(this)"/>
     <div id="prodVideoPrev"></div>
@@ -17037,7 +17038,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1560'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1561'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -36852,6 +36853,26 @@ async function acSaveProduct() {
     if (AC._shopBiz) acLoadShop(AC._shopBiz, true);
     const sv = document.getElementById('sellView'); if (sv && !sv.classList.contains('hidden')) acLoadSell();
   } catch (e) { showNotif(e.message || 'Could not save the product.'); }
+}
+// Photo-to-listing: Atwe AI drafts name/description/category/condition/price
+// from the first photo. Fills EMPTY fields only — never overwrites the seller.
+async function acProdListingAi() {
+  const img = (AC._prodImgs || [])[0];
+  if (!img) { showNotif('Add a product photo first.'); return; }
+  const btn = document.getElementById('prodAiDraftBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '✦ Reading the photo…'; }
+  try {
+    const d = await API.req('POST', '/api/ai/listing-from-photo', { image: img });
+    const setIfEmpty = (id, v) => { const el = document.getElementById(id); if (el && v != null && !String(el.value || '').trim()) { el.value = v; return true; } return false; };
+    const filled = [];
+    if (setIfEmpty('prodName', d.name)) filled.push('name');
+    if (setIfEmpty('prodDesc', d.description)) filled.push('description');
+    if (setIfEmpty('prodCategory', d.category)) filled.push('category');
+    if (d.condition) { const c = document.getElementById('prodCondition'); if (c && !c.value) { c.value = d.condition; filled.push('condition'); } }
+    if (d.priceCents != null) { if (setIfEmpty('prodPrice', (d.priceCents / 100).toFixed(2))) filled.push('price suggestion'); }
+    showNotif(filled.length ? ('Drafted from the photo — check the ' + filled.join(', ') + ' before saving.') : 'Everything was already filled in.');
+  } catch (e) { showNotif(e.status === 503 ? (e.message || 'Atwe AI isn’t available right now.') : (e.message || 'Couldn’t draft from that photo.')); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = '✦ Draft the listing from the photo'; } }
 }
 // AI business assistant: write/improve a product description from its name + details.
 async function acProdDescAi() {

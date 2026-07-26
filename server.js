@@ -25661,6 +25661,38 @@ app.post('/api/ai/alt-text', auth.requireAuth, rateLimit(20, 60000, 'ai-alt'), a
   } catch (err) { console.error(err); res.status(503).json({ error: 'Atwe AI is unavailable right now.' }); }
 });
 
+// Photo-to-listing (eBay "magic listing"): Atwe AI drafts a marketplace listing
+// from one product photo — name, description, category, condition, and a price
+// suggestion the seller always reviews. Strict JSON; brand-safe; 503 keyless.
+app.post('/api/ai/listing-from-photo', auth.requireAuth, rateLimit(12, 60000, 'ai-listing'), async (req, res) => {
+  const img = (req.body.image || '').toString();
+  const m = /^data:(image\/(?:png|jpe?g|gif|webp));base64,([A-Za-z0-9+/]+={0,2})$/i.exec(img);
+  if (!m || img.length > 8 * 1024 * 1024) return res.status(400).json({ error: 'Add a product photo first.' });
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not available right now.' });
+  const mediaType = m[1].toLowerCase() === 'image/jpg' ? 'image/jpeg' : m[1].toLowerCase();
+  try {
+    const msg = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 500,
+      system: 'You are Atwe AI, drafting a marketplace listing from a product photo. Reply with ONLY a JSON object, no markdown fences: {"name": string (≤80 chars, specific — brand/model if clearly visible), "description": string (2–3 benefit-led sentences, no hype, no emojis), "category": string (a short store section like "Kitchen", "Furniture", "Electronics"), "condition": one of "new"|"like_new"|"good"|"fair"|null (null unless wear is clearly judgeable), "priceCents": integer or null (a fair US resale price in cents ONLY if the item is confidently recognizable, else null)}. Never invent brands or details you cannot see. Never mention "Claude" or "Anthropic".',
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: mediaType, data: m[2] } },
+        { type: 'text', text: 'Draft the listing JSON for this product photo.' },
+      ] }],
+    });
+    const raw = (msg.content.find((b) => b.type === 'text')?.text || '').trim().replace(/^```(?:json)?|```$/g, '');
+    let d; try { d = JSON.parse(raw); } catch (e) { return res.status(503).json({ error: 'Atwe AI couldn’t read that photo — try a clearer shot.' }); }
+    const out = {
+      name: (d.name || '').toString().trim().slice(0, 80) || null,
+      description: (d.description || '').toString().trim().slice(0, 1000) || null,
+      category: (d.category || '').toString().trim().slice(0, 60) || null,
+      condition: PRODUCT_CONDITIONS.includes(d.condition) ? d.condition : null,
+      priceCents: (Number.isInteger(d.priceCents) && d.priceCents >= 100 && d.priceCents <= 5000000) ? d.priceCents : null,
+    };
+    if (!out.name) return res.status(503).json({ error: 'Atwe AI couldn’t read that photo — try a clearer shot.' });
+    res.json(out);
+  } catch (err) { console.error(err); res.status(503).json({ error: 'Atwe AI is unavailable right now.' }); }
+});
+
 // AI "network digest" — a short catch-up of what people you follow have posted.
 app.post('/api/ai/digest', auth.requireAuth, rateLimit(12, 60000, 'ai-digest'), async (req, res) => {
   try {
