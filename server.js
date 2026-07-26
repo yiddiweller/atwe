@@ -14298,6 +14298,29 @@ app.get('/api/business/analytics', auth.requireAuth, async (req, res) => {
     const vmap = {}; pvDays.rows.forEach((r) => { vmap[new Date(r.day).toISOString().slice(0, 10)] = r.n; });
     const days = [];
     for (let i = 13; i >= 0; i--) { const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10); days.push({ day: d, views: vmap[d] || 0 }); }
+    // Conversation analytics (WhatsApp-Business-style, last 30 days): who wrote
+    // in, whether the business answered, and how fast the FIRST reply came.
+    const convo = (await db.query(
+      `WITH firsts AS (
+         SELECT m.sender_id AS peer, MIN(m.created_at) AS first_in
+           FROM at_messages m
+          WHERE m.recipient_id = $1 AND m.created_at > now() - interval '30 days'
+          GROUP BY m.sender_id),
+       replies AS (
+         SELECT f.peer, f.first_in,
+                (SELECT MIN(o.created_at) FROM at_messages o
+                  WHERE o.sender_id = $1 AND o.recipient_id = f.peer AND o.created_at >= f.first_in) AS first_out
+           FROM firsts f)
+       SELECT COUNT(*)::int AS conversations,
+              COUNT(*) FILTER (WHERE first_out IS NOT NULL)::int AS responded,
+              percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (first_out - first_in)))
+                FILTER (WHERE first_out IS NOT NULL) AS median_secs
+         FROM replies`, [uid])).rows[0];
+    const msgVol = (await db.query(
+      `SELECT COUNT(*) FILTER (WHERE recipient_id = $1)::int AS msgs_in,
+              COUNT(*) FILTER (WHERE sender_id = $1)::int AS msgs_out
+         FROM at_messages
+        WHERE (recipient_id = $1 OR sender_id = $1) AND created_at > now() - interval '30 days'`, [uid])).rows[0];
     res.json({
       profileViews: { total: pvTot.rows[0].n || 0, last30: pv30.rows[0].n || 0, unique30: pvUniq.rows[0].n || 0, days },
       followers: followers.rows[0].n || 0,
@@ -14305,6 +14328,13 @@ app.get('/api/business/analytics', auth.requireAuth, async (req, res) => {
       posts: { count: posts.rows[0].posts || 0, views: posts.rows[0].views || 0, likes: posts.rows[0].likes || 0, reposts: posts.rows[0].reposts || 0 },
       jobs: { count: jobs.rows[0].jobs || 0, applicants: jobs.rows[0].applicants || 0, views: jobViews.rows[0].n || 0 },
       tagTaps: { total: tagTaps.rows[0].total || 0, last30: tagTaps.rows[0].last30 || 0, unique30: tagTaps.rows[0].uniq30 || 0 },
+      messaging: {
+        conversations: convo.conversations || 0,
+        responded: convo.responded || 0,
+        responseRate: convo.conversations ? Math.round((convo.responded / convo.conversations) * 100) : null,
+        medianReplyMins: convo.median_secs != null ? Math.max(1, Math.round(convo.median_secs / 60)) : null,
+        messagesIn: msgVol.msgs_in || 0, messagesOut: msgVol.msgs_out || 0,
+      },
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load analytics.' }); }
 });

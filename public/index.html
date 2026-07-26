@@ -17077,7 +17077,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1565'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1566'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24637,6 +24637,13 @@ function acRenderBizAnalytics(a) {
     <div class="ba-grid">
       ${C((a.jobs && a.jobs.count) || 0, 'Jobs posted')}
       ${C((a.jobs && a.jobs.applicants) || 0, 'Total applicants')}
+    </div>
+    <div class="ba-sec">Messaging · last 30 days</div>
+    <div class="ba-grid">
+      ${C((a.messaging && a.messaging.conversations) || 0, 'Conversations', 'people who wrote to you')}
+      ${C(a.messaging && a.messaging.responseRate != null ? a.messaging.responseRate + '%' : '—', 'Response rate', a.messaging && a.messaging.responded ? a.messaging.responded + ' answered' : '')}
+      ${C(a.messaging && a.messaging.medianReplyMins != null ? (a.messaging.medianReplyMins >= 60 ? Math.round(a.messaging.medianReplyMins / 60) + 'h' : a.messaging.medianReplyMins + 'm') : '—', 'Typical first reply', 'median time to answer')}
+      ${C(((a.messaging && a.messaging.messagesIn) || 0) + ' / ' + ((a.messaging && a.messaging.messagesOut) || 0), 'Messages in / out')}
     </div>`;
 }
 
