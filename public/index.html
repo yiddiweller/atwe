@@ -17026,7 +17026,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1556'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1557'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -26938,6 +26938,15 @@ function notifRow(n, i) {
       <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
       <div class="ac-item-main"><div class="notif-text"><b>Auction ended without bids</b> — relist it or set a lower starting bid · <span class="notif-time">${acTime(n.created_at)}</span></div>
         ${n.productName ? `<div class="notif-snip">${escHtml(n.productName)}</div>` : ''}</div>
+      ${n.read ? '' : '<span class="notif-dot"></span>'}
+    </div>`;
+  }
+  // Daily morning briefing — a system row (the Atwe mark): opens today's agenda.
+  if (n.type === 'daily_briefing') {
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');acOpenAgenda()">
+      <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
+      <div class="ac-item-main"><div class="notif-text"><b>Your morning brief</b> — see what’s on today · <span class="notif-time">${acTime(n.created_at)}</span></div>
+        <div class="notif-snip">Appointments, money waiting, orders to ship.</div></div>
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }

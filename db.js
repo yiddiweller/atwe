@@ -1245,6 +1245,8 @@ async function initSchema() {
   // Re-engagement push: when we last sent an away member a "what you missed" nudge
   // (rate-limited so we never spam). NULL = never nudged.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_reengaged_at TIMESTAMPTZ;`);
+  // Daily morning briefing (once per member per local day, ~8am; push-gated).
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_briefed_at TIMESTAMPTZ;`);
   // Split a bill / request money from several people. A split has a creator + a share
   // per participant; each share is paid into the creator's wallet (one-tap from balance).
   await query(`
