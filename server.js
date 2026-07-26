@@ -25573,6 +25573,76 @@ app.post('/api/admin/users/bulk', auth.requirePerm('users'), async (req, res) =>
     res.json({ ok: true, affected, skipped: ids.length - safe.length });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not complete the bulk action.' }); }
 });
+/* ─── Full account timeline ─────────────────────────────────────────────────
+   One chronological view of everything an account DID and everything done TO
+   it — the thing you actually want when a case lands on your desk, instead of
+   opening six tabs. Read-only, assembled from what already exists. */
+app.get('/api/admin/users/:id/timeline', auth.requirePerm('users'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
+  try {
+    const u = (await db.query('SELECT id, name, email, created_at FROM users WHERE id = $1', [id])).rows[0];
+    if (!u) return res.status(404).json({ error: 'User not found.' });
+    const items = [{ at: u.created_at, kind: 'signup', text: 'Joined Atwe' }];
+    const push = (rows, kind, fn) => { for (const r of rows) items.push({ at: r.at, kind, text: fn(r) }); };
+    const money = (c) => '$' + (Number(c || 0) / 100).toFixed(2);
+    const [posts, orders, wallet, strikes, notes, reports, acts, logins] = await Promise.all([
+      db.query(`SELECT created_at AS at, LEFT(COALESCE(body,''), 80) AS body FROM posts WHERE user_id = $1 ORDER BY created_at DESC LIMIT 40`, [id]),
+      db.query(`SELECT created_at AS at, id, status, total_cents, (buyer_id = $1) AS as_buyer FROM orders WHERE buyer_id = $1 OR seller_id = $1 ORDER BY created_at DESC LIMIT 40`, [id]),
+      db.query(`SELECT created_at AS at, kind, delta_cents, note FROM wallet_tx WHERE user_id = $1 ORDER BY created_at DESC LIMIT 40`, [id]),
+      db.query(`SELECT created_at AS at, reason, severity FROM user_strikes WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20`, [id]),
+      db.query(`SELECT created_at AS at, LEFT(body, 90) AS body FROM admin_user_notes WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20`, [id]),
+      db.query(`SELECT created_at AS at, reason, target_type, (reporter_id = $1) AS mine FROM reports WHERE reporter_id = $1 OR reported_id = $1 ORDER BY created_at DESC LIMIT 20`, [id]),
+      db.query(`SELECT created_at AS at, action, actor_name FROM admin_audit WHERE target_type = 'user' AND target_id = $1 ORDER BY created_at DESC LIMIT 40`, [id]),
+      db.query(`SELECT last_seen AS at, user_agent, location FROM auth_sessions WHERE user_id = $1 ORDER BY last_seen DESC LIMIT 10`, [id]),
+    ]);
+    push(posts.rows, 'post', (r) => 'Posted: ' + (r.body || '(media)'));
+    push(orders.rows, 'order', (r) => `${r.as_buyer ? 'Bought' : 'Sold'} — order #${r.id} (${r.status}) ${money(r.total_cents)}`);
+    push(wallet.rows, 'money', (r) => `${r.delta_cents < 0 ? 'Paid' : 'Received'} ${money(Math.abs(r.delta_cents))} · ${r.note || r.kind}`);
+    push(strikes.rows, 'strike', (r) => `Strike (${r.severity}): ${r.reason}`);
+    push(notes.rows, 'note', (r) => 'Staff note: ' + r.body);
+    push(reports.rows, 'report', (r) => r.mine ? `Reported a ${r.target_type} (${r.reason})` : `Was reported (${r.reason})`);
+    push(acts.rows, 'staff', (r) => `Staff action: ${r.action}${r.actor_name ? ' by ' + r.actor_name : ''}`);
+    push(logins.rows, 'session', (r) => `Signed in${r.location ? ' from ' + r.location : ''}${r.user_agent ? ' · ' + String(r.user_agent).slice(0, 40) : ''}`);
+    items.sort((a, b) => new Date(b.at) - new Date(a.at));
+    res.json({ user: { id: u.id, name: u.name, email: u.email }, items: items.slice(0, 250) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build the timeline.' }); }
+});
+/* ─── Global order search ───────────────────────────────────────────────────
+   Find ANY order across every seller by id, buyer, seller or tracking number —
+   the first thing support needs when someone says "where is my parcel". */
+app.get('/api/admin/orders', auth.requirePerm('support'), async (req, res) => {
+  const q = String(req.query.q || '').trim().slice(0, 120);
+  try {
+    const params = [];
+    const conds = [];
+    if (q) {
+      if (/^#?\d+$/.test(q)) { params.push(parseInt(q.replace('#', ''), 10)); conds.push(`o.id = $${params.length}`); }
+      else {
+        params.push('%' + q.replace(/[%_\\]/g, '\\$&') + '%');
+        const n = params.length;
+        conds.push(`(bu.name ILIKE $${n} OR bu.email ILIKE $${n} OR bu.username ILIKE $${n}
+                  OR su.name ILIKE $${n} OR su.username ILIKE $${n} OR o.tracking ILIKE $${n})`);
+      }
+    }
+    if (['pending', 'paid', 'fulfilled', 'delivered', 'released', 'escrow', 'disputed', 'refunded', 'cancelled'].includes(req.query.status)) {
+      params.push(req.query.status); conds.push(`o.status = $${params.length}`);
+    }
+    const { rows } = await db.query(
+      `SELECT o.id, o.status, o.total_cents, o.created_at, o.carrier, o.tracking, o.shipped_at, o.delivered_at,
+              bu.name AS buyer_name, bu.username AS buyer_username, su.name AS seller_name, su.username AS seller_username,
+              (SELECT string_agg(oi.name, ', ') FROM order_items oi WHERE oi.order_id = o.id) AS items
+         FROM orders o JOIN users bu ON bu.id = o.buyer_id JOIN users su ON su.id = o.seller_id
+        ${conds.length ? 'WHERE ' + conds.join(' AND ') : ''}
+        ORDER BY o.created_at DESC LIMIT 100`, params);
+    res.json({ orders: rows.map((r) => ({
+      id: r.id, status: r.status, totalCents: r.total_cents, createdAt: r.created_at,
+      carrier: r.carrier || null, tracking: r.tracking || null, shippedAt: r.shipped_at || null, deliveredAt: r.delivered_at || null,
+      buyer: { name: r.buyer_name, username: r.buyer_username }, seller: { name: r.seller_name, username: r.seller_username },
+      items: r.items || null,
+    })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not search orders.' }); }
+});
 /* ─── Staff notes + tags on an account (both private to staff) ─── */
 const ADMIN_TAGS = ['vip', 'partner', 'watchlist', 'beta', 'press', 'refunded'];
 app.get('/api/admin/users/:id/notes', auth.requirePerm('users'), async (req, res) => {
