@@ -15456,6 +15456,25 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- International shipping zones: a rate per group of countries -->
+<div class="overlay hidden" id="shipZonesView" onclick="if(event.target===this)closeOverlay('shipZonesView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Shipping zones">
+    <button class="sheet-close" onclick="closeOverlay('shipZonesView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Shipping zones</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Group countries and give each group its own rate. Leave this empty and your normal per-item shipping applies everywhere.</div>
+    <div id="shipZonesBody"></div>
+    <div class="co-sec-h" style="margin-top:18px;">Add a zone</div>
+    <input class="jp-in" id="szName" type="text" maxlength="60" placeholder="Zone name (e.g. Europe)"/>
+    <input class="jp-in" id="szCountries" type="text" maxlength="600" placeholder="Country codes: GB, FR, DE — or * for everywhere else" style="margin-top:8px;"/>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <input class="jp-in" id="szRate" type="number" min="0" max="1000" step="0.01" placeholder="Rate ($)" style="margin:0;flex:1;"/>
+      <input class="jp-in" id="szFree" type="number" min="0" max="10000" step="1" placeholder="Free over ($, optional)" style="margin:0;flex:1;"/>
+    </div>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="acShipZoneAdd()">Add zone</button>
+    <div class="ac-disc-sub" style="margin:10px 2px 0;font-size:12px;">Once you add a zone, buyers in countries you haven’t listed can’t check out — add a <b>*</b> zone if you ship everywhere.</div>
+  </div>
+</div>
+
 <!-- Listing A/B tests: run one title-or-price test per listing -->
 <div class="overlay hidden" id="experimentsView" onclick="if(event.target===this)closeOverlay('experimentsView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="A/B tests">
@@ -17410,7 +17429,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1584'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1585'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -39809,6 +39828,7 @@ async function acOpenStoreManage() {
     ${row(SI.chart, 'Sales & analytics', 'Revenue, orders and top products', 'closeOverlay(\'storeManageView\');acOpenShopAnalytics()')}
     ${row(SI.box, 'Restock suggestions', 'What to reorder, based on sales', 'acOpenRestock()')}
     ${row(SI.chart, 'A/B tests', 'Test a title or price and keep the winner', 'acOpenExperiments()')}
+    ${row(SI.box, 'Shipping zones', 'Ship abroad — set a rate per country group', 'acOpenShipZones()')}
     ${row(SI.store, 'Customers', 'Everyone who has bought from you', 'closeOverlay(\'storeManageView\');acOpenCustomers()')}
     ${row(SI.megaphone, 'Cart recovery', 'Win back abandoned carts via Beam', 'closeOverlay(\'storeManageView\');acOpenCartRecovery()')}
     ${row(SI.wallet, 'Wallet & payouts', 'Your balance and cash-out', 'closeOverlay(\'storeManageView\');acOpenWallet()')}
@@ -39836,6 +39856,46 @@ async function acOpenCustomers() {
         <button class="ac-post-more" onclick="event.stopPropagation();closeOverlay('customersView');appTab('chat');acOpenChat(${c.id})" aria-label="Message"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
       </div>`).join('');
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+/* ── International shipping zones: a rate per group of countries ── */
+async function acOpenShipZones() {
+  showOverlay('shipZonesView');
+  await acRenderShipZones();
+}
+async function acRenderShipZones() {
+  const b = document.getElementById('shipZonesBody'); if (!b) return;
+  b.innerHTML = acSkelRows(2);
+  try {
+    const { zones } = await API.req('GET', '/api/shipping-zones');
+    if (!zones.length) {
+      b.innerHTML = '<div class="ac-empty" style="padding:18px;">No zones yet — your normal per-item shipping applies everywhere.</div>';
+      return;
+    }
+    b.innerHTML = zones.map(z => `<div class="rsk-row">
+      <div class="rsk-main">
+        <div class="rsk-name">${escHtml(z.name)}${z.catchAll ? ' <span class="rsk-chip">Everywhere else</span>' : ''}</div>
+        <div class="rsk-sub">${z.catchAll ? 'All other countries' : escHtml(z.countries.join(', '))} · ${z.rateCents ? acMoney(z.rateCents) : 'Free'}${z.freeOverCents ? ' · free over ' + acMoney(z.freeOverCents) : ''}</div>
+      </div>
+      <button class="pv-del" onclick="acShipZoneRemove(${z.id})" aria-label="Remove">×</button>
+    </div>`).join('');
+  } catch (e) { b.innerHTML = '<div class="ac-empty">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+async function acShipZoneAdd() {
+  const name = (document.getElementById('szName').value || '').trim();
+  const countries = (document.getElementById('szCountries').value || '').trim();
+  const rate = Math.round((parseFloat(document.getElementById('szRate').value) || 0) * 100);
+  const free = Math.round((parseFloat(document.getElementById('szFree').value) || 0) * 100);
+  if (!name || !countries) { showNotif('Name the zone and list its countries.'); return; }
+  try {
+    await API.req('POST', '/api/shipping-zones', { name, countries, rateCents: rate, freeOverCents: free });
+    document.getElementById('szName').value = ''; document.getElementById('szCountries').value = '';
+    document.getElementById('szRate').value = ''; document.getElementById('szFree').value = '';
+    acRenderShipZones();
+  } catch (e) { showNotif(e.message || 'Could not save the zone.'); }
+}
+async function acShipZoneRemove(id) {
+  try { await API.req('DELETE', '/api/shipping-zones/' + id); acRenderShipZones(); }
+  catch (e) { showNotif(e.message || 'Could not remove it.'); }
 }
 /* ── Listing A/B tests: one title-or-price test per listing ── */
 function acExpRate(r) { return r == null ? '—' : r.toFixed(1) + '%'; }
