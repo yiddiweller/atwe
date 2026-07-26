@@ -25642,6 +25642,90 @@ app.post('/api/admin/users/bulk', auth.requirePerm('users'), async (req, res) =>
     res.json({ ok: true, affected, skipped: ids.length - safe.length });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not complete the bulk action.' }); }
 });
+/* ─── Linked-account detection ──────────────────────────────────────────────
+   Surface accounts that share a sign-in IP or an email pattern. This is a LEAD,
+   never a verdict: households, offices, schools and phone networks legitimately
+   share an IP, so the response says how strong each signal is and leaves the
+   judgement to a human. It's also how you spot someone evading a ban. */
+app.get('/api/admin/linked/:id', auth.requirePerm('moderation'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
+  try {
+    const me = (await db.query('SELECT id, name, username, email, created_at, status FROM users WHERE id = $1', [id])).rows[0];
+    if (!me) return res.status(404).json({ error: 'User not found.' });
+    const links = new Map();
+    const add = (row, signal, weight) => {
+      if (!row || row.id === id) return;
+      const cur = links.get(row.id) || { id: row.id, name: row.name, username: row.username, email: row.email,
+        createdAt: row.created_at, status: row.status || 'active', signals: [], score: 0 };
+      if (!cur.signals.includes(signal)) { cur.signals.push(signal); cur.score += weight; }
+      links.set(row.id, cur);
+    };
+    // Shared sign-in IP. Weak on its own (shared networks are normal), stronger
+    // when the overlap is recent.
+    const ips = (await db.query(`SELECT DISTINCT ip FROM auth_sessions WHERE user_id = $1 AND ip IS NOT NULL AND ip <> ''`, [id])).rows.map((r) => r.ip);
+    if (ips.length) {
+      const rows = (await db.query(
+        `SELECT DISTINCT u.id, u.name, u.username, u.email, u.created_at, u.status
+           FROM auth_sessions s JOIN users u ON u.id = s.user_id
+          WHERE s.ip = ANY($1) AND s.user_id <> $2 LIMIT 50`, [ips, id])).rows;
+      for (const r of rows) add(r, 'Signed in from the same IP', 2);
+    }
+    // Same email provider AND a very similar local part (gmail plus-addressing,
+    // dots, or a trailing number) — the classic throwaway-variant pattern.
+    if (me.email && me.email.includes('@')) {
+      const [local, domain] = me.email.toLowerCase().split('@');
+      const stem = local.replace(/\+.*$/, '').replace(/\./g, '').replace(/\d+$/, '');
+      if (stem.length >= 4) {
+        const rows = (await db.query(
+          `SELECT id, name, username, email, created_at, status FROM users
+            WHERE id <> $1 AND lower(split_part(email, '@', 2)) = $2
+              AND replace(regexp_replace(split_part(lower(email), '@', 1), '\\+.*$', ''), '.', '') LIKE $3 LIMIT 50`,
+          [id, domain, stem + '%'])).rows;
+        for (const r of rows) add(r, 'Very similar email address', 3);
+      }
+    }
+    const out = [...links.values()].sort((a, b) => b.score - a.score);
+    // Ban evasion is the case that matters most — call it out explicitly.
+    const evasion = out.filter((l) => l.status === 'banned' || l.status === 'suspended');
+    res.json({ user: { id: me.id, name: me.name, username: me.username }, linked: out.slice(0, 50), evasion });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not check for linked accounts.' }); }
+});
+/* ─── Retention cohorts ─────────────────────────────────────────────────────
+   The health metric: of the people who joined in week N, how many were still
+   coming back in each later week? Built from auth_sessions.last_seen, which is
+   already maintained, so there's nothing new to track. */
+app.get('/api/admin/retention', auth.requirePerm('growth'), async (req, res) => {
+  const weeks = Math.max(2, Math.min(12, parseInt(req.query.weeks, 10) || 8));
+  try {
+    const { rows } = await db.query(`
+      WITH cohorts AS (
+        SELECT id, date_trunc('week', created_at) AS wk FROM users
+         WHERE created_at > now() - make_interval(weeks => $1)
+           AND NOT COALESCE(is_demo, false) AND NOT COALESCE(deactivated, false)
+      ),
+      seen AS (
+        SELECT c.wk, c.id,
+               FLOOR(EXTRACT(EPOCH FROM (date_trunc('week', s.last_seen) - c.wk)) / 604800)::int AS offset_wk
+          FROM cohorts c JOIN auth_sessions s ON s.user_id = c.id
+      )
+      SELECT c.wk, COUNT(DISTINCT c.id)::int AS size,
+             (SELECT json_agg(json_build_object('w', x.offset_wk, 'n', x.n) ORDER BY x.offset_wk)
+                FROM (SELECT offset_wk, COUNT(DISTINCT id)::int AS n FROM seen s2
+                       WHERE s2.wk = c.wk AND s2.offset_wk >= 0 GROUP BY offset_wk) x) AS buckets
+        FROM cohorts c GROUP BY c.wk ORDER BY c.wk DESC`, [weeks]);
+    const cohorts = rows.map((r) => {
+      const buckets = Object.fromEntries((r.buckets || []).map((b) => [b.w, b.n]));
+      const cells = [];
+      for (let w = 0; w < weeks; w++) {
+        const n = buckets[w];
+        cells.push(n == null ? null : { active: n, pct: r.size ? Math.round((n / r.size) * 1000) / 10 : 0 });
+      }
+      return { week: r.wk, size: r.size, cells };
+    });
+    res.json({ cohorts, weeks });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build the cohorts.' }); }
+});
 /* ─── Platform fee manager ─── */
 app.get('/api/admin/platform-fee', auth.requirePerm('revenue'), async (_req, res) => {
   try {
