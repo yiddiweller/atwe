@@ -492,6 +492,21 @@
 .bc-aud.on b{color:#fff;}
 .bc-chans{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:13px;color:var(--muted);}
 .bc-chans label{display:flex;align-items:center;gap:6px;cursor:pointer;}
+/* Trending curation rows — a real grid so every column lines up down the list,
+   whatever length the buttons' labels happen to be. */
+.tr-row{display:grid;grid-template-columns:1fr 200px 92px 92px;align-items:center;gap:12px;}
+  .tr-row.tr-off .srt,.tr-row.tr-off .srs{opacity:.5;}
+  .tr-row input.in{width:100%!important;margin:0!important;}
+  .tr-row .act{width:100%;text-align:center;}
+  @media(max-width:760px){
+    .tr-row{grid-template-columns:1fr 1fr;}
+    .tr-row > :first-child{grid-column:1 / -1;}
+    .tr-row input.in{grid-column:1 / -1;}
+  }
+/* Demand — unmet searches + waitlists */
+.dm-term{font-variant-numeric:tabular-nums;}
+  .dm-track{height:6px;border-radius:999px;background:var(--b1);overflow:hidden;margin-top:7px;max-width:420px;}
+  .dm-track > div{height:100%;background:var(--accent);border-radius:999px;}
 .bc-row{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:10px;}
   .bc-row .ct{color:var(--t4);font-size:12px;margin-right:auto;}
   .send-btn{background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);padding:10px 20px;font-size:13.5px;font-weight:700;transition:all .15s var(--ease);}
@@ -825,6 +840,16 @@
   .act.danger{background:rgba(255,0,51,.10);color:var(--red);box-shadow:0 0 0 .5px rgba(255,0,51,.3) inset;}
   .act.danger:hover{background:rgba(255,0,51,.18);}
   .act.ghost{background:transparent;box-shadow:none;color:var(--t2);}
+  /* The ONE primary action on a panel: a solid white pill, same token as
+     .btn.primary. Without this, `.act.accent` fell through to the grey chip. */
+  .act.accent{background:var(--primary);color:var(--on-primary);box-shadow:none;font-weight:700;}
+  .act.accent:hover{background:var(--primary);filter:brightness(.94);}
+  .act.accent:active{filter:brightness(.88);transform:scale(.98);}
+  .act.accent:disabled{opacity:.45;filter:none;transform:none;cursor:default;}
+  /* A toggle that is currently ON is a STATE, not the primary action — same
+     treatment as a selected segment (s3 + white bold), so the one white pill
+     on a panel stays unambiguous. */
+  .act.on{background:var(--s3);color:var(--t1);font-weight:700;box-shadow:0 0 0 .5px var(--b3) inset;}
   .mod-act,.ad-acts button,.fc-catbtn,.vt-tbtn,.refresh,.copy{border-radius:var(--r-pill);}
   .copy{background:var(--s2);color:var(--t1);border:none;box-shadow:0 0 0 .5px var(--b2) inset;}
   .copy:hover{background:var(--s3);}
@@ -971,6 +996,7 @@
       <button class="tab" data-v="activity" onclick="switchTab('activity')">Activity</button>
       <button class="tab" data-v="traffic" onclick="switchTab('traffic')">Traffic</button>
       <button class="tab" data-v="growth" onclick="switchTab('growth')">Growth</button>
+      <button class="tab" data-v="demand" onclick="switchTab('demand')">Demand</button>
       <button class="tab" data-v="audit" onclick="switchTab('audit')">Audit log</button>
 
       <div class="nav-label" data-group="product">Product</div>
@@ -1079,6 +1105,9 @@ async function api(method, path, body){
 function esc(s){
   return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/`/g,'&#96;');
 }
+// A string safe to drop into an inline onclick="" attribute: JSON-quoted so the
+// JS parser sees a string, then HTML-escaped so the attribute itself holds.
+function jstr(v){ return esc(JSON.stringify(String(v == null ? '' : v))); }
 function initial(name){ return (String(name || '?').trim()[0] || '?').toUpperCase(); }
 function avatarHtml(u, cls){
   cls = cls || 'avatar';
@@ -1422,7 +1451,7 @@ const TAB_PERM = {
   finance: 'revenue', growth: 'growth', audit: 'super', staff: 'super',
   refunds: 'refunds', appeals: 'users', datareq: 'users', activity: 'super', investigate: 'moderation', moderate: 'moderation', orders: 'support', adjust: 'revenue', payouts: 'revenue', risk: 'revenue', retention: 'growth', curate: 'moderation', catalog: 'moderation',
   cards: 'revenue', features: 'super', featurecontrols: 'super', vault: 'super',
-  announcements: 'super',
+  announcements: 'super', demand: 'growth',
 };
 function canSee(tab){ const p = TAB_PERM[tab]; if (ME.superadmin) return true; return p !== 'super' && ME.perms.includes(p); }
 
@@ -1494,7 +1523,7 @@ const NAV_TITLES = {
   investigate:'Investigate', moderate:'AI content scan', disputes:'Disputes', appeals:'Appeals', support:'Support', datareq:'Data requests',
   posts:'Posts', circles:'Circles', feed:'Feed', activity:'Activity', traffic:'Traffic', growth:'Growth',
   orders:'Orders', adjust:'Wallet adjustments', payouts:'Payout review', risk:'Risk', retention:'Retention', curate:'Curate', catalog:'Catalog', audit:'Audit log', site:'Site', cards:'Cards', features:'Features', featurecontrols:'Feature Controls', vault:'Vault',
-  announcements:'Announcements',
+  announcements:'Announcements', demand:'Demand',
 };
 // Mobile: slide the sidebar in/out.
 function toggleNav(open){
@@ -1528,6 +1557,7 @@ function renderView(){
   else if (VIEW === 'risk') renderRiskView();
   else if (VIEW === 'retention') renderRetentionView();
   else if (VIEW === 'curate') renderCurateView();
+  else if (VIEW === 'demand') renderDemandView();
   else if (VIEW === 'catalog') renderCatalogView();
   else if (VIEW === 'disputes') renderDisputesView();
   else if (VIEW === 'circles') renderCirclesView();
@@ -1613,9 +1643,48 @@ function renderAnnouncements(){
       </label>
       <div class="custom-row" style="margin-top:14px;"><button class="act" id="annSaveBtn" onclick="saveAnn()">Publish announcement</button></div>
     </div>
+    <div class="panel" style="margin-top:18px;"><h3>Post to the feed as Atwe</h3>
+      <div class="sub">Product news and tips, in Atwe's own voice. Unlike the banner above, this is a real post in the main feed — people can reply to it, like it and share it, and it stays there.</div>
+      <textarea id="offMsg" maxlength="2000" rows="3" placeholder="e.g. You can now split a bill with anyone on Atwe — tap Split a bill in your Profile. #atwe" style="width:100%;box-sizing:border-box;background:var(--s1);border:1px solid var(--b1);border-radius:12px;color:var(--t1);padding:11px 13px;font:inherit;resize:vertical;margin-top:10px;"></textarea>
+      <div id="offWho" class="srs" style="margin-top:8px;">Checking the Atwe account…</div>
+      <div class="custom-row" style="margin-top:12px;"><button class="act accent" id="offBtn" onclick="publishOfficial()">Publish post</button></div>
+    </div>
     <h3 style="margin:22px 2px 12px;font-size:15px;">All announcements</h3>
     ${rows || '<div class="empty" style="padding:14px 0;">No announcements yet.</div>'}`;
   ANN._editing = null;
+  loadOfficialAccount();
+}
+// The platform posts from a real account, so replies/likes/moderation all work
+// normally. Show plainly which account that is — or that it needs creating.
+async function loadOfficialAccount(){
+  const el = document.getElementById('offWho'); if (!el) return;
+  try {
+    const { username, account } = await api('GET', '/api/admin/official-account');
+    if (account) el.innerHTML = 'Posting as <b>' + esc(account.name || account.username) + '</b> @' + esc(account.username) + '.';
+    else {
+      el.innerHTML = 'No <b>@' + esc(username) + '</b> account exists yet. ' +
+        '<button class="act" style="margin-inline-start:6px;" onclick="createOfficialAccount()">Create it</button>';
+      const b = document.getElementById('offBtn'); if (b) b.disabled = true;
+    }
+  } catch (e){ el.textContent = e.message; }
+}
+// @atwe is a reserved handle, so it can't be claimed through normal signup —
+// the dashboard provisions it. Nobody signs in as it; posts go through here.
+async function createOfficialAccount(){
+  if (!confirm('Create the official Atwe account? It will post as @atwe in the main feed.')) return;
+  try { const r = await api('POST', '/api/admin/official-account');
+    notify(r.created ? 'Created @' + r.account.username + '.' : 'It already exists.');
+    const b = document.getElementById('offBtn'); if (b) b.disabled = false;
+    loadOfficialAccount();
+  } catch (e){ notify(e.message); }
+}
+async function publishOfficial(){
+  const el = document.getElementById('offMsg');
+  const body = (el.value || '').trim();
+  if (!body) { notify('Write the post first.'); return; }
+  if (!confirm('Publish this to the main feed as Atwe?')) return;
+  try { await api('POST', '/api/admin/official-post', { body }); el.value = ''; notify('Posted.'); }
+  catch (e){ notify(e.message); }
 }
 function _annForm(){
   return {
@@ -3751,8 +3820,62 @@ function renderCurateView(){
         <select class="in" id="colKind" style="width:150px;margin:0;"><option value="products">Listings</option><option value="profiles">Profiles</option></select>
         <button class="act accent" onclick="createCollection()">Create shelf</button>
       </div></div>
-    <div id="colList"><div class="ld"><span class="ab-mark"></span></div></div>`;
+    <div id="colList"><div class="ld"><span class="ab-mark"></span></div></div>
+    <div class="panel"><h3>Trending topics</h3>
+      <div class="sub">What people are posting about this week. You can hide a topic from Trending, add a line of context so it reads clearly, or pin one to the top — a pinned topic shows even if it isn't trending on its own yet.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <input class="in" id="trNew" maxlength="60" placeholder="Pin a topic, e.g. atwe" style="flex:1;min-width:180px;margin:0;"/>
+        <button class="act accent" onclick="pinNewTrend()">Pin to top</button>
+      </div></div>
+    <div id="trendBox"><div class="ld"><span class="ab-mark"></span></div></div>`;
   loadCollections();
+  loadTrendCuration();
+}
+// Trending curation. Every tag the platform saw this week, plus any tag staff
+// have already touched (a pinned tag may have no posts of its own yet).
+async function loadTrendCuration(){
+  const box = document.getElementById('trendBox'); if (!box) return;
+  try {
+    const { live, overrides } = await api('GET', '/api/admin/trends');
+    const ov = new Map(overrides.map(o => [o.tag.toLowerCase(), o]));
+    const seen = new Set();
+    const rows = [];
+    for (const t of live){ seen.add(t.tag.toLowerCase()); rows.push({ tag: t.tag, count: t.count, o: ov.get(t.tag.toLowerCase()) || {} }); }
+    for (const o of overrides){ if (!seen.has(o.tag.toLowerCase())) rows.push({ tag: o.tag, count: 0, o }); }
+    rows.sort((a, b) => (b.o.pinned ? 1 : 0) - (a.o.pinned ? 1 : 0) || b.count - a.count);
+    box.innerHTML = rows.length ? '<div class="panel">' + rows.map(r => {
+      const id = r.tag.replace(/[^a-zA-Z0-9]/g, '_');
+      return `<div class="site-row tr-row${r.o.hidden ? ' tr-off' : ''}">
+        <div style="min-width:0;">
+          <div class="srt">#${esc(r.tag)}${r.o.pinned ? ' <span class="pill pro">pinned</span>' : ''}${r.o.hidden ? ' <span class="pill susp">hidden</span>' : ''}</div>
+          <div class="srs">${r.count} post${r.count === 1 ? '' : 's'} this week</div>
+        </div>
+        <input class="in" id="trl_${id}" maxlength="60" value="${esc(r.o.label || '')}" placeholder="Context line (optional)" onkeydown="if(event.key==='Enter')saveTrend(${jstr(r.tag)})" onblur="saveTrend(${jstr(r.tag)})"/>
+        <button class="act${r.o.pinned ? ' on' : ''}" onclick="toggleTrend(${jstr(r.tag)}, 'pinned')">${r.o.pinned ? 'Pinned' : 'Pin'}</button>
+        <button class="act${r.o.hidden ? ' danger' : ''}" onclick="toggleTrend(${jstr(r.tag)}, 'hidden')">${r.o.hidden ? 'Hidden' : 'Hide'}</button>
+      </div>`;
+    }).join('') + '</div>' : '<div class="empty">Nothing is trending yet.</div>';
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+// One row's current state, so a toggle never wipes a label typed beside it.
+function trendRowState(tag){
+  const box = document.getElementById('trendBox');
+  const row = [...box.querySelectorAll('.tr-row')].find(r => (r.querySelector('.srt')||{}).textContent.trim().split(' ')[0] === '#' + tag);
+  const label = (document.getElementById('trl_' + tag.replace(/[^a-zA-Z0-9]/g, '_')) || {}).value || '';
+  return { pinned: !!(row && row.querySelector('.pill.pro')), hidden: !!(row && row.classList.contains('tr-off')), label: label.trim() };
+}
+async function putTrend(tag, st){
+  try { await api('PUT', '/api/admin/trends/' + encodeURIComponent(tag), st); loadTrendCuration(); }
+  catch (e){ notify(e.message); }
+}
+function toggleTrend(tag, key){ const st = trendRowState(tag); st[key] = !st[key]; if (key === 'pinned' && st.pinned) st.hidden = false; putTrend(tag, st); }
+function saveTrend(tag){ putTrend(tag, trendRowState(tag)); }
+async function pinNewTrend(){
+  const el = document.getElementById('trNew');
+  const tag = (el.value || '').trim().replace(/^#/, '');
+  if (!tag) { notify('Type a topic first.'); return; }
+  el.value = '';
+  putTrend(tag, { pinned: true, hidden: false, label: '' });
 }
 async function loadCollections(){
   const box = document.getElementById('colList'); if (!box) return;
@@ -3794,6 +3917,80 @@ async function addCollectionItem(id, kind){
   catch (e){ notify(e.message); }
 }
 async function removeCollectionItem(id, itemId){ try { await api('DELETE', '/api/admin/collections/' + id + '/items/' + itemId); loadCollections(); } catch (e){ notify(e.message); } }
+/* Demand — what members are asking for that Atwe doesn't have yet. Two halves:
+   searches that came back empty (the unprompted signal) and waiting lists
+   (the explicit one). */
+function renderDemandView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="panel"><h3>Searches that found nothing</h3>
+      <div class="sub">What people looked for and didn't find. Counted by the words typed only — never tied back to a person. The ones at the top are the clearest gaps to fill.</div></div>
+    <div id="missBox"><div class="ld"><span class="ab-mark"></span></div></div>
+    <div class="panel"><h3>Waiting lists</h3>
+      <div class="sub">A named list people can join for something that isn't ready yet, so the interest is captured instead of lost. When it's ready, invite the next people in line — they get a message from Atwe.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <input class="in" id="wlTitle" maxlength="80" placeholder="Title (e.g. Atwe Card)" style="flex:1;min-width:180px;margin:0;"/>
+        <input class="in" id="wlSlug" maxlength="60" placeholder="Short name (e.g. atwe-card)" style="flex:1;min-width:150px;margin:0;"/>
+        <button class="act accent" onclick="createWaitlist()">Create list</button>
+      </div></div>
+    <div id="wlBox"><div class="ld"><span class="ab-mark"></span></div></div>`;
+  loadSearchMisses();
+  loadWaitlists();
+}
+async function loadSearchMisses(){
+  const box = document.getElementById('missBox'); if (!box) return;
+  try {
+    const { misses } = await api('GET', '/api/admin/search-misses');
+    if (!misses.length) { box.innerHTML = '<div class="empty">Every search so far has found something.</div>'; return; }
+    const top = misses[0].hits || 1;
+    box.innerHTML = '<div class="panel">' + misses.slice(0, 60).map(m => `<div class="site-row">
+      <div style="min-width:0;flex:1;"><div class="srt">${esc(m.term)}</div>
+        <div class="srs">${m.hits} search${m.hits === 1 ? '' : 'es'} · last ${fmtDate(m.lastAt)}</div>
+        <div class="dm-track"><div style="width:${Math.max(4, Math.round((m.hits / top) * 100))}%;"></div></div></div>
+      <button class="act" onclick="investigateTerm(${jstr(m.term)})">Look into it</button></div>`).join('') + '</div>';
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+// Jump to Investigate with the term already typed in, so "look into it" actually
+// looks into that thing rather than dropping staff on an empty search box.
+function investigateTerm(term){
+  switchTab('investigate');
+  setTimeout(() => { const i = document.getElementById('invQ'); if (!i) return; i.value = term; i.focus(); invSearch(term); }, 120);
+}
+async function loadWaitlists(){
+  const box = document.getElementById('wlBox'); if (!box) return;
+  try {
+    const { waitlists } = await api('GET', '/api/admin/waitlists');
+    box.innerHTML = waitlists.length ? waitlists.map(w => `<div class="panel">
+      <div class="site-row" style="border:none;padding-top:0;">
+        <div><div class="srt">${esc(w.title)} <span class="pill">${esc(w.slug)}</span>${w.open ? '' : ' <span class="pill susp">closed</span>'}</div>
+          <div class="srs">${w.members} waiting · ${w.invited} already invited</div></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+        <input class="in" id="wln${w.id}" type="number" min="1" max="500" value="10" style="width:90px;margin:0;"/>
+        <input class="in" id="wlm${w.id}" maxlength="200" placeholder="Message (optional)" style="flex:1;min-width:180px;margin:0;"/>
+        <button class="act accent" onclick="inviteWaitlist(${w.id})">Invite next</button>
+      </div></div>`).join('') : '<div class="empty">No waiting lists yet.</div>';
+  } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function createWaitlist(){
+  const title = document.getElementById('wlTitle').value.trim();
+  const slug = document.getElementById('wlSlug').value.trim() || title;
+  if (!title) { notify('Give the list a title.'); return; }
+  try {
+    await api('POST', '/api/admin/waitlists', { title, slug });
+    document.getElementById('wlTitle').value = ''; document.getElementById('wlSlug').value = '';
+    loadWaitlists();
+  } catch (e){ notify(e.message); }
+}
+async function inviteWaitlist(id){
+  const count = parseInt(document.getElementById('wln' + id).value, 10) || 10;
+  const message = (document.getElementById('wlm' + id).value || '').trim();
+  if (!confirm('Invite the next ' + count + ' people in line?')) return;
+  try { const r = await api('POST', '/api/admin/waitlists/' + id + '/invite', { count, message });
+    notify(r.invited ? 'Invited ' + r.invited + ' ' + (r.invited === 1 ? 'person' : 'people') + '.' : 'Nobody new is waiting.');
+    loadWaitlists();
+  } catch (e){ notify(e.message); }
+}
 // Retention cohorts — of the people who joined in week N, how many kept coming
 // back? Built from session activity that's already recorded.
 async function renderRetentionView(){

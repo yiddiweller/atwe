@@ -12694,8 +12694,201 @@ app.get('/api/social/trending', auth.requireAuth, async (req, res) => {
        GROUP BY h.tag ORDER BY count DESC, h.tag LIMIT 12`,
       [req.user.id]
     );
-    res.json({ trends: rows.map((r) => ({ tag: r.tag, count: r.count })) });
+    // Curation: hide a tag entirely, rename how it reads, or pin one to the top.
+    // A pinned tag shows even if this week's organic list didn't include it.
+    let ov = [];
+    try { ov = (await db.query('SELECT tag, pinned, hidden, label FROM trend_overrides')).rows; } catch (_) {}
+    const byTag = new Map(ov.map((o) => [o.tag.toLowerCase(), o]));
+    let trends = rows
+      .filter((r) => !(byTag.get(r.tag.toLowerCase()) || {}).hidden)
+      .map((r) => { const o = byTag.get(r.tag.toLowerCase()) || {};
+        return { tag: r.tag, count: r.count, label: o.label || null, pinned: !!o.pinned }; });
+    for (const o of ov) {
+      if (!o.pinned || o.hidden) continue;
+      if (trends.some((t) => t.tag.toLowerCase() === o.tag.toLowerCase())) continue;
+      trends.unshift({ tag: o.tag, count: 0, label: o.label || null, pinned: true });
+    }
+    trends.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.count - a.count);
+    res.json({ trends: trends.slice(0, 12) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+app.get('/api/admin/trends', auth.requirePerm('moderation'), async (_req, res) => {
+  try {
+    const live = (await db.query(
+      `SELECT h.tag, COUNT(DISTINCT h.post_id)::int AS count FROM post_hashtags h JOIN posts p ON p.id = h.post_id
+        WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at > now() - interval '7 days'
+        GROUP BY h.tag ORDER BY count DESC LIMIT 40`)).rows;
+    const ov = (await db.query('SELECT * FROM trend_overrides ORDER BY tag')).rows;
+    res.json({ live, overrides: ov.map((o) => ({ tag: o.tag, pinned: o.pinned, hidden: o.hidden, label: o.label || null })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load trends.' }); }
+});
+app.put('/api/admin/trends/:tag', auth.requirePerm('moderation'), async (req, res) => {
+  const tag = String(req.params.tag || '').replace(/^#/, '').trim().toLowerCase().slice(0, 60);
+  if (!tag) return res.status(400).json({ error: 'Invalid tag.' });
+  const pinned = req.body.pinned === true, hidden = req.body.hidden === true;
+  const label = (req.body.label || '').toString().trim().slice(0, 60) || null;
+  try {
+    if (!pinned && !hidden && !label) await db.query('DELETE FROM trend_overrides WHERE tag = $1', [tag]);
+    else await db.query(
+      `INSERT INTO trend_overrides (tag, pinned, hidden, label) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (tag) DO UPDATE SET pinned = EXCLUDED.pinned, hidden = EXCLUDED.hidden, label = EXCLUDED.label, updated_at = now()`,
+      [tag, pinned, hidden, label]);
+    adminAudit(req, 'trend.curate', 'trend', null, { tag, pinned, hidden, label });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the trend.' }); }
+});
+/* ─── Searches that found nothing ───────────────────────────────────────────
+   A free roadmap of what members want and can't find. Aggregated by TERM only —
+   never tied back to a person. */
+async function recordSearchMiss(term) {
+  const t = String(term || '').trim().toLowerCase().slice(0, 80);
+  if (t.length < 2) return;
+  try {
+    await db.query(
+      `INSERT INTO search_misses (term) VALUES ($1)
+       ON CONFLICT (term) DO UPDATE SET hits = search_misses.hits + 1, last_at = now()`, [t]);
+  } catch (_) { /* analytics is never worth an error */ }
+}
+app.get('/api/admin/search-misses', auth.requirePerm('growth'), async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT term, hits, last_at FROM search_misses WHERE last_at > now() - interval '90 days'
+        ORDER BY hits DESC, last_at DESC LIMIT 200`);
+    res.json({ misses: rows.map((r) => ({ term: r.term, hits: r.hits, lastAt: r.last_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the report.' }); }
+});
+/* ─── Waitlists ─────────────────────────────────────────────────────────────
+   A named list anyone can join, with their real position — so interest in
+   something that isn't live yet is captured instead of lost. */
+// A member's place in line. Computed entirely inside Postgres — comparing a
+// timestamp that has been round-tripped through JS silently loses the column's
+// microseconds, which made a member's own row fail the `<=` and read as 0.
+async function waitlistPosition(waitlistId, userId) {
+  const { rows } = await db.query(
+    `SELECT COUNT(*)::int AS n FROM waitlist_members WHERE waitlist_id = $1
+      AND joined_at <= (SELECT joined_at FROM waitlist_members WHERE waitlist_id = $1 AND user_id = $2)`,
+    [waitlistId, userId]);
+  return rows[0].n || null;
+}
+app.get('/api/waitlists/:slug', auth.requireAuth, async (req, res) => {
+  const slug = String(req.params.slug || '').toLowerCase().slice(0, 60);
+  try {
+    const w = (await db.query('SELECT * FROM waitlists WHERE lower(slug) = $1', [slug])).rows[0];
+    if (!w) return res.status(404).json({ error: 'No such list.' });
+    const mine = (await db.query('SELECT invited_at FROM waitlist_members WHERE waitlist_id = $1 AND user_id = $2', [w.id, req.user.id])).rows[0];
+    const total = (await db.query('SELECT COUNT(*)::int AS n FROM waitlist_members WHERE waitlist_id = $1', [w.id])).rows[0].n;
+    const position = mine ? await waitlistPosition(w.id, req.user.id) : null;
+    res.json({ slug: w.slug, title: w.title, description: w.description || null, open: w.open,
+      joined: !!mine, position, total, invited: !!(mine && mine.invited_at) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the list.' }); }
+});
+app.post('/api/waitlists/:slug/join', auth.requireAuth, rateLimit(20, 60000, 'waitlist'), async (req, res) => {
+  const slug = String(req.params.slug || '').toLowerCase().slice(0, 60);
+  try {
+    const w = (await db.query('SELECT id, open FROM waitlists WHERE lower(slug) = $1', [slug])).rows[0];
+    if (!w) return res.status(404).json({ error: 'No such list.' });
+    if (!w.open) return res.status(400).json({ error: 'That list is closed for now.' });
+    if (req.body.leave === true) {
+      await db.query('DELETE FROM waitlist_members WHERE waitlist_id = $1 AND user_id = $2', [w.id, req.user.id]);
+      return res.json({ ok: true, joined: false });
+    }
+    await db.query('INSERT INTO waitlist_members (waitlist_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [w.id, req.user.id]);
+    res.json({ ok: true, joined: true, position: await waitlistPosition(w.id, req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not join the list.' }); }
+});
+app.get('/api/admin/waitlists', auth.requirePerm('growth'), async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT w.*, (SELECT COUNT(*)::int FROM waitlist_members m WHERE m.waitlist_id = w.id) AS members,
+              (SELECT COUNT(*)::int FROM waitlist_members m WHERE m.waitlist_id = w.id AND m.invited_at IS NOT NULL) AS invited
+         FROM waitlists w ORDER BY w.created_at DESC LIMIT 50`);
+    res.json({ waitlists: rows.map((w) => ({ id: w.id, slug: w.slug, title: w.title, description: w.description || null,
+      open: w.open, members: w.members, invited: w.invited, createdAt: w.created_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the waitlists.' }); }
+});
+app.post('/api/admin/waitlists', auth.requirePerm('growth'), async (req, res) => {
+  const slug = String(req.body.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 60);
+  const title = (req.body.title || '').toString().trim().slice(0, 80);
+  if (!slug || !title) return res.status(400).json({ error: 'A slug and a title are required.' });
+  try {
+    const { rows } = await db.query('INSERT INTO waitlists (slug, title, description) VALUES ($1,$2,$3) RETURNING id',
+      [slug, title, (req.body.description || '').toString().trim().slice(0, 300) || null]);
+    res.status(201).json({ ok: true, id: rows[0].id, slug });
+  } catch (err) {
+    if (err && err.code === '23505') return res.status(409).json({ error: 'That slug is taken.' });
+    console.error(err); res.status(500).json({ error: 'Could not create the list.' });
+  }
+});
+// Invite the next N in line — they get a message and are marked invited.
+app.post('/api/admin/waitlists/:id/invite', auth.requirePerm('growth'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const n = Math.max(1, Math.min(500, parseInt(req.body.count, 10) || 10));
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const body = (req.body.message || '').toString().trim().slice(0, 1000) || 'You’re off the waiting list — it’s ready for you on Atwe.';
+  try {
+    const { rows } = await db.query(
+      `SELECT user_id FROM waitlist_members WHERE waitlist_id = $1 AND invited_at IS NULL ORDER BY joined_at LIMIT $2`, [id, n]);
+    if (!rows.length) return res.json({ ok: true, invited: 0 });
+    const ids = rows.map((r) => r.user_id);
+    await db.query('UPDATE waitlist_members SET invited_at = now() WHERE waitlist_id = $1 AND user_id = ANY($2)', [id, ids]);
+    await db.query(
+      `INSERT INTO admin_messages (user_id, sender, body, read_by_user, read_by_admin)
+       SELECT id, 'admin', $2, false, true FROM users WHERE id = ANY($1)`, [ids, body]);
+    for (const uid of ids) notifySelf(uid, 'waitlist_invite');
+    adminAudit(req, 'waitlist.invite', 'waitlist', id, { count: ids.length });
+    res.json({ ok: true, invited: ids.length });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the invites.' }); }
+});
+/* ─── Post to the feed AS Atwe ──────────────────────────────────────────────
+   Product news and tips from the platform itself. It posts as a real account
+   (ATWE_OFFICIAL_USERNAME, default @atwe) so it behaves like any other post —
+   replies, likes and moderation all work normally, with no special-case feed
+   plumbing to go wrong. */
+const ATWE_OFFICIAL_USERNAME = (process.env.ATWE_OFFICIAL_USERNAME || 'atwe').toLowerCase();
+app.get('/api/admin/official-account', auth.requireAdmin, async (_req, res) => {
+  try {
+    const u = (await db.query('SELECT id, name, username FROM users WHERE lower(username) = $1', [ATWE_OFFICIAL_USERNAME])).rows[0];
+    res.json({ username: ATWE_OFFICIAL_USERNAME, account: u || null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not check the account.' }); }
+});
+// Provision the platform's own account. @atwe is a reserved handle, so it can't
+// be claimed through normal signup — this is the one sanctioned way to create it.
+// Nobody signs in as it (its password is random and never shown); staff post to
+// it through the route below, so there is no shared login to leak.
+app.post('/api/admin/official-account', auth.requireAdmin, async (req, res) => {
+  try {
+    const have = (await db.query('SELECT id, name, username FROM users WHERE lower(username) = $1', [ATWE_OFFICIAL_USERNAME])).rows[0];
+    if (have) return res.json({ ok: true, account: have, created: false });
+    const hash = await auth.hashPassword(_vcrypto.randomBytes(48).toString('hex'));
+    const email = `no-reply+${ATWE_OFFICIAL_USERNAME}@atwe.internal`;
+    const { rows } = await db.query(
+      `INSERT INTO users (name, email, password_hash, username, account_type, verified, email_verified, headline)
+       VALUES ('Atwe', $1, $2, $3, 'business', true, true, 'Product news and tips from Atwe')
+       RETURNING id, name, username`, [email, hash, ATWE_OFFICIAL_USERNAME]);
+    // Free the handle from the reserved list now that it's genuinely held.
+    await db.query('DELETE FROM reserved_usernames WHERE lower(username) = $1', [ATWE_OFFICIAL_USERNAME]).catch(() => {});
+    adminAudit(req, 'official.create', 'user', rows[0].id, { username: ATWE_OFFICIAL_USERNAME });
+    res.status(201).json({ ok: true, account: rows[0], created: true });
+  } catch (err) {
+    if (err && err.code === '23505') return res.status(409).json({ error: 'That account already exists.' });
+    console.error(err); res.status(500).json({ error: 'Could not create the account.' });
+  }
+});
+app.post('/api/admin/official-post', auth.requireAdmin, rateLimit(20, 60000, 'official-post'), async (req, res) => {
+  const body = (req.body.body || '').toString().trim().slice(0, 2000);
+  if (!body) return res.status(400).json({ error: 'Write the post first.' });
+  try {
+    const u = (await db.query('SELECT id FROM users WHERE lower(username) = $1', [ATWE_OFFICIAL_USERNAME])).rows[0];
+    if (!u) return res.status(400).json({ error: `No @${ATWE_OFFICIAL_USERNAME} account exists yet — create it, then post from here.`, needsAccount: true });
+    const { rows } = await db.query(
+      `INSERT INTO posts (user_id, body, to_main) VALUES ($1,$2,true) RETURNING id, created_at`, [u.id, body]);
+    // Index hashtags exactly like a normal post, so it trends and is findable.
+    for (const tag of extractHashtags(body)) {
+      await db.query('INSERT INTO post_hashtags (post_id, tag) VALUES ($1,$2) ON CONFLICT DO NOTHING', [rows[0].id, tag]).catch(() => {});
+    }
+    adminAudit(req, 'official.post', 'post', rows[0].id, {});
+    res.status(201).json({ ok: true, postId: rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not publish the post.' }); }
 });
 // Posts for a hashtag (newest first).
 app.get('/api/social/hashtag/:tag', auth.requireAuth, async (req, res) => {
@@ -25023,6 +25216,8 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
         [like, me]
       ),
     ]);
+    // A search that finds nothing is worth recording — aggregated by term only.
+    if (!users.rows.length && !posts.rows.length && !listings.rows.length) recordSearchMiss(q);
     res.json({
       users: users.rows.map(mapSearchUser),
       posts: posts.rows.map(mapPost),
