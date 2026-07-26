@@ -19603,6 +19603,50 @@ async function flushReengagement() {
 }
 // Every 6h; the per-member cooldown is what actually bounds frequency.
 registerJob('reengagement', 'Re-engagement push', 6*60*60*1000); setInterval(trackJob('reengagement', flushReengagement), 6 * 60 * 60 * 1000).unref?.();
+// Daily morning briefing ("your day ahead"): appointments + events today, money
+// requests waiting, orders to ship, new followers — pushed once per member per
+// local day around 8am (local time via the stored device UTC offset; UTC when
+// unknown). Push-gated like re-engagement: no push subscription, no briefing.
+// A member with nothing to report is stamped and skipped — never an empty ping.
+async function flushDailyBriefing() {
+  if (!push.isConfigured() || !db.isConfigured()) return 0;
+  const { rows } = await db.query(
+    `SELECT u.id, u.dnd_enabled, u.dnd_start_min, u.dnd_end_min, u.dnd_tz_offset,
+            (SELECT COUNT(*)::int FROM appointments a WHERE (a.customer_id = u.id OR a.business_id = u.id)
+               AND a.status IN ('requested','confirmed') AND a.when_at BETWEEN now() AND now() + interval '24 hours') AS appts,
+            (SELECT COUNT(*)::int FROM events e LEFT JOIN event_rsvps r ON r.event_id = e.id AND r.user_id = u.id
+               WHERE (e.host_id = u.id OR r.status = 'going') AND e.starts_at BETWEEN now() AND now() + interval '24 hours') AS events,
+            (SELECT COUNT(*)::int FROM money_requests mr WHERE mr.payer_id = u.id AND mr.status = 'pending') AS to_pay,
+            (SELECT COUNT(*)::int FROM orders o WHERE o.seller_id = u.id AND o.status IN ('paid','escrow')
+               AND o.needs_shipping AND o.shipped_at IS NULL) AS to_ship,
+            (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = u.id AND f.created_at > now() - interval '24 hours') AS new_followers
+       FROM users u
+      WHERE u.username IS NOT NULL AND NOT COALESCE(u.deactivated, false) AND COALESCE(u.is_demo, false) = false
+        AND EXISTS (SELECT 1 FROM push_subscriptions ps WHERE ps.user_id = u.id)
+        AND EXTRACT(HOUR FROM (now() + (COALESCE(u.dnd_tz_offset, 0) * interval '1 minute')))::int = 8
+        AND (u.last_briefed_at IS NULL OR u.last_briefed_at < now() - interval '20 hours')
+      LIMIT 200`);
+  let sent = 0;
+  for (const u of rows) {
+    // Stamp first — a quiet day isn't rescanned every tick.
+    await db.query('UPDATE users SET last_briefed_at = now() WHERE id = $1', [u.id]).catch(() => {});
+    if (userInDnd(u)) continue; // deep quiet hours win over the briefing
+    const bits = [];
+    if (u.appts) bits.push(`${u.appts} appointment${u.appts === 1 ? '' : 's'}`);
+    if (u.events) bits.push(`${u.events} event${u.events === 1 ? '' : 's'}`);
+    if (u.to_ship) bits.push(`${u.to_ship} order${u.to_ship === 1 ? '' : 's'} to ship`);
+    if (u.to_pay) bits.push(`${u.to_pay} money request${u.to_pay === 1 ? '' : 's'} waiting`);
+    if (u.new_followers) bits.push(`${u.new_followers} new follower${u.new_followers === 1 ? '' : 's'}`);
+    if (!bits.length) continue;
+    const body = 'Today: ' + bits.join(' · ');
+    notifySelf(u.id, 'daily_briefing');
+    await pushToUser(u.id, { title: 'Good morning — your day on Atwe', body, url: '/', tag: 'briefing' }).catch(() => {});
+    sent++;
+  }
+  return sent;
+}
+const BRIEF_FLUSH_MS = Math.max(10000, parseInt(process.env.BRIEF_FLUSH_MS, 10) || 30 * 60000);
+registerJob('daily_briefing', 'Daily morning briefing', BRIEF_FLUSH_MS); setInterval(trackJob('daily_briefing', flushDailyBriefing), BRIEF_FLUSH_MS).unref?.();
 // Weekly shop summary (Etsy/Shopify-style): once a week, a business with any
 // activity gets "Your week: N orders · $X · Y new followers". Quiet weeks are
 // stamped and skipped — no empty brag mails. Numbers ride the push body; the
