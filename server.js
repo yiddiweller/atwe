@@ -14986,6 +14986,110 @@ app.post('/api/atchat/transcribe', auth.requireAuth, rateLimit(30, 60000, 'trans
   }
 });
 
+/* ─── Link previews (chat unfurl, WhatsApp-style) ───
+   Viewer-side hydration against ONE cached, SSRF-guarded server fetch — the
+   same cached-endpoint pattern as /api/quote/:sym. The fetch never follows a
+   redirect blind (each hop re-validates scheme + host), only resolves public
+   addresses, only reads text/html, and caps the body read. */
+const _lpCache = new Map(); // url → { data, ts }; data null = known-bad (shorter TTL)
+const LP_TTL_OK = 6 * 3600000, LP_TTL_BAD = 10 * 60000, LP_CACHE_MAX = 500;
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of _lpCache) if (now - v.ts > (v.data ? LP_TTL_OK : LP_TTL_BAD)) _lpCache.delete(k);
+}, 10 * 60000).unref?.();
+const _lpDns = require('dns').promises;
+function _lpPrivateIp(ip) {
+  if (!ip) return true;
+  if (ip.includes(':')) { // IPv6: block loopback / link-local / unique-local / v4-mapped
+    const low = ip.toLowerCase();
+    return low === '::1' || low === '::' || low.startsWith('fe80') || low.startsWith('fc') || low.startsWith('fd') || low.startsWith('::ffff:');
+  }
+  const p = ip.split('.').map(Number);
+  if (p.length !== 4 || p.some(n => !Number.isInteger(n) || n < 0 || n > 255)) return true;
+  return p[0] === 0 || p[0] === 10 || p[0] === 127 || (p[0] === 100 && p[1] >= 64 && p[1] <= 127) ||
+    (p[0] === 169 && p[1] === 254) || (p[0] === 172 && p[1] >= 16 && p[1] <= 31) ||
+    (p[0] === 192 && p[1] === 168) || (p[0] === 198 && (p[1] === 18 || p[1] === 19)) || p[0] >= 224;
+}
+async function _lpHostBlocked(hostname) {
+  if (process.env.LINK_PREVIEW_ALLOW_PRIVATE === '1') return false; // dev/test ONLY — never set in production
+  const h = (hostname || '').toLowerCase();
+  if (!h || h === 'localhost' || h.endsWith('.local') || h.endsWith('.internal')) return true;
+  try {
+    const addrs = await _lpDns.lookup(h, { all: true, verbatim: true });
+    return !addrs.length || addrs.some(a => _lpPrivateIp(a.address)); // ANY private resolution blocks it
+  } catch { return true; }
+}
+async function _lpFetchHtml(rawUrl) {
+  let url = rawUrl;
+  for (let hop = 0; hop < 4; hop++) {
+    const u = new URL(url);
+    if (!/^https?:$/.test(u.protocol)) return null;
+    if (await _lpHostBlocked(u.hostname)) return null;
+    const ac = new AbortController(); const t = setTimeout(() => ac.abort(), 6000);
+    let res;
+    try {
+      res = await fetch(url, { redirect: 'manual', signal: ac.signal, headers: { 'User-Agent': 'AtweBot/1.0 (+https://atwe.com) link-preview', 'Accept': 'text/html,application/xhtml+xml' } });
+    } finally { clearTimeout(t); }
+    if ([301, 302, 303, 307, 308].includes(res.status)) {
+      const loc = res.headers.get('location');
+      try { if (res.body && res.body.cancel) res.body.cancel(); } catch (e) {}
+      if (!loc) return null;
+      url = new URL(loc, url).href;
+      continue; // the next hop re-validates scheme + host
+    }
+    if (!res.ok || !res.body) return null;
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    if (!ct.includes('text/html') && !ct.includes('application/xhtml')) { try { res.body.cancel(); } catch (e) {} return null; }
+    const reader = res.body.getReader(); const dec = new TextDecoder(); let html = '', total = 0;
+    while (total < 250000) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.length; html += dec.decode(value, { stream: true });
+    }
+    try { reader.cancel(); } catch (e) {}
+    return { html, finalUrl: url };
+  }
+  return null;
+}
+function _lpDecode(s) {
+  return String(s)
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)))
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&nbsp;/g, ' ');
+}
+function _lpParse(html, finalUrl) {
+  const meta = (prop) => {
+    const re1 = new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]*content=["']([^"']*)["']`, 'i');
+    const re2 = new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]*(?:property|name)=["']${prop}["']`, 'i');
+    const m = re1.exec(html) || re2.exec(html);
+    return m ? _lpDecode(m[1]).trim() : '';
+  };
+  const titleTag = (/<title[^>]*>([^<]*)<\/title>/i.exec(html) || [])[1] || '';
+  const title = (meta('og:title') || meta('twitter:title') || _lpDecode(titleTag).trim()).slice(0, 200);
+  if (!title) return null;
+  const description = (meta('og:description') || meta('twitter:description') || meta('description')).slice(0, 300);
+  let image = meta('og:image') || meta('twitter:image');
+  if (image) { try { const iu = new URL(image, finalUrl); image = /^https?:$/.test(iu.protocol) ? iu.href.slice(0, 500) : ''; } catch (e) { image = ''; } }
+  let domain = ''; try { domain = new URL(finalUrl).hostname.replace(/^www\./, ''); } catch (e) {}
+  return { url: finalUrl, title, description: description || null, image: image || null, siteName: meta('og:site_name').slice(0, 100) || null, domain };
+}
+app.get('/api/link-preview', auth.requireAuth, rateLimit(60, 60000, 'link-preview'), async (req, res) => {
+  const raw = String(req.query.url || '').slice(0, 2000);
+  let u; try { u = new URL(raw); } catch (e) { return res.status(400).json({ error: 'Invalid link.' }); }
+  if (!/^https?:$/.test(u.protocol)) return res.status(400).json({ error: 'Invalid link.' });
+  const key = u.href;
+  const hit = _lpCache.get(key);
+  if (hit && Date.now() - hit.ts < (hit.data ? LP_TTL_OK : LP_TTL_BAD)) return res.json({ preview: hit.data, cached: true });
+  let data = null;
+  try {
+    const got = await _lpFetchHtml(key);
+    if (got) data = _lpParse(got.html, got.finalUrl);
+  } catch (e) { /* unreachable/dead link → cached null */ }
+  if (_lpCache.size >= LP_CACHE_MAX) _lpCache.delete(_lpCache.keys().next().value);
+  _lpCache.set(key, { data, ts: Date.now() });
+  res.json({ preview: data });
+});
+
 function parseWalletAmount(v) {
   const cents = Math.round(Number(v) * 100);
   if (!(Number.isFinite(cents) && cents >= WALLET_MIN_CENTS && cents <= WALLET_MAX_CENTS)) return null;
