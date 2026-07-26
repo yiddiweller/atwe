@@ -25705,6 +25705,96 @@ app.post('/api/admin/users/bulk', auth.requirePerm('users'), async (req, res) =>
     res.json({ ok: true, affected, skipped: ids.length - safe.length });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not complete the bulk action.' }); }
 });
+/* ─── Category taxonomy ─────────────────────────────────────────────────────
+   The official category list sellers pick from. Kept as ONE ordered setting
+   rather than a table, because it's a short curated list a human edits, not
+   relational data — and products keep storing free text, so editing the list
+   can never orphan an existing listing. */
+const TAXONOMY_KEY = 'catalog_categories';
+const DEFAULT_TAXONOMY = ['Art & Prints', 'Bags & Accessories', 'Beauty', 'Books', 'Clothing', 'Electronics',
+  'Food & Drink', 'Furniture', 'Health', 'Home & Garden', 'Jewellery', 'Kids & Baby', 'Music', 'Pets',
+  'Services', 'Sports & Outdoors', 'Stationery', 'Tools', 'Toys & Games', 'Vintage'];
+let _taxonomy = DEFAULT_TAXONOMY.slice();
+function normalizeTaxonomy(v) {
+  const arr = Array.isArray(v) ? v : null;
+  if (!arr) return DEFAULT_TAXONOMY.slice();
+  const out = [];
+  for (const raw of arr) {
+    const t = String(raw || '').trim().slice(0, 60);
+    if (t && !out.some((x) => x.toLowerCase() === t.toLowerCase())) out.push(t);
+    if (out.length >= 120) break;
+  }
+  return out.length ? out : DEFAULT_TAXONOMY.slice();
+}
+app.get('/api/categories', auth.requireAuth, (_req, res) => res.json({ categories: _taxonomy }));
+app.get('/api/admin/categories', auth.requirePerm('moderation'), async (_req, res) => {
+  try {
+    // Show how many live listings sit in each, so nobody deletes a busy one blind.
+    const { rows } = await db.query(
+      `SELECT category, COUNT(*)::int AS n FROM products WHERE active = true AND category IS NOT NULL GROUP BY category`);
+    const counts = Object.fromEntries(rows.map((r) => [String(r.category).toLowerCase(), r.n]));
+    res.json({ categories: _taxonomy.map((c) => ({ name: c, listings: counts[c.toLowerCase()] || 0 })), defaults: DEFAULT_TAXONOMY });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the categories.' }); }
+});
+app.put('/api/admin/categories', auth.requirePerm('moderation'), async (req, res) => {
+  const next = normalizeTaxonomy(req.body.categories);
+  try {
+    await db.setSetting(TAXONOMY_KEY, next);
+    _taxonomy = next;
+    adminAudit(req, 'taxonomy.update', 'settings', null, { count: next.length });
+    res.json({ ok: true, categories: _taxonomy });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the categories.' }); }
+});
+/* ─── Listings catalog moderation ───────────────────────────────────────────
+   Browse every listing on the platform and take one down. Hiding sets the
+   listing inactive (the seller's data is untouched) and tells them why — a
+   silent removal is the thing sellers hate most. */
+app.get('/api/admin/listings', auth.requirePerm('moderation'), async (req, res) => {
+  const q = String(req.query.q || '').trim().slice(0, 120);
+  try {
+    const conds = [], params = [];
+    if (q) {
+      params.push('%' + q.replace(/[%_\\]/g, '\\$&') + '%');
+      const n = params.length;
+      conds.push(`(p.name ILIKE $${n} OR p.description ILIKE $${n} OR u.username ILIKE $${n} OR u.name ILIKE $${n})`);
+    }
+    if (req.query.status === 'hidden') conds.push('p.active = false');
+    else if (req.query.status === 'live') conds.push('p.active = true');
+    if (req.query.category) { params.push(String(req.query.category)); conds.push(`p.category = $${params.length}`); }
+    if (req.query.reported === 'true') conds.push(`EXISTS (SELECT 1 FROM reports r WHERE r.target_type = 'listing' AND r.target_id = p.id AND r.status = 'open')`);
+    const { rows } = await db.query(
+      `SELECT p.id, p.name, p.price_cents, p.image, p.active, p.category, p.kind, p.created_at,
+              u.id AS seller_id, u.name AS seller_name, u.username AS seller_username,
+              (SELECT COUNT(*)::int FROM reports r WHERE r.target_type = 'listing' AND r.target_id = p.id AND r.status = 'open') AS open_reports
+         FROM products p JOIN users u ON u.id = p.business_id
+        ${conds.length ? 'WHERE ' + conds.join(' AND ') : ''}
+        ORDER BY open_reports DESC, p.created_at DESC LIMIT 200`, params);
+    res.json({ listings: rows.map((r) => ({
+      id: r.id, name: r.name, priceCents: r.price_cents, image: mediaRef(r.image, 'product-img', r.id),
+      active: r.active, category: r.category || null, kind: r.kind, createdAt: r.created_at,
+      openReports: r.open_reports, seller: { id: r.seller_id, name: r.seller_name, username: r.seller_username },
+    })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the catalog.' }); }
+});
+app.post('/api/admin/listings/:id/visibility', auth.requirePerm('moderation'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const hide = req.body.hide !== false;
+  const reason = (req.body.reason || '').toString().trim().slice(0, 300) || null;
+  try {
+    const r = await db.query('UPDATE products SET active = $2 WHERE id = $1 RETURNING business_id, name', [id, !hide]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Listing not found.' });
+    // Never remove something silently — tell the seller, with the reason.
+    if (hide) {
+      await db.query(
+        `INSERT INTO admin_messages (user_id, sender, body, read_by_user, read_by_admin) VALUES ($1,'admin',$2,false,true)`,
+        [r.rows[0].business_id, `Your listing “${r.rows[0].name}” has been hidden from the marketplace.${reason ? ' Reason: ' + reason : ''} Reply here if you think this is a mistake.`]).catch(() => {});
+      notifySelf(r.rows[0].business_id, 'listing_hidden', id);
+    }
+    adminAudit(req, hide ? 'listing.hide' : 'listing.restore', 'product', id, { reason });
+    res.json({ ok: true, active: !hide });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the listing.' }); }
+});
 /* ─── Editorial curation: featured collections + profile picks ──────────────
    Hand-picked shelves that appear in Discover. One system covers both a set of
    LISTINGS ("Featured this week") and a set of PROFILES ("Makers to follow"),
@@ -28573,5 +28663,6 @@ db.init()
   .then(() => { if (db.isConfigured()) return db.getSetting(CONTROLS_KEY).then((v) => { _featureControls = normalizeControls(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return loadBlockedDomains().catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(FEE_KEY).then((v) => { _platformFee = normalizeFee(v); }).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return db.getSetting(TAXONOMY_KEY).then((v) => { _taxonomy = normalizeTaxonomy(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) console.log('🗄️   Schema + settings ready.'); })
   .catch((err) => console.error('Post-init setup failed:', err.message));
