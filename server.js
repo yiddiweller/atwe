@@ -13457,6 +13457,122 @@ app.get('/api/candidates', auth.requireAuth, async (req, res) => {
     res.json({ candidates: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, headline: u.headline || null, accountType: u.account_type === 'business' ? 'business' : 'personal', role: u.role || null, location: u.location || null, schedule: u.schedule || null, rateMin: u.rate_min != null ? u.rate_min : null, rateMax: u.rate_max != null ? u.rate_max : null, ratePeriod: u.rate_period || null, remote: !!u.remote, skills: Array.isArray(u.skills) ? u.skills.filter(Boolean) : [], saved: true })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load candidates.' }); }
 });
+/* ─── Recruiter projects: named candidate shortlists with a private pipeline ───
+   LinkedIn-Recruiter model: a project is a folder of people ("Q3 warehouse
+   hires") the owner works through — each member carries a stage + note only the
+   owner ever sees. Candidates are deliberately NEVER notified. */
+const RECRUIT_STAGES = ['saved', 'contacted', 'replied', 'interviewing', 'not_fit'];
+async function loadRecruiterProject(id, ownerId) {
+  const { rows } = await db.query('SELECT id, owner_id, name, note, created_at FROM recruiter_projects WHERE id = $1 AND owner_id = $2', [id, ownerId]);
+  return rows[0] || null;
+}
+app.get('/api/recruiter-projects', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT p.id, p.name, p.note, p.created_at,
+              (SELECT COUNT(*)::int FROM recruiter_project_members m WHERE m.project_id = p.id) AS members
+         FROM recruiter_projects p WHERE p.owner_id = $1 ORDER BY p.created_at DESC LIMIT 100`, [req.user.id]);
+    res.json({ projects: rows.map((p) => ({ id: p.id, name: p.name, note: p.note || null, members: p.members, createdAt: p.created_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your projects.' }); }
+});
+app.post('/api/recruiter-projects', auth.requireAuth, rateLimit(30, 60000, 'recruit-proj'), async (req, res) => {
+  const name = (req.body.name || '').toString().trim().slice(0, 80);
+  if (!name) return res.status(400).json({ error: 'Give the project a name.' });
+  const note = (req.body.note || '').toString().trim().slice(0, 500) || null;
+  try {
+    const cnt = (await db.query('SELECT COUNT(*)::int AS n FROM recruiter_projects WHERE owner_id = $1', [req.user.id])).rows[0].n;
+    if (cnt >= 50) return res.status(400).json({ error: 'You’ve reached the maximum number of projects.' });
+    const { rows } = await db.query('INSERT INTO recruiter_projects (owner_id, name, note) VALUES ($1,$2,$3) RETURNING id, name, note, created_at', [req.user.id, name, note]);
+    res.status(201).json({ project: { id: rows[0].id, name: rows[0].name, note: rows[0].note, members: 0, createdAt: rows[0].created_at } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the project.' }); }
+});
+app.patch('/api/recruiter-projects/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const fields = [], vals = [];
+  if ('name' in req.body) { const n = (req.body.name || '').toString().trim().slice(0, 80); if (!n) return res.status(400).json({ error: 'Name can’t be empty.' }); vals.push(n); fields.push(`name = $${vals.length}`); }
+  if ('note' in req.body) { vals.push((req.body.note || '').toString().trim().slice(0, 500) || null); fields.push(`note = $${vals.length}`); }
+  if (!fields.length) return res.json({ ok: true });
+  try {
+    vals.push(id, req.user.id);
+    const r = await db.query(`UPDATE recruiter_projects SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND owner_id = $${vals.length}`, vals);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save.' }); }
+});
+app.delete('/api/recruiter-projects/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM recruiter_projects WHERE id = $1 AND owner_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete.' }); }
+});
+app.get('/api/recruiter-projects/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const p = await loadRecruiterProject(id, req.user.id);
+    if (!p) return res.status(404).json({ error: 'Not found.' });
+    const { rows } = await db.query(
+      `SELECT m.user_id, m.stage, m.note, m.added_at,
+              u.name, u.username, u.avatar, u.verified, u.headline, u.account_type,
+              w.role, w.rate_min, w.rate_max, w.rate_period
+         FROM recruiter_project_members m JOIN users u ON u.id = m.user_id
+         LEFT JOIN worker_listings w ON w.user_id = u.id
+        WHERE m.project_id = $1 AND NOT COALESCE(u.deactivated, false)
+        ORDER BY m.added_at DESC LIMIT 500`, [id]);
+    res.json({ project: { id: p.id, name: p.name, note: p.note || null, createdAt: p.created_at },
+      members: rows.map((u) => ({ id: u.user_id, stage: RECRUIT_STAGES.includes(u.stage) ? u.stage : 'saved', note: u.note || null, addedAt: u.added_at,
+        name: u.name, username: u.username, avatar: mediaRef(u.avatar, 'avatar', u.user_id), verified: !!u.verified, headline: u.headline || null,
+        accountType: u.account_type === 'business' ? 'business' : 'personal', role: u.role || null })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the project.' }); }
+});
+app.post('/api/recruiter-projects/:id/members', auth.requireAuth, rateLimit(60, 60000, 'recruit-add'), async (req, res) => {
+  const id = routeId(req.params.id);
+  const uid = parseInt(req.body.userId, 10);
+  if (!Number.isInteger(id) || !Number.isInteger(uid)) return res.status(400).json({ error: 'Invalid id.' });
+  if (uid === req.user.id) return res.status(400).json({ error: 'You can’t add yourself.' });
+  try {
+    const p = await loadRecruiterProject(id, req.user.id);
+    if (!p) return res.status(404).json({ error: 'Not found.' });
+    const u = (await db.query('SELECT username, deactivated FROM users WHERE id = $1', [uid])).rows[0];
+    if (!u || !u.username || u.deactivated) return res.status(404).json({ error: 'That person isn’t available.' });
+    if (await blockedEither(req.user.id, uid)) return res.status(403).json({ error: 'You can’t add this person.' });
+    const cnt = (await db.query('SELECT COUNT(*)::int AS n FROM recruiter_project_members WHERE project_id = $1', [id])).rows[0].n;
+    if (cnt >= 500) return res.status(400).json({ error: 'This project is full.' });
+    const note = (req.body.note || '').toString().trim().slice(0, 500) || null;
+    await db.query('INSERT INTO recruiter_project_members (project_id, user_id, note) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [id, uid, note]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add them.' }); }
+});
+app.patch('/api/recruiter-projects/:id/members/:uid', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id), uid = routeId(req.params.uid);
+  if (!Number.isInteger(id) || !Number.isInteger(uid)) return res.status(400).json({ error: 'Invalid id.' });
+  const fields = [], vals = [];
+  if ('stage' in req.body) { if (!RECRUIT_STAGES.includes(req.body.stage)) return res.status(400).json({ error: 'Invalid stage.' }); vals.push(req.body.stage); fields.push(`stage = $${vals.length}`); }
+  if ('note' in req.body) { vals.push((req.body.note || '').toString().trim().slice(0, 500) || null); fields.push(`note = $${vals.length}`); }
+  if (!fields.length) return res.json({ ok: true });
+  try {
+    const p = await loadRecruiterProject(id, req.user.id);
+    if (!p) return res.status(404).json({ error: 'Not found.' });
+    vals.push(id, uid);
+    const r = await db.query(`UPDATE recruiter_project_members SET ${fields.join(', ')} WHERE project_id = $${vals.length - 1} AND user_id = $${vals.length}`, vals);
+    if (!r.rowCount) return res.status(404).json({ error: 'They’re not on this project.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save.' }); }
+});
+app.delete('/api/recruiter-projects/:id/members/:uid', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id), uid = routeId(req.params.uid);
+  if (!Number.isInteger(id) || !Number.isInteger(uid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const p = await loadRecruiterProject(id, req.user.id);
+    if (!p) return res.status(404).json({ error: 'Not found.' });
+    await db.query('DELETE FROM recruiter_project_members WHERE project_id = $1 AND user_id = $2', [id, uid]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove them.' }); }
+});
 // Save / unsave a job (bookmark).
 app.post('/api/jobs/:id/save', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);

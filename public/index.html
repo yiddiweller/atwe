@@ -7214,6 +7214,12 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .shop-setup-row.done .shop-setup-chk{background:rgba(48,209,88,.18);}
 .shop-setup-chk svg{width:13px;height:13px;fill:none;stroke:var(--green);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;}
 .shop-setup-row .iset-chev{margin-inline-start:auto;}
+/* Recruiter projects: member rows (person + stage select + private note). */
+.recruit-row{padding:6px 0 10px;border-bottom:1px solid var(--bg);}
+.recruit-row:last-of-type{border-bottom:none;}
+.recruit-tools{display:flex;gap:8px;align-items:center;margin-top:2px;}
+.recruit-stage{margin:0;flex:0 0 128px;font-size:13px;padding:8px 10px;}
+.recruit-note{margin:0;flex:1;font-size:13px;padding:8px 10px;}
 /* Wholesale / B2B pricing: an info line on the listing (green once applied — money). */
 .ws-note{font-size:12.5px;font-weight:600;color:var(--t2);margin:2px 0 6px;}
 .ws-note.on{color:var(--green);font-weight:700;}
@@ -13881,7 +13887,36 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Saved candidates">
     <button class="sheet-close" onclick="closeOverlay('savedCands')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title">Saved candidates</div>
+    <button class="ac-link-btn" style="margin:0 0 10px;" onclick="acOpenRecruitProjects()">📁 Recruiter projects — organize people into shortlists</button>
     <div id="savedCandsBody"></div>
+  </div>
+</div>
+
+<!-- Recruiter projects: named candidate shortlists with a private pipeline -->
+<div class="overlay hidden" id="recruitProjView" onclick="if(event.target===this)closeOverlay('recruitProjView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Recruiter projects">
+    <button class="sheet-close" onclick="closeOverlay('recruitProjView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Recruiter projects</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Named shortlists of people — “Q3 hires”, “Designers to watch”. Private to you; no one is notified.</div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <input class="jp-in" id="recruitNewName" type="text" maxlength="80" placeholder="New project name" style="margin:0;flex:1;" onkeydown="if(event.key==='Enter')acRecruitCreate()"/>
+      <button class="ac-pill-btn accent" style="flex:0 0 auto;" onclick="acRecruitCreate()">Create</button>
+    </div>
+    <div id="recruitProjBody"></div>
+  </div>
+</div>
+<div class="overlay hidden" id="recruitProjDetail" onclick="if(event.target===this)closeOverlay('recruitProjDetail')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Project">
+    <button class="sheet-close" onclick="closeOverlay('recruitProjDetail')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="recruitDetailBody"></div>
+  </div>
+</div>
+<div class="overlay hidden" id="recruitPickSheet" onclick="if(event.target===this)closeOverlay('recruitPickSheet')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Save to project">
+    <button class="sheet-close" onclick="closeOverlay('recruitPickSheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Save to project</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Add this person to one of your shortlists.</div>
+    <div id="recruitPickBody"></div>
   </div>
 </div>
 
@@ -17207,7 +17242,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1574'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1575'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -26503,6 +26538,7 @@ function acCandidateCard(c) {
     <div class="ac-job-top"><span class="ac-job-title">${escHtml(c.role || c.name)}</span>
       <div class="ac-job-topr">
         <button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="event.stopPropagation();closeOverlay('savedCands');acOpenChat(${c.id})">Message</button>
+        <button class="ac-cand-star" onclick="event.stopPropagation();acRecruitPickOpen(${c.id})" title="Save to project" aria-label="Save to project"><svg viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:1.8;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button>
         <button class="ac-cand-star on" onclick="event.stopPropagation();acUnsaveCandidate(${c.id},this)" title="Remove" aria-label="Remove"><svg viewBox="0 0 24 24"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg></button>
       </div></div>
     <div class="ac-job-meta">${escHtml(c.name)}${meta ? ' · ' + escHtml(meta) : ''}</div>
@@ -26526,6 +26562,108 @@ async function acOpenSavedCandidates() {
     el.innerHTML = candidates.length ? candidates.map(acCandidateCard).join('')
       : '<div class="ac-empty" style="padding:16px;">No saved candidates yet.<br/>Tap the star on a worker or applicant to save them.</div>';
   } catch (e) { el.innerHTML = '<div class="ac-empty">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+/* ── Recruiter projects: named candidate shortlists with a private pipeline ── */
+const _RECRUIT_STAGES = [['saved', 'Saved'], ['contacted', 'Contacted'], ['replied', 'Replied'], ['interviewing', 'Interviewing'], ['not_fit', 'Not a fit']];
+async function acOpenRecruitProjects() {
+  showOverlay('recruitProjView');
+  const b = document.getElementById('recruitProjBody'); b.innerHTML = acSkelRows(3);
+  try {
+    const { projects } = await API.req('GET', '/api/recruiter-projects');
+    AC._recruitProjs = projects || [];
+    if (!projects.length) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">No projects yet — create one above, then add people from Find workers or your saved candidates.</div>'; return; }
+    b.innerHTML = projects.map(p => `<button class="iset-row" onclick="acOpenRecruitProject(${p.id})">
+      <div class="iset-main"><div class="iset-label">${escHtml(p.name)}</div><div class="iset-sub">${p.members} ${p.members === 1 ? 'person' : 'people'}${p.note ? ' · ' + escHtml(p.note.slice(0, 40)) : ''}</div></div>
+      <svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`).join('');
+  } catch (e) { b.innerHTML = '<div class="ac-empty">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+async function acRecruitCreate() {
+  const inp = document.getElementById('recruitNewName');
+  const name = (inp.value || '').trim();
+  if (!name) { showNotif('Give the project a name.'); return; }
+  try { await API.req('POST', '/api/recruiter-projects', { name }); inp.value = ''; acOpenRecruitProjects(); }
+  catch (e) { showNotif(e.message || 'Could not create it.'); }
+}
+async function acOpenRecruitProject(id) {
+  showOverlay('recruitProjDetail');
+  const b = document.getElementById('recruitDetailBody'); b.innerHTML = acSkelRows(3);
+  try {
+    const { project, members } = await API.req('GET', '/api/recruiter-projects/' + id);
+    AC._recruitCur = id;
+    const stageSel = (m) => `<select class="jp-in recruit-stage" aria-label="Stage" onchange="acRecruitStage(${id},${m.id},this)">${_RECRUIT_STAGES.map(([v, l]) => `<option value="${v}"${m.stage === v ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
+    b.innerHTML = `<div class="ac-section-row" style="margin:0 0 2px;"><span class="jp-title" style="margin:0;">${escHtml(project.name)}</span>
+        <span style="display:flex;gap:4px;flex:0 0 auto;">
+          <button class="ac-post-more" onclick="acRecruitRename(${id}, ${jsAttr(project.name)})" aria-label="Rename project"><svg viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:1.8;"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg></button>
+          <button class="ac-post-more" onclick="acRecruitDelete(${id})" aria-label="Delete project" style="color:var(--red);"><svg viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:1.8;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+        </span></div>
+      <div class="ac-disc-sub" style="margin:0 0 10px;">${members.length} ${members.length === 1 ? 'person' : 'people'}${project.note ? ' · ' + escHtml(project.note) : ''}</div>` +
+      (members.length ? members.map(m => `<div class="recruit-row">
+        <div class="ac-item" style="padding:8px 0;" onclick="closeOverlay('recruitProjDetail');closeOverlay('recruitProjView');acGoProfile(${jsAttr(m.username)})">
+          ${acAvatarHtml(m.name, m.avatar, 'user-avatar', m.accountType === 'business')}
+          <div class="ac-item-main">
+            <div class="ac-item-top"><span class="ac-item-name">${escHtml(m.name)}${vbadge(acIsVerified(m))}</span></div>
+            <div class="ac-item-last">${escHtml(m.role || m.headline || '@' + m.username)}</div>
+          </div>
+          <button class="ac-post-more" onclick="event.stopPropagation();closeOverlay('recruitProjDetail');closeOverlay('recruitProjView');appTab('chat');acOpenChat(${m.id})" aria-label="Message"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+        </div>
+        <div class="recruit-tools">${stageSel(m)}
+          <input class="jp-in recruit-note" type="text" maxlength="500" placeholder="Private note" value="${escHtml(m.note || '')}" onchange="acRecruitNote(${id},${m.id},this)"/>
+          <button class="pv-del" onclick="acRecruitRemove(${id},${m.id},this)" aria-label="Remove">×</button>
+        </div>
+      </div>`).join('') : '<div class="ac-empty" style="padding:20px;">No one here yet. Add people from Find workers, applicants, or your saved candidates — tap the folder icon on a card.</div>');
+  } catch (e) { b.innerHTML = '<div class="ac-empty">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+async function acRecruitStage(pid, uid, sel) {
+  try { await API.req('PATCH', `/api/recruiter-projects/${pid}/members/${uid}`, { stage: sel.value }); }
+  catch (e) { showNotif(e.message || 'Could not save.'); }
+}
+async function acRecruitNote(pid, uid, inp) {
+  try { await API.req('PATCH', `/api/recruiter-projects/${pid}/members/${uid}`, { note: inp.value }); }
+  catch (e) { showNotif(e.message || 'Could not save.'); }
+}
+async function acRecruitRemove(pid, uid, btn) {
+  try { await API.req('DELETE', `/api/recruiter-projects/${pid}/members/${uid}`); const row = btn.closest('.recruit-row'); if (row) row.remove(); }
+  catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
+async function acRecruitRename(id, name) {
+  const nn = prompt('Project name:', name);
+  const trimmed = (nn || '').trim();
+  if (!nn || !trimmed || trimmed === name) return;
+  try { await API.req('PATCH', '/api/recruiter-projects/' + id, { name: trimmed }); acOpenRecruitProject(id); }
+  catch (e) { showNotif(e.message || 'Could not rename.'); }
+}
+async function acRecruitDelete(id) {
+  if (!(await appConfirm({ title: 'Delete this project?', message: 'The shortlist is removed. The people on it are untouched.', confirmText: 'Delete', danger: true }))) return;
+  try { await API.req('DELETE', '/api/recruiter-projects/' + id); closeOverlay('recruitProjDetail'); acOpenRecruitProjects(); }
+  catch (e) { showNotif(e.message || 'Could not delete.'); }
+}
+// "Save to project" picker — from a candidate/worker card's folder button.
+async function acRecruitPickOpen(userId) {
+  showOverlay('recruitPickSheet');
+  const b = document.getElementById('recruitPickBody'); b.innerHTML = acSkelRows(2);
+  try {
+    const { projects } = await API.req('GET', '/api/recruiter-projects');
+    b.innerHTML = (projects.length ? projects.map(p => `<button class="iset-row" onclick="acRecruitPickAdd(${p.id},${userId})">
+        <div class="iset-main"><div class="iset-label">${escHtml(p.name)}</div><div class="iset-sub">${p.members} ${p.members === 1 ? 'person' : 'people'}</div></div>
+        <svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`).join('') : '') +
+      `<div style="display:flex;gap:8px;margin-top:${projects.length ? 12 : 0}px;">
+        <input class="jp-in" id="recruitPickNew" type="text" maxlength="80" placeholder="New project name" style="margin:0;flex:1;" onkeydown="if(event.key==='Enter')acRecruitPickCreate(${userId})"/>
+        <button class="ac-pill-btn" style="flex:0 0 auto;" onclick="acRecruitPickCreate(${userId})">Create &amp; add</button>
+      </div>`;
+  } catch (e) { b.innerHTML = '<div class="ac-empty">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+async function acRecruitPickAdd(pid, userId) {
+  try { await API.req('POST', `/api/recruiter-projects/${pid}/members`, { userId }); closeOverlay('recruitPickSheet'); showNotif('Added to the project.'); }
+  catch (e) { showNotif(e.message || 'Could not add them.'); }
+}
+async function acRecruitPickCreate(userId) {
+  const name = (document.getElementById('recruitPickNew').value || '').trim();
+  if (!name) { showNotif('Give the project a name.'); return; }
+  try {
+    const { project } = await API.req('POST', '/api/recruiter-projects', { name });
+    await API.req('POST', `/api/recruiter-projects/${project.id}/members`, { userId });
+    closeOverlay('recruitPickSheet'); showNotif('Added to “' + name + '”.');
+  } catch (e) { showNotif(e.message || 'Could not add them.'); }
 }
 async function acWithdrawJob(id) {
   try { await API.req('DELETE', '/api/jobs/' + id + '/apply'); showNotif('Application withdrawn.'); acOpenJob(id); acJobsRefresh(); }
@@ -28967,6 +29105,7 @@ function acGoProfileHub() {
     html += item('Saved jobs', _ME_IC.bmk, "acOpenJobsView('saved')", null);
     html += item('Job alerts', _ME_IC.bell, "acOpenSavedSearches()", null);
     html += item('Saved candidates', _ME_IC.bmk, "acOpenSavedCandidates()", null);
+    html += item('Recruiter projects', _ME_IC.bmk, "acOpenRecruitProjects()", null);
     html += item('Resumes', _ME_IC.resumes, "acOpenResumes()", null);
     html += item('Open to work', _ME_IC.otw, "acOpenPrefs()", null);
     html += '</div>';
