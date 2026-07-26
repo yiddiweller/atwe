@@ -7214,6 +7214,10 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .shop-setup-row.done .shop-setup-chk{background:rgba(48,209,88,.18);}
 .shop-setup-chk svg{width:13px;height:13px;fill:none;stroke:var(--green);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;}
 .shop-setup-row .iset-chev{margin-inline-start:auto;}
+/* Wholesale / B2B pricing: an info line on the listing (green once applied — money). */
+.ws-note{font-size:12.5px;font-weight:600;color:var(--t2);margin:2px 0 6px;}
+.ws-note.on{color:var(--green);font-weight:700;}
+.ws-tag{font-size:10.5px;font-weight:800;color:var(--green);background:rgba(48,209,88,.14);border-radius:999px;padding:2px 7px;margin-inline-start:4px;}
 /* Restock suggestions: product row + amber low-stock chip (amber = heads-up). */
 .rsk-row{display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--bg);}
 .rsk-row:last-of-type{border-bottom:none;}
@@ -14568,6 +14572,20 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <input class="jp-in" id="prodSubFee" type="number" min="0" max="50" step="1" placeholder="Recurring discount % (0–50)" style="margin-top:8px;display:none;"/>
       <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">Buyers can subscribe for recurring delivery and save this % on every order. Paid automatically from their Atwe balance.</div>
     </div>
+    <!-- Wholesale / B2B pricing (physical only): a lower unit price for business buyers -->
+    <div id="prodWholesaleSec" style="margin-top:8px;">
+      <div class="iset-row" style="border-radius:12px;background:var(--s2);padding:11px 14px;">
+        <span style="flex:1;font-size:14px;">Offer wholesale pricing</span>
+        <label class="ios-switch"><input type="checkbox" id="prodWholesaleOn" onchange="acProdWholesaleToggle()"><span class="ios-sw-track"></span></label>
+      </div>
+      <div id="prodWholesaleFields" style="display:none;margin-top:8px;">
+        <div style="display:flex;gap:8px;">
+          <input class="jp-in" id="prodWholesalePrice" type="number" min="0" max="50000" step="0.01" placeholder="Wholesale price ($)" style="margin:0;flex:1;"/>
+          <input class="jp-in" id="prodWholesaleMin" type="number" min="2" max="1000" step="1" placeholder="Minimum qty" style="margin:0;flex:1;"/>
+        </div>
+        <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">Business accounts ordering at least the minimum quantity pay this price per unit instead of retail. It must be below the retail price to apply. Listings with options don’t use wholesale.</div>
+      </div>
+    </div>
     <!-- Auction (physical only): sell by ascending bids instead of a fixed price -->
     <div id="prodAuctionSec" style="margin-top:8px;">
       <div class="iset-row" style="border-radius:12px;background:var(--s2);padding:11px 14px;">
@@ -17189,7 +17207,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1573'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1574'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -35204,7 +35222,11 @@ function acRenderListingBuy(l, own) {
   if (l.isRental) return acRentalBookBlock(l, own);
   if (l.auction) return acAuctionBlock(l, own);
   const v = acListingVariant();
-  const unitPrice = v ? v.priceCents : (l.hasVariants ? l.priceFromCents : l.priceCents);
+  let unitPrice = v ? v.priceCents : (l.hasVariants ? l.priceFromCents : l.priceCents);
+  // Wholesale / B2B (business viewers, simple listings): the unit price flips to
+  // the wholesale price once the chosen quantity reaches the seller's minimum.
+  const wsUnit = !own ? acWholesaleUnit(l, v, AC._listingQty || 1) : null;
+  if (wsUnit != null) unitPrice = wsUnit;
   const stock = v ? v.stock : (l.hasVariants ? null : l.stock); // variant stock when chosen
   const soldOut = v ? v.soldOut : (l.hasVariants ? l.soldOut : l.soldOut);
   const needPick = l.hasVariants && !v;
@@ -35247,13 +35269,16 @@ function acRenderListingBuy(l, own) {
   // Affiliate: any non-owner can grab a referral link and earn a commission on sales.
   const earnRow = !own
     ? `<button class="ac-link-btn" style="margin:8px 2px 0;" onclick="acGetAffiliateLink(${l.id})"><svg viewBox="0 0 24 24" style="width:14px;height:14px;vertical-align:-2px;margin-inline-end:5px;fill:none;stroke:currentColor;stroke-width:2;"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg>Share &amp; earn — get an affiliate link</button>` : '';
+  // Wholesale note (business viewers only): what the B2B price is and when it kicks in.
+  const wsRow = (!own && !l.hasVariants && l.wholesaleCents && l.wholesaleMinQty && l.wholesaleCents < l.priceCents && acIsBiz(S.user))
+    ? `<div class="ws-note${wsUnit != null ? ' on' : ''}">${wsUnit != null ? '✓ Wholesale price applied — ' : 'Business price: '}${acMoney(l.wholesaleCents)}/unit for ${l.wholesaleMinQty}+</div>` : '';
   // Always-visible buyer-protection promise, above the fold (design blueprint):
   // escrow holds the buyer's funds until they confirm delivery.
   const escChip = (!own && !soldOut) ? `<div class="esc-chip"><span class="esc-dot"></span>Buyer protection. Funds held in escrow</div>` : '';
   // Owner: "Offer to savers" (Poshmark-style) — send everyone who wishlisted this a deal.
   const dealRow = (own && l.active && !l.hasVariants && l.kind !== 'service' && l.kind !== 'rental')
     ? `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acOfferSaversOpen(${l.id}, ${l.priceCents}, ${jsAttr(l.name)})"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-inline-end:6px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M20.6 13.4 12 22l-9-9V4a1 1 0 0 1 1-1h8.6z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>Send a deal to shoppers who saved this</button>` : '';
-  return `<div class="mkt-detail-meta"><span class="mkt-price">${priceLbl}</span><span class="shop-kind">${_PROD_KIND[l.kind] || 'Item'}</span>${stockBadge}${l.active ? '' : '<span class="shop-off">Hidden</span>'}</div>${shipLine}${escChip}${qtyRow}${buyRow}${dealRow}${subRow}${offerRow}${earnRow}`;
+  return `<div class="mkt-detail-meta"><span class="mkt-price">${priceLbl}</span><span class="shop-kind">${_PROD_KIND[l.kind] || 'Item'}</span>${stockBadge}${l.active ? '' : '<span class="shop-off">Hidden</span>'}</div>${shipLine}${wsRow}${escChip}${qtyRow}${buyRow}${dealRow}${subRow}${offerRow}${earnRow}`;
 }
 /* ── Ask Atwe AI across your own data ── */
 const _AI_ASK_EXAMPLES = ['What did I agree to ship this week?', 'Which invoices are still unpaid?', 'What was my last order from', 'Do I have appointments tomorrow?'];
@@ -35839,7 +35864,8 @@ async function acBuyNow(productId, l) {
       if (variant.soldOut) { showNotif('That option is sold out.'); return; }
     }
     const qty = Math.max(1, AC._listingQty || 1);
-    const unitPrice = variant ? variant.priceCents : l.priceCents;
+    const wsBuy = acWholesaleUnit(l, variant, qty);
+    const unitPrice = wsBuy != null ? wsBuy : (variant ? variant.priceCents : l.priceCents);
     const dispName = l.name + (variant ? ' — ' + variant.label : '') + (qty > 1 ? ' × ' + qty : '');
     let affCode = null; try { affCode = localStorage.getItem('atwe_aff') || null; } catch (e) {}
     acOpenCheckout({ mode: 'buy', productId, qty, variantId: variant ? variant.id : null, name: dispName, subtotalCents: unitPrice * qty,
@@ -35847,10 +35873,20 @@ async function acBuyNow(productId, l) {
       pickupAvail: !!l.pickup, pickupLocation: l.pickupLocation || null, affCode });
   } catch (e) { showNotif(e.message || 'Could not start checkout.'); }
 }
+// Wholesale / B2B unit price (mirrors the server's wholesaleUnit — the server is
+// authoritative at checkout; this only keeps what's SHOWN in sync with it).
+function acWholesaleUnit(l, variant, qty) {
+  if (variant || !l || !acIsBiz(S.user)) return null;
+  const w = l.wholesaleCents, min = l.wholesaleMinQty || 0;
+  if (!(w > 0 && min >= 2 && qty >= min)) return null;
+  return w < l.priceCents ? w : null;
+}
 // Quantity stepper on the listing detail.
 function acListingQty(d, max) {
   AC._listingQty = Math.max(1, Math.min(max || 99, (AC._listingQty || 1) + d));
   const el = document.getElementById('mktQtyVal'); if (el) el.textContent = AC._listingQty;
+  // Wholesale listings re-render the buy area so the unit price flips at the minimum.
+  if (AC._listingCur && AC._listingCur.wholesaleCents) { const area = document.getElementById('mktBuyArea'); if (area) area.innerHTML = acRenderListingBuy(AC._listingCur); }
 }
 // Image gallery: swipe carousel that updates the dots.
 function acBindGallery() {
@@ -36875,7 +36911,7 @@ async function acOpenCart() {
       ${freeShipLine(c)}
       ${c.items.map(it => `<div class="cart-item">
         ${it.image ? `<div class="cart-thumb" style="background-image:url('${it.image}')"></div>` : `<div class="cart-thumb noimg">${_MKT_BOX_SVG}</div>`}
-        <div class="cart-item-main"><div class="cart-item-name">${escHtml(it.name)}${it.variantLabel ? ` <span class="cart-var">${escHtml(it.variantLabel)}</span>` : ''}</div><div class="cart-item-price">$${(it.priceCents / 100).toFixed(2)}</div>
+        <div class="cart-item-main"><div class="cart-item-name">${escHtml(it.name)}${it.variantLabel ? ` <span class="cart-var">${escHtml(it.variantLabel)}</span>` : ''}</div><div class="cart-item-price">$${(it.priceCents / 100).toFixed(2)}${it.wholesaleApplied ? ' <span class="ws-tag">Wholesale</span>' : ''}</div>
           <button class="ac-link-btn cart-savelater" onclick="acCartSaveLater(${it.productId},${it.variantId || 'null'})">Save for later</button></div>
         <div class="cart-qty"><button onclick="acCartQty(${it.productId},${it.qty - 1},${it.variantId || 'null'})" aria-label="Decrease quantity">−</button><span>${it.qty}</span><button onclick="acCartQty(${it.productId},${it.qty + 1},${it.variantId || 'null'})" aria-label="Increase quantity">+</button></div>
       </div>`).join('')}
@@ -37034,6 +37070,10 @@ function acProductFormOpen(productId) {
   document.getElementById('prodPickupLoc').value = (p && p.pickupLocation) ? p.pickupLocation : '';
   document.getElementById('prodSubEnabled').checked = !!(p && p.subEnabled);
   document.getElementById('prodSubFee').value = (p && p.subDiscountPct) ? p.subDiscountPct : '';
+  document.getElementById('prodWholesaleOn').checked = !!(p && p.wholesaleCents);
+  document.getElementById('prodWholesalePrice').value = (p && p.wholesaleCents) ? (p.wholesaleCents / 100) : '';
+  document.getElementById('prodWholesaleMin').value = (p && p.wholesaleMinQty) ? p.wholesaleMinQty : '';
+  acProdWholesaleToggle();
   document.getElementById('prodRentalPeriod').value = (p && p.rentalPeriod) ? p.rentalPeriod : 'night';
   // Variants: edit existing ones (keep their ids so cart/order references stay valid).
   AC._prodVariants = (p && Array.isArray(p.variants)) ? p.variants.map(v => ({ id: v.id, label: v.label, priceCents: (v.priceCents != null && v.priceCents !== p.priceCents) ? v.priceCents : null, stock: v.stock })) : [];
@@ -37136,7 +37176,13 @@ async function acSaveProduct() {
     payload.pickupLocation = payload.pickup ? document.getElementById('prodPickupLoc').value.trim() : '';
     payload.subEnabled = document.getElementById('prodSubEnabled').checked;
     payload.subDiscountPct = payload.subEnabled ? Math.max(0, Math.min(50, parseInt(document.getElementById('prodSubFee').value, 10) || 0)) : 0;
-  } else { payload.shipFree = true; payload.shipFeeCents = 0; payload.pickup = false; payload.pickupLocation = ''; payload.subEnabled = false; payload.subDiscountPct = 0; }
+    if (document.getElementById('prodWholesaleOn').checked) {
+      const wc = Math.round((parseFloat(document.getElementById('prodWholesalePrice').value) || 0) * 100);
+      if (wc > 0 && wc >= priceCents) { showNotif('Wholesale price must be below the retail price.'); return; }
+      payload.wholesaleCents = wc;
+      payload.wholesaleMinQty = Math.max(0, parseInt(document.getElementById('prodWholesaleMin').value, 10) || 0);
+    } else { payload.wholesaleCents = 0; payload.wholesaleMinQty = 0; }
+  } else { payload.shipFree = true; payload.shipFeeCents = 0; payload.pickup = false; payload.pickupLocation = ''; payload.subEnabled = false; payload.subDiscountPct = 0; payload.wholesaleCents = 0; payload.wholesaleMinQty = 0; }
   if (kind === 'rental') payload.rentalPeriod = document.getElementById('prodRentalPeriod').value === 'month' ? 'month' : 'night';
   payload.images = AC._prodImgs || [];
   if (AC._prodVideoChanged) payload.video = AC._prodVideo; // data URL, or null to clear
@@ -37824,6 +37870,7 @@ function acProdKindChange() {
   document.getElementById('prodStock').style.display = phys ? '' : 'none';
   const dig = document.getElementById('prodDigitalSec'); if (dig) dig.style.display = kind === 'digital' ? '' : 'none';
   const sub = document.getElementById('prodSubSec'); if (sub) sub.style.display = phys ? '' : 'none';
+  const whs = document.getElementById('prodWholesaleSec'); if (whs) whs.style.display = phys ? '' : 'none';
   const rent = document.getElementById('prodRentalSec'); if (rent) rent.style.display = kind === 'rental' ? '' : 'none';
   const vars = document.getElementById('prodVariantsSec'); if (vars) vars.style.display = kind === 'rental' ? 'none' : ''; // rentals don't use options
   const auc = document.getElementById('prodAuctionSec'); if (auc) auc.style.display = phys ? '' : 'none';
@@ -37840,6 +37887,10 @@ function acProdPickupToggle() {
 function acProdSubToggle() {
   const on = document.getElementById('prodSubEnabled').checked;
   document.getElementById('prodSubFee').style.display = on ? '' : 'none';
+}
+function acProdWholesaleToggle() {
+  const el = document.getElementById('prodWholesaleFields');
+  if (el) el.style.display = document.getElementById('prodWholesaleOn').checked ? '' : 'none';
 }
 function acProdShipToggle() {
   document.getElementById('prodShipFee').style.display = document.getElementById('prodShipFree').checked ? 'none' : '';

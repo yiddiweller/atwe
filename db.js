@@ -1726,6 +1726,11 @@ async function initSchema() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS condition TEXT;`); // new | like_new | good | fair (physical resale)
   // "Was" price (compare-at, Shopify-style) — shown struck through when > price.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS compare_at_cents INTEGER;`);
+  // Wholesale / B2B pricing (Faire-style): a lower unit price for business-account
+  // buyers ordering at least wholesale_min_qty. Checkout re-derives eligibility
+  // server-side; a wholesale price at/above retail is stored but never applies.
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS wholesale_cents INTEGER;`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS wholesale_min_qty INTEGER;`);
   // Product video (one per listing, Etsy-style). video_ver busts the immutable-
   // cached streaming URL when the clip is replaced; reads never inline the bytes.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS video TEXT;`);

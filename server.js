@@ -17404,6 +17404,8 @@ function mapProduct(p, opts) {
     // Subscribe & Save (physical only): recurring delivery at a seller-set discount.
     subEnabled: kind === 'physical' && p.sub_enabled === true,
     subDiscountPct: p.sub_discount_pct || 0,
+    // Wholesale / B2B: a lower unit price for business buyers at a minimum quantity.
+    wholesaleCents: p.wholesale_cents || null, wholesaleMinQty: p.wholesale_min_qty || null,
     // Universal details (any industry) + rentals.
     amenities: Array.isArray(p.amenities) ? p.amenities : [],
     specs: Array.isArray(p.specs) ? p.specs : [],
@@ -17452,7 +17454,7 @@ app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
   try {
     const owner = bid === req.user.id;
     const { rows } = await db.query(
-      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.pinned DESC, p.created_at DESC LIMIT 200`,
+      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.pinned DESC, p.created_at DESC LIMIT 200`,
       [bid]
     );
     const products = rows.map((r) => mapProduct(r, { owner }));
@@ -17485,7 +17487,7 @@ function mapListing(r) {
   });
 }
 const LISTING_SELECT = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
-  p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS},
+  p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS},
   u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified, u.free_ship_over_cents AS seller_free_ship_over
   FROM products p JOIN users u ON u.id = p.business_id`;
 
@@ -17565,7 +17567,7 @@ async function getSponsoredListings(viewerId, { q, kind }) {
     }
     const { rows } = await db.query(
       `SELECT pa.id AS ad_id, pa.bid_cents, pa.keywords, p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
-        p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS},
+        p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS},
         u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified
        FROM product_ads pa JOIN products p ON p.id = pa.product_id JOIN users u ON u.id = pa.seller_id
        WHERE ${conds.join(' AND ')} LIMIT 40`, params);
@@ -17973,7 +17975,7 @@ app.post('/api/admin/product-ads/:id/:action', auth.requirePerm('ads'), async (r
 // My own listings (any account) — for the Sell / manage surface.
 app.get('/api/my-listings', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.pinned DESC, p.created_at DESC LIMIT 300`, [req.user.id]);
+    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.pinned DESC, p.created_at DESC LIMIT 300`, [req.user.id]);
     res.json({ products: rows.map((r) => mapProduct(r, { owner: true })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your listings.' }); }
 });
@@ -18197,6 +18199,17 @@ async function notifyMarketMatch(product) {
 }
 // Post a listing (item or service). Anyone with a @username can sell — a business
 // account also gets a storefront on its profile; a personal account sells without one.
+// Wholesale fields from a product write: {cents, minQty}, or nulls when off/invalid.
+// Physical goods only; bounds echo the price/qty limits elsewhere. The "must be
+// below retail" rule is enforced at checkout (wholesaleUnit), not at write time,
+// so a price edit can never silently strand a live wholesale offer in a bad state.
+function readWholesale(body, kind) {
+  if (kind !== 'physical') return { cents: null, minQty: null };
+  const w = Math.round(Number(body.wholesaleCents) || 0);
+  const min = Math.round(Number(body.wholesaleMinQty) || 0);
+  if (!(w > 0 && w <= 5000000 && min >= 2 && min <= 1000)) return { cents: null, minQty: null };
+  return { cents: w, minQty: min };
+}
 app.post('/api/products', auth.requireAuth, rateLimit(40, 60000, 'product-add'), async (req, res) => {
   if (!(await requireHandle(req, res))) return;
   const name = (req.body.name || '').toString().trim().slice(0, 140);
@@ -18222,6 +18235,9 @@ app.post('/api/products', auth.requireAuth, rateLimit(40, 60000, 'product-add'),
   // Subscribe & Save (physical only): a recurring-delivery discount.
   const subEnabled = kind === 'physical' && req.body.subEnabled === true;
   const subDiscountPct = subEnabled ? Math.max(0, Math.min(SUB_MAX_DISCOUNT, Math.round(Number(req.body.subDiscountPct) || 0))) : 0;
+  // Wholesale / B2B pricing (physical, simple listings): a lower unit price for
+  // business-account buyers ordering at least the minimum quantity.
+  const wholesale = readWholesale(req.body, kind);
   // Local pickup (physical only): offer in-person collection + an optional location.
   const pickup = kind === 'physical' && req.body.pickup === true;
   const pickupLocation = pickup ? ((req.body.pickupLocation || '').toString().trim().slice(0, 200) || null) : null;
@@ -18257,8 +18273,8 @@ app.post('/api/products', auth.requireAuth, rateLimit(40, 60000, 'product-add'),
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM products WHERE business_id = $1', [req.user.id]);
     if (cnt.rows[0].n >= 300) return res.status(400).json({ error: 'You’ve reached the maximum number of products.' });
     const { rows } = await db.query(
-      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, video, video_ver, auction_ends_at, auction_min_cents) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, (video IS NOT NULL) AS has_video, video_ver, auction_ends_at, auction_min_cents, auction_settled, auction_winner_id`,
-      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, pickup, pickupLocation, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct, amenities, JSON.stringify(specs), rentalPeriod, category, condition, compareAtCents, procDays.min, procDays.max, video, video ? 1 : 0, auctionEndsAt, auctionMinCents]
+      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, video, video_ver, auction_ends_at, auction_min_cents, wholesale_cents, wholesale_min_qty) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, (video IS NOT NULL) AS has_video, video_ver, auction_ends_at, auction_min_cents, auction_settled, auction_winner_id, wholesale_cents, wholesale_min_qty`,
+      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, pickup, pickupLocation, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct, amenities, JSON.stringify(specs), rentalPeriod, category, condition, compareAtCents, procDays.min, procDays.max, video, video ? 1 : 0, auctionEndsAt, auctionMinCents, wholesale.cents, wholesale.minQty]
     );
     if (rows[0].active !== false) notifyMarketMatch(rows[0]); // alert saved-search watchers
     res.status(201).json({ product: mapProduct(rows[0], { owner: true }) });
@@ -18293,6 +18309,11 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
   if ('digitalContent' in req.body) { const dc = req.body.digitalContent ? req.body.digitalContent.toString().slice(0, 4000) : null; vals.push(dc); fields.push(`digital_content = $${vals.length}`); }
   if ('subEnabled' in req.body) { vals.push(req.body.subEnabled === true); fields.push(`sub_enabled = $${vals.length}`); }
   if ('subDiscountPct' in req.body) { vals.push(Math.max(0, Math.min(SUB_MAX_DISCOUNT, Math.round(Number(req.body.subDiscountPct) || 0)))); fields.push(`sub_discount_pct = $${vals.length}`); }
+  if ('wholesaleCents' in req.body || 'wholesaleMinQty' in req.body) {
+    const ws = readWholesale(req.body, req.body.kind || 'physical');
+    vals.push(ws.cents); fields.push(`wholesale_cents = $${vals.length}`);
+    vals.push(ws.minQty); fields.push(`wholesale_min_qty = $${vals.length}`);
+  }
   if ('amenities' in req.body) { vals.push(cleanAmenities(req.body.amenities)); fields.push(`amenities = $${vals.length}`); }
   if ('specs' in req.body) { vals.push(JSON.stringify(cleanSpecs(req.body.specs))); fields.push(`specs = $${vals.length}`); }
   if ('rentalPeriod' in req.body) { vals.push(RENTAL_PERIODS.includes(req.body.rentalPeriod) ? req.body.rentalPeriod : null); fields.push(`rental_period = $${vals.length}`); }
@@ -18330,7 +18351,7 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
       fields.push('auction_settled = false', 'auction_winner_id = NULL');
     }
     vals.push(id, req.user.id);
-    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, (video IS NOT NULL) AS has_video, video_ver, auction_ends_at, auction_min_cents, auction_settled, auction_winner_id`, vals);
+    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, (video IS NOT NULL) AS has_video, video_ver, auction_ends_at, auction_min_cents, auction_settled, auction_winner_id, wholesale_cents, wholesale_min_qty`, vals);
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
     const after = r.rows[0];
     // Back-in-stock alert: was sold-out (or hidden), now active + in stock → notify watchers.
@@ -18845,12 +18866,13 @@ app.get('/api/rentals/bookings', auth.requireAuth, async (req, res) => {
 app.get('/api/cart', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT c.product_id, c.qty, c.variant_id, p.name, p.price_cents, p.image, p.kind, p.active, p.business_id, p.stock, p.variants, p.ship_free, p.ship_fee_cents,
+      `SELECT c.product_id, c.qty, c.variant_id, p.name, p.price_cents, p.image, p.kind, p.active, p.business_id, p.stock, p.variants, p.ship_free, p.ship_fee_cents, p.wholesale_cents, p.wholesale_min_qty,
               b.name AS biz_name, b.username AS biz_username, b.avatar AS biz_avatar, b.account_type AS biz_type, b.free_ship_over_cents
        FROM cart_items c JOIN products p ON p.id = c.product_id JOIN users b ON b.id = p.business_id
        WHERE c.user_id = $1 ORDER BY p.business_id, c.created_at`,
       [req.user.id]
     );
+    const cartBuyerBiz = await buyerIsBusiness(req.user.id);
     // Group into one cart per seller (an order goes to a single business). Each group
     // carries its subtotal, shipping (sum of physical lines' flat fees) and total.
     const bySeller = new Map();
@@ -18867,7 +18889,9 @@ app.get('/api/cart', auth.requireAuth, async (req, res) => {
         variantLabel = v.label; lineStock = v.stock == null ? null : v.stock;
       }
       const soldOut = typeof lineStock === 'number' && lineStock <= 0;
-      g.items.push({ productId: r.product_id, variantId: r.variant_id || null, variantLabel, name: r.name, priceCents: unitPrice, image: r.image || null, kind: r.kind, qty: r.qty, soldOut });
+      const wU = wholesaleUnit(r, r.variant_id != null ? { id: r.variant_id } : null, r.qty, cartBuyerBiz);
+      if (wU != null) unitPrice = wU;
+      g.items.push({ productId: r.product_id, variantId: r.variant_id || null, variantLabel, name: r.name, priceCents: unitPrice, image: r.image || null, kind: r.kind, qty: r.qty, soldOut, wholesaleApplied: wU != null || undefined, wholesaleCents: r.wholesale_cents || undefined, wholesaleMinQty: r.wholesale_min_qty || undefined });
       g.totalCents += unitPrice * r.qty;
       if (r.kind === 'physical') { g.needsShipping = true; if (r.ship_free === false) g.shippingCents += r.ship_fee_cents || 0; }
     }
@@ -19624,6 +19648,22 @@ function resolveVariant(productRow, variantId) {
   if (!v) return { ok: false, error: 'That option isn’t available.' };
   return { ok: true, variant: { id: v.id, label: v.label, priceCents: (v.priceCents == null ? productRow.price_cents : v.priceCents), stock: v.stock == null ? null : v.stock } };
 }
+// ── Wholesale / B2B pricing ──
+// A business-account buyer ordering at least the seller's minimum quantity pays
+// the wholesale unit price instead of retail. Simple (no-variant) lines only —
+// a variant's own price always wins — and never a markup: ignored unless the
+// wholesale price is genuinely below retail. The checkout routes re-derive this
+// server-side, so a client can never claim a price it isn't entitled to.
+function wholesaleUnit(p, variant, qty, buyerIsBiz) {
+  if (variant || !buyerIsBiz) return null;
+  const w = p.wholesale_cents, min = p.wholesale_min_qty || 0;
+  if (!(Number.isInteger(w) && w > 0 && min >= 2 && qty >= min)) return null;
+  return w < p.price_cents ? w : null;
+}
+async function buyerIsBusiness(userId) {
+  try { const r = (await db.query(`SELECT account_type = 'business' AS b FROM users WHERE id = $1`, [userId])).rows[0]; return !!(r && r.b); }
+  catch { return false; }
+}
 // Insert a pending order with its ship-to snapshot (immutable history the seller ships against).
 async function insertOrder({ buyerId, sellerId, total, note, shippingCents, taxCents, needsShipping, addr, discountCents, couponCode, pickup, pickupLocation, affiliateId, commissionCents, gift, giftNote }) {
   const a = addr || {};
@@ -20096,11 +20136,12 @@ app.post('/api/checkout/quote', auth.requireAuth, async (req, res) => {
     if (mode === 'buy') {
       const pid = parseInt(req.body.productId, 10);
       const qty = Math.max(1, Math.min(99, Math.round(Number(req.body.qty) || 1)));
-      const p = (await db.query('SELECT business_id, name, price_cents, active, kind, stock, ship_free, ship_fee_cents, variants FROM products WHERE id = $1', [pid])).rows[0];
+      const p = (await db.query('SELECT business_id, name, price_cents, active, kind, stock, ship_free, ship_fee_cents, variants, wholesale_cents, wholesale_min_qty FROM products WHERE id = $1', [pid])).rows[0];
       if (!p || !p.active) return res.status(404).json({ error: 'That listing isn’t available.' });
       sellerId = p.business_id;
       const rv = resolveVariant(p, req.body.variantId);
-      const unit = rv.ok && rv.variant ? rv.variant.priceCents : p.price_cents;
+      const wQ = wholesaleUnit(p, rv.ok ? rv.variant : null, qty, await buyerIsBusiness(req.user.id));
+      const unit = wQ != null ? wQ : (rv.ok && rv.variant ? rv.variant.priceCents : p.price_cents);
       items = [{ product_id: pid, qty, name: p.name, kind: p.kind, ship_free: p.ship_free, ship_fee_cents: p.ship_fee_cents }];
       subtotal = unit * qty;
     } else if (mode === 'bundle') {
@@ -20115,10 +20156,12 @@ app.post('/api/checkout/quote', auth.requireAuth, async (req, res) => {
     } else {
       sellerId = parseInt(req.body.sellerId, 10);
       if (!Number.isInteger(sellerId)) return res.status(400).json({ error: 'Invalid seller.' });
-      const cart = await db.query(`SELECT c.product_id, c.qty, c.variant_id, p.name, p.price_cents, p.kind, p.variants, p.ship_free, p.ship_fee_cents FROM cart_items c JOIN products p ON p.id = c.product_id WHERE c.user_id = $1 AND p.business_id = $2 AND p.active = true`, [req.user.id, sellerId]);
+      const cart = await db.query(`SELECT c.product_id, c.qty, c.variant_id, p.name, p.price_cents, p.kind, p.variants, p.ship_free, p.ship_fee_cents, p.wholesale_cents, p.wholesale_min_qty FROM cart_items c JOIN products p ON p.id = c.product_id WHERE c.user_id = $1 AND p.business_id = $2 AND p.active = true`, [req.user.id, sellerId]);
+      const qBiz = await buyerIsBusiness(req.user.id);
       for (const r of cart.rows) {
         let unit = r.price_cents;
         if (r.variant_id != null) { const v = (Array.isArray(r.variants) ? r.variants : []).find((x) => x.id === r.variant_id); if (v && v.priceCents != null) unit = v.priceCents; }
+        { const wUq = wholesaleUnit(r, r.variant_id != null ? { id: r.variant_id } : null, r.qty, qBiz); if (wUq != null) unit = wUq; }
         items.push({ product_id: r.product_id, qty: r.qty, name: r.name, kind: r.kind, ship_free: r.ship_free, ship_fee_cents: r.ship_fee_cents });
         subtotal += unit * r.qty;
       }
@@ -20163,11 +20206,12 @@ app.post('/api/orders', auth.requireAuth, blockImpersonation, rateLimit(20, 6000
     if (sd && sd.is_demo) return res.status(400).json({ demo: true, error: 'This is a demo seller — buying is disabled in demo mode.' });
     { const sp = await shopPausedMessage(sellerId); if (sp) return res.status(400).json({ error: sp, shopPaused: true }); }
     const cart = await db.query(
-      `SELECT c.product_id, c.qty, c.variant_id, p.name, p.price_cents, p.kind, p.stock, p.variants, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location FROM cart_items c JOIN products p ON p.id = c.product_id
+      `SELECT c.product_id, c.qty, c.variant_id, p.name, p.price_cents, p.kind, p.stock, p.variants, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.wholesale_cents, p.wholesale_min_qty FROM cart_items c JOIN products p ON p.id = c.product_id
        WHERE c.user_id = $1 AND p.business_id = $2 AND p.active = true`,
       [req.user.id, sellerId]
     );
     if (!cart.rows.length) return res.status(400).json({ error: 'Your cart for this seller is empty.' });
+    const buyerBiz = await buyerIsBusiness(req.user.id);
     // Resolve each line's variant (price/label/stock); a since-removed variant errors out.
     const items = [];
     for (const r of cart.rows) {
@@ -20178,6 +20222,8 @@ app.post('/api/orders', auth.requireAuth, blockImpersonation, rateLimit(20, 6000
         unitPrice = v.priceCents == null ? r.price_cents : v.priceCents;
         variantLabel = v.label; lineStock = v.stock == null ? null : v.stock;
       }
+      const wU = wholesaleUnit(r, r.variant_id != null ? { id: r.variant_id } : null, r.qty, buyerBiz);
+      if (wU != null) unitPrice = wU;
       items.push({ product_id: r.product_id, qty: r.qty, name: r.name, price_cents: unitPrice, kind: r.kind, stock: lineStock, ship_free: r.ship_free, ship_fee_cents: r.ship_fee_cents, pickup: r.pickup, pickup_location: r.pickup_location, variant_id: r.variant_id || null, variant_label: variantLabel });
     }
     const subtotal = items.reduce((s, r) => s + r.price_cents * r.qty, 0);
@@ -20250,7 +20296,7 @@ app.post('/api/orders/buy', auth.requireAuth, blockImpersonation, rateLimit(20, 
   const qty = Math.max(1, Math.min(99, Math.round(Number(req.body.qty) || 1)));
   try {
     if (!(await requireHandle(req, res))) return;
-    const p = (await db.query('SELECT p.business_id, p.name, p.price_cents, p.active, p.kind, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.auction_ends_at, p.auction_settled, u.is_demo AS seller_demo FROM products p JOIN users u ON u.id = p.business_id WHERE p.id = $1', [productId])).rows[0];
+    const p = (await db.query('SELECT p.business_id, p.name, p.price_cents, p.active, p.kind, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.wholesale_cents, p.wholesale_min_qty, p.auction_ends_at, p.auction_settled, u.is_demo AS seller_demo FROM products p JOIN users u ON u.id = p.business_id WHERE p.id = $1', [productId])).rows[0];
     if (!p || !p.active) return res.status(404).json({ error: 'That listing isn’t available.' });
     if (p.auction_ends_at) return res.status(400).json({ error: auctionLive(p) ? 'This listing sells by auction — place a bid instead.' : 'This auction has ended.', auction: true });
     if (p.seller_demo) return res.status(400).json({ demo: true, error: 'This is a demo listing — buying is disabled in demo mode.' });
@@ -20259,7 +20305,8 @@ app.post('/api/orders/buy', auth.requireAuth, blockImpersonation, rateLimit(20, 
     if (await blockedEither(req.user.id, p.business_id)) return res.status(403).json({ error: 'You can’t order from this seller.' });
     const rv = resolveVariant(p, req.body.variantId);
     if (!rv.ok) return res.status(400).json({ error: rv.error });
-    const unitPrice = rv.variant ? rv.variant.priceCents : p.price_cents;
+    const wUnit = wholesaleUnit(p, rv.variant, qty, await buyerIsBusiness(req.user.id));
+    const unitPrice = wUnit != null ? wUnit : (rv.variant ? rv.variant.priceCents : p.price_cents);
     const items = [{ product_id: productId, qty, name: p.name, price_cents: unitPrice, kind: p.kind, stock: p.stock, ship_free: p.ship_free, ship_fee_cents: p.ship_fee_cents, pickup: p.pickup, pickup_location: p.pickup_location, variant_id: rv.variant ? rv.variant.id : null, variant_label: rv.variant ? rv.variant.label : null }];
     const subtotal = unitPrice * qty;
     const ship = await resolveShipping(req.user.id, req.body, items, { sellerId: p.business_id, subtotalCents: subtotal });
