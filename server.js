@@ -13,6 +13,9 @@ const shiptax = require('./shiptax');
 const shiplabels = require('./shiplabels');
 const stt = require('./stt');
 const sms = require('./sms');
+const storage = require('./storage');
+const webauthn = require('./webauthn');
+const imagegen = require('./imagegen');
 const QRCode = require('qrcode');
 const geoip = require('./geoip');
 const finance = require('./finance');
@@ -210,6 +213,17 @@ function rateLimit(max, windowMs, bucket) {
     if (!b || now > b.reset) { b = { count: 0, reset: now + windowMs }; _rlBuckets.set(key, b); }
     b.count++;
     if (b.count > max) return res.status(429).json({ error: 'Too many requests. Please try again shortly.' });
+    // With several servers running, the per-process count above is only this
+    // instance's share, so also check the shared counter in the database. The
+    // local check ALWAYS runs first: if the shared one is unavailable, the limit
+    // degrades to "still limited on this server", never to wide open.
+    if (typeof CLUSTER !== 'undefined' && CLUSTER) {
+      clusterRateHit(key, windowMs).then((shared) => {
+        if (shared !== null && shared > max) return res.status(429).json({ error: 'Too many requests. Please try again shortly.' });
+        next();
+      }).catch(() => next());
+      return;
+    }
     next();
   };
 }
@@ -1971,6 +1985,9 @@ const MEDIA_KINDS = {
   'avatar':     { table: 'users',             col: 'avatar' },
   'banner':     { table: 'users',             col: 'banner' },
   'prod-video': { table: 'products',          col: 'video'  },
+  // A call recording is private, like a DM — the unguessable signature IS the
+  // capability, which is the same bargain every other private media kind here makes.
+  'callrec':    { table: 'call_recordings',   col: 'media'  },
 };
 function mediaSig(kind, id, idx) {
   return _vcrypto.createHmac('sha256', MEDIA_SECRET).update(kind + ':' + id + ':' + (idx || 0)).digest('hex').slice(0, 20);
@@ -2181,9 +2198,17 @@ const rtClients = new Map(); // userId -> Set<res>
 function rtSend(res, event, data) {
   try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch {}
 }
-function rtPush(userId, event, data) {
+// Deliver to the people connected to THIS server process.
+function rtPushLocal(userId, event, data) {
   const set = rtClients.get(userId);
   if (set) for (const res of set) rtSend(res, event, data);
+}
+// Deliver, then — when more than one server is running — tell the others so a
+// member connected elsewhere gets it too. Cluster mode is off by default, so on
+// a single server this is exactly the local push it always was.
+function rtPush(userId, event, data) {
+  rtPushLocal(userId, event, data);
+  try { clusterPublish(userId, event, data); } catch (e) { /* never break a live push */ }
 }
 function rtBroadcast(event, data, exceptId) {
   for (const [uid, set] of rtClients) {
@@ -3061,6 +3086,11 @@ function liveStreamPublic(s) {
   const base = { id: s.id, title: s.title, startedAt: s.startedAt, viewers: s.viewers.size,
     mode: s.mode || 'video',
     pinnedProduct: s.pinnedProduct || null, // live shopping: the product the host is showcasing
+    // The console, so a viewer arriving mid-broadcast sees the same scene and
+    // the same pinned comment as everybody who was already there.
+    scene: s.scene || 'camera',
+    pinnedComment: s.pinnedComment || null,
+    guests: s.guests ? [...s.guests.values()] : [],
     user: { id: s.userId, name: s.name, username: s.username, avatar: s.avatar } };
   if (s.mode === 'audio') {
     base.host = s.userId;
@@ -3084,6 +3114,18 @@ function pushStage(s) {
 // Tear down a stream: tell its viewers (and, for a group stream, all members)
 // that it ended, then drop it.
 async function endLiveStream(s) {
+  // Write down how it went BEFORE tearing the stream down, while the numbers
+  // still exist. Best-effort: a failed recap must never stop a broadcast ending.
+  if (db.isConfigured() && s.startedAt) {
+    const seconds = Math.max(0, Math.round((Date.now() - s.startedAt) / 1000));
+    db.query(
+      `INSERT INTO live_recaps (user_id, stream_id, title, mode, started_at, seconds,
+                                peak_viewers, total_viewers, gifts_cents, comments)
+       VALUES ($1,$2,$3,$4,to_timestamp($5/1000.0),$6,$7,$8,$9,$10)`,
+      [s.userId, s.id, s.title || null, s.mode || 'video', s.startedAt, seconds,
+       s.peakViewers || s.viewers.size, s.viewers.size, s.giftsCents || 0, s.commentCount || 0]
+    ).catch(() => {});
+  }
   for (const v of s.viewers) rtPush(v, 'live', { kind: 'ended', streamId: s.id });
   if (s.groupId) {
     for (const id of await groupMemberIds(s.groupId, s.userId)) rtPush(id, 'live', { kind: 'group-ended', groupId: s.groupId, streamId: s.id });
@@ -3117,6 +3159,11 @@ app.post('/api/live/start', auth.requireAuth, async (req, res) => {
       // Audio room ("Space"): a stage of speakers (the host starts on stage) and a
       // queue of listeners who raised their hand to speak.
       speakers: new Map(), requests: new Map(),
+      // Broadcast console: what is on screen, what is held at the top of the
+      // chat, and who has been brought up. Plus the running numbers the recap
+      // is built from when it ends.
+      scene: 'camera', pinnedComment: null, guests: new Map(), invites: new Map(),
+      peakViewers: 0, commentCount: 0, giftsCents: 0,
     };
     if (mode === 'audio') {
       stream.speakers.set(req.user.id, { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null });
@@ -3190,6 +3237,7 @@ app.post('/api/live/gift', auth.requireAuth, blockImpersonation, rateLimit(30, 6
     const t = await walletTransfer(req.user.id, s.userId, gift.cents, 'Live gift: ' + gift.label, false);
     if (!t.ok) { await walletReleaseIdem(req.user.id, cid, 'livegift'); return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance.' : 'Could not send the gift.', insufficientBalance: !!t.insufficient }); }
     await recordTip(req.user.id, s.userId, gift.cents, 'Live gift: ' + gift.emoji + ' ' + gift.label);
+    s.giftsCents = (s.giftsCents || 0) + gift.cents;   // for the host's recap afterwards
     rtPush(req.user.id, 'wallet', { type: 'update' });
     rtPush(s.userId, 'wallet', { type: 'update' });
     const payload = { kind: 'gift', streamId: s.id, gift: { id: gift.id, emoji: gift.emoji, label: gift.label, cents: gift.cents },
@@ -3224,6 +3272,9 @@ app.post('/api/live/signal', auth.requireAuth, async (req, res) => {
         return res.status(403).json({ error: 'This stream is for group members only.' });
       }
       s.viewers.add(req.user.id);
+      // The peak is the number worth reporting afterwards — "42 people watched"
+      // means more than however many happened to be there at the very end.
+      if (s.viewers.size > (s.peakViewers || 0)) s.peakViewers = s.viewers.size;
     }
     if (kind === 'leave') {
       s.viewers.delete(req.user.id);
@@ -3244,6 +3295,41 @@ app.post('/api/live/signal', auth.requireAuth, async (req, res) => {
     from: me ? { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null } : { id: req.user.id },
   });
   res.json({ ok: true });
+});
+
+/* ─── Live comments ────────────────────────────────────────────────────────
+   Deliberately NOT stored. A live chat is a river: it streams past everybody
+   watching at that moment and then it is gone, which is what it is for and
+   which is also why writing every comment of every broadcast to disk would be
+   pure cost. The host can lift ONE out of the river and pin it (see the studio,
+   above) — that is what the pin is for. */
+app.post('/api/live/comment', auth.requireAuth, rateLimit(30, 60000, 'live-comment'), async (req, res) => {
+  const s = liveStreams.get(String(req.body.streamId || ''));
+  if (!s) return res.status(404).json({ error: 'That live has ended.' });
+  const text = String(req.body.text || '').trim().slice(0, 240);
+  if (!text) return res.status(400).json({ error: 'Say something.' });
+  try {
+    // A group broadcast is members-only, and a block works here like everywhere.
+    if (s.groupId && !(await isGroupMember(s.groupId, req.user.id))) {
+      return res.status(403).json({ error: 'This broadcast is for group members only.' });
+    }
+    if (req.user.id !== s.userId && await blockedEither(req.user.id, s.userId)) {
+      return res.status(403).json({ error: 'You can’t comment here.' });
+    }
+    const me = await chatIdentity(req.user.id);
+    if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
+    s.commentCount = (s.commentCount || 0) + 1;
+    const payload = { kind: 'comment', streamId: s.id, text, at: Date.now(),
+      from: { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null } };
+    // The sender is included explicitly — their own comment must appear even if
+    // their watch signal has not registered them as a viewer yet.
+    const seen = new Set();
+    for (const uid of [req.user.id, ...liveAudience(s)]) {
+      if (seen.has(uid)) continue; seen.add(uid);
+      rtPush(uid, 'live', payload);
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send that.' }); }
 });
 
 /* ─── Audio rooms ("Spaces"): stage management ─── */
@@ -7627,13 +7713,24 @@ app.post('/api/admin/staff-sessions/revoke', auth.requireAdmin, async (req, res)
 });
 /* ─── Audit log export ──────────────────────────────────────────────────────
    Append-only is good; downloadable is what an insurer or an auditor asks for. */
+/* A cell that begins with = + - @ (or a tab/return) is read as a FORMULA by
+   Excel, Numbers and Sheets — so a member who names themselves "=cmd|..." can
+   have their name run as a command on the computer of whoever opens the export.
+   The fix is the standard one: put an apostrophe in front, which those programs
+   strip on display, so the value looks right and is inert.
+
+   Plain numbers are left alone, otherwise every negative amount in a money
+   export would turn into text and stop adding up. */
+const CSV_RISKY = /^[=+\-@\t\r]/;
+const CSV_PLAIN_NUMBER = /^-?\d+(\.\d+)?$/;
 function csvCell(v) {
   // A Date is an object, so a naive JSON.stringify wrapped every timestamp in
   // its own quotes and the escaping then doubled them — dates came out as
   // """2026-07-26...""". Dates are rendered plainly; only real structures
   // are stringified.
-  const s = v == null ? '' : (v instanceof Date ? v.toISOString()
+  let s = v == null ? '' : (v instanceof Date ? v.toISOString()
     : (typeof v === 'object' ? JSON.stringify(v) : String(v)));
+  if (CSV_RISKY.test(s) && !CSV_PLAIN_NUMBER.test(s)) s = "'" + s;
   return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 app.get('/api/admin/audit.csv', auth.requireAdmin, async (req, res) => {
@@ -10303,6 +10400,912 @@ app.get('/api/media-studio', auth.requireAuth, async (req, res) => {
       revShareOn: _revShare.enabled,
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your studio.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   BATCH 39 — the platform underneath
+═══════════════════════════════════════════════ */
+
+/* ─── Passkeys ─────────────────────────────────────────────────────────────
+   Signing in with a face, a fingerprint or a device PIN. The private key never
+   leaves the device, so there is no password to phish, reuse or leak — and
+   nothing in this database is worth stealing.
+   Passwords are NOT replaced: a passkey is an additional way in, so nobody can
+   be locked out by a lost phone. */
+function rpIdFor(req) {
+  // The passkey is bound to this hostname. Getting it wrong means passkeys
+  // silently stop working after a domain change, so it is derived from the
+  // real request rather than guessed.
+  const host = String(req.hostname || '').toLowerCase();
+  if (!host || host === 'localhost' || /^\d+\.\d+\.\d+\.\d+$/.test(host)) return host || 'localhost';
+  return host.replace(/^www\./, '');
+}
+function originsFor(req) {
+  const host = String(req.get('host') || req.hostname || '');
+  const proto = req.protocol === 'https' ? 'https' : (host.startsWith('localhost') || host.startsWith('127.') ? 'http' : 'https');
+  const list = [`${proto}://${host}`];
+  if (process.env.APP_URL) list.push(String(process.env.APP_URL).replace(/\/$/, ''));
+  return [...new Set(list)];
+}
+async function newChallengeRow(userId, kind) {
+  const challenge = webauthn.newChallenge();
+  await db.query(
+    `INSERT INTO webauthn_challenges (challenge, user_id, kind, expires_at) VALUES ($1,$2,$3, now() + interval '5 minutes')`,
+    [challenge, userId || null, kind]);
+  return challenge;
+}
+// Single use: consumed by the same statement that reads it, so a challenge
+// can never be replayed even by two requests arriving together.
+async function takeChallenge(challenge, kind) {
+  const { rows } = await db.query(
+    `DELETE FROM webauthn_challenges WHERE challenge = $1 AND kind = $2 AND expires_at > now() RETURNING user_id`,
+    [String(challenge || ''), kind]);
+  return rows[0] || null;
+}
+setInterval(() => {
+  if (db.isConfigured()) db.query('DELETE FROM webauthn_challenges WHERE expires_at < now()').catch(() => {});
+}, 10 * 60000).unref?.();
+
+app.get('/api/passkeys', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT id, label, created_at, last_used_at FROM passkeys WHERE user_id = $1 ORDER BY created_at DESC', [req.user.id]);
+    res.json({ passkeys: rows, supported: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your passkeys.' }); }
+});
+// Step 1 of adding one: hand the browser a challenge and who it is for.
+app.post('/api/passkeys/register/start', auth.requireAuth, rateLimit(10, 3600000, 'pk-reg'), async (req, res) => {
+  try {
+    const u = (await db.query('SELECT id, name, username, email FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!u) return res.status(404).json({ error: 'Account not found.' });
+    const challenge = await newChallengeRow(u.id, 'register');
+    const existing = (await db.query('SELECT credential_id FROM passkeys WHERE user_id = $1', [u.id])).rows;
+    res.json({
+      challenge,
+      rp: { id: rpIdFor(req), name: 'Atwe' },
+      // The user handle is the account id — never an email, which would leak
+      // an address to anyone who could read the device's passkey list.
+      user: { id: Buffer.from(String(u.id)).toString('base64url'), name: u.username || u.email, displayName: u.name || u.username },
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+      excludeCredentials: existing.map((e) => ({ type: 'public-key', id: e.credential_id })),
+      authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' },
+      timeout: 120000, attestation: 'none',
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not start that.' }); }
+});
+app.post('/api/passkeys/register/finish', auth.requireAuth, rateLimit(10, 3600000, 'pk-reg2'), async (req, res) => {
+  try {
+    const row = await takeChallenge(req.body.challenge, 'register');
+    if (!row || row.user_id !== req.user.id) return res.status(400).json({ error: 'That took too long — please try again.' });
+    const out = webauthn.verifyRegistration({
+      attestationObject: webauthn.fromB64url(req.body.attestationObject),
+      clientDataJSON: webauthn.fromB64url(req.body.clientDataJSON),
+      expectedChallenge: String(req.body.challenge),
+      allowedOrigins: originsFor(req), rpId: rpIdFor(req),
+    });
+    await db.query(
+      `INSERT INTO passkeys (user_id, credential_id, public_key, alg, sign_count, label)
+       VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (credential_id) DO NOTHING`,
+      [req.user.id, out.credentialId, out.publicKeyPem, out.alg, out.signCount,
+        String(req.body.label || '').trim().slice(0, 60) || 'This device']);
+    res.status(201).json({ ok: true });
+  } catch (err) {
+    // These messages are written for a person, not a developer.
+    res.status(400).json({ error: String(err.message || 'That passkey could not be saved.') });
+  }
+});
+// Signing in. No auth, obviously — this IS the sign-in.
+app.post('/api/passkeys/login/start', rateLimit(20, 60000, 'pk-login'), async (req, res) => {
+  try {
+    const ident = String(req.body.identifier || '').trim().slice(0, 190);
+    let allow = [];
+    if (ident) {
+      const u = (await db.query(
+        'SELECT id FROM users WHERE lower(email) = lower($1) OR lower(username) = lower($2)',
+        [ident, ident.replace(/^@/, '')])).rows[0];
+      if (u) allow = (await db.query('SELECT credential_id FROM passkeys WHERE user_id = $1', [u.id])).rows
+        .map((r) => ({ type: 'public-key', id: r.credential_id }));
+    }
+    // An empty list is CORRECT for an unknown account: it lets the browser
+    // offer any passkey it holds, and it never reveals whether an account
+    // exists — the same no-enumeration rule the password reset follows.
+    const challenge = await newChallengeRow(null, 'login');
+    res.json({ challenge, rpId: rpIdFor(req), allowCredentials: allow, userVerification: 'preferred', timeout: 120000 });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not start sign-in.' }); }
+});
+app.post('/api/passkeys/login/finish', rateLimit(20, 60000, 'pk-login2'), async (req, res) => {
+  try {
+    const taken = await takeChallenge(req.body.challenge, 'login');
+    if (!taken) return res.status(400).json({ error: 'That took too long — please try again.' });
+    // The browser hands back `id`; accept the longer spelling too so an
+    // integration written either way works. Registration uses `id`.
+    const credId = String(req.body.id || req.body.credentialId || '');
+    const pk = (await db.query(
+      `SELECT p.*, u.id AS uid, u.email, u.name, u.is_admin, u.deactivated, u.status, u.totp_enabled
+         FROM passkeys p JOIN users u ON u.id = p.user_id WHERE p.credential_id = $1`, [credId])).rows[0];
+    if (!pk) return res.status(400).json({ error: 'That passkey is not registered here.' });
+    const out = webauthn.verifyAssertion({
+      authenticatorData: webauthn.fromB64url(req.body.authenticatorData),
+      clientDataJSON: webauthn.fromB64url(req.body.clientDataJSON),
+      signature: webauthn.fromB64url(req.body.signature),
+      expectedChallenge: String(req.body.challenge),
+      allowedOrigins: originsFor(req), rpId: rpIdFor(req),
+      publicKeyPem: pk.public_key, alg: pk.alg, storedSignCount: Number(pk.sign_count || 0),
+    });
+    // A counter that went backwards means two devices are using one key — the
+    // signature is valid but the situation is not. Refuse and disable it.
+    if (out.cloned) {
+      await db.query('DELETE FROM passkeys WHERE id = $1', [pk.id]).catch(() => {});
+      return res.status(403).json({ error: 'That passkey looks like it has been copied, so it has been removed. Sign in with your password and add a new one.' });
+    }
+    // The account still has to be allowed in — a passkey proves who you are,
+    // not that you are welcome.
+    const block = accountStatusBlock(pk);
+    if (block) return res.status(403).json({ error: block, accountBlocked: true });
+    if (pk.deactivated) {
+      await db.query('UPDATE users SET deactivated = false WHERE id = $1', [pk.uid]).catch(() => {});
+    }
+    await db.query('UPDATE passkeys SET sign_count = $2, last_used_at = now() WHERE id = $1', [pk.id, out.signCount]);
+    const full = (await db.query('SELECT * FROM users WHERE id = $1', [pk.uid])).rows[0];
+    const token = await issueSession(full, req);
+    sendLoginAlertEmail(full, req).catch(() => {});
+    notify(full.id, full.id, 'login');
+    res.json({ token, user: publicUser(full) });
+  } catch (err) {
+    res.status(400).json({ error: String(err.message || 'That passkey did not work.') });
+  }
+});
+app.delete('/api/passkeys/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    await db.query('DELETE FROM passkeys WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove it.' }); }
+});
+
+/* ─── Media in an object store ─────────────────────────────────────────────
+   Media is currently base64 in Postgres. offloadMedia() puts new uploads in a
+   bucket instead and returns a URL; everything downstream already handles a
+   URL, because mediaRef() has always returned one. With no bucket configured
+   it hands the data URL straight back, so nothing changes. */
+async function offloadMedia(dataUrl, kind) {
+  if (!storage.isConfigured()) return dataUrl;
+  if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return dataUrl;
+  const url = await storage.putDataUrl(dataUrl, kind);
+  // A storage hiccup must never lose somebody's photo — keep the bytes.
+  return url || dataUrl;
+}
+app.get('/api/admin/storage', auth.requireAdmin, async (_req, res) => {
+  try {
+    const heavy = (await db.query(
+      `SELECT
+         (SELECT COUNT(*)::int FROM posts WHERE image LIKE 'data:%' OR media LIKE 'data:%') AS posts,
+         (SELECT COUNT(*)::int FROM at_messages WHERE image LIKE 'data:%' OR media LIKE 'data:%') AS messages,
+         (SELECT COUNT(*)::int FROM products WHERE image LIKE 'data:%') AS listings,
+         (SELECT COUNT(*)::int FROM stories WHERE media LIKE 'data:%') AS stories`)).rows[0];
+    const size = (await db.query(
+      `SELECT pg_size_pretty(pg_database_size(current_database())) AS db`).catch(() => ({ rows: [{}] }))).rows[0];
+    res.json({ configured: storage.isConfigured(), inDatabase: heavy, databaseSize: size.db || null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not check storage.' }); }
+});
+app.post('/api/admin/storage/test', auth.requireAdmin, async (req, res) => {
+  try { const out = await storage.selfTest(); adminAudit(req, 'storage.test', 'settings', null, { ok: out.ok }); res.json(out); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'The test could not run.' }); }
+});
+
+/* ─── Running on more than one server ──────────────────────────────────────
+   Today Atwe holds three things in one process's memory: who is connected
+   (for realtime), the rate-limit counters, and a few caches. That is correct
+   for one server and quietly wrong for two — a message would reach only the
+   people connected to the same instance, and everybody would get double the
+   rate limit.
+
+   This is the groundwork, using the database that is already there rather than
+   adding Redis: Postgres LISTEN/NOTIFY carries realtime events between
+   instances, and a shared table carries the rate counters. It switches ON only
+   when told to (CLUSTER_MODE=true), so a single-server deploy keeps today's
+   faster in-memory behaviour with no change at all. */
+const CLUSTER = process.env.CLUSTER_MODE === 'true';
+const INSTANCE_ID = require('crypto').randomBytes(6).toString('hex');
+let _clusterClient = null;
+async function clusterListen() {
+  if (!CLUSTER || !db.isConfigured()) return;
+  try {
+    const client = await db.getPool().connect();
+    _clusterClient = client;
+    await client.query('LISTEN atwe_rt');
+    client.on('notification', (msg) => {
+      try {
+        const p = JSON.parse(msg.payload);
+        // Never re-deliver our own broadcast — that would double every event.
+        if (!p || p.from === INSTANCE_ID) return;
+        if (p.userId) rtPushLocal(p.userId, p.event, p.data);
+      } catch (e) { /* a malformed notification must not kill the listener */ }
+    });
+    client.on('error', (e) => {
+      console.error('[cluster] listener dropped:', e && e.message);
+      _clusterClient = null;
+      setTimeout(clusterListen, 5000);   // reconnect; a dropped listener means silence
+    });
+    console.log('🔗  Cluster mode on — realtime is shared across instances (id ' + INSTANCE_ID + ').');
+  } catch (e) {
+    console.error('[cluster] could not listen:', e && e.message);
+    setTimeout(clusterListen, 10000);
+  }
+}
+// Fan an event out to the other instances. Postgres caps a payload at 8000
+// bytes, so anything bigger stays local rather than being silently dropped.
+function clusterPublish(userId, event, data) {
+  try {
+    if (!CLUSTER || !db.isConfigured()) return;
+    const payload = JSON.stringify({ from: INSTANCE_ID, userId, event, data });
+    if (payload.length > 7500) return;
+    db.query('SELECT pg_notify($1, $2)', ['atwe_rt', payload]).catch(() => {});
+  } catch (e) { /* never break the local push */ }
+}
+// A shared rate counter. Falls back to the in-memory limiter on any error —
+// rate limiting must degrade to "still limited locally", never to "wide open".
+async function clusterRateHit(key, windowMs) {
+  if (!CLUSTER || !db.isConfigured()) return null;
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO rate_counters (bucket, count, expires_at)
+       VALUES ($1, 1, now() + ($2 || ' milliseconds')::interval)
+       ON CONFLICT (bucket) DO UPDATE SET
+         count = CASE WHEN rate_counters.expires_at < now() THEN 1 ELSE rate_counters.count + 1 END,
+         expires_at = CASE WHEN rate_counters.expires_at < now()
+                           THEN now() + ($2 || ' milliseconds')::interval ELSE rate_counters.expires_at END
+       RETURNING count`, [key, String(windowMs)]);
+    return rows[0] ? rows[0].count : null;
+  } catch (e) { return null; }
+}
+setInterval(() => {
+  if (CLUSTER && db.isConfigured()) db.query('DELETE FROM rate_counters WHERE expires_at < now()').catch(() => {});
+}, 5 * 60000).unref?.();
+app.get('/api/admin/cluster', auth.requireAdmin, async (_req, res) => {
+  try {
+    const conns = (await db.query(
+      `SELECT COUNT(*)::int AS n FROM pg_stat_activity WHERE datname = current_database()`).catch(() => ({ rows: [{ n: null }] }))).rows[0];
+    res.json({
+      clusterMode: CLUSTER, instanceId: INSTANCE_ID,
+      listening: !!_clusterClient,
+      liveConnections: (typeof rtClients !== 'undefined' && rtClients) ? rtClients.size : 0,
+      dbConnections: conns.n,
+      storage: storage.isConfigured(),
+      note: CLUSTER
+        ? 'Realtime and rate limits are shared through the database, so more than one server can run at once.'
+        : 'Single-server mode: realtime and rate limits live in this process, which is faster and correct for one instance.',
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not check.' }); }
+});
+
+/* ─── Make me a picture ─── */
+app.post('/api/ai/image', auth.requireAuth, rateLimit(10, 3600000, 'ai-image'), requireFeature('ai'), async (req, res) => {
+  if (!imagegen.isConfigured()) return res.status(503).json({ error: 'Making pictures is not set up on this server yet.' });
+  const prompt = String(req.body.prompt || '').trim().slice(0, 1000);
+  if (!prompt) return res.status(400).json({ error: 'Describe the picture you want.' });
+  try {
+    const out = await imagegen.generate(prompt, { size: req.body.size });
+    if (out.error) return res.status(502).json({ error: out.error });
+    // Straight into object storage when it is configured, so a generated image
+    // never becomes another big row in the database.
+    const url = await offloadMedia(out.dataUrl, 'generated');
+    res.json({ image: url });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not make that picture.' }); }
+});
+
+/* ─── The till: selling to somebody standing in front of you ───────────────
+   Honest about what this is: it rings up a sale against the SAME catalogue and
+   stock as the online shop, takes payment from the customer's Atwe wallet by
+   showing them a code, or records that cash or a card machine was used. It is
+   not a card reader — tapping a physical card needs a payments partner and
+   certified hardware, which is a separate thing entirely. */
+const POS_METHODS = ['atwe', 'cash', 'card'];
+function posCode() { return String(Math.floor(100000 + Math.random() * 900000)); }
+app.post('/api/pos/sales', auth.requireAuth, rateLimit(60, 60000, 'pos'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const method = POS_METHODS.includes(req.body.method) ? req.body.method : 'atwe';
+  const wanted = (Array.isArray(req.body.items) ? req.body.items : [])
+    .map((i) => ({ productId: parseInt(i && i.productId, 10), qty: Math.max(1, Math.min(99, parseInt(i && i.qty, 10) || 1)) }))
+    .filter((i) => Number.isInteger(i.productId)).slice(0, 40);
+  if (!wanted.length) return res.status(400).json({ error: 'Add something to the sale.' });
+  try {
+    // Price from OUR catalogue, never from what the client sent.
+    const { rows } = await db.query(
+      'SELECT id, name, price_cents, stock FROM products WHERE id = ANY($1) AND business_id = $2 AND active = true',
+      [wanted.map((i) => i.productId), req.user.id]);
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+    const items = [];
+    let total = 0;
+    for (const w of wanted) {
+      const p = byId[w.productId];
+      if (!p) return res.status(400).json({ error: 'One of those items is not in your shop.' });
+      if (p.stock != null && p.stock < w.qty) return res.status(400).json({ error: `Only ${p.stock} of “${p.name}” left.`, outOfStock: true });
+      items.push({ productId: p.id, name: p.name, qty: w.qty, priceCents: p.price_cents });
+      total += p.price_cents * w.qty;
+    }
+    const { rows: ins } = await db.query(
+      `INSERT INTO pos_sales (seller_id, items, total_cents, method, code, note, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [req.user.id, JSON.stringify(items), total, method, method === 'atwe' ? posCode() : null,
+        String(req.body.note || '').trim().slice(0, 200) || null, method === 'atwe' ? 'open' : 'paid']);
+    const sale = ins[0];
+    // Cash or a card machine: the money happened outside Atwe, so all we do is
+    // take the stock down and keep the record.
+    if (method !== 'atwe') {
+      await posDeductStock(items);
+      await db.query('UPDATE pos_sales SET paid_at = now() WHERE id = $1', [sale.id]);
+    }
+    res.status(201).json({ sale: mapPosSale(sale) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not ring that up.' }); }
+});
+function mapPosSale(s) {
+  return { id: s.id, items: s.items, totalCents: s.total_cents, method: s.method,
+    status: s.status, code: s.code, note: s.note, createdAt: s.created_at, paidAt: s.paid_at,
+    orderId: s.order_id || null, buyerId: s.buyer_id || null };
+}
+async function posDeductStock(items) {
+  for (const i of items) {
+    await db.query('UPDATE products SET stock = GREATEST(0, stock - $2) WHERE id = $1 AND stock IS NOT NULL', [i.productId, i.qty]).catch(() => {});
+  }
+}
+app.get('/api/pos/sales', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT * FROM pos_sales WHERE seller_id = $1 ORDER BY created_at DESC LIMIT 100', [req.user.id]);
+    const today = (await db.query(
+      `SELECT COUNT(*)::int AS n, COALESCE(SUM(total_cents),0)::bigint AS cents FROM pos_sales
+        WHERE seller_id = $1 AND status = 'paid' AND created_at::date = CURRENT_DATE`, [req.user.id])).rows[0];
+    res.json({ sales: rows.map(mapPosSale), today: { count: today.n, cents: Number(today.cents) } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the till.' }); }
+});
+// The customer types the code on their own phone and pays from their wallet.
+app.post('/api/pos/pay', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'pos-pay'), async (req, res) => {
+  const code = String(req.body.code || '').trim();
+  if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Enter the six-digit code from the till.' });
+  const cid = String(req.body.clientId || '').slice(0, 60) || null;
+  try {
+    // Claim it first: two taps, or two phones, must not pay the same sale twice.
+    const { rows } = await db.query(
+      `UPDATE pos_sales SET status = 'paying', buyer_id = $2
+        WHERE code = $1 AND status = 'open' AND created_at > now() - interval '1 hour' RETURNING *`,
+      [code, req.user.id]);
+    const sale = rows[0];
+    if (!sale) return res.status(404).json({ error: 'That code is not waiting for payment.' });
+    const unclaim = async () => { await db.query(`UPDATE pos_sales SET status='open', buyer_id=NULL WHERE id=$1`, [sale.id]).catch(() => {}); };
+    if (sale.seller_id === req.user.id) { await unclaim(); return res.status(400).json({ error: 'That is your own till.' }); }
+    if (cid) { const prev = await walletClaimIdem(req.user.id, cid, 'order'); if (prev && prev.replay) { await unclaim(); return res.json(prev.result); } }
+    const vel = await walletVelocityCheck(req.user.id, sale.total_cents);
+    if (!vel.ok) { await unclaim(); if (cid) await walletReleaseIdem(req.user.id, cid, 'order'); return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel)); }
+    const t = await walletTransfer(req.user.id, sale.seller_id, sale.total_cents, 'In person', false);
+    if (!t.ok) { await unclaim(); if (cid) await walletReleaseIdem(req.user.id, cid, 'order'); return res.status(400).json({ error: 'Not enough in your balance.', insufficientBalance: true }); }
+    await posDeductStock(Array.isArray(sale.items) ? sale.items : []);
+    await db.query(`UPDATE pos_sales SET status='paid', paid_at=now() WHERE id=$1`, [sale.id]);
+    notify(sale.seller_id, req.user.id, 'money_received');
+    rtPush(sale.seller_id, 'pos', { saleId: sale.id, paid: true, totalCents: sale.total_cents });
+    const out = { ok: true, paid: true, amountCents: sale.total_cents };
+    if (cid) await walletStoreIdem(req.user.id, cid, 'order', out);
+    res.json(out);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not take that payment.' }); }
+});
+app.post('/api/pos/sales/:id/void', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rowCount } = await db.query(
+      `UPDATE pos_sales SET status='void' WHERE id=$1 AND seller_id=$2 AND status='open'`, [id, req.user.id]);
+    if (!rowCount) return res.status(409).json({ error: 'Only a sale that has not been paid can be cancelled.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel it.' }); }
+});
+
+/* ─── Getting your data out ────────────────────────────────────────────────
+   Every business already keeps its records somewhere else. These are plain
+   exports — a CSV a spreadsheet opens, or JSON another system reads — for the
+   two lists people actually asked for: job applicants and customers. Honest
+   scope: this is EXPORT. Two-way syncing with a named system is a connector
+   per system and is not what this is. */
+function sendCsv(res, filename, header, rows) {
+  const lines = [header.map(csvCell).join(',')];
+  for (const r of rows) lines.push(r.map(csvCell).join(','));
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(lines.join('\n'));
+}
+/* Applicant export, in whichever shape the far end expects.
+
+   'atwe'       our own columns, readable by a person in a spreadsheet.
+   'greenhouse' / 'lever' / 'workable'  the column names those systems ask for
+                on a bulk candidate import. Same data, renamed — which is the
+                whole job, since none of them will accept a file with the wrong
+                headings and every one of them uses different ones. */
+const ATS_FORMATS = {
+  atwe: { label: 'Spreadsheet (Atwe columns)',
+    cols: ['Name', 'Username', 'Email', 'Headline', 'Location', 'Status', 'Skills', 'Applied'],
+    map: (r) => [r.name, r.username, r.email, r.headline, r.location, r.status, r.skills, r.created_at] },
+  greenhouse: { label: 'Greenhouse',
+    cols: ['First Name', 'Last Name', 'Email', 'Phone', 'Company', 'Title', 'Source', 'Stage'],
+    map: (r) => [atsFirst(r.name), atsLast(r.name), r.email, r.phone || '', '', r.headline || '', 'Atwe', atsStage(r.status)] },
+  lever: { label: 'Lever',
+    cols: ['name', 'email', 'phone', 'headline', 'location', 'origin', 'stage', 'createdAt'],
+    map: (r) => [r.name, r.email, r.phone || '', r.headline || '', r.location || '', 'Atwe', atsStage(r.status), r.created_at] },
+  workable: { label: 'Workable',
+    cols: ['firstname', 'lastname', 'email', 'phone', 'headline', 'address', 'stage', 'source'],
+    map: (r) => [atsFirst(r.name), atsLast(r.name), r.email, r.phone || '', r.headline || '', r.location || '', atsStage(r.status), 'Atwe'] },
+};
+function atsFirst(name) { return String(name || '').trim().split(/\s+/)[0] || ''; }
+function atsLast(name) { const p = String(name || '').trim().split(/\s+/); return p.length > 1 ? p.slice(1).join(' ') : ''; }
+// Our pipeline names mapped onto the stage words these systems recognise.
+const ATS_STAGES = { applied: 'Application Review', reviewed: 'Application Review', shortlisted: 'Interview', rejected: 'Rejected', hired: 'Offer' };
+function atsStage(s) { return ATS_STAGES[s] || 'Application Review'; }
+app.get('/api/ats-formats', auth.requireAuth, (_req, res) => {
+  res.json({ formats: Object.entries(ATS_FORMATS).map(([id, f]) => ({ id, label: f.label })) });
+});
+app.get('/api/jobs/:id/applicants/export', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const j = (await db.query('SELECT posted_by, title FROM jobs WHERE id = $1', [id])).rows[0];
+    if (!j) return res.status(404).json({ error: 'Job not found.' });
+    if (!(await canActAs(req.user.id, j.posted_by, 'jobs'))) return res.status(403).json({ error: 'Not your job.' });
+    const { rows } = await db.query(
+      `SELECT u.name, u.username, u.email, u.phone, u.headline, u.location, a.status, a.note, a.created_at,
+              (SELECT string_agg(s.name, '; ') FROM user_skills s WHERE s.user_id = u.id) AS skills
+         FROM job_applications a JOIN users u ON u.id = a.user_id
+        WHERE a.job_id = $1 ORDER BY a.created_at`, [id]);
+    if (req.query.format === 'json') return res.json({ job: j.title, applicants: rows });
+    const fmt = ATS_FORMATS[req.query.format] || ATS_FORMATS.atwe;
+    sendCsv(res, `applicants-${id}.csv`, fmt.cols, rows.map(fmt.map));
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not export.' }); }
+});
+app.get('/api/customers/export', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT u.name, u.username, u.email, u.location,
+              COUNT(o.id)::int AS orders,
+              COALESCE(SUM(o.total_cents),0)::bigint AS spent_cents,
+              MIN(o.created_at) AS first_order, MAX(o.created_at) AS last_order
+         FROM orders o JOIN users u ON u.id = o.buyer_id
+        WHERE o.seller_id = $1 AND o.status <> 'pending'
+        GROUP BY u.id, u.name, u.username, u.email, u.location
+        ORDER BY spent_cents DESC LIMIT 5000`, [req.user.id]);
+    if (req.query.format === 'json') {
+      return res.json({ customers: rows.map((r) => ({ ...r, spent_cents: Number(r.spent_cents) })) });
+    }
+    sendCsv(res, 'customers.csv',
+      ['Name', 'Username', 'Email', 'Location', 'Orders', 'Total spent', 'First order', 'Last order'],
+      rows.map((r) => [r.name, r.username, r.email, r.location, r.orders,
+        (Number(r.spent_cents) / 100).toFixed(2), r.first_order, r.last_order]));
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not export.' }); }
+});
+
+
+/* ═══════════════════════════════════════════════
+   BATCH 39 (part 2) — the broadcast console, talking out loud, and
+   remembering what was said on a call
+═══════════════════════════════════════════════ */
+
+/* ─── Live studio ──────────────────────────────────────────────────────────
+   Going live already works. What it lacked was the thing every broadcaster
+   actually sits behind: a console. Three parts, all of which are about the
+   host being in control of what the audience sees.
+
+     SCENES        what is on screen right now — the camera, a shared screen,
+                   a product being shown, or a "back in a minute" holding card.
+     PINNED        one comment held at the top of the chat, so the thing worth
+                   reading does not scroll away in a busy room.
+     GUESTS        bring a viewer up to co-host, and put them back down again.
+
+   The live stream itself lives in memory, which is right — it is ephemeral. But
+   when it ends the host deserves a summary, so that IS written down. */
+const LIVE_SCENES = [
+  { id: 'camera',  label: 'Camera',      help: 'Just you.' },
+  { id: 'screen',  label: 'Screen',      help: 'Share what is on your screen.' },
+  { id: 'product', label: 'Product',     help: 'The pinned product, big.' },
+  { id: 'guest',   label: 'Guest',       help: 'Your guest, front and centre.' },
+  { id: 'brb',     label: 'Back shortly', help: 'A holding card while you step away.' },
+];
+const LIVE_SCENE_IDS = LIVE_SCENES.map((s) => s.id);
+const LIVE_MAX_GUESTS = 3;
+
+// Everyone who should hear about a change: the host, the guests, the viewers.
+function liveAudience(s) {
+  const seen = new Set();
+  const out = [];
+  for (const uid of [s.userId, ...(s.guests ? s.guests.keys() : []), ...s.viewers]) {
+    if (seen.has(uid)) continue;
+    seen.add(uid);
+    out.push(uid);
+  }
+  return out;
+}
+function pushLive(s, payload) {
+  for (const uid of liveAudience(s)) rtPush(uid, 'live', payload);
+}
+// The console's whole state in one shape, so the host's screen and a viewer's
+// screen are always talking about the same thing.
+function studioPublic(s) {
+  return {
+    streamId: s.id,
+    title: s.title || '',
+    scene: s.scene || 'camera',
+    pinnedComment: s.pinnedComment || null,
+    guests: s.guests ? [...s.guests.values()] : [],
+    invites: s.invites ? [...s.invites.values()] : [],
+    pinnedProduct: s.pinnedProduct || null,
+    viewers: s.viewers.size,
+    peakViewers: s.peakViewers || s.viewers.size,
+    startedAt: s.startedAt,
+    comments: s.commentCount || 0,
+    giftsCents: s.giftsCents || 0,
+  };
+}
+function hostStream(userId, streamId) {
+  const s = liveStreams.get(streamId);
+  if (!s || s.userId !== userId) return null;
+  return s;
+}
+
+app.get('/api/live/studio', auth.requireAuth, async (req, res) => {
+  const s = hostStream(req.user.id, String(req.query.streamId || ''));
+  if (!s) return res.status(404).json({ error: 'You are not hosting that broadcast.' });
+  res.json({ studio: studioPublic(s), scenes: LIVE_SCENES });
+});
+
+// Switch what the audience is looking at.
+app.post('/api/live/scene', auth.requireAuth, async (req, res) => {
+  const s = hostStream(req.user.id, String(req.body.streamId || ''));
+  if (!s) return res.status(403).json({ error: 'Only the host can change the scene.' });
+  const scene = LIVE_SCENE_IDS.includes(req.body.scene) ? req.body.scene : null;
+  if (!scene) return res.status(400).json({ error: 'Pick a scene.' });
+  // Showing the "Product" scene with nothing pinned would be an empty screen.
+  if (scene === 'product' && !s.pinnedProduct) return res.status(400).json({ error: 'Pin a product first.' });
+  if (scene === 'guest' && !(s.guests && s.guests.size)) return res.status(400).json({ error: 'Bring a guest up first.' });
+  s.scene = scene;
+  pushLive(s, { kind: 'scene', streamId: s.id, scene });
+  res.json({ ok: true, scene });
+});
+
+// Hold one comment at the top of the chat. Sent with the text rather than an id
+// because live comments are not stored — they stream past and are gone.
+app.post('/api/live/pin-comment', auth.requireAuth, async (req, res) => {
+  const s = hostStream(req.user.id, String(req.body.streamId || ''));
+  if (!s) return res.status(403).json({ error: 'Only the host can pin a comment.' });
+  const text = String(req.body.text || '').trim().slice(0, 240);
+  s.pinnedComment = text ? { text, from: String(req.body.from || '').slice(0, 60) || null, at: Date.now() } : null;
+  pushLive(s, { kind: 'pin-comment', streamId: s.id, pinnedComment: s.pinnedComment });
+  res.json({ ok: true, pinnedComment: s.pinnedComment });
+});
+
+// Invite a viewer up as a guest. They have to accept — nobody's camera goes on
+// screen because somebody else pressed a button.
+app.post('/api/live/guest/invite', auth.requireAuth, async (req, res) => {
+  const s = hostStream(req.user.id, String(req.body.streamId || ''));
+  if (!s) return res.status(403).json({ error: 'Only the host can invite a guest.' });
+  const uid = parseInt(req.body.userId, 10);
+  if (!Number.isInteger(uid) || uid === req.user.id) return res.status(400).json({ error: 'Pick a viewer.' });
+  if (!s.viewers.has(uid)) return res.status(400).json({ error: 'They are not watching right now.' });
+  s.guests = s.guests || new Map();
+  s.invites = s.invites || new Map();
+  if (s.guests.size >= LIVE_MAX_GUESTS) return res.status(400).json({ error: 'You can have ' + LIVE_MAX_GUESTS + ' guests up at once.' });
+  try {
+    const who = await chatIdentity(uid);
+    if (!who) return res.status(404).json({ error: 'Account not found.' });
+    const entry = { id: uid, name: who.name, username: who.username, avatar: who.avatar || null, at: Date.now() };
+    s.invites.set(uid, entry);
+    rtPush(uid, 'live', { kind: 'guest-invite', streamId: s.id, host: { id: s.userId, name: s.name, username: s.username } });
+    pushLive(s, { kind: 'studio', streamId: s.id, studio: studioPublic(s) });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send that invitation.' }); }
+});
+
+// The viewer answers. Accepting puts them on the stage; declining just clears it.
+app.post('/api/live/guest/respond', auth.requireAuth, async (req, res) => {
+  const s = liveStreams.get(String(req.body.streamId || ''));
+  if (!s || !s.invites || !s.invites.has(req.user.id)) return res.status(404).json({ error: 'That invitation has gone.' });
+  const entry = s.invites.get(req.user.id);
+  s.invites.delete(req.user.id);
+  if (req.body.accept === true) {
+    s.guests = s.guests || new Map();
+    if (s.guests.size >= LIVE_MAX_GUESTS) return res.status(400).json({ error: 'The stage is full.' });
+    s.guests.set(req.user.id, entry);
+  }
+  pushLive(s, { kind: 'studio', streamId: s.id, studio: studioPublic(s) });
+  res.json({ ok: true, onStage: !!(s.guests && s.guests.has(req.user.id)) });
+});
+
+// Take a guest back down — by the host, or by the guest themselves leaving.
+app.post('/api/live/guest/remove', auth.requireAuth, async (req, res) => {
+  const s = liveStreams.get(String(req.body.streamId || ''));
+  if (!s) return res.status(404).json({ error: 'That live has ended.' });
+  const uid = parseInt(req.body.userId, 10);
+  const target = Number.isInteger(uid) ? uid : req.user.id;
+  // You may remove yourself; only the host may remove somebody else.
+  if (target !== req.user.id && s.userId !== req.user.id) return res.status(403).json({ error: 'Only the host can do that.' });
+  if (s.guests) s.guests.delete(target);
+  if (s.invites) s.invites.delete(target);
+  // If the guest scene is showing and there is no guest left, fall back to camera
+  // rather than leaving the audience staring at an empty box.
+  if (s.scene === 'guest' && !(s.guests && s.guests.size)) s.scene = 'camera';
+  rtPush(target, 'live', { kind: 'guest-off', streamId: s.id });
+  pushLive(s, { kind: 'studio', streamId: s.id, studio: studioPublic(s) });
+  res.json({ ok: true });
+});
+
+// How the last few broadcasts went.
+app.get('/api/live/recaps', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, stream_id, title, mode, started_at, ended_at, seconds,
+              peak_viewers, total_viewers, gifts_cents, comments
+         FROM live_recaps WHERE user_id = $1 ORDER BY ended_at DESC LIMIT 30`, [req.user.id]);
+    res.json({ recaps: rows.map((r) => ({
+      id: r.id, streamId: r.stream_id, title: r.title, mode: r.mode,
+      startedAt: r.started_at, endedAt: r.ended_at, seconds: r.seconds,
+      peakViewers: r.peak_viewers, totalViewers: r.total_viewers,
+      giftsCents: r.gifts_cents, comments: r.comments })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your broadcasts.' }); }
+});
+
+/* ─── Talking to Atwe AI out loud ──────────────────────────────────────────
+   The listening and the speaking both happen in the browser — it already has
+   both, and doing it there means nothing is uploaded that does not need to be.
+   What the server does is answer DIFFERENTLY when it knows it is being read
+   aloud: no markdown, no bullet points, no headings, short sentences. A written
+   answer read by a robot is unbearable; this is the same assistant with its
+   spoken voice on. */
+const VOICE_SYSTEM = [
+  'You are Atwe AI, the assistant inside Atwe. This answer will be READ ALOUD, so:',
+  'Write the way a person speaks. Short sentences. No markdown, no asterisks, no bullet points,',
+  'no headings, no code blocks, no emoji, no links. Never use lists — say "first", "then", "and finally".',
+  'Keep it under about sixty words unless genuinely asked for detail. If you must name something',
+  'written down, spell it plainly. Never mention that you are an AI model or who made you.',
+].join(' ');
+const VOICE_CHOICES = [
+  { id: 'auto', label: 'Your device default' },
+];
+app.post('/api/ai/voice', auth.requireAuth, rateLimit(60, 60000, 'ai-voice'), requireFeature('ai'), async (req, res) => {
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not set up on this server.' });
+  const text = String(req.body.message || '').trim().slice(0, 2000);
+  if (!text) return res.status(400).json({ error: 'Say something first.' });
+  // A short rolling memory so a conversation holds together, capped so a long
+  // hands-free session cannot grow without limit.
+  const history = Array.isArray(req.body.history) ? req.body.history.slice(-8) : [];
+  const messages = [];
+  for (const h of history) {
+    const role = h && h.role === 'assistant' ? 'assistant' : 'user';
+    const content = String((h && h.content) || '').slice(0, 1000);
+    if (content) messages.push({ role, content });
+  }
+  messages.push({ role: 'user', content: text });
+  try {
+    const msg = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 300,
+      system: aiPrompt('voice', VOICE_SYSTEM),
+      messages,
+    });
+    const reply = (msg.content.find((b) => b.type === 'text') || {}).text || '';
+    // Belt and braces: strip anything markdown-ish that slipped through, because
+    // a speech engine reads an asterisk out loud.
+    const spoken = reply.replace(/[*_`#>]/g, '').replace(/\s+/g, ' ').trim();
+    res.json({ reply: spoken });
+  } catch (err) {
+    console.error(err);
+    res.status(502).json({ error: 'Atwe AI could not answer just then.' });
+  }
+});
+app.get('/api/voice-prefs', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT voice_prefs FROM users WHERE id = $1', [req.user.id]);
+    const p = (rows[0] && rows[0].voice_prefs) || {};
+    res.json({
+      prefs: {
+        voice: typeof p.voice === 'string' ? p.voice : '',
+        rate: Number.isFinite(p.rate) ? p.rate : 1,
+        keepListening: p.keepListening !== false,
+        speak: p.speak !== false,
+      },
+      voices: VOICE_CHOICES,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load that.' }); }
+});
+app.put('/api/voice-prefs', auth.requireAuth, async (req, res) => {
+  const body = req.body || {};
+  const prefs = {
+    voice: String(body.voice || '').slice(0, 120),
+    // A speaking rate outside this range is unintelligible either way.
+    rate: Math.min(1.6, Math.max(0.6, Number(body.rate) || 1)),
+    keepListening: body.keepListening !== false,
+    speak: body.speak !== false,
+  };
+  try {
+    await db.query('UPDATE users SET voice_prefs = $2 WHERE id = $1', [req.user.id, JSON.stringify(prefs)]);
+    res.json({ ok: true, prefs });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+
+/* ─── Recording a call, and what was said in it ────────────────────────────
+   Recording is done by the browser (it already holds both audio streams), and
+   the recording belongs to whoever pressed record — it is their copy of their
+   own meeting, stored against their account only.
+
+   BOTH SIDES ARE TOLD. The moment recording starts, the other party gets a live
+   event and a banner they cannot dismiss. That is not a legal fig leaf bolted
+   on at the end; it is the reason the start endpoint exists at all, separately
+   from the save.
+
+   The transcript reuses stt.js, and the notes reuse the assistant — so this is
+   two existing pieces joined up, not a third one invented. */
+const REC_MAX_CHARS = 20 * 1024 * 1024;   // roughly 15MB of audio — a long call
+
+// Tell the other side. Called when recording starts AND when it stops, so the
+// banner appears and disappears honestly.
+app.post('/api/calls/recording-notice', auth.requireAuth, rateLimit(60, 60000, 'rec-notice'), async (req, res) => {
+  const on = req.body.on === true;
+  const peerId = parseInt(req.body.peerId, 10);
+  const groupId = parseInt(req.body.groupId, 10);
+  const payload = { kind: 'recording', on, callId: String(req.body.callId || '').slice(0, 64),
+    by: { id: req.user.id, name: req.user.name || null } };
+  try {
+    if (Number.isInteger(groupId)) {
+      for (const uid of await groupMemberIds(groupId, req.user.id)) rtPush(uid, 'call', payload);
+    } else if (Number.isInteger(peerId)) {
+      rtPush(peerId, 'call', payload);
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send that.' }); }
+});
+
+app.post('/api/calls/recordings', auth.requireAuth, rateLimit(20, 3600000, 'rec-save'), async (req, res) => {
+  const media = typeof req.body.media === 'string' ? req.body.media : '';
+  if (!media.startsWith('data:')) return res.status(400).json({ error: 'That recording could not be read.' });
+  if (media.length > REC_MAX_CHARS) return res.status(413).json({ error: 'That recording is too long to save.' });
+  const seconds = Math.max(0, Math.min(60 * 60 * 8, parseInt(req.body.seconds, 10) || 0));
+  const kind = req.body.kind === 'video' ? 'video' : 'audio';
+  const peerId = Number.isInteger(parseInt(req.body.peerId, 10)) ? parseInt(req.body.peerId, 10) : null;
+  const groupId = Number.isInteger(parseInt(req.body.groupId, 10)) ? parseInt(req.body.groupId, 10) : null;
+  const title = String(req.body.title || '').trim().slice(0, 140) || null;
+  try {
+    // Straight out to object storage when it is configured — a call recording is
+    // by far the biggest thing anyone uploads, and it has no business sitting in
+    // a database row.
+    const stored = await offloadMedia(media, 'callrec');
+    const { rows } = await db.query(
+      `INSERT INTO call_recordings (owner_id, peer_id, group_id, call_id, kind, media, seconds, title)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, created_at`,
+      [req.user.id, peerId, groupId, String(req.body.callId || '').slice(0, 64) || null, kind, stored, seconds, title]);
+    res.status(201).json({ id: rows[0].id, createdAt: rows[0].created_at });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that recording.' }); }
+});
+
+function mapRecording(r, withMedia) {
+  const out = {
+    id: r.id, kind: r.kind, seconds: r.seconds, title: r.title,
+    createdAt: r.created_at, peerId: r.peer_id, groupId: r.group_id,
+    peerName: r.peer_name || null, groupName: r.group_name || null,
+    hasTranscript: !!r.transcript, notes: r.notes || null,
+  };
+  if (withMedia) {
+    out.transcript = r.transcript || null;
+    // Big media is served by URL, never inlined — the same rule the rest of the
+    // app follows, and it matters most here where the files are largest.
+    out.media = r.media && /^https?:\/\//i.test(r.media) ? r.media : mediaRef(r.media, 'callrec', r.id, 0);
+  }
+  return out;
+}
+app.get('/api/calls/recordings', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT r.id, r.kind, r.seconds, r.title, r.created_at, r.peer_id, r.group_id,
+              r.transcript IS NOT NULL AS transcript, r.notes,
+              u.name AS peer_name, g.name AS group_name
+         FROM call_recordings r
+         LEFT JOIN users u ON u.id = r.peer_id
+         LEFT JOIN at_groups g ON g.id = r.group_id
+        WHERE r.owner_id = $1 ORDER BY r.created_at DESC LIMIT 100`, [req.user.id]);
+    res.json({ recordings: rows.map((r) => mapRecording(r, false)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your recordings.' }); }
+});
+app.get('/api/calls/recordings/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rows } = await db.query(
+      `SELECT r.*, u.name AS peer_name, g.name AS group_name
+         FROM call_recordings r
+         LEFT JOIN users u ON u.id = r.peer_id
+         LEFT JOIN at_groups g ON g.id = r.group_id
+        WHERE r.id = $1 AND r.owner_id = $2`, [id, req.user.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Recording not found.' });
+    res.json({ recording: mapRecording(rows[0], true), transcriptionEnabled: stt.isConfigured() });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load that recording.' }); }
+});
+app.delete('/api/calls/recordings/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rows } = await db.query(
+      'DELETE FROM call_recordings WHERE id = $1 AND owner_id = $2 RETURNING media', [id, req.user.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Recording not found.' });
+    // Take the file out of the bucket too — deleting a recording should mean it
+    // is gone, not just hidden.
+    if (rows[0].media && storage.isStoredUrl(rows[0].media)) storage.remove(rows[0].media).catch(() => {});
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete that.' }); }
+});
+
+// Write it down. Cached on the row, so a recording is only ever transcribed once.
+app.post('/api/calls/recordings/:id/transcribe', auth.requireAuth, rateLimit(10, 3600000, 'rec-stt'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  if (!stt.isConfigured()) return res.status(503).json({ error: 'Transcription is not set up on this server yet.' });
+  try {
+    const { rows } = await db.query(
+      'SELECT media, transcript FROM call_recordings WHERE id = $1 AND owner_id = $2', [id, req.user.id]);
+    const rec = rows[0];
+    if (!rec) return res.status(404).json({ error: 'Recording not found.' });
+    if (rec.transcript) return res.json({ transcript: rec.transcript, cached: true });
+    let source = rec.media;
+    // If it went to the bucket, fetch it back as a data URL for the transcriber.
+    if (source && /^https?:\/\//i.test(source)) {
+      const r = await fetch(source);
+      if (!r.ok) return res.status(502).json({ error: 'Could not read that recording back.' });
+      const buf = Buffer.from(await r.arrayBuffer());
+      const type = r.headers.get('content-type') || 'audio/webm';
+      source = `data:${type.split(';')[0]};base64,` + buf.toString('base64');
+    }
+    const out = await stt.transcribe(source);
+    const text = (out && out.text ? String(out.text) : '').trim();
+    if (!text) return res.status(502).json({ error: 'Nothing could be made out in that recording.' });
+    await db.query('UPDATE call_recordings SET transcript = $2 WHERE id = $1', [id, text]);
+    res.json({ transcript: text });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not transcribe that.' }); }
+});
+
+// Meeting notes: the summary, the points, and — the part people actually want —
+// who agreed to do what.
+const NOTES_SYSTEM = [
+  'You are Atwe AI. Turn this transcript of a call into notes for the people who were on it.',
+  'Reply with STRICT JSON and nothing else:',
+  '{"summary":"two or three plain sentences","points":["..."],"actions":[{"what":"...","who":"a name from the transcript, or null"}]}',
+  'At most six points and eight actions. Only include an action somebody actually committed to.',
+  'If the transcript is too short or unclear to be useful, say so in the summary and return empty lists.',
+  'Never mention that you are an AI model or who made you.',
+].join(' ');
+app.post('/api/calls/recordings/:id/notes', auth.requireAuth, rateLimit(10, 3600000, 'rec-notes'), requireFeature('ai'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not set up on this server.' });
+  try {
+    const { rows } = await db.query(
+      'SELECT transcript, notes FROM call_recordings WHERE id = $1 AND owner_id = $2', [id, req.user.id]);
+    const rec = rows[0];
+    if (!rec) return res.status(404).json({ error: 'Recording not found.' });
+    if (rec.notes && req.body.again !== true) return res.json({ notes: rec.notes, cached: true });
+    if (!rec.transcript) return res.status(400).json({ error: 'Write the call down first, then I can summarise it.' });
+    const msg = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 900,
+      system: aiPrompt('call-notes', NOTES_SYSTEM),
+      messages: [{ role: 'user', content: rec.transcript.slice(0, 40000) }],
+    });
+    const raw = ((msg.content.find((b) => b.type === 'text') || {}).text || '').trim();
+    let notes = null;
+    try { notes = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, '')); } catch (e) { notes = null; }
+    if (!notes || typeof notes !== 'object') return res.status(502).json({ error: 'The notes came back unreadable. Try again.' });
+    const clean = {
+      summary: String(notes.summary || '').slice(0, 1200),
+      points: Array.isArray(notes.points) ? notes.points.slice(0, 6).map((p) => String(p).slice(0, 300)) : [],
+      actions: Array.isArray(notes.actions) ? notes.actions.slice(0, 8).map((a) => ({
+        what: String((a && a.what) || '').slice(0, 300),
+        who: a && a.who ? String(a.who).slice(0, 80) : null,
+      })).filter((a) => a.what) : [],
+    };
+    await db.query('UPDATE call_recordings SET notes = $2 WHERE id = $1', [id, JSON.stringify(clean)]);
+    res.json({ notes: clean });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not write those notes.' }); }
 });
 
 /* ═══════════════════════════════════════════════
@@ -17023,7 +18026,7 @@ app.post('/api/jobs/:id/apply', auth.requireAuth, rateLimit(40, 60000, 'job-appl
     for (const k of Object.keys(req.body.answers).slice(0, 5)) answers[String(k).slice(0, 8)] = String(req.body.answers[k]).slice(0, 200);
   }
   try {
-    const j = await db.query('SELECT posted_by, closes_at FROM jobs WHERE id = $1', [id]);
+    const j = await db.query('SELECT posted_by, closes_at, title FROM jobs WHERE id = $1', [id]);
     if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
     if (j.rows[0].posted_by === req.user.id) return res.status(400).json({ error: 'This is your own listing.' });
     if (j.rows[0].closes_at && new Date(j.rows[0].closes_at) <= new Date()) return res.status(400).json({ error: 'Applications for this job have closed.' });
@@ -17033,6 +18036,15 @@ app.post('/api/jobs/:id/apply', auth.requireAuth, rateLimit(40, 60000, 'job-appl
     );
     if (r.rowCount && j.rows[0].posted_by) {
       try { await db.query('INSERT INTO notifications (user_id, actor_id, type, job_id) VALUES ($1,$2,$3,$4)', [j.rows[0].posted_by, req.user.id, 'job_application', id]); rtPush(j.rows[0].posted_by, 'notif', { type: 'job_application' }); } catch (_) {}
+      // Push it to whatever the employer has plugged in — an applicant-tracking
+      // system subscribed to this event keeps in step with no export step at all.
+      try {
+        const who = (await db.query('SELECT name, username, email FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+        emitWebhook(j.rows[0].posted_by, 'application.created', {
+          jobId: id, jobTitle: j.rows[0].title || null, stage: 'Application Review',
+          candidate: { id: req.user.id, name: who.name, username: who.username, email: who.email },
+        });
+      } catch (_) { /* an outbound hook must never fail the application itself */ }
     }
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not apply.' }); }
@@ -17227,7 +18239,7 @@ app.patch('/api/jobs/:id/applicants/:uid', auth.requireAuth, async (req, res) =>
   const status = APPLICANT_STATUSES.includes(req.body.status) ? req.body.status : null;
   if (!status) return res.status(400).json({ error: 'Invalid status.' });
   try {
-    const j = await db.query('SELECT posted_by FROM jobs WHERE id = $1', [id]);
+    const j = await db.query('SELECT posted_by, title FROM jobs WHERE id = $1', [id]);
     if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
     if (!req.user.is_admin && !(await canActAs(req.user.id, j.rows[0].posted_by, 'jobs'))) return res.status(403).json({ error: 'Only the job poster can update applicants.' });
     const r = await db.query('UPDATE job_applications SET status = $1 WHERE job_id = $2 AND user_id = $3', [status, id, uid]);
@@ -17240,6 +18252,13 @@ app.patch('/api/jobs/:id/applicants/:uid', auth.requireAuth, async (req, res) =>
         rtPush(uid, 'notif', { type: 'app_' + status });
       } catch (_) { /* best-effort */ }
     }
+    try {
+      const who = (await db.query('SELECT name, username, email FROM users WHERE id = $1', [uid])).rows[0] || {};
+      emitWebhook(j.rows[0].posted_by, 'application.updated', {
+        jobId: id, jobTitle: j.rows[0].title || null, status, stage: atsStage(status),
+        candidate: { id: uid, name: who.name, username: who.username, email: who.email },
+      });
+    } catch (_) { /* an outbound hook must never fail the move itself */ }
     res.json({ ok: true, status });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
 });
@@ -19075,6 +20094,10 @@ const WEBHOOK_EVENTS = [
   { key: 'order.shipped', label: 'An order shipped', help: 'Carrier and tracking included.' },
   { key: 'product.created', label: 'A listing was added', help: 'You (or your team) added a listing.' },
   { key: 'review.created', label: 'A new review', help: 'Someone reviewed one of your products.' },
+  // Hiring. These are what let an applicant-tracking system stay in step with
+  // Atwe by itself, instead of somebody exporting a file every morning.
+  { key: 'application.created', label: 'Someone applied', help: 'A new applicant on one of your jobs.' },
+  { key: 'application.updated', label: 'An applicant moved', help: 'You changed somebody\u2019s stage.' },
 ];
 const WEBHOOK_EVENT_KEYS = WEBHOOK_EVENTS.map((e) => e.key);
 const WEBHOOK_MAX_ATTEMPTS = 6;
@@ -28692,10 +29715,24 @@ app.get('/api/shop/analytics', auth.requireAuth, async (req, res) => {
        FROM generate_series(now()::date - interval '13 days', now()::date, interval '1 day') d
        LEFT JOIN orders o ON o.seller_id = $1 AND o.status IN ${PAID} AND o.created_at::date = d::date
        GROUP BY d ORDER BY d`, [req.user.id]);
+    // Money taken at the till is still money taken. Counting it separately AND
+    // in the total means a seller who does both online and in person sees one
+    // honest figure, and can still tell the two apart.
+    const till = (await db.query(
+      `SELECT COUNT(*)::int AS sales, COALESCE(SUM(total_cents),0)::bigint AS cents
+         FROM pos_sales WHERE seller_id = $1 AND status = 'paid'`, [req.user.id])).rows[0];
+    const tillTrend = (await db.query(
+      `SELECT to_char(d::date,'YYYY-MM-DD') AS day, COALESCE(SUM(s.total_cents),0)::bigint AS cents
+         FROM generate_series(now()::date - interval '13 days', now()::date, interval '1 day') d
+         LEFT JOIN pos_sales s ON s.seller_id = $1 AND s.status = 'paid' AND s.paid_at::date = d::date
+        GROUP BY d ORDER BY d`, [req.user.id])).rows;
+    const tillByDay = Object.fromEntries(tillTrend.map((r) => [r.day, Number(r.cents)]));
     res.json({
       orders: head.orders, revenueCents: Number(head.revenue_cents), units, pending: head.pending, toShip: head.to_ship,
+      till: { sales: till.sales, revenueCents: Number(till.cents) },
+      totalRevenueCents: Number(head.revenue_cents) + Number(till.cents),
       topProducts: top.rows.map((r) => ({ name: r.name, units: r.units, revenueCents: Number(r.revenue_cents) })),
-      trend: trend.rows.map((r) => ({ day: r.day, revenueCents: Number(r.revenue_cents) })),
+      trend: trend.rows.map((r) => ({ day: r.day, revenueCents: Number(r.revenue_cents) + (tillByDay[r.day] || 0) })),
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your sales.' }); }
 });
@@ -35446,5 +36483,6 @@ db.init()
   .then(() => { if (db.isConfigured()) return db.getSetting(MAILBRAND_KEY).then((v) => { _mailBrand = normalizeMailBrand(v); mailer.setBranding(_mailBrand); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(REVSHARE_KEY).then((v) => { _revShare = normalizeRevShare(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(AUTH_FEE_KEY).then((v) => { _authCfg = normalizeAuthCfg(v); }).catch(() => {}); })
+  .then(() => clusterListen().catch(() => {}))
   .then(() => { if (db.isConfigured()) console.log('🗄️   Schema + settings ready.'); })
   .catch((err) => console.error('Post-init setup failed:', err.message));

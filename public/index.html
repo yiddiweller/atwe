@@ -10999,6 +10999,94 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   body.light .ai-working::after{animation:none;}
   .ai-working{box-shadow:0 0 0 1px rgba(var(--accent-rgb),.28),0 0 24px rgba(var(--accent-rgb),.2);transition:box-shadow var(--t-slow) ease;}
 }
+/* ═══ Batch 39 ═══ */
+/* Passkeys / recordings / broadcasts all use the same plain row stack. */
+.b39-row{background:var(--s1);border-radius:16px;padding:13px 14px;margin-bottom:9px;}
+.b39-row-top{display:flex;align-items:center;gap:9px;}
+.b39-name{font-size:15px;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.b39-sub{font-size:12.5px;color:var(--t3);margin-top:3px;}
+.b39-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.b39-acts .ac-pill-btn{font-size:13px;padding:7px 14px;}
+.b39-tag{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:3px 9px;border-radius:999px;background:var(--s2);color:var(--t2);}
+.b39-tag.ok{background:rgba(136,255,0,.16);color:var(--green);}
+.b39-tag.warn{background:rgba(255,187,0,.16);color:var(--amber);}
+
+/* The till. Big numbers, thumb-sized targets — it is used standing up. */
+.till-total{background:var(--s1);border-radius:20px;padding:18px;margin-bottom:12px;text-align:center;}
+.till-total b{display:block;font-size:34px;font-weight:800;letter-spacing:-.02em;}
+.till-total span{font-size:12.5px;color:var(--t3);}
+.till-pick{display:flex;align-items:center;gap:10px;background:var(--s1);border-radius:14px;padding:10px 12px;margin-bottom:8px;}
+.till-pick-n{flex:1;min-width:0;font-size:14.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.till-pick-p{font-size:13px;color:var(--t3);}
+.till-step{display:flex;align-items:center;gap:8px;}
+.till-step button{width:32px;height:32px;border-radius:50%;border:none;background:var(--s2);color:var(--t1);font-size:19px;line-height:1;cursor:pointer;}
+.till-step b{min-width:20px;text-align:center;font-size:15px;}
+.till-code{background:var(--s1);border-radius:20px;padding:22px;text-align:center;margin-bottom:12px;}
+.till-code b{display:block;font-size:42px;font-weight:800;letter-spacing:.14em;font-variant-numeric:tabular-nums;}
+.till-code span{font-size:13px;color:var(--t3);display:block;margin-top:6px;}
+.till-code-in{text-align:center;font-size:30px;letter-spacing:.2em;font-variant-numeric:tabular-nums;}
+.till-methods{display:flex;gap:8px;margin:10px 0;}
+.till-methods button{flex:1;padding:10px;border-radius:999px;border:none;background:var(--s1);color:var(--t2);font-size:13.5px;font-weight:600;cursor:pointer;}
+.till-methods button.on{background:var(--accent);color:#fff;}
+
+/* Voice. One big thing to press, and it breathes while it is listening. */
+.voice-modal{text-align:center;}
+.voice-stage{padding:8px 0 6px;}
+.voice-orb{width:128px;height:128px;border-radius:50%;border:none;background:var(--s1);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;margin:6px auto 16px;transition:transform var(--t-fast);}
+.voice-orb-in{width:56px;height:56px;border-radius:50%;background:var(--t3);transition:background var(--t-base),transform var(--t-base);}
+.voice-orb.on{background:rgba(0,136,255,.12);}
+.voice-orb.on .voice-orb-in{background:var(--accent);animation:voicePulse 1.5s ease-in-out infinite;}
+.voice-orb.talk .voice-orb-in{background:var(--green);}
+.voice-orb:active{transform:scale(.96);}
+@keyframes voicePulse{0%,100%{transform:scale(1);}50%{transform:scale(1.22);}}
+.voice-state{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);}
+.voice-said{font-size:15px;color:var(--t2);margin-top:12px;min-height:20px;}
+.voice-reply{font-size:17px;line-height:1.5;margin-top:10px;min-height:24px;}
+.voice-opts{border-top:1px solid var(--b2);margin-top:16px;padding-top:12px;text-align:left;}
+.voice-opt{display:flex;align-items:center;gap:10px;padding:9px 0;font-size:14.5px;}
+.voice-opt span{flex:1;}
+.voice-opt input[type=range]{width:120px;}
+
+/* Making a picture. */
+.aiimg-chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px;}
+.aiimg-chips button{padding:6px 12px;border-radius:999px;border:none;background:var(--s1);color:var(--t2);font-size:12.5px;cursor:pointer;}
+.aiimg-out{margin-top:14px;}
+.aiimg-out img{width:100%;border-radius:16px;display:block;}
+
+/* The broadcast console. */
+.st-scenes{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:8px;margin-bottom:14px;}
+.st-scene{padding:12px 8px;border-radius:14px;border:none;background:var(--s1);color:var(--t2);cursor:pointer;text-align:center;}
+.st-scene.on{background:var(--accent);color:#fff;}
+.st-scene b{display:block;font-size:13.5px;font-weight:700;}
+.st-scene small{display:block;font-size:11px;opacity:.75;margin-top:2px;}
+.st-stat{display:flex;gap:8px;margin-bottom:14px;}
+.st-stat div{flex:1;background:var(--s1);border-radius:14px;padding:11px;text-align:center;}
+.st-stat b{display:block;font-size:19px;font-weight:800;}
+.st-stat span{font-size:11px;color:var(--t3);}
+.st-pinned{background:rgba(255,187,0,.12);border-radius:14px;padding:11px 13px;margin-bottom:12px;font-size:14px;}
+.st-pinned b{color:var(--amber);font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:4px;}
+.st-h{font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--t3);margin:16px 0 8px;}
+
+
+/* Batch 39 · live chat + recording banners */
+.live-pinned{position:absolute;left:12px;right:12px;top:56px;z-index:6;background:rgba(255,187,0,.92);color:#2a1e00;
+  border-radius:14px;padding:9px 12px;font-size:13.5px;font-weight:600;line-height:1.4;}
+.live-chat{position:absolute;left:12px;right:70px;bottom:96px;z-index:5;max-height:34vh;overflow-y:auto;
+  display:flex;flex-direction:column;justify-content:flex-end;gap:6px;pointer-events:none;}
+.live-cmt{background:rgba(0,0,0,.42);border-radius:14px;padding:6px 11px;font-size:13.5px;color:#fff;align-self:flex-start;max-width:100%;}
+.live-cmt b{color:var(--accent);font-weight:700;margin-right:5px;}
+.live-say{position:absolute;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 84px);z-index:6;display:flex;gap:8px;}
+.live-say input{flex:1;min-width:0;background:rgba(0,0,0,.5);border:none;border-radius:999px;padding:11px 16px;color:#fff;font-size:14.5px;}
+.live-say input::placeholder{color:rgba(255,255,255,.5);}
+.live-say button{width:42px;height:42px;border-radius:50%;border:none;background:var(--primary);color:var(--on-primary);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;flex:none;}
+.live-say button svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.call-recbadge{position:absolute;top:calc(env(safe-area-inset-top,0px) + 14px);left:14px;z-index:8;
+  background:var(--red);color:#fff;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:800;letter-spacing:.04em;}
+.call-recnotice{position:absolute;top:calc(env(safe-area-inset-top,0px) + 14px);left:14px;right:14px;z-index:8;
+  background:var(--red);color:#fff;border-radius:14px;padding:8px 13px;font-size:13px;font-weight:700;text-align:center;}
+#callRecBtn.on{background:var(--red);color:#fff;}
 </style>
 </head>
 <body style="background:#000">
@@ -11135,6 +11223,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     </div>
     <div class="ai-menu-scrim hidden" id="authQrScrim" onclick="authCloseQrMenu()"></div>
     <div class="ai-menu-pop hidden" id="authQrMenu" role="menu" style="min-width:210px;">
+      <button class="aimp-item" role="menuitem" onclick="acPasskeyLogin()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="4"/><path d="M13 13l6 6M17 17l2-2M19 19l1.5-1.5"/></svg> Sign in with a passkey</button>
       <button class="aimp-item" role="menuitem" onclick="authQrFromMenu()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><path d="M14 14.5v.01M14 18v3M17.5 14h.01M21 14v.01M17.5 17.5h.01M21 17.5v3.5M17.5 21h.01"/></svg> Log in with QR code</button>
     </div>
     <div class="auth-handle">
@@ -11847,7 +11936,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
 <div class="iset-cap">Turn off personalization for a non-tailored feed. Your activity won’t be used to rank your For You posts.</div>
     </div>
     <div class="iset-body hidden" data-page="security" data-title="Security & access">
-<div class="iset-group"><button class="iset-row" onclick="changePassword()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="8" cy="13" r="3.2"/><path d="M10.6 11.6l8-8M16 6l2.4 2.4M14 8l2 2"/></svg></span><div class="iset-main"><div class="iset-label">Password</div><div class="iset-sub">Change it any time</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="open2FA()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span><div class="iset-main"><div class="iset-label">Two-factor authentication</div></div><span class="iset-val" id="twoFaVal">Off</span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="openDevices()"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="6.5" y="3" width="11" height="18" rx="2.4"/><line x1="10.5" y1="18" x2="13.5" y2="18"/></svg></span><div class="iset-main"><div class="iset-label">Devices &amp; sessions</div><div class="iset-sub">See where you’re logged in</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenLinkScan()"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="18" y1="14" x2="21" y2="14"/><line x1="21" y1="18" x2="21" y2="21"/></svg></span><div class="iset-main"><div class="iset-label">Link a device</div><div class="iset-sub">Scan a QR to sign in another device</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group" id="securityVerifyGroup"><button class="iset-row" onclick="resendVerification()"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7.5l8.5 5.5 8.5-5.5"/></svg></span><div class="iset-main"><div class="iset-label">Email not verified</div><div class="iset-sub">Confirm your address to secure your account</div></div><span class="iset-val accent">Resend</span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Add two-factor authentication for an extra layer of protection on sign-in.</div>
+<div class="iset-group"><button class="iset-row" onclick="changePassword()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="8" cy="13" r="3.2"/><path d="M10.6 11.6l8-8M16 6l2.4 2.4M14 8l2 2"/></svg></span><div class="iset-main"><div class="iset-label">Password</div><div class="iset-sub">Change it any time</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="open2FA()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span><div class="iset-main"><div class="iset-label">Two-factor authentication</div></div><span class="iset-val" id="twoFaVal">Off</span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="openDevices()"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="6.5" y="3" width="11" height="18" rx="2.4"/><line x1="10.5" y1="18" x2="13.5" y2="18"/></svg></span><div class="iset-main"><div class="iset-label">Devices &amp; sessions</div><div class="iset-sub">See where you’re logged in</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenPasskeys()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="4"/><path d="M13 13l6 6M17 17l2-2M19 19l1.5-1.5"/></svg></span><div class="iset-main"><div class="iset-label">Passkeys</div><div class="iset-sub">Sign in with your face or fingerprint</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenLinkScan()"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="18" y1="14" x2="21" y2="14"/><line x1="21" y1="18" x2="21" y2="21"/></svg></span><div class="iset-main"><div class="iset-label">Link a device</div><div class="iset-sub">Scan a QR to sign in another device</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group" id="securityVerifyGroup"><button class="iset-row" onclick="resendVerification()"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7.5l8.5 5.5 8.5-5.5"/></svg></span><div class="iset-main"><div class="iset-label">Email not verified</div><div class="iset-sub">Confirm your address to secure your account</div></div><span class="iset-val accent">Resend</span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Add two-factor authentication for an extra layer of protection on sign-in.</div>
 <div class="iset-group">
   <div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.4"/><path d="M3.5 20c0-3.2 2.6-5 5.5-5s5.5 1.8 5.5 5"/><path d="M15 8.5l2 2 3.5-3.5"/></svg></span><div class="iset-main"><div class="iset-label">How you sign in</div><div class="iset-sub" id="setConnectedDesc">Email &amp; password</div></div></div>
   <div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9.5" rx="2.4"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><div class="iset-main"><div class="iset-label">App lock</div><div class="iset-sub">Require a passcode to open Atwe on this device</div></div><label class="ios-switch"><input type="checkbox" id="appLockToggle" onchange="toggleAppLock(this)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>
@@ -13008,6 +13097,17 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <div class="live-info" id="liveInfo"></div>
     <!-- Live shopping: a pinned product card (viewer = buy, host = manage) -->
     <div class="live-shop hidden" id="liveShopCard"></div>
+    <!-- One comment held at the top, put there by the host. -->
+    <div class="live-pinned hidden" id="livePinnedBar"></div>
+    <!-- The comments themselves, and the box to add one. -->
+    <div class="live-chat hidden" id="liveChat"></div>
+    <div class="live-say hidden" id="liveSayRow">
+      <input id="liveSayInput" maxlength="240" placeholder="Say something" aria-label="Say something"
+             onkeydown="if(event.key==='Enter')acLiveSay()"/>
+      <button onclick="acLiveSay()" aria-label="Send">
+        <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
     <div class="live-wait" id="liveWait">Connecting…</div>
     <div class="call-controls live-controls" id="liveControls">
       <button class="call-btn bcast-only" id="liveMicBtn" onclick="liveToggleMic()" aria-label="Mute mic">
@@ -13017,6 +13117,9 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       <button class="call-btn bcast-only" id="liveCamBtn" onclick="liveToggleCam()" aria-label="Camera">
         <svg class="ic-on" viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
         <svg class="ic-off" viewBox="0 0 24 24"><path d="M16 16v2a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2m4 0h5a2 2 0 0 1 2 2v3l4-3v8"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+      </button>
+      <button class="call-btn bcast-only" id="liveStudioBtn" onclick="acOpenBroadcastConsole()" aria-label="Broadcast console">
+        <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="6" y1="8" x2="6" y2="13"/><line x1="10" y1="8" x2="10" y2="13"/><line x1="14" y1="8" x2="14" y2="13"/></svg>
       </button>
       <button class="call-btn viewer-only" id="liveGiftBtn" onclick="liveGiftOpen()" aria-label="Send a gift">
         <svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
@@ -13196,6 +13299,9 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   <div class="call-card" onclick="callCardTap()">
     <span class="call-min-hint" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></span>
     <video id="callRemoteVid" class="call-remote" autoplay playsinline></video>
+    <!-- Recording is never quiet: your own badge, and the other side's warning. -->
+    <div class="call-recbadge hidden" id="callRecBadge">● Recording</div>
+    <div class="call-recnotice hidden" id="callRecNotice" role="status"></div>
     <div class="call-info" id="callInfo">
       <div class="user-avatar call-ava" id="callAva">?</div>
       <div class="call-name" id="callName">—</div>
@@ -13216,6 +13322,9 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
       </button>
       <button class="call-btn" id="callScreenBtn" onclick="callToggleScreen()" aria-label="Share screen" style="display:none;">
         <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><polyline points="9 8.5 12 5.5 15 8.5"/><line x1="12" y1="5.5" x2="12" y2="12"/></svg>
+      </button>
+      <button class="call-btn" id="callRecBtn" onclick="acCallRecToggle()" aria-label="Record this call">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.2" fill="currentColor" stroke="none"/></svg>
       </button>
       <button class="call-btn" id="callMinBtn" onclick="callMinimize()" aria-label="Minimize">
         <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><rect x="12.5" y="12.5" width="6" height="5" rx="1" fill="currentColor" stroke="none"/></svg>
@@ -14368,6 +14477,102 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
 
 <!-- Connect your systems: API keys + webhooks, for a business that runs
      other software and wants it talking to Atwe. -->
+<!-- ═══ BATCH 39 · passkeys · the till · voice · pictures · broadcast console · call recordings ═══ -->
+<div class="overlay hidden" id="applExportView" onclick="if(event.target===this)closeOverlay('applExportView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Export applicants">
+    <button class="sheet-close" onclick="closeOverlay('applExportView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Export applicants</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Where are you taking them?</div>
+    <div id="applExportBody"></div>
+  </div>
+</div>
+<div class="overlay hidden" id="passkeysView" onclick="if(event.target===this)closeOverlay('passkeysView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Passkeys">
+    <button class="sheet-close" onclick="closeOverlay('passkeysView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Passkeys</div>
+    <div class="ac-disc-sub" style="margin:0 0 14px;">Sign in with your face, your fingerprint or your device PIN — no password to type, forget or have stolen. The key itself never leaves this device.</div>
+    <div id="passkeysBody"></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="tillView" onclick="if(event.target===this)closeOverlay('tillView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="The till">
+    <button class="sheet-close" onclick="closeOverlay('tillView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">The till</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Selling to somebody standing in front of you. Same shop, same stock.</div>
+    <div id="tillBody"></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="tillPayView" onclick="if(event.target===this)closeOverlay('tillPayView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Pay at a till">
+    <button class="sheet-close" onclick="closeOverlay('tillPayView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Pay in person</div>
+    <div class="ac-disc-sub" style="margin:0 0 14px;">Type the six-digit code the shop is showing you. It comes out of your Atwe balance.</div>
+    <input class="jp-in till-code-in" id="tillPayCode" inputmode="numeric" maxlength="6" placeholder="000000" aria-label="Six-digit code"/>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:14px;" onclick="acTillPay()">Pay</button>
+  </div>
+</div>
+
+<div class="overlay hidden" id="voiceView" onclick="if(event.target===this)acVoiceClose()">
+  <div class="job-card-modal voice-modal" role="dialog" aria-modal="true" aria-label="Talk to Atwe AI">
+    <button class="sheet-close" onclick="acVoiceClose()" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Talk to Atwe AI</div>
+    <div class="voice-stage">
+      <button class="voice-orb" id="voiceOrb" onclick="acVoiceToggle()" aria-label="Start or stop listening"><span class="voice-orb-in"></span></button>
+      <div class="voice-state" id="voiceState">Tap to talk</div>
+      <div class="voice-said" id="voiceSaid" aria-live="polite"></div>
+      <div class="voice-reply" id="voiceReply" aria-live="polite"></div>
+    </div>
+    <div class="voice-opts" id="voiceOpts"></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="aiImageView" onclick="if(event.target===this)closeOverlay('aiImageView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Make a picture">
+    <button class="sheet-close" onclick="closeOverlay('aiImageView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Make a picture</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Describe what you want and Atwe AI will draw it. Good for a listing photo, a post image or a shop banner.</div>
+    <textarea class="jp-in" id="aiImgPrompt" rows="3" maxlength="1000" placeholder="A loaf of sourdough on a wooden board, warm morning light" aria-label="Describe the picture"></textarea>
+    <div class="aiimg-chips" id="aiImgChips"></div>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" id="aiImgGo" onclick="acAiImageGo()">Make it</button>
+    <div id="aiImgOut"></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="studioView" onclick="if(event.target===this)closeOverlay('studioView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Broadcast console">
+    <button class="sheet-close" onclick="closeOverlay('studioView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Broadcast console</div>
+    <div id="studioBody"></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="recapsView" onclick="if(event.target===this)closeOverlay('recapsView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Your broadcasts">
+    <button class="sheet-close" onclick="closeOverlay('recapsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Your broadcasts</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">How each one went, once it was over.</div>
+    <div id="recapsBody"></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="recordingsView" onclick="if(event.target===this)closeOverlay('recordingsView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Call recordings">
+    <button class="sheet-close" onclick="closeOverlay('recordingsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Call recordings</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Calls you recorded, what was said, and the notes.</div>
+    <div id="recordingsBody"></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="recordingView" onclick="if(event.target===this)closeOverlay('recordingView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Recording">
+    <button class="sheet-close" onclick="closeOverlay('recordingView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="recordingBody"></div>
+  </div>
+</div>
+
 <div class="overlay hidden" id="devToolsView" onclick="if(event.target===this)closeOverlay('devToolsView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Connect your systems">
     <button class="sheet-close" onclick="closeOverlay('devToolsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -18044,7 +18249,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1620'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1621'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -28339,7 +28544,7 @@ async function acRankApplicants(id) {
 function acRenderApplicantList(id) {
   const filtered = acApplFiltered();
   const chips = acApplFilterDefs().map(([k, l, n]) => `<button class="ja-fchip ${AC._applFilter === k ? 'on' : ''}" onclick="acApplFilter('${k}')">${l}${n != null ? ' ' + n : ''}</button>`).join('');
-  const tools = `<div class="ja-tools"><div class="ja-filters">${chips}</div><button class="ja-select-btn ja-rank-btn" id="jaRankBtn" onclick="acRankApplicants(${id})">✨ Rank</button><button class="ja-select-btn" onclick="acApplicantsCsv()" aria-label="Export CSV">⬇ CSV</button><button class="ja-select-btn ${AC._applSelMode ? 'on' : ''}" onclick="acApplToggleSelectMode()">${AC._applSelMode ? 'Done' : 'Select'}</button></div>`;
+  const tools = `<div class="ja-tools"><div class="ja-filters">${chips}</div><button class="ja-select-btn ja-rank-btn" id="jaRankBtn" onclick="acRankApplicants(${id})">✨ Rank</button><button class="ja-select-btn" onclick="acApplExportMenu(${id})" aria-label="Export applicants">⬇ Export</button><button class="ja-select-btn ${AC._applSelMode ? 'on' : ''}" onclick="acApplToggleSelectMode()">${AC._applSelMode ? 'Done' : 'Select'}</button></div>`;
   const list = filtered.length ? filtered.map((a) => acApplicantRow(id, a)).join('') : '<div class="ac-empty" style="padding:24px;">No applicants in this view.</div>';
   const bar = AC._applSelMode ? `<div class="ja-bulkbar"><span class="ja-bulk-n">${(AC._applSel || new Set()).size} selected</span><select id="jaBulkStatus" class="ac-jf-sel">${_APPLICANT_STATUSES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:8px 16px;" onclick="acApplBulkApply(${id})">Apply</button></div>` : '';
   document.getElementById('jaBody').innerHTML = tools + '<div id="jaList">' + list + '</div>' + bar;
@@ -28350,7 +28555,15 @@ function acApplFilter(k) { AC._applFilter = k; acRenderApplicantList(AC._applica
 function acApplicantsCsv() {
   const apps = AC._applicants || [];
   if (!apps.length) { showNotif('No applicants to export.'); return; }
-  const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  // A cell starting with = + - @ is a FORMULA to Excel, so an applicant who
+  // named themselves that would run as one on the recruiter's computer. An
+  // apostrophe in front makes it inert and is stripped on display. Plain
+  // numbers are left alone so amounts still add up.
+  const q = (v) => {
+    let t = String(v == null ? '' : v);
+    if (/^[=+\-@\t\r]/.test(t) && !/^-?\d+(\.\d+)?$/.test(t)) t = "'" + t;
+    return '"' + t.replace(/"/g, '""') + '"';
+  };
   const hasAnswers = apps.some((a) => a.answers && a.answers.length);
   const head = ['Name', 'Username', 'Applied', 'Status', 'Meets requirements', 'AI fit %', 'Cover note', 'Private note'];
   if (hasAnswers) head.push('Screening answers');
@@ -31196,6 +31409,11 @@ const _ME_IC = {
   qr: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="18" y1="14" x2="21" y2="14"/><line x1="21" y1="18" x2="21" y2="21"/><line x1="17" y1="21" x2="14" y2="21"/></svg>',
   doit: '<svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
   refund: '<svg viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M3.5 13a9 9 0 1 0 2.1-9.4L3 7"/><path d="M12 8v5l3 2"/></svg>',
+  till: '<svg viewBox="0 0 24 24"><rect x="2" y="8" width="20" height="12" rx="2"/><path d="M6 8V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/><line x1="7" y1="13" x2="10" y2="13"/><line x1="14" y1="13" x2="17" y2="13"/><line x1="7" y1="16.5" x2="17" y2="16.5"/></svg>',
+  mic: '<svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11v1a7 7 0 0 0 14 0v-1"/><line x1="12" y1="19" x2="12" y2="22"/></svg>',
+  picture: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="8.5" cy="8.5" r="1.8"/><path d="M21 15l-5-5L5 21"/></svg>',
+  rec: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>',
+  bcast: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5"/><path d="M7.5 7.5a6.4 6.4 0 0 0 0 9M16.5 16.5a6.4 6.4 0 0 0 0-9"/><path d="M4.5 4.5a10.6 10.6 0 0 0 0 15M19.5 19.5a10.6 10.6 0 0 0 0-15"/></svg>',
 };
 // Jump to the Jobs board in a given view (mine / saved / applied / forme / all).
 function acOpenJobsView(view) { AC._jobView = view || 'all'; AC._jobBoard = 'jobs'; _searchScope = 'jobs'; appTab('search'); }
@@ -31254,7 +31472,9 @@ function acGoProfileHub() {
     html += item('Smart links', _ME_IC.link || _ME_IC.share || _ME_IC.grid, "acOpenSmartLinks()", null);
     html += item('My listings', _ME_IC.sell, "acOpenSell()", null);
     if (acIsBiz(u)) html += item('Manage store', _ME_IC.store, "acOpenStoreManage()", null);
+    html += item('The till', _ME_IC.till, "acOpenTill()", null);
     html += item('Sales & analytics', _ME_IC.sales, "acOpenShopAnalytics()", null);
+    html += item('Export your customers', _ME_IC.co, "acExportCustomers()", null);
     if (acIsBiz(u)) html += item('Business analytics', _ME_IC.analytics, "acOpenBizAnalytics()", null);
     html += item('Advertise', _ME_IC.ads, "acOpenAdCreate()", null);
     html += item('Ads Manager', _ME_IC.ads, "acOpenAds()", null);
@@ -31323,6 +31543,11 @@ function acGoProfileHub() {
     html += item('Events', _ME_IC.events, "acOpenEvents()", null);
     html += '</div>';
     html += '<div class="me-catlabel">App</div><div class="me-group">';
+    html += item('Talk to Atwe AI', _ME_IC.mic, "acOpenVoice()", null);
+    html += item('Make a picture', _ME_IC.picture, "acOpenAiImage()", null);
+    html += item('Call recordings', _ME_IC.rec, "acOpenRecordings()", null);
+    html += item('Your broadcasts', _ME_IC.bcast, "acOpenRecaps()", null);
+    html += item('Pay at a till', _ME_IC.till, "acOpenTillPay()", null);
     html += item('Do it for me', _ME_IC.doit, "acOpenAgent()", null);
     html += item('Ask about your data', _ME_IC.doit, "acOpenAiAsk()", null);
     html += item('QR code', _ME_IC.qr, "acOpenMyQR()", null);
@@ -47441,7 +47666,7 @@ async function rtConnect() {
       acApplyPresence();
     } catch {}
   });
-  rtSource.addEventListener('call', e => { try { callOnSignal(JSON.parse(e.data)); } catch {} });
+  rtSource.addEventListener('call', e => { try { const d = JSON.parse(e.data); if (d && d.kind === 'recording') acOnRecordingNotice(d); else callOnSignal(d); } catch {} });
   rtSource.addEventListener('group-call', e => { try { groupCallOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('call-link', e => { try { callLinkOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('group-removed', e => { try { onGroupRemoved(JSON.parse(e.data)); } catch {} });
@@ -50826,6 +51051,7 @@ async function acGoLive(groupId, title) {
   try {
     const r = await API.req('POST', '/api/live/start', { title: title || '', mode: 'video', ...(groupId ? { groupId } : {}) });
     LIVE = { role: 'broadcaster', streamId: r.streamId, groupId: groupId || null, localStream: stream, pcs: new Map(), viewers: new Map() };
+    acLiveChatShow(true);
     liveShow('broadcaster');
     document.getElementById('liveCount').textContent = '0';
     document.getElementById('liveInfo').textContent = 'You’re live';
@@ -50850,6 +51076,9 @@ async function acWatchLive(s) {
   document.getElementById('liveInfo').textContent = s.user.name + (s.title ? ' · ' + s.title : '');
   document.getElementById('liveCount').textContent = s.viewers || 0;
   liveRenderShop(s.pinnedProduct || null); // live shopping: any product the host already pinned
+  acLiveChatShow(true);
+  // Arriving late should not mean missing the thing the host pinned for everyone.
+  acLiveRenderPinned(s.pinnedComment || null);
   liveSignal(s.user.id, 'watch', {});
 }
 /* ── Live shopping: pinned product card ── */
@@ -50929,7 +51158,17 @@ function liveOnSignal(d) {
   // Group broadcast lifecycle (handled regardless of my own session state).
   if (d.kind === 'started') return acOnGroupLiveStarted(d);
   if (d.kind === 'group-ended') return acOnGroupLiveEnded(d);
+  // An invitation to come on air can reach you before you are anywhere near a
+  // stream object, so it is answered ahead of the guard below.
+  if (d.kind === 'guest-invite') return acOnGuestInvite(d);
   if (!LIVE) return;
+  if (d.streamId === LIVE.streamId) {
+    if (d.kind === 'comment') return acLiveOnComment(d);
+    if (d.kind === 'pin-comment') return acLiveRenderPinned(d.pinnedComment);
+    if (d.kind === 'scene') return acLiveOnScene(d.scene);
+    if (d.kind === 'studio') { if (STUDIO.streamId === d.streamId) { STUDIO.data = d.studio; acRenderStudio(); } return acLiveRenderPinned(d.studio && d.studio.pinnedComment); }
+    if (d.kind === 'guest-off') { showNotif('You are no longer on air.'); return; }
+  }
   if (d.kind === 'pin' && d.streamId === LIVE.streamId) return liveRenderShop(d.product);
   if (d.kind === 'gift' && d.streamId === LIVE.streamId) return liveShowGift(d);
   if (typeof d.viewers === 'number') document.getElementById('liveCount').textContent = d.viewers;
@@ -51000,6 +51239,8 @@ function liveCleanup() {
   }
   LIVE = null;
   { const sc = document.getElementById('liveShopCard'); if (sc) { sc.innerHTML = ''; sc.classList.add('hidden'); } }
+  acLiveChatShow(false); acLiveRenderPinned(null);
+  closeOverlay('studioView');
   closeOverlay('liveOverlay');
   const v = document.getElementById('liveVideo'); if (v) v.srcObject = null;
   acLoadLiveStrip();
@@ -56124,6 +56365,706 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   });
 }
+
+/* ═══════════════════════════════════════════════
+   BATCH 39 — passkeys · the till · voice · pictures · the console · recordings
+═══════════════════════════════════════════════ */
+
+/* ─── Passkeys ─────────────────────────────────────────────────────────────
+   The browser does the hard part. We hand it a challenge, it asks the device
+   to unlock, and it hands back a signature the server checks. Nothing secret
+   ever travels, which is why there is nothing here to phish. */
+const _b64u = {
+  dec: (s) => { const p = String(s).replace(/-/g, '+').replace(/_/g, '/'); const b = atob(p + '='.repeat((4 - p.length % 4) % 4)); const u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; },
+  enc: (buf) => { const u = new Uint8Array(buf); let s = ''; for (let i = 0; i < u.length; i++) s += String.fromCharCode(u[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); },
+};
+function acPasskeysSupported() {
+  return !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create);
+}
+async function acOpenPasskeys() {
+  showOverlay('passkeysView');
+  const b = document.getElementById('passkeysBody');
+  if (b) b.innerHTML = acSkelRows(2);
+  await acLoadPasskeys();
+}
+async function acLoadPasskeys() {
+  const b = document.getElementById('passkeysBody'); if (!b) return;
+  let keys = [];
+  try { keys = (await API.req('GET', '/api/passkeys')).passkeys || []; } catch (e) {}
+  const supported = acPasskeysSupported();
+  const row = (k) => `<div class="b39-row">
+    <div class="b39-row-top"><span class="b39-name">${escHtml(k.label || 'Passkey')}</span>
+      <span class="b39-tag ok">ready</span></div>
+    <div class="b39-sub">Added ${acTime(k.createdAt)}${k.lastUsedAt ? ' · last used ' + acTime(k.lastUsedAt) : ' · not used yet'}</div>
+    <div class="b39-acts"><button class="ac-pill-btn" onclick="acRemovePasskey(${k.id})">Remove</button></div>
+  </div>`;
+  b.innerHTML = (keys.length ? keys.map(row).join('')
+      : '<div class="ac-empty-sm">No passkeys yet. Add one and you can sign in without a password.</div>')
+    + (supported
+      ? `<button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="acAddPasskey()">Add a passkey to this device</button>`
+      : `<div class="ac-disc-sub" style="margin-top:12px;">This browser cannot make passkeys. Try Safari on an iPhone, or Chrome on a computer.</div>`);
+}
+async function acAddPasskey() {
+  if (!acPasskeysSupported()) { showNotif('This browser cannot make passkeys.'); return; }
+  try {
+    const o = await API.req('POST', '/api/passkeys/register/start', {});
+    const cred = await navigator.credentials.create({ publicKey: {
+      challenge: _b64u.dec(o.challenge),
+      rp: o.rp,
+      user: { id: _b64u.dec(o.user.id), name: o.user.name, displayName: o.user.displayName },
+      pubKeyCredParams: o.pubKeyCredParams,
+      // Ask for the device's own biometrics, and for a key that syncs to the
+      // user's keychain — otherwise a new phone means starting again.
+      authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' },
+      timeout: 60000,
+      excludeCredentials: (o.excludeCredentials || []).map((c) => ({ id: _b64u.dec(c.id), type: 'public-key' })),
+      attestation: 'none',
+    } });
+    if (!cred) return;
+    await API.req('POST', '/api/passkeys/register/finish', {
+      id: cred.id,
+      challenge: o.challenge,
+      label: acDeviceLabel(),
+      clientDataJSON: _b64u.enc(cred.response.clientDataJSON),
+      attestationObject: _b64u.enc(cred.response.attestationObject),
+    });
+    showNotif('Passkey added.');
+    acLoadPasskeys();
+  } catch (e) {
+    // A cancelled prompt is not an error worth shouting about.
+    if (e && (e.name === 'NotAllowedError' || e.name === 'AbortError')) return;
+    showNotif((e && e.message) || 'Could not add that passkey.');
+  }
+}
+function acDeviceLabel() {
+  const ua = navigator.userAgent || '';
+  if (/iPhone/.test(ua)) return 'iPhone';
+  if (/iPad/.test(ua)) return 'iPad';
+  if (/Android/.test(ua)) return 'Android phone';
+  if (/Mac/.test(ua)) return 'Mac';
+  if (/Windows/.test(ua)) return 'Windows PC';
+  return 'This device';
+}
+async function acRemovePasskey(id) {
+  const ok = await appConfirm({ title: 'Remove this passkey?', message: 'You will not be able to sign in with it any more. Your password still works.', confirmText: 'Remove', danger: true });
+  if (!ok) return;
+  try { await API.req('DELETE', '/api/passkeys/' + id); showNotif('Removed.'); acLoadPasskeys(); }
+  catch (e) { showNotif((e && e.message) || 'Could not remove it.'); }
+}
+/* Signing in with one, from the login screen. */
+async function acPasskeyLogin() {
+  if (!acPasskeysSupported()) { showNotif('This browser cannot use passkeys.'); return; }
+  try {
+    const o = await API.req('POST', '/api/passkeys/login/start', {});
+    const cred = await navigator.credentials.get({ publicKey: {
+      challenge: _b64u.dec(o.challenge),
+      rpId: o.rpId,
+      userVerification: 'preferred',
+      timeout: 60000,
+      // Empty is correct for an unknown account — the device then offers whatever
+      // passkey it holds, and nothing has leaked about who has an account here.
+      allowCredentials: (o.allowCredentials || []).map((c) => ({ type: 'public-key', id: _b64u.dec(c.id) })),
+    } });
+    if (!cred) return;
+    const out = await API.req('POST', '/api/passkeys/login/finish', {
+      id: cred.id,
+      challenge: o.challenge,
+      clientDataJSON: _b64u.enc(cred.response.clientDataJSON),
+      authenticatorData: _b64u.enc(cred.response.authenticatorData),
+      signature: _b64u.enc(cred.response.signature),
+      userHandle: cred.response.userHandle ? _b64u.enc(cred.response.userHandle) : null,
+    });
+    if (out && out.token) onAuthSuccess(out.token, out.user);
+  } catch (e) {
+    if (e && (e.name === 'NotAllowedError' || e.name === 'AbortError')) return;
+    showNotif((e && e.message) || 'That passkey did not work.');
+  }
+}
+
+/* ─── The till ─────────────────────────────────────────────────────────────
+   Ring up what somebody is buying in person, off the same shelf as the online
+   shop, so the stock number is right whichever way it sold. */
+let TILL = { items: [], products: [], method: 'atwe', sale: null, sales: [], today: { count: 0, cents: 0 } };
+async function acOpenTill() {
+  TILL = { items: [], products: [], method: 'atwe', sale: null, sales: [], today: { count: 0, cents: 0 } };
+  showOverlay('tillView');
+  const b = document.getElementById('tillBody'); if (b) b.innerHTML = acSkelRows(3);
+  try {
+    const [p, s] = await Promise.all([
+      API.req('GET', '/api/my-listings').catch(() => ({ products: [] })),
+      API.req('GET', '/api/pos/sales').catch(() => ({ sales: [], today: { count: 0, cents: 0 } })),
+    ]);
+    TILL.products = (p.products || []).filter((x) => x.active);
+    TILL.sales = s.sales || [];
+    TILL.today = s.today || { count: 0, cents: 0 };
+  } catch (e) {}
+  acRenderTill();
+}
+function acTillQty(id, d) {
+  const line = TILL.items.find((i) => i.productId === id);
+  if (line) { line.qty = Math.max(0, Math.min(99, line.qty + d)); if (!line.qty) TILL.items = TILL.items.filter((i) => i.productId !== id); }
+  else if (d > 0) TILL.items.push({ productId: id, qty: 1 });
+  acRenderTill();
+}
+function acTillMethod(m) { TILL.method = m; acRenderTill(); }
+function acTillTotal() {
+  return TILL.items.reduce((n, i) => {
+    const p = TILL.products.find((x) => x.id === i.productId);
+    return n + (p ? (p.priceCents || 0) * i.qty : 0);
+  }, 0);
+}
+function acRenderTill() {
+  const b = document.getElementById('tillBody'); if (!b) return;
+  // A sale waiting to be paid takes over the whole screen — the customer is
+  // looking at it, and the code is the only thing that matters.
+  if (TILL.sale && TILL.sale.status === 'open') {
+    b.innerHTML = `<div class="till-code"><b>${escHtml(TILL.sale.code)}</b>
+        <span>${acMoney(TILL.sale.totalCents)} · ask them to type this into Atwe</span></div>
+      <button class="ac-pill-btn accent" style="width:100%;" onclick="acTillCheck()">I have been paid — check</button>
+      <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acTillVoid()">Cancel this sale</button>`;
+    return;
+  }
+  const total = acTillTotal();
+  const method = (m, label) => `<button class="${TILL.method === m ? 'on' : ''}" onclick="acTillMethod('${m}')">${label}</button>`;
+  const rows = TILL.products.map((p) => {
+    const line = TILL.items.find((i) => i.productId === p.id);
+    return `<div class="till-pick">
+      <div style="flex:1;min-width:0;"><div class="till-pick-n">${escHtml(p.name)}</div>
+        <div class="till-pick-p">${acMoney(p.priceCents)}${p.stock != null ? ' · ' + p.stock + ' left' : ''}</div></div>
+      <div class="till-step"><button onclick="acTillQty(${p.id},-1)" aria-label="One fewer">−</button>
+        <b>${line ? line.qty : 0}</b>
+        <button onclick="acTillQty(${p.id},1)" aria-label="One more">+</button></div>
+    </div>`;
+  }).join('');
+  b.innerHTML = `
+    <div class="till-total"><b>${acMoney(total)}</b><span>${TILL.items.length ? TILL.items.length + ' line' + (TILL.items.length === 1 ? '' : 's') : 'nothing rung up yet'}</span></div>
+    <div class="till-methods">${method('atwe', 'Atwe wallet')}${method('cash', 'Cash')}${method('card', 'Card machine')}</div>
+    ${rows || '<div class="ac-empty-sm">Add something to your shop first and it will appear here.</div>'}
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" ${total ? '' : 'disabled'} onclick="acTillRingUp()">
+      ${TILL.method === 'atwe' ? 'Take payment' : 'Record the sale'}</button>
+    <div class="st-h">Today</div>
+    <div class="b39-row"><div class="b39-row-top"><span class="b39-name">${acMoney(TILL.today.cents || 0)}</span>
+      <span class="b39-tag">${TILL.today.count || 0} sale${TILL.today.count === 1 ? '' : 's'}</span></div>
+      <div class="b39-sub">Counted in your Sales figures alongside online orders.</div></div>`;
+}
+async function acTillRingUp() {
+  if (!acTillTotal()) return;
+  try {
+    const r = await API.req('POST', '/api/pos/sales', { items: TILL.items, method: TILL.method });
+    TILL.sale = r.sale;
+    // Cash and card are recorded and done — there is no code for them to type.
+    if (TILL.method !== 'atwe') {
+      showNotif('Sale recorded.');
+      TILL.sale = null; TILL.items = [];
+      const s = await API.req('GET', '/api/pos/sales').catch(() => null);
+      if (s) { TILL.sales = s.sales || []; TILL.today = s.today || TILL.today; }
+    }
+    acRenderTill();
+  } catch (e) { showNotif((e && e.message) || 'Could not ring that up.'); }
+}
+async function acTillCheck() {
+  try {
+    const s = await API.req('GET', '/api/pos/sales');
+    TILL.sales = s.sales || []; TILL.today = s.today || TILL.today;
+    const mine = TILL.sales.find((x) => TILL.sale && x.id === TILL.sale.id);
+    if (mine && mine.status === 'paid') {
+      showNotif('Paid — ' + acMoney(mine.totalCents));
+      TILL.sale = null; TILL.items = [];
+      if (typeof acRefreshBalance === 'function') acRefreshBalance();
+    } else { showNotif('Not paid yet.'); }
+    acRenderTill();
+  } catch (e) { showNotif((e && e.message) || 'Could not check.'); }
+}
+async function acTillVoid() {
+  if (!TILL.sale) return;
+  try { await API.req('POST', '/api/pos/sales/' + TILL.sale.id + '/void', {}); } catch (e) {}
+  TILL.sale = null; acRenderTill();
+}
+// The customer's side: type the code the shop is showing.
+function acOpenTillPay() { showOverlay('tillPayView'); const i = document.getElementById('tillPayCode'); if (i) { i.value = ''; setTimeout(() => i.focus(), 120); } }
+async function acTillPay() {
+  const code = ((document.getElementById('tillPayCode') || {}).value || '').trim();
+  if (!/^\d{6}$/.test(code)) { showNotif('That should be six digits.'); return; }
+  try {
+    const r = await API.req('POST', '/api/pos/pay', { code, clientId: acPayCid('till') });
+    closeOverlay('tillPayView');
+    if (typeof acOrderSuccessPulse === 'function') acOrderSuccessPulse(null, 'Paid ' + acMoney(r.amountCents));
+    else showNotif('Paid.');
+    if (typeof acRefreshBalance === 'function') acRefreshBalance();
+  } catch (e) { showNotif((e && e.message) || 'Could not pay that.'); }
+}
+
+/* ─── Talking to Atwe AI ───────────────────────────────────────────────────
+   The browser listens and the browser speaks; the server only supplies the
+   words. Hands-free means it goes back to listening once it has finished
+   answering, so a conversation carries on without touching the phone. */
+let VOICE = { on: false, rec: null, busy: false, history: [], prefs: { rate: 1, voice: '', keepListening: true, speak: true }, speaking: false };
+function acVoiceSupported() { return !!(window.SpeechRecognition || window.webkitSpeechRecognition); }
+async function acOpenVoice() {
+  showOverlay('voiceView');
+  VOICE.history = [];
+  acVoiceSet('Tap to talk', '', '');
+  try { const r = await API.req('GET', '/api/voice-prefs'); VOICE.prefs = r.prefs || VOICE.prefs; } catch (e) {}
+  acRenderVoiceOpts();
+  if (!acVoiceSupported()) acVoiceSet('Not available here', '', 'This browser cannot listen. Try Safari on an iPhone, or Chrome on a computer.');
+}
+function acRenderVoiceOpts() {
+  const el = document.getElementById('voiceOpts'); if (!el) return;
+  el.innerHTML = `
+    <div class="voice-opt"><span>Read the answers out loud</span>
+      <label class="ios-switch"><input type="checkbox" id="vcSpeak" ${VOICE.prefs.speak ? 'checked' : ''} onchange="acVoicePref('speak',this.checked)"><span class="ios-slider"></span></label></div>
+    <div class="voice-opt"><span>Keep listening after it answers</span>
+      <label class="ios-switch"><input type="checkbox" id="vcKeep" ${VOICE.prefs.keepListening ? 'checked' : ''} onchange="acVoicePref('keepListening',this.checked)"><span class="ios-slider"></span></label></div>
+    <div class="voice-opt"><span>Speaking speed</span>
+      <input type="range" min="0.6" max="1.6" step="0.1" value="${VOICE.prefs.rate}" aria-label="Speaking speed" onchange="acVoicePref('rate',parseFloat(this.value))"></div>`;
+}
+function acVoicePref(k, v) {
+  VOICE.prefs[k] = v;
+  API.req('PUT', '/api/voice-prefs', VOICE.prefs).catch(() => {});
+}
+function acVoiceSet(state, said, reply) {
+  const st = document.getElementById('voiceState'); if (st && state != null) st.textContent = state;
+  const sd = document.getElementById('voiceSaid'); if (sd && said != null) sd.textContent = said;
+  const rp = document.getElementById('voiceReply'); if (rp && reply != null) rp.textContent = reply;
+}
+function acVoiceOrb(cls) {
+  const o = document.getElementById('voiceOrb'); if (!o) return;
+  o.classList.remove('on', 'talk');
+  if (cls) o.classList.add(cls);
+}
+function acVoiceToggle() { if (VOICE.on || VOICE.speaking) acVoiceStop(); else acVoiceStart(); }
+function acVoiceStart() {
+  if (!acVoiceSupported()) { showNotif('This browser cannot listen.'); return; }
+  if (VOICE.busy) return;
+  const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) {}
+  VOICE.speaking = false;
+  const rec = new Rec();
+  rec.lang = navigator.language || 'en-GB';
+  rec.interimResults = true;
+  rec.continuous = false;
+  let heard = '';
+  rec.onresult = (e) => {
+    heard = '';
+    for (let i = 0; i < e.results.length; i++) heard += e.results[i][0].transcript;
+    acVoiceSet(null, heard, null);
+  };
+  rec.onerror = (e) => {
+    VOICE.on = false; acVoiceOrb('');
+    // "no-speech" just means they said nothing — not worth an error message.
+    acVoiceSet(e && e.error === 'no-speech' ? 'Did not catch that — tap to try again' : 'Tap to talk', null, null);
+  };
+  rec.onend = () => {
+    VOICE.on = false; acVoiceOrb('');
+    const said = heard.trim();
+    if (said) acVoiceAsk(said); else acVoiceSet('Tap to talk', null, null);
+  };
+  VOICE.rec = rec; VOICE.on = true;
+  acVoiceOrb('on'); acVoiceSet('Listening', '', '');
+  try { rec.start(); } catch (e) { VOICE.on = false; acVoiceOrb(''); acVoiceSet('Tap to talk', null, null); }
+}
+function acVoiceStop() {
+  VOICE.on = false; VOICE.speaking = false;
+  try { VOICE.rec && VOICE.rec.stop(); } catch (e) {}
+  try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) {}
+  acVoiceOrb(''); acVoiceSet('Tap to talk', null, null);
+}
+function acVoiceClose() { acVoiceStop(); closeOverlay('voiceView'); }
+async function acVoiceAsk(text) {
+  VOICE.busy = true;
+  acVoiceSet('Thinking', text, '');
+  try {
+    const r = await API.req('POST', '/api/ai/voice', { message: text, history: VOICE.history });
+    const reply = r.reply || '';
+    VOICE.history = VOICE.history.concat([{ role: 'user', content: text }, { role: 'assistant', content: reply }]).slice(-8);
+    acVoiceSet(VOICE.prefs.speak ? 'Speaking' : 'Tap to talk', text, reply);
+    if (typeof announce === 'function') announce(reply);
+    if (VOICE.prefs.speak) acVoiceSpeak(reply); else if (VOICE.prefs.keepListening) setTimeout(acVoiceStart, 400);
+  } catch (e) {
+    acVoiceSet('Tap to talk', text, (e && e.message) || 'Atwe AI could not answer just then.');
+  } finally { VOICE.busy = false; }
+}
+function acVoiceSpeak(text) {
+  if (!window.speechSynthesis || !text) { if (VOICE.prefs.keepListening) setTimeout(acVoiceStart, 300); return; }
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = VOICE.prefs.rate || 1;
+    u.lang = navigator.language || 'en-GB';
+    const want = VOICE.prefs.voice;
+    if (want) { const v = (window.speechSynthesis.getVoices() || []).find((x) => x.name === want); if (v) u.voice = v; }
+    VOICE.speaking = true; acVoiceOrb('talk');
+    const done = () => {
+      VOICE.speaking = false; acVoiceOrb('');
+      acVoiceSet('Tap to talk', null, null);
+      // Hands-free: go straight back to listening so the conversation continues.
+      if (VOICE.prefs.keepListening) setTimeout(acVoiceStart, 350);
+    };
+    u.onend = done; u.onerror = done;
+    window.speechSynthesis.speak(u);
+  } catch (e) { VOICE.speaking = false; acVoiceOrb(''); }
+}
+
+/* ─── Making a picture ─── */
+const _AI_IMG_IDEAS = ['A product photo on a clean white background', 'A warm, inviting shop banner',
+  'A flat-lay of my tools on a workbench', 'A simple logo mark, bold and geometric'];
+let _aiImgLast = null;
+function acOpenAiImage(cb) {
+  _aiImgUse = typeof cb === 'function' ? cb : null;
+  showOverlay('aiImageView');
+  const out = document.getElementById('aiImgOut'); if (out) out.innerHTML = '';
+  const ch = document.getElementById('aiImgChips');
+  if (ch) ch.innerHTML = _AI_IMG_IDEAS.map((i) => `<button onclick="acAiImgIdea(${jsAttr(i)})">${escHtml(i)}</button>`).join('');
+}
+let _aiImgUse = null;
+function acAiImgIdea(t) { const el = document.getElementById('aiImgPrompt'); if (el) { el.value = t; el.focus(); } }
+async function acAiImageGo() {
+  const el = document.getElementById('aiImgPrompt');
+  const prompt = ((el && el.value) || '').trim();
+  if (!prompt) { showNotif('Describe the picture first.'); return; }
+  const btn = document.getElementById('aiImgGo');
+  const out = document.getElementById('aiImgOut');
+  if (btn) { btn.disabled = true; btn.textContent = 'Drawing…'; }
+  if (out) out.innerHTML = '<div class="ac-disc-sub" style="margin-top:14px;">This takes a few seconds.</div>';
+  try {
+    const r = await API.req('POST', '/api/ai/image', { prompt });
+    _aiImgLast = r.image;
+    if (out) out.innerHTML = `<div class="aiimg-out"><img src="${escHtml(r.image)}" alt="${escHtml(prompt)}"/></div>
+      <div class="b39-acts" style="margin-top:10px;">
+        ${_aiImgUse ? '<button class="ac-pill-btn accent" onclick="acAiImgUse()">Use this picture</button>' : ''}
+        <button class="ac-pill-btn" onclick="acAiImageGo()">Try again</button></div>`;
+  } catch (e) {
+    if (out) out.innerHTML = `<div class="ac-disc-sub" style="margin-top:14px;">${escHtml((e && e.message) || 'Could not make that picture.')}</div>`;
+  } finally { if (btn) { btn.disabled = false; btn.textContent = 'Make it'; } }
+}
+function acAiImgUse() { if (_aiImgUse && _aiImgLast) { _aiImgUse(_aiImgLast); closeOverlay('aiImageView'); } }
+
+/* ─── The broadcast console ────────────────────────────────────────────────
+   What is on screen, what is pinned, and who is up here with you. */
+let STUDIO = { streamId: null, data: null, scenes: [] };
+async function acOpenBroadcastConsole(streamId) {
+  STUDIO.streamId = streamId || (typeof LIVE !== 'undefined' && LIVE ? LIVE.streamId : null);
+  if (!STUDIO.streamId) { showNotif('You are not broadcasting.'); return; }
+  showOverlay('studioView');
+  const b = document.getElementById('studioBody'); if (b) b.innerHTML = acSkelRows(3);
+  await acLoadStudio();
+}
+async function acLoadStudio() {
+  try {
+    const r = await API.req('GET', '/api/live/studio?streamId=' + encodeURIComponent(STUDIO.streamId));
+    STUDIO.data = r.studio; STUDIO.scenes = r.scenes || [];
+  } catch (e) { STUDIO.data = null; }
+  acRenderStudio();
+}
+function acRenderStudio() {
+  const b = document.getElementById('studioBody'); if (!b) return;
+  const d = STUDIO.data;
+  if (!d) { b.innerHTML = '<div class="ac-empty-sm">That broadcast has ended.</div>'; return; }
+  const mins = Math.max(0, Math.round((Date.now() - d.startedAt) / 60000));
+  b.innerHTML = `
+    <div class="st-stat">
+      <div><b>${d.viewers}</b><span>watching</span></div>
+      <div><b>${d.peakViewers}</b><span>peak</span></div>
+      <div><b>${mins}m</b><span>on air</span></div>
+    </div>
+    <div class="st-h">What they see</div>
+    <div class="st-scenes">${STUDIO.scenes.map((s) => `<button class="st-scene ${d.scene === s.id ? 'on' : ''}" onclick="acStudioScene('${s.id}')">
+      <b>${escHtml(s.label)}</b><small>${escHtml(s.help)}</small></button>`).join('')}</div>
+    ${d.pinnedComment ? `<div class="st-pinned"><b>Pinned</b>${escHtml(d.pinnedComment.text)}
+        <div class="b39-acts"><button class="ac-pill-btn" onclick="acStudioPin('')">Unpin</button></div></div>` : ''}
+    <div class="st-h">Pin a comment</div>
+    <input class="jp-in" id="stPinText" maxlength="240" placeholder="Hold one message at the top of the chat"/>
+    <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acStudioPinFromBox()">Pin it</button>
+    <div class="st-h">Guests</div>
+    ${(d.guests || []).length
+      ? d.guests.map((g) => `<div class="b39-row"><div class="b39-row-top">
+          <span class="b39-name">${escHtml(g.name)}</span><span class="b39-tag ok">on air</span></div>
+          <div class="b39-acts"><button class="ac-pill-btn" onclick="acStudioGuestOff(${g.id})">Take them down</button></div></div>`).join('')
+      : '<div class="ac-empty-sm">Nobody up here with you. Tap a viewer in the chat to invite them.</div>'}
+    ${(d.invites || []).length ? '<div class="ac-disc-sub" style="margin-top:8px;">Waiting on: ' + d.invites.map((i) => escHtml(i.name)).join(', ') + '</div>' : ''}`;
+}
+async function acStudioScene(scene) {
+  try { await API.req('POST', '/api/live/scene', { streamId: STUDIO.streamId, scene }); acLoadStudio(); }
+  catch (e) { showNotif((e && e.message) || 'Could not switch.'); }
+}
+function acStudioPinFromBox() {
+  const el = document.getElementById('stPinText');
+  acStudioPin(((el && el.value) || '').trim());
+}
+async function acStudioPin(text) {
+  try { await API.req('POST', '/api/live/pin-comment', { streamId: STUDIO.streamId, text }); acLoadStudio(); }
+  catch (e) { showNotif((e && e.message) || 'Could not pin that.'); }
+}
+async function acStudioGuestOff(userId) {
+  try { await API.req('POST', '/api/live/guest/remove', { streamId: STUDIO.streamId, userId }); acLoadStudio(); }
+  catch (e) { showNotif((e && e.message) || 'Could not do that.'); }
+}
+async function acStudioInvite(userId) {
+  try { await API.req('POST', '/api/live/guest/invite', { streamId: STUDIO.streamId, userId }); showNotif('Invitation sent.'); acLoadStudio(); }
+  catch (e) { showNotif((e && e.message) || 'Could not invite them.'); }
+}
+// A viewer being asked up.
+async function acOnGuestInvite(d) {
+  const ok = await appConfirm({ title: 'Come on air?', message: (d.host && d.host.name ? d.host.name : 'The host') + ' has invited you to join the broadcast. Your camera and microphone will be shared with everyone watching.', confirmText: 'Join' });
+  try { await API.req('POST', '/api/live/guest/respond', { streamId: d.streamId, accept: !!ok }); }
+  catch (e) { if (ok) showNotif((e && e.message) || 'Could not join.'); }
+}
+// Talking during a broadcast.
+async function acLiveComment(streamId, text) {
+  const t = String(text || '').trim();
+  if (!t) return;
+  try { await API.req('POST', '/api/live/comment', { streamId, text: t }); }
+  catch (e) { showNotif((e && e.message) || 'Could not send that.'); }
+}
+async function acOpenRecaps() {
+  showOverlay('recapsView');
+  const b = document.getElementById('recapsBody'); if (b) b.innerHTML = acSkelRows(3);
+  let list = [];
+  try { list = (await API.req('GET', '/api/live/recaps')).recaps || []; } catch (e) {}
+  if (!b) return;
+  b.innerHTML = list.length ? list.map((r) => {
+    const mins = Math.round(r.seconds / 60);
+    return `<div class="b39-row"><div class="b39-row-top">
+      <span class="b39-name">${escHtml(r.title || 'Broadcast')}</span>
+      <span class="b39-tag">${r.mode === 'audio' ? 'audio' : 'video'}</span></div>
+      <div class="b39-sub">${acTime(r.endedAt)} · ${mins < 1 ? 'under a minute' : mins + ' min'} · ${r.peakViewers} at peak · ${r.comments} comment${r.comments === 1 ? '' : 's'}${r.giftsCents ? ' · ' + acMoney(r.giftsCents) + ' in gifts' : ''}</div>
+    </div>`;
+  }).join('') : '<div class="ac-empty-sm">You have not been live yet.</div>';
+}
+
+/* ─── Recording a call ─────────────────────────────────────────────────────
+   The browser records; the other side is told, plainly and immediately. */
+let CALLREC = { rec: null, chunks: [], startedAt: 0, peerId: null, groupId: null, callId: null, kind: 'audio' };
+function acCallRecActive() { return !!(CALLREC.rec && CALLREC.rec.state === 'recording'); }
+async function acCallRecToggle() {
+  if (acCallRecActive()) return acCallRecStop();
+  return acCallRecStart();
+}
+async function acCallRecStart() {
+  if (typeof CALL === 'undefined' || !CALL || !CALL.pc) { showNotif('Start a call first.'); return; }
+  if (!window.MediaRecorder) { showNotif('This browser cannot record.'); return; }
+  const ok = await appConfirm({
+    title: 'Record this call?',
+    message: 'The other person will be told straight away that you are recording. The recording is saved to your account only.',
+    confirmText: 'Record',
+  });
+  if (!ok) return;
+  try {
+    // Mix both sides into one track, otherwise a recording is only ever half a
+    // conversation. Done with WebAudio because MediaRecorder takes one stream.
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const dest = ctx.createMediaStreamDestination();
+    let any = false;
+    for (const s of [CALL.localStream, CALL.remoteStream]) {
+      if (s && s.getAudioTracks && s.getAudioTracks().length) { ctx.createMediaStreamSource(s).connect(dest); any = true; }
+    }
+    if (!any) { showNotif('There is no sound to record yet.'); return; }
+    const rec = new MediaRecorder(dest.stream);
+    CALLREC = { rec, chunks: [], startedAt: Date.now(), ctx,
+      peerId: CALL.peerId || null, groupId: CALL.groupId || null, callId: CALL.callId || null, kind: 'audio' };
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) CALLREC.chunks.push(e.data); };
+    rec.onstop = acCallRecSave;
+    rec.start(1000);
+    API.req('POST', '/api/calls/recording-notice', { on: true, peerId: CALLREC.peerId, groupId: CALLREC.groupId, callId: CALLREC.callId }).catch(() => {});
+    acCallRecBadge(true);
+    if (typeof announce === 'function') announce('Recording started');
+  } catch (e) { showNotif('Could not start recording.'); }
+}
+function acCallRecStop() {
+  if (!acCallRecActive()) return;
+  try { CALLREC.rec.stop(); } catch (e) {}
+  API.req('POST', '/api/calls/recording-notice', { on: false, peerId: CALLREC.peerId, groupId: CALLREC.groupId, callId: CALLREC.callId }).catch(() => {});
+  acCallRecBadge(false);
+}
+async function acCallRecSave() {
+  const chunks = CALLREC.chunks; CALLREC.chunks = [];
+  try { CALLREC.ctx && CALLREC.ctx.close(); } catch (e) {}
+  if (!chunks.length) return;
+  const seconds = Math.round((Date.now() - CALLREC.startedAt) / 1000);
+  const blob = new Blob(chunks, { type: chunks[0].type || 'audio/webm' });
+  // Roughly 15MB of audio is about two hours — beyond that, saying so is kinder
+  // than a failed upload after a long wait.
+  if (blob.size > 15 * 1024 * 1024) { showNotif('That call was too long to save.'); return; }
+  const media = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
+  try {
+    await API.req('POST', '/api/calls/recordings', {
+      media, seconds, kind: 'audio', peerId: CALLREC.peerId, groupId: CALLREC.groupId,
+      callId: CALLREC.callId, title: CALL && CALL.peerName ? 'Call with ' + CALL.peerName : null,
+    });
+    showNotif('Recording saved.');
+  } catch (e) { showNotif((e && e.message) || 'Could not save that recording.'); }
+}
+function acCallRecBadge(on) {
+  const el = document.getElementById('callRecBadge');
+  if (el) el.classList.toggle('hidden', !on);
+  const btn = document.getElementById('callRecBtn');
+  if (btn) btn.classList.toggle('on', !!on);
+}
+// The OTHER side finding out. Not dismissible: it is on for as long as it is on.
+function acOnRecordingNotice(d) {
+  const el = document.getElementById('callRecNotice');
+  if (el) {
+    el.textContent = d && d.on
+      ? ((d.by && d.by.name ? d.by.name : 'The other person') + ' is recording this call')
+      : '';
+    el.classList.toggle('hidden', !(d && d.on));
+  }
+  if (d && d.on) {
+    showNotif((d.by && d.by.name ? d.by.name : 'The other person') + ' is recording this call');
+    if (typeof announce === 'function') announce('This call is being recorded', true);
+  }
+}
+async function acOpenRecordings() {
+  showOverlay('recordingsView');
+  const b = document.getElementById('recordingsBody'); if (b) b.innerHTML = acSkelRows(3);
+  let list = [];
+  try { list = (await API.req('GET', '/api/calls/recordings')).recordings || []; } catch (e) {}
+  if (!b) return;
+  b.innerHTML = list.length ? list.map((r) => {
+    const mins = Math.floor(r.seconds / 60), secs = r.seconds % 60;
+    return `<div class="b39-row" onclick="acOpenRecording(${r.id})" style="cursor:pointer;">
+      <div class="b39-row-top"><span class="b39-name">${escHtml(r.title || r.peerName || r.groupName || 'Call')}</span>
+        ${r.notes ? '<span class="b39-tag ok">notes</span>' : r.hasTranscript ? '<span class="b39-tag">written down</span>' : ''}</div>
+      <div class="b39-sub">${acTime(r.createdAt)} · ${mins}m ${secs}s</div></div>`;
+  }).join('') : '<div class="ac-empty-sm">Nothing recorded yet. During a call, tap the record button.</div>';
+}
+let _recNow = null;
+async function acOpenRecording(id) {
+  showOverlay('recordingView');
+  const b = document.getElementById('recordingBody'); if (b) b.innerHTML = acSkelRows(3);
+  try {
+    const r = await API.req('GET', '/api/calls/recordings/' + id);
+    _recNow = r; acRenderRecording();
+  } catch (e) { if (b) b.innerHTML = '<div class="ac-empty-sm">Could not open that.</div>'; }
+}
+function acRenderRecording() {
+  const b = document.getElementById('recordingBody'); if (!b || !_recNow) return;
+  const r = _recNow.recording, n = r.notes;
+  const mins = Math.floor(r.seconds / 60), secs = r.seconds % 60;
+  b.innerHTML = `
+    <div class="jp-title">${escHtml(r.title || r.peerName || 'Call')}</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">${acTime(r.createdAt)} · ${mins}m ${secs}s</div>
+    ${r.media ? `<audio controls preload="none" style="width:100%;" src="${escHtml(r.media)}"></audio>` : ''}
+    <div class="b39-acts" style="margin-top:12px;">
+      ${r.transcript ? '' : (_recNow.transcriptionEnabled
+        ? `<button class="ac-pill-btn accent" onclick="acRecTranscribe(${r.id})">Write it down</button>`
+        : '')}
+      ${r.transcript && !n ? `<button class="ac-pill-btn accent" onclick="acRecNotes(${r.id})">Make notes</button>` : ''}
+      <button class="ac-pill-btn" onclick="acRecDelete(${r.id})">Delete</button>
+    </div>
+    ${!r.transcript && !_recNow.transcriptionEnabled ? '<div class="ac-disc-sub" style="margin-top:10px;">Writing calls down is not switched on for this server yet.</div>' : ''}
+    ${n ? `<div class="st-h">The notes</div>
+      <div class="b39-row"><div style="font-size:15px;line-height:1.55;">${escHtml(n.summary || '')}</div>
+      ${(n.points || []).length ? '<ul style="margin:10px 0 0;padding-left:18px;font-size:14.5px;line-height:1.6;">' + n.points.map((p) => '<li>' + escHtml(p) + '</li>').join('') + '</ul>' : ''}</div>
+      ${(n.actions || []).length ? '<div class="st-h">Who does what</div>' + n.actions.map((a) => `<div class="b39-row">
+        <div class="b39-row-top"><span class="b39-name">${escHtml(a.what)}</span>${a.who ? '<span class="b39-tag">' + escHtml(a.who) + '</span>' : ''}</div></div>`).join('') : ''}` : ''}
+    ${r.transcript ? `<div class="st-h">What was said</div><div class="b39-row" style="font-size:14.5px;line-height:1.6;white-space:pre-wrap;">${escHtml(r.transcript)}</div>` : ''}`;
+}
+async function acRecTranscribe(id) {
+  showNotif('Writing it down…');
+  try { await API.req('POST', '/api/calls/recordings/' + id + '/transcribe', {}); acOpenRecording(id); }
+  catch (e) { showNotif((e && e.message) || 'Could not write that down.'); }
+}
+async function acRecNotes(id) {
+  showNotif('Making notes…');
+  try { await API.req('POST', '/api/calls/recordings/' + id + '/notes', {}); acOpenRecording(id); }
+  catch (e) { showNotif((e && e.message) || 'Could not make notes.'); }
+}
+async function acRecDelete(id) {
+  const ok = await appConfirm({ title: 'Delete this recording?', message: 'The audio and the notes go with it. This cannot be undone.', confirmText: 'Delete', danger: true });
+  if (!ok) return;
+  try { await API.req('DELETE', '/api/calls/recordings/' + id); closeOverlay('recordingView'); acOpenRecordings(); }
+  catch (e) { showNotif((e && e.message) || 'Could not delete it.'); }
+}
+
+/* ─── Getting your records out ─── */
+async function acExportCsv(path, filename) {
+  try {
+    const r = await fetch(path, { headers: { Authorization: 'Bearer ' + S.token } });
+    if (!r.ok) throw new Error('Could not export that.');
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+    showNotif('Downloaded.');
+  } catch (e) { showNotif((e && e.message) || 'Could not export that.'); }
+}
+function acExportApplicants(jobId) { acExportCsv('/api/jobs/' + jobId + '/applicants/export', 'applicants.csv'); }
+function acExportCustomers() { acExportCsv('/api/customers/export', 'customers.csv'); }
+
+
+/* ─── The live chat, as a viewer or the host sees it ─── */
+let _liveCmts = [];
+function acLiveChatShow(on) {
+  for (const id of ['liveChat', 'liveSayRow']) {
+    const el = document.getElementById(id); if (el) el.classList.toggle('hidden', !on);
+  }
+  if (on) { _liveCmts = []; acLiveRenderChat(); }
+}
+function acLiveOnComment(d) {
+  // A river, not an archive: only the last handful stay on screen.
+  _liveCmts.push(d);
+  if (_liveCmts.length > 30) _liveCmts = _liveCmts.slice(-30);
+  acLiveRenderChat();
+}
+function acLiveRenderChat() {
+  const el = document.getElementById('liveChat'); if (!el) return;
+  el.innerHTML = _liveCmts.slice(-12).map((c) =>
+    `<div class="live-cmt"><b>${escHtml((c.from && c.from.name) || '')}</b>${escHtml(c.text)}</div>`).join('');
+  el.scrollTop = el.scrollHeight;
+}
+function acLiveRenderPinned(pin) {
+  const el = document.getElementById('livePinnedBar'); if (!el) return;
+  if (!pin || !pin.text) { el.classList.add('hidden'); el.textContent = ''; return; }
+  el.classList.remove('hidden');
+  el.textContent = pin.text;
+}
+function acLiveOnScene(scene) {
+  // The scene is the host's own framing; a viewer only needs to know when the
+  // host has stepped away, which is the one scene with nothing behind it.
+  const wait = document.getElementById('liveWait');
+  if (wait) {
+    if (scene === 'brb') { wait.textContent = 'Back shortly'; wait.classList.remove('hidden'); }
+    else if (wait.textContent === 'Back shortly') wait.classList.add('hidden');
+  }
+}
+function acLiveSay() {
+  const el = document.getElementById('liveSayInput');
+  const t = ((el && el.value) || '').trim();
+  if (!t || typeof LIVE === 'undefined' || !LIVE) return;
+  if (el) el.value = '';
+  acLiveComment(LIVE.streamId, t);
+}
+
+
+/* ─── Handing applicants to another system ────────────────────────────────
+   Every applicant-tracking system will import a spreadsheet, and every one of
+   them insists on its own column names. So the data is the same and only the
+   headings change — which is the entire difference between a file that imports
+   and a file that is rejected. */
+function acApplExportMenu(jobId) {
+  const opts = [
+    ['atwe', 'Spreadsheet', 'Readable columns, for you'],
+    ['greenhouse', 'Greenhouse', 'Their bulk-import columns'],
+    ['lever', 'Lever', 'Their bulk-import columns'],
+    ['workable', 'Workable', 'Their bulk-import columns'],
+  ];
+  const b = document.getElementById('applExportBody');
+  if (b) b.innerHTML = opts.map(([id, label, help]) =>
+    `<button class="b39-row" style="width:100%;text-align:left;border:none;cursor:pointer;display:block;"
+       onclick="acApplExport(${jobId},'${id}')">
+       <div class="b39-name">${escHtml(label)}</div><div class="b39-sub">${escHtml(help)}</div></button>`).join('')
+    + `<div class="ac-disc-sub" style="margin-top:12px;">Want it to happen by itself? Add a webhook under
+       <b>Connect your systems</b> and pick <b>Someone applied</b> — your system is then told the moment
+       anyone applies, with no file to move.</div>`;
+  showOverlay('applExportView');
+}
+function acApplExport(jobId, format) {
+  closeOverlay('applExportView');
+  acExportCsv('/api/jobs/' + jobId + '/applicants/export?format=' + encodeURIComponent(format),
+    'applicants-' + format + '.csv');
+}
+
 </script>
 </body>
 </html>
