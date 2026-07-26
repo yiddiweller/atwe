@@ -18365,6 +18365,25 @@ app.post('/api/coupons/validate', auth.requireAuth, async (req, res) => {
     res.json({ ok: true, discountCents: r.discountCents, coupon: r.coupon ? mapCoupon(r.coupon) : null });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not check the code.' }); }
 });
+// Coupon share-link landing (Shopify discount-link model): public coupon facts +
+// seller identity, so a shared ?coupon= link can show what the deal is before
+// the buyer shops. No per-buyer redemption check here — that stays at checkout.
+app.get('/api/coupons/peek', auth.requireAuth, rateLimit(60, 60000, 'coupon-peek'), async (req, res) => {
+  const sellerId = parseInt(req.query.sellerId, 10);
+  const code = String(req.query.code || '').trim().slice(0, 24);
+  if (!Number.isInteger(sellerId) || !/^[A-Za-z0-9]{3,24}$/.test(code)) return res.status(400).json({ error: 'Invalid coupon link.' });
+  try {
+    const seller = (await db.query('SELECT id, name, username, avatar, account_type FROM users WHERE id = $1 AND username IS NOT NULL AND NOT COALESCE(deactivated, false)', [sellerId])).rows[0];
+    if (!seller) return res.status(404).json({ error: 'This shop is no longer available.' });
+    const c = (await db.query('SELECT code, kind, value, min_order_cents, max_uses, used_count, expires_at, active FROM coupons WHERE seller_id = $1 AND lower(code) = lower($2)', [sellerId, code])).rows[0];
+    const live = c && c.active && (!c.expires_at || new Date(c.expires_at) > new Date()) && (c.max_uses == null || c.used_count < c.max_uses);
+    if (!live) return res.status(404).json({ error: 'This coupon is no longer active.' });
+    res.json({
+      coupon: { code: c.code, kind: c.kind, value: c.value, minOrderCents: c.min_order_cents || 0, expiresAt: c.expires_at || null },
+      seller: { id: seller.id, name: seller.name, username: seller.username, avatar: mediaRef(seller.avatar, 'avatar', seller.id), accountType: seller.account_type },
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the coupon.' }); }
+});
 
 /* ─── Referral program ─── */
 // Invite a friend with your code; when a new account claims it, both wallets get a
