@@ -7919,6 +7919,42 @@ app.post('/api/atchat/invite/:code/join', auth.requireAuth, async (req, res) => 
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not join the group.' }); }
 });
 
+/* ─── Group insights (admin analytics — Discord/Facebook Groups style) ─── */
+app.get('/api/atchat/groups/:id/insights', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  try {
+    if (!(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only a group admin can see insights.' });
+    const one = async (q, p) => (await db.query(q, p)).rows[0];
+    const members = await one(`SELECT COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE joined_at > now() - interval '7 days')::int AS wk,
+        COUNT(*) FILTER (WHERE joined_at > now() - interval '30 days')::int AS mo
+      FROM at_group_members WHERE group_id = $1`, [gid]);
+    const msgs = await one(`SELECT COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE created_at > now() - interval '7 days')::int AS wk,
+        COUNT(*) FILTER (WHERE created_at > now() - interval '30 days')::int AS mo,
+        COUNT(DISTINCT sender_id) FILTER (WHERE created_at > now() - interval '7 days')::int AS active_wk
+      FROM at_group_messages WHERE group_id = $1`, [gid]);
+    // 14-day zero-filled daily message trend (the standard generate_series idiom).
+    const trend = (await db.query(
+      `SELECT d::date AS day, COALESCE(n, 0)::int AS n
+       FROM generate_series(now()::date - 13, now()::date, interval '1 day') d
+       LEFT JOIN (SELECT created_at::date AS day, COUNT(*) AS n FROM at_group_messages
+                   WHERE group_id = $1 AND created_at > now() - interval '14 days' GROUP BY 1) m ON m.day = d::date`, [gid])).rows;
+    const top = (await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar, COUNT(*)::int AS n
+       FROM at_group_messages m JOIN users u ON u.id = m.sender_id
+       WHERE m.group_id = $1 AND m.created_at > now() - interval '30 days'
+       GROUP BY u.id, u.name, u.username, u.avatar ORDER BY n DESC LIMIT 5`, [gid])).rows;
+    res.json({
+      members: { total: members.total, newThisWeek: members.wk, newThisMonth: members.mo },
+      messages: { total: msgs.total, thisWeek: msgs.wk, thisMonth: msgs.mo, activeThisWeek: msgs.active_wk },
+      trend: trend.map(t => ({ day: t.day, n: t.n })),
+      topContributors: top.map(t => ({ id: t.id, name: t.name, username: t.username, avatar: mediaRef(t.avatar, 'avatar', t.id), messages: t.n })),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load insights.' }); }
+});
+
 /* ─── Locked / hidden chats (passcode) ─── */
 // Set or change the chat-lock passcode (4–10 digits). `current` is required when
 // a passcode already exists. Returns the current locked list.
