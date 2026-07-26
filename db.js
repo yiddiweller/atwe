@@ -1946,6 +1946,75 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS ai_usage_at_idx ON ai_usage (created_at DESC);
     CREATE INDEX IF NOT EXISTS ai_usage_feature_idx ON ai_usage (feature);
   `);
+  // ── Batch 37: the assistant that works for you, and a shop that sells ──────
+  // What Atwe AI remembers about you between conversations. Deliberately a
+  // short list of plain facts you can read and delete — not a hidden profile.
+  await query(`
+    CREATE TABLE IF NOT EXISTS ai_memory (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      fact       TEXT NOT NULL,
+      source     TEXT NOT NULL DEFAULT 'you',   -- you | learned
+      pinned     BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS ai_memory_user_idx ON ai_memory (user_id, created_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS ai_memory_dupe_idx ON ai_memory (user_id, md5(lower(fact)));
+  `);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_memory_on BOOLEAN NOT NULL DEFAULT true;`);
+  // Ask the assistant to do something on a schedule ("every Monday, summarise
+  // last week's orders"). The answer lands in the Atwe inbox.
+  await query(`
+    CREATE TABLE IF NOT EXISTS ai_tasks (
+      id          SERIAL PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name        TEXT NOT NULL,
+      prompt      TEXT NOT NULL,
+      cadence     TEXT NOT NULL DEFAULT 'weekly',  -- daily | weekly | monthly
+      hour        INTEGER NOT NULL DEFAULT 8,
+      weekday     INTEGER NOT NULL DEFAULT 1,
+      status      TEXT NOT NULL DEFAULT 'active',  -- active | paused
+      next_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+      last_run_at TIMESTAMPTZ,
+      last_result TEXT,
+      runs        INTEGER NOT NULL DEFAULT 0,
+      fails       INTEGER NOT NULL DEFAULT 0,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS ai_tasks_due_idx ON ai_tasks (status, next_at);
+  `);
+  // A business's front desk: answer inbound messages from what the business
+  // actually knows, and hand over to a human the moment it can't.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reception_enabled BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reception_note TEXT;`);
+  // What a business HAS right now — the stock, the slots, the services — so
+  // "do you have X?" gets a real answer instead of "we'll get back to you".
+  await query(`
+    CREATE TABLE IF NOT EXISTS availability_items (
+      id           SERIAL PRIMARY KEY,
+      business_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name         TEXT NOT NULL,
+      detail       TEXT,
+      category     TEXT,
+      qty          INTEGER,
+      price_cents  INTEGER,
+      available    BOOLEAN NOT NULL DEFAULT true,
+      position     INTEGER NOT NULL DEFAULT 0,
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS availability_biz_idx ON availability_items (business_id, position);
+  `);
+  // A document attached to a post — a PDF, a deck, a price list.
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS doc_url TEXT;`);
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS doc_name TEXT;`);
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS doc_size INTEGER;`);
+  // When it should arrive, promised at checkout and kept on the order.
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS eta_min_at TIMESTAMPTZ;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS eta_max_at TIMESTAMPTZ;`);
+  // How a seller's shop looks.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS store_theme JSONB;`);
+
   // ── Batch 36: reach, reporting, money-back, and where you operate ──────────
   // Wording changes without a deploy. Only the strings you have ACTUALLY
   // changed are stored — everything else falls through to what ships.
