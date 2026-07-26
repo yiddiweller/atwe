@@ -6131,6 +6131,247 @@ app.put('/api/admin/maintenance', auth.requireAdmin, async (req, res) => {
     res.json({ ok: true, maintenance: m });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the message.' }); }
 });
+/* ═══ Trust, safety and support ═══ */
+/* ─── IP blocking ───────────────────────────────────────────────────────────
+   Turn away an abusive network at the door. Every block carries an expiry, so
+   one can never become permanent by being forgotten — and the whole list is
+   cached, because this is checked on every request. */
+let _ipBlocks = new Map();
+async function loadIpBlocks() {
+  if (!db.isConfigured()) return;
+  try {
+    const { rows } = await db.query(`SELECT ip, expires_at FROM blocked_ips WHERE expires_at IS NULL OR expires_at > now()`);
+    _ipBlocks = new Map(rows.map((r) => [r.ip, r.expires_at]));
+  } catch (e) { /* keep the last-known list rather than opening the door */ }
+}
+setInterval(loadIpBlocks, 60000).unref?.();
+app.use((req, res, next) => {
+  if (!_ipBlocks.size) return next();
+  const ip = (req.ip || '').replace(/^::ffff:/, '');
+  if (!_ipBlocks.has(ip)) return next();
+  const until = _ipBlocks.get(ip);
+  if (until && new Date(until) <= new Date()) { _ipBlocks.delete(ip); return next(); }
+  res.status(403).send('Access from your network has been blocked.');
+});
+app.get('/api/admin/ip-blocks', auth.requirePerm('moderation'), async (_req, res) => {
+  try {
+    const { rows } = await db.query(`SELECT * FROM blocked_ips ORDER BY created_at DESC LIMIT 500`);
+    res.json({ blocks: rows.map((b) => ({ ip: b.ip, reason: b.reason, expiresAt: b.expires_at, createdAt: b.created_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the list.' }); }
+});
+app.post('/api/admin/ip-blocks', auth.requirePerm('moderation'), async (req, res) => {
+  const ip = (req.body.ip || '').toString().trim().slice(0, 45);
+  const days = Math.max(1, Math.min(365, parseInt(req.body.days, 10) || 7));
+  if (!/^[0-9a-fA-F:.]{3,45}$/.test(ip)) return res.status(400).json({ error: 'That doesn’t look like an address.' });
+  try {
+    await db.query(
+      `INSERT INTO blocked_ips (ip, reason, expires_at, created_by)
+       VALUES ($1,$2, now() + make_interval(days => $3), $4)
+       ON CONFLICT (ip) DO UPDATE SET reason = EXCLUDED.reason, expires_at = EXCLUDED.expires_at`,
+      [ip, (req.body.reason || '').toString().trim().slice(0, 200) || null, days, req.user.id]);
+    await loadIpBlocks();
+    adminAudit(req, 'ip.block', 'ip', null, { ip, days });
+    res.status(201).json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not block it.' }); }
+});
+app.delete('/api/admin/ip-blocks/:ip', auth.requirePerm('moderation'), async (req, res) => {
+  try {
+    await db.query('DELETE FROM blocked_ips WHERE ip = $1', [String(req.params.ip).slice(0, 45)]);
+    await loadIpBlocks();
+    adminAudit(req, 'ip.unblock', 'ip', null, { ip: req.params.ip });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove it.' }); }
+});
+/* ─── Cases: reports with an owner ──────────────────────────────────────────
+   A queue where nobody owns anything is a queue where two people do the same
+   work and a hard one is never done at all. */
+app.post('/api/admin/reports/:id/assign', auth.requirePerm('moderation'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const to = req.body.assignee === null || req.body.assignee === '' ? null : routeId(req.body.assignee);
+  try {
+    await db.query('UPDATE reports SET assigned_to = $2 WHERE id = $1', [id, to]);
+    if (to && to !== req.user.id) notify(to, req.user.id, 'case_assigned');
+    adminAudit(req, 'report.assign', 'report', id, { to });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not assign it.' }); }
+});
+app.post('/api/admin/reports/:id/escalate', auth.requirePerm('moderation'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    await db.query('UPDATE reports SET escalated = $2, staff_note = COALESCE($3, staff_note) WHERE id = $1',
+      [id, req.body.escalated !== false, (req.body.note || '').toString().trim().slice(0, 500) || null]);
+    adminAudit(req, 'report.escalate', 'report', id, {});
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not escalate it.' }); }
+});
+/* ─── Reduced reach ─────────────────────────────────────────────────────────
+   The middle path between "fine" and "banned": a borderline account keeps
+   posting, but its posts stop being pushed into other people's For You. It is
+   never told, because telling it turns moderation into a game — but it is
+   recorded in the audit log, because staff should be accountable for it. */
+app.post('/api/admin/users/:id/reach', auth.requirePerm('moderation'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const limited = req.body.limited === true;
+  try {
+    const r = await db.query('UPDATE users SET reach_limited = $2 WHERE id = $1 AND NOT is_admin', [id, limited]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    adminAudit(req, limited ? 'reach.limit' : 'reach.restore', 'user', id, { reason: req.body.reason || null });
+    res.json({ ok: true, limited });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not change that.' }); }
+});
+/* ─── Transparency report ───────────────────────────────────────────────────
+   The enforcement numbers a platform is increasingly expected to publish,
+   built from the record rather than assembled by hand. */
+app.get('/api/admin/transparency', auth.requirePerm('moderation'), async (req, res) => {
+  const { from, to } = readRange(req.query);
+  try {
+    const q = (sql) => db.query(sql, [from, to]).then((r) => r.rows[0].n).catch(() => 0);
+    const [received, auto, actioned, dismissed, suspended, banned, appeals, granted, removed, idv] = await Promise.all([
+      q(`SELECT COUNT(*)::int AS n FROM reports WHERE created_at BETWEEN $1 AND $2`),
+      q(`SELECT COUNT(*)::int AS n FROM reports WHERE created_at BETWEEN $1 AND $2 AND reporter_id IS NULL`),
+      q(`SELECT COUNT(*)::int AS n FROM reports WHERE created_at BETWEEN $1 AND $2 AND status = 'resolved'`),
+      q(`SELECT COUNT(*)::int AS n FROM reports WHERE created_at BETWEEN $1 AND $2 AND status = 'dismissed'`),
+      q(`SELECT COUNT(*)::int AS n FROM admin_audit WHERE created_at BETWEEN $1 AND $2 AND action = 'user.status' AND meta->>'status' = 'suspended'`),
+      q(`SELECT COUNT(*)::int AS n FROM admin_audit WHERE created_at BETWEEN $1 AND $2 AND action = 'user.status' AND meta->>'status' = 'banned'`),
+      q(`SELECT COUNT(*)::int AS n FROM appeals WHERE created_at BETWEEN $1 AND $2`),
+      q(`SELECT COUNT(*)::int AS n FROM appeals WHERE created_at BETWEEN $1 AND $2 AND state = 'granted'`),
+      q(`SELECT COUNT(*)::int AS n FROM admin_audit WHERE created_at BETWEEN $1 AND $2 AND action LIKE 'post.delete%'`),
+      q(`SELECT COUNT(*)::int AS n FROM id_verifications WHERE created_at BETWEEN $1 AND $2 AND status = 'approved'`),
+    ]);
+    const byReason = (await db.query(
+      `SELECT reason, COUNT(*)::int AS n FROM reports WHERE created_at BETWEEN $1 AND $2
+        GROUP BY reason ORDER BY n DESC LIMIT 20`, [from, to])).rows;
+    res.json({ from, to,
+      reports: { received, automated: auto, fromPeople: Math.max(0, received - auto), actioned, dismissed },
+      accounts: { suspended, banned, idVerified: idv },
+      content: { removed },
+      appeals: { received: appeals, granted, upheldPct: appeals ? Math.round((granted / appeals) * 100) : 0 },
+      byReason });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build the report.' }); }
+});
+/* ─── Help centre ───────────────────────────────────────────────────────────
+   Answer a common question once, publicly, instead of in every thread. */
+app.get('/api/help', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, slug, title, body, category FROM help_articles WHERE published = true
+        ORDER BY position, title LIMIT 200`);
+    res.json({ articles: rows });
+  } catch (err) { res.json({ articles: [] }); }
+});
+app.post('/api/help/:slug/view', auth.requireAuth, async (req, res) => {
+  db.query('UPDATE help_articles SET views = views + 1 WHERE slug = $1', [String(req.params.slug).slice(0, 80)]).catch(() => {});
+  res.json({ ok: true });
+});
+app.get('/api/admin/help', auth.requirePerm('support'), async (_req, res) => {
+  try {
+    const { rows } = await db.query('SELECT * FROM help_articles ORDER BY position, title LIMIT 300');
+    res.json({ articles: rows });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the articles.' }); }
+});
+app.post('/api/admin/help', auth.requirePerm('support'), async (req, res) => {
+  const title = (req.body.title || '').toString().trim().slice(0, 120);
+  const body = (req.body.body || '').toString().trim().slice(0, 20000);
+  if (!title || !body) return res.status(400).json({ error: 'A title and some words are both needed.' });
+  const slug = (req.body.slug || title).toString().trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO help_articles (slug, title, body, category, published)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (slug) DO UPDATE SET title = EXCLUDED.title, body = EXCLUDED.body,
+         category = EXCLUDED.category, published = EXCLUDED.published, updated_at = now()
+       RETURNING id`,
+      [slug, title, body, (req.body.category || '').toString().trim().slice(0, 60) || null, req.body.published !== false]);
+    adminAudit(req, 'help.save', 'help', rows[0].id, { slug });
+    res.status(201).json({ ok: true, id: rows[0].id, slug });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save it.' }); }
+});
+app.delete('/api/admin/help/:id', auth.requirePerm('support'), async (req, res) => {
+  try {
+    await db.query('DELETE FROM help_articles WHERE id = $1', [routeId(req.params.id)]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete it.' }); }
+});
+/* ─── Did that help? ────────────────────────────────────────────────────────
+   One question after a support conversation, reported per staffer. */
+app.post('/api/support/rate', auth.requireAuth, rateLimit(10, 3600000, 'csat'), async (req, res) => {
+  try {
+    await db.query('INSERT INTO support_ratings (user_id, solved, comment) VALUES ($1,$2,$3)',
+      [req.user.id, req.body.solved === true, (req.body.comment || '').toString().trim().slice(0, 500) || null]);
+    res.status(201).json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not record that.' }); }
+});
+app.get('/api/admin/support-ratings', auth.requirePerm('support'), async (req, res) => {
+  const { from, to } = readRange(req.query);
+  try {
+    const t = (await db.query(
+      `SELECT COUNT(*)::int AS n, COUNT(*) FILTER (WHERE solved)::int AS solved
+         FROM support_ratings WHERE created_at BETWEEN $1 AND $2`, [from, to])).rows[0];
+    const recent = (await db.query(
+      `SELECT r.solved, r.comment, r.created_at, u.username FROM support_ratings r
+         LEFT JOIN users u ON u.id = r.user_id
+        WHERE r.created_at BETWEEN $1 AND $2 AND r.comment IS NOT NULL
+        ORDER BY r.created_at DESC LIMIT 50`, [from, to])).rows;
+    res.json({ from, to, total: t.n, solved: t.solved,
+      solvedPct: t.n ? Math.round((t.solved / t.n) * 100) : null, recent });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load.' }); }
+});
+/* ─── Terms and privacy, versioned ──────────────────────────────────────────
+   When the terms change, people are asked to accept the new ones — and there
+   is a record of who accepted which version, which is the whole point. */
+app.get('/api/legal', async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT DISTINCT ON (kind) id, kind, version, body, created_at FROM legal_docs
+        WHERE published = true ORDER BY kind, created_at DESC`);
+    res.json({ docs: rows });
+  } catch (err) { res.json({ docs: [] }); }
+});
+app.get('/api/legal/pending', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT d.id, d.kind, d.version FROM (
+         SELECT DISTINCT ON (kind) * FROM legal_docs WHERE published = true ORDER BY kind, created_at DESC) d
+        WHERE NOT EXISTS (SELECT 1 FROM legal_accepts a WHERE a.user_id = $1 AND a.doc_id = d.id)`, [req.user.id]);
+    res.json({ pending: rows });
+  } catch (err) { res.json({ pending: [] }); }
+});
+app.post('/api/legal/accept', auth.requireAuth, async (req, res) => {
+  const ids = Array.isArray(req.body.docIds) ? req.body.docIds.map(routeId).filter(Number.isInteger).slice(0, 10) : [];
+  if (!ids.length) return res.status(400).json({ error: 'Nothing to accept.' });
+  try {
+    for (const id of ids) {
+      await db.query('INSERT INTO legal_accepts (user_id, doc_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [req.user.id, id]);
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not record that.' }); }
+});
+app.get('/api/admin/legal', auth.requireAdmin, async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT d.*, (SELECT COUNT(*)::int FROM legal_accepts a WHERE a.doc_id = d.id) AS accepts
+         FROM legal_docs d ORDER BY d.kind, d.created_at DESC LIMIT 100`);
+    res.json({ docs: rows.map((d) => ({ id: d.id, kind: d.kind, version: d.version, published: d.published,
+      accepts: d.accepts, createdAt: d.created_at, body: d.body })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load.' }); }
+});
+app.post('/api/admin/legal', auth.requireAdmin, async (req, res) => {
+  const kind = ['terms', 'privacy'].includes(req.body.kind) ? req.body.kind : null;
+  const version = (req.body.version || '').toString().trim().slice(0, 30);
+  const body = (req.body.body || '').toString().trim().slice(0, 200000);
+  if (!kind || !version || !body) return res.status(400).json({ error: 'Which document, a version, and the words are all needed.' });
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO legal_docs (kind, version, body, published) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (kind, version) DO UPDATE SET body = EXCLUDED.body, published = EXCLUDED.published RETURNING id`,
+      [kind, version, body, req.body.published === true]);
+    adminAudit(req, 'legal.publish', 'legal', rows[0].id, { kind, version, published: req.body.published === true });
+    res.status(201).json({ ok: true, id: rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save it.' }); }
+});
 /* ─── Reading history ───────────────────────────────────────────────────────
    "That post I saw yesterday" is a real thing to want back. This is the
    member's own record of what they opened — theirs to see and theirs to
@@ -10495,6 +10736,11 @@ const MUTE_DAYS = [1, 7, 30];
 function muteExpirySql(days) { const d = MUTE_DAYS.includes(Number(days)) ? Number(days) : 0; return d > 0 ? `now() + interval '${d} days'` : 'NULL'; }
 // Hides subscriber-only posts the viewer ($1) can't access from the public feeds
 // (they still appear as locked teasers on the creator's own profile).
+// A reach-limited account's posts still reach the people who follow it — they
+// just stop being pushed at strangers through For You.
+const REACH_FILTER = ` AND (p.user_id = $1 OR NOT EXISTS (
+  SELECT 1 FROM users ru WHERE ru.id = p.user_id AND ru.reach_limited = true
+) OR EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $1 AND f.following_id = p.user_id))`;
 const SUBONLY_FEED_FILTER = ` AND (p.subscribers_only = false OR p.user_id = $1
   OR EXISTS(SELECT 1 FROM creator_subs cs LEFT JOIN creator_tiers ct ON ct.id = cs.tier_id WHERE cs.creator_id = p.user_id AND cs.subscriber_id = $1 AND cs.status = 'active' AND (cs.period_end IS NULL OR cs.period_end > now()) AND COALESCE(ct.level, 0) >= p.min_tier_level))`;
 // Pull #hashtags out of post text (lowercased, deduped, capped).
@@ -11874,7 +12120,8 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     const repostBy = `EXISTS(SELECT 1 FROM post_reposts rp WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1)))`;
     let where = (following
       ? `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() AND (p.user_id = $1 OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1) OR ${repostBy})`
-      : `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()`) + notBlocked + notHidden + notDeact + MUTE_FILTER + SUBONLY_FEED_FILTER;
+      : `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()`) + notBlocked + notHidden + notDeact + MUTE_FILTER + SUBONLY_FEED_FILTER
+      + (following ? '' : REACH_FILTER);   // reduced reach applies to For You, not to people you chose to follow
     // Infinite scroll: the client sends the ids it already has this session (`seen`,
     // exact within-session dedupe) so each "load more" returns the NEXT unseen batch.
     // First page = no `seen` (and, for Following, no `before` cursor).
@@ -30523,6 +30770,7 @@ db.init()
   .then(() => { if (db.isConfigured()) return db.getSetting(FEE_KEY).then((v) => { _platformFee = normalizeFee(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(TAXONOMY_KEY).then((v) => { _taxonomy = normalizeTaxonomy(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return backfillSkillCanonicals().catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return loadIpBlocks().catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(MAINT_KEY).then((v) => { if (v && typeof v === 'object') _maintenance = v; }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) console.log('🗄️   Schema + settings ready.'); })
   .catch((err) => console.error('Post-init setup failed:', err.message));

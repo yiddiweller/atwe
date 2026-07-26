@@ -1836,6 +1836,70 @@ async function initSchema() {
     CREATE UNIQUE INDEX IF NOT EXISTS chat_form_responses_once_idx
       ON chat_form_responses (form_id, responder_id, message_id) WHERE message_id IS NOT NULL;
   `);
+  // Block an abusive network at the door, with an expiry so a block is never
+  // accidentally permanent.
+  await query(`
+    CREATE TABLE IF NOT EXISTS blocked_ips (
+      ip         TEXT PRIMARY KEY,
+      reason     TEXT,
+      expires_at TIMESTAMPTZ,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  // Reports become cases: someone owns it, it has a state, and a hard one can
+  // be escalated instead of quietly sitting in the queue.
+  await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL`);
+  await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS escalated BOOLEAN NOT NULL DEFAULT false`);
+  await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS staff_note TEXT`);
+  await query(`CREATE INDEX IF NOT EXISTS reports_assigned_idx ON reports (assigned_to) WHERE assigned_to IS NOT NULL`);
+  // The middle path between "fine" and "banned": quietly reduce how far a
+  // borderline account's posts travel, without removing them or telling anyone.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reach_limited BOOLEAN NOT NULL DEFAULT false`);
+  // Help articles, editable from admin, so a common question can be answered
+  // once instead of in every support thread.
+  await query(`
+    CREATE TABLE IF NOT EXISTS help_articles (
+      id         SERIAL PRIMARY KEY,
+      slug       TEXT NOT NULL UNIQUE,
+      title      TEXT NOT NULL,
+      body       TEXT NOT NULL,
+      category   TEXT,
+      published  BOOLEAN NOT NULL DEFAULT true,
+      views      INTEGER NOT NULL DEFAULT 0,
+      position   INTEGER NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  // "Did this solve it?" after a support conversation.
+  await query(`
+    CREATE TABLE IF NOT EXISTS support_ratings (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      staff_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      solved     BOOLEAN NOT NULL,
+      comment    TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  // Terms and privacy, versioned — and who has accepted which version.
+  await query(`
+    CREATE TABLE IF NOT EXISTS legal_docs (
+      id         SERIAL PRIMARY KEY,
+      kind       TEXT NOT NULL,
+      version    TEXT NOT NULL,
+      body       TEXT NOT NULL,
+      published  BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS legal_docs_kind_ver_idx ON legal_docs (kind, version);
+    CREATE TABLE IF NOT EXISTS legal_accepts (
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      doc_id     INTEGER NOT NULL REFERENCES legal_docs(id) ON DELETE CASCADE,
+      accepted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, doc_id)
+    );
+  `);
   // A member's own reading history — "that post I saw yesterday" is a real
   // thing to want back. Their own record, and theirs to clear.
   await query(`
