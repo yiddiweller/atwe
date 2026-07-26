@@ -2411,6 +2411,30 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS saved_candidates_owner_idx ON saved_candidates(owner_id);`);
+  // Recruiter projects (LinkedIn-Recruiter-style): NAMED candidate shortlists —
+  // "Q3 warehouse hires", "Designers to watch" — each member with a private
+  // pipeline stage + note. Entirely private to the owner; candidates are never
+  // notified they're on one.
+  await query(`
+    CREATE TABLE IF NOT EXISTS recruiter_projects (
+      id         SERIAL PRIMARY KEY,
+      owner_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name       TEXT NOT NULL,
+      note       TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS recruiter_projects_owner_idx ON recruiter_projects(owner_id);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS recruiter_project_members (
+      project_id INTEGER NOT NULL REFERENCES recruiter_projects(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      stage      TEXT NOT NULL DEFAULT 'saved',
+      note       TEXT,
+      added_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (project_id, user_id)
+    );
+  `);
   await query(`
     CREATE TABLE IF NOT EXISTS saved_jobs (
       job_id     INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
