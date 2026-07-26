@@ -12,6 +12,7 @@ const push = require('./push');
 const shiptax = require('./shiptax');
 const shiplabels = require('./shiplabels');
 const stt = require('./stt');
+const sms = require('./sms');
 const QRCode = require('qrcode');
 const geoip = require('./geoip');
 const finance = require('./finance');
@@ -263,6 +264,118 @@ function normalizeFeatureFlags(v) {
   for (const k of FEATURE_KEYS) out[k] = src[k] !== false; // default ON
   return out;
 }
+/* ─── Wording, without a deploy ────────────────────────────────────────────
+   The app ships 14 languages as a dictionary in the page. Fixing a clumsy
+   translation used to mean a code change. Overrides live in the database,
+   are merged over the shipped dictionary when the app boots, and only the
+   strings actually CHANGED are stored — so an untouched install is identical. */
+let _i18nOverrides = {};   // { lang: { sourceString: replacement } }
+async function loadTranslationOverrides() {
+  if (!db.isConfigured()) return;
+  try {
+    const { rows } = await db.query('SELECT lang, src, value FROM translation_overrides');
+    const out = {};
+    for (const r of rows) { (out[r.lang] = out[r.lang] || {})[r.src] = r.value; }
+    _i18nOverrides = out;
+  } catch (e) { /* keep whatever we had */ }
+}
+
+/* ─── Where you operate ────────────────────────────────────────────────────
+   Some things are illegal in some places, and some places are simply not worth
+   the fraud. A country can be blocked outright, or have specific features
+   switched off, without touching anyone else. Location comes from the same
+   best-effort IP lookup the Devices list uses, so it FAILS OPEN: if we can't
+   tell where someone is, they are treated as allowed. Blocking a real customer
+   because a lookup hiccuped is far worse than missing one bad actor. */
+const GEO_KEY = 'geo_rules';
+// Which features a country can be denied without being blocked entirely.
+const GEO_FEATURES = [
+  { key: 'signup', label: 'Creating an account' },
+  { key: 'wallet', label: 'Sending money' },
+  { key: 'marketplace', label: 'Buying and selling' },
+  { key: 'ai', label: 'Atwe AI' },
+];
+const GEO_FEATURE_KEYS = GEO_FEATURES.map((f) => f.key);
+let _geoRules = { enabled: false, mode: 'block', countries: [], features: {} };
+function normalizeGeoRules(v) {
+  const src = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+  const codes = (Array.isArray(src.countries) ? src.countries : [])
+    .map((c) => String(c || '').trim().toUpperCase()).filter((c) => /^[A-Z]{2}$/.test(c));
+  const features = {};
+  const f = (src.features && typeof src.features === 'object') ? src.features : {};
+  for (const [code, list] of Object.entries(f)) {
+    if (!/^[A-Z]{2}$/.test(String(code).toUpperCase())) continue;
+    const keys = (Array.isArray(list) ? list : []).filter((k) => GEO_FEATURE_KEYS.includes(k));
+    if (keys.length) features[String(code).toUpperCase()] = [...new Set(keys)];
+  }
+  return {
+    enabled: src.enabled === true,
+    // 'block' = everyone except this list is fine; 'allow' = ONLY this list is.
+    mode: src.mode === 'allow' ? 'allow' : 'block',
+    countries: [...new Set(codes)].slice(0, 300),
+    features,
+  };
+}
+// Cheap per-IP country cache — a geo lookup is a network call, and the same
+// visitor makes many requests.
+const _geoCountry = new Map();
+setInterval(() => { if (_geoCountry.size > 5000) _geoCountry.clear(); }, 3600000).unref?.();
+async function countryOf(req) {
+  const ip = reqIp(req);
+  if (!ip) return null;
+  if (_geoCountry.has(ip)) return _geoCountry.get(ip);
+  let code = null;
+  try { code = await geoip.lookupCountry(ip); } catch (e) { code = null; }
+  _geoCountry.set(ip, code);
+  return code;
+}
+/* Is this request allowed? Returns { ok } or { ok:false, reason }.
+   `feature` is optional: with none, this is the whole-country check. */
+async function geoAllowed(req, feature) {
+  if (!_geoRules.enabled) return { ok: true };
+  const code = await countryOf(req);
+  if (!code) return { ok: true };                       // unknown → allowed, always
+  const listed = _geoRules.countries.includes(code);
+  if (_geoRules.mode === 'block' && listed) return { ok: false, country: code, whole: true };
+  if (_geoRules.mode === 'allow' && !listed) return { ok: false, country: code, whole: true };
+  if (feature) {
+    const off = _geoRules.features[code] || [];
+    if (off.includes(feature)) return { ok: false, country: code, feature };
+  }
+  return { ok: true };
+}
+// Middleware form, for a route that a country can be denied.
+function requireGeo(feature) {
+  return async function (req, res, next) {
+    const g = await geoAllowed(req, feature);
+    if (g.ok) return next();
+    res.status(451).json({
+      error: g.whole ? 'Atwe is not available in your country yet.'
+        : 'This part of Atwe is not available in your country.',
+      geoBlocked: true, country: g.country || null,
+    });
+  };
+}
+
+/* ─── Your own words on your own email ─────────────────────────────────────
+   Every email Atwe sends is wrapped in the same branded shell. This lets that
+   shell be edited — the from-name, the colour, the footer, the reply address —
+   without a deploy. Empty means "use what ships". */
+const MAILBRAND_KEY = 'email_branding';
+let _mailBrand = {};
+function normalizeMailBrand(v) {
+  const src = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+  const str = (x, n) => { const t = String(x == null ? '' : x).trim().slice(0, n); return t || null; };
+  const hex = String(src.accent || '').trim();
+  return {
+    productName: str(src.productName, 40),
+    accent: /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : null,
+    footer: str(src.footer, 400),
+    replyTo: /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(src.replyTo || '').trim()) ? String(src.replyTo).trim() : null,
+    signOff: str(src.signOff, 80),
+  };
+}
+
 /* ─── Gradual rollout ──────────────────────────────────────────────────────
    A switch is all-or-nothing; shipping to everyone at once is how a small bug
    becomes a platform-wide one. A rollout percentage lets a feature reach 5% of
@@ -866,6 +979,10 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
       const tier = parseInt(m.tier_id, 10);
       const stripeSubId = typeof s.subscription === 'string' ? s.subscription : (s.subscription && s.subscription.id) || null;
       if (Number.isInteger(sub) && Number.isInteger(creator)) await recordCreatorSub(sub, creator, CREATOR_SUB_DAYS, Number.isInteger(tier) ? tier : null, stripeSubId);
+    } else if (event.type && event.type.startsWith('charge.dispute.')) {
+      // A cardholder disputed a charge with their bank. Record it and start the
+      // clock — missing the response deadline is an automatic loss.
+      await recordCardDispute(event.data.object);
     } else if (event.type === 'invoice.paid' && event.data.object.subscription) {
       // Monthly renewal of a creator subscription — extend the period if we can map it.
       const inv = event.data.object, line = (inv.lines && inv.lines.data && inv.lines.data[0]) || {};
@@ -1576,6 +1693,11 @@ function publicUser(row) {
     businessVerified: row.business_verify_status === 'verified',
     businessTier: BIZ_TIERS.includes(row.business_verify_tier) ? row.business_verify_tier : 'none',
     allowRemix: row.allow_remix !== false,
+    // The number itself is never sent back — only whether it's confirmed and a
+    // masked form, so a shared screen can't leak it.
+    phoneVerified: !!row.phone_verified,
+    phoneMasked: row.phone_verified && row.sms_phone ? sms.maskPhone(row.sms_phone) : null,
+    smsAlerts: !!row.sms_alerts,
     dmConnectionsOnly: !!row.dm_connections_only,
     otwVisibility: ['recruiters', 'everyone'].includes(row.otw_visibility) ? row.otw_visibility : 'off',
     openToWork: row.otw_visibility === 'everyone', // drives the public #OpenToWork ring
@@ -1631,6 +1753,9 @@ async function createSession(userId, token, req) {
 async function issueSession(user, req) {
   const token = auth.signToken(user);
   await createSession(user.id, token, req);
+  // If a win-back campaign reached this person recently, THIS is them coming
+  // back — the only honest measure of whether it worked. Fire and forget.
+  try { markCampaignReturn(user.id); } catch (e) { /* never block a sign-in */ }
   return token;
 }
 
@@ -3195,6 +3320,10 @@ async function sendLoginAlertEmail(user, req) {
   const where = await geoip.lookup(ip).catch(() => null); // best-effort; omit the line if unknown
   const whereText = where ? `\nLocation: ${where}` : '';
   const whereHtml = where ? `<b>Location:</b> ${escapeHtml(where)}<br/>` : '';
+  // A text as well, if they asked for one. Security is one of only two things
+  // Atwe will ever text about.
+  smsAlert(user.id, 'security', `Atwe: a new sign-in to your account just happened${where ? ' from ' + where : ''}. Not you? Reset your password now.`)
+    .catch(() => {});
   await mailer.sendMail({
     from: ALERTS_FROM,
     to: user.email,
@@ -3508,7 +3637,7 @@ app.post('/api/auth/exists', rateLimit(20, 60000, 'exists'), async (req, res) =>
 
 // Step 1: validate the details, stash a pending signup, and email a 6-digit code.
 // No real account exists until the code is confirmed (step 2).
-app.post('/api/auth/signup', rateLimit(15, 60000, 'signup'), requireFeature('signups'), async (req, res) => {
+app.post('/api/auth/signup', rateLimit(15, 60000, 'signup'), requireFeature('signups'), requireGeo('signup'), async (req, res) => {
   const name = (req.body.name || '').trim();
   const email = (req.body.email || '').trim().toLowerCase();
   const password = req.body.password || '';
@@ -3614,6 +3743,7 @@ app.post('/api/auth/signup/verify', rateLimit(20, 60000, 'signup-verify'), async
     const user = rows[0];
     try { await sendWelcomeEmail(user); } catch (e) { console.error('Welcome email failed:', e.message); }
     logEvent('account', 'account.signup', { actorId: user.id, subjectType: 'user', subjectId: user.id, subjectName: user.name, meta: { accountType: user.account_type || 'personal' } });
+    try { experimentGoal('signup', user.id, req); } catch (e) { /* measurement never blocks a signup */ }
     res.status(201).json({ token: await issueSession(user, req), user: publicUser(user) });
   } catch (err) {
     console.error(err);
@@ -3995,7 +4125,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, business_verify_tier, allow_remix, dm_connections_only, otw_visibility, has_password, totp_enabled, id_verified, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, intro_seen, business_hours, special_hours, hours_note, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, paused, pause_message, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off, store_banner, free_ship_over_cents, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, hiring, pronouns FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, sms_phone, phone_verified, sms_alerts, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, business_verify_tier, allow_remix, dm_connections_only, otw_visibility, has_password, totp_enabled, id_verified, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, intro_seen, business_hours, special_hours, hours_note, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, paused, pause_message, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off, store_banner, free_ship_over_cents, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, hiring, pronouns FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -6101,6 +6231,7 @@ app.post('/api/atchat/with/:id', auth.requireAuth, blockLimited, rateLimit(40, 6
       if (req.body.silent !== true) notify(other, req.user.id, 'message', null);
       maybeAutoReply(other, req.user.id, body).catch(() => {});
     }
+    try { experimentGoal('message', req.user.id, req); } catch (e) { /* measurement never blocks a message */ }
     res.json({ message: { ...msg, mine: true } });
   } catch (err) {
     console.error(err);
@@ -13442,6 +13573,7 @@ app.post('/api/social/posts', auth.requireAuth, blockLimited, rateLimit(40, 6000
     const postId = ins.rows[0].id;
     if (quoteOwner != null) notify(quoteOwner, req.user.id, 'quote', postId);
     moderatePost(postId, req.user.id, body).catch(() => {}); // auto-flag abusive content for review
+    try { experimentGoal('post', req.user.id, req); } catch (e) { /* measurement never blocks a post */ }
     // Index hashtags for tag pages + trending.
     for (const tag of extractHashtags(body)) {
       await db.query('INSERT INTO post_hashtags (post_id, tag) VALUES ($1, $2) ON CONFLICT DO NOTHING', [postId, tag]).catch(() => {});
@@ -16292,6 +16424,739 @@ app.put('/api/admin/feature-flags', auth.requireAdmin, async (req, res) => {
     res.json({ flags: next });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save feature flags.' }); }
 });
+/* ═══════════════════════════════════════════════
+   BATCH 36 (part 2) — churn · campaigns · card money back · SMS · experiments
+═══════════════════════════════════════════════ */
+
+/* ─── Who is drifting away ─────────────────────────────────────────────────
+   The re-engagement push already nudges people who have been gone a while.
+   This is the layer above it: WHO is going quiet, ranked, so you can see the
+   shape of the problem and act on a group rather than one person at a time.
+   "Risk" here is deliberately simple and explainable — days since they were
+   last seen, softened by how much they had been using Atwe before. A member
+   who was here daily and has now been gone a week matters more than one who
+   never really started. */
+const CHURN_SEGMENTS = {
+  all:        { label: 'Everyone',              where: 'TRUE' },
+  at_risk:    { label: 'Going quiet (7–30 days)', where: "last_seen BETWEEN now() - interval '30 days' AND now() - interval '7 days'" },
+  dormant:    { label: 'Gone (30–90 days)',     where: "last_seen BETWEEN now() - interval '90 days' AND now() - interval '30 days'" },
+  lost:       { label: 'Long gone (90+ days)',  where: "last_seen < now() - interval '90 days'" },
+  active:     { label: 'Active this week',      where: "last_seen > now() - interval '7 days'" },
+  never:      { label: 'Signed up, never came back', where: "last_seen IS NULL" },
+  business:   { label: 'Businesses',            where: "account_type = 'business'" },
+  pro:        { label: 'On Pro',                where: "plan = 'pro'" },
+  buyers:     { label: 'Has bought something',  where: 'has_bought' },
+  sellers:    { label: 'Has sold something',    where: 'has_sold' },
+};
+const CHURN_SEGMENT_KEYS = Object.keys(CHURN_SEGMENTS);
+/* One shared view. Every segment above is a filter over THIS, so the numbers in
+   the churn screen and the campaign screen can never disagree. */
+const CHURN_BASE = `
+  SELECT u.id, u.name, u.username, u.email, u.avatar, u.plan, u.account_type, u.created_at,
+         (SELECT MAX(s.last_seen) FROM auth_sessions s WHERE s.user_id = u.id) AS last_seen,
+         EXISTS(SELECT 1 FROM orders o WHERE o.buyer_id = u.id AND o.status <> 'pending') AS has_bought,
+         EXISTS(SELECT 1 FROM orders o WHERE o.seller_id = u.id AND o.status <> 'pending') AS has_sold,
+         (SELECT COUNT(*)::int FROM posts p WHERE p.user_id = u.id) AS posts
+    FROM users u
+   WHERE NOT COALESCE(u.is_demo,false) AND NOT COALESCE(u.deactivated,false)
+     AND COALESCE(u.status,'active') = 'active'`;
+function churnSql(segment) {
+  const seg = CHURN_SEGMENTS[segment] || CHURN_SEGMENTS.all;
+  return `WITH m AS (${CHURN_BASE}) SELECT * FROM m WHERE ${seg.where}`;
+}
+app.get('/api/admin/churn', auth.requirePerm('growth'), async (req, res) => {
+  const segment = CHURN_SEGMENT_KEYS.includes(req.query.segment) ? req.query.segment : 'at_risk';
+  try {
+    const counts = {};
+    for (const key of CHURN_SEGMENT_KEYS) {
+      const r = await db.query(`SELECT COUNT(*)::int AS n FROM (${churnSql(key)}) x`).catch(() => ({ rows: [{ n: 0 }] }));
+      counts[key] = r.rows[0].n;
+    }
+    const { rows } = await db.query(
+      `SELECT * FROM (${churnSql(segment)}) x ORDER BY last_seen DESC NULLS LAST LIMIT 100`);
+    const now = Date.now();
+    const people = rows.map((u) => {
+      const away = u.last_seen ? Math.floor((now - new Date(u.last_seen).getTime()) / 86400000) : null;
+      // Engagement they HAD, so a heavy user drifting is ranked above a light one.
+      const weight = Math.min(1, ((u.posts || 0) + (u.has_bought ? 5 : 0) + (u.has_sold ? 5 : 0)) / 10);
+      const risk = away == null ? 40 : Math.round(Math.min(100, (away / 90) * 70 + weight * 30));
+      return { id: u.id, name: u.name, username: u.username, email: u.email, avatar: u.avatar,
+        plan: u.plan, accountType: u.account_type, lastSeen: u.last_seen, awayDays: away,
+        posts: u.posts, hasBought: u.has_bought, hasSold: u.has_sold, risk };
+    }).sort((a, b) => b.risk - a.risk);
+    res.json({ segment, segments: Object.entries(CHURN_SEGMENTS).map(([k, v]) => ({ key: k, label: v.label, count: counts[k] })), people });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not work out who is drifting.' }); }
+});
+
+/* ─── Campaigns ────────────────────────────────────────────────────────────
+   A message to a chosen group, over the channels you pick, with the result
+   recorded per campaign — including how many of the people you reached came
+   BACK, which is the only number that actually answers "did it work?". */
+function mapCampaign(c) {
+  return { id: c.id, name: c.name, segment: c.segment, subject: c.subject, body: c.body,
+    ctaLabel: c.cta_label, ctaUrl: c.cta_url, byEmail: c.by_email, byPush: c.by_push, byInbox: c.by_inbox,
+    status: c.status, reached: c.reached, emailed: c.emailed, pushed: c.pushed,
+    returned: c.returned != null ? Number(c.returned) : null,
+    createdByName: c.created_by_name || null, sentAt: c.sent_at, createdAt: c.created_at };
+}
+app.get('/api/admin/campaigns', auth.requireAdmin, async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT c.*, u.name AS created_by_name,
+              (SELECT COUNT(*)::int FROM campaign_recipients r WHERE r.campaign_id = c.id AND r.returned_at IS NOT NULL) AS returned
+         FROM marketing_campaigns c LEFT JOIN users u ON u.id = c.created_by
+        ORDER BY c.id DESC LIMIT 100`);
+    res.json({ campaigns: rows.map(mapCampaign),
+      segments: Object.entries(CHURN_SEGMENTS).map(([k, v]) => ({ key: k, label: v.label })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load campaigns.' }); }
+});
+app.post('/api/admin/campaigns', auth.requireAdmin, async (req, res) => {
+  const name = String(req.body.name || '').trim().slice(0, 80);
+  const segment = CHURN_SEGMENT_KEYS.includes(req.body.segment) ? req.body.segment : 'at_risk';
+  const body = String(req.body.body || '').trim().slice(0, 2000);
+  if (!name) return res.status(400).json({ error: 'Give the campaign a name.' });
+  if (!body) return res.status(400).json({ error: 'Write the message.' });
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO marketing_campaigns (name, segment, subject, body, cta_label, cta_url, by_email, by_push, by_inbox, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [name, segment, String(req.body.subject || '').trim().slice(0, 160) || null, body,
+        String(req.body.ctaLabel || '').trim().slice(0, 40) || null, cleanAnnUrl(req.body.ctaUrl),
+        req.body.byEmail !== false, req.body.byPush === true, req.body.byInbox !== false, req.user.id]);
+    res.status(201).json({ campaign: mapCampaign(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the campaign.' }); }
+});
+// How many people a segment holds, before committing to sending anything.
+app.get('/api/admin/campaigns/preview', auth.requireAdmin, async (req, res) => {
+  const segment = CHURN_SEGMENT_KEYS.includes(req.query.segment) ? req.query.segment : 'at_risk';
+  try {
+    const r = await db.query(`SELECT COUNT(*)::int AS n, COUNT(email)::int AS with_email FROM (${churnSql(segment)}) x`);
+    res.json({ segment, ...r.rows[0] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not count that group.' }); }
+});
+app.post('/api/admin/campaigns/:id/send', auth.requireAdmin, rateLimit(10, 3600000, 'campaign'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    // Claim-first, like every other send in this codebase: two clicks must not
+    // mail the same group twice.
+    const c = (await db.query(
+      `UPDATE marketing_campaigns SET status = 'sending' WHERE id = $1 AND status = 'draft' RETURNING *`, [id])).rows[0];
+    if (!c) return res.status(409).json({ error: 'That campaign has already been sent.' });
+    const { rows: people } = await db.query(`SELECT id, name, email FROM (${churnSql(c.segment)}) x LIMIT 20000`);
+    // Record WHO, so "did they come back?" can be answered later.
+    if (people.length) {
+      await db.query(
+        `INSERT INTO campaign_recipients (campaign_id, user_id)
+         SELECT $1, unnest($2::int[]) ON CONFLICT DO NOTHING`,
+        [id, people.map((p) => p.id)]).catch(() => {});
+    }
+    let emailed = 0, pushed = 0;
+    if (c.by_inbox) {
+      await db.query(
+        `INSERT INTO admin_messages (user_id, sender, body, read_by_user, read_by_admin)
+         SELECT unnest($2::int[]), 'admin', $1, false, true`, [c.body, people.map((p) => p.id)]).catch(() => {});
+    }
+    if (c.by_email && mailer.isConfigured()) {
+      const withEmail = people.filter((p) => p.email);
+      emailed = withEmail.length;
+      sendTeamBroadcastEmails(withEmail, c.subject || c.name, c.body).catch((e) => console.error('Campaign email failed:', e.message));
+    }
+    if (c.by_push && push.isConfigured()) {
+      pushed = people.length;
+      (async () => {
+        for (const p of people) {
+          await pushToUser(p.id, { title: c.subject || 'Atwe', body: String(c.body).slice(0, 180),
+            url: c.cta_url || '/', tag: 'campaign' }).catch(() => {});
+        }
+      })().catch(() => {});
+    }
+    await db.query(
+      `UPDATE marketing_campaigns SET status='sent', sent_at=now(), reached=$2, emailed=$3, pushed=$4 WHERE id=$1`,
+      [id, people.length, emailed, pushed]);
+    adminAudit(req, 'campaign.send', 'system', id, { segment: c.segment, reached: people.length });
+    res.json({ ok: true, reached: people.length, emailed, pushed });
+  } catch (err) {
+    await db.query(`UPDATE marketing_campaigns SET status='draft' WHERE id=$1`, [id]).catch(() => {});
+    console.error(err); res.status(500).json({ error: 'Could not send the campaign.' });
+  }
+});
+app.delete('/api/admin/campaigns/:id', auth.requireAdmin, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rowCount } = await db.query(`DELETE FROM marketing_campaigns WHERE id = $1 AND status = 'draft'`, [id]);
+    if (!rowCount) return res.status(409).json({ error: 'A sent campaign is kept as a record and can’t be deleted.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete that.' }); }
+});
+/* Did they come back? Stamped on the recipient row the next time someone we
+   messaged actually signs in. Called from the session-issuing path, fire and
+   forget — the only honest measure of a win-back campaign. */
+function markCampaignReturn(userId) {
+  if (!userId || !db.isConfigured()) return;
+  db.query(
+    `UPDATE campaign_recipients SET returned_at = now()
+      WHERE user_id = $1 AND returned_at IS NULL
+        AND campaign_id IN (SELECT id FROM marketing_campaigns WHERE sent_at > now() - interval '30 days')`,
+    [userId]).catch(() => {});
+}
+
+/* ─── Refund to the card it came from ──────────────────────────────────────
+   Until now a refund always landed as Atwe balance, which is right for a
+   peer-to-peer send but wrong for a card charge someone wants their money back
+   from. This returns it to the card via Stripe. Only for platform charges that
+   actually went through Stripe — money already inside the wallet has no card
+   to go back to. */
+async function findPaymentIntent(kind, refId) {
+  if (!billing.isConfigured()) return null;
+  try {
+    // The Checkout session carries our metadata; from it we get the charge.
+    const sessions = await billing.stripe.checkout.sessions.list({ limit: 100 });
+    const match = sessions.data.find((s) => s.metadata && s.metadata.type === kind
+      && String(s.metadata.ref_id || s.metadata.post_id || s.metadata.job_id || s.metadata.order_id || '') === String(refId));
+    return match && match.payment_intent ? String(match.payment_intent) : null;
+  } catch (e) { return null; }
+}
+app.post('/api/admin/refunds/:id/refund-to-card', auth.requirePerm('refunds'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  if (!billing.isConfigured()) return res.status(503).json({ error: 'Card payments are not set up on this server, so there is no card to refund to.' });
+  const piFromBody = String(req.body.paymentIntent || '').trim().slice(0, 80) || null;
+  try {
+    const rr = (await db.query(
+      `UPDATE refund_requests SET status='resolving' WHERE id=$1 AND status='open' RETURNING *`, [id])).rows[0];
+    if (!rr) return res.status(409).json({ error: 'That request was already handled.' });
+    const unclaim = async () => { await db.query(`UPDATE refund_requests SET status='open' WHERE id=$1`, [id]).catch(() => {}); };
+    let amount = parseInt(req.body.amountCents, 10);
+    if (!Number.isInteger(amount) || amount <= 0) amount = rr.amount_cents;
+    amount = Math.min(amount, rr.amount_cents);
+    if (!amount || amount <= 0) { await unclaim(); return res.status(400).json({ error: 'Nothing to refund.' }); }
+    const pi = piFromBody || await findPaymentIntent(rr.kind, rr.ref_id);
+    if (!pi) { await unclaim(); return res.status(400).json({ error: 'We could not find the original card payment. Refund it as Atwe balance instead, or paste the payment id.', needIntent: true }); }
+    // Record the attempt BEFORE calling Stripe, so a refund that succeeds at the
+    // provider but fails on the way back is still visible rather than invisible.
+    const rec = (await db.query(
+      `INSERT INTO card_refunds (request_id, user_id, kind, ref_id, amount_cents, payment_intent, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [id, rr.user_id, rr.kind, rr.ref_id, amount, pi, req.user.id])).rows[0];
+    let refund;
+    try {
+      refund = await billing.stripe.refunds.create(
+        { payment_intent: pi, amount },
+        { idempotencyKey: 'atwe_refund_' + id + '_' + amount });
+    } catch (e) {
+      await db.query(`UPDATE card_refunds SET status='failed', error=$2 WHERE id=$1`, [rec.id, String(e.message || e).slice(0, 300)]);
+      await unclaim();
+      return res.status(400).json({ error: 'The card refund was declined: ' + String(e.message || e).slice(0, 160) });
+    }
+    await db.query(`UPDATE card_refunds SET status='succeeded', stripe_refund_id=$2 WHERE id=$1`, [rec.id, refund.id]);
+    await db.query(
+      `UPDATE refund_requests SET status='approved', refunded_cents=$2, resolution_note=$3, resolved_by=$4, resolved_at=now() WHERE id=$1`,
+      [id, amount, 'Refunded to the original card', req.user.id]);
+    // Net the revenue dashboard, exactly as a balance refund of a platform charge does.
+    await db.query(
+      'INSERT INTO company_revenue (source, ref_id, payer_id, payer_name, amount_cents, note) VALUES ($1,$2,$3,(SELECT name FROM users WHERE id=$3),$4,$5)',
+      ['refund', rr.ref_id, rr.user_id, -Math.abs(amount), 'Card refund of ' + rr.kind]).catch(() => {});
+    notify(rr.user_id, req.user.id, 'refund_approved');
+    adminAudit(req, 'refund.to_card', 'refund', id, { amount, kind: rr.kind, stripeRefund: refund.id });
+    res.json({ ok: true, amountCents: amount, refundId: refund.id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not refund to the card.' }); }
+});
+app.get('/api/admin/card-refunds', auth.requirePerm('refunds'), async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT c.*, u.username, a.name AS by_name FROM card_refunds c
+         LEFT JOIN users u ON u.id = c.user_id LEFT JOIN users a ON a.id = c.created_by
+        ORDER BY c.id DESC LIMIT 100`);
+    res.json({ refunds: rows, cardsEnabled: billing.isConfigured() });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load card refunds.' }); }
+});
+
+/* ─── Chargebacks ──────────────────────────────────────────────────────────
+   When a cardholder disputes a charge with THEIR bank, the bank takes the
+   money back and gives you a deadline to argue. Missing that deadline is an
+   automatic loss, so this exists mainly to make the clock visible. */
+async function recordCardDispute(d) {
+  if (!d || !d.id) return;
+  const charge = d.charge;
+  let userId = null;
+  try {
+    // Best effort: match the charge back to whoever paid it.
+    if (charge && billing.isConfigured()) {
+      const ch = await billing.stripe.charges.retrieve(String(charge));
+      const cust = ch && ch.customer ? String(ch.customer) : null;
+      if (cust) {
+        const u = (await db.query('SELECT id FROM users WHERE stripe_customer_id = $1', [cust])).rows[0];
+        userId = u ? u.id : null;
+      }
+    }
+  } catch (e) { /* an unmatched dispute is still worth recording */ }
+  await db.query(
+    `INSERT INTO card_disputes (stripe_id, user_id, amount_cents, currency, reason, status, due_by, evidence, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,now())
+     ON CONFLICT (stripe_id) DO UPDATE SET status = $6, due_by = $7, updated_at = now()`,
+    [String(d.id), userId, Math.round(Number(d.amount) || 0), d.currency || null, d.reason || null,
+      d.status || 'needs_response',
+      d.evidence_details && d.evidence_details.due_by ? new Date(d.evidence_details.due_by * 1000).toISOString() : null,
+      {}]).catch((e) => console.error('[dispute]', e.message));
+  // A chargeback is money leaving. Tell the owners immediately.
+  try {
+    const admins = (await db.query(`SELECT id FROM users WHERE is_admin = true LIMIT 5`)).rows;
+    for (const a of admins) notify(a.id, a.id, 'payment');
+  } catch (e) { /* never break the webhook */ }
+}
+app.get('/api/admin/chargebacks', auth.requirePerm('refunds'), async (req, res) => {
+  const openOnly = req.query.state !== 'all';
+  try {
+    const { rows } = await db.query(
+      `SELECT d.*, u.username, u.name AS user_name FROM card_disputes d LEFT JOIN users u ON u.id = d.user_id
+        ${openOnly ? "WHERE d.status IN ('needs_response','warning_needs_response','under_review')" : ''}
+        ORDER BY d.due_by NULLS LAST, d.created_at DESC LIMIT 200`);
+    const totals = (await db.query(
+      `SELECT COUNT(*)::int AS n,
+              COUNT(*) FILTER (WHERE status IN ('needs_response','warning_needs_response'))::int AS needs_response,
+              COUNT(*) FILTER (WHERE status = 'lost')::int AS lost,
+              COUNT(*) FILTER (WHERE status = 'won')::int AS won,
+              COALESCE(SUM(amount_cents) FILTER (WHERE status = 'lost'),0)::bigint AS lost_cents
+         FROM card_disputes`)).rows[0];
+    res.json({
+      disputes: rows.map((d) => ({ ...d,
+        hoursLeft: d.due_by ? Math.round((new Date(d.due_by).getTime() - Date.now()) / 3600000) : null,
+        overdue: !!(d.due_by && new Date(d.due_by).getTime() < Date.now()) })),
+      totals: { ...totals, lost_cents: Number(totals.lost_cents) },
+      cardsEnabled: billing.isConfigured(),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load chargebacks.' }); }
+});
+app.post('/api/admin/chargebacks/:id/evidence', auth.requirePerm('refunds'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  if (!billing.isConfigured()) return res.status(503).json({ error: 'Card payments are not set up on this server.' });
+  const text = String(req.body.text || '').trim().slice(0, 4000);
+  if (!text) return res.status(400).json({ error: 'Write what happened — that is the evidence.' });
+  try {
+    const d = (await db.query('SELECT * FROM card_disputes WHERE id = $1', [id])).rows[0];
+    if (!d) return res.status(404).json({ error: 'Not found.' });
+    if (d.submitted_at) return res.status(409).json({ error: 'Evidence was already submitted for this one.' });
+    // Submitting evidence, not closing: closing a dispute CONCEDES it, which is
+    // a separate and deliberate decision, never a side effect of writing a reply.
+    await billing.stripe.disputes.update(d.stripe_id, { evidence: { uncategorized_text: text } });
+    await db.query(
+      `UPDATE card_disputes SET evidence = $2, submitted_at = now(), note = $3, updated_at = now() WHERE id = $1`,
+      [id, { uncategorized_text: text.slice(0, 1000) }, String(req.body.note || '').slice(0, 500) || null]);
+    adminAudit(req, 'chargeback.evidence', 'dispute', id, { stripeId: d.stripe_id });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not submit the evidence: ' + String(err.message || err).slice(0, 160) }); }
+});
+
+/* ─── Text messages, for security and money only ─── */
+function smsCodeHash(code) { return _nodeCrypto.createHash('sha256').update('atwe-sms:' + String(code)).digest('hex'); }
+app.post('/api/account/phone/start', auth.requireAuth, rateLimit(5, 3600000, 'phone-start'), async (req, res) => {
+  const phone = sms.normalizePhone(req.body.phone);
+  if (!phone) return res.status(400).json({ error: 'Enter your number with the country code, like +447700900123.' });
+  try {
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    await db.query(
+      `INSERT INTO phone_codes (user_id, phone, code_hash, expires_at) VALUES ($1,$2,$3, now() + interval '10 minutes')
+       ON CONFLICT (user_id) DO UPDATE SET phone=$2, code_hash=$3, tries=0, expires_at=now() + interval '10 minutes', created_at=now()`,
+      [req.user.id, phone, smsCodeHash(code)]);
+    const out = await sms.send(phone, 'Your Atwe code is ' + code + '. It expires in 10 minutes.');
+    res.json({ ok: true, sent: out.delivered, masked: sms.maskPhone(phone), smsEnabled: sms.isConfigured() });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the code.' }); }
+});
+app.post('/api/account/phone/verify', auth.requireAuth, rateLimit(10, 3600000, 'phone-verify'), async (req, res) => {
+  const code = String(req.body.code || '').trim();
+  if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Enter the six-digit code.' });
+  try {
+    const row = (await db.query('SELECT * FROM phone_codes WHERE user_id = $1', [req.user.id])).rows[0];
+    if (!row) return res.status(400).json({ error: 'Ask for a code first.' });
+    if (new Date(row.expires_at).getTime() < Date.now()) return res.status(400).json({ error: 'That code has expired. Ask for a new one.' });
+    if (row.tries >= 5) return res.status(429).json({ error: 'Too many attempts. Ask for a new code.' });
+    if (row.code_hash !== smsCodeHash(code)) {
+      await db.query('UPDATE phone_codes SET tries = tries + 1 WHERE user_id = $1', [req.user.id]);
+      return res.status(400).json({ error: 'That code is not right.' });
+    }
+    await db.query('UPDATE users SET sms_phone = $2, phone_verified = true WHERE id = $1', [req.user.id, row.phone]);
+    await db.query('DELETE FROM phone_codes WHERE user_id = $1', [req.user.id]);
+    res.json({ ok: true, masked: sms.maskPhone(row.phone) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not check that code.' }); }
+});
+app.put('/api/account/sms-alerts', auth.requireAuth, async (req, res) => {
+  const on = req.body.enabled === true;
+  try {
+    if (on) {
+      const u = (await db.query('SELECT phone_verified FROM users WHERE id = $1', [req.user.id])).rows[0];
+      if (!u || !u.phone_verified) return res.status(400).json({ error: 'Confirm your number first.' });
+    }
+    await db.query('UPDATE users SET sms_alerts = $2 WHERE id = $1', [req.user.id, on]);
+    res.json({ ok: true, enabled: on });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+app.delete('/api/account/phone', auth.requireAuth, async (req, res) => {
+  try {
+    await db.query('UPDATE users SET sms_phone = NULL, phone_verified = false, sms_alerts = false WHERE id = $1', [req.user.id]);
+    await db.query('DELETE FROM phone_codes WHERE user_id = $1', [req.user.id]).catch(() => {});
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove that.' }); }
+});
+/* Send a member a text — ONLY for the two things that justify one. Silent
+   no-op unless they turned it on and confirmed a number. */
+const SMS_KINDS = ['security', 'money'];
+async function smsAlert(userId, kind, text) {
+  if (!SMS_KINDS.includes(kind) || !db.isConfigured()) return;
+  try {
+    const u = (await db.query(
+      'SELECT sms_phone, phone_verified, sms_alerts FROM users WHERE id = $1', [userId])).rows[0];
+    if (!u || !u.sms_alerts || !u.phone_verified || !u.sms_phone) return;
+    await sms.send(u.sms_phone, String(text).slice(0, 300));
+  } catch (e) { /* a text must never break what triggered it */ }
+}
+
+/* ─── Platform experiments ─────────────────────────────────────────────────
+   Two versions, two groups, one measured winner. Reuses the same stable
+   bucketing as the gradual rollout, so a member sees ONE version consistently
+   rather than flickering between them. */
+const EXPERIMENT_GOALS = {
+  signup: 'Someone signs up',
+  post: 'Someone posts',
+  order: 'Someone buys something',
+  message: 'Someone sends a message',
+  subscribe: 'Someone upgrades to Pro',
+};
+let _experiments = [];
+async function loadExperiments() {
+  if (!db.isConfigured()) return;
+  try { _experiments = (await db.query(`SELECT * FROM platform_experiments WHERE status = 'running'`)).rows; }
+  catch (e) { /* keep what we had */ }
+}
+// Which side of an experiment this person is on. Deterministic, and salted with
+// the experiment key so two experiments don't pick on the same half.
+function experimentVariant(exp, req) {
+  const variants = Array.isArray(exp.variants) && exp.variants.length >= 2 ? exp.variants : ['control', 'test'];
+  const bucket = _rolloutBucket(rolloutSeed(req) + ':exp:' + exp.key);
+  return bucket < (exp.split || 50) ? variants[0] : variants[1];
+}
+// What the client should render. Also records that they SAW it, once.
+app.get('/api/experiments', auth.optionalAuth, async (req, res) => {
+  const out = {};
+  for (const exp of _experiments) {
+    const v = experimentVariant(exp, req);
+    out[exp.key] = v;
+    if (req.user && req.user.id && db.isConfigured()) {
+      db.query(
+        `INSERT INTO experiment_events (experiment_id, user_id, variant, kind) VALUES ($1,$2,$3,'exposure')
+         ON CONFLICT DO NOTHING`, [exp.id, req.user.id, v]).catch(() => {});
+    }
+  }
+  res.json({ experiments: out });
+});
+/* The goal fired. Called from the real thing happening (a signup, an order),
+   not from the client claiming it did. */
+function experimentGoal(goal, userId, req) {
+  if (!userId || !db.isConfigured()) return;
+  for (const exp of _experiments) {
+    if (exp.goal !== goal) continue;
+    const v = experimentVariant(exp, req || { user: { id: userId } });
+    db.query(
+      `INSERT INTO experiment_events (experiment_id, user_id, variant, kind) VALUES ($1,$2,$3,'goal')
+       ON CONFLICT DO NOTHING`, [exp.id, userId, v]).catch(() => {});
+  }
+}
+app.get('/api/admin/experiments', auth.requireAdmin, async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT e.*, u.name AS created_by_name FROM platform_experiments e
+         LEFT JOIN users u ON u.id = e.created_by ORDER BY e.id DESC LIMIT 100`);
+    const stats = (await db.query(
+      `SELECT experiment_id, variant,
+              COUNT(*) FILTER (WHERE kind='exposure')::int AS saw,
+              COUNT(*) FILTER (WHERE kind='goal')::int AS did
+         FROM experiment_events GROUP BY experiment_id, variant`)).rows;
+    const byExp = {};
+    for (const s of stats) (byExp[s.experiment_id] = byExp[s.experiment_id] || []).push(s);
+    res.json({
+      experiments: rows.map((e) => {
+        const arms = (byExp[e.id] || []).map((a) => ({
+          variant: a.variant, saw: a.saw, did: a.did,
+          ratePct: a.saw ? Math.round((a.did / a.saw) * 1000) / 10 : null,
+        })).sort((a, b) => a.variant.localeCompare(b.variant));
+        // Honest about certainty: a few dozen people is not a result.
+        const enough = arms.length >= 2 && arms.every((a) => a.saw >= 100);
+        const lead = arms.length >= 2 ? [...arms].sort((a, b) => (b.ratePct || 0) - (a.ratePct || 0))[0] : null;
+        return { ...e, goalLabel: EXPERIMENT_GOALS[e.goal] || e.goal, arms,
+          enoughData: enough, leading: lead ? lead.variant : null };
+      }),
+      goals: Object.entries(EXPERIMENT_GOALS).map(([k, v]) => ({ key: k, label: v })),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load experiments.' }); }
+});
+app.post('/api/admin/experiments', auth.requireAdmin, async (req, res) => {
+  const key = String(req.body.key || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 40);
+  const name = String(req.body.name || '').trim().slice(0, 80);
+  const goal = EXPERIMENT_GOALS[req.body.goal] ? req.body.goal : 'signup';
+  let split = Math.round(Number(req.body.split));
+  if (!Number.isFinite(split) || split < 5 || split > 95) split = 50;
+  if (!key) return res.status(400).json({ error: 'Give it a short key, like "new-signup-copy".' });
+  if (!name) return res.status(400).json({ error: 'Give it a name.' });
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO platform_experiments (key, name, hypothesis, goal, split, created_by) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [key, name, String(req.body.hypothesis || '').trim().slice(0, 300) || null, goal, split, req.user.id]);
+    await loadExperiments();
+    adminAudit(req, 'experiment.create', 'settings', rows[0].id, { key, goal, split });
+    res.status(201).json({ experiment: rows[0] });
+  } catch (err) {
+    if (String(err.message || '').includes('duplicate')) return res.status(409).json({ error: 'An experiment with that key already exists.' });
+    console.error(err); res.status(500).json({ error: 'Could not create the experiment.' });
+  }
+});
+app.post('/api/admin/experiments/:id/:action', auth.requireAdmin, async (req, res) => {
+  const id = routeId(req.params.id);
+  const action = ['pause', 'resume', 'end'].includes(req.params.action) ? req.params.action : null;
+  if (!Number.isInteger(id) || !action) return res.status(400).json({ error: 'Invalid request.' });
+  const winner = String(req.body.winner || '').trim().slice(0, 40) || null;
+  try {
+    const status = action === 'pause' ? 'paused' : action === 'resume' ? 'running' : 'ended';
+    await db.query(
+      `UPDATE platform_experiments SET status=$2, winner=COALESCE($3, winner),
+              ended_at = CASE WHEN $2='ended' THEN now() ELSE NULL END WHERE id=$1`,
+      [id, status, action === 'end' ? winner : null]);
+    await loadExperiments();
+    adminAudit(req, 'experiment.' + action, 'settings', id, { winner });
+    res.json({ ok: true, status });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update that.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   BATCH 36 — words, places, reporting, reach, money back
+═══════════════════════════════════════════════ */
+
+/* ─── Translation manager ─── */
+// The app fetches these on boot and merges them over its shipped dictionary.
+app.get('/api/i18n-overrides', (_req, res) => {
+  res.set('Cache-Control', 'no-cache');
+  res.json({ overrides: _i18nOverrides });
+});
+app.get('/api/admin/translations', auth.requireAdmin, async (req, res) => {
+  const lang = String(req.query.lang || '').trim().slice(0, 8);
+  try {
+    const args = [], where = [];
+    if (lang) { args.push(lang); where.push(`lang = $${args.length}`); }
+    const { rows } = await db.query(
+      `SELECT t.*, u.name AS updated_by_name FROM translation_overrides t
+         LEFT JOIN users u ON u.id = t.updated_by
+        ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+        ORDER BY t.lang, t.src LIMIT 1000`, args);
+    const counts = (await db.query(
+      'SELECT lang, COUNT(*)::int AS n FROM translation_overrides GROUP BY lang ORDER BY lang')).rows;
+    res.json({ overrides: rows, counts });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the wording.' }); }
+});
+app.put('/api/admin/translations', auth.requireAdmin, async (req, res) => {
+  const lang = String(req.body.lang || '').trim().slice(0, 8);
+  const src = String(req.body.src || '').trim();
+  const value = String(req.body.value == null ? '' : req.body.value).trim();
+  if (!/^[a-z]{2}(-[A-Za-z]{2})?$/.test(lang)) return res.status(400).json({ error: 'Pick a language.' });
+  if (!src || src.length > 400) return res.status(400).json({ error: 'Which phrase are you changing?' });
+  try {
+    if (!value) {
+      // An empty value means "put it back to what ships", not "make it blank".
+      await db.query('DELETE FROM translation_overrides WHERE lang = $1 AND src = $2', [lang, src]);
+    } else {
+      await db.query(
+        `INSERT INTO translation_overrides (lang, src, value, updated_by) VALUES ($1,$2,$3,$4)
+         ON CONFLICT (lang, md5(src)) DO UPDATE SET value = $3, updated_by = $4, updated_at = now()`,
+        [lang, src, value.slice(0, 600), req.user.id]);
+    }
+    await loadTranslationOverrides();
+    adminAudit(req, 'i18n.edit', 'settings', lang, { src: src.slice(0, 80), cleared: !value });
+    res.json({ ok: true, overrides: _i18nOverrides[lang] || {} });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that wording.' }); }
+});
+
+/* ─── Where you operate ─── */
+app.get('/api/admin/geo-rules', auth.requireAdmin, async (req, res) => {
+  try {
+    // What countries people are ACTUALLY coming from, so a rule is written
+    // against reality rather than a guess.
+    const seen = (await db.query(
+      `SELECT g.country, COUNT(DISTINCT v.visitor)::int AS visitors
+         FROM page_views v JOIN ip_geo g ON g.ip = v.ip
+        WHERE v.created_at > now() - interval '30 days' AND g.country IS NOT NULL
+        GROUP BY g.country ORDER BY visitors DESC LIMIT 40`).catch(() => ({ rows: [] }))).rows;
+    res.json({ rules: _geoRules, features: GEO_FEATURES, seen, geoEnabled: geoip.isConfigured() });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the rules.' }); }
+});
+app.put('/api/admin/geo-rules', auth.requireAdmin, async (req, res) => {
+  try {
+    const next = normalizeGeoRules(req.body.rules);
+    // The same anti-lockout thinking as the IP allowlist: switching this on
+    // from a country the rule would block locks you out of your own platform.
+    if (next.enabled) {
+      const mine = await countryOf(req);
+      if (mine) {
+        const listed = next.countries.includes(mine);
+        const blocked = next.mode === 'block' ? listed : !listed;
+        if (blocked) return res.status(400).json({
+          error: 'That would block your own country (' + mine + '). Adjust the list first.', myCountry: mine });
+      }
+    }
+    if (db.isConfigured()) await db.setSetting(GEO_KEY, next);
+    _geoRules = next;
+    adminAudit(req, 'geo.rules', 'settings', GEO_KEY, { enabled: next.enabled, mode: next.mode, n: next.countries.length });
+    res.json({ ok: true, rules: next });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the rules.' }); }
+});
+
+/* ─── Email branding ─── */
+app.get('/api/admin/email-branding', auth.requireAdmin, (_req, res) => {
+  res.json({ branding: _mailBrand, defaults: { productName: 'Atwe', accent: '#0A84FF', signOff: 'The Atwe team' },
+    emailEnabled: mailer.isConfigured() });
+});
+app.put('/api/admin/email-branding', auth.requireAdmin, async (req, res) => {
+  try {
+    const next = normalizeMailBrand(req.body.branding);
+    if (db.isConfigured()) await db.setSetting(MAILBRAND_KEY, next);
+    _mailBrand = next;
+    mailer.setBranding(next);
+    adminAudit(req, 'email.branding', 'settings', MAILBRAND_KEY, next);
+    res.json({ ok: true, branding: next });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+app.post('/api/admin/email-branding/preview', auth.requireAdmin, rateLimit(10, 3600000, 'mailpreview'), async (req, res) => {
+  try {
+    const me = (await db.query('SELECT email, name FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!me || !me.email) return res.status(400).json({ error: 'Your account has no email address.' });
+    await mailer.sendMail({
+      to: me.email,
+      subject: 'How your emails look',
+      html: mailer.brand({
+        heading: 'This is how your emails look',
+        intro: 'A sample, sent to you so you can see the wording, the colour and the footer as a member would.',
+        bodyHtml: '<p>Nothing here needs doing — it is just a preview.</p>',
+        button: { label: 'Open Atwe', url: mailer.appUrl() },
+      }),
+      text: 'A preview of your email design.',
+    });
+    res.json({ ok: true, sent: me.email, delivered: mailer.isConfigured() });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the preview.' }); }
+});
+
+/* ─── Custom report builder ────────────────────────────────────────────────
+   BI without leaving the dashboard, but deliberately NOT a query language: you
+   pick a metric and a way to break it down, both from fixed lists that map to
+   hand-written SQL. A free-text query box over the live database is one typo
+   away from a very bad afternoon. */
+const REPORT_METRICS = {
+  signups:  { label: 'New members',    table: 'users',           date: 'created_at', agg: 'COUNT(*)', where: 'NOT COALESCE(is_demo,false)' },
+  revenue:  { label: 'Revenue',        table: 'company_revenue',  date: 'created_at', agg: 'COALESCE(SUM(amount_cents),0)', money: true },
+  orders:   { label: 'Orders',         table: 'orders',           date: 'created_at', agg: 'COUNT(*)', where: "status <> 'pending'" },
+  gmv:      { label: 'Value of goods sold', table: 'orders',      date: 'created_at', agg: 'COALESCE(SUM(total_cents),0)', money: true, where: "status <> 'pending'" },
+  posts:    { label: 'Posts',          table: 'posts',            date: 'created_at', agg: 'COUNT(*)' },
+  messages: { label: 'Messages sent',  table: 'at_messages',      date: 'created_at', agg: 'COUNT(*)' },
+  listings: { label: 'Listings added', table: 'products',         date: 'created_at', agg: 'COUNT(*)' },
+  reports:  { label: 'Content reports', table: 'reports',         date: 'created_at', agg: 'COUNT(*)' },
+  refunds:  { label: 'Refund requests', table: 'refund_requests', date: 'created_at', agg: 'COUNT(*)' },
+  disputes: { label: 'Order disputes', table: 'orders',           date: 'disputed_at', agg: 'COUNT(*)', where: 'disputed_at IS NOT NULL' },
+};
+// How to slice it. Each is a SQL expression we wrote, never anything from the request.
+const REPORT_DIMENSIONS = {
+  day:   { label: 'By day',   expr: "to_char(%D%::date, 'YYYY-MM-DD')" },
+  week:  { label: 'By week',  expr: "to_char(date_trunc('week', %D%), 'YYYY-MM-DD')" },
+  month: { label: 'By month', expr: "to_char(date_trunc('month', %D%), 'YYYY-MM')" },
+  hour:  { label: 'By hour of day', expr: "lpad(EXTRACT(HOUR FROM %D%)::text, 2, '0') || ':00'" },
+  dow:   { label: 'By day of week', expr: "trim(to_char(%D%, 'Day'))" },
+};
+// A few metrics can also be split by a property of the row itself.
+const REPORT_EXTRA_DIMS = {
+  revenue:  { source: { label: 'By source',  expr: 'source' } },
+  orders:   { status: { label: 'By status',  expr: 'status' } },
+  gmv:      { status: { label: 'By status',  expr: 'status' } },
+  signups:  { type:   { label: 'By account type', expr: "COALESCE(account_type,'personal')" },
+              plan:   { label: 'By plan',    expr: "COALESCE(plan,'free')" } },
+  reports:  { reason: { label: 'By reason',  expr: 'reason' } },
+  refunds:  { kind:   { label: 'By kind',    expr: 'kind' } },
+};
+function reportDimsFor(metric) {
+  const out = { ...REPORT_DIMENSIONS };
+  for (const [k, v] of Object.entries(REPORT_EXTRA_DIMS[metric] || {})) out[k] = v;
+  return out;
+}
+async function runReport(metric, dimension, days) {
+  const m = REPORT_METRICS[metric];
+  if (!m) throw new Error('Unknown metric');
+  const dims = reportDimsFor(metric);
+  const d = dims[dimension] || dims.day;
+  const bucket = d.expr.replace(/%D%/g, m.date);
+  const conds = [`${m.date} > now() - ($1 || ' days')::interval`];
+  if (m.where) conds.push(m.where);
+  const { rows } = await db.query(
+    `SELECT ${bucket} AS bucket, ${m.agg} AS value
+       FROM ${m.table} WHERE ${conds.join(' AND ')}
+      GROUP BY 1 ORDER BY 1`, [String(days)]);
+  const total = rows.reduce((a, r) => a + Number(r.value || 0), 0);
+  return { rows: rows.map((r) => ({ bucket: r.bucket, value: Number(r.value || 0) })), total,
+    money: !!m.money, metricLabel: m.label, dimensionLabel: d.label };
+}
+app.get('/api/admin/report-options', auth.requirePerm('growth'), async (req, res) => {
+  const metric = REPORT_METRICS[req.query.metric] ? req.query.metric : null;
+  res.json({
+    metrics: Object.entries(REPORT_METRICS).map(([k, v]) => ({ key: k, label: v.label, money: !!v.money })),
+    dimensions: Object.entries(reportDimsFor(metric || 'signups')).map(([k, v]) => ({ key: k, label: v.label })),
+  });
+});
+app.get('/api/admin/report', auth.requirePerm('growth'), async (req, res) => {
+  const metric = REPORT_METRICS[req.query.metric] ? req.query.metric : 'signups';
+  const dimension = req.query.dimension || 'day';
+  const days = Math.min(730, Math.max(1, parseInt(req.query.days, 10) || 30));
+  if (!reportDimsFor(metric)[dimension]) return res.status(400).json({ error: 'That breakdown does not apply to this number.' });
+  try { res.json({ metric, dimension, days, ...(await runReport(metric, dimension, days)) }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not build that report.' }); }
+});
+app.get('/api/admin/report.csv', auth.requirePerm('growth'), async (req, res) => {
+  const metric = REPORT_METRICS[req.query.metric] ? req.query.metric : 'signups';
+  const dimension = req.query.dimension || 'day';
+  const days = Math.min(730, Math.max(1, parseInt(req.query.days, 10) || 30));
+  if (!reportDimsFor(metric)[dimension]) return res.status(400).json({ error: 'That breakdown does not apply.' });
+  try {
+    const r = await runReport(metric, dimension, days);
+    const lines = [[r.dimensionLabel, r.metricLabel].map(csvCell).join(',')];
+    for (const row of r.rows) lines.push([csvCell(row.bucket), r.money ? (row.value / 100).toFixed(2) : row.value].join(','));
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="atwe-${metric}-${dimension}.csv"`);
+    res.send(lines.join('\n'));
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not export that.' }); }
+});
+app.get('/api/admin/saved-reports', auth.requirePerm('growth'), async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT r.*, u.name AS created_by_name FROM saved_reports r LEFT JOIN users u ON u.id = r.created_by ORDER BY r.id DESC LIMIT 100`);
+    res.json({ reports: rows });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your reports.' }); }
+});
+app.post('/api/admin/saved-reports', auth.requirePerm('growth'), async (req, res) => {
+  const name = String(req.body.name || '').trim().slice(0, 80);
+  const metric = REPORT_METRICS[req.body.metric] ? req.body.metric : null;
+  const dimension = req.body.dimension || 'day';
+  const days = Math.min(730, Math.max(1, parseInt(req.body.rangeDays, 10) || 30));
+  if (!name) return res.status(400).json({ error: 'Give the report a name.' });
+  if (!metric) return res.status(400).json({ error: 'Pick a number to report on.' });
+  if (!reportDimsFor(metric)[dimension]) return res.status(400).json({ error: 'That breakdown does not apply.' });
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO saved_reports (name, metric, dimension, range_days, created_by) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [name, metric, dimension, days, req.user.id]);
+    res.status(201).json({ report: rows[0] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the report.' }); }
+});
+app.delete('/api/admin/saved-reports/:id', auth.requirePerm('growth'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try { await db.query('DELETE FROM saved_reports WHERE id = $1', [id]); res.json({ ok: true }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete that.' }); }
+});
+
 /* ═══════════════════════════════════════════════
    BATCH 35 — ops: fraud rules · alert rules · broadcasts · SLA · QA · digest · status
 ═══════════════════════════════════════════════ */
@@ -19359,6 +20224,7 @@ async function recordMoneySend(fromId, toId, amountCents, note, sourceTopup) {
     }
   } catch (e) { /* the money still moved even if the card fails */ }
   notify(toId, fromId, 'money_received');
+  smsAlert(toId, 'money', 'Atwe: you received $' + (amountCents / 100).toFixed(2) + '.').catch(() => {});
   rtPush(toId, 'wallet', { type: 'receive', amountCents });
   rtPush(fromId, 'wallet', { type: 'send', amountCents });
   return { ok: true };
@@ -19801,7 +20667,7 @@ app.post('/api/wallet/topup', auth.requireAuth, blockImpersonation, rateLimit(20
 });
 // Send money to another username. Pays instantly from balance when it covers the
 // amount; otherwise charges the sender (Stripe/demo) for the full amount.
-app.post('/api/wallet/send', auth.requireAuth, blockImpersonation, blockLimited, rateLimit(20, 60000, 'wallet-send'), requireFeature('wallet'), async (req, res) => {
+app.post('/api/wallet/send', auth.requireAuth, blockImpersonation, blockLimited, rateLimit(20, 60000, 'wallet-send'), requireFeature('wallet'), requireGeo('wallet'), async (req, res) => {
   const amountCents = parseWalletAmount(req.body.amount);
   if (amountCents === null) return res.status(400).json({ error: 'Enter an amount between $1 and $2,000.' });
   const note = (req.body.note || '').toString().trim().slice(0, 200) || null;
@@ -24365,6 +25231,7 @@ async function recordOrderPaid(orderId, sellerCredited) {
   // Tell the seller's own systems. Queued, never awaited — their server being
   // slow (or down) must not hold up an order that has already been paid for.
   emitWebhook(o.seller_id, 'order.created', { orderId, totalCents: o.total_cents, buyerId: o.buyer_id });
+  try { experimentGoal('order', o.buyer_id); } catch (e) { /* measurement never blocks money */ }
   emitWebhook(o.seller_id, 'order.paid', { orderId, totalCents: o.total_cents, buyerId: o.buyer_id });
   try {
     if (await dmAllowed(o.buyer_id, o.seller_id)) {
@@ -25219,7 +26086,7 @@ app.post('/api/orders', auth.requireAuth, blockImpersonation, rateLimit(20, 6000
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not place the order.' }); }
 });
 // Buy now: a one-item order straight from a listing (no cart needed).
-app.post('/api/orders/buy', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'order-buy'), requireFeature('marketplace'), async (req, res) => {
+app.post('/api/orders/buy', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'order-buy'), requireFeature('marketplace'), requireGeo('marketplace'), async (req, res) => {
   const productId = parseInt(req.body.productId, 10);
   if (!Number.isInteger(productId)) return res.status(400).json({ error: 'Invalid product.' });
   const qty = Math.max(1, Math.min(99, Math.round(Number(req.body.qty) || 1)));
@@ -32185,7 +33052,7 @@ setInterval(trackJob('broadcasts', flushScheduledBroadcasts), BCAST_FLUSH_MS).un
    Plan is taken from the authenticated user (authoritative);
    guests (no token) fall back to the client-sent plan, local-only.
 ═══════════════════════════════════════════════ */
-app.post('/api/chat', auth.requireAuth, rateLimit(30, 60000, 'chat'), requireFeature('ai'), async (req, res) => {
+app.post('/api/chat', auth.requireAuth, rateLimit(30, 60000, 'chat'), requireFeature('ai'), requireGeo('ai'), async (req, res) => {
   const { messages, plan: clientPlan } = req.body;
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -33144,5 +34011,9 @@ db.init()
   .then(() => { if (db.isConfigured()) return db.getSetting(DIGEST_KEY).then((v) => { if (v) _ownerDigest = normalizeDigest(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return loadFraudRules().catch(() => {}); })
   .then(() => { if (db.isConfigured()) return loadAlertRules().catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return loadTranslationOverrides().catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return loadExperiments().catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return db.getSetting(GEO_KEY).then((v) => { _geoRules = normalizeGeoRules(v); }).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return db.getSetting(MAILBRAND_KEY).then((v) => { _mailBrand = normalizeMailBrand(v); mailer.setBranding(_mailBrand); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) console.log('🗄️   Schema + settings ready.'); })
   .catch((err) => console.error('Post-init setup failed:', err.message));
