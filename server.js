@@ -9407,6 +9407,18 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
         : counts.rows[0].conn_status === 'accepted' ? 'connected'
         : counts.rows[0].conn_status === 'pending' ? (counts.rows[0].conn_requester === req.user.id ? 'pending_out' : 'pending_in')
         : 'none',
+      // LinkedIn-style degree: 1 = connected; 2 = a connection of one of your
+      // connections; null otherwise (3rd+ isn't computed — cost vs value).
+      connectionDegree: (t.id === req.user.id) ? null
+        : counts.rows[0].conn_status === 'accepted' ? 1
+        : ((await db.query(
+            `SELECT 1 FROM connections c1 JOIN connections c2
+               ON (CASE WHEN c1.requester_id = $1 THEN c1.addressee_id ELSE c1.requester_id END)
+                = (CASE WHEN c2.requester_id = $2 THEN c2.addressee_id ELSE c2.requester_id END)
+             WHERE c1.status = 'accepted' AND c2.status = 'accepted'
+               AND (c1.requester_id = $1 OR c1.addressee_id = $1)
+               AND (c2.requester_id = $2 OR c2.addressee_id = $2) LIMIT 1`,
+            [req.user.id, t.id])).rowCount ? 2 : null),
       pinnedPost, isMuted,
       subPrice: t.sub_price_cents || 0, subBlurb: t.sub_blurb || null, isSubscribed, subscriberCount,
       subTiers: tiers, myTierId,
@@ -23573,6 +23585,13 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
       const r = await db.query(
         `SELECT id, name, username, avatar, verified, categories, account_type, headline, business_verify_status,
                 (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = users.id AND f.follower_id IN (SELECT following_id FROM follows WHERE follower_id = $3)) AS mutuals,
+                EXISTS (SELECT 1 FROM connections cc WHERE cc.status = 'accepted' AND ((cc.requester_id = $3 AND cc.addressee_id = users.id) OR (cc.requester_id = users.id AND cc.addressee_id = $3))) AS is_first,
+                EXISTS (SELECT 1 FROM connections c1 JOIN connections c2
+                          ON (CASE WHEN c1.requester_id = $3 THEN c1.addressee_id ELSE c1.requester_id END)
+                           = (CASE WHEN c2.requester_id = users.id THEN c2.addressee_id ELSE c2.requester_id END)
+                        WHERE c1.status = 'accepted' AND c2.status = 'accepted'
+                          AND (c1.requester_id = $3 OR c1.addressee_id = $3)
+                          AND (c2.requester_id = users.id OR c2.addressee_id = users.id)) AS is_second,
                 ${FOLLOWED_BY_SQL('users.id', '$3')} AS followed_by
          FROM users
          WHERE username IS NOT NULL AND id <> $3 AND NOT deactivated AND (
@@ -23584,7 +23603,7 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
          ORDER BY (lower(username) = lower($2)) DESC, mutuals DESC, verified DESC, (username ILIKE $1) DESC, lower(username) LIMIT 40`,
         fParams
       );
-      return res.json({ users: r.rows.map((u) => ({ ...mapSearchUser(u), ...socialProof(u) })) });
+      return res.json({ users: r.rows.map((u) => ({ ...mapSearchUser(u), ...socialProof(u), connectionDegree: u.is_first ? 1 : (u.is_second ? 2 : null) })) });
     }
     // Default ('all'): people + posts + a few marketplace listings.
     const [users, posts, listings] = await Promise.all([
