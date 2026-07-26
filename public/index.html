@@ -7214,6 +7214,15 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .shop-setup-row.done .shop-setup-chk{background:rgba(48,209,88,.18);}
 .shop-setup-chk svg{width:13px;height:13px;fill:none;stroke:var(--green);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;}
 .shop-setup-row .iset-chev{margin-inline-start:auto;}
+/* "What's new": release-note entries + the unread dot. */
+.wn-entry{padding:12px 0;border-bottom:1px solid var(--bg);}
+.wn-entry:last-child{border-bottom:none;}
+.wn-head{display:flex;align-items:center;gap:8px;}
+.wn-title{font-size:15px;font-weight:800;flex:1;}
+.wn-ver{font-size:11px;font-weight:800;color:var(--t3);background:var(--s2);border-radius:999px;padding:2px 8px;}
+.wn-date{font-size:12px;color:var(--t3);margin-top:2px;}
+.wn-body{font-size:14px;line-height:1.55;color:var(--t2);margin-top:7px;white-space:pre-wrap;}
+.wn-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block;margin-inline-start:6px;vertical-align:1px;}
 /* Targeted ads v2: the audience chip grid in the campaign form. */
 .pad-cats{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
 .pad-cats .ppl-chip.on{background:var(--accent-dim);color:var(--accent);font-weight:700;}
@@ -15287,6 +15296,16 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   </div>
 </div>
 
+<!-- "What's new": release notes members can read in-app -->
+<div class="overlay hidden" id="changelogView" onclick="if(event.target===this)closeOverlay('changelogView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="What’s new">
+    <button class="sheet-close" onclick="closeOverlay('changelogView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">What’s new</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Everything we’ve added to Atwe lately.</div>
+    <div id="changelogBody"></div>
+  </div>
+</div>
+
 <!-- Workplace verification: prove where you work with a work-email code -->
 <div class="overlay hidden" id="workVerifyView" onclick="if(event.target===this)closeOverlay('workVerifyView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Verify your workplace">
@@ -17462,7 +17481,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1588'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1589'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -29474,6 +29493,7 @@ function acGoProfileHub() {
     // No top bar on this page — syncTopbar first (resets state), then acShow hides
     // the bar (acMeScreen is in AC_OWN_HEADER) so the hero leads with a clean top.
     acStopMic(); syncTopbar('profile'); acShow('acMeScreen', null);
+    acLoadChangelogBadge(); // quiet "what's new" dot
     const u = S.user || {}, isAdmin = !!u.is_admin, verified = meVerified();
     // `color` is accepted for back-compat with existing call sites but no longer
     // used — icon tiles are plain glyphs now, no per-row background at all.
@@ -29586,6 +29606,7 @@ function acGoProfileHub() {
     html += item('Settings', _ME_IC.gear, "openSettings()", null);
     html += item('Notifications', _ME_IC.bell, "openNotifications()", null);
     html += item('Devices', _ME_IC.device, "openDevices()", null);
+    html += item('What’s new', _ME_IC.bell, "acOpenChangelog()", null);
     html += item('Help', _ME_IC.help, "openHelp()", null);
     if (isAdmin) html += item('Admin dashboard', _ME_IC.shield, "openAdmin()", null);
     html += '</div><div class="me-group">';
@@ -41594,6 +41615,35 @@ function acExperienceSection(d, mine) {
   const chips = AC._workVerified.map(w => `<span class="wv-chip">✓ Verified at ${escHtml(w.businessName || w.domain)}</span>`).join('');
   const verifyBtn = mine ? `<button class="ac-link-btn" style="margin:8px 2px 0;" onclick="acOpenWorkVerify()">${AC._workVerified.length ? 'Manage workplace verification' : 'Verify where you work'}</button>` : '';
   return `<div class="ac-section-row"><span class="ac-prof-head">Experience</span>${addBtn}</div>${chips ? `<div class="wv-row">${chips}</div>` : ''}${rows}${verifyBtn}`;
+}
+/* ── "What's new": release notes + a quiet unread dot ── */
+async function acOpenChangelog() {
+  showOverlay('changelogView');
+  const b = document.getElementById('changelogBody'); b.innerHTML = acSkelRows(2);
+  try {
+    const { entries } = await API.req('GET', '/api/changelog');
+    b.innerHTML = entries.length ? entries.map(e => `<div class="wn-entry">
+        <div class="wn-head"><span class="wn-title">${escHtml(e.title)}</span>${e.version ? `<span class="wn-ver">${escHtml(e.version)}</span>` : ''}</div>
+        <div class="wn-date">${acTime(e.publishedAt)}</div>
+        <div class="wn-body">${acLinkifyPost(escHtml(e.body)).replace(/\n/g, '<br/>')}</div>
+      </div>`).join('') : '<div class="ac-empty" style="padding:22px;">Nothing new yet — we’ll post here as features land.</div>';
+    // Reading it clears the dot.
+    API.req('POST', '/api/changelog/seen').catch(() => {});
+    AC._changelogUnread = 0; acSyncChangelogDot();
+  } catch (e) { b.innerHTML = '<div class="ac-empty">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+async function acLoadChangelogBadge() {
+  try { const { unread } = await API.req('GET', '/api/changelog'); AC._changelogUnread = unread || 0; acSyncChangelogDot(); } catch (e) {}
+}
+// The unread dot lives on the Me-hub row; item() escapes its label, so the dot
+// is injected into the rendered row rather than baked into the string.
+function acSyncChangelogDot() {
+  const row = [...document.querySelectorAll('#acMeBody .me-row')].find(r => (r.getAttribute('onclick') || '').includes('acOpenChangelog'));
+  if (!row) return;
+  const lbl = row.querySelector('.me-lbl'); if (!lbl) return;
+  let dot = lbl.querySelector('.wn-dot');
+  if (AC._changelogUnread) { if (!dot) { dot = document.createElement('span'); dot.className = 'wn-dot'; lbl.appendChild(dot); } }
+  else if (dot) dot.remove();
 }
 /* ── Workplace verification: prove where you work with a work-email code ── */
 async function acOpenWorkVerify() {

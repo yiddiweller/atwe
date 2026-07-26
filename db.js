@@ -1737,6 +1737,22 @@ async function initSchema() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS condition TEXT;`); // new | like_new | good | fair (physical resale)
   // "Was" price (compare-at, Shopify-style) — shown struck through when > price.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS compare_at_cents INTEGER;`);
+  // "What's new" changelog: staff-written release notes members can read in-app.
+  // Drafts are invisible to members until published; users.changelog_seen_at is
+  // what drives the unread dot (a timestamp, so no per-entry read table).
+  await query(`
+    CREATE TABLE IF NOT EXISTS changelog_entries (
+      id           SERIAL PRIMARY KEY,
+      title        TEXT NOT NULL,
+      body         TEXT NOT NULL,
+      version      TEXT,
+      published_at TIMESTAMPTZ,
+      created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS changelog_pub_idx ON changelog_entries(published_at DESC NULLS LAST);`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS changelog_seen_at TIMESTAMPTZ;`);
   // Targeted ads v2: audience targeting on the existing CPC auction. Empty
   // arrays / 'all' mean untargeted (today's behaviour), so existing campaigns
   // are unchanged. Targeting only ever NARROWS who can be shown an ad — it never
