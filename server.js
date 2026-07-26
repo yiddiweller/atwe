@@ -1589,6 +1589,10 @@ function cleanMeta(meta) {
   if (meta == null) return null;
   if (typeof meta !== 'object' || Array.isArray(meta)) return undefined;
   const t = meta.t;
+  // Forms are built SERVER-side from the sender's own saved form (see the
+  // routes), never from a client payload — otherwise anyone could post a card
+  // claiming to be someone else's booking form.
+  if (t === 'form' || t === 'formreply') return undefined;
   if (t === 'doc') {
     const title = metaStr(meta.title, 120) || 'Document';
     const html = sanitizeRichHtml(meta.html);
@@ -6022,6 +6026,324 @@ async function pushMetaCard(fromId, toId, meta) {
   rtPush(fromId, 'msg', { kind: 'dm', peerId: toId, message: { ...msg, mine: true } });
   return ins.rows[0].id;
 }
+/* ─── Per-conversation notification sound ───────────────────────────────────
+   Silent send (already in the DM + group send routes) is the SENDER choosing
+   not to ring anyone. This is the other half: the RECIPIENT choosing what a
+   given conversation sounds like — so the one chat that matters can be told
+   apart from the rest without looking. Stored per thread key on the user. */
+const CHAT_SOUNDS = ['default', 'none', 'chime', 'ping', 'knock', 'pop'];
+app.get('/api/atchat/sounds', auth.requireAuth, async (req, res) => {
+  try {
+    const r = (await db.query('SELECT chat_sounds FROM users WHERE id = $1', [req.user.id])).rows[0];
+    res.json({ sounds: r?.chat_sounds || {}, options: CHAT_SOUNDS });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your sounds.' }); }
+});
+app.put('/api/atchat/sounds', auth.requireAuth, rateLimit(60, 60000, 'chat-sound'), async (req, res) => {
+  const key = (req.body.key || '').toString().trim().slice(0, 40);
+  const sound = CHAT_SOUNDS.includes(req.body.sound) ? req.body.sound : null;
+  if (!/^[dg]\d+(:t\d+)?$/.test(key)) return res.status(400).json({ error: 'Invalid conversation.' });
+  try {
+    // 'default' means "nothing special" — drop the key rather than storing it,
+    // so the map stays small however many chats someone has.
+    if (!sound || sound === 'default') {
+      await db.query('UPDATE users SET chat_sounds = chat_sounds - $2 WHERE id = $1', [req.user.id, key]);
+    } else {
+      await db.query(`UPDATE users SET chat_sounds = jsonb_set(COALESCE(chat_sounds, '{}'::jsonb), $2, $3::jsonb, true) WHERE id = $1`,
+        [req.user.id, '{' + key + '}', JSON.stringify(sound)]);
+    }
+    res.json({ ok: true, key, sound: sound || 'default' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the sound.' }); }
+});
+/* ─── Chat folders ──────────────────────────────────────────────────────────
+   Tabs across the top of the chat list. Labels tag a conversation; a folder is
+   the tab you actually switch to. Kept separate so an existing label set isn't
+   silently repurposed as navigation. */
+const FOLDER_CAP = 12;
+app.get('/api/atchat/folders', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT f.*, COALESCE(json_agg(json_build_object('kind', i.kind, 'id', i.target_id))
+                FILTER (WHERE i.folder_id IS NOT NULL), '[]'::json) AS items
+         FROM chat_folders f LEFT JOIN chat_folder_items i ON i.folder_id = f.id
+        WHERE f.user_id = $1 GROUP BY f.id ORDER BY f.position, f.id`, [req.user.id]);
+    res.json({ folders: rows.map((f) => ({ id: f.id, name: f.name, items: f.items || [] })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your folders.' }); }
+});
+app.post('/api/atchat/folders', auth.requireAuth, rateLimit(30, 60000, 'folder'), async (req, res) => {
+  const name = (req.body.name || '').toString().trim().slice(0, 30);
+  if (!name) return res.status(400).json({ error: 'Give the folder a name.' });
+  try {
+    const n = (await db.query('SELECT COUNT(*)::int AS n FROM chat_folders WHERE user_id = $1', [req.user.id])).rows[0].n;
+    if (n >= FOLDER_CAP) return res.status(400).json({ error: 'You’ve reached the maximum number of folders.' });
+    const { rows } = await db.query('INSERT INTO chat_folders (user_id, name, position) VALUES ($1,$2,$3) RETURNING id',
+      [req.user.id, name, n]);
+    res.status(201).json({ ok: true, id: rows[0].id, name });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the folder.' }); }
+});
+app.delete('/api/atchat/folders/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM chat_folders WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the folder.' }); }
+});
+app.post('/api/atchat/folders/:id/assign', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id), targetId = routeId(req.body.targetId);
+  const kind = req.body.kind === 'group' ? 'group' : 'dm';
+  if (!Number.isInteger(id) || !Number.isInteger(targetId)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const f = (await db.query('SELECT id FROM chat_folders WHERE id = $1 AND user_id = $2', [id, req.user.id])).rows[0];
+    if (!f) return res.status(404).json({ error: 'Not found.' });
+    if (req.body.on === false) await db.query('DELETE FROM chat_folder_items WHERE folder_id = $1 AND kind = $2 AND target_id = $3', [id, kind, targetId]);
+    else await db.query('INSERT INTO chat_folder_items (folder_id, kind, target_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [id, kind, targetId]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the folder.' }); }
+});
+/* ─── Group topic threads ───────────────────────────────────────────────────
+   A named sub-conversation inside a busy group. A message with no topic is the
+   main room, so every message that already exists is untouched. */
+const TOPIC_CAP = 50;
+app.get('/api/atchat/groups/:id/topics', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    if (!(await isGroupMember(gid, req.user.id))) return res.status(403).json({ error: 'Not a member.' });
+    const { rows } = await db.query(
+      `SELECT t.*, (SELECT COUNT(*)::int FROM at_group_messages m WHERE m.topic_id = t.id AND m.deleted_all IS NOT TRUE) AS messages,
+              (SELECT MAX(m.created_at) FROM at_group_messages m WHERE m.topic_id = t.id) AS last_at
+         FROM group_topics t WHERE t.group_id = $1 ORDER BY t.closed, COALESCE(
+              (SELECT MAX(m.created_at) FROM at_group_messages m WHERE m.topic_id = t.id), t.created_at) DESC`, [gid]);
+    res.json({ topics: rows.map((t) => ({ id: t.id, name: t.name, closed: t.closed, messages: t.messages, lastAt: t.last_at, createdBy: t.created_by })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the topics.' }); }
+});
+app.post('/api/atchat/groups/:id/topics', auth.requireAuth, rateLimit(30, 60000, 'topic'), async (req, res) => {
+  const gid = routeId(req.params.id);
+  const name = (req.body.name || '').toString().trim().slice(0, 60);
+  if (!Number.isInteger(gid) || !name) return res.status(400).json({ error: 'Give the topic a name.' });
+  try {
+    if (!(await isGroupMember(gid, req.user.id))) return res.status(403).json({ error: 'Not a member.' });
+    const n = (await db.query('SELECT COUNT(*)::int AS n FROM group_topics WHERE group_id = $1 AND NOT closed', [gid])).rows[0].n;
+    if (n >= TOPIC_CAP) return res.status(400).json({ error: 'This group has too many open topics.' });
+    const { rows } = await db.query('INSERT INTO group_topics (group_id, name, created_by) VALUES ($1,$2,$3) RETURNING id',
+      [gid, name, req.user.id]);
+    res.status(201).json({ ok: true, id: rows[0].id, name });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the topic.' }); }
+});
+// Close/reopen a topic — the creator or a group admin.
+app.patch('/api/atchat/groups/:id/topics/:tid', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id), tid = routeId(req.params.tid);
+  if (!Number.isInteger(gid) || !Number.isInteger(tid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const t = (await db.query('SELECT * FROM group_topics WHERE id = $1 AND group_id = $2', [tid, gid])).rows[0];
+    if (!t) return res.status(404).json({ error: 'Not found.' });
+    if (t.created_by !== req.user.id && !(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Not allowed.' });
+    await db.query('UPDATE group_topics SET closed = $2 WHERE id = $1', [tid, req.body.closed === true]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the topic.' }); }
+});
+/* ═══════════════════════════════════════════════
+   MESSAGE TEMPLATES, REPLY BUTTONS AND IN-CHAT FORMS
+   The three things a business needs to stop typing the same thing all day:
+   a saved message, tappable choices instead of "reply 1 for…", and a small
+   form the customer fills in without leaving the chat.
+
+   Everything the customer sees is built HERE from the sender's own saved row —
+   a client can never post a card with arbitrary buttons or a form that isn't
+   theirs (cleanMeta rejects these types outright).
+═══════════════════════════════════════════════ */
+const TEMPLATE_CAP = 60, FORM_CAP = 30, FORM_FIELD_CAP = 10, BUTTON_CAP = 3;
+// A template's optional quick-reply buttons. Same shape the existing buttons
+// card already uses (up to three plain choices the recipient taps to reply),
+// so a template renders through the renderer that is already there.
+function cleanButtons(v) {
+  if (!Array.isArray(v)) return null;
+  const out = [];
+  for (const b of v.slice(0, BUTTON_CAP)) {
+    const label = String((b && typeof b === 'object') ? (b.label || '') : b || '').trim().slice(0, 60);
+    if (label) out.push(label);
+  }
+  return out.length ? out : null;
+}
+function cleanFormFields(v) {
+  if (!Array.isArray(v)) return [];
+  const out = [];
+  for (const f of v.slice(0, FORM_FIELD_CAP)) {
+    if (!f || typeof f !== 'object') continue;
+    const label = String(f.label || '').trim().slice(0, 60);
+    if (!label) continue;
+    const type = ['text', 'number', 'date', 'choice'].includes(f.type) ? f.type : 'text';
+    const opts = type === 'choice' && Array.isArray(f.options)
+      ? f.options.slice(0, 8).map((o) => String(o).trim().slice(0, 40)).filter(Boolean) : undefined;
+    out.push({ label, type, required: f.required === true, ...(opts && opts.length ? { options: opts } : {}) });
+  }
+  return out;
+}
+const mapTemplate = (t) => ({ id: t.id, title: t.title, body: t.body, buttons: t.buttons || null, uses: t.uses, createdAt: t.created_at });
+app.get('/api/message-templates', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT * FROM message_templates WHERE owner_id = $1 ORDER BY uses DESC, created_at DESC', [req.user.id]);
+    res.json({ templates: rows.map(mapTemplate) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your templates.' }); }
+});
+app.post('/api/message-templates', auth.requireAuth, rateLimit(40, 60000, 'tmpl'), async (req, res) => {
+  const title = (req.body.title || '').toString().trim().slice(0, 60);
+  const body = (req.body.body || '').toString().trim().slice(0, 2000);
+  if (!title || !body) return res.status(400).json({ error: 'A name and a message are required.' });
+  try {
+    const n = (await db.query('SELECT COUNT(*)::int AS n FROM message_templates WHERE owner_id = $1', [req.user.id])).rows[0].n;
+    if (n >= TEMPLATE_CAP) return res.status(400).json({ error: 'You’ve reached the maximum number of templates.' });
+    const { rows } = await db.query(
+      'INSERT INTO message_templates (owner_id, title, body, buttons) VALUES ($1,$2,$3,$4) RETURNING *',
+      [req.user.id, title, body, JSON.stringify(cleanButtons(req.body.buttons))]);
+    res.status(201).json({ ok: true, template: mapTemplate(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the template.' }); }
+});
+app.patch('/api/message-templates/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const sets = [], params = [id, req.user.id];
+  if (typeof req.body.title === 'string' && req.body.title.trim()) { params.push(req.body.title.trim().slice(0, 60)); sets.push(`title = $${params.length}`); }
+  if (typeof req.body.body === 'string' && req.body.body.trim()) { params.push(req.body.body.trim().slice(0, 2000)); sets.push(`body = $${params.length}`); }
+  if (req.body.buttons !== undefined) { params.push(JSON.stringify(cleanButtons(req.body.buttons))); sets.push(`buttons = $${params.length}`); }
+  if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
+  try {
+    const r = await db.query(`UPDATE message_templates SET ${sets.join(', ')} WHERE id = $1 AND owner_id = $2`, params);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the template.' }); }
+});
+app.delete('/api/message-templates/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM message_templates WHERE id = $1 AND owner_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the template.' }); }
+});
+// Send a saved template into a DM. With buttons it becomes a tappable card;
+// without, it's an ordinary message, so nothing about the thread changes.
+app.post('/api/message-templates/:id/send', auth.requireAuth, rateLimit(60, 60000, 'tmpl-send'), async (req, res) => {
+  const id = routeId(req.params.id), to = routeId(req.body.to);
+  if (!Number.isInteger(id) || !Number.isInteger(to)) return res.status(400).json({ error: 'Invalid id.' });
+  if (to === req.user.id) return res.status(400).json({ error: 'That’s you.' });
+  try {
+    const t = (await db.query('SELECT * FROM message_templates WHERE id = $1 AND owner_id = $2', [id, req.user.id])).rows[0];
+    if (!t) return res.status(404).json({ error: 'Not found.' });
+    if (!(await dmAllowed(req.user.id, to))) return res.status(403).json({ error: 'You can’t message them.' });
+    // deliverDM already notifies the recipient; pushMetaCard doesn't, so only
+    // the card path notifies here — otherwise a plain template pings twice.
+    // Quick buttons are a business tool everywhere else — a template must not
+    // be a way around that rule.
+    let mid;
+    if (t.buttons && t.buttons.length) {
+      const acct = (await db.query('SELECT account_type FROM users WHERE id = $1', [req.user.id])).rows[0];
+      if (!acct || acct.account_type !== 'business') return res.status(403).json({ error: 'Quick buttons are a business-account tool.' });
+      mid = await pushMetaCard(req.user.id, to, { t: 'buttons', text: t.body, options: t.buttons });
+      if (mid) notify(to, req.user.id, 'message');
+    } else {
+      mid = await deliverDM(req.user.id, to, t.body, null);
+    }
+    if (!mid) return res.status(403).json({ error: 'You can’t message them.' });
+    await db.query('UPDATE message_templates SET uses = uses + 1 WHERE id = $1', [id]).catch(() => {});
+    res.status(201).json({ ok: true, messageId: mid });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the template.' }); }
+});
+/* ─── In-chat forms ─────────────────────────────────────────────────────── */
+const mapForm = (f) => ({ id: f.id, title: f.title, fields: f.fields || [], createdAt: f.created_at });
+app.get('/api/chat-forms', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT f.*, (SELECT COUNT(*)::int FROM chat_form_responses r WHERE r.form_id = f.id) AS responses
+         FROM chat_forms f WHERE f.owner_id = $1 ORDER BY f.created_at DESC`, [req.user.id]);
+    res.json({ forms: rows.map((f) => ({ ...mapForm(f), responses: f.responses })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your forms.' }); }
+});
+app.post('/api/chat-forms', auth.requireAuth, rateLimit(30, 60000, 'form'), async (req, res) => {
+  const title = (req.body.title || '').toString().trim().slice(0, 60);
+  const fields = cleanFormFields(req.body.fields);
+  if (!title || !fields.length) return res.status(400).json({ error: 'A name and at least one question are required.' });
+  try {
+    const n = (await db.query('SELECT COUNT(*)::int AS n FROM chat_forms WHERE owner_id = $1', [req.user.id])).rows[0].n;
+    if (n >= FORM_CAP) return res.status(400).json({ error: 'You’ve reached the maximum number of forms.' });
+    const { rows } = await db.query('INSERT INTO chat_forms (owner_id, title, fields) VALUES ($1,$2,$3) RETURNING *',
+      [req.user.id, title, JSON.stringify(fields)]);
+    res.status(201).json({ ok: true, form: mapForm(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the form.' }); }
+});
+app.delete('/api/chat-forms/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM chat_forms WHERE id = $1 AND owner_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the form.' }); }
+});
+// Send a form into a DM as a fillable card.
+app.post('/api/chat-forms/:id/send', auth.requireAuth, rateLimit(60, 60000, 'form-send'), async (req, res) => {
+  const id = routeId(req.params.id), to = routeId(req.body.to);
+  if (!Number.isInteger(id) || !Number.isInteger(to)) return res.status(400).json({ error: 'Invalid id.' });
+  if (to === req.user.id) return res.status(400).json({ error: 'That’s you.' });
+  try {
+    const f = (await db.query('SELECT * FROM chat_forms WHERE id = $1 AND owner_id = $2', [id, req.user.id])).rows[0];
+    if (!f) return res.status(404).json({ error: 'Not found.' });
+    const mid = await pushMetaCard(req.user.id, to, { t: 'form', formId: f.id, title: f.title, fields: f.fields || [] });
+    if (!mid) return res.status(403).json({ error: 'You can’t message them.' });
+    notify(to, req.user.id, 'message');
+    res.status(201).json({ ok: true, messageId: mid });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the form.' }); }
+});
+// The customer fills it in. Their answers go back to the business as a card,
+// and are stored once per (form, person, card) so a double-tap can't duplicate.
+app.post('/api/chat-forms/:id/respond', auth.requireAuth, rateLimit(40, 60000, 'form-reply'), async (req, res) => {
+  const id = routeId(req.params.id), messageId = routeId(req.body.messageId);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const f = (await db.query('SELECT * FROM chat_forms WHERE id = $1', [id])).rows[0];
+    if (!f) return res.status(404).json({ error: 'Not found.' });
+    // You can only answer a form that was actually sent TO you.
+    if (Number.isInteger(messageId)) {
+      const m = (await db.query('SELECT sender_id, recipient_id FROM at_messages WHERE id = $1', [messageId])).rows[0];
+      if (!m || m.recipient_id !== req.user.id || m.sender_id !== f.owner_id) return res.status(403).json({ error: 'Not allowed.' });
+    } else if (!(await dmAllowed(req.user.id, f.owner_id))) return res.status(403).json({ error: 'Not allowed.' });
+    const fields = Array.isArray(f.fields) ? f.fields : [];
+    const raw = (req.body.answers && typeof req.body.answers === 'object') ? req.body.answers : {};
+    const answers = {};
+    for (const fld of fields) {
+      const v = raw[fld.label];
+      if (v == null || String(v).trim() === '') {
+        if (fld.required) return res.status(400).json({ error: `“${fld.label}” is required.` });
+        continue;
+      }
+      answers[fld.label] = String(v).trim().slice(0, 300);
+    }
+    const ins = await db.query(
+      `INSERT INTO chat_form_responses (form_id, responder_id, message_id, answers) VALUES ($1,$2,$3,$4)
+       ON CONFLICT DO NOTHING RETURNING id`,
+      [id, req.user.id, Number.isInteger(messageId) ? messageId : null, JSON.stringify(answers)]);
+    if (!ins.rows[0]) return res.json({ ok: true, already: true });
+    await pushMetaCard(req.user.id, f.owner_id, { t: 'formreply', title: f.title, answers });
+    notify(f.owner_id, req.user.id, 'message');
+    res.status(201).json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send your answers.' }); }
+});
+app.get('/api/chat-forms/:id/responses', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const f = (await db.query('SELECT id FROM chat_forms WHERE id = $1 AND owner_id = $2', [id, req.user.id])).rows[0];
+    if (!f) return res.status(404).json({ error: 'Not found.' });
+    const { rows } = await db.query(
+      `SELECT r.id, r.answers, r.created_at, u.name, u.username, u.avatar
+         FROM chat_form_responses r JOIN users u ON u.id = r.responder_id
+        WHERE r.form_id = $1 ORDER BY r.created_at DESC LIMIT 200`, [id]);
+    res.json({ responses: rows.map((r) => ({ id: r.id, answers: r.answers || {}, at: r.created_at,
+      from: { name: r.name, username: r.username, avatar: mediaRef(r.avatar, 'avatar', 0, 0) } })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the responses.' }); }
+});
 /* ═══════════════════════════════════════════════
    CUSTOM STICKERS  —  a member's personal collection of uploaded image stickers.
    Sending one drops a server-built meta.t='sticker' card (image validated at
@@ -6678,11 +7000,50 @@ app.get('/api/atchat/starred', auth.requireAuth, async (req, res) => {
 // actually open. Optional ?peer= or ?group= scopes it to one conversation (the
 // in-thread search bar); with neither it spans every chat. Body-only by design —
 // media/meta cards have no text to match.
+/* Search operators for messages — the same idea as the post-search operators,
+   applied to your own conversations: `from:me`, `has:photo|video|file|link`,
+   `before:`/`after:` a date. Everything that isn't an operator is the text to
+   look for; an operator-only query still works (find every file I was sent). */
+function parseMsgSearch(raw) {
+  const out = { text: '', from: null, has: null, before: null, after: null };
+  const words = [];
+  for (const tok of String(raw || '').split(/\s+/)) {
+    const m = tok.match(/^(from|has|before|after):(.+)$/i);
+    if (!m) { if (tok) words.push(tok); continue; }
+    const k = m[1].toLowerCase(), v = m[2].trim();
+    if (k === 'from') out.from = v.replace(/^@/, '').toLowerCase().slice(0, 40);
+    else if (k === 'has' && ['photo', 'image', 'video', 'file', 'audio', 'link'].includes(v.toLowerCase())) out.has = v.toLowerCase();
+    else if ((k === 'before' || k === 'after') && /^\d{4}-\d{2}-\d{2}$/.test(v)) out[k] = v;
+    else words.push(tok);                    // not a real operator — treat as text
+  }
+  out.text = words.join(' ').trim();
+  return out;
+}
+// The WHERE fragment for a parsed operator set, as parameterized SQL. `meCol`
+// is how "me" is expressed for this table; params are appended in place.
+function msgSearchConds(op, params, meCol) {
+  let sql = '';
+  if (op.has) {
+    if (op.has === 'link') sql += ` AND m.body ~* 'https?://'`;
+    else if (op.has === 'photo' || op.has === 'image') sql += ` AND (m.image IS NOT NULL OR m.media_kind = 'image')`;
+    else { params.push(op.has === 'file' ? 'file' : op.has); sql += ` AND m.media_kind = $${params.length}`; }
+  }
+  if (op.before) { params.push(op.before); sql += ` AND m.created_at < $${params.length}::date`; }
+  if (op.after) { params.push(op.after); sql += ` AND m.created_at >= ($${params.length}::date + interval '1 day')`; }
+  if (op.from === 'me') sql += ` AND m.sender_id = ${meCol}`;
+  else if (op.from) { params.push(op.from); sql += ` AND m.sender_id = (SELECT id FROM users WHERE lower(username) = $${params.length})`; }
+  return sql;
+}
 app.get('/api/atchat/messages/search', auth.requireAuth, rateLimit(60, 60000, 'msg-search'), async (req, res) => {
   const uid = req.user.id;
-  const q = (req.query.q || '').toString().trim();
-  if (q.length < 2) return res.json({ items: [] });
-  const like = '%' + q.replace(/[%_\\]/g, (c) => '\\' + c) + '%';
+  const rawQ = (req.query.q || '').toString().trim();
+  const op = parseMsgSearch(rawQ);
+  const q = op.text;
+  // An operator-only search is valid ("has:file"); a bare 1-letter search isn't.
+  const hasOp = !!(op.from || op.has || op.before || op.after);
+  if (!hasOp && q.length < 2) return res.json({ items: [] });
+  if (hasOp && q.length && q.length < 2) return res.json({ items: [] });
+  const like = q ? '%' + q.replace(/[%_\\]/g, (c) => '\\' + c) + '%' : '%';
   const peer = req.query.peer ? routeId(req.query.peer) : null;
   const group = req.query.group ? routeId(req.query.group) : null;
   if (req.query.peer && !Number.isInteger(peer)) return res.status(400).json({ error: 'Invalid peer id.' });
@@ -6690,6 +7051,8 @@ app.get('/api/atchat/messages/search', auth.requireAuth, rateLimit(60, 60000, 'm
   try {
     let dm = { rows: [] }, gm = { rows: [] };
     if (!group) {
+      const dmParams = peer ? [uid, like, peer] : [uid, like];
+      const dmOps = msgSearchConds(op, dmParams, '$1');
       dm = await db.query(
         `SELECT m.id, m.body, m.created_at, m.sender_id, m.thread_id,
                 (CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END) AS peer_id,
@@ -6703,11 +7066,14 @@ app.get('/api/atchat/messages/search', auth.requireAuth, rateLimit(60, 60000, 'm
             AND (m.expires_at IS NULL OR m.expires_at > now())
             AND m.created_at > COALESCE((SELECT cleared_at FROM at_cleared WHERE user_id = $1 AND other_id = (CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END)), '-infinity'::timestamptz)
             ${peer ? 'AND ((m.sender_id = $1 AND m.recipient_id = $3) OR (m.sender_id = $3 AND m.recipient_id = $1))' : ''}
+            ${dmOps}
           ORDER BY m.created_at DESC LIMIT 40`,
-        peer ? [uid, like, peer] : [uid, like]
+        dmParams
       );
     }
     if (!peer) {
+      const gmParams = group ? [uid, like, group] : [uid, like];
+      const gmOps = msgSearchConds(op, gmParams, '$1');
       gm = await db.query(
         `SELECT m.id, m.body, m.created_at, m.sender_id, m.group_id,
                 g.name AS group_name, g.username AS group_username, g.avatar AS group_avatar,
@@ -6722,8 +7088,9 @@ app.get('/api/atchat/messages/search', auth.requireAuth, rateLimit(60, 60000, 'm
             AND NOT ($1 = ANY(m.hidden_for))
             AND (m.expires_at IS NULL OR m.expires_at > now())
             ${group ? 'AND m.group_id = $3' : ''}
+            ${gmOps}
           ORDER BY m.created_at DESC LIMIT 40`,
-        group ? [uid, like, group] : [uid, like]
+        gmParams
       );
     }
     const items = [
@@ -6737,7 +7104,7 @@ app.get('/api/atchat/messages/search', auth.requireAuth, rateLimit(60, 60000, 'm
         group: { id: m.group_id, name: m.group_name, username: m.group_username || null, avatar: m.group_avatar || null },
       })),
     ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 50);
-    res.json({ items, query: q });
+    res.json({ items, query: q, operators: { from: op.from, has: op.has, before: op.before, after: op.after } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -9188,7 +9555,7 @@ async function recomputeNoteStatus(noteId) {
   } catch (e) { /* best-effort */ }
 }
 const POSTS_SELECT = `
-  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.media_name, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only, p.min_tier_level, p.image_alt, p.ppv_cents, p.occasion, p.article_title, p.pinned_reply_id, p.poll_ends_at,
+  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.media_name, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only, p.min_tier_level, p.image_alt, p.ppv_cents, p.occasion, p.article_title, p.pinned_reply_id, p.poll_ends_at, p.ai_assisted,
          (p.promoted_until IS NOT NULL AND p.promoted_until > now()) AS promoted,
          (p.subscribers_only = false OR p.user_id = $1 OR EXISTS(SELECT 1 FROM creator_subs cs LEFT JOIN creator_tiers ct ON ct.id = cs.tier_id WHERE cs.creator_id = p.user_id AND cs.subscriber_id = $1 AND cs.status = 'active' AND (cs.period_end IS NULL OR cs.period_end > now()) AND COALESCE(ct.level, 0) >= p.min_tier_level)) AS sub_ok,
          (COALESCE(p.ppv_cents,0) = 0 OR p.user_id = $1 OR EXISTS(SELECT 1 FROM post_unlocks pu WHERE pu.post_id = p.id AND pu.user_id = $1)) AS ppv_ok,
@@ -9349,7 +9716,7 @@ function mapPost(r) {
     ppvCents: r.ppv_cents > 0 ? r.ppv_cents : undefined,
     tagged: Array.isArray(r.tags) ? r.tags.filter((t) => t.kind === 'tag').map(({ kind, ...u }) => u) : [],
     coAuthors: Array.isArray(r.tags) ? r.tags.filter((t) => t.kind === 'author').map(({ kind, ...u }) => u) : [],
-    editedAt: r.edited_at || null, promoted: !!r.promoted, occasion: r.occasion || null,
+    editedAt: r.edited_at || null, promoted: !!r.promoted, occasion: r.occasion || null, aiAssisted: !!r.ai_assisted,
     articleTitle: r.article_title || null, note: r.note || null, pinnedReplyId: r.pinned_reply_id || null,
     products: tagProductsFrom(r), product: (tagProductsFrom(r)[0] || null),
     parentId: r.parent_id || null, location: r.location || null,
@@ -11635,9 +12002,9 @@ app.post('/api/social/posts', auth.requireAuth, blockLimited, rateLimit(40, 6000
     // Celebration: an occasion tag on a top-level post gives its card a festive banner.
     const occasion = (parentId == null && POST_OCCASIONS.includes(req.body.occasion)) ? req.body.occasion : null;
     const ins = await db.query(
-      `INSERT INTO posts (user_id, body, image, images, media, media_kind, media_name, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope, subscribers_only, image_alt, ppv_cents, min_tier_level, product_id, occasion, article_title, poll_ends_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $20, $7, $8, $9, COALESCE($10::timestamptz, now()), $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, ${hasPoll ? `now() + interval '${pollDays} days'` : 'NULL'}) RETURNING id`,
-      [req.user.id, body, image, images.length > 1 ? images : null, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId, replyScope, subscribersOnly, imageAlt, ppvCents, minTierLevel, productId, occasion, articleTitle, media.name]
+      `INSERT INTO posts (user_id, body, image, images, media, media_kind, media_name, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope, subscribers_only, image_alt, ppv_cents, min_tier_level, product_id, occasion, article_title, poll_ends_at, ai_assisted)
+       VALUES ($1, $2, $3, $4, $5, $6, $20, $7, $8, $9, COALESCE($10::timestamptz, now()), $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, ${hasPoll ? `now() + interval '${pollDays} days'` : 'NULL'}, $21) RETURNING id`,
+      [req.user.id, body, image, images.length > 1 ? images : null, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId, replyScope, subscribersOnly, imageAlt, ppvCents, minTierLevel, productId, occasion, articleTitle, media.name, req.body.aiAssisted === true]
     );
     const postId = ins.rows[0].id;
     if (quoteOwner != null) notify(quoteOwner, req.user.id, 'quote', postId);
