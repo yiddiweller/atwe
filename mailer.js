@@ -43,7 +43,7 @@ async function sendMail({ to, subject, html, text, replyTo, from }) {
   // Per-call Reply-To wins (e.g. the support form replies to the sender);
   // otherwise fall back to MAIL_REPLY_TO so replies to automated mail (sent from
   // a send-only address like alerts@) land in a real inbox (e.g. team@atwe.com).
-  const rt = replyTo || process.env.MAIL_REPLY_TO;
+  const rt = replyTo || BRAND.replyTo || process.env.MAIL_REPLY_TO;
   if (rt) msg.replyTo = rt;
   await transport.sendMail(msg);
   return { delivered: true };
@@ -59,6 +59,13 @@ function appUrl() {
 // header with the logo, a white card with the message, an optional big code or
 // accent button, and a footer. Renders nicely in Gmail / Apple Mail / Outlook.
 const ACCENT = '#0A84FF';
+/* Admin-editable branding. Empty/absent means "use what ships", so an untouched
+   install renders byte-for-byte what it always did. Set once at boot from
+   app_settings and again whenever it is saved. */
+let BRAND = {};
+function setBranding(b) { BRAND = (b && typeof b === 'object') ? b : {}; }
+function accent() { return BRAND.accent || ACCENT; }
+function productName() { return BRAND.productName || 'Atwe'; }
 function esc(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -70,11 +77,18 @@ function brand({ preheader = '', heading = '', intro = '', code = '', bodyHtml =
       <div style="font-family:'SFMono-Regular',Menlo,Consolas,monospace;font-size:34px;font-weight:800;letter-spacing:9px;
         color:#0b0b0c;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:14px;padding:18px 0;text-align:center;">${esc(code)}</div>
     </td></tr>` : '';
+  // `label` and `text` both accepted — different call sites use different names.
   const btn = button ? `
     <tr><td style="padding:10px 0 4px;">
-      <a href="${button.url}" style="display:inline-block;background:${ACCENT};color:#ffffff !important;text-decoration:none;
-        font-weight:700;font-size:15px;line-height:1;padding:14px 28px;border-radius:999px;">${esc(button.text)}</a>
+      <a href="${button.url}" style="display:inline-block;background:${accent()};color:#ffffff !important;text-decoration:none;
+        font-weight:700;font-size:15px;line-height:1;padding:14px 28px;border-radius:999px;">${esc(button.text || button.label)}</a>
     </td></tr>` : '';
+  const name = productName();
+  const footerLine = BRAND.footer
+    ? esc(BRAND.footer).replace(/\n/g, '<br/>')
+    : `<a href="${base}" style="color:#6E6E73;text-decoration:none;">atwe.com</a> &nbsp;·&nbsp; The network built for business.<br/>
+            © Atwe INC. You're receiving this because you have an Atwe account.`;
+  const signOff = BRAND.signOff ? `<div style="font-size:14px;color:#1D1D1F;padding-top:14px;">${esc(BRAND.signOff)}</div>` : '';
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
 <body style="margin:0;padding:0;background:#ffffff;-webkit-font-smoothing:antialiased;">
   <span style="display:none!important;opacity:0;color:transparent;height:0;width:0;overflow:hidden;">${esc(preheader)}</span>
@@ -83,7 +97,7 @@ function brand({ preheader = '', heading = '', intro = '', code = '', bodyHtml =
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:484px;background:#ffffff;border-radius:22px;overflow:hidden;">
         <tr><td style="background:#0b0b0c;padding:22px 30px;text-align:left;">
           <img src="${logo}" width="34" height="34" alt="" style="display:inline-block;vertical-align:middle;border:0;"/>
-          <span style="color:#ffffff;font-size:20px;font-weight:800;letter-spacing:-.02em;vertical-align:middle;margin-left:9px;">Atwe</span>
+          <span style="color:#ffffff;font-size:20px;font-weight:800;letter-spacing:-.02em;vertical-align:middle;margin-left:9px;">${esc(name)}</span>
         </td></tr>
         <tr><td style="padding:32px 32px 30px;">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
@@ -93,11 +107,11 @@ function brand({ preheader = '', heading = '', intro = '', code = '', bodyHtml =
             ${bodyHtml ? `<tr><td style="font-size:15px;line-height:1.62;color:#1D1D1F;padding-bottom:8px;">${bodyHtml}</td></tr>` : ''}
             ${btn}
           </table>
+          ${signOff}
         </td></tr>
         <tr><td style="padding:18px 32px 26px;border-top:1px solid #eeeef1;">
           <div style="font-size:12.5px;color:#6E6E73;line-height:1.7;">
-            <a href="${base}" style="color:#6E6E73;text-decoration:none;">atwe.com</a> &nbsp;·&nbsp; The network built for business.<br/>
-            © Atwe INC. You're receiving this because you have an Atwe account.
+            ${footerLine}
           </div>
         </td></tr>
       </table>
@@ -106,4 +120,4 @@ function brand({ preheader = '', heading = '', intro = '', code = '', bodyHtml =
 </body></html>`;
 }
 
-module.exports = { isConfigured, sendMail, appUrl, brand };
+module.exports = { isConfigured, sendMail, appUrl, brand, setBranding };

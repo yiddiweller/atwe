@@ -1942,6 +1942,151 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS ai_usage_at_idx ON ai_usage (created_at DESC);
     CREATE INDEX IF NOT EXISTS ai_usage_feature_idx ON ai_usage (feature);
   `);
+  // ── Batch 36: reach, reporting, money-back, and where you operate ──────────
+  // Wording changes without a deploy. Only the strings you have ACTUALLY
+  // changed are stored — everything else falls through to what ships.
+  await query(`
+    CREATE TABLE IF NOT EXISTS translation_overrides (
+      id         SERIAL PRIMARY KEY,
+      lang       TEXT NOT NULL,
+      src        TEXT NOT NULL,
+      value      TEXT NOT NULL,
+      updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS translation_one_idx ON translation_overrides (lang, md5(src));
+  `);
+  // A question you keep asking, saved so you don't rebuild it every Monday.
+  await query(`
+    CREATE TABLE IF NOT EXISTS saved_reports (
+      id         SERIAL PRIMARY KEY,
+      name       TEXT NOT NULL,
+      metric     TEXT NOT NULL,
+      dimension  TEXT,
+      range_days INTEGER NOT NULL DEFAULT 30,
+      filters    JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  // A coordinated push/email/banner to a chosen group of members, with the
+  // result recorded per campaign rather than guessed at.
+  await query(`
+    CREATE TABLE IF NOT EXISTS marketing_campaigns (
+      id          SERIAL PRIMARY KEY,
+      name        TEXT NOT NULL,
+      segment     TEXT NOT NULL DEFAULT 'all',
+      subject     TEXT,
+      body        TEXT NOT NULL,
+      cta_label   TEXT,
+      cta_url     TEXT,
+      by_email    BOOLEAN NOT NULL DEFAULT true,
+      by_push     BOOLEAN NOT NULL DEFAULT false,
+      by_inbox    BOOLEAN NOT NULL DEFAULT true,
+      status      TEXT NOT NULL DEFAULT 'draft',   -- draft | sending | sent
+      reached     INTEGER,
+      emailed     INTEGER,
+      pushed      INTEGER,
+      opened      INTEGER NOT NULL DEFAULT 0,
+      clicked     INTEGER NOT NULL DEFAULT 0,
+      created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      sent_at     TIMESTAMPTZ,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    -- Who a campaign actually reached, so "did it work?" is measured, not felt.
+    CREATE TABLE IF NOT EXISTS campaign_recipients (
+      campaign_id INTEGER NOT NULL REFERENCES marketing_campaigns(id) ON DELETE CASCADE,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      returned_at TIMESTAMPTZ,
+      PRIMARY KEY (campaign_id, user_id)
+    );
+  `);
+  // Refunds that go back to the card they came from, and card chargebacks the
+  // bank has raised against you.
+  await query(`
+    CREATE TABLE IF NOT EXISTS card_refunds (
+      id           SERIAL PRIMARY KEY,
+      request_id   INTEGER,
+      user_id      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      kind         TEXT,
+      ref_id       TEXT,
+      amount_cents INTEGER NOT NULL,
+      stripe_refund_id TEXT,
+      payment_intent   TEXT,
+      status       TEXT NOT NULL DEFAULT 'pending',
+      error        TEXT,
+      created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS card_refunds_stripe_idx ON card_refunds (stripe_refund_id) WHERE stripe_refund_id IS NOT NULL;
+    CREATE TABLE IF NOT EXISTS card_disputes (
+      id            SERIAL PRIMARY KEY,
+      stripe_id     TEXT UNIQUE NOT NULL,
+      user_id       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      amount_cents  INTEGER NOT NULL DEFAULT 0,
+      currency      TEXT,
+      reason        TEXT,
+      status        TEXT NOT NULL,
+      due_by        TIMESTAMPTZ,
+      evidence      JSONB NOT NULL DEFAULT '{}'::jsonb,
+      submitted_at  TIMESTAMPTZ,
+      note          TEXT,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS card_disputes_open_idx ON card_disputes (status, due_by);
+  `);
+  // Text messages for the two things worth a text: a security alert and money.
+  // DELIBERATELY its own column, NOT users.phone — that one is the contact
+  // number a member publishes on their profile, which they can edit freely and
+  // which nobody has verified. Sending a security code to it would mean an
+  // alert could be redirected by simply editing a profile field.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS sms_phone TEXT;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS sms_alerts BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS phone_codes (
+      user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      phone      TEXT NOT NULL,
+      code_hash  TEXT NOT NULL,
+      tries      INTEGER NOT NULL DEFAULT 0,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  // Show two versions to two groups and measure which wins. Distinct from the
+  // seller-side listing test (product_experiments) — this is for decisions
+  // about the platform itself.
+  await query(`
+    CREATE TABLE IF NOT EXISTS platform_experiments (
+      id          SERIAL PRIMARY KEY,
+      key         TEXT UNIQUE NOT NULL,
+      name        TEXT NOT NULL,
+      hypothesis  TEXT,
+      variants    JSONB NOT NULL DEFAULT '["control","test"]'::jsonb,
+      split       INTEGER NOT NULL DEFAULT 50,
+      goal        TEXT NOT NULL DEFAULT 'signup',
+      status      TEXT NOT NULL DEFAULT 'running',  -- running | paused | ended
+      winner      TEXT,
+      created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      ended_at    TIMESTAMPTZ
+    );
+    CREATE TABLE IF NOT EXISTS experiment_events (
+      id            SERIAL PRIMARY KEY,
+      experiment_id INTEGER NOT NULL REFERENCES platform_experiments(id) ON DELETE CASCADE,
+      user_id       INTEGER,
+      variant       TEXT NOT NULL,
+      kind          TEXT NOT NULL,       -- exposure | goal
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS experiment_events_idx ON experiment_events (experiment_id, variant, kind);
+    -- One exposure per person per experiment: a page reloaded fifty times is
+    -- still one person seeing it, and counting it fifty times would wreck the rate.
+    CREATE UNIQUE INDEX IF NOT EXISTS experiment_once_idx
+      ON experiment_events (experiment_id, user_id, kind) WHERE user_id IS NOT NULL;
+  `);
+
   // ── Batch 35: the developer platform, ops discipline, fraud rules ──────────
   // A broadcast you write now and send later — or keep as a draft. Today's
   // broadcast goes out the instant you press the button, to everyone, with no

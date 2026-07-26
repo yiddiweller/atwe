@@ -1029,6 +1029,7 @@
       <button class="tab" data-v="refunds" onclick="switchTab('refunds')">Refunds</button>
       <button class="tab" data-v="cards" onclick="switchTab('cards')">Cards</button>
       <button class="tab" data-v="fraud" onclick="switchTab('fraud')">Fraud rules</button>
+      <button class="tab" data-v="chargebacks" onclick="switchTab('chargebacks')">Chargebacks</button>
 
       <div class="nav-label" data-group="people">People</div>
       <button class="tab" data-v="users" onclick="switchTab('users')">Users</button>
@@ -1068,6 +1069,10 @@
       <button class="tab" data-v="traffic" onclick="switchTab('traffic')">Traffic</button>
       <button class="tab" data-v="growth" onclick="switchTab('growth')">Growth</button>
       <button class="tab" data-v="demand" onclick="switchTab('demand')">Demand</button>
+      <button class="tab" data-v="reports2" onclick="switchTab('reports2')">Report builder</button>
+      <button class="tab" data-v="churn" onclick="switchTab('churn')">Churn</button>
+      <button class="tab" data-v="campaigns" onclick="switchTab('campaigns')">Campaigns</button>
+      <button class="tab" data-v="experiments" onclick="switchTab('experiments')">Experiments</button>
       <button class="tab" data-v="numbers" onclick="switchTab('numbers')">Numbers</button>
       <button class="tab" data-v="groups" onclick="switchTab('groups')">Groups</button>
       <button class="tab" data-v="audit" onclick="switchTab('audit')">Audit log</button>
@@ -1084,6 +1089,9 @@
       <button class="tab" data-v="developers" onclick="switchTab('developers')">Developers</button>
       <button class="tab" data-v="apilog" onclick="switchTab('apilog')">API log</button>
       <button class="tab" data-v="incidents" onclick="switchTab('incidents')">Status page</button>
+      <button class="tab" data-v="wording" onclick="switchTab('wording')">Wording</button>
+      <button class="tab" data-v="places" onclick="switchTab('places')">Countries</button>
+      <button class="tab" data-v="emailbrand" onclick="switchTab('emailbrand')">Email design</button>
       <button class="tab" data-v="aistudio" onclick="switchTab('aistudio')">AI Studio</button>
       <button class="tab" data-v="ops" onclick="switchTab('ops')">Operations</button>
       <button class="tab" data-v="site" onclick="switchTab('site')">Site</button>
@@ -1541,6 +1549,9 @@ const TAB_PERM = {
   alerts: 'super', aistudio: 'super',
   fraud: 'revenue', modqa: 'moderation', broadcasts: 'super',
   developers: 'super', apilog: 'super', incidents: 'super',
+  chargebacks: 'refunds', reports2: 'growth', churn: 'growth',
+  campaigns: 'super', experiments: 'super', wording: 'super',
+  places: 'super', emailbrand: 'super',
 };
 function canSee(tab){ const p = TAB_PERM[tab]; if (ME.superadmin) return true; return p !== 'super' && ME.perms.includes(p); }
 
@@ -1622,6 +1633,9 @@ const NAV_TITLES = {
   alerts:'Alerts', aistudio:'AI Studio',
   fraud:'Fraud rules', modqa:'Moderator QA', broadcasts:'Broadcasts',
   developers:'Developers', apilog:'API log', incidents:'Status page',
+  chargebacks:'Chargebacks', reports2:'Report builder', churn:'Churn',
+  campaigns:'Campaigns', experiments:'Experiments', wording:'Wording',
+  places:'Countries', emailbrand:'Email design',
 };
 // Mobile: slide the sidebar in/out.
 function toggleNav(open){
@@ -1639,7 +1653,15 @@ function renderView(){
   const statRow = document.getElementById('stats'); if (statRow) statRow.style.display = (VIEW === 'features') ? 'none' : '';
   const inner = document.querySelector('.main-inner'); if (inner) inner.scrollTop = 0;
   window.scrollTo(0, 0);
-  if (VIEW === 'fraud') renderFraudView();
+  if (VIEW === 'chargebacks') renderChargebacksView();
+  else if (VIEW === 'reports2') renderReportBuilderView();
+  else if (VIEW === 'churn') renderChurnView();
+  else if (VIEW === 'campaigns') renderCampaignsView();
+  else if (VIEW === 'experiments') renderExperimentsView();
+  else if (VIEW === 'wording') renderWordingView();
+  else if (VIEW === 'places') renderPlacesView();
+  else if (VIEW === 'emailbrand') renderEmailBrandView();
+  else if (VIEW === 'fraud') renderFraudView();
   else if (VIEW === 'modqa') renderModQaView();
   else if (VIEW === 'broadcasts') renderBroadcastsView();
   else if (VIEW === 'developers') renderDevelopersView();
@@ -3319,6 +3341,495 @@ async function resolveAppeal(id, action){
   const note = prompt(action === 'grant' ? 'Optional note (shown to the member):' : 'Reason for denying (shown to the member):', '');
   if (action === 'deny' && note === null) return;
   try { await api('POST', '/api/admin/appeals/' + id + '/resolve', { action, note: note || null }); notify(action === 'grant' ? 'Appeal granted — account reinstated.' : 'Appeal denied.'); loadAppeals(); }
+  catch (e){ notify(e.message); }
+}
+
+/* ═══════════════════════════════════════════════
+   BATCH 36 — Chargebacks · Reports · Churn · Campaigns · Experiments ·
+              Wording · Countries · Email design
+═══════════════════════════════════════════════ */
+
+/* ─── Chargebacks ─── */
+let CB_ALL = false;
+function renderChargebacksView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="tf-head"><div class="tf-ranges">
+      <button class="tf-r ${!CB_ALL?'on':''}" onclick="cbFilter(false)">Needs a reply</button>
+      <button class="tf-r ${CB_ALL?'on':''}" onclick="cbFilter(true)">All</button>
+    </div></div>
+    <div id="cbBody"><div class="ld"><span class="ab-mark"></span></div></div>`;
+  loadChargebacks();
+}
+function cbFilter(all){ CB_ALL = all; renderChargebacksView(); }
+async function loadChargebacks(){
+  const el = document.getElementById('cbBody'); if (!el) return;
+  try {
+    const d = await api('GET', '/api/admin/chargebacks' + (CB_ALL ? '?state=all' : ''));
+    const t = d.totals || {};
+    const head = `<div class="panel"><h3>When a bank takes the money back</h3>
+      <div class="sub">A chargeback is a customer disputing a card payment with their own bank. The money is pulled from you straight away, and you get a deadline to argue your side — <b>miss it and you lose automatically</b>. That deadline is the reason this page exists.
+      ${d.cardsEnabled ? '' : '<br><b>Note:</b> card payments are not set up on this server, so nothing will appear here.'}</div>
+      <div class="ov-grid" style="margin-top:14px;">
+        ${ovCard('shield', t.needs_response || 0, 'Waiting on you')}
+        ${ovCard('check', t.won || 0, 'Won')}
+        ${ovCard('lock', t.lost || 0, 'Lost')}
+        ${ovCard('pro', money(t.lost_cents || 0), 'Lost so far')}
+      </div></div>`;
+    if (!d.disputes.length) { el.innerHTML = head + '<div class="empty">No chargebacks. Good.</div>'; return; }
+    el.innerHTML = head + d.disputes.map(x => {
+      const clock = x.hoursLeft == null ? ''
+        : x.overdue ? '<span class="pill ban">deadline passed</span>'
+        : `<span class="pill ${x.hoursLeft < 48 ? 'susp' : ''}">${x.hoursLeft}h to reply</span>`;
+      const acts = x.submitted_at
+        ? '<span class="pill pro">reply sent</span>'
+        : `<button class="act accent" onclick="cbReply(${x.id})">Write your reply</button>`;
+      return `<div class="ref-row"><div class="ref-main">
+        <div class="ref-top"><span class="ref-kind">${money(x.amount_cents)}</span>
+          <span class="pill">${esc(x.status)}</span>${clock}</div>
+        <div class="ref-sub">${x.username ? '@'+esc(x.username) : (x.user_name ? esc(x.user_name) : 'unmatched account')} · reason: ${esc(x.reason || 'not given')} · ${new Date(x.created_at).toLocaleString()}</div>
+        ${x.note ? `<div class="ref-note">${esc(x.note)}</div>` : ''}
+      </div><div class="ref-side">${acts}</div></div>`;
+    }).join('');
+  } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function cbReply(id){
+  const text = prompt('What happened? Say it plainly — this goes to the bank as your evidence.', '');
+  if (!text) return;
+  try { await api('POST', '/api/admin/chargebacks/' + id + '/evidence', { text }); notify('Reply sent to the bank.'); loadChargebacks(); }
+  catch (e){ notify(e.message); }
+}
+
+/* ─── Report builder ─── */
+let RB = { metric: 'signups', dimension: 'day', days: 30, data: null, saved: [] };
+function renderReportBuilderView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="ld"><span class="ab-mark"></span></div>';
+  loadReportBuilder();
+}
+async function loadReportBuilder(){
+  try {
+    const [opts, data, saved] = await Promise.all([
+      api('GET', '/api/admin/report-options?metric=' + RB.metric),
+      api('GET', `/api/admin/report?metric=${RB.metric}&dimension=${RB.dimension}&days=${RB.days}`).catch(() => null),
+      api('GET', '/api/admin/saved-reports').catch(() => ({ reports: [] })),
+    ]);
+    RB.opts = opts; RB.data = data; RB.saved = saved.reports || [];
+    renderReportBuilder();
+  } catch (e){ document.getElementById('content').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function rbSet(k, v){
+  RB[k] = v;
+  // A breakdown that doesn't apply to the new number would 400 — reset it.
+  if (k === 'metric') RB.dimension = 'day';
+  loadReportBuilder();
+}
+function renderReportBuilder(){
+  if (VIEW !== 'reports2') return;
+  const d = RB.data;
+  const max = d && d.rows.length ? Math.max(...d.rows.map(r => r.value)) : 0;
+  const fmt = (v) => (d && d.money) ? money(v) : Number(v).toLocaleString();
+  const chart = d && d.rows.length
+    ? `<div class="ba-spark" style="margin-top:14px;">${d.rows.slice(-60).map(r =>
+        `<div class="bs-bar" style="height:${max ? Math.max(3, Math.round((r.value / max) * 100)) : 3}%" title="${esc(r.bucket)}: ${esc(fmt(r.value))}"></div>`).join('')}</div>`
+    : '<div class="empty">Nothing in this period.</div>';
+  const rows = d ? d.rows.slice().reverse().slice(0, 40).map(r =>
+    `<div class="al-row"><span class="al-p">${esc(r.bucket)}</span><span class="al-ms">${esc(fmt(r.value))}</span></div>`).join('') : '';
+  document.getElementById('content').innerHTML = `
+    <div class="panel"><h3>Ask your own question</h3>
+      <div class="sub">Pick a number and how to slice it. No formulas, no query language — just the numbers Atwe already keeps, arranged the way you want them.</div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;">
+        <select class="in" style="width:auto;min-width:180px;margin:0;" onchange="rbSet('metric', this.value)">
+          ${(RB.opts.metrics||[]).map(m => `<option value="${esc(m.key)}"${RB.metric===m.key?' selected':''}>${esc(m.label)}</option>`).join('')}
+        </select>
+        <select class="in" style="width:auto;min-width:170px;margin:0;" onchange="rbSet('dimension', this.value)">
+          ${(RB.opts.dimensions||[]).map(x => `<option value="${esc(x.key)}"${RB.dimension===x.key?' selected':''}>${esc(x.label)}</option>`).join('')}
+        </select>
+        <select class="in" style="width:auto;min-width:140px;margin:0;" onchange="rbSet('days', Number(this.value))">
+          ${[7,30,90,180,365].map(n => `<option value="${n}"${RB.days===n?' selected':''}>Last ${n} days</option>`).join('')}
+        </select>
+        <button class="act" onclick="rbExport()">Download CSV</button>
+        <button class="act accent" onclick="rbSave()">Save this report</button>
+      </div>
+      ${d ? `<div class="sub" style="margin-top:14px;"><b>${esc(fmt(d.total))}</b> in total · ${d.rows.length} ${d.rows.length===1?'row':'rows'}</div>` : ''}
+      ${chart}
+    </div>
+    <div class="panel"><h3>The numbers</h3><div class="al-list">${rows || '<div class="empty">Nothing to show.</div>'}</div></div>
+    ${RB.saved.length ? '<div class="panel"><h3>Saved reports</h3>' + RB.saved.map(r =>
+      `<div class="site-row"><div><div class="srt">${esc(r.name)}</div><div class="srs">${esc(r.metric)} · ${esc(r.dimension)} · last ${r.range_days} days</div></div>
+       <div class="ref-acts"><button class="act" onclick="rbOpen(${r.id})">Open</button><button class="act danger" onclick="rbDelete(${r.id})">Delete</button></div></div>`).join('') + '</div>' : ''}`;
+}
+function rbExport(){
+  window.open(`/api/admin/report.csv?metric=${RB.metric}&dimension=${RB.dimension}&days=${RB.days}`, '_blank');
+}
+async function rbSave(){
+  const name = prompt('Name this report:', '');
+  if (!name) return;
+  try { await api('POST', '/api/admin/saved-reports', { name, metric: RB.metric, dimension: RB.dimension, rangeDays: RB.days });
+    notify('Saved.'); loadReportBuilder(); }
+  catch (e){ notify(e.message); }
+}
+function rbOpen(id){
+  const r = RB.saved.find(x => x.id === id); if (!r) return;
+  RB.metric = r.metric; RB.dimension = r.dimension; RB.days = r.range_days; loadReportBuilder();
+}
+async function rbDelete(id){
+  try { await api('DELETE', '/api/admin/saved-reports/' + id); loadReportBuilder(); } catch (e){ notify(e.message); }
+}
+
+/* ─── Churn ─── */
+let CH = { segment: 'at_risk', segments: [], people: [] };
+function renderChurnView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="ld"><span class="ab-mark"></span></div>';
+  loadChurn();
+}
+async function loadChurn(){
+  try { CH = await api('GET', '/api/admin/churn?segment=' + CH.segment); renderChurn(); }
+  catch (e){ document.getElementById('content').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function chSeg(k){ CH.segment = k; loadChurn(); }
+function renderChurn(){
+  if (VIEW !== 'churn') return;
+  const rows = (CH.people || []).map(p => {
+    const tone = p.risk >= 70 ? 'ban' : p.risk >= 40 ? 'susp' : '';
+    return `<div class="ref-row"><div class="ref-main">
+      <div class="ref-top"><span class="ref-kind">${p.username ? '@'+esc(p.username) : esc(p.name || 'member')}</span>
+        <span class="pill ${tone}">${p.risk}% risk</span>
+        ${p.accountType === 'business' ? '<span class="pill">business</span>' : ''}
+        ${p.plan === 'pro' ? '<span class="pill pro">pro</span>' : ''}</div>
+      <div class="ref-sub">${p.awayDays == null ? 'Never came back after signing up' : 'Last seen ' + p.awayDays + ' day' + (p.awayDays===1?'':'s') + ' ago'} · ${p.posts} post${p.posts===1?'':'s'}${p.hasBought ? ' · has bought' : ''}${p.hasSold ? ' · has sold' : ''}</div>
+    </div><div class="ref-side">${p.username ? `<button class="act" onclick="openUserByName('${esc(p.username)}')">Open</button>` : ''}</div></div>`;
+  }).join('') || '<div class="empty">Nobody in this group.</div>';
+  document.getElementById('content').innerHTML = `
+    <div class="panel"><h3>Who is drifting away</h3>
+      <div class="sub">Ranked by how likely someone is to be gone for good. "Risk" is simply <b>how long they've been away</b>, weighted by <b>how much they used Atwe before</b> — so a regular who has vanished for a week ranks above someone who never really started. Pick a group here, then message them from Campaigns.</div>
+      <div class="tf-ranges" style="margin-top:12px;">
+        ${(CH.segments||[]).map(sg => `<button class="tf-r ${CH.segment===sg.key?'on':''}" onclick="chSeg('${sg.key}')">${esc(sg.label)} (${sg.count})</button>`).join('')}
+      </div>
+    </div>${rows}`;
+}
+function openUserByName(username){
+  const u = (USERS || []).find(x => x.username === username);
+  if (u) openUser(u.id); else notify('Open the Users tab to see the full account.');
+}
+
+/* ─── Campaigns ─── */
+let CP = { campaigns: [], segments: [] };
+function renderCampaignsView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="ld"><span class="ab-mark"></span></div>';
+  loadCampaigns();
+}
+async function loadCampaigns(){
+  try { CP = await api('GET', '/api/admin/campaigns'); renderCampaigns(); }
+  catch (e){ document.getElementById('content').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function renderCampaigns(){
+  if (VIEW !== 'campaigns') return;
+  const rows = (CP.campaigns || []).map(c => {
+    const sent = c.status === 'sent';
+    const backPct = sent && c.reached ? Math.round(((c.returned || 0) / c.reached) * 100) : null;
+    return `<div class="ref-row"><div class="ref-main">
+      <div class="ref-top"><span class="ref-kind">${esc(c.name)}</span>
+        <span class="pill">${esc(c.segment)}</span>
+        <span class="pill ${sent?'pro':''}">${esc(c.status)}</span></div>
+      <div class="ref-sub">${sent
+        ? `Reached ${c.reached||0}${c.emailed?', '+c.emailed+' emailed':''}${c.pushed?', '+c.pushed+' pushed':''} · ${new Date(c.sentAt).toLocaleString()}`
+        : 'Not sent yet · saved ' + new Date(c.createdAt).toLocaleString()}</div>
+      ${sent ? `<div class="ref-note"><b>${c.returned || 0}</b> of them came back${backPct != null ? ` — ${backPct}%` : ''}</div>` : ''}
+      <div class="ref-reason">${esc((c.body||'').slice(0,180))}</div>
+    </div><div class="ref-side">${sent ? '' :
+      `<div class="ref-acts"><button class="act accent" onclick="cpSend(${c.id})">Send</button><button class="act danger" onclick="cpDelete(${c.id})">Delete</button></div>`}</div></div>`;
+  }).join('') || '<div class="empty">No campaigns yet.</div>';
+  document.getElementById('content').innerHTML = `
+    <div class="panel"><h3>Win people back</h3>
+      <div class="sub">Pick a group, write one message, and send it where you choose — the Atwe inbox, email, a phone notification, or all three. Afterwards Atwe counts how many of the people you reached <b>actually came back</b>, which is the only number that tells you whether it worked.</div>
+      <input class="in" id="cpName" maxlength="80" placeholder="Name it (just for you)" style="width:100%;margin:10px 0 8px;"/>
+      <input class="in" id="cpSubject" maxlength="160" placeholder="Subject, if you're emailing" style="width:100%;margin:0 0 8px;"/>
+      <textarea class="in" id="cpBody" rows="4" maxlength="2000" placeholder="What do you want to say?" style="width:100%;box-sizing:border-box;resize:vertical;"></textarea>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
+        <select class="in" id="cpSegment" style="width:auto;min-width:200px;margin:0;" onchange="cpPreview()">
+          ${(CP.segments||[]).map(sg => `<option value="${esc(sg.key)}"${sg.key==='at_risk'?' selected':''}>${esc(sg.label)}</option>`).join('')}
+        </select>
+        <label class="ovp-item"><input type="checkbox" id="cpInbox" checked/><span>Atwe inbox</span></label>
+        <label class="ovp-item"><input type="checkbox" id="cpEmail" checked/><span>Email</span></label>
+        <label class="ovp-item"><input type="checkbox" id="cpPush"/><span>Phone alert</span></label>
+        <button class="act accent" onclick="cpCreate()">Save it</button>
+      </div>
+      <div class="sub" id="cpCount" style="margin-top:10px;"></div>
+    </div>${rows}`;
+  cpPreview();
+}
+async function cpPreview(){
+  const el = document.getElementById('cpCount'); if (!el) return;
+  const seg = document.getElementById('cpSegment'); if (!seg) return;
+  try { const r = await api('GET', '/api/admin/campaigns/preview?segment=' + seg.value);
+    el.innerHTML = `That group has <b>${r.n}</b> ${r.n===1?'person':'people'} right now (<b>${r.with_email}</b> with an email address).`; }
+  catch (e){ el.textContent = ''; }
+}
+async function cpCreate(){
+  const name = (document.getElementById('cpName').value || '').trim();
+  const body = (document.getElementById('cpBody').value || '').trim();
+  if (!name || !body) { notify('Give it a name and a message.'); return; }
+  try {
+    await api('POST', '/api/admin/campaigns', { name, body,
+      subject: (document.getElementById('cpSubject').value || '').trim(),
+      segment: document.getElementById('cpSegment').value,
+      byInbox: document.getElementById('cpInbox').checked,
+      byEmail: document.getElementById('cpEmail').checked,
+      byPush: document.getElementById('cpPush').checked });
+    notify('Saved. Press Send when you are ready.'); loadCampaigns();
+  } catch (e){ notify(e.message); }
+}
+async function cpSend(id){
+  if (!confirm('Send this now? It cannot be taken back.')) return;
+  try { const r = await api('POST', '/api/admin/campaigns/' + id + '/send', {});
+    notify('Sent to ' + r.reached + ' people.'); loadCampaigns(); }
+  catch (e){ notify(e.message); }
+}
+async function cpDelete(id){
+  if (!confirm('Delete this campaign?')) return;
+  try { await api('DELETE', '/api/admin/campaigns/' + id); loadCampaigns(); } catch (e){ notify(e.message); }
+}
+
+/* ─── Experiments ─── */
+let EX = { experiments: [], goals: [] };
+function renderExperimentsView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="ld"><span class="ab-mark"></span></div>';
+  loadExperimentsView();
+}
+async function loadExperimentsView(){
+  try { EX = await api('GET', '/api/admin/experiments'); renderExperiments(); }
+  catch (e){ document.getElementById('content').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function renderExperiments(){
+  if (VIEW !== 'experiments') return;
+  const rows = (EX.experiments || []).map(e => {
+    const arms = (e.arms || []).map(a =>
+      `<div class="fr-cond">${esc(a.variant)} — <b>${a.saw}</b> saw it, <b>${a.did}</b> did it${a.ratePct != null ? ' (<b>'+a.ratePct+'%</b>)' : ''}</div>`).join('')
+      || '<span class="muted">nobody has seen it yet</span>';
+    const verdict = !e.arms || e.arms.length < 2 ? ''
+      : e.enoughData
+        ? `<div class="ref-note"><b>${esc(e.leading)}</b> is ahead.</div>`
+        : '<div class="ref-note">Too early to say — wait for at least 100 people on each side.</div>';
+    const live = e.status === 'running';
+    return `<div class="ref-row"><div class="ref-main">
+      <div class="ref-top"><span class="ref-kind">${esc(e.name)}</span>
+        <span class="pill">${esc(e.key)}</span>
+        <span class="pill ${live?'pro':''}">${esc(e.status)}</span>
+        ${e.winner ? `<span class="pill pro">winner: ${esc(e.winner)}</span>` : ''}</div>
+      <div class="ref-sub">Measuring: ${esc(e.goalLabel)} · ${e.split}% see the first version</div>
+      ${e.hypothesis ? `<div class="ref-reason">${esc(e.hypothesis)}</div>` : ''}
+      <div class="fr-conds">${arms}</div>${verdict}
+    </div><div class="ref-side"><div class="ref-acts">
+      ${live ? `<button class="act" onclick="exAct(${e.id},'pause')">Pause</button>` : (e.status === 'paused' ? `<button class="act" onclick="exAct(${e.id},'resume')">Resume</button>` : '')}
+      ${e.status !== 'ended' ? `<button class="act accent" onclick="exEnd(${e.id})">Finish</button>` : ''}
+    </div></div></div>`;
+  }).join('') || '<div class="empty">No experiments running.</div>';
+  document.getElementById('content').innerHTML = `
+    <div class="panel"><h3>Show two versions, keep the winner</h3>
+      <div class="sub">Half your members see one thing, half see another, and Atwe counts which group does more of what you care about. Everyone stays on the same side for the whole test, so nothing flickers. This is about <b>Atwe itself</b> — a seller testing their own listing has a separate tool in Manage store.</div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+        <input class="in" id="exKey" maxlength="40" placeholder="short key (e.g. new-signup-copy)" style="flex:1;min-width:180px;margin:0;"/>
+        <input class="in" id="exName" maxlength="80" placeholder="Name it" style="flex:1;min-width:160px;margin:0;"/>
+        <select class="in" id="exGoal" style="width:auto;min-width:200px;margin:0;">
+          ${(EX.goals||[]).map(g => `<option value="${esc(g.key)}">${esc(g.label)}</option>`).join('')}
+        </select>
+        <input class="in" id="exSplit" type="number" min="5" max="95" value="50" style="width:100px;margin:0;" placeholder="% split"/>
+        <button class="act accent" onclick="exCreate()">Start it</button>
+      </div>
+      <input class="in" id="exHypothesis" maxlength="300" placeholder="What do you expect to happen? (optional, but worth writing down)" style="width:100%;margin-top:8px;"/>
+    </div>${rows}`;
+}
+async function exCreate(){
+  const key = (document.getElementById('exKey').value || '').trim();
+  const name = (document.getElementById('exName').value || '').trim();
+  if (!key || !name) { notify('Give it a key and a name.'); return; }
+  try {
+    await api('POST', '/api/admin/experiments', { key, name,
+      goal: document.getElementById('exGoal').value,
+      split: Number(document.getElementById('exSplit').value),
+      hypothesis: (document.getElementById('exHypothesis').value || '').trim() });
+    notify('Running.'); loadExperimentsView();
+  } catch (e){ notify(e.message); }
+}
+async function exAct(id, action){
+  try { await api('POST', '/api/admin/experiments/' + id + '/' + action, {}); loadExperimentsView(); }
+  catch (e){ notify(e.message); }
+}
+async function exEnd(id){
+  const winner = prompt('Which version won? (leave blank if it was a draw)', '');
+  if (winner === null) return;
+  try { await api('POST', '/api/admin/experiments/' + id + '/end', { winner }); notify('Finished.'); loadExperimentsView(); }
+  catch (e){ notify(e.message); }
+}
+
+/* ─── Wording ─── */
+let WD = { lang: 'es', overrides: [], counts: [] };
+const WD_LANGS = [['es','Spanish'],['fr','French'],['de','German'],['pt','Portuguese'],['it','Italian'],
+  ['ru','Russian'],['tr','Turkish'],['hi','Hindi'],['zh','Chinese'],['ja','Japanese'],['ko','Korean'],
+  ['ar','Arabic'],['he','Hebrew'],['en','English']];
+function renderWordingView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="ld"><span class="ab-mark"></span></div>';
+  loadWording();
+}
+async function loadWording(){
+  try { const d = await api('GET', '/api/admin/translations?lang=' + WD.lang); WD.overrides = d.overrides; WD.counts = d.counts; renderWording(); }
+  catch (e){ document.getElementById('content').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function wdLang(l){ WD.lang = l; loadWording(); }
+function renderWording(){
+  if (VIEW !== 'wording') return;
+  const byLang = Object.fromEntries((WD.counts||[]).map(c => [c.lang, c.n]));
+  const rows = (WD.overrides || []).map(o => `<div class="ref-row"><div class="ref-main">
+      <div class="ref-top"><span class="ref-kind">${esc(o.src)}</span></div>
+      <div class="ref-reason">${esc(o.value)}</div>
+      <div class="ref-sub">${o.updated_by_name ? 'changed by ' + esc(o.updated_by_name) + ' · ' : ''}${new Date(o.updated_at).toLocaleString()}</div>
+    </div><div class="ref-side"><button class="act danger" onclick="wdClear(${jstr(o.src)})">Put back</button></div></div>`).join('')
+    || '<div class="empty">Nothing changed in this language — it reads exactly as it ships.</div>';
+  document.getElementById('content').innerHTML = `
+    <div class="panel"><h3>Change a word, anywhere in Atwe</h3>
+      <div class="sub">Atwe speaks 14 languages. If a translation reads oddly, fix it here and it changes for everyone the next time they open the app — no waiting for a release. Only the phrases you actually change are stored; everything else keeps the wording Atwe ships with.</div>
+      <div class="tf-ranges" style="margin-top:12px;">
+        ${WD_LANGS.map(([c,n]) => `<button class="tf-r ${WD.lang===c?'on':''}" onclick="wdLang('${c}')">${n}${byLang[c]?' ('+byLang[c]+')':''}</button>`).join('')}
+      </div>
+    </div>
+    <div class="panel"><h3>Change one</h3>
+      <div class="sub">Type the English phrase exactly as it appears in the app, then what it should say in this language.</div>
+      <input class="in" id="wdSrc" maxlength="400" placeholder="The English phrase (e.g. Post)" style="width:100%;margin:10px 0 8px;"/>
+      <input class="in" id="wdVal" maxlength="600" placeholder="What it should say" style="width:100%;margin:0;"/>
+      <button class="act accent" style="margin-top:10px;" onclick="wdSave()">Save</button>
+    </div>${rows}`;
+}
+async function wdSave(){
+  const src = (document.getElementById('wdSrc').value || '').trim();
+  const value = (document.getElementById('wdVal').value || '').trim();
+  if (!src || !value) { notify('Fill in both boxes.'); return; }
+  try { await api('PUT', '/api/admin/translations', { lang: WD.lang, src, value });
+    document.getElementById('wdSrc').value = ''; document.getElementById('wdVal').value = '';
+    notify('Saved.'); loadWording(); }
+  catch (e){ notify(e.message); }
+}
+async function wdClear(src){
+  if (!confirm('Put this phrase back to what Atwe ships with?')) return;
+  try { await api('PUT', '/api/admin/translations', { lang: WD.lang, src, value: '' }); loadWording(); }
+  catch (e){ notify(e.message); }
+}
+
+/* ─── Countries ─── */
+let PL = null;
+function renderPlacesView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="ld"><span class="ab-mark"></span></div>';
+  loadPlaces();
+}
+async function loadPlaces(){
+  try { PL = await api('GET', '/api/admin/geo-rules'); renderPlaces(); }
+  catch (e){ document.getElementById('content').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function renderPlaces(){
+  if (VIEW !== 'places') return;
+  const r = PL.rules || {};
+  const list = (r.countries || []).map(c => `<span class="fr-cond">${esc(c)} <button class="act" style="padding:2px 8px;margin-left:6px;" onclick="plRemove('${esc(c)}')">×</button></span>`).join('')
+    || '<span class="muted">no countries listed</span>';
+  const seen = (PL.seen || []).slice(0, 24).map(x =>
+    `<button class="tf-r" onclick="plAdd('${esc(String(x.country).slice(0,2).toUpperCase())}')">${esc(x.country)} (${x.visitors})</button>`).join('');
+  document.getElementById('content').innerHTML = `
+    <div class="panel"><h3>Where Atwe is available</h3>
+      <div class="sub">Some things are against the law in some places, and some places are simply not worth the fraud. You can shut a country out entirely, or leave it open and switch off just the risky parts. <b>If Atwe can't tell where someone is, they are let through</b> — turning away a real customer because a lookup hiccuped is worse than missing one bad actor.
+      ${PL.geoEnabled ? '' : '<br><b>Note:</b> location lookup is switched off on this server, so no rule here will ever match.'}</div>
+      <div class="site-row"><div><div class="srt">Use these rules${r.enabled ? '' : ' <span class="pill ban">off</span>'}</div><div class="srs">Nothing applies until this is on.</div></div>
+        <button class="switch ${r.enabled?'on':''}" onclick="plToggle()" aria-label="Country rules"><span></span></button></div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;">
+        <select class="in" id="plMode" style="width:auto;min-width:230px;margin:0;" onchange="plMode()">
+          <option value="block"${r.mode==='block'?' selected':''}>Everywhere EXCEPT the list below</option>
+          <option value="allow"${r.mode==='allow'?' selected':''}>ONLY the countries listed below</option>
+        </select>
+        <input class="in" id="plCode" maxlength="2" placeholder="GB" style="width:90px;margin:0;text-transform:uppercase;"/>
+        <button class="act" onclick="plAdd()">Add</button>
+      </div>
+      <div class="fr-conds" style="margin-top:12px;">${list}</div>
+    </div>
+    ${seen ? `<div class="panel"><h3>Where your visitors come from <span class="muted">· last 30 days</span></h3>
+      <div class="sub">Tap one to add it to the list.</div><div class="tf-ranges" style="margin-top:10px;">${seen}</div></div>` : ''}`;
+}
+async function plSave(next, msg){
+  try { const r = await api('PUT', '/api/admin/geo-rules', { rules: next }); PL.rules = r.rules; renderPlaces(); if (msg) notify(msg); }
+  catch (e){ notify(e.message); }
+}
+function plAdd(code){
+  const c = String(code || document.getElementById('plCode').value || '').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(c)) { notify('Use the two-letter country code, like GB or US.'); return; }
+  const el = document.getElementById('plCode'); if (el) el.value = '';
+  plSave({ ...PL.rules, countries: [...new Set([...(PL.rules.countries||[]), c])] }, 'Added ' + c + '.');
+}
+function plRemove(c){ plSave({ ...PL.rules, countries: (PL.rules.countries||[]).filter(x => x !== c) }, 'Removed ' + c + '.'); }
+function plMode(){ plSave({ ...PL.rules, mode: document.getElementById('plMode').value }); }
+function plToggle(){
+  const want = !PL.rules.enabled;
+  if (want && !confirm('Turn these rules on? People in the affected countries will be turned away.')) return;
+  plSave({ ...PL.rules, enabled: want }, want ? 'Rules are on.' : 'Rules are off.');
+}
+
+/* ─── Email design ─── */
+let EB = null;
+function renderEmailBrandView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="ld"><span class="ab-mark"></span></div>';
+  loadEmailBrand();
+}
+async function loadEmailBrand(){
+  try { EB = await api('GET', '/api/admin/email-branding'); renderEmailBrand(); }
+  catch (e){ document.getElementById('content').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function renderEmailBrand(){
+  if (VIEW !== 'emailbrand') return;
+  const b = EB.branding || {}, d = EB.defaults || {};
+  document.getElementById('content').innerHTML = `
+    <div class="panel"><h3>How your emails look</h3>
+      <div class="sub">Every email Atwe sends — the sign-in alerts, the receipts, the campaigns — uses the same design. Change it here and everything sent afterwards follows. Leave a box empty to keep what Atwe ships with.
+      ${EB.emailEnabled ? '' : '<br><b>Note:</b> email is not set up on this server, so nothing is actually delivered yet.'}</div>
+      <div class="fr-grid" style="margin-top:14px;">
+        <div class="fr-in"><label>Name in the header</label>
+          <input class="in" id="ebName" maxlength="40" value="${esc(b.productName || '')}" placeholder="${esc(d.productName || 'Atwe')}" style="margin:0;"/></div>
+        <div class="fr-in"><label>Button colour</label>
+          <input class="in" id="ebAccent" maxlength="7" value="${esc(b.accent || '')}" placeholder="${esc(d.accent || '#0A84FF')}" style="margin:0;"/></div>
+        <div class="fr-in"><label>Replies go to</label>
+          <input class="in" id="ebReply" maxlength="120" value="${esc(b.replyTo || '')}" placeholder="team@atwe.com" style="margin:0;"/></div>
+        <div class="fr-in"><label>Sign-off</label>
+          <input class="in" id="ebSign" maxlength="80" value="${esc(b.signOff || '')}" placeholder="${esc(d.signOff || 'The Atwe team')}" style="margin:0;"/></div>
+      </div>
+      <div class="fr-in" style="margin-top:10px;"><label>Footer</label>
+        <textarea class="in" id="ebFooter" rows="3" maxlength="400" placeholder="Leave empty for the standard footer" style="width:100%;box-sizing:border-box;resize:vertical;">${esc(b.footer || '')}</textarea></div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+        <button class="act accent" onclick="ebSave()">Save</button>
+        <button class="act" onclick="ebPreview()">Email me a sample</button>
+        <button class="act" onclick="ebReset()">Back to the standard design</button>
+      </div>
+    </div>`;
+}
+async function ebSave(){
+  try {
+    const r = await api('PUT', '/api/admin/email-branding', { branding: {
+      productName: document.getElementById('ebName').value,
+      accent: document.getElementById('ebAccent').value,
+      replyTo: document.getElementById('ebReply').value,
+      signOff: document.getElementById('ebSign').value,
+      footer: document.getElementById('ebFooter').value } });
+    EB.branding = r.branding; notify('Saved.'); renderEmailBrand();
+  } catch (e){ notify(e.message); }
+}
+async function ebReset(){
+  if (!confirm('Put every email back to the standard Atwe design?')) return;
+  try { const r = await api('PUT', '/api/admin/email-branding', { branding: {} }); EB.branding = r.branding; renderEmailBrand(); notify('Back to standard.'); }
+  catch (e){ notify(e.message); }
+}
+async function ebPreview(){
+  try { const r = await api('POST', '/api/admin/email-branding/preview', {});
+    notify(r.delivered ? 'Sent to ' + r.sent + '.' : 'Email is not set up — the sample went to the server log.'); }
   catch (e){ notify(e.message); }
 }
 

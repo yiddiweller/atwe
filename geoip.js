@@ -57,4 +57,33 @@ async function lookup(ip) {
   }
 }
 
-module.exports = { lookup, isConfigured };
+// The two-letter country CODE, for rules that turn on where someone is
+// (see the geo restrictions in server.js). Separate from lookup() because
+// that one composes a human-readable place string, and a rule needs a code it
+// can compare exactly. Tolerant of the shapes the free providers return.
+// Returns null on anything uncertain — a rule that can't tell where someone is
+// must let them through, not guess.
+function codeOf(d) {
+  if (!d || typeof d !== 'object') return null;
+  if (d.success === false || d.status === 'fail') return null;
+  const raw = d.country_code || d.countryCode || d.country_code_iso3166 || d.countryCode2 || '';
+  const c = String(raw || '').trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(c) ? c : null;
+}
+async function lookupCountry(ip) {
+  if (DISABLED || !isPublicIp(ip)) return null;
+  const url = ENDPOINT.replace('{ip}', encodeURIComponent(String(ip).trim()));
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal, headers: { accept: 'application/json' } });
+    if (!res.ok) return null;
+    return codeOf(await res.json());
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+module.exports = { lookup, lookupCountry, isConfigured };

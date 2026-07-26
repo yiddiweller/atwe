@@ -11824,6 +11824,20 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     </div>
     <div class="iset-body hidden" data-page="notifications" data-title="Notifications">
 <div class="iset-group"><div class="iset-row" data-static id="pushRow"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 0 1 12 0c0 4.5 2 5.5 2 5.5H4s2-1 2-5.5"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></svg></span><div class="iset-main"><div class="iset-label">Push notifications</div><div class="iset-sub" id="pushDesc">Get alerts even when Atwe is closed</div></div><label class="ios-switch"><input type="checkbox" id="pushSwitch" onchange="togglePush()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-cap">Push notifications arrive on this device even when the app is closed. While a tab is open you’ll always get live in-app alerts.</div>
+<div class="iset-cap" style="margin-top:18px;font-weight:600;color:var(--t2);">Text messages</div>
+<div class="iset-group" id="smsGroup">
+  <div class="iset-row" data-static id="smsRow">
+    <span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.1A8.4 8.4 0 0 1 4 11.5 8.4 8.4 0 0 1 12.5 3 8.4 8.4 0 0 1 21 11.5z"/></svg></span>
+    <div class="iset-main"><div class="iset-label">Security &amp; money texts</div><div class="iset-sub" id="smsDesc">Add a number to turn this on</div></div>
+    <label class="ios-switch"><input type="checkbox" id="smsSwitch" onchange="acToggleSmsAlerts()"/><span class="ios-track"></span><span class="ios-knob"></span></label>
+  </div>
+  <div class="iset-row" data-static onclick="acOpenPhone()">
+    <span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8.1 9.5a16 16 0 0 0 6 6l1.1-1.1a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z"/></svg></span>
+    <div class="iset-main"><div class="iset-label">Your number</div><div class="iset-sub" id="phoneDesc">Not added</div></div>
+    <svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+  </div>
+</div>
+<div class="iset-cap">Atwe only ever texts about two things: a new sign-in to your account, and money arriving. Everything else stays in the app. Standard message rates may apply.</div>
 <div class="iset-cap" style="margin-top:18px;font-weight:600;color:var(--t2);">Quiet hours</div>
 <div class="iset-group">
   <div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M20 15a8 8 0 0 1-9.9-9.9A8 8 0 1 0 20 15z"/></svg></span><div class="iset-main"><div class="iset-label">Do not disturb</div><div class="iset-sub">Mute notification alerts during set hours</div></div><label class="ios-switch"><input type="checkbox" id="dndToggle" onchange="acDndToggle(this.checked)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>
@@ -14213,6 +14227,18 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
     <div class="report-reasons" id="reportReasons"></div>
     <textarea class="jp-in jp-desc" id="reportNote" placeholder="Add any details (optional)…" maxlength="1000" style="margin-top:12px;"></textarea>
     <button class="ac-pill-btn accent jp-submit" id="reportSubmit" onclick="acSubmitReport()">Submit report</button>
+  </div>
+</div>
+
+<!-- Confirm a phone number, so security and money texts can reach you. -->
+<div class="overlay set-fs hidden" id="phoneOverlay">
+  <div class="set-sheet" role="dialog" aria-label="Your number">
+    <div class="iset-head">
+      <button class="iset-back" onclick="closeOverlay('phoneOverlay')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <span class="iset-title">Your number</span>
+    </div>
+    <div class="iset-cap">We text about two things only: a new sign-in, and money arriving. Include the country code.</div>
+    <div id="phoneBody" style="padding:0 var(--feed-gutter,18px);"></div>
   </div>
 </div>
 
@@ -17890,7 +17916,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1617'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1618'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -20797,8 +20823,23 @@ const I18N = { lang: 'en' };
 function i18nT(key, vars) {
   const d = I18N_DICT[I18N.lang];
   let s = (d && d[key] != null) ? d[key] : key;
+  const ov = I18N_OVERRIDES[I18N.lang];
+  if (ov && ov[key]) s = ov[key];
   if (vars) for (const k in vars) s = s.split('{' + k + '}').join(vars[k]);
   return s;
+}
+/* Wording the owner has changed from the dashboard. Merged OVER the shipped
+   dictionary, so anything untouched still reads exactly as it always did, and
+   a failed fetch changes nothing at all. */
+let I18N_OVERRIDES = {};
+async function loadI18nOverrides() {
+  try {
+    const r = await fetch('/api/i18n-overrides', { cache: 'no-cache' });
+    if (!r.ok) return;
+    const d = await r.json();
+    I18N_OVERRIDES = (d && d.overrides) || {};
+    if (Object.keys(I18N_OVERRIDES).length) { translateStatic(); }
+  } catch (e) { /* the app reads fine without them */ }
 }
 function i18nResolve() {
   let saved = null; try { saved = localStorage.getItem('atwe_lang'); } catch (e) {}
@@ -21976,7 +22017,7 @@ function setNav(pageName, opts) {
   _setPage = pageName;
   const t = document.getElementById('setTitle'); if (t) t.textContent = i18nT(title);
   overlay.scrollTop = 0;
-  if (pageName === 'notifications') acLoadNotifPrefs();
+  if (pageName === 'notifications') { acLoadNotifPrefs(); acSyncSmsRows(); }
   if (pageName === 'privacy') acLoadAccountPrivacy();
   if (pageName === 'security') { acLoadConnected(); syncAppLockRow(); }
 }
@@ -24539,6 +24580,80 @@ async function acSubmitReport() {
     await API.req('POST', '/api/reports', { targetType: r.type, targetId: r.id, reason, note: document.getElementById('reportNote').value.trim() });
     closeOverlay('reportSheet'); showNotif('Thanks. Your report was sent to the Atwe team.');
   } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not submit the report.'); }
+}
+
+/* ─── Your number: security and money texts ─────────────────────────────── */
+// Kept deliberately small. A phone number is the one contact detail people
+// change most and trust least, so nothing here happens without a code.
+function acSyncSmsRows() {
+  const u = S.user || {};
+  const sw = document.getElementById('smsSwitch');
+  const desc = document.getElementById('smsDesc');
+  const pd = document.getElementById('phoneDesc');
+  if (pd) pd.textContent = u.phoneMasked ? u.phoneMasked + ' · confirmed' : 'Not added';
+  if (sw) { sw.checked = !!u.smsAlerts; sw.disabled = !u.phoneVerified; }
+  if (desc) desc.textContent = u.phoneVerified
+    ? 'A text for a new sign-in, and when money arrives'
+    : 'Add a number to turn this on';
+}
+function acOpenPhone() {
+  showOverlay('phoneOverlay');
+  acRenderPhone('enter');
+}
+function acRenderPhone(stage, masked) {
+  const b = document.getElementById('phoneBody'); if (!b) return;
+  const u = S.user || {};
+  if (stage === 'code') {
+    b.innerHTML = `
+      <div class="ac-disc-sub" style="margin:6px 0 12px;">We sent a six-digit code to ${escHtml(masked || '')}.</div>
+      <input class="jp-in" id="phCode" inputmode="numeric" maxlength="6" placeholder="123456" autocomplete="one-time-code"/>
+      <button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="acVerifyPhone()">Confirm</button>
+      <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acRenderPhone('enter')">Use a different number</button>`;
+    setTimeout(() => { const el = document.getElementById('phCode'); if (el) el.focus(); }, 150);
+    return;
+  }
+  b.innerHTML = `
+    ${u.phoneVerified ? `<div class="ac-disc-sub" style="margin:6px 0 12px;">Confirmed: <b>${escHtml(u.phoneMasked || '')}</b></div>` : ''}
+    <input class="jp-in" id="phNum" inputmode="tel" maxlength="20" placeholder="+44 7700 900123" value=""/>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="acStartPhone()">Send me a code</button>
+    ${u.phoneVerified ? `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acRemovePhone()">Remove my number</button>` : ''}`;
+}
+async function acStartPhone() {
+  const phone = (document.getElementById('phNum').value || '').trim();
+  if (!phone) { showNotif('Enter your number.'); return; }
+  try {
+    const r = await API.req('POST', '/api/account/phone/start', { phone });
+    acRenderPhone('code', r.masked);
+    if (!r.smsEnabled) showNotif('Texting isn’t set up on this server yet — the code is in the server log.');
+  } catch (e) { showNotif(e.message || 'Could not send a code.'); }
+}
+async function acVerifyPhone() {
+  const code = (document.getElementById('phCode').value || '').trim();
+  try {
+    const r = await API.req('POST', '/api/account/phone/verify', { code });
+    if (S.user) { S.user.phoneVerified = true; S.user.phoneMasked = r.masked; }
+    showNotif('Number confirmed.');
+    closeOverlay('phoneOverlay');
+    acSyncSmsRows();
+  } catch (e) { showNotif(e.message || 'That code is not right.'); }
+}
+async function acRemovePhone() {
+  const ok = await appConfirm({ title: 'Remove your number?', message: 'Security and money texts will stop.', confirmText: 'Remove', danger: true });
+  if (!ok) return;
+  try {
+    await API.req('DELETE', '/api/account/phone');
+    if (S.user) { S.user.phoneVerified = false; S.user.phoneMasked = null; S.user.smsAlerts = false; }
+    closeOverlay('phoneOverlay'); acSyncSmsRows(); showNotif('Removed.');
+  } catch (e) { showNotif(e.message); }
+}
+async function acToggleSmsAlerts() {
+  const sw = document.getElementById('smsSwitch');
+  const want = !!(sw && sw.checked);
+  try {
+    await API.req('PUT', '/api/account/sms-alerts', { enabled: want });
+    if (S.user) S.user.smsAlerts = want;
+    acSyncSmsRows();
+  } catch (e) { if (sw) sw.checked = !want; showNotif(e.message || 'Could not save that.'); }
 }
 
 /* ─── Connect your systems: API keys + webhooks ─────────────────────────── */
@@ -54869,6 +54984,7 @@ const _bootDone = (async function boot() {
   Store.load();
   applyTheme();
   applyLocale();
+  loadI18nOverrides();   // fire-and-forget: re-translates in place if any exist
   try {
     if (localStorage.getItem('atwe_sb_collapsed') === '1' && window.innerWidth > 768)
       document.getElementById('sidebar').classList.add('collapsed');
