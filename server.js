@@ -18213,6 +18213,63 @@ app.delete('/api/products/:id', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the product.' }); }
 });
 
+/* ─── Smart links (bitly-lite: trackable short links) ─── */
+// Destination: absolute http(s), or an in-app path ("/@user", "/listing/12").
+function cleanSmartDest(raw) {
+  const s = String(raw || '').trim().slice(0, 2000);
+  if (!s) return null;
+  if (s.startsWith('/') && !s.startsWith('//')) return s;
+  try { const u = new URL(s); if (/^https?:$/.test(u.protocol)) return u.href; } catch (e) {}
+  return null;
+}
+app.post('/api/smart-links', auth.requireAuth, rateLimit(20, 60000, 'smartlink-create'), async (req, res) => {
+  const dest = cleanSmartDest(req.body.url);
+  if (!dest) return res.status(400).json({ error: 'Enter a valid link (https://… or an Atwe page).' });
+  const label = (req.body.label || '').toString().trim().slice(0, 80) || null;
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const cnt = (await db.query('SELECT COUNT(*)::int AS n FROM smart_links WHERE owner_id = $1', [req.user.id])).rows[0].n;
+    if (cnt >= 100) return res.status(400).json({ error: 'You’ve reached the maximum number of smart links.' });
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const code = genReferralCode().toLowerCase();
+      try {
+        const r = await db.query('INSERT INTO smart_links (owner_id, code, dest_url, label) VALUES ($1,$2,$3,$4) RETURNING id, code', [req.user.id, code, dest, label]);
+        return res.status(201).json({ id: r.rows[0].id, code: r.rows[0].code });
+      } catch (e) { if (e.code !== '23505') throw e; } // rare code collision → retry
+    }
+    res.status(500).json({ error: 'Could not create the link.' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the link.' }); }
+});
+app.get('/api/smart-links', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT id, code, dest_url, label, clicks, active, created_at FROM smart_links WHERE owner_id = $1 ORDER BY created_at DESC LIMIT 100', [req.user.id]);
+    res.json({ links: rows.map(r => ({ id: r.id, code: r.code, url: r.dest_url, label: r.label || null, clicks: r.clicks, active: r.active !== false, createdAt: r.created_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your links.' }); }
+});
+app.patch('/api/smart-links/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const fields = [], vals = [];
+  if ('label' in req.body) { vals.push((req.body.label || '').toString().trim().slice(0, 80) || null); fields.push(`label = $${vals.length}`); }
+  if ('active' in req.body) { vals.push(req.body.active !== false); fields.push(`active = $${vals.length}`); }
+  if (!fields.length) return res.json({ ok: true });
+  try {
+    vals.push(id, req.user.id);
+    const r = await db.query(`UPDATE smart_links SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND owner_id = $${vals.length}`, vals);
+    if (!r.rowCount) return res.status(404).json({ error: 'Link not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the link.' }); }
+});
+app.delete('/api/smart-links/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM smart_links WHERE id = $1 AND owner_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Link not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the link.' }); }
+});
+
 /* ─── Bulk listing tools (Etsy/Shopify-style CSV export + import) ─── */
 // Export my catalog as a spreadsheet. Free-text cells get the formula-injection
 // guard; price/stock stay real numbers for Excel (same rules as the wallet export).
@@ -25966,6 +26023,22 @@ async function ogForPath(req) {
   } catch (_) { /* any lookup problem → default shell */ }
   return null;
 }
+
+// Smart-link redirect (/s/<code>): public — a share link works for anyone.
+// Only http(s)/in-app destinations exist (enforced at create), the click count
+// bumps fire-and-forget, and an off/unknown code falls through to the app shell
+// (its own not-found state) instead of a bare error page.
+app.get('/s/:code', rateLimit(120, 60000, 'smartlink-hit'), async (req, res, next) => {
+  const code = String(req.params.code || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 16);
+  if (!code) return next();
+  try {
+    const r = (await db.query('SELECT id, dest_url, active FROM smart_links WHERE code = $1', [code])).rows[0];
+    if (!r || r.active === false) return next();
+    db.query('UPDATE smart_links SET clicks = clicks + 1 WHERE id = $1', [r.id]).catch(() => {});
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    return res.redirect(302, r.dest_url);
+  } catch (e) { return next(); }
+});
 
 app.get('*', async (req, res, next) => {
   if (req.hostname === ADMIN_HOST) return next();

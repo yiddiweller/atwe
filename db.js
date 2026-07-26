@@ -896,6 +896,20 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS contacts_owner_idx ON contacts(owner_id);`);
+  // Smart links (bitly-lite): trackable short links a member shares anywhere.
+  await query(`
+    CREATE TABLE IF NOT EXISTS smart_links (
+      id         SERIAL PRIMARY KEY,
+      owner_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      code       TEXT NOT NULL UNIQUE,
+      dest_url   TEXT NOT NULL,
+      label      TEXT,
+      clicks     INTEGER NOT NULL DEFAULT 0,
+      active     BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS smart_links_owner_idx ON smart_links(owner_id);`);
   // Lightweight CRM on contacts: a pipeline stage + a one-shot follow-up
   // reminder (cleared when it fires — never a repeating nag).
   await query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS stage TEXT;`);
