@@ -15144,6 +15144,7 @@ app.get('/api/stories', auth.requireAuth, async (req, res) => {
     const { rows } = await db.query(
       `SELECT s.user_id, u.name, u.username, u.avatar, u.account_type, u.verified,
               COUNT(*)::int AS count, MAX(s.created_at) AS last_at,
+              COUNT(*) FILTER (WHERE sv.viewer_id IS NULL)::int AS unseen_count,
               bool_or(sv.viewer_id IS NULL) AS has_unseen,
               EXISTS(SELECT 1 FROM story_mutes sm WHERE sm.muter_id = $1 AND sm.muted_id = s.user_id) AS muted
          FROM stories s
@@ -15163,7 +15164,7 @@ app.get('/api/stories', auth.requireAuth, async (req, res) => {
     res.json({ tray: rows.map((r) => ({
       user: { id: r.user_id, name: r.name, username: r.username, avatar: r.avatar || null, accountType: r.account_type === 'business' ? 'business' : 'personal', verified: !!r.verified },
       muted: !!r.muted,
-      count: r.count, lastAt: r.last_at, hasUnseen: !!r.has_unseen, mine: r.user_id === me,
+      count: r.count, unseen: r.unseen_count, lastAt: r.last_at, hasUnseen: !!r.has_unseen, mine: r.user_id === me,
     })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load stories.' }); }
 });
@@ -17206,6 +17207,44 @@ app.put('/api/social/privacy', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save settings.' }); }
 });
 
+// Every video on the main feed, newest first — the reel of clips behind the
+// full-screen player you land in when you tap a video on a post. `start` is the
+// one that was tapped: it is hoisted to the front so the player opens on it, and
+// it is fetched separately if it did not make the recent window (an old clip
+// reached from a profile or a shared link still opens, it just has the newer
+// ones to scroll into). Same visibility rules as the feed itself — blocked,
+// muted, hidden, hibernated, reach-limited and locked posts never appear.
+app.get('/api/social/video-posts', auth.requireAuth, async (req, res) => {
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const start = parseInt(req.params.start || req.query.start, 10);
+    const notBlocked = ` AND p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)`;
+    const notBlockedBy = ` AND p.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)`;
+    const notHidden = ` AND p.id NOT IN (SELECT post_id FROM post_hides WHERE user_id = $1)`;
+    const notDeact = ` AND p.user_id NOT IN (SELECT id FROM users WHERE deactivated)`;
+    const where = `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()
+        AND p.media_kind = 'video' AND p.media IS NOT NULL`
+      + notBlocked + notBlockedBy + notHidden + notDeact + MUTE_FILTER + SUBONLY_FEED_FILTER + REACH_FILTER;
+    const { rows } = await db.query(
+      POSTS_SELECT + where + ' ORDER BY p.created_at DESC LIMIT 40', [req.user.id]);
+    let posts = rows.map((r) => mapPost(r, req.user.id)).filter((x) => !x.locked);
+    if (Number.isInteger(start)) {
+      const i = posts.findIndex((x) => x.id === start);
+      if (i > 0) posts = posts.slice(i).concat(posts.slice(0, i));
+      else if (i < 0) {
+        // Not in the recent window — pull just that one, through the same gate.
+        const one = await db.query(POSTS_SELECT + `WHERE p.id = $2 AND p.to_main = true
+            AND p.media_kind = 'video' AND p.media IS NOT NULL` + notBlocked + notBlockedBy + notDeact,
+          [req.user.id, start]);
+        if (one.rows[0]) {
+          const m = mapPost(one.rows[0], req.user.id);
+          if (!m.locked) posts = [m].concat(posts);
+        }
+      }
+    }
+    res.json({ posts });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load videos.' }); }
+});
 // Home feed. scope=following → your posts + people you follow; scope=foryou → everyone (recent).
 app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
   try {
