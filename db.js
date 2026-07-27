@@ -2239,6 +2239,14 @@ async function initSchema() {
     -- and that guess can come out wildly wrong (a 3-second note reading 12:10).
     -- Recording the real number at send time means nobody has to guess again.
     -- (SQL comments are -- , not // — a // here silently kills the whole block.)
+    -- The shape of a photo, so a chat can reserve its space before the bytes
+    -- arrive and nothing on screen ever has to move once it does. Filled by the
+    -- sender when the message is written, and read out of the file's header for
+    -- anything sent before that (once — then it is stored here for good).
+    ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS image_w INTEGER;
+    ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS image_h INTEGER;
+    ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS image_w INTEGER;
+    ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS image_h INTEGER;
     ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS duration_sec INTEGER;
     ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS duration_sec INTEGER;
     ALTER TABLE feed_posts ADD COLUMN IF NOT EXISTS duration_sec INTEGER;
