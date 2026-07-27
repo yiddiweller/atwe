@@ -13546,9 +13546,12 @@ app.get('/api/series', auth.requireAuth, async (req, res) => {
   const scope = ['mine', 'owned', 'discover'].includes(req.query.scope) ? req.query.scope : 'discover';
   const creator = String(req.query.creator || '').replace(/^@/, '').slice(0, 40);
   try {
-    let sql = SERIES_SELECT, args = [req.user.id];
-    if (scope === 'mine') sql += ' WHERE s.creator_id = $1';
-    else if (scope === 'owned') sql += ' WHERE s.id IN (SELECT series_id FROM series_access WHERE user_id = $1)';
+    // Only add a parameter when the branch we take actually uses it. Postgres
+    // rejects a query that is handed a value it never asked for, so seeding the
+    // list up front broke the plain "discover" tab — the one everybody lands on.
+    let sql = SERIES_SELECT, args = [];
+    if (scope === 'mine') { args.push(req.user.id); sql += ' WHERE s.creator_id = $1'; }
+    else if (scope === 'owned') { args.push(req.user.id); sql += ' WHERE s.id IN (SELECT series_id FROM series_access WHERE user_id = $1)'; }
     else if (creator) { args.push(creator); sql += ` WHERE s.published = true AND lower(u.username) = lower($${args.length})`; }
     else sql += ' WHERE s.published = true';
     sql += ' ORDER BY s.created_at DESC LIMIT 100';

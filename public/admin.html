@@ -5876,7 +5876,9 @@ function openAttention(){
     <div class="dur-row" style="margin-top:14px;"><button class="act" onclick="closeModal()">Close</button></div>`;
   document.getElementById('modal').classList.add('show');
 }
-function closeModal(){ document.getElementById('modal').classList.remove('show'); }
+/* closeModal() itself lives further down, next to the user modal it belongs to.
+   Declaring it twice is a trap: the LAST declaration silently wins, so the
+   version read here would never be the one that ran. */
 /* ═══ Search everything (Ctrl/Cmd + K) ═══
    One box that finds a person, a post or a listing without knowing which tab
    they live in. */
