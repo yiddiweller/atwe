@@ -11157,6 +11157,21 @@ body.light .secret-bar{background:rgba(26,127,55,.1);}
 body.desktop-app{--titlebar-h:0px;}
 body.desktop-app .topbar{padding-top:calc(var(--titlebar-h) + 6px);}
 body.desktop-app .app{padding-top:0;}
+
+/* Your lists — one row per list, with the actions on the right. */
+.lm-row{display:flex;align-items:center;gap:8px;padding:11px 12px;background:var(--s1);
+  border-radius:14px;margin-bottom:8px;}
+.lm-name{flex:1;min-width:0;font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.lm-count{font-size:12.5px;color:var(--t3);margin-right:2px;white-space:nowrap;}
+.lm-ic,.lm-del{width:32px;height:32px;border:none;border-radius:50%;background:var(--s2);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;padding:0;}
+.lm-ic svg,.lm-del svg{width:16px;height:16px;fill:none;stroke:var(--t2);stroke-width:1.9;
+  stroke-linecap:round;stroke-linejoin:round;}
+.lm-del svg{stroke:var(--red);}
+.lm-ic:disabled{opacity:.3;}
+/* The name at the top of the long-press menu, so it is obvious which list it is. */
+.aimp-head{padding:9px 14px 7px;font-size:12px;font-weight:800;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--t3);}
 </style>
 </head>
 <body style="background:#000">
@@ -13330,10 +13345,10 @@ body.desktop-app .app{padding-top:0;}
 
 <!-- Manage chat labels -->
 <div class="overlay hidden" id="labelManage" onclick="if(event.target===this)closeOverlay('labelManage')">
-  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Labels">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Your lists">
     <button class="sheet-close" onclick="closeOverlay('labelManage')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-    <div class="jp-title">Chat labels</div>
-    <div class="jp-sub" style="margin:-6px 0 12px;color:var(--t3);font-size:13.5px;">Organize your chats into colored folders.</div>
+    <div class="jp-title">Your lists</div>
+    <div class="jp-sub" style="margin:-6px 0 12px;color:var(--t3);font-size:13.5px;">The tabs at the top of your chats. Rename them, put them in the order you want, or remove one.</div>
     <div id="labelManageBody"></div>
   </div>
 </div>
@@ -17181,6 +17196,8 @@ body.desktop-app .app{padding-top:0;}
   <div class="aimp-sep"></div>
   <button class="aimp-item" role="menuitem" onclick="acChatMenuPick('readall')"><svg viewBox="0 0 24 24"><path d="M18 6 7 17l-4-4"/><path d="M22 8.5 13.5 17"/></svg><span>Mark all as read</span></button>
   <div class="aimp-sep"></div>
+  <button class="aimp-item" role="menuitem" id="chatMenuLists" onclick="acChatMenuPick('lists')"><svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="14" y2="17"/></svg><span>Your lists</span><span class="aimp-count" id="chatMenuListsN"></span></button>
+  <div class="aimp-sep"></div>
   <button class="aimp-item" role="menuitem" id="chatMenuArchived" onclick="acChatMenuPick('archived')"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg><span>Archived</span><span class="aimp-count" id="chatMenuArchivedN"></span></button>
   <div class="aimp-sep"></div>
   <!-- "Unread only" now lives as its own tab in the Beam tab row — hidden here to avoid duplication. -->
@@ -17190,6 +17207,21 @@ body.desktop-app .app{padding-top:0;}
   <div class="aimp-sep hidden" id="chatMenuAutoMsgSep"></div>
   <button class="aimp-item hidden" role="menuitem" id="chatMenuAutoMsg" onclick="acChatMenuPick('automsg')"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 10h.01M12 10h.01M16 10h.01"/></svg><span>Auto-messages</span></button>
   <button class="aimp-item hidden" role="menuitem" id="chatMenuFaq" onclick="acChatMenuPick('faq')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 .3c0 1.7-2.5 2.2-2.5 3.7"/><circle cx="12" cy="16.8" r=".5"/></svg><span>Instant answers</span></button>
+</div>
+
+<!-- List tools popover — long-press a custom list tab. Same shape WhatsApp and
+     Telegram use: edit what is in it, move it along the row, or delete it. -->
+<div class="ai-menu-scrim hidden" id="listMenuScrim" onclick="acCloseListMenu(true)"></div>
+<div class="ai-menu-pop hidden" id="listMenuPop" role="menu" aria-label="List options">
+  <div class="aimp-head" id="listMenuName"></div>
+  <button class="aimp-item" role="menuitem" onclick="acListMenuPick('edit')"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg><span>Edit list</span></button>
+  <div class="aimp-sep"></div>
+  <button class="aimp-item" role="menuitem" id="listMenuLeft" onclick="acListMenuPick('left')"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg><span>Move left</span></button>
+  <button class="aimp-item" role="menuitem" id="listMenuRight" onclick="acListMenuPick('right')"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg><span>Move right</span></button>
+  <div class="aimp-sep"></div>
+  <button class="aimp-item" role="menuitem" onclick="acListMenuPick('manage')"><svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="14" y2="17"/></svg><span>All lists</span></button>
+  <div class="aimp-sep"></div>
+  <button class="aimp-item danger" role="menuitem" onclick="acListMenuPick('delete')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg><span>Delete list</span></button>
 </div>
 
 <!-- Notification tools popover — the ⋯ in the Notifications header (settings / clear the list) -->
@@ -18491,7 +18523,7 @@ body.desktop-app .app{padding-top:0;}
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1625'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1626'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -33889,6 +33921,7 @@ function acChatMenuPick(which) {
   else if (which === 'starred') acOpenStarred();
   else if (which === 'readall') acMarkAllChatsRead();
   else if (which === 'archived') acEnterArchived();
+  else if (which === 'lists') acOpenLabelManage();
   else if (which === 'lastseen') acToggleLastSeen();
   else if (which === 'automsg') acOpenAutoMessages();
   else if (which === 'faq') acOpenFaq();
@@ -47042,6 +47075,9 @@ function acRenderChatLists() {
     btn.textContent = l.name;
     btn.setAttribute('aria-label', l.name + ' list');
     btn.onclick = () => acChatTab(tab);
+    // Press and hold to manage it — the same gesture WhatsApp and Telegram use,
+    // and the only way these were ever going to be editable from a tab strip.
+    _acBindListLongPress(btn, l.id);
     row.insertBefore(btn, addBtn || null);
   });
 }
@@ -47049,7 +47085,9 @@ function acRenderChatLists() {
 function acOpenNewList(e) {
   if (e) e.stopPropagation();
   AC._nlMembers = [];
+  AC._nlEditId = null;                 // a fresh one, never a leftover edit
   showOverlay('newListView');
+  const t = document.getElementById('newListTitle'); if (t) t.textContent = 'New list';
   const nm = document.getElementById('nlName'); if (nm) nm.value = '';
   acRenderNlIncluded();
   setTimeout(() => document.getElementById('nlName')?.focus(), 60);
@@ -47105,6 +47143,18 @@ function acNlToggle(kind, id, name, avatar) {
 async function acCreateNewList() {
   const name = (document.getElementById('nlName')?.value || '').trim();
   if (!name) { showNotif('Name your list.'); document.getElementById('nlName')?.focus(); return; }
+  if (AC._nlEditId) return acSaveEditedList(name);
+  // Two lists with the same name are indistinguishable once they are tabs, so
+  // say so — but do not block it, in case somebody genuinely wants that.
+  const clash = (AC._labels || []).some((l) => l.name.toLowerCase() === name.toLowerCase());
+  if (clash) {
+    const go = await appConfirm({
+      title: 'You already have a list called “' + name + '”',
+      message: 'Two lists with the same name look identical in the tab row. Use a different name?',
+      confirmText: 'Make it anyway',
+    });
+    if (!go) { document.getElementById('nlName')?.focus(); return; }
+  }
   try {
     const r = await API.req('POST', '/api/atchat/labels', { name, color: 'blue' });
     let labelId = (r && r.label && r.label.id) || (r && r.id);
@@ -47118,22 +47168,60 @@ async function acCreateNewList() {
     if (labelId) acChatTab('list:' + labelId);
   } catch (e) { showNotif(e.message || 'Could not create the list.'); }
 }
+/** Save changes to an existing list: its name, and who is in it. */
+async function acSaveEditedList(name) {
+  const id = AC._nlEditId;
+  const before = (AC._labels || []).find((l) => l.id === id);
+  try {
+    if (before && before.name !== name) await API.req('PATCH', '/api/atchat/labels/' + id, { name });
+    // Work out what actually changed rather than re-sending everything.
+    const now = (AC._nlMembers || []).map((m) => m.kind + ':' + m.id);
+    const was = (before?.items || []).map((i) => i.kind + ':' + i.targetId);
+    for (const key of now) {
+      if (was.includes(key)) continue;
+      const [kind, tid] = key.split(':');
+      await API.req('POST', '/api/atchat/labels/' + id + '/assign', { kind, targetId: Number(tid), on: true }).catch(() => {});
+    }
+    for (const key of was) {
+      if (now.includes(key)) continue;
+      const [kind, tid] = key.split(':');
+      await API.req('POST', '/api/atchat/labels/' + id + '/assign', { kind, targetId: Number(tid), on: false }).catch(() => {});
+    }
+    await acLoadLabels();
+    closeOverlay('newListPicker'); closeOverlay('newListView');
+    showNotif('List saved.');
+  } catch (e) { showNotif((e && e.message) || 'Could not save the list.'); }
+  finally { AC._nlEditId = null; }
+}
 function acLabelFilter(id) {
   AC._labelFilter = AC._labelFilter === id ? null : id;
   acRenderLabelBar(); acRenderChats();
 }
-function acManageLabels() {
+function acManageLabels() { acOpenLabelManage(); }
+/** Every list you have, with a way to change each one. The same screen WhatsApp
+    keeps under Settings, so there is somewhere to go if the long-press on a tab
+    is not obvious. */
+function acOpenLabelManage() {
   showOverlay('labelManage');
   acRenderLabelManage();
 }
 function acRenderLabelManage() {
   const body = document.getElementById('labelManageBody');
+  if (!body) return;
   const labels = AC._labels || [];
-  const colorDots = Object.keys(_LABEL_COLORS).map(c => `<button class="lm-color" data-c="${c}" style="background:${_LABEL_COLORS[c]}" onclick="acLabelPickColor('${c}',this)"></button>`).join('');
-  let html = `<div class="lm-new"><input id="lmNewName" class="jp-in" type="text" placeholder="New label name" maxlength="40" style="margin-bottom:8px;"/><div class="lm-colors" id="lmColors">${colorDots}</div><button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acLabelCreate()">Create label</button></div>`;
-  html += labels.length ? '<div class="lm-list">' + labels.map(l => `<div class="lm-row"><span class="ac-lchip-dot" style="--lc:${_LABEL_COLORS[l.color] || 'var(--accent)'}"></span><span class="lm-name">${escHtml(l.name)}</span><span class="lm-count">${l.count}</span><button class="lm-del" onclick="acLabelDelete(${l.id})" aria-label="Delete"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button></div>`).join('') + '</div>' : '<div class="ac-empty" style="padding:18px;">No labels yet.</div>';
-  body.innerHTML = html;
-  AC._lmColor = 'blue';
+  const row = (l, i) => `<div class="lm-row">
+    <span class="lm-name">${escHtml(l.name)}</span>
+    <span class="lm-count">${l.count} chat${l.count === 1 ? '' : 's'}</span>
+    <button class="lm-ic" onclick="acMoveList(${l.id},-1);setTimeout(acRenderLabelManage,220)" aria-label="Move ${escHtml(l.name)} left" ${i === 0 ? 'disabled' : ''}><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+    <button class="lm-ic" onclick="acMoveList(${l.id},1);setTimeout(acRenderLabelManage,220)" aria-label="Move ${escHtml(l.name)} right" ${i === labels.length - 1 ? 'disabled' : ''}><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>
+    <button class="lm-ic" onclick="closeOverlay('labelManage');acOpenEditList(${l.id})" aria-label="Edit ${escHtml(l.name)}"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+    <button class="lm-del" onclick="acDeleteList(${l.id});setTimeout(acRenderLabelManage,300)" aria-label="Delete ${escHtml(l.name)}"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+  </div>`;
+  body.innerHTML = (labels.length
+      ? '<div class="lm-list">' + labels.map(row).join('') + '</div>'
+      : '<div class="ac-empty" style="padding:18px;">You have not made any lists yet.</div>')
+    + '<div class="ac-disc-sub" style="margin-top:12px;">Deleting a list never deletes the chats in it. You can also press and hold a list at the top of your chats to change it.</div>'
+    + '<button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="closeOverlay(\'labelManage\');acOpenNewList()">New list</button>';
 }
 function acLabelPickColor(c, btn) {
   AC._lmColor = c;
@@ -55574,6 +55662,10 @@ function acTabTouchSync() {
     _tabTouchBound = true;
     strip.addEventListener('scroll', _ttSyncStart, { passive: true });      // rAF-sync the tabs (smooth through momentum)
     strip.addEventListener('touchstart', _ttSyncStart, { passive: true });
+    // Press-and-hold has to be forwarded too, not just a tap: the strip sits
+    // OVER the tabs, so a long press on a list tab lands here and the tab never
+    // hears it. Mapped by geometry, exactly like the click forwarder below.
+    _ttBindHold(strip);
     strip.addEventListener('click', (e) => {    // forward the tap to the real ≡ / ＋ / tab / AI button
       // Map the tap to the button whose on-screen rect contains it — NOT elementFromPoint,
       // which returns the covering content (z5) that sits above the menu (z4), never the
@@ -55589,6 +55681,60 @@ function acTabTouchSync() {
     window.addEventListener('resize', () => { try { acTabTouchSync(); } catch (_) {} }, { passive: true });
   }
 }
+/* Which button is under this point? Geometry, not elementFromPoint — the
+   covering content sits above the tabs, so asking the browser what is there
+   returns the wrong thing. */
+function _ttButtonAt(x, y) {
+  const row = document.getElementById('tbTabRow'); if (!row) return null;
+  const btns = row.querySelectorAll('button, a');
+  for (let i = 0; i < btns.length; i++) {
+    const b = btns[i].getBoundingClientRect();
+    if (b.width && x >= b.left && x <= b.right && y >= b.top && y <= b.bottom) return btns[i];
+  }
+  return null;
+}
+/* Press and hold a custom list tab through the strip. A hold that lands on
+   anything else does nothing, and any real movement cancels it so scrolling the
+   tab row never opens a menu. */
+function _ttBindHold(strip) {
+  let timer = null, x0 = 0, y0 = 0, held = false;
+  const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  strip.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    held = false;
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+    timer = setTimeout(() => {
+      timer = null;
+      const btn = _ttButtonAt(x0, y0);
+      if (!btn || !btn.classList.contains('tb-chatlist-pill')) return;
+      const id = parseInt(String(btn.id || '').replace('acseg-list:', ''), 10);
+      if (!Number.isInteger(id)) return;
+      held = true;
+      try { navigator.vibrate && navigator.vibrate(12); } catch (_) {}
+      acOpenListMenu(btn, id);
+    }, LIST_HOLD_MS);
+  }, { passive: true });
+  strip.addEventListener('touchmove', (e) => {
+    const t = e.touches[0]; if (!t) return;
+    if (Math.abs(t.clientX - x0) > 8 || Math.abs(t.clientY - y0) > 8) cancel();
+  }, { passive: true });
+  strip.addEventListener('touchend', cancel, { passive: true });
+  strip.addEventListener('touchcancel', cancel, { passive: true });
+  // Right-click gets the same menu, for anybody on a computer.
+  strip.addEventListener('contextmenu', (e) => {
+    const btn = _ttButtonAt(e.clientX, e.clientY);
+    if (!btn || !btn.classList.contains('tb-chatlist-pill')) return;
+    const id = parseInt(String(btn.id || '').replace('acseg-list:', ''), 10);
+    if (!Number.isInteger(id)) return;
+    e.preventDefault();
+    acOpenListMenu(btn, id);
+  });
+  // A hold must not also count as a tap once the finger lifts.
+  strip.addEventListener('click', (e) => {
+    if (held) { held = false; e.preventDefault(); e.stopPropagation(); }
+  }, true);
+}
+
 // ── Additive scroll-up reveal bar (Home/Beam) ────────────────────────────────
 // A floating COPY of the menu that slides down when you scroll UP (like the bottom
 // nav returning) and slides away when you scroll down or reach the top. Transform-slide
@@ -58725,6 +58871,165 @@ function acDesktopInit() {
     else if (e.key === '4') { e.preventDefault(); appTab('ai'); }
     else if (e.key === '5') { e.preventDefault(); appTab('profile'); }
   });
+}
+
+
+/* ═══ Managing a chat list ═══════════════════════════════════════════════════
+   You could make a list and never get rid of it — the tabs were plain buttons
+   with nothing behind a long press, and the manager screen had been orphaned
+   when the filter chips became tabs.
+
+   Both WhatsApp and Telegram solve this the same way, so Atwe does too: press
+   and hold the tab. That gives edit, move along the row, and delete — and the
+   delete says plainly that the chats inside are not going anywhere, because
+   that is the thing people are actually afraid of.
+═══════════════════════════════════════════════════════════════════════════ */
+let _acListMenuId = null;
+let _acListMenuAt = 0;
+const LIST_HOLD_MS = 420;
+// The menu opens WHILE the finger is still down, so lifting it fires a click on
+// the scrim that has just appeared underneath — which would shut the menu again
+// instantly. A short deaf period after opening is what stops the gesture that
+// opened it from also closing it.
+const LIST_MENU_GUARD_MS = 450;
+
+function _acBindListLongPress(btn, labelId) {
+  let timer = null, moved = false, x0 = 0, y0 = 0;
+  const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  const fire = () => {
+    cancel();
+    // A held tab must not also count as a tap when the finger lifts.
+    btn.dataset.held = '1';
+    try { navigator.vibrate && navigator.vibrate(12); } catch (e) {}
+    acOpenListMenu(btn, labelId);
+  };
+  btn.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    moved = false; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+    delete btn.dataset.held;
+    timer = setTimeout(fire, LIST_HOLD_MS);
+  }, { passive: true });
+  btn.addEventListener('touchmove', (e) => {
+    // Scrolling the tab row must never be mistaken for a hold.
+    const t = e.touches[0];
+    if (!moved && (Math.abs(t.clientX - x0) > 8 || Math.abs(t.clientY - y0) > 8)) { moved = true; cancel(); }
+  }, { passive: true });
+  btn.addEventListener('touchend', cancel, { passive: true });
+  btn.addEventListener('touchcancel', cancel, { passive: true });
+  // A mouse gets the same thing from a right-click, which is what a desktop
+  // user reaches for.
+  btn.addEventListener('contextmenu', (e) => { e.preventDefault(); acOpenListMenu(btn, labelId); });
+  // Holding with a mouse works too, for anybody who tries it.
+  btn.addEventListener('mousedown', (e) => { if (e.button === 0) timer = setTimeout(fire, LIST_HOLD_MS); });
+  btn.addEventListener('mouseup', cancel);
+  btn.addEventListener('mouseleave', cancel);
+  // Swallow the click that follows a hold, so the list does not also get opened.
+  btn.addEventListener('click', (e) => {
+    if (btn.dataset.held) { e.preventDefault(); e.stopPropagation(); delete btn.dataset.held; }
+  }, true);
+}
+
+function acOpenListMenu(btn, labelId) {
+  const pop = document.getElementById('listMenuPop');
+  const scrim = document.getElementById('listMenuScrim');
+  if (!pop || !scrim) return;
+  _acListMenuId = labelId;
+  const labels = AC._labels || [];
+  const i = labels.findIndex((l) => l.id === labelId);
+  const l = labels[i];
+  const nameEl = document.getElementById('listMenuName');
+  if (nameEl) nameEl.textContent = l ? l.name : 'List';
+  // Nothing to the left of the first one, nothing to the right of the last.
+  document.getElementById('listMenuLeft')?.classList.toggle('hidden', i <= 0);
+  document.getElementById('listMenuRight')?.classList.toggle('hidden', i < 0 || i >= labels.length - 1);
+  _acListMenuAt = Date.now();
+  scrim.classList.remove('hidden');
+  pop.classList.remove('hidden');
+  _acAnchorPopover(btn, pop);
+}
+/** Tapping away closes it — but not the release of the press that opened it. */
+function acCloseListMenu(fromScrim) {
+  if (fromScrim && Date.now() - _acListMenuAt < LIST_MENU_GUARD_MS) return;
+  _animateMenuPopClose(document.getElementById('listMenuPop'), document.getElementById('listMenuScrim'));
+}
+function acListMenuPick(what) {
+  const id = _acListMenuId;
+  acCloseListMenu();
+  setTimeout(() => {
+    if (what === 'edit') acOpenEditList(id);
+    else if (what === 'left') acMoveList(id, -1);
+    else if (what === 'right') acMoveList(id, 1);
+    else if (what === 'manage') acOpenLabelManage();
+    else if (what === 'delete') acDeleteList(id);
+  }, 160);
+}
+
+/** Move a list one place along the row, and remember it. */
+async function acMoveList(id, dir) {
+  const labels = (AC._labels || []).slice();
+  const i = labels.findIndex((l) => l.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= labels.length) return;
+  [labels[i], labels[j]] = [labels[j], labels[i]];
+  AC._labels = labels;
+  acRenderChatLists();   // move it on screen straight away
+  try { await API.req('PUT', '/api/atchat/labels/order', { ids: labels.map((l) => l.id) }); }
+  catch (e) { showNotif((e && e.message) || 'Could not save the order.'); acLoadLabels(); }
+}
+
+/** Delete a list. The chats in it are NOT touched — and it says so, because
+    that is what somebody hesitating is actually worried about. */
+async function acDeleteList(id) {
+  const l = (AC._labels || []).find((x) => x.id === id);
+  if (!l) return;
+  const ok = await appConfirm({
+    title: 'Delete “' + l.name + '”?',
+    message: l.count
+      ? `The ${l.count} chat${l.count === 1 ? '' : 's'} in it stay exactly where they are — only the list itself goes.`
+      : 'Only the list goes. No chats are affected.',
+    confirmText: 'Delete list',
+    danger: true,
+  });
+  if (!ok) return;
+  try {
+    await API.req('DELETE', '/api/atchat/labels/' + id);
+    AC._labels = (AC._labels || []).filter((x) => x.id !== id);
+    // If the deleted list was the one being shown, fall back to All.
+    if (AC._chatsTab === 'list:' + id) acChatTab('all');
+    else acRenderChatLists();
+    showNotif('List deleted.');
+  } catch (e) { showNotif((e && e.message) || 'Could not delete it.'); }
+}
+
+/** Edit one: its name, and who is in it. Reuses the same sheet that creates a
+    list, in edit mode — so there is one screen to learn, not two. */
+async function acOpenEditList(id) {
+  const l = (AC._labels || []).find((x) => x.id === id);
+  if (!l) return;
+  AC._nlEditId = id;
+  AC._nlMembers = [];
+  showOverlay('newListView');
+  const nm = document.getElementById('nlName'); if (nm) nm.value = l.name;
+  const ttl = document.getElementById('newListTitle'); if (ttl) ttl.textContent = 'Edit list';
+  // Fill in who is already in it, resolving each to a real name to show.
+  try {
+    const [convos, groups] = await Promise.all([
+      API.req('GET', '/api/atchat/conversations').catch(() => ({ conversations: [] })),
+      API.req('GET', '/api/atchat/groups').catch(() => ({ groups: [] })),
+    ]);
+    const members = [];
+    for (const it of (l.items || [])) {
+      if (it.kind === 'group') {
+        const g = (groups.groups || []).find((x) => x.id === it.targetId);
+        if (g) members.push({ kind: 'group', id: g.id, name: g.name, avatar: g.avatar || null });
+      } else {
+        const c = (convos.conversations || []).find((x) => x.id === it.targetId);
+        if (c) members.push({ kind: 'dm', id: c.id, name: c.nickname || c.name, avatar: c.avatar || null });
+      }
+    }
+    AC._nlMembers = members;
+  } catch (e) {}
+  acRenderNlIncluded();
 }
 
 </script>
