@@ -2094,6 +2094,12 @@ body.light .cloud-overlay{background:rgba(0,0,0,.42);}
   font-size:11px;font-weight:700;color:#fff;
   flex-shrink:0;
 }
+/* No photo → a person, filling the disc and cropped by it, so the shoulders meet
+   the edge the way a real portrait would. Sized in % so it is right at every
+   avatar size in the app without a rule per size. */
+.user-avatar.no-img,.mc-ct-ava.no-img{overflow:hidden;}
+.ava-person{width:100%;height:100%;display:block;fill:rgba(255,255,255,.55);stroke:none;}
+body.light .ava-person{fill:rgba(255,255,255,.72);}
 /* Business accounts: an app-shaped (rounded-square) avatar instead of a circle. */
 .user-avatar.biz{border-radius:50%;} /* business avatars are full circles (owner) — a new business tell is coming separately */
 .user-info{flex:1;min-width:0;}
@@ -4302,27 +4308,30 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .msg-col.show-time .msg-time{display:block;}
 /* Group: sender header (avatar + display name + @username) on top of their message */
 /* The old group header (avatar + name + @handle stacked above the bubble) is
-   replaced by .msg-gname inside the bubble + .msg-gava in the left gutter.
+   replaced by .msg-gname (photo + name) inside the first bubble of a run.
    The rules stay for any surface still rendering the old shape. */
 .msg-ghead{display:flex;align-items:center;gap:7px;margin:11px 0 4px 2px;cursor:pointer;}
 .msg-ghead .user-avatar{width:26px;height:26px;font-size:11px;flex-shrink:0;}
 /* ── Group chat: who said it ──────────────────────────────────────────────
-   The name lives INSIDE the first bubble of a run (Telegram / WhatsApp), in the
-   accent — blue is identity in this app, and a name is exactly that. The photo
-   sits in the gutter beside the LAST bubble of the run, so a run of five
-   messages carries one photo, not five. */
-.msg-gname{display:block;font-size:13px;font-weight:700;color:var(--accent);
-  line-height:1.25;margin:0 0 2px;cursor:pointer;white-space:nowrap;overflow:hidden;
-  text-overflow:ellipsis;max-width:100%;}
-.msg-gname .vbadge{margin-left:4px;}
-.msg-gava{flex:0 0 auto;align-self:flex-end;margin-inline-end:7px;cursor:pointer;
-  display:inline-flex;}
-.msg-gava .user-avatar{width:28px;height:28px;font-size:12px;}
-/* Kept in the layout on every row of a run so the bubbles stay on one line, but
-   only drawn on the one that ends it. */
-.msg-gava.ghost{visibility:hidden;}
-/* A bubble carrying a name needs a touch more room above the text. */
-.msg-bubble.has-gname{padding-top:7px;}
+   Photo and name on one line at the top of the FIRST bubble of a run, with the
+   message underneath — and nothing in the gutter, so every bubble in the thread
+   starts on the same left edge. The rest of the run is plain bubbles.
+
+   The name is a quiet grey rather than the accent: it sits directly above the
+   words it belongs to, so it does not need colour to be found, and a coloured
+   line above every incoming message would shout across a busy group. */
+.msg-gname{display:flex;align-items:center;gap:7px;margin:0 0 4px;cursor:pointer;
+  max-width:100%;min-width:0;}
+.msg-gname .msg-gna{width:22px;height:22px;flex:0 0 auto;}
+/* Brighter than the app's muted grey but still clearly under the message text —
+   matching the sample. Mixed from the two text tokens so it flips with the theme
+   instead of being a hardcoded grey that only works on black. */
+.msg-gnt{font-size:13.5px;font-weight:700;color:color-mix(in srgb, var(--t1) 72%, var(--t2));line-height:1.2;
+  letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  min-width:0;display:inline-flex;align-items:center;}
+.msg-gnt .vbadge{margin-left:4px;}
+/* A bubble carrying the name line breathes a little more at the top. */
+.msg-bubble.has-gname{padding-top:8px;}
 .msg-gh-name{font-size:13px;font-weight:700;color:var(--t1);line-height:1;}
 .msg-gh-user{font-size:12px;color:var(--t3);line-height:1;}
 .msg-bubble{max-width:75%;padding:10px 15px;border-radius:22px;font-size:15px;line-height:1.4;
@@ -12248,7 +12257,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <div class="iset-body hidden" id="setSearchResults"></div>
     <div class="iset-body" data-page="hub" data-title="Settings">
       <div class="iset-acct" onclick="setNav('account')">
-        <div class="user-avatar iset-acct-ava" id="settingsAvatar">?</div>
+        <div class="user-avatar iset-acct-ava no-img" id="settingsAvatar"><svg class="ava-person" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="9.1" r="4.05"/><path d="M12 14.6c-4.5 0-8.1 2.9-9.1 6.9h18.2c-1-4-4.6-6.9-9.1-6.9z"/></svg></div>
         <div class="iset-acct-main">
           <div class="iset-acct-name" id="settingsName">Guest</div>
           <div class="iset-acct-sub" id="settingsAcctSub">Profile, account &amp; more</div>
@@ -13653,7 +13662,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <div class="call-recbadge hidden" id="callRecBadge">● Recording</div>
     <div class="call-recnotice hidden" id="callRecNotice" role="status"></div>
     <div class="call-info" id="callInfo">
-      <div class="user-avatar call-ava" id="callAva">?</div>
+      <div class="user-avatar call-ava no-img" id="callAva"><svg class="ava-person" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="9.1" r="4.05"/><path d="M12 14.6c-4.5 0-8.1 2.9-9.1 6.9h18.2c-1-4-4.6-6.9-9.1-6.9z"/></svg></div>
       <div class="call-name" id="callName">—</div>
       <div class="call-status" id="callStatus">Calling…</div>
     </div>
@@ -17656,7 +17665,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 <!-- Profile popover (bottom of the sidebar) -->
 <div class="brand-menu hidden" id="profileMenu">
   <div class="pm-head" onclick="openProfileEdit()">
-    <div class="user-avatar" id="pmAvatar">?</div>
+    <div class="user-avatar no-img" id="pmAvatar"><svg class="ava-person" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="9.1" r="4.05"/><path d="M12 14.6c-4.5 0-8.1 2.9-9.1 6.9h18.2c-1-4-4.6-6.9-9.1-6.9z"/></svg></div>
     <div style="min-width:0;flex:1;">
       <div class="pm-name" id="pmName">—</div>
       <div class="pm-plan" id="pmPlan">Free</div>
@@ -17715,7 +17724,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
       </button>
       <div class="pf-avatar-wrap">
-        <div class="user-avatar pf-avatar" id="pfAvatar">?</div>
+        <div class="user-avatar pf-avatar no-img" id="pfAvatar"><svg class="ava-person" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="9.1" r="4.05"/><path d="M12 14.6c-4.5 0-8.1 2.9-9.1 6.9h18.2c-1-4-4.6-6.9-9.1-6.9z"/></svg></div>
         <button class="pf-cam" onclick="document.getElementById('pfAvatarFile').click()" aria-label="Change photo">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
         </button>
@@ -18189,7 +18198,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
           <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
         <button class="ac-head-ava" onclick="acHeadAvatar()" aria-label="View profile">
-          <div class="user-avatar ac-peer-ava" id="acPeerAvatar">?</div>
+          <div class="user-avatar ac-peer-ava no-img" id="acPeerAvatar"><svg class="ava-person" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="9.1" r="4.05"/><path d="M12 14.6c-4.5 0-8.1 2.9-9.1 6.9h18.2c-1-4-4.6-6.9-9.1-6.9z"/></svg></div>
         </button>
         <button class="ac-head-name" onclick="acHeadName()">
           <div class="msg-name" id="acPeerName">—</div>
@@ -18796,7 +18805,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1631'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1632'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25337,11 +25346,13 @@ function renderAvatar(el, name, avatar) {
   if (img) {
     el.style.setProperty('--avatar', `url("${img}")`);
     el.classList.add('has-img');
+    el.classList.remove('no-img');
     el.textContent = '';
   } else {
     el.style.removeProperty('--avatar');
     el.classList.remove('has-img');
-    el.textContent = (name || S.user?.name || '?').charAt(0).toUpperCase();
+    el.classList.add('no-img');
+    el.innerHTML = AVA_PERSON;
   }
 }
 
@@ -25423,17 +25434,24 @@ function acSetNotify(id, on) {
 // than deliberate, so it's now one flat tone everywhere.
 const AVA_DEFAULT_TINT = '#48484A';
 function avatarTint() { return AVA_DEFAULT_TINT; }
+/* An account with no photo shows a person, not the first letter of their name.
+   A letter is an arbitrary stand-in — two people called Sam are the same avatar,
+   and one initial says nothing about anybody. The silhouette says exactly what
+   is true: we do not have their photo yet. It is drawn at the full size of the
+   disc and cropped by it, so the shoulders meet the edge at every size the app
+   uses — 22px in a chat row, 100px on a profile — without any per-size tuning. */
+const AVA_PERSON = '<svg class="ava-person" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="9.1" r="4.05"/><path d="M12 14.6c-4.5 0-8.1 2.9-9.1 6.9h18.2c-1-4-4.6-6.9-9.1-6.9z"/></svg>';
 function acAvatarHtml(name, avatar, cls, biz, otw) {
   cls = (cls || 'user-avatar') + (biz ? ' biz' : '') + (otw ? ' otw' : ''); // business → app-shaped; otw → #OpenToWork ring
   if (avatar) return `<div class="${cls} has-img" style="--avatar:url('${avatar}')"></div>`;
-  return `<div class="${cls}" style="background:${avatarTint(name)}">${escHtml((name || '?').charAt(0).toUpperCase())}</div>`;
+  return `<div class="${cls} no-img" style="background:${avatarTint(name)}">${AVA_PERSON}</div>`;
 }
 // An avatar that opens the full picture in the lightbox when tapped (X-style).
-// Falls back to the plain avatar (initial) when there's no photo to show.
+// Falls back to the plain silhouette when there's no photo to show.
 function acAvatarOpenable(name, avatar, cls, biz, otw) {
   cls = (cls || 'user-avatar') + (biz ? ' biz' : '') + (otw ? ' otw' : '');
   if (avatar) return `<div class="${cls} has-img ac-avaopen" style="--avatar:url('${avatar}')" onclick="event.stopPropagation();openImageViewer('${avatar}', this)" title="View photo"></div>`;
-  return `<div class="${cls}" style="background:${avatarTint(name)}">${escHtml((name || '?').charAt(0).toUpperCase())}</div>`;
+  return `<div class="${cls} no-img" style="background:${avatarTint(name)}">${AVA_PERSON}</div>`;
 }
 // A user object is a business account? Also remembers username→biz so the
 // profile-loading skeleton can pick the right avatar shape (app-square vs circle)
@@ -53138,12 +53156,7 @@ function acRenderThread() {
     // WhatsApp read: the name belongs to what was said. No @handle: it repeated
     // the display name and made two lines out of one piece of information.
     const gname = (groupIncoming && !grouped)
-      ? `<span class="msg-gname" onclick="event.stopPropagation();acGoProfile('${m.sender?.username || ''}')">${escHtml(m.sender?.name || '')}${vbadge(acIsVerified(m.sender))}</span>`
-      : '';
-    // The avatar is always in the layout so the bubbles stay on one line; it only
-    // becomes visible on the message that ends the run.
-    const gava = groupIncoming
-      ? `<span class="msg-gava${ends ? '' : ' ghost'}" onclick="event.stopPropagation();acGoProfile('${m.sender?.username || ''}')">${acAvatarHtml(m.sender?.name, m.sender?.avatar)}</span>`
+      ? `<span class="msg-gname" onclick="event.stopPropagation();acGoProfile('${m.sender?.username || ''}')">${acAvatarHtml(m.sender?.name, m.sender?.avatar, 'user-avatar msg-gna', acIsBiz(m.sender))}<span class="msg-gnt">${escHtml(m.sender?.name || '')}${vbadge(acIsVerified(m.sender))}</span></span>`
       : '';
     // Delivery status under the most recent message I sent (iMessage-style).
     // The Sent/Seen/Sending text is gone — the per-message tick conveys it now.
@@ -53177,7 +53190,7 @@ function acRenderThread() {
     // "New messages" divider — sits right before the first unread incoming message.
     const divider = (AC._unreadDivId != null && String(m.id) === String(AC._unreadDivId))
       ? '<div class="msg-divider"><span>Unread messages</span></div>' : '';
-    html += divider + `<div class="msg-row ${rowCls}"${rowAttrs}>${selCheck}${gava}<div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''}${bubTap}>${inner}</div>${reaxHtml}${starHtml}</div><span class="msg-slidetime">${sideTime}</span></div>` + status;
+    html += divider + `<div class="msg-row ${rowCls}"${rowAttrs}>${selCheck}<div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''}${bubTap}>${inner}</div>${reaxHtml}${starHtml}</div><span class="msg-slidetime">${sideTime}</span></div>` + status;
     lastT = t;
    } catch (err) { console.error('message render failed', m && m.id, err); } // one bad message can't blank the thread
   });
@@ -54218,10 +54231,10 @@ function acMetaCard(m) {
     </div>`;
   }
   if (meta.t === 'contact') {
-    const ini = (meta.name || '?').trim().charAt(0).toUpperCase();
+    // (the contact card's disc uses the same silhouette as every other avatar)
     const sub = meta.phone || meta.email || (meta.username ? '@' + meta.username : 'Contact card');
     return `<div class="meta-card mc-contact"${live ? ` onclick="event.stopPropagation();acContactOpen(${m.id})"` : ''}>
-      <span class="mc-ct-ava">${escHtml(ini)}</span>
+      <span class="mc-ct-ava no-img">${AVA_PERSON}</span>
       <div class="mc-ct-main"><div class="mc-ct-name">${escHtml(meta.name)}</div><div class="mc-ct-sub">${escHtml(sub)}</div></div>
       <span class="mc-ct-go"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></span>
     </div>`;
