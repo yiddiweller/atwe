@@ -6191,6 +6191,20 @@ body.reduce-motion .ac-react-bar,body.reduce-motion .ac-rb-btn{animation:none;}
    message bubble as a second box, so the bubble's own fill became a pale frame
    around it — the box-in-a-box the rest of the cards were already fixed for.
    Now the bubble steps back to a plain frame and the card IS the surface. */
+/* Media sits on the page with nothing drawn round it.
+   .msg-bubble.photo already asked for a transparent background — but it is two
+   classes, and the rules that colour a bubble are ".msg-row.me .msg-bubble" and
+   ".msg-row.me .msg-bubble.msg-unseen", which are more specific and therefore
+   won. So every picture kept a 2px ring of bubble colour around it: blue on a
+   sent photo, pale blue until it was read, grey on a received one. These say the
+   same thing with enough specificity to actually hold, and drop the padding that
+   was making the ring visible in the first place.
+   A photo WITH a caption is deliberately left alone — there the bubble is real,
+   because the words underneath live inside it. */
+.msg-row.me .msg-bubble.photo,
+.msg-row.team .msg-bubble.photo,
+.msg-row.me .msg-bubble.photo.msg-unseen,
+.msg-row.me .msg-bubble.photo.msg-deliver{background:none;padding:0;box-shadow:none;}
 /* A message that is only a link says nothing the card does not already say. */
 .msg-bubble.lp-only{display:none;}
 /* The card is a sibling of the bubble inside the message column, so it lines up
@@ -18829,7 +18843,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1637'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1638'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
