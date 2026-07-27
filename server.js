@@ -1193,6 +1193,7 @@ app.use((req, res, next) => {
   if (req.path === '/robots.txt') return next();          // crawlers can always read robots
   if (req.path === '/status' || req.path === '/status.html') return next(); // the status page is exactly what people check when the site is down
   if (req.path === '/security' || req.path === '/security.html') return next(); // and this one has to be readable without an account
+  if (req.path.startsWith('/.well-known/')) return next(); // Apple and Google check these to link the app to this domain
   if (req.path.startsWith('/api/')) return next();        // API incl. /api/site/unlock
   if (req.method !== 'GET') return next();
   if (!(req.headers.accept || '').includes('text/html')) return next(); // only navigations
@@ -1217,6 +1218,27 @@ app.use(compression({
     return compression.filter(req, res);
   },
 }));
+
+/* ─── Letting an Atwe link open the app ────────────────────────────────────
+   Apple and Google both fetch a file from this domain to confirm that the app
+   claiming these links is really ours. Without it, tapping an atwe.com link on
+   a phone opens the browser instead of the app — the file IS the feature.
+   Served as JSON, no redirect, no login. */
+const _fsWellKnown = require('fs');
+const _APPLINK_DIR = path.join(__dirname, 'public', '.well-known');
+function sendWellKnown(res, file) {
+  // Read and send rather than sendFile: the Apple file has no .json extension,
+  // so sendFile guesses application/octet-stream — and Apple REFUSES anything
+  // that is not application/json, which silently breaks every app link.
+  _fsWellKnown.readFile(path.join(_APPLINK_DIR, file), 'utf8', (err, body) => {
+    if (err) return res.status(404).end();
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(body);
+  });
+}
+app.get('/.well-known/apple-app-site-association', (_req, res) => sendWellKnown(res, 'apple-app-site-association'));
+app.get('/.well-known/assetlinks.json', (_req, res) => sendWellKnown(res, 'assetlinks.json'));
 
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders(res, filePath) {
@@ -2479,11 +2501,15 @@ const PUSH_VERBS = {
 // Fan a web-push notification out to all of a user's subscribed devices,
 // pruning any that the push service reports as gone (404/410).
 async function pushToUser(userId, { title, body, url, tag }) {
-  if (!push.isConfigured() || !db.isConfigured()) return;
+  if (!db.isConfigured()) return;
   let subs;
   try { subs = (await db.query('SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = $1', [userId])).rows; }
   catch { return; }
   await Promise.all(subs.map(async (s) => {
+    // A browser needs VAPID keys; a phone does not, because Expo holds the
+    // Apple and Google certificates. So the check is PER SUBSCRIPTION — a
+    // server with no VAPID keys must still reach the app.
+    if (!push.isNativeToken(s.endpoint) && !push.isConfigured()) return;
     try {
       await push.send({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, { title, body, url: url || '/', tag: tag || 'atwe' });
     } catch (e) {
@@ -2507,7 +2533,8 @@ function userInDnd(d, nowMs) {
 async function sendPushForNotif(userId, actorId, type) {
   const verb = PUSH_VERBS[type];
   if (!verb) return; // only push the user-facing, actionable types
-  if (!push.isConfigured()) return;
+  // Deliberately NOT gated on VAPID here: the phone app does not need it, and
+  // pushToUser decides per subscription which of the two paths applies.
   // Quiet hours or an active snooze: suppress the push banner/sound (the in-app
   // notification is still created by notify() — only the alert is muted).
   try {
@@ -4520,8 +4547,12 @@ app.put('/api/notification-filters', auth.requireAuth, async (req, res) => {
 app.post('/api/push/subscribe', auth.requireAuth, async (req, res) => {
   const sub = req.body.subscription || req.body;
   const endpoint = sub && typeof sub.endpoint === 'string' ? sub.endpoint : null;
-  const p256dh = sub && sub.keys && sub.keys.p256dh, authKey = sub && sub.keys && sub.keys.auth;
-  if (!endpoint || !p256dh || !authKey) return res.status(400).json({ error: 'Invalid push subscription.' });
+  // A phone's token is the whole address — there are no keys to go with it,
+  // because Expo does the encrypting. A browser still needs both.
+  const native = push.isNativeToken(endpoint);
+  const p256dh = native ? '' : (sub && sub.keys && sub.keys.p256dh);
+  const authKey = native ? '' : (sub && sub.keys && sub.keys.auth);
+  if (!endpoint || (!native && (!p256dh || !authKey))) return res.status(400).json({ error: 'Invalid push subscription.' });
   try {
     const ua = String(req.headers['user-agent'] || '').slice(0, 300);
     await db.query(
@@ -21943,6 +21974,7 @@ app.post('/api/admin/moderator-qa/:auditId', auth.requirePerm('moderation'), asy
    if the platform is having a bad day, the status page must still answer. */
 const INCIDENT_IMPACTS = ['minor', 'major', 'critical', 'maintenance'];
 const INCIDENT_STATES = ['investigating', 'identified', 'monitoring', 'resolved'];
+
 // What Atwe encrypts, what it does not, and what that costs you. Served like
 // the status page: its own document, readable without an account.
 app.get(['/security', '/security.html'], (_req, res) => {
