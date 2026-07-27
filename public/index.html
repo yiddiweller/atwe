@@ -6201,20 +6201,20 @@ body.reduce-motion .ac-react-bar,body.reduce-motion .ac-rb-btn{animation:none;}
    message bubble as a second box, so the bubble's own fill became a pale frame
    around it — the box-in-a-box the rest of the cards were already fixed for.
    Now the bubble steps back to a plain frame and the card IS the surface. */
-/* A picture WITH a caption loses the panel too. It used to be one coloured
-   bubble with the photo inset by 2px and the words on a strip underneath, so the
-   photo's bottom corners were flattened to 12px to meet that strip. With the
-   strip gone there is nothing to meet: the picture is rounded the same on all
-   four corners, like any other photo, and the words sit under it on the page.
-   The caption keeps the photo's left edge so the two read as one message. */
-.msg-row.me .msg-bubble.has-cap,
-.msg-row.team .msg-bubble.has-cap,
-.msg-row.me .msg-bubble.has-cap.msg-unseen,
-.msg-row.me .msg-bubble.has-cap.msg-deliver{background:none;padding:0;box-shadow:none;}
+/* A picture WITH a caption is ONE shape: the photo flush across the top, the
+   words on a panel joined to its bottom edge, and nothing drawn around the
+   outside. The ring that used to circle it was never a border — it was 2px of
+   padding letting the bubble's own colour show all the way round the picture.
+   Take the padding away and that colour survives only where it belongs, under
+   the words, which is what makes the two read as a single message.
+
+   The bubble keeps its own radius (and its grouped-run corners) and clips its
+   contents, so the picture squares off into the caption and the rounding is
+   carried by the outer shape. */
+.msg-bubble.has-cap{padding:0;overflow:hidden;}
 .msg-bubble.has-cap .msg-photo,
-.msg-bubble.has-cap .msg-video{border-radius:20px;}
-.msg-bubble.has-cap .bub-cap{padding:7px 3px 1px;color:var(--t1);}
-.msg-row.me .msg-bubble.has-cap .bub-cap{text-align:end;}
+.msg-bubble.has-cap .msg-video{border-radius:0;display:block;background:none;}
+.msg-bubble.has-cap .bub-cap{display:block;padding:8px 13px 10px;}
 /* Media sits on the page with nothing drawn round it.
    .msg-bubble.photo already asked for a transparent background — but it is two
    classes, and the rules that colour a bubble are ".msg-row.me .msg-bubble" and
@@ -18867,7 +18867,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1640'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1641'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -52592,7 +52592,12 @@ function _imgDims(m) {
   const w = m && m.image_w, h = m && m.image_h;
   if (!(w > 0 && h > 0)) return '';
   const r = Math.min(MSG_IMG_MAX_W / w, MSG_IMG_MAX_H / h, 1);
-  return ` width="${w}" height="${h}" style="width:${Math.round(w * r)}px;height:${Math.round(h * r)}px"`;
+  // A width in pixels with max-width:100% so a narrow screen can shrink it (the
+  // message column is narrower than 280px on a small phone, and a fixed width
+  // was being CLIPPED by the caption bubble), plus the true aspect ratio so the
+  // height still resolves to a definite number and the space is reserved either
+  // way. Both together: right size, no clipping, nothing moves.
+  return ` width="${w}" height="${h}" style="width:${Math.round(w * r)}px;max-width:100%;aspect-ratio:${w}/${h};height:auto"`;
 }
 function acMsgMedia(m) {
   // View-once photo/video: never render the bytes inline. Recipient gets a
