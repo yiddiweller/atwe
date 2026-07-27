@@ -6,6 +6,7 @@ import { Avatar } from '@/components/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useConversations, conversationPreview, type Conversation } from '@/api/beam';
 import { timeAgo } from '@/lib/format';
+import { useRealtimeInvalidate } from '@/lib/useRealtime';
 
 /**
  * Beam — the messaging world. Phase-1 slice: the real conversation list over
@@ -16,6 +17,10 @@ export default function Beam() {
   const { c } = useTheme();
   const { data, isLoading, isError, refetch, isRefetching } = useConversations();
   const convos = data?.conversations ?? [];
+  // A message arriving anywhere reorders this list and changes an unread count,
+  // so the list is refetched the moment one does — rather than only when the
+  // screen is pulled down.
+  useRealtimeInvalidate(['msg', 'read', 'read-self'], [['conversations']]);
 
   return (
     <Screen edges={['top']}>

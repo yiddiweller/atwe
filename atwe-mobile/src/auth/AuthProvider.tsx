@@ -10,12 +10,21 @@ interface LoginArgs {
   code?: string; // TOTP / recovery code for the 2FA challenge
 }
 
+interface SignupArgs {
+  name: string;
+  username: string;
+  email: string;
+  password: string;
+  accountType: 'personal' | 'business';
+}
+
 interface AuthContextValue {
   user: User | null;
   /** True until the initial token bootstrap finishes (show splash). */
   loading: boolean;
   signedIn: boolean;
   login: (args: LoginArgs) => Promise<{ twoFactorRequired?: boolean }>;
+  signup: (args: SignupArgs) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   setUser: (u: User) => void;
@@ -84,6 +93,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const signup = useCallback<AuthContextValue['signup']>(async (args) => {
+    const res = await api.post<AuthResponse>('/api/auth/signup', args, { noAuth: true });
+    tokenRef.current = res.token;
+    await saveToken(res.token);
+    setUserState(res.user);
+    realtime.connect();
+  }, []);
+
   const logout = useCallback(async () => {
     await hardLogout();
   }, [hardLogout]);
@@ -99,6 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     signedIn: !!user,
     login,
+    signup,
     logout,
     refresh,
     setUser: setUserState,

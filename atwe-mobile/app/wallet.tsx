@@ -60,6 +60,30 @@ export default function Wallet() {
                       Send
                     </Text>
                   </Pressable>
+                  <Pressable
+                    style={[styles.action, { backgroundColor: 'rgba(255,255,255,0.18)' }]}
+                    onPress={() => router.push('/wallet-requests')}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="arrow-down" size={18} color="#fff" />
+                    <Text variant="callout" style={styles.actionLabel}>Request</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.action, { backgroundColor: 'rgba(255,255,255,0.18)' }]}
+                    onPress={() => router.push('/wallet-topup')}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="add" size={18} color="#fff" />
+                    <Text variant="callout" style={styles.actionLabel}>Add</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.action, { backgroundColor: 'rgba(255,255,255,0.18)' }]}
+                    onPress={() => router.push('/wallet-cashout')}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="business-outline" size={17} color="#fff" />
+                    <Text variant="callout" style={styles.actionLabel}>Cash out</Text>
+                  </Pressable>
                 </View>
               </View>
               <Text variant="headline" style={{ marginTop: 22, marginBottom: 4 }}>
@@ -130,7 +154,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
   card: { padding: 20 },
   balance: { color: '#fff', fontSize: 40, fontWeight: '800', marginTop: 4 },
-  actionsRow: { flexDirection: 'row', marginTop: 18, gap: 10 },
+  actionsRow: { flexDirection: 'row', marginTop: 18, gap: 8, flexWrap: 'wrap' },
   action: {
     flexDirection: 'row',
     alignItems: 'center',

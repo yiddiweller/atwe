@@ -14,13 +14,17 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { GlassComposer } from '@/components/GlassComposer';
 import { useTheme } from '@/theme/ThemeProvider';
-import { sendChat, type ChatMessage } from '@/api/ai';
+import { sendChat, askAgent, runAgentAction, agentSummary, type ChatMessage, type AgentAction } from '@/api/ai';
 
 const EXAMPLES = [
   'Draft a friendly reply to a customer asking for a refund',
   'Write a short post announcing a summer sale',
   'Give me 5 name ideas for a coffee brand',
 ];
+
+// Phrases that mean "do something", rather than "tell me something". Checked
+// here so an ordinary question never takes the slower agent route.
+const DOING = /\b(create|make|schedule|set up|book|send|invoice|remind|post)\b/i;
 
 /**
  * Atwe AI — the assistant chat over POST /api/chat. Sends the running
@@ -33,6 +37,9 @@ export default function AI() {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Something the assistant is offering to DO, waiting to be agreed to.
+  const [pending, setPending] = useState<AgentAction | null>(null);
+  const [doing, setDoing] = useState(false);
   const listRef = useRef<FlatList<ChatMessage>>(null);
 
   const scrollEnd = () => setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
@@ -47,6 +54,18 @@ export default function AI() {
     setBusy(true);
     scrollEnd();
     try {
+      // Anything phrased as an instruction goes to the assistant that can act.
+      // It either hands back something to do — shown as a card to agree to —
+      // or plain words, in which case it reads exactly like a normal answer.
+      if (DOING.test(content)) {
+        const out = await askAgent(content);
+        if (out.action) {
+          setPending(out.action);
+          setMessages([...next, { role: 'assistant', content: out.text || 'Here is what I would do — have a look before I do it.' }]);
+          return;
+        }
+        if (out.text) { setMessages([...next, { role: 'assistant', content: out.text }]); return; }
+      }
       const reply = await sendChat(next);
       setMessages([...next, { role: 'assistant', content: reply || '…' }]);
     } catch (e) {
@@ -115,6 +134,28 @@ export default function AI() {
                 </View>
               ) : null
             }
+          />
+        )}
+
+        {pending && (
+          <ActionCard
+            action={pending}
+            busy={doing}
+            onCancel={() => setPending(null)}
+            onConfirm={async () => {
+              setDoing(true);
+              setError(null);
+              try {
+                const done = await runAgentAction(pending);
+                setMessages((m) => [...m, { role: 'assistant', content: done }]);
+                setPending(null);
+              } catch (e) {
+                setError((e as Error).message);
+              } finally {
+                setDoing(false);
+                scrollEnd();
+              }
+            }}
           />
         )}
 
@@ -199,4 +240,47 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   sendBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+});
+
+/**
+ * The confirmation card. Nothing the assistant proposes happens until this is
+ * read and agreed to — which is the point, and why the words on it are the
+ * actual details rather than a summary of them.
+ */
+function ActionCard({
+  action, busy, onConfirm, onCancel,
+}: { action: AgentAction; busy: boolean; onConfirm: () => void; onCancel: () => void }) {
+  const { c, radius, spacing } = useTheme();
+  const s = agentSummary(action);
+  return (
+    <View style={[cardStyles.wrap, { backgroundColor: c.s1, borderRadius: radius.lg, marginHorizontal: spacing.md }]}>
+      <Text variant="headline">{s.title}</Text>
+      {s.lines.map((l, i) => (
+        <Text key={i} variant="callout" tone="t2" style={{ marginTop: 4 }}>{l}</Text>
+      ))}
+      <View style={cardStyles.row}>
+        <Pressable
+          onPress={onCancel}
+          style={[cardStyles.btn, { backgroundColor: c.s2, borderRadius: radius.pill }]}
+          accessibilityRole="button"
+        >
+          <Text variant="callout" tone="t2">Not now</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onConfirm(); }}
+          disabled={busy}
+          style={[cardStyles.btn, { backgroundColor: c.primary, borderRadius: radius.pill, opacity: busy ? 0.6 : 1 }]}
+          accessibilityRole="button"
+        >
+          <Text variant="callout" tone="onPrimary" weight="700">{busy ? 'Working…' : s.confirm}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+const cardStyles = StyleSheet.create({
+  wrap: { padding: 16, marginBottom: 10 },
+  row: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  btn: { flex: 1, alignItems: 'center', paddingVertical: 11 },
 });

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, TextInput, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
+import { View, TextInput, KeyboardAvoidingView, Platform, StyleSheet, Pressable } from 'react-native';
+import { router } from 'expo-router';
 import { Text } from '@/components/Text';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
@@ -107,6 +108,16 @@ export default function Login() {
 
           <View style={{ height: 24 }} />
           <Button title="Log in" onPress={submit} loading={busy} disabled={!identifier || !password} />
+
+          <Pressable
+            onPress={() => router.push('/(auth)/signup')}
+            style={styles.alt}
+            accessibilityRole="button"
+          >
+            <Text variant="callout" tone="t2">
+              New here? <Text variant="callout" tone="accent">Create an account</Text>
+            </Text>
+          </Pressable>
         </View>
       </KeyboardAvoidingView>
     </Screen>
@@ -116,4 +127,5 @@ export default function Login() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   body: { flex: 1, justifyContent: 'center' },
+  alt: { alignSelf: 'center', marginTop: 28, padding: 8 },
 });

@@ -7,7 +7,7 @@ import { api } from './client';
  * names match the API (note `created_at` is snake_case from the row).
  */
 
-export type FeedScope = 'foryou' | 'following';
+export type FeedScope = 'foryou' | 'following' | 'circles' | 'bookmarks';
 
 export interface PostAuthor {
   id: number;
@@ -63,6 +63,14 @@ export function useInfiniteFeed(scope: FeedScope) {
     queryFn: ({ pageParam }) => {
       const seen = (pageParam as number[]) ?? [];
       const q = seen.length ? `&seen=${seen.join(',')}` : '';
+      // Collections is the bookmarks list, which is its own endpoint rather
+      // than a scope on the feed — same cards, different source.
+      if (scope === 'bookmarks') {
+        return api.get<FeedResponse>('/api/social/bookmarks').then((r) => ({
+          posts: (r as unknown as { posts?: Post[] }).posts ?? [],
+          hasMore: false,
+        }));
+      }
       return api.get<FeedResponse>(`/api/social/feed?scope=${scope}${q}`);
     },
     initialPageParam: [] as number[],

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { View, Pressable, Image, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Pressable, Image, StyleSheet, useWindowDimensions, type ImageSourcePropType } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   interpolate,
@@ -27,7 +27,10 @@ const GUTTER = 14;
 const BAR_H = 56;
 const BALL = 56;
 
-const IMG: Record<string, ReturnType<typeof require>> = {
+// `require` on an image returns a number at runtime under Metro, but its type
+// is unknown — which the Image source prop rightly refuses. Typed explicitly so
+// a build does not fail on what is really a bundler detail.
+const IMG: Record<string, ImageSourcePropType> = {
   index: require('../../assets/nav/home.png'),
   beam: require('../../assets/nav/beam.png'),
   engine: require('../../assets/nav/engine.png'),

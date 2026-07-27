@@ -11,6 +11,12 @@ import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { AuthProvider, useAuth } from '@/auth/AuthProvider';
 import { AnimatedSplash } from '@/components/AnimatedSplash';
 import { AppReadyProvider, useAppReady } from '@/lib/appReady';
+import { ConnectionProvider } from '@/lib/connection';
+import { OfflineBanner } from '@/components/OfflineBanner';
+import { registerForPush } from '@/api/push';
+import { routeForUrl } from '@/lib/deeplinks';
+import * as Notifications from 'expo-notifications';
+import * as Linking from 'expo-linking';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -29,12 +35,54 @@ function useProtectedRoute(signedIn: boolean, loading: boolean) {
   }, [signedIn, loading, segments, router]);
 }
 
+/**
+ * Everything that only makes sense once somebody is signed in: asking about
+ * notifications, following a link that opened the app, and following a
+ * notification that was tapped.
+ */
+function useSignedInEffects(signedIn: boolean) {
+  const router = useRouter();
+  // Ask about notifications AFTER sign-in, never on the very first launch —
+  // a permission prompt before somebody knows what the app is gets refused.
+  useEffect(() => {
+    if (!signedIn) return;
+    const t = setTimeout(() => { void registerForPush(); }, 2500);
+    return () => clearTimeout(t);
+  }, [signedIn]);
+
+  // A tapped notification goes where it is about.
+  useEffect(() => {
+    if (!signedIn) return;
+    const sub = Notifications.addNotificationResponseReceivedListener((res) => {
+      const data = (res?.notification?.request?.content?.data ?? {}) as { url?: string; path?: string };
+      const to = data.url ? routeForUrl(data.url) : (data.path ?? null);
+      if (to) router.push(to as never);
+    });
+    return () => sub.remove();
+  }, [signedIn, router]);
+
+  // A link from outside — shared, or from the web — opens the right screen,
+  // both when the app was already running and when the link launched it.
+  useEffect(() => {
+    if (!signedIn) return;
+    const go = (url: string | null) => {
+      if (!url) return;
+      const to = routeForUrl(url);
+      if (to) setTimeout(() => router.push(to as never), 200);
+    };
+    Linking.getInitialURL().then(go).catch(() => {});
+    const sub = Linking.addEventListener('url', (e) => go(e.url));
+    return () => sub.remove();
+  }, [signedIn, router]);
+}
+
 function RootNavigator() {
   const { loading, signedIn } = useAuth();
   const { c, name } = useTheme();
   const { feedReady } = useAppReady();
   const [splashDone, setSplashDone] = useState(false);
   useProtectedRoute(signedIn, loading);
+  useSignedInEffects(signedIn);
 
   // Hand off from the native splash to our animated one immediately on mount:
   // both are the same white logo on pure black, so the swap is invisible and the
@@ -72,10 +120,16 @@ function RootNavigator() {
           <Stack.Screen name="listing/[id]" />
           <Stack.Screen name="wallet" />
           <Stack.Screen name="wallet-send" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="wallet-topup" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="wallet-cashout" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="wallet-requests" />
+          <Stack.Screen name="orders" />
+          <Stack.Screen name="search" />
           <Stack.Screen name="story/[userId]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
           <Stack.Screen name="compose" options={{ presentation: 'modal' }} />
         </Stack>
       )}
+      <OfflineBanner />
       {showSplash && <AnimatedSplash appReady={appReady} onDone={() => setSplashDone(true)} />}
     </>
   );
@@ -88,9 +142,11 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <ThemeProvider>
             <AuthProvider>
-              <AppReadyProvider>
-                <RootNavigator />
-              </AppReadyProvider>
+              <ConnectionProvider>
+                <AppReadyProvider>
+                  <RootNavigator />
+                </AppReadyProvider>
+              </ConnectionProvider>
             </AuthProvider>
           </ThemeProvider>
         </QueryClientProvider>

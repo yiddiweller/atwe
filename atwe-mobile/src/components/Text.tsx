@@ -3,7 +3,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { type } from '@/theme/tokens';
 
 type Variant = keyof typeof type;
-type Tone = 'text' | 't2' | 't3' | 't4' | 'accent' | 'danger' | 'onPrimary';
+type Tone = 'text' | 't2' | 't3' | 't4' | 'accent' | 'danger' | 'warning' | 'success' | 'onPrimary';
 
 interface Props extends TextProps {
   variant?: Variant;

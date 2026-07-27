@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, FlatList, RefreshControl, ActivityIndicator, Pressable, StyleSheet, type NativeSyntheticEvent, type NativeScrollEvent } from 'react-native';
+import { View, FlatList, RefreshControl, ActivityIndicator, Pressable, StyleSheet, type NativeSyntheticEvent, type NativeScrollEvent, ScrollView } from 'react-native';
 import { withTiming } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,9 +15,12 @@ import { useNotifCount } from '@/api/notifications';
 import { useAppReady } from '@/lib/appReady';
 import { useNavMorph } from '@/lib/navMorph';
 
+// The same four the web Home has, in the same order.
 const TABS: { key: FeedScope; label: string }[] = [
   { key: 'foryou', label: 'For You' },
   { key: 'following', label: 'Following' },
+  { key: 'circles', label: 'Circles' },
+  { key: 'bookmarks', label: 'Collections' },
 ];
 
 /**
@@ -87,7 +90,12 @@ export default function Home() {
     <Screen edges={['top']}>
       {/* Header: feed tabs + notifications bell */}
       <View style={[styles.headerRow, { borderBottomColor: c.border }]}>
-        <View style={styles.tabs}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabs}
+          style={styles.tabsWrap}
+        >
           {TABS.map((t) => {
             const active = scope === t.key;
             return (
@@ -99,7 +107,7 @@ export default function Home() {
               </Pressable>
             );
           })}
-        </View>
+        </ScrollView>
         {/* Right actions: notifications bell + top-right compose "+" (replaces the
             old floating FAB; a clean plus, X/web-style). */}
         <View style={styles.headActions}>
@@ -187,7 +195,8 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  tabs: { flexDirection: 'row', gap: 28 },
+  tabsWrap: { flexShrink: 1 },
+  tabs: { flexDirection: 'row', gap: 24, alignItems: 'flex-end', paddingRight: 8 },
   tab: { alignItems: 'center' },
   headActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headBtn: { padding: 2 },

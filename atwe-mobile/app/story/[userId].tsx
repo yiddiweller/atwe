@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Pressable, Animated, ActivityIndicator, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,8 +20,7 @@ function safeBg(bg: string | null): string {
 /**
  * Full-screen story viewer — mirrors the web `acStoryShow`: segmented progress
  * bars up top, auto-advance, tap-right/left to skip, marks each story seen.
- * Image + text stories render fully; video shows a clean placeholder until we
- * wire a native player (expo-video) in a later pass.
+ * Image, text and video all render natively (expo-video for the last).
  */
 export default function StoryViewer() {
   const { c } = useTheme();
@@ -152,14 +152,38 @@ function StoryMedia({ story }: { story: Story }) {
       </View>
     );
   }
-  // video (or missing media) — clean placeholder until a native player lands
+  if (story.kind === 'video' && story.media) return <StoryVideo uri={story.media} />;
+  // Nothing to show — a story whose media has gone.
   return (
     <View style={[styles.fill, styles.center]}>
-      <Ionicons name="play-circle-outline" size={64} color="rgba(255,255,255,0.85)" />
-      <Text variant="callout" style={{ color: 'rgba(255,255,255,0.85)', marginTop: 10 }}>
-        Video story
+      <Ionicons name="image-outline" size={54} color="rgba(255,255,255,0.7)" />
+      <Text variant="callout" style={{ color: 'rgba(255,255,255,0.7)', marginTop: 10 }}>
+        This one is no longer available
       </Text>
     </View>
+  );
+}
+
+/**
+ * A video story, played properly. It is tapped to open, so sound is allowed —
+ * autoplay-with-sound rules are about video that starts on its own, which this
+ * is not. It loops rather than freezing on a black last frame, because a story
+ * advances on a timer and a frozen frame reads as broken.
+ */
+function StoryVideo({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri, (p) => {
+    p.loop = true;
+    p.muted = false;
+    p.play();
+  });
+  return (
+    <VideoView
+      style={styles.fill}
+      player={player}
+      contentFit="contain"
+      nativeControls={false}
+      allowsPictureInPicture={false}
+    />
   );
 }
 

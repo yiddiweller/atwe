@@ -68,3 +68,58 @@ export function txLabel(tx: WalletTx): string {
   };
   return map[tx.kind] || (tx.deltaCents < 0 ? 'Payment' : 'Received');
 }
+
+/* ─── Putting money in, and taking it out ──────────────────────────────────
+   Both go through the routes the web already uses, so the rules — the limits,
+   the velocity caps, a frozen wallet — are enforced in exactly one place and
+   the phone cannot get around any of them by asking differently.
+*/
+export async function topUp(input: { amount: number; clientId: string }): Promise<{ url?: string; ok?: boolean }> {
+  return api.post('/api/wallet/topup', input);
+}
+
+export interface CashoutStatus {
+  configured: boolean;
+  connected: boolean;
+  payoutsEnabled: boolean;
+  balanceCents: number;
+}
+export function useCashoutStatus() {
+  return useQuery({
+    queryKey: ['cashout-status'],
+    queryFn: () => api.get<CashoutStatus>('/api/wallet/cashout-status'),
+  });
+}
+export async function cashOut(input: { amount: number; clientId: string }) {
+  return api.post('/api/wallet/cashout', input);
+}
+/** The hosted page where a bank account is connected. */
+export async function connectBank(): Promise<{ url?: string }> {
+  return api.post('/api/wallet/connect', {});
+}
+
+/* ─── Asking somebody for money ─── */
+export interface MoneyRequest {
+  id: number;
+  amountCents: number;
+  note?: string | null;
+  status: 'pending' | 'paid' | 'declined' | 'cancelled';
+  createdAt: string;
+  requester?: { id: number; name: string; username: string; avatar?: string | null } | null;
+  payer?: { id: number; name: string; username: string; avatar?: string | null } | null;
+}
+export function useMoneyRequests(scope: 'incoming' | 'outgoing') {
+  return useQuery({
+    queryKey: ['money-requests', scope],
+    queryFn: () => api.get<{ requests: MoneyRequest[] }>(`/api/wallet/requests?scope=${scope}`),
+  });
+}
+export async function requestMoney(input: { to: string; amount: number; note?: string }) {
+  return api.post('/api/wallet/request', input);
+}
+export async function payMoneyRequest(id: number, clientId: string) {
+  return api.post(`/api/wallet/requests/${id}/pay`, { clientId });
+}
+export async function declineMoneyRequest(id: number) {
+  return api.post(`/api/wallet/requests/${id}/decline`, {});
+}

@@ -125,7 +125,58 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
 - **Perf (backend, deployed to prod main):** gzip the JSON API (was skipping all
   `/api/*`) except the SSE stream — cuts feed transfer ~30-60% on web + native.
 
-## Next up (Phase 1 continued → then phases 2–7)
+## Recently added (this run — phases 1, 2, 5 and native push COMPLETE)
+- **Making an account on the phone** (`app/(auth)/signup.tsx`): the web's
+  page-by-page shape — personal-or-business FIRST (it changes what "your name"
+  means), then name + handle with the rules checked as you type, then email +
+  password. `signup()` in `AuthProvider`; linked both ways with login.
+- **Native push, end to end** (`src/api/push.ts`): asks 2.5s AFTER sign-in (never
+  on first launch — a prompt before somebody knows what the app is gets refused),
+  registers the Expo token through `POST /api/push/subscribe`, sets the Android
+  channel, and handles a tapped notification by routing to what it is about.
+  **Backend:** `push.js` now tells a phone token from a browser subscription and
+  sends via Expo (which holds the Apple/Google certs, so no VAPID needed);
+  `pushToUser` decides PER SUBSCRIPTION — it used to bail entirely when VAPID was
+  unset, which would have meant no push to the app at all.
+- **Links from outside** (`src/lib/deeplinks.ts`): `atwe://` and
+  `https://atwe.com/...` both resolve to the right screen, including a bare
+  `/<handle>` as a profile. Handled when the app is running AND when a link
+  launched it. **The site now serves the association files** Apple and Google
+  fetch to confirm the app owns the domain (`public/.well-known/*`, routed ABOVE
+  express.static — static was serving Apple's extension-less file as
+  octet-stream, which Apple refuses outright).
+- **Offline, honestly** (`src/lib/connection.tsx` + `OfflineBanner`): asks whether
+  Atwe *answers*, not whether wifi is on — a hotel network that has not been
+  logged into looks perfectly connected. Re-checks and reconnects the live stream
+  on resume, and shows a brief green "Back online".
+- **Home is complete** — all four web tabs (For You · Following · Circles ·
+  Collections) in a scrolling row, and **video stories now play** via `expo-video`
+  (the one deliberate gap in the story viewer is closed).
+- **Beam is live, not polled** — `useRealtime`/`useRealtimeInvalidate` put the SSE
+  client to work: the conversation list and an open thread update the instant a
+  message, read receipt, edit or deletion arrives. The old 5s poll is now a 25s
+  safety net for when iOS silently kills the socket.
+- **Atwe AI can act** — an instruction routes to `POST /api/ai/agent`, which hands
+  back a described action rendered as a **confirmation card** with the real
+  details; only on agreement does the app call the ordinary authenticated route
+  (`create_event` / `schedule_post` / `draft_invoice` / `draft_reply`).
+- **Money is complete on the phone** — Send, **Request** (`wallet-requests.tsx`,
+  pay/decline, claim-first so two taps pay once), **Add money** (`wallet-topup`),
+  **Cash out** (`wallet-cashout`, with the three honest states: not set up / bank
+  not connected / ready), plus **Orders** (bought + sold, plain-words status).
+- **Search across everything** (`app/search.tsx` + `src/api/search.ts`): all seven
+  web scopes — people, posts, shop, jobs, services, businesses — each rendered as
+  what it is. Engine's box now opens it.
+- **Store + Android readiness**: universal links, the permission wording Apple
+  requires, accessibility roles/labels/Dynamic Type throughout, notification icon
+  + colour, Android package/permissions/app-links/adaptive icon, and EAS profiles
+  producing a Play app-bundle and a shareable apk.
+- **Verified**: `npx tsc --noEmit` clean, and `npx expo export --platform ios`
+  produces a real 4.83 MB bundle — every import resolves and every route compiles.
+  Also fixed two PRE-EXISTING type errors that would have failed a build (a tone
+  the Text component did not have, and an untyped `require()` image source).
+
+## Next up (phases 3, 4, 6, 7 remain partial)
 1. ~~Profile navigation from feed/detail~~ ✅ done (`app/user/[username].tsx`).
    ~~Stories tray + viewer~~ ✅ done (`StoriesTray` + `app/story/[userId].tsx`).
    Next: **Circles/Following full feed tabs on Home**; native **video** story
@@ -133,6 +184,17 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
 2. Onboarding / signup polish; Settings surfaces (theme, privacy, account).
 3. Then per the Architecture & Build Plan: Beam · Engine · Atwe AI · Profile/
    money · App Store polish.
+
+### What is genuinely left
+- **Phase 3 — Beam:** groups, media/voice, reactions, calls.
+- **Phase 4 — Engine:** buying inside the app (address + wallet/escrow checkout).
+- **Phase 6 — Profile & money:** managing a storefront, business analytics.
+- **Phase 7 — App Store:** Apple Pay; the public listing needs Apple to approve
+  the developer account.
+- **Android release:** configured and buildable; needs a Play developer account.
+- **Home-screen widgets:** genuinely blocked in managed Expo — a widget is a
+  separate WidgetKit target written in Swift, which needs prebuild + a config
+  plugin. Not a matter of more effort in this codebase.
 
 **Delivery note:** new native code reaches the founder's phone only via a rebuild
 (`eas build -p ios --profile production` → `eas submit`). Before the next build,
@@ -205,7 +267,7 @@ npx expo start --tunnel                    # scan QR with Expo Go
 - **Next:** `eas submit -p ios --latest` → TestFlight → install on the real iPhone.
 - **Later:** connect the GitHub repo to Expo so builds trigger online (Mac-free);
   upgrade Apple Individual → Organization (ATWE INC) before public App Store launch.
-- **Repo/local divergence:** committed `package.json` still lists SDK-53 versions;
-  the founder's LOCAL copy was aligned to SDK 54 (`expo install --fix` +
-  `react-native-worklets`). Sync the repo package.json to the working SDK-54 set on
-  the next pass so a fresh clone builds clean.
+- ~~Repo/local divergence~~ **RESOLVED:** the committed `package.json` is the
+  working SDK-54 set (expo ~54, react-native 0.81.5, react-native-worklets 0.5.1)
+  and a fresh clone now installs and bundles cleanly — verified with a real
+  `expo export`. `expo-video` was added on the same pass.

@@ -20,6 +20,8 @@ import { Avatar } from '@/components/Avatar';
 import { GlassComposer } from '@/components/GlassComposer';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useThread, sendDm, type DmMessage, type DmThreadData } from '@/api/beam';
+import { useRealtime } from '@/lib/useRealtime';
+import { useCallback } from 'react';
 
 /**
  * A live 1:1 DM thread — reads GET /api/atchat/with/:id (polled) and sends via
@@ -33,6 +35,26 @@ export default function ChatThread() {
   const qc = useQueryClient();
   const { peer } = useLocalSearchParams<{ peer: string }>();
   const peerId = Number(peer);
+
+  // Live delivery. A message for THIS conversation refetches it straight away;
+  // one for a different conversation is left alone, so opening a chat does not
+  // start reacting to every message on the account.
+  const onLiveMsg = useCallback((data: unknown) => {
+    const d = data as { kind?: string; peerId?: number };
+    if (d?.kind === 'dm' && d.peerId === peerId) {
+      qc.invalidateQueries({ queryKey: ['thread', peerId] });
+      qc.invalidateQueries({ queryKey: ['conversations'] });
+    }
+  }, [peerId, qc]);
+  useRealtime('msg', onLiveMsg);
+  // Their "seen" tick, and their edits and deletions, arrive the same way.
+  const onLiveState = useCallback((data: unknown) => {
+    const d = data as { peerId?: number };
+    if (d?.peerId === peerId) qc.invalidateQueries({ queryKey: ['thread', peerId] });
+  }, [peerId, qc]);
+  useRealtime('read', onLiveState);
+  useRealtime('dm_deleted', onLiveState);
+  useRealtime('dm_edited', onLiveState);
   const { data, isLoading } = useThread(Number.isFinite(peerId) ? peerId : undefined);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);

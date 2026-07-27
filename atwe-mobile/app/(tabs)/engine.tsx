@@ -9,7 +9,7 @@ import {
   RefreshControl,
   StyleSheet,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
@@ -49,7 +49,7 @@ export default function Engine() {
           <Ionicons name="search" size={18} color={c.t3} />
           <TextInput
             style={[styles.searchInput, { color: c.text }]}
-            placeholder="Search people"
+            placeholder="Search Atwe"
             placeholderTextColor={c.t3}
             value={q}
             onChangeText={setQ}
@@ -57,6 +57,7 @@ export default function Engine() {
             autoCorrect={false}
             returnKeyType="search"
             accessibilityLabel="Search"
+            onSubmitEditing={() => { if (q.trim()) router.push(`/search?q=${encodeURIComponent(q.trim())}`); }}
           />
           {q.length > 0 && (
             <Pressable onPress={() => setQ('')} hitSlop={8}>

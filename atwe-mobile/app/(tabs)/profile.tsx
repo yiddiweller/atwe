@@ -81,6 +81,41 @@ export default function Profile() {
             label="Send money"
             onPress={() => router.push('/wallet-send')}
             c={c}
+          />
+          <NavRow
+            icon="download-outline"
+            label="Money requests"
+            onPress={() => router.push('/wallet-requests')}
+            c={c}
+          />
+          <NavRow
+            icon="add-circle-outline"
+            label="Add money"
+            onPress={() => router.push('/wallet-topup')}
+            c={c}
+          />
+          <NavRow
+            icon="business-outline"
+            label="Cash out to a bank"
+            onPress={() => router.push('/wallet-cashout')}
+            c={c}
+            last
+          />
+        </Group>
+
+        {/* What you have bought and sold */}
+        <Group label="SHOPPING">
+          <NavRow
+            icon="receipt-outline"
+            label="Orders"
+            onPress={() => router.push('/orders')}
+            c={c}
+          />
+          <NavRow
+            icon="storefront-outline"
+            label="Marketplace"
+            onPress={() => router.push('/marketplace')}
+            c={c}
             last
           />
         </Group>

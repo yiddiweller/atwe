@@ -75,7 +75,11 @@ export function useThread(peerId: number | undefined) {
     queryKey: ['thread', peerId],
     queryFn: () => api.get<DmThreadData>(`/api/atchat/with/${peerId}`),
     enabled: peerId != null,
-    refetchInterval: 5_000, // lightweight polling until the SSE stream is wired natively
+    // The live stream is what actually delivers a message now (see the chat
+    // screen). This slow poll stays as a safety net for the case iOS quietly
+    // kills the connection in the background and the reconnect has not landed
+    // yet — without it a thread could sit silently stale.
+    refetchInterval: 25_000,
   });
 }
 

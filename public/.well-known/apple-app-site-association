@@ -1,0 +1,22 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TH3FQ8FMKB.com.atwe.app",
+        "paths": [
+          "NOT /api/*",
+          "NOT /admin*",
+          "NOT /status*",
+          "NOT /security*",
+          "/post/*",
+          "/user/*",
+          "/listing/*",
+          "/group/*",
+          "/circle/*",
+          "/*"
+        ]
+      }
+    ]
+  }
+}

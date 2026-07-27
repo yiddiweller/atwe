@@ -13,21 +13,33 @@
       "resizeMode": "contain",
       "backgroundColor": "#000000"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.atwe.app",
       "buildNumber": "1",
-      "config": { "usesNonExemptEncryption": false },
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "infoPlist": {
-        "UIBackgroundModes": ["remote-notification"],
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
         "NSCameraUsageDescription": "Atwe uses the camera for photos, video, stories, and QR scanning.",
         "NSPhotoLibraryUsageDescription": "Atwe lets you attach photos and video to posts, messages, and listings.",
         "NSMicrophoneUsageDescription": "Atwe uses the microphone for voice notes and calls.",
         "NSFaceIDUsageDescription": "Atwe uses Face ID to unlock the app and protected sections.",
         "NSLocationWhenInUseUsageDescription": "Atwe uses your location for near-me discovery and live location sharing.",
-        "ITSAppUsesNonExemptEncryption": false
-      }
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSUserTrackingUsageDescription": "Atwe does not track you across other apps or websites.",
+        "NSContactsUsageDescription": "Atwe can find people you already know, only if you ask it to."
+      },
+      "associatedDomains": [
+        "applinks:atwe.com",
+        "applinks:www.atwe.com"
+      ]
     },
     "android": {
       "package": "com.atwe.app",
@@ -35,22 +47,70 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "atwe.com"
+            },
+            {
+              "scheme": "https",
+              "host": "www.atwe.com"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "POST_NOTIFICATIONS",
+        "VIBRATE"
+      ],
+      "versionCode": 1
     },
     "plugins": [
       "expo-router",
       "expo-secure-store",
       "expo-local-authentication",
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/adaptive-icon.png",
+          "color": "#0088FF"
+        }
+      ],
       [
         "expo-splash-screen",
-        { "backgroundColor": "#000000", "image": "./assets/splash.png", "imageWidth": 104 }
-      ]
+        {
+          "backgroundColor": "#000000",
+          "image": "./assets/splash.png",
+          "imageWidth": 104
+        }
+      ],
+      "expo-video"
     ],
-    "experiments": { "typedRoutes": true },
+    "experiments": {
+      "typedRoutes": true
+    },
     "extra": {
       "apiUrl": "https://atwe.com",
-      "eas": { "projectId": "e7cc019c-b415-4fa0-9f63-283aaf8d1ad6" }
-    }
+      "eas": {
+        "projectId": "e7cc019c-b415-4fa0-9f63-283aaf8d1ad6"
+      }
+    },
+    "primaryColor": "#0088FF",
+    "description": "The network built for business. Connect, message, hire, sell and grow, all in one place."
   }
 }
