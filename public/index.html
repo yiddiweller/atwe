@@ -9940,18 +9940,15 @@ body.light .skel-stories{border-bottom-color:rgba(0,0,0,.08);}
    22px radius, same left/right sides, the same run spacing (.msg-row.gap = 11px),
    and the same grouped-corner rule (a connecting corner flattens to 12px when a
    same-side bubble is adjacent), so it dissolves cleanly into the real messages. */
-.ac-thread-skel{display:flex;flex-direction:column;padding:14px 16px 0;}
-.ats-row{display:flex;margin-top:3px;}
-.ats-row:not(.hasAbove){margin-top:11px;}   /* start of a run → matches .msg-row.gap */
-.ats-row:first-child{margin-top:0;}
-.ats-row.me{justify-content:flex-end;}
-.ats-row.team{justify-content:flex-start;}
-.ats-bub{height:38px;border-radius:22px;max-width:75%;}
-.ats-row.team.hasAbove .ats-bub{border-top-left-radius:12px;}
-.ats-row.team.hasBelow .ats-bub{border-bottom-left-radius:12px;}
-.ats-row.me.hasAbove .ats-bub{border-top-right-radius:12px;}
-.ats-row.me.hasBelow .ats-bub{border-bottom-right-radius:12px;}
-
+/* The chat-opening screen: black, with one small dark turning mark centred in
+   the space the messages are about to fill. The height is the viewport less the
+   header and the composer — the mark only has to land near the middle, and this
+   holds on every phone size without measuring anything. */
+.ac-thread-load{display:flex;align-items:center;justify-content:center;
+  height:calc(100dvh - 200px);min-height:200px;background:var(--bg);}
+/* Two classes, because the shared .swirl-load sizing rule is declared further
+   down the sheet and would otherwise win at the same specificity. */
+.swirl-load.atl-mark{width:20px;height:20px;opacity:.32;}
 /* Spinner for short loads (opening a thread) */
 .ac-spin{display:flex;justify-content:center;align-items:center;padding:48px 0;}
 /* Swirl loading spinner — the Atwe mark spinning smoothly. The rotation runs on the
@@ -18799,7 +18796,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1630'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1631'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -26522,22 +26519,12 @@ const AC_SPINNER = '<div class="ac-spin"><span></span></div>';
 // a real run of same-side bubbles.
 // All ghost bubbles are the SAME chat-bubble height (set in CSS) — only the WIDTH
 // varies; enough rows to fill the screen. [side, width].
-const _ATS = [['team', 148], ['team', 96], ['me', 184], ['team', 124], ['me', 92], ['me', 156], ['team', 210], ['team', 108],
-  ['me', 138], ['team', 172], ['me', 84], ['team', 200], ['me', 120], ['team', 150], ['me', 176], ['team', 100], ['team', 132]];
-// _ATS alone (~765px) fell short of the full screen on taller phones, leaving the
-// skeleton visibly "stop in the middle" with plain background below it — repeat
-// the pattern a few times so it always overflows any device's height; the
-// container clips the excess (`.ac-thread-skel`'s ancestor is `overflow:hidden`),
-// so there's no visible harm in generating more rows than any screen needs.
-const _ATS_REPEATED = Array(3).fill(_ATS).flat();
-const AC_THREAD_SKELETON = '<div class="ac-thread-skel" aria-hidden="true">'
-  + _ATS_REPEATED.map(([side, w], i) => {
-      const above = i > 0 && _ATS_REPEATED[i - 1][0] === side;
-      const below = i < _ATS_REPEATED.length - 1 && _ATS_REPEATED[i + 1][0] === side;
-      const cls = side + (above ? ' hasAbove' : '') + (below ? ' hasBelow' : '');
-      return `<div class="ats-row ${cls}"><div class="skel ats-bub" style="width:${w}px"></div></div>`;
-    }).join('')
-  + '</div>';
+/* Opening a chat shows a black screen with the Atwe swirl turning on it — the
+   same spinner the rest of the app uses (.swirl-load), just small and dark. It
+   replaced a screenful of grey ghost bubbles: those imitate messages that are
+   not there yet, and on a chat you have already read they read as content
+   loading in the wrong shape. A quiet mark says "a moment" and nothing else. */
+const AC_THREAD_SKELETON = '<div class="ac-thread-load" aria-hidden="true"><span class="swirl-load atl-mark"></span></div>';
 function acSkelRows(n) {
   let s = '';
   for (let i = 0; i < (n || 6); i++) s += `<div class="skel-row"><div class="skel skel-ava"></div><div class="skel-lines"><div class="skel skel-line" style="width:38%"></div><div class="skel skel-line" style="width:72%"></div></div></div>`;
