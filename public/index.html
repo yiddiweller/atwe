@@ -6183,15 +6183,32 @@ body.reduce-motion .ac-react-bar,body.reduce-motion .ac-rb-btn{animation:none;}
 .ord-shipnote{margin:10px 0;background:var(--s2);border-radius:14px;padding:12px 14px;}
 .ord-shipnote .co-sec-h{margin:0 0 4px;}
 .ord-shipnote-body{font-size:14px;line-height:1.45;white-space:pre-wrap;}
-/* Chat link-preview card (unfurl) — inherits the bubble's text colour so it
-   reads on both my/their bubbles and every theme; the tint darkens the fill. */
-.lp-card{display:block;margin-top:6px;border-radius:12px;overflow:hidden;background:rgba(0,0,0,.16);text-decoration:none;color:inherit;max-width:280px;}
-body.light .lp-card{background:rgba(0,0,0,.06);}
-.lp-img{width:100%;max-height:140px;object-fit:cover;display:block;}
-.lp-tx{display:block;padding:8px 10px;}
-.lp-title{font-size:13px;font-weight:700;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-.lp-desc{font-size:12px;opacity:.75;margin-top:2px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-.lp-dom{display:block;font-size:11px;opacity:.6;margin-top:4px;}
+/* Chat link-preview card (unfurl). Same treatment as every other rich card in a
+   chat: ONE surface, no outline, and room to breathe. It used to sit inside the
+   message bubble as a second box, so the bubble's own fill became a pale frame
+   around it — the box-in-a-box the rest of the cards were already fixed for.
+   Now the bubble steps back to a plain frame and the card IS the surface. */
+/* A message that is only a link says nothing the card does not already say. */
+.msg-bubble.lp-only{display:none;}
+/* The card is a sibling of the bubble inside the message column, so it lines up
+   under it on the correct side. white-space:normal, or the bubble family's
+   pre-wrap (needed so the line breaks in a TYPED message survive) prints the
+   newlines and indents of the card's own markup as real blank space — the band
+   of nothing above the picture and below the domain. Same trap the rich cards
+   were carrying. */
+.lp-card{display:block;margin:5px 0 0;border-radius:var(--card-r);overflow:hidden;white-space:normal;
+  background:var(--card-fill);border:none;text-decoration:none;color:var(--t1);
+  width:272px;max-width:100%;align-self:inherit;}
+.msg-row.me .lp-card{margin-inline-start:auto;}
+.lp-img{width:100%;max-height:150px;object-fit:cover;display:block;background:var(--s2);}
+.lp-tx{display:block;padding:11px 13px 12px;}
+.lp-title{font-size:14.5px;font-weight:650;line-height:1.3;letter-spacing:-.01em;color:var(--t1);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.lp-desc{font-size:12.5px;color:var(--t3);opacity:1;margin-top:3px;line-height:1.4;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.lp-dom{display:block;font-size:12px;color:var(--t3);opacity:1;margin-top:6px;}
+@media(hover:hover){.lp-card:hover{background:var(--s2);}}
+.lp-card:active{background:var(--s2);}
 /* Instant answers editor */
 .faq-row{margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--bg);}
 /* Interactive reply buttons (business DM card) */
@@ -18800,7 +18817,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1634'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1635'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -34795,6 +34812,16 @@ function acLinkifyPost(text) {
     return 'qZurlZq' + (urls.length - 1) + 'qZurlZq';
   });
   let h = escHtml(s);
+  // escHtml turns an apostrophe into the entity "&#39;" — and the hashtag rule
+  // right below would then read the "#39" INSIDE that entity as a tag. That is
+  // why "What's up" came out as "What&" + a blue #39 + ";s up", and why a number
+  // appeared out of nowhere: it was the apostrophe, wearing a hashtag. Shield
+  // every entity the same way the URLs above are shielded, and put them back at
+  // the end, so nothing the escaper produces can be re-read as content.
+  const ents = [];
+  h = h.replace(/&(?:#\d+|#x[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);/g, (m) => {
+    ents.push(m); return 'qZentZq' + (ents.length - 1) + 'qZentZq';
+  });
   h = h.replace(/#([\p{L}\p{N}_]{1,50})/gu, (m, t) => `<span class="ac-tag" onclick="event.stopPropagation();acOpenHashtag('${t.toLowerCase()}')">#${t}</span>`);
   // @everyone (a group-wide ping, not a profile) highlights without a profile link.
   h = h.replace(/(^|[^\w@/])@([a-zA-Z0-9_]{2,30})/g, (m, pre, u) => (u.toLowerCase() === 'everyone'
@@ -34803,6 +34830,7 @@ function acLinkifyPost(text) {
   // $CASHTAG (stock/crypto ticker) — letters only so "$5" prices aren't linked.
   // Function replacer keeps the literal "$" from being read as a replacement pattern.
   h = h.replace(/(^|[^\w$])\$([A-Za-z]{1,6})(?![A-Za-z0-9])/g, (m, pre, t) => `${pre}<span class="ac-tag" onclick="event.stopPropagation();acOpenCashtag('${t.toUpperCase()}')">$${t.toUpperCase()}</span>`);
+  h = h.replace(/qZentZq(\d+)qZentZq/g, (m, i) => ents[+i] || '');
   h = h.replace(/qZurlZq(\d+)qZurlZq/g, (m, i) => urls[+i] || '');
   return h;
 }
@@ -52612,8 +52640,18 @@ async function acHydrateLinkPreviews() {
     if (!data) return;
     const cur = document.querySelector(`#acThread .msg-bubble[data-mid="${m.id}"]`); // thread may have re-rendered
     if (!cur || cur.querySelector('.lp-card')) return;
-    cur.insertAdjacentHTML('beforeend', acLpCardHtml(url, data));
-    cur.style.width = ''; // undo the text-hug width so the bubble can fit the card
+    // The card goes BESIDE the bubble, not inside it — that nested box was what
+    // put a thick frame of bubble-colour around the preview. The message keeps
+    // its own bubble and the card sits under it as its own surface, which is how
+    // Messages does it. And when the message is nothing but the link, the bubble
+    // would only be repeating the card's own domain line, so it steps aside and
+    // the card stands alone.
+    const col = cur.closest('.msg-col') || cur.parentElement;
+    if (!col || col.querySelector('.lp-card')) return;
+    cur.style.width = ''; // undo the text-hug width
+    const onlyLink = (m.body || '').trim() === url || (m.body || '').trim() === url.replace(/\/$/, '');
+    cur.classList.toggle('lp-only', onlyLink);
+    cur.insertAdjacentHTML('afterend', acLpCardHtml(url, data));
   });
 }
 // Open a view-once photo/video — fetch the bytes once, show full-screen, then
