@@ -2036,6 +2036,100 @@ function mediaSig(kind, id, idx) {
 const MEDIA_URL_RE = /^\/api\/media\/([a-z-]+)\/(\d+)\/(\d+)\/([a-f0-9]{20})(?:\?.*)?$/;
 // Replace a stored data URL with its streaming URL. Small blobs (< 2 KB) stay
 // inline (fewer requests); non-data strings (external URLs, null) pass through.
+/* ── How big is this picture? ────────────────────────────────────────────────
+   A photo in a chat has no known size until it downloads, so its bubble starts
+   flat and everything below it jumps the moment it lands. The only real cure is
+   to know the shape BEFORE the bytes arrive, so the space is already reserved
+   and nothing ever moves.
+
+   This reads the width and height straight out of the file's header — a few
+   dozen bytes for a PNG or GIF, a short marker walk for a JPEG. It never decodes
+   the image. Once read, the numbers are written back onto the message row, so a
+   given photo is measured exactly once in its life.
+
+   Nothing here trusts the file: every read is bounds-checked, and anything
+   unrecognised or malformed simply returns null and the picture behaves as it
+   did before. */
+function imageSizeFromDataUrl(dataUrl) {
+  try {
+    if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) return null;
+    const i = dataUrl.indexOf(';base64,');
+    if (i === -1) return null;
+    // 96KB of header is far more than any format needs, and keeps a huge photo
+    // from being decoded in full just to find two numbers.
+    const b64 = dataUrl.slice(i + 8, i + 8 + 131072);
+    const b = Buffer.from(b64, 'base64');
+    if (b.length < 12) return null;   // shorter than any real image header
+
+    // PNG: 8-byte signature, then IHDR with width/height as big-endian 32-bit.
+    if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) {
+      if (b.length < 24) return null;
+      return okSize(b.readUInt32BE(16), b.readUInt32BE(20));
+    }
+    // GIF: width/height little-endian at byte 6.
+    if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) {
+      return okSize(b.readUInt16LE(6), b.readUInt16LE(8));
+    }
+    // WEBP (RIFF....WEBP) — three sub-formats, each stores the size differently.
+    if (b.length > 30 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP') {
+      const tag = b.toString('ascii', 12, 16);
+      if (tag === 'VP8X') return okSize(1 + b.readUIntLE(24, 3), 1 + b.readUIntLE(27, 3));
+      if (tag === 'VP8 ') return okSize(b.readUInt16LE(26) & 0x3fff, b.readUInt16LE(28) & 0x3fff);
+      if (tag === 'VP8L') {
+        const n = b.readUInt32LE(21);
+        return okSize(1 + (n & 0x3fff), 1 + ((n >> 14) & 0x3fff));
+      }
+      return null;
+    }
+    // JPEG: walk the marker segments to the frame header, which carries the size.
+    if (b[0] === 0xff && b[1] === 0xd8) {
+      let o = 2;
+      while (o + 9 < b.length) {
+        if (b[o] !== 0xff) { o++; continue; }              // resync on padding
+        const marker = b[o + 1];
+        if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) { o += 2; continue; }
+        const len = b.readUInt16BE(o + 2);
+        if (len < 2) return null;
+        // SOF0-SOF15, minus the four that are not frame headers.
+        if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+          return okSize(b.readUInt16BE(o + 7), b.readUInt16BE(o + 5));   // width, height
+        }
+        o += 2 + len;
+      }
+      return null;
+    }
+    return null;
+  } catch (_) { return null; }
+}
+/* The size to store for a message: what the sender measured if they sent it,
+   otherwise read out of the file itself. */
+function pickImageSize(body, dataUrl) {
+  const fromSender = okSize(Math.round(Number(body && body.imageW)), Math.round(Number(body && body.imageH)));
+  if (fromSender) return fromSender;
+  return imageSizeFromDataUrl(dataUrl) || { w: null, h: null };
+}
+/* Fill in the shape of any photo in a thread that has not been measured yet,
+   and remember it — so a given picture is measured exactly once in its life
+   rather than on every open. Best-effort throughout: a file we cannot read just
+   stays unmeasured and behaves as it did before. */
+function backfillImageSizes(rows, table) {
+  const todo = [];
+  for (const r of rows) {
+    if (!r || (r.image_w && r.image_h)) continue;
+    if (!r.image || typeof r.image !== 'string') continue;
+    const sz = imageSizeFromDataUrl(r.image);
+    if (!sz) continue;
+    r.image_w = sz.w; r.image_h = sz.h;
+    todo.push([r.id, sz.w, sz.h]);
+  }
+  for (const [id, w, h] of todo) {
+    db.query(`UPDATE ${table} SET image_w = $2, image_h = $3 WHERE id = $1`, [id, w, h]).catch(() => {});
+  }
+}
+function okSize(w, h) {
+  return (Number.isInteger(w) && Number.isInteger(h) && w > 0 && h > 0 && w <= 30000 && h <= 30000)
+    ? { w, h } : null;
+}
 function mediaRef(val, kind, id, idx = 0) {
   if (typeof val !== 'string' || !val.startsWith('data:') || val.length < 2048) return val == null ? null : val;
   // v= busts caches when the content changes (avatar swaps); sig excludes it.
@@ -6048,7 +6142,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     // Seeing the thread starts the self-destruct timer on any unseen secret messages.
     await startSecretTimers(req.user.id, other, thread);
     const { rows } = await db.query(
-      `SELECT id, sender_id, body, image, images, media, media_kind, media_name, duration_sec, created_at, read_at, deleted_all, reply_to, edited, forwarded, meta, client_id, view_once, secret, cipher, cipher_iv, expires_at, ($1 = ANY(viewed_by)) AS viewed,
+      `SELECT id, sender_id, body, image, images, media, media_kind, media_name, duration_sec, image_w, image_h, created_at, read_at, deleted_all, reply_to, edited, forwarded, meta, client_id, view_once, secret, cipher, cipher_iv, expires_at, ($1 = ANY(viewed_by)) AS viewed,
               ($1 = ANY(hidden_for)) AS hidden, ($1 = ANY(starred_by)) AS starred, (pinned_at IS NOT NULL) AS pinned, reactions FROM at_messages
        WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
          AND thread_id IS NOT DISTINCT FROM $3
@@ -6101,7 +6195,9 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
         nickname: (await db.query('SELECT nickname FROM contacts WHERE owner_id = $1 AND contact_id = $2', [req.user.id, other])).rows[0]?.nickname || null },
       canMessage, request, incomingRequest, connectGated, thread,
       disappearing: await dmDisappearSeconds(req.user.id, other),
-      messages: rows.map((m) => {
+      // Work out the shape of any photo we have not measured yet, once, and
+      // remember it — so the chat can hold the space open before it downloads.
+      messages: (backfillImageSizes(rows, 'at_messages'), rows).map((m) => {
         // View-once: never ship the bytes in the thread payload. The recipient
         // opens it via the view endpoint (once); afterwards it reads as "opened".
         const vo = !!m.view_once;
@@ -6109,6 +6205,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
         id: m.id, body: m.body, image: vo ? null : (m.image || null),
         images: vo ? [] : ((Array.isArray(m.images) && m.images.length) ? m.images : (m.image ? [m.image] : [])),
         media: vo ? null : (m.media || null), media_kind: m.media_kind || null, media_name: m.media_name || null, duration_sec: m.duration_sec || null,
+        image_w: m.image_w || null, image_h: m.image_h || null,
         viewOnce: vo, viewed: vo ? !!m.viewed : false,
         created_at: m.created_at, mine: m.sender_id === req.user.id, read_at: showReceipts ? (m.read_at || null) : null, clientId: m.client_id || null,
         deleted: !!m.deleted_all, hidden: !!m.hidden, starred: !!m.starred, pinned: !!m.pinned, reactions: m.reactions || {},
@@ -6421,24 +6518,25 @@ app.post('/api/atchat/with/:id', auth.requireAuth, blockLimited, rateLimit(40, 6
     // Idempotent insert: a resend with the same clientId hits the unique
     // (sender_id, client_id) index and inserts nothing; we then return the
     // original row (and skip re-delivery) so a retry never duplicates a message.
-    const COLS = 'id, body, image, images, media, media_kind, media_name, created_at, reply_to, forwarded, meta, view_once, thread_id, secret';
+    const COLS = 'id, body, image, images, media, media_kind, media_name, duration_sec, image_w, image_h, created_at, reply_to, forwarded, meta, view_once, thread_id, secret';
     // Disappearing-messages timer (if the conversation has one on). A secret message
     // has NO timer at send — it starts counting down only when the recipient sees it.
     const dsec = secret ? 0 : await dmDisappearSeconds(req.user.id, other);
+    const imgSize = image ? pickImageSize(req.body, image) : { w: null, h: null };
     const ins = await db.query(
-      `INSERT INTO at_messages (sender_id, recipient_id, body, image, images, media, media_kind, media_name, duration_sec, reply_to, forwarded, meta, client_id, view_once, thread_id, secret, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, ${dsec ? `now() + interval '${dsec} seconds'` : 'NULL'})
-       ON CONFLICT (sender_id, client_id) DO NOTHING RETURNING ${COLS}, duration_sec`,
-      [req.user.id, other, body, image, imgs.length > 1 ? imgs : null, media.data, media.kind, media.name, cleanDurationSec(req.body.durationSec), replyTo, !!req.body.forwarded, meta ? JSON.stringify(meta) : null, clientId, viewOnce, thread, secret]
+      `INSERT INTO at_messages (sender_id, recipient_id, body, image, images, media, media_kind, media_name, duration_sec, image_w, image_h, reply_to, forwarded, meta, client_id, view_once, thread_id, secret, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, ${dsec ? `now() + interval '${dsec} seconds'` : 'NULL'})
+       ON CONFLICT (sender_id, client_id) DO NOTHING RETURNING ${COLS}`,
+      [req.user.id, other, body, image, imgs.length > 1 ? imgs : null, media.data, media.kind, media.name, cleanDurationSec(req.body.durationSec), imgSize.w, imgSize.h, replyTo, !!req.body.forwarded, meta ? JSON.stringify(meta) : null, clientId, viewOnce, thread, secret]
     );
     let r = ins.rows[0];
     const isNew = !!r;
     if (!r) { // conflict (duplicate resend) — return the message we already stored
-      const ex = await db.query(`SELECT ${COLS}, duration_sec FROM at_messages WHERE sender_id = $1 AND client_id = $2`, [req.user.id, clientId]);
+      const ex = await db.query(`SELECT ${COLS} FROM at_messages WHERE sender_id = $1 AND client_id = $2`, [req.user.id, clientId]);
       r = ex.rows[0];
       if (!r) return res.status(500).json({ error: 'Something went wrong. Please try again.' });
     }
-    const msg = mediaRefMsg({ id: r.id, body: r.body, image: r.image || null, images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []), media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, duration_sec: r.duration_sec || null, created_at: r.created_at, reply_to: r.reply_to || null, forwarded: !!r.forwarded, meta: r.meta || null, viewOnce: !!r.view_once, threadId: r.thread_id || null, secret: !!r.secret }, 'dm');
+    const msg = mediaRefMsg({ id: r.id, body: r.body, image: r.image || null, images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []), media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, duration_sec: r.duration_sec || null, image_w: r.image_w || null, image_h: r.image_h || null, created_at: r.created_at, reply_to: r.reply_to || null, forwarded: !!r.forwarded, meta: r.meta || null, viewOnce: !!r.view_once, threadId: r.thread_id || null, secret: !!r.secret }, 'dm');
     if (isNew) {
       // For a view-once message the recipient's live copy carries no media — they
       // must open it via the view endpoint (which records the one view).
@@ -9348,7 +9446,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     const iAmAdmin = g.rows[0].created_by === req.user.id
       || members.rows.some((m) => m.id === req.user.id && m.role === 'admin');
     const msgs = await db.query(
-      `SELECT m.id, m.body, m.image, m.images, m.media, m.media_kind, m.media_name, m.duration_sec, m.created_at, m.sender_id, m.forwarded, m.meta, m.client_id,
+      `SELECT m.id, m.body, m.image, m.images, m.media, m.media_kind, m.media_name, m.duration_sec, m.image_w, m.image_h, m.created_at, m.sender_id, m.forwarded, m.meta, m.client_id,
               m.reply_to, m.deleted_all, m.edited, m.reactions, ($2 = ANY(m.starred_by)) AS starred, ($2 = ANY(m.hidden_for)) AS hidden, (m.pinned_at IS NOT NULL) AS pinned,
               u.name AS sender_name, u.username AS sender_username, u.avatar AS sender_avatar, u.verified AS sender_verified
        FROM at_group_messages m JOIN users u ON u.id = m.sender_id
@@ -9377,9 +9475,10 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       lastRead,
       live: ls ? liveStreamPublic(ls) : null,
       members: members.rows.map((m) => ({ id: m.id, name: m.name, username: m.username, avatar: m.avatar || null, verified: !!m.verified, isOwner: m.id === g.rows[0].created_by, isAdmin: m.id === g.rows[0].created_by || m.role === 'admin', lastReadAt: m.last_read_at || null })),
-      messages: msgs.rows.map((m) => mediaRefMsg({
+      messages: (backfillImageSizes(msgs.rows, 'at_group_messages'), msgs.rows).map((m) => mediaRefMsg({
         id: m.id, body: m.body, image: m.image || null,
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null, duration_sec: m.duration_sec || null,
+        image_w: m.image_w || null, image_h: m.image_h || null,
         created_at: m.created_at, mine: m.sender_id === req.user.id, forwarded: !!m.forwarded, meta: m.meta || null, clientId: m.client_id || null,
         starred: !!m.starred, pinned: !!m.pinned, images: (Array.isArray(m.images) && m.images.length) ? m.images : (m.image ? [m.image] : []),
         reply_to: m.reply_to || null, deleted: !!m.deleted_all, hidden: !!m.hidden, edited: !!m.edited, reactions: m.reactions || {},
@@ -9487,14 +9586,15 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, blockLimited, rate
       }
     }
     // Idempotent insert (see the DM route) — a resend dedupes on (sender_id, client_id).
-    const GCOLS = 'id, body, image, images, media, media_kind, media_name, duration_sec, created_at, forwarded, meta, reply_to';
+    const GCOLS = 'id, body, image, images, media, media_kind, media_name, duration_sec, image_w, image_h, created_at, forwarded, meta, reply_to';
     const gdis = await db.query('SELECT disappearing FROM at_groups WHERE id = $1', [gid]);
     const gsec = (gdis.rows[0] && gdis.rows[0].disappearing) || 0;
+    const gImgSize = image ? pickImageSize(req.body, image) : { w: null, h: null };
     const ins = await db.query(
-      `INSERT INTO at_group_messages (group_id, sender_id, body, image, images, media, media_kind, media_name, duration_sec, forwarded, meta, client_id, reply_to, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, ${gsec ? `now() + interval '${gsec} seconds'` : 'NULL'})
+      `INSERT INTO at_group_messages (group_id, sender_id, body, image, images, media, media_kind, media_name, duration_sec, image_w, image_h, forwarded, meta, client_id, reply_to, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, ${gsec ? `now() + interval '${gsec} seconds'` : 'NULL'})
        ON CONFLICT (group_id, sender_id, client_id) DO NOTHING RETURNING ${GCOLS}`,
-      [gid, req.user.id, body, image, imgs.length > 1 ? imgs : null, media.data, media.kind, media.name, cleanDurationSec(req.body.durationSec), !!req.body.forwarded, meta ? JSON.stringify(meta) : null, clientId, replyTo]
+      [gid, req.user.id, body, image, imgs.length > 1 ? imgs : null, media.data, media.kind, media.name, cleanDurationSec(req.body.durationSec), gImgSize.w, gImgSize.h, !!req.body.forwarded, meta ? JSON.stringify(meta) : null, clientId, replyTo]
     );
     let r = ins.rows[0];
     const isNew = !!r;
@@ -9506,7 +9606,7 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, blockLimited, rate
     const base = mediaRefMsg({
       id: r.id, body: r.body, image: r.image || null,
       images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []),
-      media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, duration_sec: r.duration_sec || null,
+      media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, duration_sec: r.duration_sec || null, image_w: r.image_w || null, image_h: r.image_h || null,
       created_at: r.created_at, forwarded: !!r.forwarded, meta: r.meta || null, reply_to: r.reply_to || null,
       reactions: {}, edited: false,
       sender: { id: me.id, name: me.name, username: me.username, avatar: mediaRef(me.avatar, 'avatar', me.id) },
