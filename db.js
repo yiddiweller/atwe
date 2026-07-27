@@ -2229,6 +2229,14 @@ async function initSchema() {
   // A clip is more than its bytes: how long it runs and which way round it is,
   // so a player can size itself without downloading the film to find out.
   await query(`
+    -- How long a voice note actually is, in seconds, measured by the sender's own
+    -- clock while recording. A voice note is a WebM with no duration written into
+    -- its header, so a receiving browser has to GUESS the length from the file,
+    -- and that guess can come out wildly wrong (a 3-second note reading 12:10).
+    -- Recording the real number at send time means nobody has to guess again.
+    -- (SQL comments are -- , not // — a // here silently kills the whole block.)
+    ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS duration_sec INTEGER;
+    ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS duration_sec INTEGER;
     ALTER TABLE feed_posts ADD COLUMN IF NOT EXISTS duration_sec INTEGER;
     ALTER TABLE feed_posts ADD COLUMN IF NOT EXISTS aspect TEXT;
     ALTER TABLE posts ADD COLUMN IF NOT EXISTS duration_sec INTEGER;
