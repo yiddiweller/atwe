@@ -6645,7 +6645,8 @@ async function ownsLabel(id, uid) {
 // List my labels, each with the chats it contains (kind+targetId pairs) + a count.
 app.get('/api/atchat/labels', auth.requireAuth, async (req, res) => {
   try {
-    const labels = await db.query('SELECT id, name, color FROM chat_labels WHERE user_id = $1 ORDER BY created_at ASC', [req.user.id]);
+    const labels = await db.query(
+      'SELECT id, name, color, position FROM chat_labels WHERE user_id = $1 ORDER BY position ASC, created_at ASC', [req.user.id]);
     const items = await db.query(
       `SELECT i.label_id, i.kind, i.target_id FROM chat_label_items i
        JOIN chat_labels l ON l.id = i.label_id WHERE l.user_id = $1`,
@@ -6653,7 +6654,7 @@ app.get('/api/atchat/labels', auth.requireAuth, async (req, res) => {
     );
     const byLabel = {};
     items.rows.forEach((r) => { (byLabel[r.label_id] = byLabel[r.label_id] || []).push({ kind: r.kind, targetId: r.target_id }); });
-    res.json({ labels: labels.rows.map((l) => ({ id: l.id, name: l.name, color: l.color, items: byLabel[l.id] || [], count: (byLabel[l.id] || []).length })) });
+    res.json({ labels: labels.rows.map((l) => ({ id: l.id, name: l.name, color: l.color, position: l.position, items: byLabel[l.id] || [], count: (byLabel[l.id] || []).length })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load labels.' }); }
 });
 app.post('/api/atchat/labels', auth.requireAuth, rateLimit(30, 60000, 'label-add'), async (req, res) => {
@@ -6663,8 +6664,11 @@ app.post('/api/atchat/labels', auth.requireAuth, rateLimit(30, 60000, 'label-add
   try {
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM chat_labels WHERE user_id = $1', [req.user.id]);
     if (cnt.rows[0].n >= LABEL_CAP) return res.status(400).json({ error: `You can create up to ${LABEL_CAP} labels.` });
-    const ins = await db.query('INSERT INTO chat_labels (user_id, name, color) VALUES ($1,$2,$3) RETURNING id, name, color', [req.user.id, name, color]);
-    res.json({ label: { id: ins.rows[0].id, name: ins.rows[0].name, color: ins.rows[0].color, items: [], count: 0 } });
+    const ins = await db.query(
+      `INSERT INTO chat_labels (user_id, name, color, position)
+       VALUES ($1,$2,$3, COALESCE((SELECT MAX(position) + 1 FROM chat_labels WHERE user_id = $1), 0))
+       RETURNING id, name, color, position`, [req.user.id, name, color]);
+    res.json({ label: { id: ins.rows[0].id, name: ins.rows[0].name, color: ins.rows[0].color, position: ins.rows[0].position, items: [], count: 0 } });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the label.' }); }
 });
 app.patch('/api/atchat/labels/:id', auth.requireAuth, async (req, res) => {
@@ -6687,6 +6691,21 @@ app.delete('/api/atchat/labels/:id', auth.requireAuth, async (req, res) => {
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete.' }); }
+});
+/* Put the list tabs in the order somebody actually wants them. Sent as the full
+   ordered set of ids rather than "move this one left", so the result cannot
+   drift out of step with what is on screen. */
+app.put('/api/atchat/labels/order', auth.requireAuth, async (req, res) => {
+  const ids = (Array.isArray(req.body.ids) ? req.body.ids : []).map((x) => parseInt(x, 10)).filter(Number.isInteger);
+  if (!ids.length) return res.status(400).json({ error: 'Nothing to reorder.' });
+  try {
+    // Only ever touches this account's own labels, so a stray id in the list
+    // cannot reorder somebody else's.
+    for (let i = 0; i < ids.length; i++) {
+      await db.query('UPDATE chat_labels SET position = $3 WHERE id = $1 AND user_id = $2', [ids[i], req.user.id, i]);
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the order.' }); }
 });
 // Tag / untag a chat with a label.
 app.post('/api/atchat/labels/:id/assign', auth.requireAuth, async (req, res) => {

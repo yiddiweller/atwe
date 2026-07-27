@@ -5164,6 +5164,9 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS chat_labels_user_idx ON chat_labels(user_id);`);
+  // Which order the list tabs sit in. Every other messenger lets you drag them
+  // around; without a stored position they can only ever be oldest-first.
+  await query(`ALTER TABLE chat_labels ADD COLUMN IF NOT EXISTS position INTEGER NOT NULL DEFAULT 0;`);
   await query(`
     CREATE TABLE IF NOT EXISTS chat_label_items (
       label_id  INTEGER NOT NULL REFERENCES chat_labels(id) ON DELETE CASCADE,
