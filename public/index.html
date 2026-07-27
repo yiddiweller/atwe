@@ -4170,7 +4170,7 @@ body.light .tb-login,body.light .btn-white{background:var(--primary);color:var(-
 .ac-head-name .msg-sub2.show-handle{color:var(--t1);}
 .ac-head-name:active .msg-name{opacity:.55;}
 .ac-head-acts{display:flex;align-items:center;gap:6px;margin-inline-start:auto;flex-shrink:0;}
-.ac-callbtn.ac-head-more svg{fill:currentColor;stroke:none;width:15px;height:15px;}
+.ac-callbtn.ac-head-more svg{fill:currentColor;stroke:none;width:17px;height:17px;}
 .ac-head-sheet{position:fixed;width:212px;max-height:var(--menu-maxh);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
 /* Custom scroller: the viewport clips, the content (#acThread) is translated by the
    SC controller. touch-action:none so the browser does no native scroll/zoom — JS
@@ -4307,31 +4307,25 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .msg-divider span{font-size:11.5px;font-weight:700;letter-spacing:.02em;color:var(--t2);white-space:nowrap;}
 .msg-col.show-time .msg-time{display:block;}
 /* Group: sender header (avatar + display name + @username) on top of their message */
-/* The old group header (avatar + name + @handle stacked above the bubble) is
-   replaced by .msg-gname (photo + name) inside the first bubble of a run.
-   The rules stay for any surface still rendering the old shape. */
-.msg-ghead{display:flex;align-items:center;gap:7px;margin:11px 0 4px 2px;cursor:pointer;}
-.msg-ghead .user-avatar{width:26px;height:26px;font-size:11px;flex-shrink:0;}
 /* ── Group chat: who said it ──────────────────────────────────────────────
-   Photo and name on one line at the top of the FIRST bubble of a run, with the
-   message underneath — and nothing in the gutter, so every bubble in the thread
-   starts on the same left edge. The rest of the run is plain bubbles.
-
-   The name is a quiet grey rather than the accent: it sits directly above the
-   words it belongs to, so it does not need colour to be found, and a coloured
-   line above every incoming message would shout across a busy group. */
-.msg-gname{display:flex;align-items:center;gap:7px;margin:0 0 4px;cursor:pointer;
-  max-width:100%;min-width:0;}
-.msg-gname .msg-gna{width:22px;height:22px;flex:0 0 auto;}
+   Photo and name on a line of their OWN, above the first bubble of a run: the
+   photo out in the left gutter, the name to its right. Every bubble in that run
+   is then indented to start where the photo ends, so the photo has a column to
+   itself and the bubbles have theirs. The rest of the run is plain bubbles.
+   No @handle — it repeated the display name and made two lines of one thing. */
+.msg-ghead{display:flex;align-items:center;gap:8px;margin:12px 0 5px;cursor:pointer;}
+.msg-ghead .msg-gna{width:26px;height:26px;flex:0 0 auto;}
 /* Brighter than the app's muted grey but still clearly under the message text —
    matching the sample. Mixed from the two text tokens so it flips with the theme
    instead of being a hardcoded grey that only works on black. */
-.msg-gnt{font-size:13.5px;font-weight:700;color:color-mix(in srgb, var(--t1) 72%, var(--t2));line-height:1.2;
+.msg-gnt{font-size:14px;font-weight:700;color:color-mix(in srgb, var(--t1) 78%, var(--t2));line-height:1.2;
   letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   min-width:0;display:inline-flex;align-items:center;}
 .msg-gnt .vbadge{margin-left:4px;}
-/* A bubble carrying the name line breathes a little more at the top. */
-.msg-bubble.has-gname{padding-top:8px;}
+/* Every incoming bubble in a group clears the photo's column, so the run reads
+   as one block hanging off the photo — the same indent the header's name sits
+   at. 26px photo + the 8px gap it is set with. */
+.msg-row.gmsg{padding-inline-start:34px;}
 .msg-gh-name{font-size:13px;font-weight:700;color:var(--t1);line-height:1;}
 .msg-gh-user{font-size:12px;color:var(--t3);line-height:1;}
 .msg-bubble{max-width:75%;padding:10px 15px;border-radius:22px;font-size:15px;line-height:1.4;
@@ -10621,17 +10615,16 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 @keyframes typingFade{to{opacity:0;transform:scale(.85);}}
 @keyframes typingDot{0%,60%,100%{transform:translateY(0);opacity:.45;}30%{transform:translateY(-5px);opacity:1;}}
 /* Call buttons in the thread header */
-.ac-callbtn{width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.1);border:none;color:var(--t1);cursor:pointer;
-  display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);-webkit-tap-highlight-color:transparent;}
-.ac-callbtn svg{width:13.5px;height:13.5px;stroke:currentColor;stroke-width:2;fill:none;}
-.ac-callbtn:hover{background:rgba(255,255,255,.18);}
-.ac-callbtn:active{transform:scale(.9);}
-/* The ⋯ wears the same grey circle as every other control in the header — it is
-   one of the buttons, not a loose glyph floating beside them. */
-.ac-callbtn.ac-head-more{background:rgba(255,255,255,.1);}
-@media(hover:hover){.ac-callbtn.ac-head-more:hover{background:rgba(255,255,255,.18);}}
-body.light .ac-callbtn.ac-head-more{background:rgba(0,0,0,.06);}
-@media(hover:hover){body.light .ac-callbtn.ac-head-more:hover{background:rgba(0,0,0,.10);}}
+/* The icon alone, on the background — no disc behind it. The tap target is
+   still a comfortable 30px; only the fill is gone. */
+.ac-callbtn{width:30px;height:30px;border-radius:50%;background:none;border:none;color:var(--t1);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);-webkit-tap-highlight-color:transparent;}
+.ac-callbtn svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.9;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+@media(hover:hover){.ac-callbtn:hover{opacity:.6;}}
+.ac-callbtn:active{transform:scale(.88);opacity:.6;}
+/* The dots run top-to-bottom, and like every other header icon they carry no
+   disc behind them. */
+.ac-callbtn.ac-head-more{background:none;}
 
 /* ── Springy tap feedback across the chat controls (WhatsApp-like "pop"): a
    quick shrink on press, then an overshoot spring back on release. Defined
@@ -12257,7 +12250,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <div class="iset-body hidden" id="setSearchResults"></div>
     <div class="iset-body" data-page="hub" data-title="Settings">
       <div class="iset-acct" onclick="setNav('account')">
-        <div class="user-avatar iset-acct-ava no-img" id="settingsAvatar"><svg class="ava-person" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="9.1" r="4.05"/><path d="M12 14.6c-4.5 0-8.1 2.9-9.1 6.9h18.2c-1-4-4.6-6.9-9.1-6.9z"/></svg></div>
+        <div class="user-avatar iset-acct-ava no-img" id="settingsAvatar"><svg class="ava-person" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8.6" r="4.15"/><path d="M12 14.1c-5.6 0-10.2 4.4-10.2 9.9V24h20.4v-.1c0-5.5-4.6-9.9-10.2-9.9z"/></svg></div>
         <div class="iset-acct-main">
           <div class="iset-acct-name" id="settingsName">Guest</div>
           <div class="iset-acct-sub" id="settingsAcctSub">Profile, account &amp; more</div>
@@ -13662,7 +13655,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <div class="call-recbadge hidden" id="callRecBadge">● Recording</div>
     <div class="call-recnotice hidden" id="callRecNotice" role="status"></div>
     <div class="call-info" id="callInfo">
-      <div class="user-avatar call-ava no-img" id="callAva"><svg class="ava-person" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="9.1" r="4.05"/><path d="M12 14.6c-4.5 0-8.1 2.9-9.1 6.9h18.2c-1-4-4.6-6.9-9.1-6.9z"/></svg></div>
+      <div class="user-avatar call-ava no-img" id="callAva"><svg class="ava-person" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8.6" r="4.15"/><path d="M12 14.1c-5.6 0-10.2 4.4-10.2 9.9V24h20.4v-.1c0-5.5-4.6-9.9-10.2-9.9z"/></svg></div>
       <div class="call-name" id="callName">—</div>
       <div class="call-status" id="callStatus">Calling…</div>
     </div>
@@ -17665,7 +17658,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 <!-- Profile popover (bottom of the sidebar) -->
 <div class="brand-menu hidden" id="profileMenu">
   <div class="pm-head" onclick="openProfileEdit()">
-    <div class="user-avatar no-img" id="pmAvatar"><svg class="ava-person" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="9.1" r="4.05"/><path d="M12 14.6c-4.5 0-8.1 2.9-9.1 6.9h18.2c-1-4-4.6-6.9-9.1-6.9z"/></svg></div>
+    <div class="user-avatar no-img" id="pmAvatar"><svg class="ava-person" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8.6" r="4.15"/><path d="M12 14.1c-5.6 0-10.2 4.4-10.2 9.9V24h20.4v-.1c0-5.5-4.6-9.9-10.2-9.9z"/></svg></div>
     <div style="min-width:0;flex:1;">
       <div class="pm-name" id="pmName">—</div>
       <div class="pm-plan" id="pmPlan">Free</div>
@@ -17724,7 +17717,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
       </button>
       <div class="pf-avatar-wrap">
-        <div class="user-avatar pf-avatar no-img" id="pfAvatar"><svg class="ava-person" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="9.1" r="4.05"/><path d="M12 14.6c-4.5 0-8.1 2.9-9.1 6.9h18.2c-1-4-4.6-6.9-9.1-6.9z"/></svg></div>
+        <div class="user-avatar pf-avatar no-img" id="pfAvatar"><svg class="ava-person" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8.6" r="4.15"/><path d="M12 14.1c-5.6 0-10.2 4.4-10.2 9.9V24h20.4v-.1c0-5.5-4.6-9.9-10.2-9.9z"/></svg></div>
         <button class="pf-cam" onclick="document.getElementById('pfAvatarFile').click()" aria-label="Change photo">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
         </button>
@@ -18198,7 +18191,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
           <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
         <button class="ac-head-ava" onclick="acHeadAvatar()" aria-label="View profile">
-          <div class="user-avatar ac-peer-ava no-img" id="acPeerAvatar"><svg class="ava-person" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="9.1" r="4.05"/><path d="M12 14.6c-4.5 0-8.1 2.9-9.1 6.9h18.2c-1-4-4.6-6.9-9.1-6.9z"/></svg></div>
+          <div class="user-avatar ac-peer-ava no-img" id="acPeerAvatar"><svg class="ava-person" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8.6" r="4.15"/><path d="M12 14.1c-5.6 0-10.2 4.4-10.2 9.9V24h20.4v-.1c0-5.5-4.6-9.9-10.2-9.9z"/></svg></div>
         </button>
         <button class="ac-head-name" onclick="acHeadName()">
           <div class="msg-name" id="acPeerName">—</div>
@@ -18218,7 +18211,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
             <svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
           </button>
           <button class="ac-callbtn ac-head-more" id="acThreadMenuBtn" onclick="acThreadMenu(this)" aria-label="More options" title="More">
-            <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="2.1"/><circle cx="12" cy="12" r="2.1"/><circle cx="19" cy="12" r="2.1"/></svg>
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="5" r="2.1"/><circle cx="12" cy="12" r="2.1"/><circle cx="12" cy="19" r="2.1"/></svg>
           </button>
         </div>
       </div>
@@ -18805,7 +18798,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1632'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1633'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25347,11 +25340,15 @@ function renderAvatar(el, name, avatar) {
     el.style.setProperty('--avatar', `url("${img}")`);
     el.classList.add('has-img');
     el.classList.remove('no-img');
+    el.style.removeProperty('background');
     el.textContent = '';
   } else {
     el.style.removeProperty('--avatar');
     el.classList.remove('has-img');
     el.classList.add('no-img');
+    // Same grey disc every other default avatar uses — this one used to keep the
+    // element's own blue, which made the chat header the odd one out.
+    el.style.background = AVA_DEFAULT_TINT;
     el.innerHTML = AVA_PERSON;
   }
 }
@@ -25440,7 +25437,7 @@ function avatarTint() { return AVA_DEFAULT_TINT; }
    is true: we do not have their photo yet. It is drawn at the full size of the
    disc and cropped by it, so the shoulders meet the edge at every size the app
    uses — 22px in a chat row, 100px on a profile — without any per-size tuning. */
-const AVA_PERSON = '<svg class="ava-person" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="9.1" r="4.05"/><path d="M12 14.6c-4.5 0-8.1 2.9-9.1 6.9h18.2c-1-4-4.6-6.9-9.1-6.9z"/></svg>';
+const AVA_PERSON = '<svg class="ava-person" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8.6" r="4.15"/><path d="M12 14.1c-5.6 0-10.2 4.4-10.2 9.9V24h20.4v-.1c0-5.5-4.6-9.9-10.2-9.9z"/></svg>';
 function acAvatarHtml(name, avatar, cls, biz, otw) {
   cls = (cls || 'user-avatar') + (biz ? ' biz' : '') + (otw ? ' otw' : ''); // business → app-shaped; otw → #OpenToWork ring
   if (avatar) return `<div class="${cls} has-img" style="--avatar:url('${avatar}')"></div>`;
@@ -48432,9 +48429,12 @@ function acApplyChatPerms() {
   const inc = AC.incomingRequest;
   document.getElementById('acReqBar').classList.toggle('hidden', !inc);
   if (inc) document.getElementById('acReqBarTxt').textContent = 'Allow ' + (AC.peer?.name || 'this person') + ' to message you?';
-  // Call/video live inside the ⋯ menu now — keep the header buttons hidden.
-  document.getElementById('acCallAudio').style.display = 'none';
-  document.getElementById('acCallVideo').style.display = 'none';
+  // A one-to-one chat carries the two calls in the header: a phone and a camera,
+  // beside the dots. (They stay hidden in your own self-chat — there is nobody
+  // to ring.)
+  const canCall = !!(AC.peer && AC.peer.id !== S.user?.id);
+  document.getElementById('acCallAudio').style.display = canCall ? 'flex' : 'none';
+  document.getElementById('acCallVideo').style.display = canCall ? 'flex' : 'none';
 }
 // The request panel's button: Connect when the peer is connections-only, else
 // send a chat request.
@@ -52923,7 +52923,7 @@ function jellyClear(el) {
 // bubble's width to its widest line + horizontal padding — only ever SHRINKING, so
 // we never exceed the CSS max-width and a single line keeps its natural hug.
 // Only plain text bubbles: voice/photo/caption/reply/meta/emoji keep their own sizing.
-const _HUG_SKIP = ['voice', 'photo', 'has-cap', 'has-reply', 'msg-meta', 'msg-emoji', 'tomb', 'msg-hidden-bub', 'tdotsbub', 'has-gname'];
+const _HUG_SKIP = ['voice', 'photo', 'has-cap', 'has-reply', 'msg-meta', 'msg-emoji', 'tomb', 'msg-hidden-bub', 'tdotsbub'];
 function _hugBubbleLines(scope) {
   if (!scope) return;
   const vw = window.innerWidth;
@@ -53155,8 +53155,8 @@ function acRenderThread() {
     // gutter next to the LAST bubble of that run. That is how Telegram and
     // WhatsApp read: the name belongs to what was said. No @handle: it repeated
     // the display name and made two lines out of one piece of information.
-    const gname = (groupIncoming && !grouped)
-      ? `<span class="msg-gname" onclick="event.stopPropagation();acGoProfile('${m.sender?.username || ''}')">${acAvatarHtml(m.sender?.name, m.sender?.avatar, 'user-avatar msg-gna', acIsBiz(m.sender))}<span class="msg-gnt">${escHtml(m.sender?.name || '')}${vbadge(acIsVerified(m.sender))}</span></span>`
+    const ghead = (groupIncoming && !grouped)
+      ? `<div class="msg-ghead" onclick="acGoProfile('${m.sender?.username || ''}')">${acAvatarHtml(m.sender?.name, m.sender?.avatar, 'user-avatar msg-gna', acIsBiz(m.sender))}<span class="msg-gnt">${escHtml(m.sender?.name || '')}${vbadge(acIsVerified(m.sender))}</span></div>`
       : '';
     // Delivery status under the most recent message I sent (iMessage-style).
     // The Sent/Seen/Sending text is gone — the per-message tick conveys it now.
@@ -53175,22 +53175,21 @@ function acRenderThread() {
       ? `<span class="msg-secret"${m.expiresAt ? ` data-exp="${escHtml(m.expiresAt)}"` : ''}><svg viewBox="0 0 24 24"><path d="M12 2c1 4 4 5 4 9a4 4 0 0 1-8 0c0-1.5 .7-2.5 .7-2.5S9 11 10 11s1-3 2-9z"/></svg>${m.expiresAt ? '<span class="ms-cd">' + acSecretLeft(m.expiresAt) + '</span>' : 'Secret'}</span>`
       : '';
     if (m.secret && !isDeleted && !concealed) bcls += ' msg-secret-bub';
-    if (gname) bcls += ' has-gname';
     const inner = hasReply
-      ? `${gname}${fwdLabel}${quoteHtml}<div class="mq-body">${metaHtml}${img}${txt}${editedHtml}${secretHtml}</div>`
-      : `${gname}${fwdLabel}${quoteHtml}${metaHtml}${img}${txt}${editedHtml}${secretHtml}`;
+      ? `${fwdLabel}${quoteHtml}<div class="mq-body">${metaHtml}${img}${txt}${editedHtml}${secretHtml}</div>`
+      : `${fwdLabel}${quoteHtml}${metaHtml}${img}${txt}${editedHtml}${secretHtml}`;
     // Select mode: the whole row toggles selection (and a checkbox shows); the
     // bubble's own tap (reveal hidden) is suppressed.
     const selMode = !!AC._selectMode;
     const isSel = selMode && AC._sel && AC._sel.has(m.id);
-    const rowCls = cls + (selMode ? ' selectable' : '') + (isSel ? ' selected' : '');
+    const rowCls = cls + (groupIncoming ? ' gmsg' : '') + (selMode ? ' selectable' : '') + (isSel ? ' selected' : '');
     const rowAttrs = selMode ? ` data-selid="${m.id}" onclick="acToggleSel(${m.id})"` : '';
     const selCheck = selMode ? '<span class="sel-dot"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>' : '';
     const bubTap = (!selMode && tapAttr) ? ` onclick="${tapAttr}"` : '';
     // "New messages" divider — sits right before the first unread incoming message.
     const divider = (AC._unreadDivId != null && String(m.id) === String(AC._unreadDivId))
       ? '<div class="msg-divider"><span>Unread messages</span></div>' : '';
-    html += divider + `<div class="msg-row ${rowCls}"${rowAttrs}>${selCheck}<div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''}${bubTap}>${inner}</div>${reaxHtml}${starHtml}</div><span class="msg-slidetime">${sideTime}</span></div>` + status;
+    html += ghead + divider + `<div class="msg-row ${rowCls}"${rowAttrs}>${selCheck}<div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''}${bubTap}>${inner}</div>${reaxHtml}${starHtml}</div><span class="msg-slidetime">${sideTime}</span></div>` + status;
     lastT = t;
    } catch (err) { console.error('message render failed', m && m.id, err); } // one bad message can't blank the thread
   });
