@@ -5375,6 +5375,9 @@ body.reduce-motion .ac-newposts{animation:none;}
 #acThreadScreen.ac-exit{animation:acThreadSlideOut .26s cubic-bezier(.4,0,.7,.4) forwards;will-change:transform;}
 @keyframes acBodyIn{from{opacity:0;}to{opacity:1;}}
 #acThread.ac-bodyin{animation:acBodyIn .2s ease;}
+/* Held shut for the instant the visible photos take to paint, so the whole
+   conversation arrives already laid out instead of rearranging itself. */
+#acThread.thread-hold{opacity:0;}
 
 /* Top bar with title left + close right */
 .ac-top-bar2{justify-content:space-between;}
@@ -18826,7 +18829,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1636'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1637'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -48432,7 +48435,7 @@ function acApplyDmData(id, d, firstPaint, fromCache) {
   // already preserves the reader's position (and sticks to bottom only if they
   // were already there), so a reader scrolled up into history isn't yanked down.
   if (firstPaint) {
-    const t = document.getElementById('acThread'); t.classList.remove('ac-bodyin'); void t.offsetWidth; t.classList.add('ac-bodyin');
+    acRevealThread(document.getElementById('acThread'));
     if (AC._unreadDivId != null) acScrollToDivider(); else acStickBottom();
   }
 }
@@ -52509,7 +52512,7 @@ function acApplyGroupData(id, d, firstPaint, fromCache) {
   // Scroll + fade only on the OPENING paint (see acApplyDmData) — a background
   // revalidate must not yank a reader who scrolled up into history.
   if (firstPaint) {
-    const t = document.getElementById('acThread'); t.classList.remove('ac-bodyin'); void t.offsetWidth; t.classList.add('ac-bodyin');
+    acRevealThread(document.getElementById('acThread'));
     if (AC._unreadDivId != null) acScrollToDivider(); else acStickBottom();
   }
   // Reflect any call already in progress.
@@ -52553,11 +52556,11 @@ function acMsgMedia(m) {
   }
   const imgs = (m.images && m.images.length) ? m.images : (m.image ? [m.image] : []);
   if (imgs.length > 1) {
-    const slides = imgs.map((src) => `<div class="ac-imgslide"><img src="${src}" alt="" loading="lazy" decoding="async" onclick="event.stopPropagation();openImageViewer(this.src, this)"/></div>`).join('');
+    const slides = imgs.map((src) => `<div class="ac-imgslide"><img src="${src}" alt="" loading="eager" fetchpriority="high" decoding="async" onclick="event.stopPropagation();openImageViewer(this.src, this)"/></div>`).join('');
     const dots = imgs.map((_, i) => `<span class="ac-imgdot${i === 0 ? ' on' : ''}"></span>`).join('');
     return `<div class="msg-imgcar" onscroll="acCarScroll(this)" onclick="event.stopPropagation()"><div class="ac-imgcar-track">${slides}</div></div><div class="ac-imgdots">${dots}</div>`;
   }
-  if (imgs.length === 1) return `<img class="msg-photo" src="${imgs[0]}" alt="" loading="lazy" decoding="async" onclick="event.stopPropagation();openImageViewer(this.src, this)"/>`;
+  if (imgs.length === 1) return `<img class="msg-photo" src="${imgs[0]}" alt="" loading="eager" fetchpriority="high" decoding="async" onclick="event.stopPropagation();openImageViewer(this.src, this)"/>`;
   if (!m.media) return '';
   if (m.media_kind === 'video') return `<video class="msg-photo msg-video" src="${m.media}" controls preload="metadata" playsinline onclick="event.stopPropagation()"></video>`;
   if (m.media_kind === 'audio') {
@@ -52574,8 +52577,8 @@ function acMsgMedia(m) {
       <svg class="vn-ic-pause" viewBox="0 0 24 24"><rect x="6.5" y="5" width="3.6" height="14" rx="1.1"/><rect x="13.9" y="5" width="3.6" height="14" rx="1.1"/></svg>
     </button>
     <div class="vn-track"><div class="vn-wave"><div class="vn-wave-clip"><div class="vn-wave-row base">${_vnWaveHtml(m.id)}</div><div class="vn-wave-row fill">${_vnWaveHtml(m.id)}</div></div><span class="vn-scrub"></span></div></div>
-    <span class="vn-time">0:00</span>
-    <audio class="vn-audio" src="${m.media}" preload="metadata"></audio>
+    <span class="vn-time">${m.duration_sec ? _vnFmt(m.duration_sec) : '0:00'}</span>
+    <audio class="vn-audio" src="${m.media}" preload="metadata"${m.duration_sec ? ` data-dur="${m.duration_sec}"` : ''}></audio>
   </div>${(S.config && S.config.transcriptionEnabled) ? `<div class="vn-transcript" data-vtid="${m.id}" data-vtkind="${AC.mode === 'group' ? 'group' : 'dm'}" data-pending="1"></div>` : ''}`;
   }
   const name = escHtml(m.media_name || 'File');
@@ -53648,10 +53651,11 @@ async function acSend(opts) {
     image: imgs ? imgs[0] : ((att && att.kind === 'image') ? att.data : null),
     images: imgs || ((att && att.kind === 'image') ? [att.data] : []),
     media: (att && att.kind !== 'image') ? att.data : null,
+    duration_sec: (att && att.durationSec) || null,   // the note's real length, measured while recording
     media_kind: (att && att.kind !== 'image') ? att.kind : null,
     media_name: att ? att.name : null,
     reply_to: replyTo, forwarded: fwd, viewOnce, secret,
-    _payload: Object.assign({ body, clientId: tmpId }, imgs ? { images: imgs } : (att ? (att.kind === 'image' ? { image: att.data } : { media: att.data, mediaName: att.name }) : {}), replyTo ? { replyTo } : {}, fwd ? { forwarded: true } : {}, viewOnce ? { viewOnce: true } : {}, secret ? { secret: true } : {}, silent ? { silent: true } : {}, (!isGroup && AC.threadId) ? { threadId: AC.threadId } : {}),
+    _payload: Object.assign({ body, clientId: tmpId }, imgs ? { images: imgs } : (att ? (att.kind === 'image' ? { image: att.data } : Object.assign({ media: att.data, mediaName: att.name }, att.durationSec ? { durationSec: att.durationSec } : {})) : {}), replyTo ? { replyTo } : {}, fwd ? { forwarded: true } : {}, viewOnce ? { viewOnce: true } : {}, secret ? { secret: true } : {}, silent ? { silent: true } : {}, (!isGroup && AC.threadId) ? { threadId: AC.threadId } : {}),
     _target: isGroup ? { group: AC.groupId } : { peer: AC.peer.id, threadId: AC.threadId || null },
   };
   if (secret) { AC._secret = false; acRenderSecretBar(); } // one-shot: secret mode resets after sending
@@ -54891,12 +54895,20 @@ function acVoiceFinalize() {
   // spin-up). Tell the user instead of dropping it silently.
   if (blob.size < 512) { if (autoSend) showNotif('Hold to record. That was too short.'); return; }
   if (blob.size > AC_MEDIA_MAX) { showNotif('That voice note is too long (16 MB max).'); return; }
+  // How long the note actually is, by our own clock. A WebM from MediaRecorder
+  // carries no duration in its header, so a receiving browser has to guess it out
+  // of the file — and that guess can land wildly wrong. Measuring it here means
+  // nobody ever has to guess.
+  const secs = acRecStart ? Math.max(1, Math.round((Date.now() - acRecStart - _recPausedAccum) / 1000)) : null;
   const reader = new FileReader();
-  reader.onload = () => { acSetAttach({ data: reader.result, kind: 'audio', name: null }); if (autoSend) acSend(); };
+  reader.onload = () => { acSetAttach({ data: reader.result, kind: 'audio', name: null, durationSec: secs }); if (autoSend) acSend(); };
   reader.readAsDataURL(blob);
 }
 function acStopMic() {
-  // Abort any in-progress recording when leaving a thread.
+  // Abort any in-progress recording when leaving a thread — and stop any note
+  // that is playing, plus any queued "play the next one". This is called on
+  // every path that leaves a conversation, which is why the guard lives here.
+  acStopAllVoice();
   _recPreviewStop(); _recPaused = false;
   _recWaveStop();
   _micEnd();
@@ -55032,6 +55044,75 @@ function _vnWaveHtml(mid) {
   }
   return out;
 }
+/* The pending "play the next note" timer, so leaving a chat can cancel it. */
+let _vnAdvanceTimer = 0;
+/* Stop every voice note and cancel any queued auto-advance. Called whenever the
+   open conversation changes, so nothing can start playing in a chat you just
+   opened because of a note that finished in the one you just left. */
+function acStopAllVoice() {
+  clearTimeout(_vnAdvanceTimer); _vnAdvanceTimer = 0;
+  document.querySelectorAll('.msg-voice .vn-audio').forEach((a) => { try { if (!a.paused) a.pause(); } catch (_) {} });
+}
+/* Opening a chat used to paint the words straight away and let the photos land
+   afterwards, shoving everything below them down the screen as each one arrived.
+   Every messaging app worth copying avoids that: nothing moves after it appears.
+
+   We do not store a photo's dimensions, so we cannot reserve its space up front.
+   Instead the thread stays invisible for the moment it takes the pictures that
+   are ACTUALLY on screen to decode, then the whole conversation fades in at once,
+   already laid out. Only the visible ones are waited on, and never for longer
+   than a beat — a slow photo can hold the fade for 550ms and no more, after which
+   the chat appears regardless. So it is never slower to open than it was; it
+   just stops rearranging itself once it is.
+
+   Paired with loading="eager" + fetchpriority="high" on thread photos, which
+   starts them the moment the markup exists instead of waiting for the browser to
+   decide they are near enough to bother with. */
+/* The hold above covers a photo that arrives within the beat. A genuinely slow
+   one still lands after the chat is on screen — and when it does, it grows ABOVE
+   whatever you are reading and pushes it down, which is the shove in the report.
+
+   You open a chat at the bottom, so the answer is to STAY at the bottom while the
+   media settles: each photo that finishes re-pins the view, and a picture growing
+   above the fold then extends the conversation upward, out of sight, instead of
+   shoving the last message down the screen. It gives up the moment you scroll —
+   at that point you have chosen where to look and nothing should move you. */
+function acHoldBottomWhileMediaSettles(t) {
+  if (!t) return;
+  const imgs = [...t.querySelectorAll('img.msg-photo, .ac-imgslide img')].filter((im) => !im.complete);
+  if (!imgs.length) return;
+  // Whether we are still parked at the bottom is READ from the scroller, not
+  // remembered from a scroll event — re-pinning scrolls the thread itself, and a
+  // listener would have heard its own move and concluded the reader had taken
+  // over, switching the anchor off after the very first photo.
+  const atBottom = () => { try { return (SC.max - SC.y) < 90; } catch (_) { return false; } };
+  const restick = () => { if (atBottom() && typeof acStickBottom === 'function') acStickBottom(); };
+  imgs.forEach((im) => {
+    im.addEventListener('load', restick, { once: true });
+    im.addEventListener('error', restick, { once: true });
+  });
+}
+function acRevealThread(t) {
+  if (!t) return;
+  const show = () => { t.classList.remove('ac-bodyin', 'thread-hold'); void t.offsetWidth; t.classList.add('ac-bodyin'); };
+  const vh = window.innerHeight || 800;
+  const imgs = [...t.querySelectorAll('img.msg-photo, .ac-imgslide img')]
+    .filter((im) => !im.complete)
+    .filter((im) => { const r = im.getBoundingClientRect(); return r.top < vh * 1.5; })
+    .slice(0, 6);
+  acHoldBottomWhileMediaSettles(t);
+  if (!imgs.length) { show(); return; }
+  t.classList.add('thread-hold');
+  let done = false;
+  const finish = () => { if (done) return; done = true; show(); };
+  let left = imgs.length;
+  imgs.forEach((im) => {
+    const tick = () => { if (--left <= 0) finish(); };
+    im.addEventListener('load', tick, { once: true });
+    im.addEventListener('error', tick, { once: true });
+  });
+  setTimeout(finish, 550);   // a slow photo never holds the chat shut
+}
 function _bindVoiceNotes(el) {
   el.querySelectorAll('.msg-voice').forEach((vn) => {
     if (vn._vnWired) return; vn._vnWired = true;
@@ -55051,7 +55132,20 @@ function _bindVoiceNotes(el) {
       audio.playbackRate = _vnRate[mid];
       const sp = vn.querySelector('.vn-speed'); if (sp) sp.textContent = _vnRate[mid] + '×';
     }
-    const realDur = () => (isFinite(audio.duration) && audio.duration > 0) ? audio.duration : 0;
+    // The length the SENDER measured, if we have it. A voice note is a WebM with
+    // no duration written into its header, so audio.duration is the browser's own
+    // guess from the file's last timestamp — and that guess can be wildly wrong
+    // (a three-second note reading 12:10). Trust the measured number when it is
+    // there; fall back to the guess only for notes recorded before we stored it,
+    // and refuse a guess that is absurd for the number of bytes we actually hold.
+    const storedDur = Number(audio.dataset.dur) || 0;
+    const guessOk = (d) => {
+      if (!isFinite(d) || d <= 0) return false;
+      const bytes = (audio.getAttribute('src') || '').length * 0.75;   // data URL → rough bytes
+      if (!bytes) return true;
+      return d <= Math.max(30, (bytes / 700));   // ≈700 B/s is already slower than any voice codec
+    };
+    const realDur = () => storedDur || ((isFinite(audio.duration) && audio.duration > 0 && guessOk(audio.duration)) ? audio.duration : 0);
     const paintTime = () => { timeEl.textContent = _vnFmt(audio.paused ? (realDur() || audio.currentTime) : audio.currentTime); };
     // Smoothness: instead of stepping the clip-path every animation frame (which
     // repaints 34 bars and looks choppy), we let the browser animate the reveal with
@@ -55079,6 +55173,7 @@ function _bindVoiceNotes(el) {
     // play never finds the note parked at the end.
     let fixing = false;
     const fixDuration = () => {
+      if (storedDur) { paintTime(); return; }      // nothing to work out — we were told
       if (realDur()) { paintTime(); return; }
       if (fixing) return; fixing = true;
       const onDC = () => {
@@ -55128,11 +55223,24 @@ function _bindVoiceNotes(el) {
       // 2) Schedule the bell now (synchronous → iOS-safe), timed to land on the reset.
       _vnChime(0.38);
       // 3) Hold at full a beat so the fully-blue bars are seen, then reset + hand off.
-      setTimeout(() => {
+      // Playing on into the NEXT note is deliberate — it is what the messaging
+      // apps do — but it used to be a bare timer that fired 480ms later and then
+      // looked the next note up in whatever thread happened to be on screen by
+      // then. Back out of the chat, or open a different one, inside that window
+      // and a voice note would start playing in the chat you had just opened,
+      // untouched. That is the "it randomly starts playing" — it was this.
+      // The timer is now cancelled when the thread changes, and it re-checks that
+      // the same conversation is still open before it plays anything.
+      const thenKey = _acThreadKey();
+      clearTimeout(_vnAdvanceTimer);
+      _vnAdvanceTimer = setTimeout(() => {
+        _vnAdvanceTimer = 0;
         if (fill) fill.style.transition = 'clip-path .18s ease-out';
         setP(0);
         try { audio.currentTime = 0; } catch (_) {}
         paintTime();
+        if (_acThreadKey() !== thenKey) return;          // a different chat is open now
+        if (!document.body.contains(audio)) return;      // this note is no longer on screen
         const idx = AC.messages.findIndex(x => String(x.id) === String(mid));
         const nxt = idx !== -1 ? AC.messages[idx + 1] : null;
         if (nxt && nxt.media_kind === 'audio' && !nxt.deleted) {
