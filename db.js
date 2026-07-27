@@ -1946,6 +1946,161 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS ai_usage_at_idx ON ai_usage (created_at DESC);
     CREATE INDEX IF NOT EXISTS ai_usage_feature_idx ON ai_usage (feature);
   `);
+  // ── Batch 41: private chats, bots, a phone number, and the last of the tail ──
+  // End-to-end encrypted 1:1 chats. The server stores the PUBLIC half of each
+  // member's key and nothing else — the private half never leaves their device.
+  // A secret chat's messages arrive here already scrambled and are stored that
+  // way, so a database dump contains nothing readable.
+  await query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS e2ee_public_key TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS e2ee_key_at TIMESTAMPTZ;
+    -- One row per pair who have turned it on. The fingerprint is what the two
+    -- of them compare out loud to be sure nobody is in the middle.
+    CREATE TABLE IF NOT EXISTS secret_chats (
+      a           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      b           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      a_key       TEXT,
+      b_key       TEXT,
+      fingerprint TEXT,
+      started_by  INTEGER,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (a, b)
+    );
+    -- Scrambled text lives beside the plain column, never in it.
+    ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS cipher TEXT;
+    ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS cipher_iv TEXT;
+  `);
+  // Bots and mini-apps: an account somebody's software drives, which can be
+  // added to a chat and answer in it.
+  await query(`
+    CREATE TABLE IF NOT EXISTS bots (
+      id            SERIAL PRIMARY KEY,
+      owner_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name          TEXT NOT NULL,
+      about         TEXT,
+      avatar        TEXT,
+      webhook_url   TEXT,
+      secret        TEXT NOT NULL,
+      commands      JSONB NOT NULL DEFAULT '[]'::jsonb,
+      published     BOOLEAN NOT NULL DEFAULT false,
+      installs      INTEGER NOT NULL DEFAULT 0,
+      status        TEXT NOT NULL DEFAULT 'active',   -- active | suspended
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS bots_user_idx ON bots (user_id);
+    CREATE INDEX IF NOT EXISTS bots_owner_idx ON bots (owner_id);
+    -- Who has added which bot, and where. A bot only ever sees the chats it was
+    -- deliberately put in.
+    CREATE TABLE IF NOT EXISTS bot_installs (
+      id         SERIAL PRIMARY KEY,
+      bot_id     INTEGER NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      group_id   INTEGER REFERENCES at_groups(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    -- NOT a primary key across those three: group_id is null for a personal
+    -- install, and Postgres forbids a null in a primary key — which silently
+    -- made every personal install fail to store. COALESCE gives the same
+    -- one-row-per-place guarantee without that trap.
+    CREATE UNIQUE INDEX IF NOT EXISTS bot_installs_uniq ON bot_installs (bot_id, user_id, COALESCE(group_id, 0));
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS is_bot BOOLEAN NOT NULL DEFAULT false;
+  `);
+  // A real phone number for a business, so customers with no app can still ring.
+  await query(`
+    CREATE TABLE IF NOT EXISTS phone_numbers (
+      id           SERIAL PRIMARY KEY,
+      owner_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      number       TEXT NOT NULL UNIQUE,
+      provider_sid TEXT,
+      forward_to   TEXT,
+      greeting     TEXT,
+      voicemail    BOOLEAN NOT NULL DEFAULT true,
+      sms_to_beam  BOOLEAN NOT NULL DEFAULT true,
+      active       BOOLEAN NOT NULL DEFAULT true,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS phone_owner_idx ON phone_numbers (owner_id);
+    CREATE TABLE IF NOT EXISTS phone_calls (
+      id           SERIAL PRIMARY KEY,
+      number_id    INTEGER REFERENCES phone_numbers(id) ON DELETE CASCADE,
+      owner_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      direction    TEXT NOT NULL,                     -- in | out
+      from_number  TEXT,
+      to_number    TEXT,
+      status       TEXT,
+      seconds      INTEGER NOT NULL DEFAULT 0,
+      recording    TEXT,
+      transcript   TEXT,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS phone_calls_owner_idx ON phone_calls (owner_id, created_at DESC);
+  `);
+  // Money advanced against sales that have already happened, repaid out of the
+  // sales that follow. OFF unless an operator turns it on — lending is regulated.
+  await query(`
+    CREATE TABLE IF NOT EXISTS advances (
+      id             SERIAL PRIMARY KEY,
+      user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      amount_cents   INTEGER NOT NULL,
+      fee_cents      INTEGER NOT NULL DEFAULT 0,
+      repay_cents    INTEGER NOT NULL,
+      repaid_cents   INTEGER NOT NULL DEFAULT 0,
+      share_pct      INTEGER NOT NULL DEFAULT 15,
+      status         TEXT NOT NULL DEFAULT 'offered', -- offered|active|repaid|declined|cancelled
+      offered_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+      accepted_at    TIMESTAMPTZ,
+      repaid_at      TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS advances_user_idx ON advances (user_id, status);
+    CREATE TABLE IF NOT EXISTS advance_repayments (
+      id          SERIAL PRIMARY KEY,
+      advance_id  INTEGER NOT NULL REFERENCES advances(id) ON DELETE CASCADE,
+      order_id    INTEGER,
+      cents       INTEGER NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS advance_repay_idx ON advance_repayments (advance_id);
+  `);
+  // Sounds a creator can put behind a reel. Either their own upload, or one from
+  // a catalogue an operator has confirmed the rights to.
+  await query(`
+    CREATE TABLE IF NOT EXISTS sounds (
+      id           SERIAL PRIMARY KEY,
+      owner_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      title        TEXT NOT NULL,
+      artist       TEXT,
+      media        TEXT NOT NULL,
+      seconds      INTEGER,
+      licence      TEXT NOT NULL DEFAULT 'own',       -- own | cc0 | licensed
+      official     BOOLEAN NOT NULL DEFAULT false,
+      uses         INTEGER NOT NULL DEFAULT 0,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS sounds_official_idx ON sounds (official, uses DESC);
+    ALTER TABLE feed_posts ADD COLUMN IF NOT EXISTS sound_id INTEGER REFERENCES sounds(id) ON DELETE SET NULL;
+    ALTER TABLE stories ADD COLUMN IF NOT EXISTS sound_id INTEGER REFERENCES sounds(id) ON DELETE SET NULL;
+  `);
+  // What people are saying about the app on the stores.
+  await query(`
+    CREATE TABLE IF NOT EXISTS app_reviews (
+      id           TEXT PRIMARY KEY,
+      store        TEXT NOT NULL DEFAULT 'apple',
+      rating       INTEGER,
+      title        TEXT,
+      body         TEXT,
+      author       TEXT,
+      version      TEXT,
+      territory    TEXT,
+      responded    BOOLEAN NOT NULL DEFAULT false,
+      response     TEXT,
+      responded_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at   TIMESTAMPTZ,
+      fetched_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS app_reviews_idx ON app_reviews (store, created_at DESC);
+  `);
+
   // ── Batch 40: bigger media, better calls, and marketing your own shop ──────
   // A business marketing to ITS OWN customers — distinct from the admin
   // campaigns tool, which is Atwe writing to Atwe's members.

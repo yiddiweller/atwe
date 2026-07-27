@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>Atwe · How your messages are protected</title>
+<meta name="description" content="Plainly what Atwe encrypts, what it does not, and what that means for you."/>
+<meta name="robots" content="index,follow"/>
+<link rel="icon" href="/icon.png"/>
+<meta name="theme-color" content="#000000"/>
+<style>
+  :root{
+    --bg:#000; --s1:#1C1C1E; --t1:#e7e9ea; --t2:#a8adb3; --t3:#71767b;
+    --green:#88FF00; --green-ink:#132a00; --amber:#FFBB00; --red:#FF0033; --accent:#0088FF;
+    --b1:rgba(255,255,255,.05); --gutter:18px; --r-lg:20px;
+  }
+  @media (prefers-color-scheme: light){
+    :root{ --bg:#fff; --s1:#f4f5f6; --t1:#0f1419; --t2:#536471; --t3:#8b98a5;
+           --green:#1a7f37; --green-ink:#fff; --b1:rgba(0,0,0,.06); }
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--t1);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:680px;margin:0 auto;padding:calc(env(safe-area-inset-top,0px) + 40px) var(--gutter) 70px;}
+  .brand{display:flex;align-items:center;gap:10px;margin-bottom:30px;}
+  .brand img{width:26px;height:26px;}
+  .brand b{font-size:16px;font-weight:700;letter-spacing:-.01em;}
+  .brand span{color:var(--t3);font-size:16px;}
+  h1{font-size:29px;font-weight:800;letter-spacing:-.02em;margin:0 0 10px;line-height:1.2;}
+  .lede{font-size:17px;line-height:1.6;color:var(--t2);margin:0 0 30px;}
+  h2{font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+     color:var(--t3);margin:34px 0 12px;}
+  p{font-size:16px;line-height:1.65;margin:0 0 14px;}
+  .card{background:var(--s1);border-radius:var(--r-lg);padding:18px;margin-bottom:12px;}
+  .card b{display:block;font-size:16px;margin-bottom:6px;}
+  .card p{font-size:15px;color:var(--t2);margin:0;}
+  .tag{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
+       padding:4px 10px;border-radius:999px;margin-bottom:9px;}
+  .tag.yes{background:var(--green);color:var(--green-ink);}
+  .tag.no{background:rgba(255,0,51,.14);color:var(--red);}
+  .tag.part{background:rgba(255,187,0,.16);color:var(--amber);}
+  ul{margin:0 0 14px;padding-left:20px;font-size:16px;line-height:1.7;color:var(--t2);}
+  li{margin-bottom:5px;}
+  .foot{margin-top:44px;padding-top:20px;border-top:1px solid var(--b1);color:var(--t3);font-size:13.5px;line-height:1.6;}
+  .foot a{color:var(--accent);text-decoration:none;}
+  @media(hover:hover){.foot a:hover{text-decoration:underline;}}
+  @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><img src="/logo-mark.png" alt=""/><b>Atwe</b><span>Security</span></div>
+
+  <h1>How your messages are protected</h1>
+  <p class="lede">Written to be read, not to reassure. Where Atwe is strong, it says so. Where it
+  is not, it says that too — because a promise you cannot check is worth nothing.</p>
+
+  <h2>The short version</h2>
+  <div class="card">
+    <span class="tag part">Ordinary chats</span>
+    <b>Private, encrypted in transit, but not end-to-end</b>
+    <p>Everything between your phone and Atwe travels over HTTPS, and your messages are stored on
+    our servers so your history follows you to a new phone and to the web. That storage is the
+    trade: it means Atwe <em>could</em> read an ordinary message, and so could anybody who
+    compelled or breached us. We do not sell it, we do not advertise against it, and access is
+    logged — but "we choose not to" is a policy, not a guarantee, and we will not dress it up as one.</p>
+  </div>
+  <div class="card">
+    <span class="tag yes">Secret chats</span>
+    <b>End-to-end encrypted, and we genuinely cannot read them</b>
+    <p>Turn on a secret chat with somebody and your two devices agree a key between themselves.
+    Your half of it never leaves your phone — not in a backup, not in our database, nowhere we
+    could hand it over. What reaches our servers is a scrambled blob, stored and delivered exactly
+    as it arrived. This is not a policy. There is nothing to hand over.</p>
+  </div>
+
+  <h2>What a secret chat costs you</h2>
+  <p>These are real and we would rather you knew them before you needed them, not after:</p>
+  <ul>
+    <li><b>Your history will not follow you to a new phone.</b> The key is on the old one. That is the point of it.</li>
+    <li><b>Lose the device and you lose the conversation.</b> There is no copy anywhere for us to restore.</li>
+    <li><b>Search will not find those messages</b>, and a notification cannot preview them, because we cannot read them either.</li>
+    <li><b>One person at a time.</b> Group chats are not end-to-end encrypted.</li>
+  </ul>
+
+  <h2>Check it yourself</h2>
+  <p>Every secret chat shows a <b>safety code</b> — a short string of characters worked out from
+  both of your keys. Read it aloud to each other, or compare it in person. If the two match,
+  nobody is sitting in the middle. If they ever change without either of you reinstalling, stop
+  and ask why.</p>
+
+  <h2>What else protects an account</h2>
+  <div class="card"><b>Passkeys</b><p>Sign in with your face, your fingerprint or your device PIN. There is
+  no password to phish, and a passkey checks the site's real address, so a convincing fake gets nothing.</p></div>
+  <div class="card"><b>Two-factor authentication</b><p>An authenticator app, with single-use backup codes
+  kept only as hashes.</p></div>
+  <div class="card"><b>Every session, revocable</b><p>See where you are signed in and end any of them.
+  Changing your password ends all of them and cuts the live connections immediately.</p></div>
+  <div class="card"><b>Money moves once</b><p>Every payment path claims the work before it charges, so a
+  double-tap, a retry or two servers racing cannot take money twice. A wallet cannot go negative — the
+  database itself refuses.</p></div>
+  <div class="card"><b>Your data, on request</b><p>Download everything on your account at any time, and
+  ask for it to be deleted. Requests are tracked against the legal deadline.</p></div>
+
+  <h2>What we do not do</h2>
+  <ul>
+    <li>We do not sell your messages, your contacts or your behaviour to anybody.</li>
+    <li>We do not read your chats to target advertising.</li>
+    <li>We do not claim end-to-end encryption on chats that are not end-to-end encrypted.</li>
+  </ul>
+
+  <h2>Found something wrong?</h2>
+  <p>Tell us before you tell anybody else and we will fix it. Write to
+  <b>security@atwe.com</b> with enough detail to reproduce it. We will not take legal action
+  against anybody who reports a problem in good faith and gives us a reasonable chance to fix it.</p>
+
+  <div class="foot">
+    This page describes what is actually built today. When any of it changes, this page changes
+    with it. <a href="/">Back to Atwe</a>
+  </div>
+</div>
+</body>
+</html>

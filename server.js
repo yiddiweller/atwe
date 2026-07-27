@@ -1192,6 +1192,7 @@ app.use((req, res, next) => {
   if (req.path === '/admin.html') return next();          // admin on the main domain
   if (req.path === '/robots.txt') return next();          // crawlers can always read robots
   if (req.path === '/status' || req.path === '/status.html') return next(); // the status page is exactly what people check when the site is down
+  if (req.path === '/security' || req.path === '/security.html') return next(); // and this one has to be readable without an account
   if (req.path.startsWith('/api/')) return next();        // API incl. /api/site/unlock
   if (req.method !== 'GET') return next();
   if (!(req.headers.accept || '').includes('text/html')) return next(); // only navigations
@@ -1996,6 +1997,8 @@ const MEDIA_KINDS = {
   // capability, which is the same bargain every other private media kind here makes.
   'callrec':    { table: 'call_recordings',   col: 'media'  },
   'webinar':    { table: 'webinars',          col: 'cover'  },
+  'bot':        { table: 'bots',              col: 'avatar' },
+  'sound':      { table: 'sounds',            col: 'media'  },
 };
 function mediaSig(kind, id, idx) {
   return _vcrypto.createHmac('sha256', MEDIA_SECRET).update(kind + ':' + id + ':' + (idx || 0)).digest('hex').slice(0, 20);
@@ -2785,7 +2788,14 @@ app.post('/api/rt/call', auth.requireAuth, rateLimit(300, 60000, 'rt-call'), asy
 const groupCalls = new Map(); // groupId -> Map<userId, { since:number }>
 // Full-mesh upload cost grows with every participant (each sends to all others),
 // so cap a call's size to keep it stable. A bigger room would need an SFU.
-const GROUP_CALL_MAX = 8;
+const GROUP_CALL_MAX = 8;           // with video: every person sends to every other
+const GROUP_CALL_MAX_AUDIO = 32;    // audio only, which costs a fraction as much
+// How many may be in THIS room, given whether anybody has their camera on.
+function groupCallCap(room) {
+  if (!room) return GROUP_CALL_MAX_AUDIO;
+  for (const v of room.values()) if (v && v.video) return GROUP_CALL_MAX;
+  return GROUP_CALL_MAX_AUDIO;
+}
 
 // Remove a user from a group call (on explicit leave or SSE disconnect) and
 // tell the rest of the group the roster changed. Best-effort.
@@ -2808,15 +2818,28 @@ app.post('/api/rt/group-call/join', auth.requireAuth, rateLimit(120, 60000, 'gca
   if (!Number.isInteger(groupId)) return res.status(400).json({ error: 'Invalid group.' });
   if (!(await isGroupMember(groupId, req.user.id))) return res.status(403).json({ error: 'You’re not a member of this group.' });
   let room = groupCalls.get(groupId);
-  // Cap the room (rejoins by someone already in it are always allowed).
-  if (room && !room.has(req.user.id) && room.size >= GROUP_CALL_MAX) {
-    return res.status(409).json({ error: `This call is full (max ${GROUP_CALL_MAX}).` });
+  const withVideo = req.body.video === true;
+  // Cap the room (rejoins by someone already in it are always allowed). An
+  // audio-only room holds far more people than one where cameras are on,
+  // because every camera has to reach every other person.
+  const cap = withVideo ? GROUP_CALL_MAX : groupCallCap(room);
+  if (room && !room.has(req.user.id) && room.size >= cap) {
+    return res.status(409).json({
+      error: withVideo
+        ? `This call is full (${GROUP_CALL_MAX} with cameras on). Join with your camera off and up to ${GROUP_CALL_MAX_AUDIO} can be in it.`
+        : `This call is full (max ${cap}).`,
+      full: true, cap, audioCap: GROUP_CALL_MAX_AUDIO });
+  }
+  // Somebody turning a camera on in a big room would break it for everybody, so
+  // it is refused with an explanation rather than allowed to fail as bad video.
+  if (withVideo && room && room.size >= GROUP_CALL_MAX) {
+    return res.status(409).json({ error: `There are too many people for cameras. Join with your camera off.`, audioOnly: true });
   }
   const starting = !room || room.size === 0;
   if (!room) { room = new Map(); groupCalls.set(groupId, room); }
   // Peers already in the call — the newcomer offers to each of these.
   const peers = [...room.keys()].filter((id) => id !== req.user.id);
-  room.set(req.user.id, { since: Date.now() });
+  room.set(req.user.id, { since: Date.now(), video: withVideo });
   let me = null;
   try { me = await chatIdentity(req.user.id); } catch {}
   const member = me ? { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null } : { id: req.user.id };
@@ -2967,12 +2990,21 @@ app.post('/api/rt/call-link/join', auth.requireAuth, rateLimit(120, 60000, 'clin
     if (!rows[0] || !rows[0].active) return res.status(404).json({ error: 'This call link is no longer active.' });
   } catch (e) { return res.status(500).json({ error: 'Could not join the call.' }); }
   let room = callLinkRooms.get(code);
-  if (room && !room.has(req.user.id) && room.size >= GROUP_CALL_MAX) {
-    return res.status(409).json({ error: `This call is full (max ${GROUP_CALL_MAX}).` });
+  const withVideo = req.body.video === true;
+  const cap = withVideo ? GROUP_CALL_MAX : groupCallCap(room);
+  if (room && !room.has(req.user.id) && room.size >= cap) {
+    return res.status(409).json({
+      error: withVideo
+        ? `This call is full (${GROUP_CALL_MAX} with cameras on). Join with your camera off and up to ${GROUP_CALL_MAX_AUDIO} can be in it.`
+        : `This call is full (max ${cap}).`,
+      full: true, cap, audioCap: GROUP_CALL_MAX_AUDIO });
+  }
+  if (withVideo && room && room.size >= GROUP_CALL_MAX) {
+    return res.status(409).json({ error: 'There are too many people for cameras. Join with your camera off.', audioOnly: true });
   }
   if (!room) { room = new Map(); callLinkRooms.set(code, room); }
   const peers = [...room.keys()].filter((id) => id !== req.user.id);
-  room.set(req.user.id, { since: Date.now() });
+  room.set(req.user.id, { since: Date.now(), video: withVideo });
   let me = null;
   try { me = await chatIdentity(req.user.id); } catch {}
   const member = me ? { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null } : { id: req.user.id };
@@ -5586,6 +5618,7 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
               nk.nickname,
               t.thread_id, dt.title AS thread_title,
               lm.body AS last_body, (lm.image IS NOT NULL) AS last_image, lm.media_kind AS last_media_kind,
+              (lm.cipher IS NOT NULL) AS last_secret,
               lm.meta->>'t' AS last_meta,
               lm.deleted_all AS last_deleted, lm.hidden AS last_hidden,
               lm.created_at AS last_at, (lm.sender_id = $1) AS last_mine,
@@ -5617,7 +5650,12 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
        ORDER BY COALESCE(lm.created_at, dt.created_at) DESC NULLS LAST`,
       [req.user.id]
     );
-    res.json({ conversations: rows.map((r) => ({ ...r, avatar: mediaRef(r.avatar, 'avatar', r.id) })) });
+    res.json({ conversations: rows.map((r) => ({
+      ...r, avatar: mediaRef(r.avatar, 'avatar', r.id),
+      // A secret message has no readable body here and never will, so the list
+      // says what it honestly is rather than showing an empty row.
+      last_body: r.last_secret ? '🔒 Secret message' : r.last_body,
+    })) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -5967,7 +6005,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     // Seeing the thread starts the self-destruct timer on any unseen secret messages.
     await startSecretTimers(req.user.id, other, thread);
     const { rows } = await db.query(
-      `SELECT id, sender_id, body, image, images, media, media_kind, media_name, created_at, read_at, deleted_all, reply_to, edited, forwarded, meta, client_id, view_once, secret, expires_at, ($1 = ANY(viewed_by)) AS viewed,
+      `SELECT id, sender_id, body, image, images, media, media_kind, media_name, created_at, read_at, deleted_all, reply_to, edited, forwarded, meta, client_id, view_once, secret, cipher, cipher_iv, expires_at, ($1 = ANY(viewed_by)) AS viewed,
               ($1 = ANY(hidden_for)) AS hidden, ($1 = ANY(starred_by)) AS starred, (pinned_at IS NOT NULL) AS pinned, reactions FROM at_messages
        WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
          AND thread_id IS NOT DISTINCT FROM $3
@@ -6033,6 +6071,10 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
         deleted: !!m.deleted_all, hidden: !!m.hidden, starred: !!m.starred, pinned: !!m.pinned, reactions: m.reactions || {},
         reply_to: m.reply_to || null, edited: !!m.edited, forwarded: !!m.forwarded, meta: m.meta || null,
         secret: !!m.secret, expiresAt: m.expires_at || null,
+        // A secret-chat message: the scrambled text and the number it was
+        // scrambled with. This server has never been able to read it, and the
+        // body column beside it is deliberately empty.
+        cipher: m.cipher || null, iv: m.cipher_iv || null,
         }, 'dm');
       }),
     });
@@ -6371,6 +6413,7 @@ app.post('/api/atchat/with/:id', auth.requireAuth, blockLimited, rateLimit(40, 6
       // skip the push/bell so the recipient's phone stays quiet.
       if (req.body.silent !== true) notify(other, req.user.id, 'message', null);
       maybeAutoReply(other, req.user.id, body).catch(() => {});
+      routeToBots({ senderId: req.user.id, text: body, groupId: null, userId: other }).catch(() => {});
     }
     try { experimentGoal('message', req.user.id, req); } catch (e) { /* measurement never blocks a message */ }
     res.json({ message: { ...msg, mine: true } });
@@ -9425,6 +9468,8 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, blockLimited, rate
     if (isNew) {
       const out = { kind: 'group', groupId: gid, message: { ...base, mine: false } };
       for (const id of await groupMemberIds(gid, req.user.id)) rtPush(id, 'msg', out);
+      // Only a message that NAMES a bot reaches it — see routeToBots.
+      routeToBots({ senderId: req.user.id, text: body, groupId: gid, userId: null }).catch(() => {});
       // @mention notifications: a group member you @named gets pinged (in a group you
       // DON'T get a per-message notif like a DM, so this is how a mention reaches them).
       // A silent send stays quiet — deliver live, but skip the mention pings.
@@ -10924,6 +10969,942 @@ app.get('/api/customers/export', auth.requireAuth, async (req, res) => {
 });
 
 
+
+
+/* ═══════════════════════════════════════════════
+   BATCH 41 — private chats, bots, a phone number, and the last of the tail
+═══════════════════════════════════════════════ */
+
+/* ─── Secret chats: end-to-end encrypted 1:1 ───────────────────────────────
+   Atwe's ordinary chats are private but NOT end-to-end encrypted, and the app
+   says so plainly rather than implying otherwise (see the chat privacy notice).
+   This is the other option, for the conversation where that matters.
+
+   How it works, and what this server can and cannot see:
+     · Each device makes a key pair. The private half NEVER leaves it — it is
+       not in a backup, not in a database, and cannot be handed to anybody.
+     · The public half is uploaded here so the other person can find it.
+     · The two devices work out a shared secret between themselves (ECDH), and
+       every message is scrambled with it before it is sent.
+     · What arrives here is a blob. It is stored as a blob and delivered as a
+       blob. A dump of this database contains nothing readable from a secret
+       chat, and neither do we.
+
+   The honest costs, stated in the app rather than buried:
+     · History does not follow you to a new device. There is no copy of the key
+       anywhere else, which is the entire point.
+     · Losing the device loses the conversation.
+     · Search, previews and web push cannot read the text.
+   Nothing here weakens the ordinary chats; a secret chat is a separate mode a
+   pair deliberately turn on. */
+function pairKey(a, b) { return a < b ? [a, b] : [b, a]; }
+
+app.post('/api/e2ee/key', auth.requireAuth, rateLimit(20, 3600000, 'e2ee-key'), async (req, res) => {
+  // A public key is a fixed-length base64 blob. Anything else is refused rather
+  // than stored, so a junk value cannot sit here pretending to be a key.
+  const key = String(req.body.publicKey || '').trim();
+  if (!/^[A-Za-z0-9+/=_-]{40,200}$/.test(key)) return res.status(400).json({ error: 'That is not a usable key.' });
+  try {
+    await db.query('UPDATE users SET e2ee_public_key = $2, e2ee_key_at = now() WHERE id = $1', [req.user.id, key]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+app.get('/api/e2ee/key/:userId', auth.requireAuth, async (req, res) => {
+  const uid = routeId(req.params.userId);
+  if (!Number.isInteger(uid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    // A block still applies: you cannot fetch a key for somebody who has
+    // blocked you, or you them.
+    if (uid !== req.user.id && await blockedEither(req.user.id, uid)) return res.status(403).json({ error: 'Not available.' });
+    const { rows } = await db.query('SELECT e2ee_public_key, e2ee_key_at FROM users WHERE id = $1', [uid]);
+    if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
+    res.json({ publicKey: rows[0].e2ee_public_key || null, keyAt: rows[0].e2ee_key_at || null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load that.' }); }
+});
+// Turn it on for a pair. Both must have uploaded a key first, because a secret
+// chat with one key is not a secret chat.
+app.post('/api/e2ee/start', auth.requireAuth, async (req, res) => {
+  const peer = parseInt(req.body.peerId, 10);
+  if (!Number.isInteger(peer) || peer === req.user.id) return res.status(400).json({ error: 'Pick somebody else.' });
+  try {
+    if (!(await dmAllowed(req.user.id, peer))) return res.status(403).json({ error: 'You cannot message them.' });
+    const rows = (await db.query('SELECT id, e2ee_public_key FROM users WHERE id IN ($1,$2)', [req.user.id, peer])).rows;
+    const mine = rows.find((r) => r.id === req.user.id);
+    const theirs = rows.find((r) => r.id === peer);
+    if (!mine || !mine.e2ee_public_key) return res.status(400).json({ error: 'Set up your own key first.', needKey: true });
+    if (!theirs || !theirs.e2ee_public_key) return res.status(400).json({ error: 'They have not set up a secret chat on their device yet. Ask them to open Settings and turn it on.', peerNoKey: true });
+    const [a, b] = pairKey(req.user.id, peer);
+    const aKey = a === req.user.id ? mine.e2ee_public_key : theirs.e2ee_public_key;
+    const bKey = b === req.user.id ? mine.e2ee_public_key : theirs.e2ee_public_key;
+    // The fingerprint is derived from BOTH public keys, so it is the same on
+    // both devices and different if anybody's key has been swapped. Reading it
+    // out loud to each other is what catches somebody in the middle.
+    const fp = _nodeCrypto.createHash('sha256').update(aKey + '|' + bKey).digest('hex').slice(0, 32);
+    await db.query(
+      `INSERT INTO secret_chats (a, b, a_key, b_key, fingerprint, started_by) VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (a, b) DO UPDATE SET a_key = EXCLUDED.a_key, b_key = EXCLUDED.b_key, fingerprint = EXCLUDED.fingerprint`,
+      [a, b, aKey, bKey, fp, req.user.id]);
+    rtPush(peer, 'msg', { kind: 'secret', peerId: req.user.id, on: true });
+    res.json({ ok: true, fingerprint: fp, theirKey: theirs.e2ee_public_key });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not start that.' }); }
+});
+app.get('/api/e2ee/chat/:peerId', auth.requireAuth, async (req, res) => {
+  const peer = routeId(req.params.peerId);
+  if (!Number.isInteger(peer)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const [a, b] = pairKey(req.user.id, peer);
+    const { rows } = await db.query('SELECT * FROM secret_chats WHERE a = $1 AND b = $2', [a, b]);
+    if (!rows[0]) return res.json({ on: false });
+    const r = rows[0];
+    res.json({ on: true, fingerprint: r.fingerprint,
+      theirKey: (peer === a ? r.a_key : r.b_key), myKeyOnRecord: (req.user.id === a ? r.a_key : r.b_key) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not check.' }); }
+});
+app.delete('/api/e2ee/chat/:peerId', auth.requireAuth, async (req, res) => {
+  const peer = routeId(req.params.peerId);
+  if (!Number.isInteger(peer)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const [a, b] = pairKey(req.user.id, peer);
+    await db.query('DELETE FROM secret_chats WHERE a = $1 AND b = $2', [a, b]);
+    rtPush(peer, 'msg', { kind: 'secret', peerId: req.user.id, on: false });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not turn it off.' }); }
+});
+/* Sending one. The body arriving here is already scrambled; this route stores
+   it exactly as it came and never attempts to read it. Deliberately separate
+   from the ordinary send route so there is no path where a secret message could
+   accidentally fall through into the plain column. */
+const CIPHER_MAX = 200000;   // generous for text; a secret chat is text only
+app.post('/api/e2ee/send', auth.requireAuth, blockLimited, rateLimit(60, 60000, 'e2ee-send'), async (req, res) => {
+  const peer = parseInt(req.body.to, 10);
+  const cipher = String(req.body.cipher || '');
+  const iv = String(req.body.iv || '');
+  if (!Number.isInteger(peer) || peer === req.user.id) return res.status(400).json({ error: 'Pick somebody else.' });
+  if (!cipher || cipher.length > CIPHER_MAX) return res.status(400).json({ error: 'Nothing to send.' });
+  if (!/^[A-Za-z0-9+/=_-]{1,64}$/.test(iv)) return res.status(400).json({ error: 'Bad message.' });
+  if (!/^[A-Za-z0-9+/=_-]+$/.test(cipher)) return res.status(400).json({ error: 'Bad message.' });
+  try {
+    if (!(await dmAllowed(req.user.id, peer))) return res.status(403).json({ error: 'You cannot message them.' });
+    const [a, b] = pairKey(req.user.id, peer);
+    const on = (await db.query('SELECT 1 FROM secret_chats WHERE a = $1 AND b = $2', [a, b])).rows[0];
+    if (!on) return res.status(400).json({ error: 'This is not a secret chat.' });
+    const cid = String(req.body.clientId || '').slice(0, 60) || null;
+    const dsec = await dmDisappearSeconds(req.user.id, peer);
+    const ins = await db.query(
+      `INSERT INTO at_messages (sender_id, recipient_id, body, cipher, cipher_iv, client_id, expires_at)
+       VALUES ($1,$2,'',$3,$4,$5,${dsec ? `now() + interval '${dsec} seconds'` : 'NULL'})
+       ON CONFLICT DO NOTHING RETURNING id, created_at`,
+      [req.user.id, peer, cipher, iv, cid]);
+    if (!ins.rows[0]) {
+      const dup = (await db.query('SELECT id, created_at FROM at_messages WHERE sender_id = $1 AND client_id = $2', [req.user.id, cid])).rows[0];
+      return res.json({ message: dup ? { id: dup.id, createdAt: dup.created_at, clientId: cid } : null, deduped: true });
+    }
+    const m = { id: ins.rows[0].id, cipher, iv, created_at: ins.rows[0].created_at, clientId: cid, secret: true };
+    rtPush(peer, 'msg', { kind: 'dm', peerId: req.user.id, message: { ...m, mine: false } });
+    rtPush(req.user.id, 'msg', { kind: 'dm', peerId: peer, message: { ...m, mine: true } });
+    // The notification says somebody wrote, and nothing else — there is no way
+    // to preview a message this server cannot read, and that is correct.
+    notify(peer, req.user.id, 'message');
+    res.json({ message: m });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send that.' }); }
+});
+
+
+/* ─── Bots and mini-apps ───────────────────────────────────────────────────
+   Somebody else's software, running inside a chat. A bot IS a real account —
+   it has a @handle, a picture and a profile — but it is driven by a webhook
+   rather than a person, and it is flagged so nobody can be fooled about which
+   they are talking to.
+
+   The boundaries, which are the whole design:
+     · A bot only ever sees a chat it was deliberately ADDED to. There is no
+       firehose and no way to ask for one.
+     · In a group it hears only messages that name it (/command or @mention),
+       not everything everybody says. A bot in a group chat that reads the whole
+       conversation is a surveillance device.
+     · Everything it sends goes out as the bot, marked as a bot.
+     · Its owner is on the record, and staff can suspend it. */
+const BOT_CAP = 10;                 // per owner
+const BOT_TIMEOUT_MS = 8000;
+function mapBot(b, mine) {
+  return { id: b.id, userId: b.user_id, name: b.name, username: b.username || null,
+    about: b.about || '', avatar: mediaRef(b.avatar, 'bot', b.id),
+    commands: Array.isArray(b.commands) ? b.commands : [],
+    published: !!b.published, installs: b.installs, status: b.status,
+    installed: !!b.installed, mine: !!mine,
+    // The secret and the URL are the owner's business and nobody else's.
+    webhookUrl: mine ? (b.webhook_url || '') : undefined,
+    secret: mine ? b.secret : undefined };
+}
+function cleanCommands(v) {
+  if (!Array.isArray(v)) return [];
+  return v.slice(0, 12).map((c) => ({
+    name: String((c && c.name) || '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 24),
+    help: String((c && c.help) || '').slice(0, 80),
+  })).filter((c) => c.name);
+}
+app.get('/api/bots', auth.requireAuth, async (req, res) => {
+  const scope = ['mine', 'installed', 'discover'].includes(req.query.scope) ? req.query.scope : 'discover';
+  try {
+    const where = { mine: 'b.owner_id = $1', installed: 'EXISTS(SELECT 1 FROM bot_installs i WHERE i.bot_id = b.id AND i.user_id = $1)',
+      discover: `b.published = true AND b.status = 'active'` }[scope];
+    const { rows } = await db.query(
+      `SELECT b.*, u.username,
+              EXISTS(SELECT 1 FROM bot_installs i WHERE i.bot_id = b.id AND i.user_id = $1 AND i.group_id IS NULL) AS installed
+         FROM bots b JOIN users u ON u.id = b.user_id
+        WHERE ${where} ORDER BY b.installs DESC, b.id DESC LIMIT 60`, [req.user.id]);
+    res.json({ bots: rows.map((b) => mapBot(b, b.owner_id === req.user.id)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load those.' }); }
+});
+app.post('/api/bots', auth.requireAuth, rateLimit(10, 3600000, 'bot-create'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const name = String(req.body.name || '').trim().slice(0, 60);
+  let handle = String(req.body.username || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 24);
+  if (!name) return res.status(400).json({ error: 'Give it a name.' });
+  if (handle.length < 3) return res.status(400).json({ error: 'Pick a handle of at least three letters.' });
+  // Every bot handle ends in _bot. Not decoration — it is how somebody knows at
+  // a glance that they are not talking to a person.
+  if (!handle.endsWith('_bot')) handle = handle.slice(0, 20) + '_bot';
+  try {
+    const n = (await db.query('SELECT COUNT(*)::int AS n FROM bots WHERE owner_id = $1', [req.user.id])).rows[0].n;
+    if (n >= BOT_CAP) return res.status(400).json({ error: 'You can have ' + BOT_CAP + ' bots.' });
+    if (usernameReserved && await usernameReserved(handle)) return res.status(409).json({ error: 'That handle is not available.' });
+    const taken = (await db.query('SELECT 1 FROM users WHERE lower(username) = $1', [handle])).rows[0];
+    if (taken) return res.status(409).json({ error: 'That handle is taken.' });
+    const avatar = req.body.avatar ? await offloadMedia(cleanImage(req.body.avatar) || null, 'bot') : null;
+    // The bot's own account. It has no password and no email, so nobody can
+    // ever sign in as it — it exists only to be driven by its webhook.
+    const acct = await db.query(
+      `INSERT INTO users (name, email, password_hash, username, is_bot, account_type, avatar, email_verified)
+       VALUES ($1,$2,$3,$4,true,'personal',$5,true) RETURNING id`,
+      [name, 'bot+' + handle + '@bots.atwe.invalid', 'x-no-login-' + _nodeCrypto.randomBytes(24).toString('hex'), handle, avatar]);
+    const secret = 'bsec_' + _nodeCrypto.randomBytes(24).toString('base64url');
+    const { rows } = await db.query(
+      `INSERT INTO bots (owner_id, user_id, name, about, avatar, webhook_url, secret, commands)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [req.user.id, acct.rows[0].id, name, String(req.body.about || '').trim().slice(0, 300) || null,
+        avatar, cleanWebhookUrl(req.body.webhookUrl), secret, JSON.stringify(cleanCommands(req.body.commands))]);
+    res.status(201).json({ bot: mapBot({ ...rows[0], username: handle }, true) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create that.' }); }
+});
+app.patch('/api/bots/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const sets = [], vals = [];
+  const put = (c, v) => { vals.push(v); sets.push(`${c} = $${vals.length}`); };
+  if (typeof req.body.name === 'string') put('name', req.body.name.trim().slice(0, 60));
+  if (typeof req.body.about === 'string') put('about', req.body.about.trim().slice(0, 300));
+  if (typeof req.body.webhookUrl === 'string') {
+    const u = cleanWebhookUrl(req.body.webhookUrl);
+    if (req.body.webhookUrl && !u) return res.status(400).json({ error: 'Enter a public https:// address we can reach.' });
+    put('webhook_url', u);
+  }
+  if (Array.isArray(req.body.commands)) put('commands', JSON.stringify(cleanCommands(req.body.commands)));
+  if (typeof req.body.published === 'boolean') put('published', req.body.published);
+  if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
+  vals.push(id, req.user.id);
+  try {
+    const { rows } = await db.query(
+      `UPDATE bots SET ${sets.join(', ')} WHERE id = $${vals.length - 1} AND owner_id = $${vals.length} RETURNING *`, vals);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found.' });
+    res.json({ bot: mapBot(rows[0], true) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update that.' }); }
+});
+app.post('/api/bots/:id/rotate', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const secret = 'bsec_' + _nodeCrypto.randomBytes(24).toString('base64url');
+    const { rowCount } = await db.query('UPDATE bots SET secret = $3 WHERE id = $1 AND owner_id = $2', [id, req.user.id, secret]);
+    if (!rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ secret });
+  } catch (err) { res.status(500).json({ error: 'Could not do that.' }); }
+});
+app.delete('/api/bots/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rows } = await db.query('DELETE FROM bots WHERE id = $1 AND owner_id = $2 RETURNING user_id', [id, req.user.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found.' });
+    // The bot's account goes with it, which cascades away its messages.
+    await db.query('DELETE FROM users WHERE id = $1 AND is_bot = true', [rows[0].user_id]).catch(() => {});
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete that.' }); }
+});
+// Adding one to your chats, or to a group you run.
+app.post('/api/bots/:id/install', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const groupId = Number.isInteger(parseInt(req.body.groupId, 10)) ? parseInt(req.body.groupId, 10) : null;
+  try {
+    const b = (await db.query(`SELECT * FROM bots WHERE id = $1 AND status = 'active'`, [id])).rows[0];
+    if (!b) return res.status(404).json({ error: 'Not found.' });
+    if (!b.published && b.owner_id !== req.user.id) return res.status(403).json({ error: 'That bot is not published.' });
+    // Only somebody who runs the group may put a bot in it.
+    if (groupId != null && !(await isGroupAdmin(groupId, req.user.id))) {
+      return res.status(403).json({ error: 'Only a group admin can add a bot to a group.' });
+    }
+    if (req.body.on === false) {
+      await db.query('DELETE FROM bot_installs WHERE bot_id = $1 AND user_id = $2 AND group_id IS NOT DISTINCT FROM $3', [id, req.user.id, groupId]);
+      return res.json({ ok: true, installed: false });
+    }
+    const ins = await db.query(
+      `INSERT INTO bot_installs (bot_id, user_id, group_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING RETURNING bot_id`,
+      [id, req.user.id, groupId]);
+    if (ins.rowCount) await db.query('UPDATE bots SET installs = installs + 1 WHERE id = $1', [id]);
+    if (groupId != null) await db.query('INSERT INTO at_group_members (group_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [groupId, b.user_id]).catch(() => {});
+    res.json({ ok: true, installed: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add it.' }); }
+});
+/* Handing a message to a bot. Called after a message is stored, and only when
+   the bot was genuinely addressed. Never awaited by the sender — a bot having a
+   bad day must not slow down a conversation between two people. */
+function botSignature(secret, ts, body) {
+  return _nodeCrypto.createHmac('sha256', secret).update(ts + '.' + body).digest('hex');
+}
+async function deliverToBot(bot, payload) {
+  if (!bot.webhook_url) return;
+  const body = JSON.stringify(payload);
+  const ts = String(Math.floor(Date.now() / 1000));
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), BOT_TIMEOUT_MS);
+    const r = await fetch(bot.webhook_url, {
+      method: 'POST', signal: ctrl.signal,
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'Atwe-Bots/1',
+        'X-Atwe-Bot': String(bot.id), 'X-Atwe-Timestamp': ts,
+        'X-Atwe-Signature': botSignature(bot.secret, ts, body) },
+      body,
+    }).finally(() => clearTimeout(timer));
+    if (!r.ok) return;
+    // A bot may answer straight away in its reply, which saves it a round trip.
+    const out = await r.json().catch(() => null);
+    if (out && typeof out.text === 'string' && out.text.trim()) {
+      await botSay(bot, payload.chat, out.text.trim().slice(0, 2000));
+    }
+  } catch (e) { /* a bot that is down or slow is simply quiet */ }
+}
+async function botSay(bot, chat, text) {
+  try {
+    if (chat.groupId) {
+      const isMember = await db.query('SELECT 1 FROM at_group_members WHERE group_id = $1 AND user_id = $2', [chat.groupId, bot.user_id]);
+      if (!isMember.rows[0]) return;
+      const ins = await db.query(
+        `INSERT INTO at_group_messages (group_id, sender_id, body) VALUES ($1,$2,$3) RETURNING id, created_at`,
+        [chat.groupId, bot.user_id, text]);
+      const msg = { id: ins.rows[0].id, body: text, created_at: ins.rows[0].created_at, sender_id: bot.user_id, bot: true };
+      for (const uid of await groupMemberIds(chat.groupId, bot.user_id)) {
+        rtPush(uid, 'msg', { kind: 'group', groupId: chat.groupId, message: { ...msg, mine: false } });
+      }
+      return;
+    }
+    await deliverDM(bot.user_id, chat.userId, text);
+  } catch (e) { /* never let a bot's reply break anything */ }
+}
+/* Was this message actually addressed to a bot? In a DM with the bot, yes,
+   always. In a group, only when it starts with /command or names @the_bot —
+   a bot that reads every message in a group is a surveillance device. */
+async function routeToBots({ senderId, text, groupId, userId }) {
+  if (!db.isConfigured() || !text) return;
+  try {
+    if (groupId == null && userId != null) {
+      // A DM to a bot account.
+      const b = (await db.query(`SELECT * FROM bots WHERE user_id = $1 AND status = 'active'`, [userId])).rows[0];
+      if (!b) return;
+      const installed = await db.query('SELECT 1 FROM bot_installs WHERE bot_id = $1 AND user_id = $2 AND group_id IS NULL', [b.id, senderId]);
+      if (!installed.rows[0]) return;
+      deliverToBot(b, { type: 'message', text, from: { id: senderId }, chat: { userId: senderId } });
+      return;
+    }
+    if (groupId == null) return;
+    const { rows } = await db.query(
+      `SELECT b.* FROM bots b JOIN bot_installs i ON i.bot_id = b.id
+        WHERE i.group_id = $1 AND b.status = 'active'`, [groupId]);
+    if (!rows.length) return;
+    const lower = text.toLowerCase();
+    for (const b of rows) {
+      const handle = (await db.query('SELECT username FROM users WHERE id = $1', [b.user_id])).rows[0];
+      const named = handle && handle.username && lower.includes('@' + handle.username.toLowerCase());
+      const commanded = /^\//.test(text.trim());
+      if (!named && !commanded) continue;
+      deliverToBot(b, { type: 'message', text, from: { id: senderId }, chat: { groupId } });
+    }
+  } catch (e) { /* routing is best-effort */ }
+}
+/* A bot pushing a message of its own accord, using its secret. This is how a
+   bot answers later, or tells somebody something without being asked first. */
+app.post('/api/bots/say', rateLimit(120, 60000, 'bot-say'), async (req, res) => {
+  const secret = String(req.headers['x-atwe-bot-secret'] || req.body.secret || '');
+  if (!secret) return res.status(401).json({ error: 'Missing bot secret.' });
+  const text = String(req.body.text || '').trim().slice(0, 2000);
+  if (!text) return res.status(400).json({ error: 'Nothing to say.' });
+  try {
+    const b = (await db.query(`SELECT * FROM bots WHERE secret = $1 AND status = 'active'`, [secret])).rows[0];
+    if (!b) return res.status(401).json({ error: 'That bot secret is not valid.' });
+    const groupId = Number.isInteger(parseInt(req.body.groupId, 10)) ? parseInt(req.body.groupId, 10) : null;
+    const userId = Number.isInteger(parseInt(req.body.userId, 10)) ? parseInt(req.body.userId, 10) : null;
+    if (groupId == null && userId == null) return res.status(400).json({ error: 'Say it to whom?' });
+    // Only where it was actually put. A secret is not a licence to message
+    // anybody on Atwe.
+    const allowed = await db.query(
+      'SELECT 1 FROM bot_installs WHERE bot_id = $1 AND (group_id IS NOT DISTINCT FROM $2) AND ($3::int IS NULL OR user_id = $3)',
+      [b.id, groupId, userId]);
+    if (!allowed.rows[0]) return res.status(403).json({ error: 'This bot has not been added to that chat.' });
+    await botSay(b, { groupId, userId }, text);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send that.' }); }
+});
+
+
+/* ─── A real phone number for a business ───────────────────────────────────
+   Plenty of customers will never install anything. They will look up a shop
+   and ring it. This gives a business a real number on Atwe so it does not need
+   a separate phone line — calls to it ring the owner's actual phone, and texts
+   to it land in Beam like any other message.
+
+   Honest about HOW: this bridges two real telephones through the carrier. It is
+   not a softphone — dialling from inside the browser needs a voice SDK and a
+   media path we deliberately have not taken on. What happens when a business
+   presses "call this customer" is that the carrier rings the BUSINESS first,
+   and when they pick up it rings the customer and joins the two. From the
+   customer's side the call comes from the business number, which is the point.
+
+   Optional like every integration here: with no Twilio credentials this is off
+   and says so, rather than half-working. */
+const TWILIO_SID = process.env.TWILIO_ACCOUNT_SID;
+const TWILIO_TOKEN = process.env.TWILIO_AUTH_TOKEN;
+function phoneConfigured() { return !!(TWILIO_SID && TWILIO_TOKEN); }
+function twilioAuth() { return 'Basic ' + Buffer.from(TWILIO_SID + ':' + TWILIO_TOKEN).toString('base64'); }
+async function twilio(path, form) {
+  const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(TWILIO_SID)}${path}`, {
+    method: form ? 'POST' : 'GET',
+    headers: { Authorization: twilioAuth(), ...(form ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}) },
+    body: form ? new URLSearchParams(form).toString() : undefined,
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.message || ('the phone provider said no (' + r.status + ')'));
+  return j;
+}
+function mapNumber(n) {
+  return { id: n.id, number: n.number, forwardTo: n.forward_to || '', greeting: n.greeting || '',
+    voicemail: n.voicemail, smsToBeam: n.sms_to_beam, active: n.active, createdAt: n.created_at };
+}
+app.get('/api/phone', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT * FROM phone_numbers WHERE owner_id = $1 ORDER BY id', [req.user.id]);
+    const calls = await db.query(
+      'SELECT * FROM phone_calls WHERE owner_id = $1 ORDER BY created_at DESC LIMIT 50', [req.user.id]);
+    res.json({ configured: phoneConfigured(), numbers: rows.map(mapNumber),
+      calls: calls.rows.map((c) => ({ id: c.id, direction: c.direction, from: c.from_number, to: c.to_number,
+        status: c.status, seconds: c.seconds, createdAt: c.created_at,
+        // For a text this IS the text; for a voicemail it is what was said.
+        text: c.direction === 'sms-in' ? (c.transcript || '') : null,
+        transcript: c.direction === 'sms-in' ? null : (c.transcript || null),
+        recording: c.recording || null })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load that.' }); }
+});
+// What numbers are available to take.
+app.get('/api/phone/available', auth.requireAuth, rateLimit(20, 3600000, 'phone-search'), async (req, res) => {
+  if (!phoneConfigured()) return res.status(503).json({ error: 'Phone numbers are not set up on this server yet.' });
+  const country = String(req.query.country || 'US').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2) || 'US';
+  const area = String(req.query.area || '').replace(/[^0-9]/g, '').slice(0, 5);
+  try {
+    const q = new URLSearchParams({ PageSize: '10' });
+    if (area) q.set('AreaCode', area);
+    const j = await twilio(`/AvailablePhoneNumbers/${country}/Local.json?${q.toString()}`);
+    res.json({ numbers: (j.available_phone_numbers || []).map((n) => ({
+      number: n.phone_number, friendly: n.friendly_name, locality: n.locality, region: n.region })) });
+  } catch (err) { res.status(502).json({ error: String(err.message || 'Could not look those up.') }); }
+});
+app.post('/api/phone', auth.requireAuth, rateLimit(5, 3600000, 'phone-buy'), async (req, res) => {
+  if (!phoneConfigured()) return res.status(503).json({ error: 'Phone numbers are not set up on this server yet.' });
+  if (!(await requireHandle(req, res))) return;
+  const number = sms.normalizePhone(req.body.number);
+  if (!number) return res.status(400).json({ error: 'Pick a number from the list.' });
+  try {
+    const held = (await db.query('SELECT COUNT(*)::int AS n FROM phone_numbers WHERE owner_id = $1', [req.user.id])).rows[0].n;
+    if (held >= 3) return res.status(400).json({ error: 'You can hold three numbers.' });
+    const base = (process.env.APP_URL || '').replace(/\/$/, '');
+    const bought = await twilio('/IncomingPhoneNumbers.json', {
+      PhoneNumber: number,
+      // The carrier asks us what to do when somebody rings or texts.
+      VoiceUrl: base + '/api/phone/incoming-call', VoiceMethod: 'POST',
+      SmsUrl: base + '/api/phone/incoming-sms', SmsMethod: 'POST',
+    });
+    const { rows } = await db.query(
+      `INSERT INTO phone_numbers (owner_id, number, provider_sid, forward_to, greeting)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [req.user.id, number, bought.sid || null, sms.normalizePhone(req.body.forwardTo),
+        String(req.body.greeting || '').trim().slice(0, 300) || null]);
+    res.status(201).json({ number: mapNumber(rows[0]) });
+  } catch (err) { console.error(err); res.status(502).json({ error: String(err.message || 'Could not get that number.') }); }
+});
+app.patch('/api/phone/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const sets = [], vals = [];
+  const put = (c, v) => { vals.push(v); sets.push(`${c} = $${vals.length}`); };
+  if (req.body.forwardTo !== undefined) {
+    const f = sms.normalizePhone(req.body.forwardTo);
+    if (req.body.forwardTo && !f) return res.status(400).json({ error: 'Write the number with its country code, like +44…' });
+    put('forward_to', f);
+  }
+  if (typeof req.body.greeting === 'string') put('greeting', req.body.greeting.trim().slice(0, 300) || null);
+  if (typeof req.body.voicemail === 'boolean') put('voicemail', req.body.voicemail);
+  if (typeof req.body.smsToBeam === 'boolean') put('sms_to_beam', req.body.smsToBeam);
+  if (typeof req.body.active === 'boolean') put('active', req.body.active);
+  if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
+  vals.push(id, req.user.id);
+  try {
+    const { rows } = await db.query(
+      `UPDATE phone_numbers SET ${sets.join(', ')} WHERE id = $${vals.length - 1} AND owner_id = $${vals.length} RETURNING *`, vals);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found.' });
+    res.json({ number: mapNumber(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update that.' }); }
+});
+app.delete('/api/phone/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rows } = await db.query('DELETE FROM phone_numbers WHERE id = $1 AND owner_id = $2 RETURNING provider_sid', [id, req.user.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found.' });
+    // Give the number back to the carrier too, or it keeps costing money.
+    if (rows[0].provider_sid && phoneConfigured()) {
+      fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(TWILIO_SID)}/IncomingPhoneNumbers/${rows[0].provider_sid}.json`,
+        { method: 'DELETE', headers: { Authorization: twilioAuth() } }).catch(() => {});
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not give that number up.' }); }
+});
+/* Ring a customer FROM the business number. The carrier rings the business
+   first; when they answer it dials the customer and joins the two. */
+app.post('/api/phone/:id/call', auth.requireAuth, rateLimit(30, 3600000, 'phone-call'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!phoneConfigured()) return res.status(503).json({ error: 'Phone calls are not set up on this server yet.' });
+  const to = sms.normalizePhone(req.body.to);
+  if (!Number.isInteger(id) || !to) return res.status(400).json({ error: 'Write the number with its country code.' });
+  try {
+    const n = (await db.query('SELECT * FROM phone_numbers WHERE id = $1 AND owner_id = $2', [id, req.user.id])).rows[0];
+    if (!n) return res.status(404).json({ error: 'Not found.' });
+    if (!n.forward_to) return res.status(400).json({ error: 'Set the phone this should ring first, under Your phone.' });
+    const base = (process.env.APP_URL || '').replace(/\/$/, '');
+    const j = await twilio('/Calls.json', {
+      To: n.forward_to, From: n.number,
+      Url: base + '/api/phone/bridge?to=' + encodeURIComponent(to),
+      StatusCallback: base + '/api/phone/status', StatusCallbackMethod: 'POST',
+    });
+    await db.query(
+      `INSERT INTO phone_calls (number_id, owner_id, direction, from_number, to_number, status)
+       VALUES ($1,$2,'out',$3,$4,$5)`, [n.id, req.user.id, n.number, to, j.status || 'queued']);
+    res.json({ ok: true, status: j.status });
+  } catch (err) { console.error(err); res.status(502).json({ error: String(err.message || 'Could not place that call.') }); }
+});
+// Answering a text from the business number.
+app.post('/api/phone/:id/sms', auth.requireAuth, rateLimit(60, 3600000, 'phone-sms'), async (req, res) => {
+  const id = routeId(req.params.id);
+  const to = sms.normalizePhone(req.body.to);
+  const body = String(req.body.body || '').trim().slice(0, 480);
+  if (!Number.isInteger(id) || !to || !body) return res.status(400).json({ error: 'Who to, and saying what?' });
+  if (!phoneConfigured()) return res.status(503).json({ error: 'Texts are not set up on this server yet.' });
+  try {
+    const n = (await db.query('SELECT * FROM phone_numbers WHERE id = $1 AND owner_id = $2', [id, req.user.id])).rows[0];
+    if (!n) return res.status(404).json({ error: 'Not found.' });
+    await twilio('/Messages.json', { To: to, From: n.number, Body: body });
+    await db.query(
+      `INSERT INTO phone_calls (number_id, owner_id, direction, from_number, to_number, status, transcript)
+       VALUES ($1,$2,'sms-out',$3,$4,'sent',$5)`, [n.id, req.user.id, n.number, to, body]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(502).json({ error: String(err.message || 'Could not send that.') }); }
+});
+
+/* ── What the carrier asks us, mid-call ──
+   These are called by the phone network, not by a browser, so they answer in
+   TwiML (the carrier's own XML) rather than JSON. They are unauthenticated by
+   necessity — the carrier has no token — so they reveal nothing and act only on
+   a number we actually own. */
+function twiml(res, xml) {
+  res.setHeader('Content-Type', 'text/xml');
+  res.send('<?xml version="1.0" encoding="UTF-8"?><Response>' + xml + '</Response>');
+}
+app.post('/api/phone/bridge', express.urlencoded({ extended: false }), (req, res) => {
+  const to = sms.normalizePhone(req.query.to);
+  if (!to) return twiml(res, '<Say>That number could not be dialled.</Say>');
+  twiml(res, `<Dial>${ogEscape(to)}</Dial>`);
+});
+app.post('/api/phone/incoming-call', express.urlencoded({ extended: false }), async (req, res) => {
+  const called = sms.normalizePhone(req.body.Called || req.body.To);
+  try {
+    const n = called ? (await db.query('SELECT * FROM phone_numbers WHERE number = $1 AND active = true', [called])).rows[0] : null;
+    if (!n) return twiml(res, '<Say>This number is not in service.</Say>');
+    await db.query(
+      `INSERT INTO phone_calls (number_id, owner_id, direction, from_number, to_number, status)
+       VALUES ($1,$2,'in',$3,$4,'ringing')`,
+      [n.id, n.owner_id, sms.normalizePhone(req.body.From) || req.body.From || null, called]).catch(() => {});
+    rtPush(n.owner_id, 'call', { kind: 'pstn', from: req.body.From || null, number: called });
+    const greeting = n.greeting ? `<Say>${ogEscape(n.greeting)}</Say>` : '';
+    if (n.forward_to) {
+      // Ring the real phone; if nobody picks up, take a message.
+      const vm = n.voicemail
+        ? `<Say>Sorry, nobody is available. Please leave a message after the tone.</Say><Record maxLength="120" transcribe="false" action="${(process.env.APP_URL || '').replace(/\/$/, '')}/api/phone/voicemail" />`
+        : '<Say>Sorry, nobody is available. Please try again later.</Say>';
+      return twiml(res, `${greeting}<Dial timeout="20">${ogEscape(n.forward_to)}</Dial>${vm}`);
+    }
+    if (n.voicemail) {
+      return twiml(res, `${greeting}<Say>Please leave a message after the tone.</Say><Record maxLength="120" action="${(process.env.APP_URL || '').replace(/\/$/, '')}/api/phone/voicemail" />`);
+    }
+    twiml(res, `${greeting}<Say>Thank you for calling.</Say>`);
+  } catch (err) { console.error(err); twiml(res, '<Say>Sorry, something went wrong.</Say>'); }
+});
+app.post('/api/phone/voicemail', express.urlencoded({ extended: false }), async (req, res) => {
+  const called = sms.normalizePhone(req.body.Called || req.body.To);
+  try {
+    const n = called ? (await db.query('SELECT * FROM phone_numbers WHERE number = $1', [called])).rows[0] : null;
+    if (n) {
+      await db.query(
+        `UPDATE phone_calls SET status = 'voicemail', recording = $3, seconds = $4
+          WHERE owner_id = $1 AND from_number = $2 AND status IN ('ringing','no-answer')`,
+        [n.owner_id, sms.normalizePhone(req.body.From) || req.body.From || null,
+          req.body.RecordingUrl || null, parseInt(req.body.RecordingDuration, 10) || 0]).catch(() => {});
+      notify(n.owner_id, n.owner_id, 'voicemail');
+    }
+  } catch (e) {}
+  twiml(res, '<Say>Thank you. Goodbye.</Say>');
+});
+app.post('/api/phone/status', express.urlencoded({ extended: false }), async (req, res) => {
+  try {
+    const sid = req.body.CallSid;
+    const status = String(req.body.CallStatus || '').slice(0, 20);
+    const dur = parseInt(req.body.CallDuration, 10) || 0;
+    if (sid && status) {
+      await db.query(
+        `UPDATE phone_calls SET status = $2, seconds = $3
+          WHERE id = (SELECT id FROM phone_calls WHERE status NOT IN ('completed','voicemail') ORDER BY id DESC LIMIT 1)`,
+        [sid, status, dur]).catch(() => {});
+    }
+  } catch (e) {}
+  res.status(204).end();
+});
+/* A text to the business number lands in Beam, so it is answered in the same
+   place as everything else. */
+app.post('/api/phone/incoming-sms', express.urlencoded({ extended: false }), async (req, res) => {
+  const called = sms.normalizePhone(req.body.To);
+  const from = sms.normalizePhone(req.body.From) || req.body.From;
+  const body = String(req.body.Body || '').slice(0, 1000);
+  try {
+    const n = called ? (await db.query('SELECT * FROM phone_numbers WHERE number = $1 AND active = true', [called])).rows[0] : null;
+    if (n && n.sms_to_beam && body) {
+      // A text has no Atwe account behind it, so there is no thread to put it
+      // in. It goes in the phone's own log, beside the calls from that same
+      // number — which is where somebody actually looks for it.
+      await db.query(
+        `INSERT INTO phone_calls (number_id, owner_id, direction, from_number, to_number, status, transcript)
+         VALUES ($1,$2,'sms-in',$3,$4,'received',$5)`,
+        [n.id, n.owner_id, from, called, body]).catch(() => {});
+      notify(n.owner_id, n.owner_id, 'sms_received');
+      rtPush(n.owner_id, 'phone', { kind: 'sms', from, body });
+    }
+  } catch (e) {}
+  twiml(res, '');
+});
+
+
+/* ─── Money advanced against sales already made ────────────────────────────
+   A shop that sold £8,000 last quarter and needs stock now can be advanced
+   against what it has already proved it can sell, and repay out of what it
+   sells next — a fixed share of each sale, so a slow month repays slowly.
+
+   OFF by default and off until an operator deliberately turns it on, because
+   advancing money against future receipts is a REGULATED activity in most
+   places. The machinery is here and it works; whether it may lawfully be
+   switched on is not a question code can answer, and pretending otherwise
+   would be the worst kind of shipping. The admin switch says exactly that. */
+const ADVANCE_KEY = 'advances';
+let _advCfg = { enabled: false, maxCents: 500000, feePct: 8, sharePct: 15, minSalesCents: 100000 };
+function normalizeAdvanceCfg(v) {
+  const s = (v && typeof v === 'object') ? v : {};
+  const num = (x, d, lo, hi) => { const n = Math.round(Number(x)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+  return {
+    enabled: s.enabled === true,
+    maxCents: num(s.maxCents, 500000, 1000, 10000000),
+    feePct: num(s.feePct, 8, 0, 30),
+    sharePct: num(s.sharePct, 15, 5, 50),
+    minSalesCents: num(s.minSalesCents, 100000, 0, 100000000),
+  };
+}
+// What a seller has actually taken, over the last 90 days.
+async function sellerSales90(userId) {
+  const r = await db.query(
+    `SELECT COALESCE(SUM(total_cents),0)::bigint AS cents, COUNT(*)::int AS orders
+       FROM orders WHERE seller_id = $1 AND status IN ('paid','fulfilled','delivered','released')
+        AND created_at > now() - interval '90 days'`, [userId]);
+  return { cents: Number(r.rows[0].cents || 0), orders: r.rows[0].orders };
+}
+function mapAdvance(a) {
+  return { id: a.id, amountCents: a.amount_cents, feeCents: a.fee_cents, repayCents: a.repay_cents,
+    repaidCents: a.repaid_cents, sharePct: a.share_pct, status: a.status,
+    outstandingCents: Math.max(0, a.repay_cents - a.repaid_cents),
+    offeredAt: a.offered_at, acceptedAt: a.accepted_at, repaidAt: a.repaid_at };
+}
+app.get('/api/advances', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT * FROM advances WHERE user_id = $1 ORDER BY id DESC LIMIT 20', [req.user.id]);
+    const active = rows.find((a) => a.status === 'active');
+    const sales = await sellerSales90(req.user.id);
+    // What could be offered: a quarter of the last ninety days' takings, capped.
+    const eligible = _advCfg.enabled && !active && sales.cents >= _advCfg.minSalesCents;
+    const offerCents = eligible ? Math.min(_advCfg.maxCents, Math.round(sales.cents * 0.25 / 1000) * 1000) : 0;
+    res.json({
+      enabled: _advCfg.enabled,
+      sales90Cents: sales.cents, orders90: sales.orders,
+      eligible, offerCents,
+      feePct: _advCfg.feePct, sharePct: _advCfg.sharePct,
+      minSalesCents: _advCfg.minSalesCents,
+      advances: rows.map(mapAdvance),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not work that out.' }); }
+});
+app.post('/api/advances', auth.requireAuth, blockImpersonation, rateLimit(5, 3600000, 'advance'), async (req, res) => {
+  if (!_advCfg.enabled) return res.status(503).json({ error: 'Advances are not available on Atwe yet.' });
+  const want = Math.max(1000, Math.min(_advCfg.maxCents, parseInt(req.body.amountCents, 10) || 0));
+  try {
+    const open = (await db.query(`SELECT 1 FROM advances WHERE user_id = $1 AND status IN ('offered','active')`, [req.user.id])).rows[0];
+    if (open) return res.status(400).json({ error: 'You already have one open. Finish repaying it first.' });
+    const sales = await sellerSales90(req.user.id);
+    if (sales.cents < _advCfg.minSalesCents) return res.status(400).json({ error: 'Not enough sales history yet.' });
+    const max = Math.min(_advCfg.maxCents, Math.round(sales.cents * 0.25 / 1000) * 1000);
+    if (want > max) return res.status(400).json({ error: 'The most we can advance you right now is ' + (max / 100).toFixed(2) + '.' });
+    const fee = Math.round(want * _advCfg.feePct / 100);
+    // ONE transaction: the row and the money move together, or neither does.
+    const client = await db.getPool().connect();
+    let id = null;
+    try {
+      await client.query('BEGIN');
+      const ins = await client.query(
+        `INSERT INTO advances (user_id, amount_cents, fee_cents, repay_cents, share_pct, status, accepted_at)
+         VALUES ($1,$2,$3,$4,$5,'active',now()) RETURNING id`,
+        [req.user.id, want, fee, want + fee, _advCfg.sharePct]);
+      id = ins.rows[0].id;
+      await walletCredit(client, req.user.id, want, 'advance', null, 'Advance against your sales');
+      await client.query('COMMIT');
+    } catch (e) { await client.query('ROLLBACK').catch(() => {}); throw e; }
+    finally { client.release(); }
+    rtPush(req.user.id, 'wallet', { type: 'update' });
+    logEvent('money', 'advance.taken', { actorId: req.user.id, meta: { cents: want } });
+    res.status(201).json({ ok: true, id, amountCents: want, feeCents: fee, repayCents: want + fee });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not do that.' }); }
+});
+/* Repayment: a share of each sale, taken as the sale lands. Never more than is
+   still owed, and never so much that a seller is left with nothing — the share
+   is a slice of the sale, not the whole thing. */
+async function repayAdvanceFromSale(sellerId, saleCents) {
+  if (!db.isConfigured() || !sellerId || !(saleCents > 0)) return;
+  try {
+    const a = (await db.query(`SELECT * FROM advances WHERE user_id = $1 AND status = 'active' LIMIT 1`, [sellerId])).rows[0];
+    if (!a) return;
+    const owed = a.repay_cents - a.repaid_cents;
+    if (owed <= 0) return;
+    const take = Math.min(owed, Math.floor(saleCents * a.share_pct / 100));
+    if (take <= 0) return;
+    const client = await db.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      // Lock the seller so the debit cannot race another payment.
+      const bal = (await client.query('SELECT balance_cents FROM users WHERE id = $1 FOR UPDATE', [sellerId])).rows[0];
+      const actual = Math.min(take, Number(bal.balance_cents) || 0);
+      if (actual > 0) {
+        await walletCredit(client, sellerId, -actual, 'advance_repay', null, 'Advance repayment');
+        await client.query('UPDATE advances SET repaid_cents = repaid_cents + $2 WHERE id = $1', [a.id, actual]);
+        await client.query('INSERT INTO advance_repayments (advance_id, cents) VALUES ($1,$2)', [a.id, actual]);
+      }
+      await client.query('COMMIT');
+      if (actual > 0 && a.repaid_cents + actual >= a.repay_cents) {
+        await db.query(`UPDATE advances SET status='repaid', repaid_at=now() WHERE id=$1`, [a.id]);
+        notify(sellerId, sellerId, 'advance_repaid');
+      }
+    } catch (e) { await client.query('ROLLBACK').catch(() => {}); }
+    finally { client.release(); }
+  } catch (e) { /* repayment is best-effort per sale; the balance owed does not change */ }
+}
+app.get('/api/admin/advances', auth.requirePerm('revenue'), async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT a.*, u.username, u.name FROM advances a JOIN users u ON u.id = a.user_id ORDER BY a.id DESC LIMIT 100`);
+    const t = (await db.query(
+      `SELECT COALESCE(SUM(amount_cents),0)::bigint AS out_cents,
+              COALESCE(SUM(repaid_cents),0)::bigint AS back_cents,
+              COUNT(*) FILTER (WHERE status='active')::int AS active
+         FROM advances`)).rows[0];
+    res.json({ config: _advCfg, advancedCents: Number(t.out_cents), repaidCents: Number(t.back_cents), active: t.active,
+      advances: rows.map((a) => ({ ...mapAdvance(a), username: a.username, name: a.name })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load those.' }); }
+});
+app.put('/api/admin/advances/config', auth.requireAdmin, async (req, res) => {
+  try {
+    const cfg = normalizeAdvanceCfg(req.body);
+    await db.setSetting(ADVANCE_KEY, cfg);
+    _advCfg = cfg;
+    adminAudit(req, 'advances.config', 'settings', null, cfg);
+    res.json({ ok: true, config: cfg });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+
+/* ─── Sounds for a reel ────────────────────────────────────────────────────
+   Two honest sources, and no third:
+     · YOUR OWN audio, which you uploaded and have the right to use;
+     · a catalogue an operator has added and confirmed the rights to.
+   There is deliberately no chart music. Putting a commercial track behind
+   somebody's video without a licence is not a feature, it is a lawsuit, and no
+   amount of code makes that untrue. When Atwe has label agreements, the same
+   catalogue is where they go — marked `licensed` rather than `cc0`. */
+const SOUND_LICENCES = ['own', 'cc0', 'licensed'];
+const SOUND_MAX_CHARS = 8_000_000;   // ~6MB of audio; a clip, not an album
+function mapSound(s, me) {
+  return { id: s.id, title: s.title, artist: s.artist || null, licence: s.licence,
+    official: !!s.official, uses: s.uses, seconds: s.seconds,
+    media: mediaRef(s.media, 'sound', s.id),
+    mine: me != null && s.owner_id === me };
+}
+app.get('/api/sounds', auth.requireAuth, async (req, res) => {
+  const scope = ['library', 'mine'].includes(req.query.scope) ? req.query.scope : 'library';
+  const q = String(req.query.q || '').trim().slice(0, 60);
+  try {
+    // Only pass a parameter the query actually uses — Postgres rejects a bind
+    // with more parameters than the statement references, which made the whole
+    // cleared library fail to load.
+    const args = [];
+    let where;
+    if (scope === 'mine') { args.push(req.user.id); where = 'owner_id = $1'; }
+    else where = 'official = true';
+    if (q) { args.push('%' + q.replace(/[%_\\]/g, '\\$&') + '%'); where += ` AND (title ILIKE $${args.length} OR artist ILIKE $${args.length})`; }
+    const { rows } = await db.query(
+      `SELECT * FROM sounds WHERE ${where} ORDER BY uses DESC, id DESC LIMIT 60`, args);
+    res.json({ sounds: rows.map((s) => mapSound(s, req.user.id)),
+      note: 'Only your own audio and sounds Atwe has cleared. Chart music needs a licence we do not have.' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load those.' }); }
+});
+app.post('/api/sounds', auth.requireAuth, rateLimit(20, 3600000, 'sound-add'), async (req, res) => {
+  const title = String(req.body.title || '').trim().slice(0, 80);
+  const media = typeof req.body.media === 'string' ? req.body.media : '';
+  if (!title) return res.status(400).json({ error: 'Give it a name.' });
+  const uploaded = cleanMediaUrl(media) !== undefined;
+  if (!uploaded) {
+    const m = cleanMedia(media);
+    if (m === undefined || !m || m.kind !== 'audio') return res.status(400).json({ error: 'Pick an audio file.' });
+    if (media.length > SOUND_MAX_CHARS) return res.status(413).json({ error: 'That is too long — use a clip.' });
+  }
+  // You are saying this is yours to use. Recorded as such, so if it turns out
+  // not to be, whose claim it was is on the record.
+  if (req.body.iOwnThis !== true) return res.status(400).json({ error: 'Confirm this is your own audio, or something you have the right to use.' });
+  try {
+    const stored = uploaded ? media : await offloadMedia(media, 'sound');
+    const { rows } = await db.query(
+      `INSERT INTO sounds (owner_id, title, artist, media, seconds, licence) VALUES ($1,$2,$3,$4,$5,'own') RETURNING *`,
+      [req.user.id, title, String(req.body.artist || '').trim().slice(0, 80) || null, stored,
+        Math.max(0, Math.min(600, parseInt(req.body.seconds, 10) || 0)) || null]);
+    res.status(201).json({ sound: mapSound(rows[0], req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add that.' }); }
+});
+app.delete('/api/sounds/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rows } = await db.query('DELETE FROM sounds WHERE id = $1 AND owner_id = $2 RETURNING media', [id, req.user.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found.' });
+    if (rows[0].media && storage.isStoredUrl(rows[0].media)) storage.remove(rows[0].media).catch(() => {});
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Could not remove it.' }); }
+});
+// An operator adding something to the cleared catalogue.
+app.post('/api/admin/sounds', auth.requirePerm('moderation'), async (req, res) => {
+  const title = String(req.body.title || '').trim().slice(0, 80);
+  const licence = SOUND_LICENCES.includes(req.body.licence) ? req.body.licence : 'cc0';
+  const media = typeof req.body.media === 'string' ? req.body.media : '';
+  if (!title || !media) return res.status(400).json({ error: 'A name and an audio file are needed.' });
+  try {
+    const stored = cleanMediaUrl(media) !== undefined ? media : await offloadMedia(media, 'sound');
+    const { rows } = await db.query(
+      `INSERT INTO sounds (title, artist, media, licence, official) VALUES ($1,$2,$3,$4,true) RETURNING *`,
+      [title, String(req.body.artist || '').trim().slice(0, 80) || null, stored, licence]);
+    adminAudit(req, 'sound.add', 'sound', rows[0].id, { title, licence });
+    res.status(201).json({ sound: mapSound(rows[0], null) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add that.' }); }
+});
+app.delete('/api/admin/sounds/:id', auth.requirePerm('moderation'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    await db.query('DELETE FROM sounds WHERE id = $1 AND official = true', [id]);
+    adminAudit(req, 'sound.remove', 'sound', id, {});
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Could not remove it.' }); }
+});
+
+/* ─── What people are saying on the app stores ─────────────────────────────
+   Once the iPhone app is out, its reviews are the loudest feedback there is,
+   and they are somewhere nobody on the team is looking. This pulls them in.
+
+   Apple's public RSS feed needs no key and no approval, so this works the day
+   the app ships. Replying still has to be done in App Store Connect (that needs
+   a signed API key and their review-response permission), so the reply box says
+   so and links there rather than pretending. */
+const APPLE_APP_ID = process.env.APPLE_APP_ID || '';
+async function fetchAppleReviews(territory) {
+  if (!APPLE_APP_ID) return { ok: false, reason: 'no app id' };
+  const t = String(territory || 'gb').toLowerCase().replace(/[^a-z]/g, '').slice(0, 2) || 'gb';
+  const url = `https://itunes.apple.com/${t}/rss/customerreviews/id=${encodeURIComponent(APPLE_APP_ID)}/sortBy=mostRecent/json`;
+  try {
+    const r = await fetch(url, { headers: { 'User-Agent': 'Atwe/1' } });
+    if (!r.ok) return { ok: false, reason: 'store returned ' + r.status };
+    const j = await r.json().catch(() => null);
+    const entries = (j && j.feed && j.feed.entry) || [];
+    let n = 0;
+    // The first entry is the app itself, not a review.
+    for (const e of entries.slice(1)) {
+      const id = (e.id && e.id.label) || null;
+      if (!id) continue;
+      await db.query(
+        `INSERT INTO app_reviews (id, store, rating, title, body, author, version, territory, created_at)
+         VALUES ($1,'apple',$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (id) DO NOTHING`,
+        [id, parseInt((e['im:rating'] || {}).label, 10) || null, (e.title || {}).label || null,
+          (e.content || {}).label || null, (e.author && e.author.name && e.author.name.label) || null,
+          (e['im:version'] || {}).label || null, t, e.updated ? new Date(e.updated.label) : null]).catch(() => {});
+      n++;
+    }
+    return { ok: true, seen: n };
+  } catch (e) { return { ok: false, reason: String((e && e.message) || e).slice(0, 120) }; }
+}
+app.get('/api/admin/app-reviews', auth.requirePerm('support'), async (req, res) => {
+  try {
+    if (req.query.refresh === '1' && APPLE_APP_ID) await fetchAppleReviews(req.query.territory);
+    const { rows } = await db.query(
+      `SELECT * FROM app_reviews ORDER BY created_at DESC NULLS LAST LIMIT 100`);
+    const t = (await db.query(
+      `SELECT COUNT(*)::int AS n, COALESCE(AVG(rating),0)::numeric(3,2) AS avg,
+              COUNT(*) FILTER (WHERE rating <= 2)::int AS bad,
+              COUNT(*) FILTER (WHERE NOT responded AND rating <= 3)::int AS need_reply
+         FROM app_reviews`)).rows[0];
+    res.json({
+      configured: !!APPLE_APP_ID,
+      total: t.n, average: Number(t.avg), bad: t.bad, needReply: t.need_reply,
+      reviews: rows.map((r) => ({ id: r.id, store: r.store, rating: r.rating, title: r.title, body: r.body,
+        author: r.author, version: r.version, territory: r.territory, responded: r.responded,
+        response: r.response, createdAt: r.created_at })),
+      note: APPLE_APP_ID ? null : 'Set APPLE_APP_ID once the app is on the store, and reviews will appear here.',
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load those.' }); }
+});
+// Record the reply that was posted in App Store Connect, so the queue clears
+// and nobody answers the same person twice.
+app.post('/api/admin/app-reviews/:id/responded', auth.requirePerm('support'), async (req, res) => {
+  try {
+    const { rowCount } = await db.query(
+      'UPDATE app_reviews SET responded = true, response = $2, responded_by = $3 WHERE id = $1',
+      [String(req.params.id), String(req.body.response || '').slice(0, 2000) || null, req.user.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Not found.' });
+    adminAudit(req, 'appreview.responded', 'app_review', null, { id: String(req.params.id) });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Could not save that.' }); }
+});
 
 /* ═══════════════════════════════════════════════
    BATCH 40 — bigger media, better calls, marketing your own shop
@@ -20962,6 +21943,11 @@ app.post('/api/admin/moderator-qa/:auditId', auth.requirePerm('moderation'), asy
    if the platform is having a bad day, the status page must still answer. */
 const INCIDENT_IMPACTS = ['minor', 'major', 'critical', 'maintenance'];
 const INCIDENT_STATES = ['investigating', 'identified', 'monitoring', 'resolved'];
+// What Atwe encrypts, what it does not, and what that costs you. Served like
+// the status page: its own document, readable without an account.
+app.get(['/security', '/security.html'], (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'security.html'));
+});
 app.get(['/status', '/status.html'], (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'status.html'));
 });
@@ -28728,6 +29714,7 @@ async function recordOrderPaid(orderId, sellerCredited) {
   await db.query('DELETE FROM cart_items WHERE user_id = $1 AND product_id IN (SELECT id FROM products WHERE business_id = $2)', [o.buyer_id, o.seller_id]).catch(() => {});
   markCartRecovered(o.seller_id, o.buyer_id);
   creditShopCampaign(o.seller_id, o.buyer_id, o.total_cents);
+  repayAdvanceFromSale(o.seller_id, o.total_cents);
   // Tell the seller's own systems. Queued, never awaited — their server being
   // slow (or down) must not hold up an order that has already been paid for.
   emitWebhook(o.seller_id, 'order.created', { orderId, totalCents: o.total_cents, buyerId: o.buyer_id });
@@ -28938,6 +29925,7 @@ async function fundEscrowOrder(buyerId, sellerId, orderId, totalCents) {
   await db.query('DELETE FROM cart_items WHERE user_id = $1 AND product_id IN (SELECT id FROM products WHERE business_id = $2)', [buyerId, sellerId]).catch(() => {});
   markCartRecovered(sellerId, buyerId);
   creditShopCampaign(sellerId, buyerId, totalCents);
+  repayAdvanceFromSale(sellerId, totalCents);
   try {
     if (await dmAllowed(buyerId, sellerId)) {
       const meta = { t: 'order', id: orderId, totalCents, escrow: true };
@@ -37432,7 +38420,7 @@ async function ogForPath(req) {
   const httpImg = (v) => (typeof v === 'string' && /^https?:\/\//i.test(v)) ? v : null;
   let segs;
   try { segs = decodeURIComponent(req.path).split('/').filter(Boolean); } catch { return null; }
-  const RESERVED = ['index.html', 'admin.html', 'locked.html', 'status.html', 'status', 'api', 'sw.js', 'manifest.json', 'manifest.webmanifest', 'favicon.png', 'robots.txt', 'ai', 'og'];
+  const RESERVED = ['index.html', 'admin.html', 'locked.html', 'status.html', 'status', 'security.html', 'security', 'api', 'sw.js', 'manifest.json', 'manifest.webmanifest', 'favicon.png', 'robots.txt', 'ai', 'og'];
   try {
     if ((segs[0] === 'group' || segs[0] === 'circle') && segs[1] && /^@?[a-z0-9._-]{1,40}$/i.test(segs[1])) {
       const uname = segs[1].replace(/^@/, '');
@@ -37545,6 +38533,7 @@ db.init()
   .then(() => { if (db.isConfigured()) return db.getSetting(MAILBRAND_KEY).then((v) => { _mailBrand = normalizeMailBrand(v); mailer.setBranding(_mailBrand); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(REVSHARE_KEY).then((v) => { _revShare = normalizeRevShare(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(AUTH_FEE_KEY).then((v) => { _authCfg = normalizeAuthCfg(v); }).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return db.getSetting(ADVANCE_KEY).then((v) => { _advCfg = normalizeAdvanceCfg(v); }).catch(() => {}); })
   .then(() => clusterListen().catch(() => {}))
   .then(() => { if (db.isConfigured()) console.log('🗄️   Schema + settings ready.'); })
   .catch((err) => console.error('Post-init setup failed:', err.message));

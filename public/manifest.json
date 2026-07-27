@@ -9,21 +9,133 @@
   "orientation": "any",
   "background_color": "#000000",
   "theme_color": "#000000",
-  "categories": ["social", "communication", "productivity"],
+  "categories": [
+    "social",
+    "communication",
+    "productivity"
+  ],
   "lang": "en",
   "dir": "ltr",
   "icons": [
-    { "src": "/icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
-    { "src": "/icon-384.png", "type": "image/png", "sizes": "384x384", "purpose": "any" },
-    { "src": "/icon.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
-    { "src": "/icon-maskable-192.png", "type": "image/png", "sizes": "192x192", "purpose": "maskable" },
-    { "src": "/icon-maskable-384.png", "type": "image/png", "sizes": "384x384", "purpose": "maskable" },
-    { "src": "/icon-maskable.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-384.png",
+      "type": "image/png",
+      "sizes": "384x384",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-maskable-384.png",
+      "type": "image/png",
+      "sizes": "384x384",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-maskable.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
   ],
   "shortcuts": [
-    { "name": "Home", "short_name": "Home", "url": "/?go=home", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Search", "short_name": "Search", "url": "/?go=search", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Messages", "short_name": "Messages", "url": "/?go=chat", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Atwe AI", "short_name": "AI", "url": "/?go=ai", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
-  ]
+    {
+      "name": "Home",
+      "short_name": "Home",
+      "url": "/?go=home",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Search",
+      "short_name": "Search",
+      "url": "/?go=search",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Messages",
+      "short_name": "Messages",
+      "url": "/?go=chat",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Atwe AI",
+      "short_name": "AI",
+      "url": "/?go=ai",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Wallet",
+      "short_name": "Wallet",
+      "url": "/?go=wallet",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui"
+  ],
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "protocol_handlers": [
+    {
+      "protocol": "web+atwe",
+      "url": "/?p=%s"
+    }
+  ],
+  "edge_side_panel": {
+    "preferred_width": 420
+  },
+  "handle_links": "preferred",
+  "share_target": {
+    "action": "/?share=1",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
 }
