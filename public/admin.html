@@ -1099,6 +1099,8 @@
       <button class="tab" data-v="site" onclick="switchTab('site')">Site</button>
       <button class="tab" data-v="storage" onclick="switchTab('storage')">Storage</button>
       <button class="tab" data-v="webinars" onclick="switchTab('webinars')">Webinars</button>
+      <button class="tab" data-v="appreviews" onclick="switchTab('appreviews')">App reviews</button>
+      <button class="tab" data-v="advances" onclick="switchTab('advances')">Advances</button>
       <button class="tab" data-v="cluster" onclick="switchTab('cluster')">Servers</button>
     </nav>
     <div class="side-foot">
@@ -1554,6 +1556,7 @@ const TAB_PERM = {
   alerts: 'super', aistudio: 'super',
   fraud: 'revenue', modqa: 'moderation', broadcasts: 'super',
   storage: 'super', cluster: 'super', webinars: 'moderation',
+  appreviews: 'support', advances: 'revenue',
   developers: 'super', apilog: 'super', incidents: 'super',
   chargebacks: 'refunds', reports2: 'growth', churn: 'growth',
   campaigns: 'super', experiments: 'super', wording: 'super',
@@ -1645,6 +1648,7 @@ const NAV_TITLES = {
   places:'Countries', emailbrand:'Email design',
   revshare:'Creator share', authenticate:'Item authentication',
   storage:'Media storage', cluster:'Servers', webinars:'Webinars',
+  appreviews:'App store reviews', advances:'Advances',
 };
 // Mobile: slide the sidebar in/out.
 function toggleNav(open){
@@ -1662,6 +1666,8 @@ function renderView(){
   const statRow = document.getElementById('stats'); if (statRow) statRow.style.display = (VIEW === 'features') ? 'none' : '';
   const inner = document.querySelector('.main-inner'); if (inner) inner.scrollTop = 0;
   window.scrollTo(0, 0);
+  if (VIEW === 'appreviews') return renderAppReviews();
+  if (VIEW === 'advances') return renderAdvancesAdmin();
   if (VIEW === 'webinars') return renderWebinarsAdmin();
   if (VIEW === 'storage') return renderStorageView();
   if (VIEW === 'cluster') return renderClusterView();
@@ -7762,6 +7768,112 @@ async function cancelWebinar(id){
   if (!confirm('Cancel this webinar? Everyone who signed up will be told.')) return;
   try { await api('/api/admin/webinars/'+id+'/cancel', 'POST', {}); renderWebinarsAdmin(); }
   catch(e){ alert('Could not cancel it.'); }
+}
+
+
+/* ─── What people are saying on the app stores ─────────────────────────────
+   The loudest feedback there is, and somewhere nobody on the team is looking
+   unless it is put in front of them. */
+async function renderAppReviews(){
+  const c = document.getElementById('content');
+  document.getElementById('stats').innerHTML = '';
+  c.innerHTML = '<div class="muted">Loading…</div>';
+  let d = null;
+  try { d = await api('/api/admin/app-reviews'); } catch(e){ c.innerHTML = '<div class="muted">Could not load.</div>'; return; }
+  if (!d.configured) {
+    c.innerHTML = `<div class="card"><div class="card-h">Not connected yet</div>
+      <div class="muted">${jstr(d.note || '')} Apple's public feed needs no key and no approval, so this starts working the day the app is live.</div></div>`;
+    return;
+  }
+  const rows = d.reviews || [];
+  c.innerHTML = `
+    <div class="stat-grid">
+      <div class="stat"><b>${d.average ? d.average.toFixed(2) : '—'}</b><span>average</span></div>
+      <div class="stat"><b>${d.total||0}</b><span>reviews</span></div>
+      <div class="stat"><b>${d.bad||0}</b><span>one or two stars</span></div>
+      <div class="stat"><b>${d.needReply||0}</b><span>worth a reply</span></div>
+    </div>
+    <div class="card"><div class="card-h">Recent <button class="btn" onclick="refreshAppReviews()">Fetch new ones</button></div>
+    ${rows.length ? rows.map(r => `<div class="ad-row">
+      <div><b>${'★'.repeat(r.rating||0)}${'☆'.repeat(Math.max(0,5-(r.rating||0)))} ${jstr(r.title||'')}</b>
+        <div class="muted">${jstr((r.body||'').slice(0,240))}</div>
+        <div class="muted" style="margin-top:4px;">${jstr(r.author||'')} · ${jstr(r.version||'')} · ${jstr(r.territory||'')} · ${r.createdAt?jstr(new Date(r.createdAt).toLocaleDateString()):''}</div>
+        ${r.responded ? `<div class="muted" style="margin-top:6px;">Replied: ${jstr((r.response||'').slice(0,200))}</div>` : ''}</div>
+      ${r.responded ? '<span class="ad-badge ok">replied</span>'
+        : `<button class="btn" onclick="markAppReviewReplied(${jstr(JSON.stringify(r.id))})">Mark replied</button>`}
+    </div>`).join('') : '<div class="muted">Nothing yet.</div>'}</div>
+    <div class="card"><div class="card-h">Replying</div>
+      <div class="muted">Replies have to be posted in App Store Connect — Apple requires a signed key and the
+      review-response permission, which is deliberately not something a web dashboard should hold. Reply there,
+      then mark it here so nobody answers the same person twice.</div></div>`;
+}
+async function refreshAppReviews(){
+  try { await api('/api/admin/app-reviews?refresh=1'); renderAppReviews(); } catch(e){ alert('Could not fetch.'); }
+}
+async function markAppReviewReplied(id){
+  const txt = prompt('What did you reply? (kept here as a record)');
+  if (txt === null) return;
+  try { await api('/api/admin/app-reviews/'+encodeURIComponent(id)+'/responded','POST',{response:txt}); renderAppReviews(); }
+  catch(e){ alert('Could not save that.'); }
+}
+
+/* ─── Advances ─────────────────────────────────────────────────────────────
+   Money advanced against sales already made. Off unless deliberately switched
+   on, because lending is regulated and a checkbox does not change that. */
+async function renderAdvancesAdmin(){
+  const c = document.getElementById('content');
+  document.getElementById('stats').innerHTML = '';
+  c.innerHTML = '<div class="muted">Loading…</div>';
+  let d = null;
+  try { d = await api('/api/admin/advances'); } catch(e){ c.innerHTML = '<div class="muted">Could not load.</div>'; return; }
+  const cfg = d.config || {};
+  const rows = d.advances || [];
+  c.innerHTML = `
+    <div class="card">
+      <div class="card-h">Before you switch this on</div>
+      <div class="muted">Advancing money against future receipts is a <b>regulated activity</b> in most places.
+      The machinery below is built and works. Whether Atwe may lawfully run it where your sellers are is a question
+      for a lawyer, not for this page. It stays off until somebody deliberately turns it on.</div>
+      <div class="ad-row" style="margin-top:10px;">
+        <div><b>Advances are ${cfg.enabled ? 'ON' : 'off'}</b>
+          <div class="muted">${cfg.enabled ? 'Sellers with enough history are being offered money.' : 'Nobody is offered anything and the member screen says so.'}</div></div>
+        <span class="ad-badge ${cfg.enabled ? 'ok' : ''}">${cfg.enabled ? 'live' : 'off'}</span>
+      </div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat"><b>$${((d.advancedCents||0)/100).toFixed(2)}</b><span>advanced</span></div>
+      <div class="stat"><b>$${((d.repaidCents||0)/100).toFixed(2)}</b><span>repaid</span></div>
+      <div class="stat"><b>${d.active||0}</b><span>outstanding</span></div>
+      <div class="stat"><b>$${(((d.advancedCents||0)-(d.repaidCents||0))/100).toFixed(2)}</b><span>still out</span></div>
+    </div>
+    <div class="card"><div class="card-h">Terms</div>
+      <label class="muted">Turn advances on
+        <input type="checkbox" id="advOn" ${cfg.enabled?'checked':''}/></label>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+        <label class="muted">Most we advance ($)<input class="in" id="advMax" type="number" value="${(cfg.maxCents||0)/100}"/></label>
+        <label class="muted">Fee (%)<input class="in" id="advFee" type="number" value="${cfg.feePct||0}"/></label>
+        <label class="muted">Share of each sale (%)<input class="in" id="advShare" type="number" value="${cfg.sharePct||0}"/></label>
+        <label class="muted">Sales needed first ($)<input class="in" id="advMin" type="number" value="${(cfg.minSalesCents||0)/100}"/></label>
+      </div>
+      <button class="btn" style="margin-top:10px;" onclick="saveAdvanceCfg()">Save</button>
+    </div>
+    <div class="card"><div class="card-h">Who has one</div>
+    ${rows.length ? rows.map(a => `<div class="ad-row">
+      <div><b>@${jstr(a.username||'')}</b>
+        <div class="muted">$${(a.amountCents/100).toFixed(2)} advanced · $${(a.repaidCents/100).toFixed(2)} of $${(a.repayCents/100).toFixed(2)} repaid · ${a.sharePct}% of each sale</div></div>
+      <span class="ad-badge ${a.status==='repaid'?'ok':a.status==='active'?'':'bad'}">${jstr(a.status)}</span>
+    </div>`).join('') : '<div class="muted">Nobody yet.</div>'}</div>`;
+}
+async function saveAdvanceCfg(){
+  const num = (id) => Number((document.getElementById(id)||{}).value) || 0;
+  try {
+    await api('/api/admin/advances/config','PUT',{
+      enabled: !!(document.getElementById('advOn')||{}).checked,
+      maxCents: Math.round(num('advMax')*100), feePct: num('advFee'),
+      sharePct: num('advShare'), minSalesCents: Math.round(num('advMin')*100),
+    });
+    renderAdvancesAdmin();
+  } catch(e){ alert('Could not save that.'); }
 }
 
 </script>
