@@ -5661,7 +5661,11 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
        LEFT JOIN contacts nk ON nk.owner_id = $1 AND nk.contact_id = t.peer_id
        LEFT JOIN at_cleared cl ON cl.user_id = $1 AND cl.other_id = t.peer_id
        LEFT JOIN LATERAL (
-         SELECT body, image, media_kind, meta, deleted_all, ($1 = ANY(hidden_for)) AS hidden, created_at, sender_id, read_at FROM at_messages m
+         -- cipher MUST be selected here: the outer query asks for lm.cipher to
+         -- tell a secret message apart, and a column left out of this list simply
+         -- does not exist out there — which fails the WHOLE query, so the chat
+         -- list returns nothing at all rather than one row looking odd.
+         SELECT body, image, media_kind, meta, deleted_all, ($1 = ANY(hidden_for)) AS hidden, created_at, sender_id, read_at, cipher FROM at_messages m
          WHERE ((m.sender_id = $1 AND m.recipient_id = t.peer_id)
             OR (m.sender_id = t.peer_id AND m.recipient_id = $1))
            AND m.thread_id IS NOT DISTINCT FROM t.thread_id
