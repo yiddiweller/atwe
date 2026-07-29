@@ -215,6 +215,30 @@
   .tf-ranges{display:inline-flex;background:var(--s1);border:none;border-radius:var(--r-pill);padding:3px;}
   .tf-r{background:transparent;border:none;color:var(--t2);padding:8px 16px;font-size:13.5px;font-weight:600;border-radius:var(--r-pill);cursor:pointer;transition:.15s var(--ease);}
   .tf-r.on{background:var(--accent, var(--accent));color:#fff;}
+  /* Who is online — a member shown as themselves, a visitor shown as a Guest. */
+  .on-row{display:flex;align-items:center;gap:12px;width:100%;text-align:start;background:none;border:none;
+    padding:11px 4px;border-bottom:1px solid var(--b1);color:inherit;font-family:inherit;cursor:pointer;}
+  .on-row:last-of-type{border-bottom:none;}
+  .on-row.guest{cursor:default;}
+  @media(hover:hover){.on-row:not(.guest):hover{background:var(--s1);}}
+  .on-ava{width:42px;height:42px;border-radius:50%;flex:0 0 auto;background:#48484A center/cover no-repeat;
+    display:grid;place-items:center;overflow:hidden;}
+  .on-ava.biz{border-radius:13px;}
+  .on-guest-ic{width:100%;height:100%;fill:rgba(255,255,255,.55);stroke:none;display:block;}
+  .on-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+  .on-name{display:flex;align-items:center;gap:6px;font-size:14.5px;font-weight:700;color:var(--t1);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .on-check{color:var(--t2);font-size:12px;}
+  .on-sub,.on-meta{font-size:12.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .on-meta{font-size:12px;}
+  .on-tag{font-size:10.5px;font-weight:700;letter-spacing:.02em;padding:2px 7px;border-radius:999px;
+    background:var(--s2);color:var(--t2);text-transform:none;flex:0 0 auto;}
+  .on-tag.biz{background:var(--accent-dim,rgba(0,136,255,.16));color:var(--accent);}
+  .on-tag.pro{background:rgba(136,255,0,.16);color:var(--green);}
+  .on-tag.staff{background:rgba(170,0,255,.18);color:#c98bff;}
+  .on-tag.bad{background:rgba(255,0,51,.16);color:var(--red);}
+  .on-when{flex:0 0 auto;font-size:12px;color:var(--t3);}
+  .on-live{display:inline-flex;align-items:center;gap:5px;color:var(--green);font-weight:700;}
   .tf-live{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--t2);font-weight:600;}
   .tf-dot{width:8px;height:8px;border-radius:50%;background:var(--green,var(--green));box-shadow:0 0 0 4px rgba(136,255,0,.16);animation:tfpulse 2s ease-in-out infinite;}
   @keyframes tfpulse{0%,100%{opacity:1;}50%{opacity:.4;}}
@@ -2786,8 +2810,71 @@ function renderTrafficView(){
 }
 function setTrafficRange(r){ TRAFFIC_RANGE = r; renderTrafficView(); }
 async function loadTraffic(){
-  try { TRAFFIC = await api('GET', '/api/admin/analytics?range=' + TRAFFIC_RANGE); renderTraffic(); }
+  try {
+    // The numbers and the names, together — one refresh, one repaint.
+    const [t, o] = await Promise.all([
+      api('GET', '/api/admin/analytics?range=' + TRAFFIC_RANGE),
+      api('GET', '/api/admin/online').catch(() => null),   // never let this hide the traffic figures
+    ]);
+    TRAFFIC = t; ONLINE = o; renderTraffic();
+  }
   catch (e){ const el = document.getElementById('tfBody'); if (el) el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+/* ── Who is on the site right now ──────────────────────────────────────────
+   A member is shown as themselves: their photo, their name, whether they are
+   verified, personal or business, on Pro, in good standing — and tapping the
+   row opens the same detail as the Users tab. Someone who is not signed in is
+   shown as a Guest with wherever they are, because a page view records nothing
+   else about them and pretending otherwise would be a privacy problem. */
+let ONLINE = null;
+function onAgo(iso){
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso)) / 1000));
+  if (s < 45) return 'just now';
+  if (s < 3600) return Math.round(s / 60) + 'm ago';
+  return Math.round(s / 3600) + 'h ago';
+}
+const ON_PERSON = '<svg viewBox="0 0 24 24" class="on-guest-ic"><circle cx="12" cy="8.6" r="4.15"/><path d="M12 14.1c-5.6 0-10.2 4.4-10.2 9.9V24h20.4v-.1c0-5.5-4.6-9.9-10.2-9.9z"/></svg>';
+function onAva(m){
+  if (m.avatar) return `<span class="on-ava${m.accountType === 'business' ? ' biz' : ''}" style="background-image:url('${esc(m.avatar)}')"></span>`;
+  return `<span class="on-ava${m.accountType === 'business' ? ' biz' : ''} noimg">${ON_PERSON}</span>`;
+}
+function onMemberRow(m){
+  const tags = [];
+  if (m.staff) tags.push(`<span class="on-tag staff">${esc(m.role || 'staff')}</span>`);
+  if (m.accountType === 'business') tags.push('<span class="on-tag biz">Business</span>');
+  if (m.plan === 'pro') tags.push('<span class="on-tag pro">Pro</span>');
+  if (m.status && m.status !== 'active') tags.push(`<span class="on-tag bad">${esc(m.status)}</span>`);
+  const meta = [m.location, m.device].filter(Boolean).join(' · ');
+  return `<button class="on-row" onclick="openUser(${m.id})">
+    ${onAva(m)}
+    <span class="on-main">
+      <span class="on-name">${esc(m.name || '—')}${m.verified ? '<span class="on-check">✓</span>' : ''}${tags.join('')}</span>
+      <span class="on-sub">@${esc(m.username || '')}${m.headline ? ' · ' + esc(m.headline) : ''}</span>
+      <span class="on-meta">${esc(meta || 'Location unknown')}</span>
+    </span>
+    <span class="on-when">${m.live ? '<span class="on-live"><span class="tf-dot"></span>live</span>' : esc(onAgo(m.lastSeen))}</span>
+  </button>`;
+}
+function onGuestRow(g){
+  return `<div class="on-row guest">
+    <span class="on-ava noimg">${ON_PERSON}</span>
+    <span class="on-main">
+      <span class="on-name">Guest<span class="on-tag">not signed in</span></span>
+      <span class="on-sub">${esc(g.location || 'Location unknown')}</span>
+      <span class="on-meta">${g.views} page${g.views === 1 ? '' : 's'}${g.path ? ' · ' + esc(g.path) : ''}</span>
+    </span>
+    <span class="on-when">${esc(onAgo(g.lastSeen))}</span>
+  </div>`;
+}
+function onlinePanel(){
+  const o = ONLINE;
+  if (!o) return '<div class="panel"><h3>Who is online</h3><div class="empty">Could not load who is online.</div></div>';
+  const rows = o.members.map(onMemberRow).join('') + o.guests.map(onGuestRow).join('');
+  const head = `${o.counts.members} member${o.counts.members === 1 ? '' : 's'} · ${o.counts.guests} guest${o.counts.guests === 1 ? '' : 's'}`;
+  return `<div class="panel"><h3>Who is online <span class="muted" style="font-weight:500;">${head}</span></h3>
+    ${rows || '<div class="empty">Nobody is on the site right now.</div>'}
+    <div class="muted" style="margin-top:10px;">Anyone active in the last five minutes. A guest is a visitor who is not signed in — a page view records only where they are, nothing that identifies them.</div>
+  </div>`;
 }
 function tfNum(n){ return (n||0).toLocaleString(); }
 function tfChange(cur, prev){
@@ -2830,6 +2917,7 @@ function renderTraffic(){
       <div class="tf-card"><div class="tf-cl">Unique visitors</div><div class="tf-cv">${tfNum(t.totals.visitors)}</div><div class="tf-cd ${uc.cls}">${uc.txt} <span class="muted">vs previous</span></div></div>
       <div class="tf-card"><div class="tf-cl">All-time views</div><div class="tf-cv">${tfNum(t.allTime.views)}</div><div class="tf-cd muted">${tfNum(t.allTime.visitors)} visitors total</div></div>
     </div>
+    ${onlinePanel()}
     <div class="panel"><h3>Views · ${rangeLabel}</h3><div class="tf-chart">${bars}</div></div>
     <div class="tf-locs">
       <div class="panel"><h3>Top countries</h3>${countryRows}${geoNote}</div>
