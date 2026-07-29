@@ -37384,6 +37384,100 @@ app.post('/api/handles/claim', auth.requireAuth, blockImpersonation, rateLimit(1
   }
 });
 
+/* ─── Admin: who is on the site right this minute ────────────────────────────
+   The traffic numbers say HOW MANY. This says WHO.
+
+   Two different kinds of person, and they are known in two different ways:
+
+   · A signed-in member is known exactly. Every authenticated request stamps
+     their session's last_seen, and an open live stream (rtClients) proves they
+     have the app in front of them right now. So we list the sessions touched in
+     the last few minutes and show the person behind them in full — their photo,
+     name, handle, whether they are verified, personal or business, their plan,
+     whether the account is in good standing, where they are and what they are
+     using. Tapping one opens the same member detail as the Users tab.
+
+   · Everyone else is a visitor we cannot name, and saying so plainly is the
+     honest thing: "Guest", with wherever they are. A page view records only an
+     IP and a hash of IP+browser, deliberately — see visitorHash — so there is
+     nothing else to show, and inventing more would be a privacy problem rather
+     than a feature.
+
+   Telling the two apart needs no new tracking: a member's session already
+   stores the IP and browser it was created with, and hashing those the same way
+   a page view is hashed gives the same visitor id. Anything left over after
+   removing those is genuinely not signed in. */
+const ONLINE_WINDOW = "5 minutes";
+function uaLabel(ua) {
+  const s = String(ua || '');
+  if (!s) return null;
+  const dev = /iPhone/i.test(s) ? 'iPhone' : /iPad/i.test(s) ? 'iPad'
+    : /Android/i.test(s) ? 'Android' : /Macintosh|Mac OS X/i.test(s) ? 'Mac'
+    : /Windows/i.test(s) ? 'Windows' : /Linux/i.test(s) ? 'Linux' : null;
+  const app = /Edg\//i.test(s) ? 'Edge' : /OPR\/|Opera/i.test(s) ? 'Opera'
+    : /Chrome\//i.test(s) ? 'Chrome' : /Firefox\//i.test(s) ? 'Firefox'
+    : /Safari\//i.test(s) ? 'Safari' : null;
+  return [dev, app].filter(Boolean).join(' · ') || null;
+}
+app.get('/api/admin/online', auth.requirePerm('growth'), async (req, res) => {
+  try {
+    // ── Members: one row per person, their most recently active session ──
+    const sess = await db.query(
+      `SELECT DISTINCT ON (s.user_id)
+              s.user_id, s.user_agent, s.ip, s.location, s.last_seen,
+              u.name, u.username, u.avatar, u.verified, u.account_type, u.plan, u.headline,
+              u.status, u.is_admin, u.admin_role, u.created_at
+         FROM auth_sessions s JOIN users u ON u.id = s.user_id
+        WHERE s.last_seen >= now() - interval '${ONLINE_WINDOW}'
+        ORDER BY s.user_id, s.last_seen DESC`);
+    const members = sess.rows.map((r) => ({
+      id: r.user_id,
+      name: r.name, username: r.username,
+      avatar: mediaRef(r.avatar, 'avatar', r.user_id),
+      verified: !!r.verified,
+      accountType: r.account_type === 'business' ? 'business' : 'personal',
+      plan: r.plan || 'free',
+      status: r.status || 'active',
+      headline: r.headline || null,
+      staff: !!r.is_admin || !!r.admin_role,
+      role: r.admin_role || (r.is_admin ? 'superadmin' : null),
+      joinedAt: r.created_at,
+      location: r.location || null,
+      ip: r.ip || null,
+      device: uaLabel(r.user_agent),
+      lastSeen: r.last_seen,
+      // An open live stream means the app is on screen this second, as opposed
+      // to "made a request a couple of minutes ago".
+      live: rtClients.has(r.user_id),
+    })).sort((a, b) => (b.live - a.live) || (new Date(b.lastSeen) - new Date(a.lastSeen)));
+
+    // ── Guests: recent visitors that are not one of those members ──
+    const known = new Set();
+    for (const r of sess.rows) if (r.ip) known.add(visitorHash(r.ip, r.user_agent));
+    const seen = await db.query(
+      `SELECT pv.visitor, max(pv.created_at) AS last_at, min(pv.created_at) AS first_at,
+              count(*)::int AS views, max(pv.ip) AS ip,
+              (array_agg(pv.path ORDER BY pv.created_at DESC))[1] AS path
+         FROM page_views pv
+        WHERE pv.created_at >= now() - interval '${ONLINE_WINDOW}'
+        GROUP BY pv.visitor ORDER BY max(pv.created_at) DESC LIMIT 300`);
+    const rest = seen.rows.filter((r) => !known.has(r.visitor));
+    const ips = [...new Set(rest.map((r) => r.ip).filter(Boolean))];
+    const geo = ips.length
+      ? (await db.query('SELECT ip, city, country FROM ip_geo WHERE ip = ANY($1::text[])', [ips])).rows
+      : [];
+    const byIp = new Map(geo.map((g) => [g.ip, [g.city, g.country].filter(Boolean).join(', ') || null]));
+    const guests = rest.map((r) => ({
+      visitor: r.visitor.slice(0, 8),        // a short handle for the row, never the full hash
+      location: byIp.get(r.ip) || null,
+      views: r.views, path: r.path || null,
+      firstSeen: r.first_at, lastSeen: r.last_at,
+    }));
+
+    res.json({ members, guests, counts: { members: members.length, guests: guests.length, total: members.length + guests.length } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load who is online.' }); }
+});
+
 /* ─── Admin: site traffic analytics ─── */
 // Views + unique visitors + a zero-filled trend + top locations, for a chosen
 // window. All interval/bucket/series values come from a fixed whitelist keyed by
