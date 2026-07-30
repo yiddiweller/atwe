@@ -1334,6 +1334,38 @@ app.get('/api/admin/features-data', auth.requireAdmin, (_req, res) => {
   res.json({ features: FEATURES_DATA });
 });
 
+/* ── The owner's decisions ON that catalog — kept on the account, not the phone.
+   The Features page used to save its Keep/Skip choices, notes, added features
+   and deletions only to the device's localStorage, which meant the owner's
+   edits were invisible from anywhere else and gone with the phone. Now the page
+   syncs the same little state object here. One document per admin, capped so a
+   bug can never balloon it, and served back to any device they sign in on. */
+const FEATURE_SEL_MAX = 400_000; // ~400KB of JSON is far beyond any real selection
+function featureSelKey(userId) { return 'feature_selection_u' + userId; }
+app.get('/api/admin/feature-selection', auth.requireAdmin, async (req, res) => {
+  try {
+    const sel = await db.getSetting(featureSelKey(req.user.id));
+    res.json({ selection: sel || null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your selections.' }); }
+});
+app.put('/api/admin/feature-selection', auth.requireAdmin, async (req, res) => {
+  try {
+    const sel = req.body && req.body.selection;
+    if (!sel || typeof sel !== 'object' || Array.isArray(sel)) return res.status(400).json({ error: 'Nothing to save.' });
+    const doc = {
+      dec: (sel.dec && typeof sel.dec === 'object' && !Array.isArray(sel.dec)) ? sel.dec : {},
+      notes: (sel.notes && typeof sel.notes === 'object' && !Array.isArray(sel.notes)) ? sel.notes : {},
+      ideas: String(sel.ideas || '').slice(0, 20000),
+      custom: Array.isArray(sel.custom) ? sel.custom.slice(0, 300) : [],
+      deleted: Array.isArray(sel.deleted) ? sel.deleted.map(String).slice(0, 1000) : [],
+      updatedAt: Date.now(),
+    };
+    if (JSON.stringify(doc).length > FEATURE_SEL_MAX) return res.status(400).json({ error: 'That selection is too large to save.' });
+    await db.setSetting(featureSelKey(req.user.id), doc);
+    res.json({ ok: true, updatedAt: doc.updatedAt });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save your selections.' }); }
+});
+
 app.get('/api/admin/site', auth.requireAdmin, async (_req, res) => {
   await loadSiteLock();
   if (!_siteLock.code) { _siteLock.code = genCode(_siteLock.codeLength); }
