@@ -100,14 +100,27 @@
     var vCode = document.getElementById('vCode');
     var row = document.getElementById('codeRow');
 
-    fetch('/api/site/status', { headers: { Accept: 'application/json' } })
+    // Send the signed-in account's token if this browser has one: people the
+    // owner put on the allowlist are let straight through with no code.
+    var _h = { Accept: 'application/json' }, _signedIn = false;
+    try { var _t = localStorage.getItem('atwe_token'); if (_t) { _h.Authorization = 'Bearer ' + _t; _signedIn = true; } } catch (e) {}
+    // If this browser is signed in, hold the "unavailable" message back for the
+    // moment the check takes — someone the owner allowed should never see it.
+    if (_signedIn) {
+      vMsg.classList.remove('on');
+      // …but never leave them staring at a blank screen if the check stalls.
+      setTimeout(function () { if (!vCode.classList.contains('on')) vMsg.classList.add('on'); }, 2500);
+    }
+
+    fetch('/api/site/status', { headers: _h })
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d.locked || d.allowed) { location.replace('/'); return; }
+        vMsg.classList.add('on');
         LEN = Math.max(4, Math.min(10, d.codeLength || 4));
         buildBoxes();
       })
-      .catch(function () { buildBoxes(); });
+      .catch(function () { vMsg.classList.add('on'); buildBoxes(); });
 
     function buildBoxes() {
       row.innerHTML = ''; boxes = [];

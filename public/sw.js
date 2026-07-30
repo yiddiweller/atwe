@@ -1,4 +1,4 @@
-const CACHE = 'atwe-v1644';
+const CACHE = 'atwe-v1645';
 // The app shell ('/', '/index.html') is cached at runtime by the network-first
 // navigation handler, not precached — precaching '/' on install would request a
 // gated navigation and could consume a one-time site-lock pass.
@@ -68,7 +68,9 @@ self.addEventListener('fetch', e => {
     e.respondWith(
       fetch('/__shell/' + Date.now(), { cache: 'reload', credentials: 'same-origin' })
         .then(res => {
-          if (res && res.ok) { const c = res.clone(); caches.open(CACHE).then(x => x.put('/index.html', c)); }
+          // Never store the site-lock screen as the app shell — it would be the
+          // offline fallback long after the site was unlocked again.
+          if (res && res.ok && !res.headers.get('X-Atwe-Locked')) { const c = res.clone(); caches.open(CACHE).then(x => x.put('/index.html', c)); }
           return res;
         })
         .catch(() => caches.match('/index.html').then(r => r || caches.match('/')))

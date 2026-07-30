@@ -77,6 +77,16 @@ function signGatePass(minutes) {
   return jwt.sign({ pass: true }, SECRET, { expiresIn: mins * 60 });
 }
 
+// Site-lock ALLOWLIST pass: a long-lived signed cookie saying "this account is
+// one of the people the owner picked to get in without the code". It carries
+// only the user id — the server re-checks that the id is STILL on the list on
+// every request, so removing someone takes effect immediately rather than when
+// the cookie expires.
+function signSiteAllow(userId, days) {
+  const d = Math.max(1, parseInt(days, 10) || 30);
+  return jwt.sign({ siteAllow: true, uid: userId }, SECRET, { expiresIn: d * 24 * 60 * 60 });
+}
+
 // Short-lived token proving Google verified this email, used to carry a new
 // Google user through the onboarding steps (birthday / password / username)
 // before the account row is created.
@@ -337,6 +347,7 @@ module.exports = {
   signToken,
   signStreamToken,
   signGatePass,
+  signSiteAllow,
   signGoogleSignupToken,
   signAppleSignupToken,
   verifyToken,
