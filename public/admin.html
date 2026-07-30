@@ -517,6 +517,9 @@
     color:var(--t1);padding:11px 16px;font-size:14px;outline:none;transition:border-color .15s var(--ease);}
   .custom-row input:focus{border-color:var(--b3);}
   .custom-row input::placeholder{color:var(--t4);}
+  /* Site-lock allowlist: tick a person to let them in without the code. */
+  .allow-cb{width:20px;height:20px;flex:0 0 auto;cursor:pointer;accent-color:var(--accent);margin:0;}
+  .allow-pick{display:flex;align-items:center;gap:12px;min-width:0;flex:1;cursor:pointer;}
 
   /* ── Announcements form ── */
   .ann-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;}
@@ -2384,6 +2387,16 @@ function renderSite(){
       </div>
     </div>
     <div class="panel">
+      <h3>Let certain people in <span class="muted">· no code needed</span></h3>
+      <div class="sub">Pick the people who should keep using Atwe completely normally while it’s locked — no lock screen, no code. Everyone else still needs the code. They have to be signed in to their Atwe account on that device for this to work.</div>
+      <div class="custom-row" style="margin-top:12px;">
+        <input id="allowSearch" placeholder="Search by name, @username or email" autocomplete="off" value="${esc(ALLOW_Q || '')}" oninput="allowSearch()"/>
+      </div>
+      <div id="allowResults"></div>
+      <div class="srt" style="margin:20px 2px 8px;">Allowed without a code <span class="muted">· <span id="allowCount">${((s.allowUsers) || []).length}</span></span></div>
+      <div id="allowList">${allowListHtml()}</div>
+    </div>
+    <div class="panel">
       <h3>Demo mode <span class="muted">· preview</span></h3>
       <div class="sub">Fill the platform with ~100 sample accounts — real-looking profiles, photos, banners, posts (with images), stories, businesses and products, all networked together — so you can see how it feels fully used. Sample items can’t be bought. Turn it off and every sample is removed, leaving only real users.</div>
       <div class="site-status">${DEMO.on ? `<span class="dot amber"></span> Demo mode is <b>ON</b> — <b>${DEMO.count||0}</b> sample accounts live` : `<span class="dot green"></span> Real platform — real users only`}</div>
@@ -2671,6 +2684,56 @@ function lockFor(min, label){ patchSite({ lockForMinutes: min }, 'Locked for ' +
 function setLen(n){ patchSite({ codeLength: n }, n + '-digit code generated.'); }
 function regen(){ patchSite({ regenerate: true }, 'New code generated.'); }
 function setPass(m){ const lbl = { 0: 'every visit', 60: '1 hour', 1440: '24 hours', 10080: '7 days' }[m] || 'every visit'; patchSite({ passMinutes: m }, 'Testers re-enter the code ' + lbl + '.'); }
+
+/* ── Site-lock allowlist: the people who skip the code entirely ──
+   One row per person with a tick box. Ticking calls the site PATCH with a
+   single add/remove, so two open dashboards can't overwrite each other's list.
+   Toggling repaints only the small list below, never the whole page, so the
+   search box keeps its text and the keyboard stays up on a phone. */
+let ALLOW_Q = '', _allowT = null;
+function allowRow(u, on){
+  const name = esc(u.name || 'Member #' + u.id);
+  const handle = u.username ? ` <span class="muted">@${esc(u.username)}</span>` : '';
+  return `<div class="site-row"><label class="allow-pick">
+    <input type="checkbox" class="allow-cb" data-uid="${u.id}" ${on ? 'checked' : ''} onchange="setAllow(${u.id}, this.checked)" aria-label="Let ${name} in without the code"/>
+    <span style="min-width:0;display:block;"><span class="srt" style="display:block;">${name}${handle}</span><span class="srs" style="display:block;">${esc(u.email || '')}</span></span>
+  </label></div>`;
+}
+function allowListHtml(){
+  const a = (typeof SITE !== 'undefined' && SITE && SITE.allowUsers) || [];
+  return a.length ? a.map(u => allowRow(u, true)).join('')
+    : '<div class="muted" style="font-size:13px;">Nobody yet — while the site is locked, everyone needs the code.</div>';
+}
+function allowSearch(){
+  const inp = document.getElementById('allowSearch');
+  ALLOW_Q = inp ? inp.value : '';
+  clearTimeout(_allowT);
+  _allowT = setTimeout(async () => {
+    const box = document.getElementById('allowResults'); if (!box) return;
+    const q = (ALLOW_Q || '').trim();
+    if (q.length < 2){ box.innerHTML = ''; return; }
+    try {
+      const r = await api('GET', '/api/admin/site/allow-search?q=' + encodeURIComponent(q));
+      box.innerHTML = '<div style="margin-top:8px;">' + (r.users.length
+        ? r.users.map(u => allowRow(u, u.allowed)).join('')
+        : '<div class="muted" style="font-size:13px;">Nobody matches that.</div>') + '</div>';
+    } catch (e){ box.innerHTML = `<div class="muted" style="font-size:13px;">${esc(e.message)}</div>`; }
+  }, 250);
+}
+function allowSyncBoxes(id, on){
+  // The same person can be on screen twice (a search hit AND the list below).
+  // Keep every tick box for that person in step, or one goes stale.
+  document.querySelectorAll('.allow-cb[data-uid="' + id + '"]').forEach(cb => { cb.checked = on; });
+}
+async function setAllow(id, on){
+  try {
+    SITE = await api('PATCH', '/api/admin/site', on ? { allowAdd: id } : { allowRemove: id });
+    const list = document.getElementById('allowList'); if (list) list.innerHTML = allowListHtml();
+    const n = document.getElementById('allowCount'); if (n) n.textContent = ((SITE.allowUsers) || []).length;
+    allowSyncBoxes(id, on);
+    notify(on ? 'They can get in without the code now.' : 'They need the code again.');
+  } catch (e){ allowSyncBoxes(id, !on); notify(e.message); }
+}
 function setCustom(){
   const v = (document.getElementById('customCode').value || '').trim();
   if (!/^[0-9]{4,10}$/.test(v)) { notify('Code must be 4–10 digits.'); return; }

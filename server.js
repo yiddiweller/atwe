@@ -240,12 +240,20 @@ setInterval(() => {
    logo, enter it, and receive a signed bypass cookie. The admin dashboard,
    the API and the unlock flow are never gated. Settings live in app_settings
    (key `site_lock`) and are cached in memory, refreshed on a short interval.
+
+   ON TOP of the code there is an ALLOWLIST: the owner picks specific members
+   (`allowUserIds`) who use the site completely normally while it's locked —
+   no code, no lock screen. Everyone else still hits the code gate exactly as
+   before, so the allowlist is purely additive.
 ═══════════════════════════════════════════════ */
 const SITE_LOCK_KEY = 'site_lock';
 const SITE_LOCK_COOKIE = 'atwe_pass';
+const SITE_ALLOW_COOKIE = 'atwe_allow'; // "this account is on the allowlist"
+const SITE_ALLOW_DAYS = 30;             // how long that cookie lasts before it's re-issued
+const SITE_ALLOW_MAX = 500;             // sanity cap on the picked-people list
 // passMinutes: how long a tester stays in after entering the code before it's
 // required again. 0 = single use (every visit); 60 = 1h; 1440 = 24h; 10080 = 7d.
-let _siteLock = { locked: false, lockUntil: null, code: null, codeLength: 4, passMinutes: 0 };
+let _siteLock = { locked: false, lockUntil: null, code: null, codeLength: 4, passMinutes: 0, allowUserIds: [] };
 const PASS_CHOICES = [0, 60, 1440, 10080];
 const DEMO_KEY = 'demo_mode';
 let _demoMode = false; // cached so /api/config and the buy-guard don't hit the DB
@@ -816,7 +824,8 @@ async function loadSiteLock() {
   if (!db.isConfigured()) return _siteLock;
   try {
     const v = await db.getSetting(SITE_LOCK_KEY);
-    if (v && typeof v === 'object') _siteLock = { locked: false, lockUntil: null, code: null, codeLength: 4, passMinutes: 0, ...v };
+    if (v && typeof v === 'object') _siteLock = { locked: false, lockUntil: null, code: null, codeLength: 4, passMinutes: 0, allowUserIds: [], ...v };
+    if (!Array.isArray(_siteLock.allowUserIds)) _siteLock.allowUserIds = [];
   } catch (e) { /* keep last-known state */ }
   return _siteLock;
 }
@@ -864,6 +873,36 @@ function hasGatePass(req, consume) {
   // Time-window signed pass?
   const d = auth.verifyToken(tok);
   return !!(d && d.pass === true);
+}
+
+/* ── The allowlist: people who use a locked site normally, with no code ──
+   The picked ids live on the same cached `site_lock` settings, so the check is
+   in-memory. The cookie only carries the id; membership is re-checked here on
+   every request, so taking someone off the list locks them out immediately. */
+function siteAllowIds() {
+  return Array.isArray(_siteLock.allowUserIds) ? _siteLock.allowUserIds : [];
+}
+function isSiteAllowed(userId) {
+  const id = Number(userId);
+  return !!id && siteAllowIds().includes(id);
+}
+function hasSiteAllowPass(req) {
+  const tok = parseCookies(req)[SITE_ALLOW_COOKIE];
+  if (!tok) return false;
+  const d = auth.verifyToken(tok);
+  return !!(d && d.siteAllow === true && isSiteAllowed(d.uid));
+}
+// Hand an allowlisted account its pass cookie (called wherever we can see who
+// they are: the locked screen's status check and the app's own boot call).
+function issueSiteAllowCookie(req, res, userId) {
+  if (!isSiteAllowed(userId)) return false;
+  res.cookie(SITE_ALLOW_COOKIE, auth.signSiteAllow(Number(userId), SITE_ALLOW_DAYS), {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: req.protocol === 'https',
+    maxAge: SITE_ALLOW_DAYS * 24 * 60 * 60 * 1000,
+  });
+  return true;
 }
 
 // Refresh the cache periodically so admin changes propagate to all instances,
@@ -1196,9 +1235,16 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/.well-known/')) return next(); // Apple and Google check these to link the app to this domain
   if (req.path.startsWith('/api/')) return next();        // API incl. /api/site/unlock
   if (req.method !== 'GET') return next();
-  if (!(req.headers.accept || '').includes('text/html')) return next(); // only navigations
+  // An INSTALLED app doesn't navigate — its service worker fetches the shell from
+  // /__shell/<t> (and /go) with a plain `Accept: */*`, so the "only navigations"
+  // rule below used to wave it straight through and the lock did nothing for
+  // anyone who'd added Atwe to their home screen. Those two paths ARE page loads.
+  const isShellFetch = req.path === '/go' || req.path.startsWith('/__shell/');
+  if (!isShellFetch && !(req.headers.accept || '').includes('text/html')) return next(); // only navigations
+  if (hasSiteAllowPass(req)) return next();               // someone the owner picked — no code, ever
   if (hasGatePass(req, true)) return next();              // tester with a valid one-time pass (consumed)
   res.set('Cache-Control', 'no-store');
+  res.set('X-Atwe-Locked', '1');                          // so the service worker never caches this AS the app
   return res.sendFile(path.join(__dirname, 'public', 'locked.html'));
 });
 
@@ -1304,11 +1350,17 @@ app.get('/go', _serveShellFresh);
 app.get(/^\/__shell\//, _serveShellFresh);
 
 /* ── Site lock: public status + code-unlock; admin read/update ── */
-app.get('/api/site/status', (req, res) => {
+// The locked screen calls this on load, sending the signed-in account's token if
+// the browser has one. If that account is on the owner's allowlist we hand back
+// the pass cookie right here, so it walks straight into the app without ever
+// being asked for a code.
+app.get('/api/site/status', auth.optionalAuth, (req, res) => {
+  const allowlisted = !!(req.user && isSiteAllowed(req.user.id));
+  if (allowlisted) issueSiteAllowCookie(req, res, req.user.id);
   res.json({
     locked: siteLockEffective(),
     codeLength: _siteLock.codeLength || 4,
-    allowed: hasGatePass(req, false),
+    allowed: allowlisted || hasSiteAllowPass(req) || hasGatePass(req, false),
   });
 });
 
@@ -1366,6 +1418,20 @@ app.put('/api/admin/feature-selection', auth.requireAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save your selections.' }); }
 });
 
+// Turn the stored allowlist ids into people the dashboard can show. Ids whose
+// account has since been deleted simply drop out of the list.
+async function siteAllowUsers() {
+  const ids = siteAllowIds();
+  if (!ids.length || !db.isConfigured()) return [];
+  try {
+    const { rows } = await db.query(
+      'SELECT id, name, username, email, avatar FROM users WHERE id = ANY($1::int[]) ORDER BY lower(name)',
+      [ids]
+    );
+    return rows.map((u) => ({ id: u.id, name: u.name, username: u.username, email: u.email, avatar: u.avatar }));
+  } catch (e) { return ids.map((id) => ({ id, name: 'Member #' + id, username: null, email: null, avatar: null })); }
+}
+
 app.get('/api/admin/site', auth.requireAdmin, async (_req, res) => {
   await loadSiteLock();
   if (!_siteLock.code) { _siteLock.code = genCode(_siteLock.codeLength); }
@@ -1376,7 +1442,28 @@ app.get('/api/admin/site', auth.requireAdmin, async (_req, res) => {
     code: _siteLock.code,
     codeLength: _siteLock.codeLength || 4,
     passMinutes: _siteLock.passMinutes || 0,
+    allowUsers: await siteAllowUsers(),
   });
+});
+
+// Search members to put on the allowlist. Deliberately its own small endpoint
+// rather than the full admin user list, which returns every account.
+app.get('/api/admin/site/allow-search', auth.requireAdmin, async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (q.length < 2) return res.json({ users: [] });
+  if (!db.isConfigured()) return res.json({ users: [] });
+  try {
+    const like = '%' + q.replace(/[\\%_]/g, (c) => '\\' + c) + '%';
+    const { rows } = await db.query(`
+      SELECT id, name, username, email, avatar
+      FROM users
+      WHERE name ILIKE $1 ESCAPE '\\' OR username ILIKE $1 ESCAPE '\\' OR email ILIKE $1 ESCAPE '\\'
+      ORDER BY (username IS NULL), lower(name)
+      LIMIT 25
+    `, [like]);
+    const on = new Set(siteAllowIds());
+    res.json({ users: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, email: u.email, avatar: u.avatar, allowed: on.has(u.id) })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not search members.' }); }
 });
 
 // ── Demo mode (admin "showcase"): populate the platform with ~100 tagged demo
@@ -1426,6 +1513,28 @@ app.patch('/api/admin/site', auth.requireAdmin, async (req, res) => {
   await loadSiteLock();
   const s = { ..._siteLock };
   const b = req.body || {};
+  // Allowlist: the people who get in without the code. Sent one at a time
+  // (add / remove) so two open dashboards can't overwrite each other's list.
+  s.allowUserIds = siteAllowIds().slice();
+  let allowChange = null;
+  if (b.allowAdd != null) {
+    const id = parseInt(b.allowAdd, 10);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'That isn’t a valid member.' });
+    if (s.allowUserIds.length >= SITE_ALLOW_MAX && !s.allowUserIds.includes(id)) {
+      return res.status(400).json({ error: `You can pick up to ${SITE_ALLOW_MAX} people.` });
+    }
+    try {
+      const { rows } = await db.query('SELECT id FROM users WHERE id = $1', [id]);
+      if (!rows[0]) return res.status(404).json({ error: 'That member no longer exists.' });
+    } catch (e) { return res.status(503).json({ error: 'Could not reach the database.' }); }
+    if (!s.allowUserIds.includes(id)) s.allowUserIds.push(id);
+    allowChange = { action: 'add', userId: id };
+  }
+  if (b.allowRemove != null) {
+    const id = parseInt(b.allowRemove, 10);
+    s.allowUserIds = s.allowUserIds.filter((x) => x !== id);
+    allowChange = { action: 'remove', userId: id };
+  }
   // Code length (4–10) regenerates a fresh code at that length.
   if (b.codeLength != null) {
     s.codeLength = Math.max(4, Math.min(10, parseInt(b.codeLength, 10) || 4));
@@ -1459,7 +1568,8 @@ app.patch('/api/admin/site', auth.requireAdmin, async (req, res) => {
   try {
     await db.setSetting(SITE_LOCK_KEY, s);
     _siteLock = s;
-    adminAudit(req, 'site.lock', 'settings', 'site_lock', { locked: !!s.locked, lockUntil: s.lockUntil || null });
+    if (allowChange) adminAudit(req, 'site.allowlist', 'user', allowChange.userId, allowChange);
+    else adminAudit(req, 'site.lock', 'settings', 'site_lock', { locked: !!s.locked, lockUntil: s.lockUntil || null });
     res.json({
       locked: !!s.locked,
       effectiveLocked: siteLockEffective(),
@@ -1467,6 +1577,7 @@ app.patch('/api/admin/site', auth.requireAdmin, async (req, res) => {
       code: s.code,
       codeLength: s.codeLength || 4,
       passMinutes: s.passMinutes || 0,
+      allowUsers: await siteAllowUsers(),
     });
   } catch (err) {
     console.error(err);
@@ -4452,6 +4563,9 @@ app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
+    // Keep an allowlisted member's site-lock pass fresh while they're active, so
+    // it can't quietly lapse and drop them onto the code screen one day.
+    issueSiteAllowCookie(req, res, req.user.id);
     res.json({ user: publicUser(rows[0]) });
   } catch (err) {
     console.error(err);
