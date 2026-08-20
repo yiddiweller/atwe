@@ -2166,6 +2166,8 @@ const MEDIA_KINDS = {
   'avatar':     { table: 'users',             col: 'avatar' },
   'banner':     { table: 'users',             col: 'banner' },
   'prod-video': { table: 'products',          col: 'video'  },
+  'prod-img':   { table: 'products',          col: 'image'  },
+  'prod-imgs':  { table: 'products',          col: 'images', array: true },
   // A call recording is private, like a DM — the unguessable signature IS the
   // capability, which is the same bargain every other private media kind here makes.
   'callrec':    { table: 'call_recordings',   col: 'media'  },
@@ -2713,6 +2715,7 @@ const PUSH_VERBS = {
   connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills',
   event_rsvp: 'is going to your event', event_reminder: 'an event you’re going to starts soon', event_comment: 'commented on your event', rec_received: 'recommended you',
   creator_sub: 'subscribed to you', tip: 'sent you a tip', review_reply: 'responded to your review',
+  community_boost: 'boosted your community',
   invoice_reminder: 'sent a reminder — an invoice is waiting',
   split_reminder: 'sent a reminder — your share of a split is waiting',
   appt_request: 'requested an appointment',
@@ -11084,6 +11087,358 @@ app.post('/api/ai/image', auth.requireAuth, rateLimit(10, 3600000, 'ai-image'), 
    certified hardware, which is a separate thing entirely. */
 const POS_METHODS = ['atwe', 'cash', 'card'];
 function posCode() { return String(Math.floor(100000 + Math.random() * 900000)); }
+
+/* ═══════════════════════════════════════════════
+   SELLING ON OTHER CHANNELS  —  the product feed
+   ───────────────────────────────────────────────
+   A seller's live catalog, published in the two shapes every other channel
+   knows how to read: Google's Shopping XML, and a plain spreadsheet. Point
+   Google Merchant Center / Meta Commerce / a marketplace importer at the URL
+   and it refetches on its own timer — the shop stays in step with no exporting
+   by hand.
+
+   Deliberately a FEED, not a two-way sync. Atwe never takes orders back from
+   another channel (that would mean stock in two places disagreeing, which is
+   how oversells happen); it publishes what is for sale, and the sale itself
+   still happens here. Same honest bargain as the CRM export.
+
+   The token in the URL IS the permission — an importer has no account and can
+   send no password, which is exactly how every product feed works. So it is
+   rotatable (a leaked URL is killed by rotating), and the feed can be turned
+   off entirely without losing the address.
+═══════════════════════════════════════════════ */
+const FEED_MAX_ITEMS = 5000;
+
+function feedAbsUrl(pathOrUrl) {
+  if (!pathOrUrl) return '';
+  const s = String(pathOrUrl);
+  if (/^https?:\/\//i.test(s)) return s;
+  const base = (process.env.APP_URL || '').replace(/\/$/, '');
+  return base + (s.startsWith('/') ? s : '/' + s);
+}
+// A data URL can't be fetched by an importer, so a stored photo goes out as its
+// streaming URL instead (the same signed URL the app itself uses for media).
+function feedImage(p) {
+  const ref = mediaRef(p.image, 'prod-img', p.id, 0);
+  if (!ref || String(ref).startsWith('data:')) return '';       // too small to offload, or none
+  return feedAbsUrl(String(ref).split('?')[0]);
+}
+function xmlEsc(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&apos;')
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');  // XML forbids these outright
+}
+// Local to the product feed. NOT the exports' csvCell above — that one also
+// stringifies objects and renders Dates; a feed cell is always a plain string.
+function feedCsvCell(v) {
+  const s = String(v == null ? '' : v).replace(/\r?\n/g, ' ');
+  return /[",]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function feedAvailability(p) {
+  if (p.stock === null || p.stock === undefined) return 'in stock';
+  return Number(p.stock) > 0 ? 'in stock' : 'out of stock';
+}
+// Load the seller a feed token belongs to, and their sellable catalog.
+async function loadCatalogFeed(token) {
+  const u = (await db.query(
+    `SELECT id, name, username, catalog_feed_on, COALESCE(deactivated,false) AS deactivated, COALESCE(is_demo,false) AS is_demo
+       FROM users WHERE catalog_feed_token = $1`, [token])).rows[0];
+  if (!u || !u.catalog_feed_on || u.deactivated || u.is_demo) return null;
+  const { rows } = await db.query(
+    `SELECT id, name, description, price_cents, image, kind, stock, category, ship_free, ship_fee_cents
+       FROM products
+      WHERE business_id = $1 AND active = true
+      ORDER BY id DESC LIMIT ${FEED_MAX_ITEMS}`, [u.id]);
+  return { seller: u, products: rows };
+}
+
+// The public feed. No account, no token header — the address is the permission.
+app.get('/catalog/:file', rateLimit(120, 60000, 'catalog-feed'), async (req, res) => {
+  const m = /^([A-Za-z0-9_-]{16,64})\.(xml|csv)$/.exec(String(req.params.file || ''));
+  if (!m) return res.status(404).type('text/plain').send('Not found');
+  if (!db.isConfigured()) return res.status(503).type('text/plain').send('Not available');
+  // While the whole site is locked for private testing, nothing public goes out
+  // — a feed an importer can read would make "locked" untrue.
+  if (siteLockEffective()) return res.status(404).type('text/plain').send('Not found');
+  const [, token, ext] = m;
+  let data;
+  try { data = await loadCatalogFeed(token); }
+  catch (err) { console.error('catalog feed:', err.message); return res.status(500).type('text/plain').send('Not available'); }
+  if (!data) return res.status(404).type('text/plain').send('Not found');
+  const { seller, products } = data;
+  const shopUrl = feedAbsUrl('/' + (seller.username || ''));
+  // Importers poll on a timer; a short cache keeps a big catalog cheap to serve.
+  res.set('Cache-Control', 'public, max-age=900');
+
+  if (ext === 'csv') {
+    const cols = ['id', 'title', 'description', 'link', 'image_link', 'price', 'availability', 'condition', 'brand', 'product_type', 'shipping'];
+    const lines = [cols.join(',')];
+    for (const p of products) {
+      lines.push([
+        'atwe-' + p.id,
+        p.name,
+        p.description || '',
+        feedAbsUrl('/listing/' + p.id),
+        feedImage(p),
+        ((p.price_cents || 0) / 100).toFixed(2) + ' USD',
+        feedAvailability(p),
+        'new',
+        seller.name || seller.username || '',
+        p.category || (p.kind === 'service' ? 'Services' : ''),
+        p.ship_free ? '0.00 USD' : (((p.ship_fee_cents || 0) / 100).toFixed(2) + ' USD'),
+      ].map(feedCsvCell).join(','));
+    }
+    return res.type('text/csv; charset=utf-8').send(lines.join('\n') + '\n');
+  }
+
+  // Google Shopping's RSS 2.0 shape — the one nearly every importer accepts.
+  const items = products.map((p) => {
+    const img = feedImage(p);
+    return '  <item>\n'
+      + `    <g:id>atwe-${p.id}</g:id>\n`
+      + `    <title>${xmlEsc((p.name || '').slice(0, 150))}</title>\n`
+      + `    <description>${xmlEsc((p.description || p.name || '').slice(0, 5000))}</description>\n`
+      + `    <link>${xmlEsc(feedAbsUrl('/listing/' + p.id))}</link>\n`
+      + (img ? `    <g:image_link>${xmlEsc(img)}</g:image_link>\n` : '')
+      + `    <g:price>${((p.price_cents || 0) / 100).toFixed(2)} USD</g:price>\n`
+      + `    <g:availability>${feedAvailability(p)}</g:availability>\n`
+      + '    <g:condition>new</g:condition>\n'
+      + `    <g:brand>${xmlEsc(seller.name || seller.username || 'Atwe')}</g:brand>\n`
+      + (p.category ? `    <g:product_type>${xmlEsc(p.category)}</g:product_type>\n` : '')
+      + '  </item>';
+  }).join('\n');
+  res.type('application/xml; charset=utf-8').send(
+    '<?xml version="1.0" encoding="UTF-8"?>\n'
+    + '<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">\n<channel>\n'
+    + `  <title>${xmlEsc((seller.name || seller.username || 'Atwe') + ' — Atwe')}</title>\n`
+    + `  <link>${xmlEsc(shopUrl)}</link>\n`
+    + '  <description>Products for sale on Atwe.</description>\n'
+    + (items ? items + '\n' : '')
+    + '</channel>\n</rss>\n');
+});
+
+// The seller's own view of it: the two addresses, the on/off switch, rotate.
+app.get('/api/catalog-feed', auth.requireAuth, async (req, res) => {
+  const me = await requireHandle(req, res); if (!me) return;
+  try {
+    const u = (await db.query('SELECT catalog_feed_token, catalog_feed_on FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+    const n = (await db.query('SELECT COUNT(*)::int AS n FROM products WHERE business_id = $1 AND active = true', [req.user.id])).rows[0].n;
+    res.json({
+      on: !!u.catalog_feed_on,
+      hasToken: !!u.catalog_feed_token,
+      count: n,
+      xml: u.catalog_feed_token ? feedAbsUrl('/catalog/' + u.catalog_feed_token + '.xml') : '',
+      csv: u.catalog_feed_token ? feedAbsUrl('/catalog/' + u.catalog_feed_token + '.csv') : '',
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not read your feed settings.' }); }
+});
+
+app.post('/api/catalog-feed', auth.requireAuth, rateLimit(20, 60000, 'catalog-feed-set'), async (req, res) => {
+  const me = await requireHandle(req, res); if (!me) return;
+  const wantOn = req.body.on === true || req.body.on === 'true';
+  const rotate = req.body.rotate === true || req.body.rotate === 'true';
+  try {
+    let tok = (await db.query('SELECT catalog_feed_token FROM users WHERE id = $1', [req.user.id])).rows[0].catalog_feed_token;
+    // A token is minted the first time it's needed, and replaced on rotate —
+    // retried on the (vanishingly unlikely) collision with the unique index.
+    if (!tok || rotate) {
+      for (let i = 0; i < 5; i++) {
+        const cand = _vcrypto.randomBytes(18).toString('base64url');
+        try {
+          await db.query('UPDATE users SET catalog_feed_token = $2 WHERE id = $1', [req.user.id, cand]);
+          tok = cand; break;
+        } catch (e) { if (i === 4) throw e; }
+      }
+    }
+    if (req.body.on !== undefined) await db.query('UPDATE users SET catalog_feed_on = $2 WHERE id = $1', [req.user.id, wantOn]);
+    const u = (await db.query('SELECT catalog_feed_token, catalog_feed_on FROM users WHERE id = $1', [req.user.id])).rows[0];
+    res.json({
+      on: !!u.catalog_feed_on,
+      hasToken: !!u.catalog_feed_token,
+      xml: feedAbsUrl('/catalog/' + u.catalog_feed_token + '.xml'),
+      csv: feedAbsUrl('/catalog/' + u.catalog_feed_token + '.csv'),
+      rotated: rotate,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update your feed.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   SHOPS WITH MORE THAN ONE BRANCH
+   ───────────────────────────────────────────────
+   A seller with two shops has one question their customers keep asking: which
+   one has it in, right now. This answers that, and nothing more.
+
+   What it deliberately does NOT do: it does not become the number the online
+   shop sells from. `products.stock` stays the single figure that checkout
+   reserves against, so reservations, oversell protection and refunds behave
+   exactly as they did. Making a branch count authoritative for online orders is
+   how real shops end up selling the same item twice — so the two are kept apart,
+   and the branch count is what a collection order draws down.
+═══════════════════════════════════════════════ */
+const LOCATION_CAP = 50;
+
+function mapLocation(l) {
+  return {
+    id: l.id, name: l.name, address: l.address || null, note: l.note || null,
+    lat: l.lat != null ? Number(l.lat) : null, lng: l.lng != null ? Number(l.lng) : null,
+    active: !!l.active,
+    stock: l.stock != null ? Number(l.stock) : undefined,
+    createdAt: l.created_at,
+  };
+}
+
+app.get('/api/locations', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT * FROM seller_locations WHERE seller_id = $1 ORDER BY active DESC, lower(name)', [req.user.id]);
+    res.json({ locations: rows.map(mapLocation) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your shops.' }); }
+});
+
+app.post('/api/locations', auth.requireAuth, rateLimit(30, 60000, 'location'), async (req, res) => {
+  const me = await requireHandle(req, res); if (!me) return;
+  const name = String(req.body.name || '').trim().slice(0, 80);
+  if (!name) return res.status(400).json({ error: 'Give this shop a name.' });
+  try {
+    const n = (await db.query('SELECT COUNT(*)::int AS n FROM seller_locations WHERE seller_id = $1', [req.user.id])).rows[0].n;
+    if (n >= LOCATION_CAP) return res.status(400).json({ error: 'You can have up to ' + LOCATION_CAP + ' shops.' });
+    const geo = readLocationGeo(req.body);
+    if (geo.error) return res.status(400).json({ error: geo.error });
+    const { rows } = await db.query(
+      `INSERT INTO seller_locations (seller_id, name, address, note, lat, lng)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [req.user.id, name, String(req.body.address || '').trim().slice(0, 200) || null,
+        String(req.body.note || '').trim().slice(0, 200) || null, geo.lat, geo.lng]);
+    res.status(201).json({ location: mapLocation(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add that shop.' }); }
+});
+
+function readLocationGeo(body) {
+  if (body.lat === undefined && body.lng === undefined) return { lat: null, lng: null, unset: true };
+  if (body.lat === null || body.lat === '' || body.lng === null || body.lng === '') return { lat: null, lng: null };
+  const la = Number(body.lat), lo = Number(body.lng);
+  if (!Number.isFinite(la) || !Number.isFinite(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180) {
+    return { error: 'That location doesn’t look right.' };
+  }
+  return { lat: la, lng: lo };
+}
+
+app.patch('/api/locations/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const sets = [], vals = [];
+  const put = (c, v) => { vals.push(v); sets.push(`${c} = $${vals.length}`); };
+  if (typeof req.body.name === 'string') {
+    const n = req.body.name.trim().slice(0, 80);
+    if (!n) return res.status(400).json({ error: 'Give this shop a name.' });
+    put('name', n);
+  }
+  if (typeof req.body.address === 'string') put('address', req.body.address.trim().slice(0, 200) || null);
+  if (typeof req.body.note === 'string') put('note', req.body.note.trim().slice(0, 200) || null);
+  if (typeof req.body.active === 'boolean') put('active', req.body.active);
+  if (req.body.lat !== undefined || req.body.lng !== undefined) {
+    const geo = readLocationGeo(req.body);
+    if (geo.error) return res.status(400).json({ error: geo.error });
+    put('lat', geo.lat); put('lng', geo.lng);
+  }
+  if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
+  vals.push(id, req.user.id);
+  try {
+    const { rows } = await db.query(
+      `UPDATE seller_locations SET ${sets.join(', ')} WHERE id = $${vals.length - 1} AND seller_id = $${vals.length} RETURNING *`, vals);
+    if (!rows[0]) return res.status(404).json({ error: 'Shop not found.' });
+    res.json({ location: mapLocation(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update that shop.' }); }
+});
+
+app.delete('/api/locations/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rowCount } = await db.query('DELETE FROM seller_locations WHERE id = $1 AND seller_id = $2', [id, req.user.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Shop not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove that shop.' }); }
+});
+
+// The seller's grid for one product: every one of their shops, and how many are
+// on that shop's shelf. Shops with no row yet come back as 0, not missing.
+app.get('/api/locations/product/:productId', auth.requireAuth, async (req, res) => {
+  const pid = routeId(req.params.productId);
+  if (!Number.isInteger(pid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const p = (await db.query('SELECT business_id FROM products WHERE id = $1', [pid])).rows[0];
+    if (!p) return res.status(404).json({ error: 'Listing not found.' });
+    if (p.business_id !== req.user.id) return res.status(403).json({ error: 'That isn’t your listing.' });
+    const { rows } = await db.query(
+      `SELECT l.*, COALESCE(s.stock, 0) AS stock
+         FROM seller_locations l LEFT JOIN location_stock s ON s.location_id = l.id AND s.product_id = $2
+        WHERE l.seller_id = $1 ORDER BY l.active DESC, lower(l.name)`, [req.user.id, pid]);
+    res.json({ locations: rows.map(mapLocation) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load that.' }); }
+});
+
+app.put('/api/locations/:id/stock', auth.requireAuth, rateLimit(120, 60000, 'location-stock'), async (req, res) => {
+  const id = routeId(req.params.id);
+  const pid = routeId(req.body.productId);
+  const stock = Math.round(Number(req.body.stock));
+  if (!Number.isInteger(id) || !Number.isInteger(pid)) return res.status(400).json({ error: 'Invalid id.' });
+  if (!Number.isFinite(stock) || stock < 0 || stock > 1000000) return res.status(400).json({ error: 'Enter a number from 0 upward.' });
+  try {
+    // Both the shop AND the listing have to be this seller's — checked in one
+    // query so a crafted request can't write a count onto somebody else's shelf.
+    const ok = (await db.query(
+      `SELECT 1 FROM seller_locations l, products p
+        WHERE l.id = $1 AND l.seller_id = $3 AND p.id = $2 AND p.business_id = $3`, [id, pid, req.user.id])).rows[0];
+    if (!ok) return res.status(404).json({ error: 'Not found.' });
+    await db.query(
+      `INSERT INTO location_stock (location_id, product_id, stock) VALUES ($1,$2,$3)
+       ON CONFLICT (location_id, product_id) DO UPDATE SET stock = $3, updated_at = now()`, [id, pid, stock]);
+    res.json({ ok: true, locationId: id, productId: pid, stock });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that count.' }); }
+});
+
+// What a shopper sees: which branches have this in, for collection. Only ACTIVE
+// shops, and only when the seller has actually set counts — a seller with one
+// shop and no branch data shows nothing, exactly as before.
+app.get('/api/listings/:id/availability', auth.requireAuth, async (req, res) => {
+  const pid = routeId(req.params.id);
+  if (!Number.isInteger(pid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const p = (await db.query('SELECT business_id, active, pickup FROM products WHERE id = $1', [pid])).rows[0];
+    if (!p) return res.status(404).json({ error: 'Listing not found.' });
+    const mine = p.business_id === req.user.id;
+    if (!p.active && !mine) return res.status(404).json({ error: 'Listing not found.' });
+    if (await blockedEither(req.user.id, p.business_id)) return res.json({ locations: [], pickup: false });
+    const { rows } = await db.query(
+      `SELECT l.id, l.name, l.address, l.note, l.lat, l.lng, l.active, s.stock
+         FROM location_stock s JOIN seller_locations l ON l.id = s.location_id
+        WHERE s.product_id = $1 AND l.active = true
+     ORDER BY s.stock DESC, lower(l.name) LIMIT 50`, [pid]);
+    res.json({ pickup: !!p.pickup, locations: rows.map(mapLocation) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not check the shops.' }); }
+});
+
+/* A collection order draws down the branch it is being collected from. Called
+   after the money has already settled, and deliberately best-effort: the sale is
+   real whatever happens here, so a failure is logged for the seller to correct
+   rather than allowed to fail an order that has been paid for. */
+async function drawDownLocationStock(orderId) {
+  try {
+    const o = (await db.query('SELECT pickup_location_id FROM orders WHERE id = $1', [orderId])).rows[0];
+    if (!o || !o.pickup_location_id) return;
+    const items = (await db.query('SELECT product_id, qty FROM order_items WHERE order_id = $1', [orderId])).rows;
+    for (const it of items) {
+      if (!it.product_id) continue;
+      await db.query(
+        `UPDATE location_stock SET stock = GREATEST(0, stock - $3), updated_at = now()
+          WHERE location_id = $1 AND product_id = $2`,
+        [o.pickup_location_id, it.product_id, Math.max(1, Number(it.qty) || 1)]);
+    }
+  } catch (err) { console.error('branch stock draw-down failed for order', orderId, err.message); }
+}
+
 app.post('/api/pos/sales', auth.requireAuth, rateLimit(60, 60000, 'pos'), async (req, res) => {
   if (!(await requireHandle(req, res))) return;
   const method = POS_METHODS.includes(req.body.method) ? req.body.method : 'atwe';
@@ -11425,6 +11780,10 @@ function mapBot(b, mine) {
     commands: Array.isArray(b.commands) ? b.commands : [],
     published: !!b.published, installs: b.installs, status: b.status,
     installed: !!b.installed, mine: !!mine,
+    placeName: b.place_name || null,
+    lat: b.lat != null ? Number(b.lat) : null, lng: b.lng != null ? Number(b.lng) : null,
+    radiusKm: b.radius_km != null ? Number(b.radius_km) : null,
+    distanceKm: b.dist_km != null ? Math.round(Number(b.dist_km) * 10) / 10 : undefined,
     // The secret and the URL are the owner's business and nobody else's.
     webhookUrl: mine ? (b.webhook_url || '') : undefined,
     secret: mine ? b.secret : undefined };
@@ -11448,6 +11807,33 @@ app.get('/api/bots', auth.requireAuth, async (req, res) => {
         WHERE ${where} ORDER BY b.installs DESC, b.id DESC LIMIT 60`, [req.user.id]);
     res.json({ bots: rows.map((b) => mapBot(b, b.owner_id === req.user.id)) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load those.' }); }
+});
+/* Mini-apps for where you are standing. A bot only appears here if its owner
+   deliberately pinned it to a place AND you are inside the radius they chose —
+   so a bot can't quietly follow people around, and nothing shows up as "near"
+   that its owner didn't mean to be local. Same haversine as the business
+   directory: no map service, no geocoding, distance only. */
+const BOT_NEAR_DEFAULT_KM = 5;
+app.get('/api/bots/nearby', auth.requireAuth, async (req, res) => {
+  const la = Number(req.query.lat), lo = Number(req.query.lng);
+  if (!Number.isFinite(la) || !Number.isFinite(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180) {
+    return res.status(400).json({ error: 'Send your location to see what is nearby.' });
+  }
+  try {
+    const { rows } = await db.query(
+      `SELECT b.*, u.username,
+              EXISTS(SELECT 1 FROM bot_installs i WHERE i.bot_id = b.id AND i.user_id = $3 AND i.group_id IS NULL) AS installed,
+              (6371 * acos(GREATEST(-1, LEAST(1, cos(radians($1)) * cos(radians(b.lat)) * cos(radians(b.lng) - radians($2)) + sin(radians($1)) * sin(radians(b.lat)))))) AS dist_km
+         FROM bots b JOIN users u ON u.id = b.user_id
+        WHERE b.published = true AND b.status = 'active' AND b.lat IS NOT NULL AND b.lng IS NOT NULL
+     ORDER BY dist_km ASC LIMIT 200`, [la, lo, req.user.id]);
+    // The radius is each owner's own choice, so it is applied once the distance
+    // is known rather than as one fixed WHERE for everybody.
+    const near = rows
+      .filter((b) => Number(b.dist_km) <= (b.radius_km != null ? Number(b.radius_km) : BOT_NEAR_DEFAULT_KM))
+      .slice(0, 40);
+    res.json({ bots: near.map((b) => mapBot(b, b.owner_id === req.user.id)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not look around you.' }); }
 });
 app.post('/api/bots', auth.requireAuth, rateLimit(10, 3600000, 'bot-create'), async (req, res) => {
   if (!(await requireHandle(req, res))) return;
@@ -11494,6 +11880,22 @@ app.patch('/api/bots/:id', auth.requireAuth, async (req, res) => {
   }
   if (Array.isArray(req.body.commands)) put('commands', JSON.stringify(cleanCommands(req.body.commands)));
   if (typeof req.body.published === 'boolean') put('published', req.body.published);
+  // Tie it to a place — or untie it by sending placeName: '' / lat: null.
+  if (typeof req.body.placeName === 'string') put('place_name', req.body.placeName.trim().slice(0, 80) || null);
+  if ('lat' in req.body || 'lng' in req.body) {
+    const la = req.body.lat === null || req.body.lat === '' ? null : Number(req.body.lat);
+    const lo = req.body.lng === null || req.body.lng === '' ? null : Number(req.body.lng);
+    if (la === null || lo === null) { put('lat', null); put('lng', null); }
+    else if (!Number.isFinite(la) || !Number.isFinite(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180) {
+      return res.status(400).json({ error: 'That location doesn’t look right.' });
+    } else { put('lat', la); put('lng', lo); }
+  }
+  if ('radiusKm' in req.body) {
+    const r = req.body.radiusKm === null || req.body.radiusKm === '' ? null : Number(req.body.radiusKm);
+    if (r === null) put('radius_km', null);
+    else if (!Number.isFinite(r) || r <= 0 || r > 100) return res.status(400).json({ error: 'Pick a distance between 0 and 100 km.' });
+    else put('radius_km', r);
+  }
   if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
   vals.push(id, req.user.id);
   try {
@@ -12991,6 +13393,31 @@ app.get('/api/ai/photo-styles', auth.requireAuth, (_req, res) => {
   res.json({ styles: PHOTO_STYLE_KEYS.map((k) => ({ key: k, label: PHOTO_STYLES[k].label })),
     enabled: imagegen.isConfigured() && !!process.env.ANTHROPIC_API_KEY });
 });
+/* Is there a real, identifiable person in this photo? One word back, so it is
+   cheap. Returns null when the check itself could not run — the caller treats
+   that as "don't block", which is a deliberate choice: a provider wobble must
+   not take a working tool away from every seller. */
+async function photoHasPerson(image) {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  try {
+    const r = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 8,
+      system: aiPrompt('photo-person',
+        'Answer with exactly one word, YES or NO. YES if a real person is identifiable in the photo — a face, or a recognisable body. '
+        + 'NO for a drawing, a mannequin, a statue, a logo, a photo on a product, or a hand or arm alone. No punctuation, no explanation.'),
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: (image.match(/^data:([^;]+);/) || [])[1] || 'image/jpeg',
+          data: image.slice(image.indexOf(';base64,') + 8) } },
+        { type: 'text', text: 'Is a real person identifiable here?' },
+      ] }],
+    });
+    const t = ((r.content.find((b) => b.type === 'text') || {}).text || '').trim().toUpperCase();
+    if (t.startsWith('YES')) return true;
+    if (t.startsWith('NO')) return false;
+    return null;
+  } catch (e) { console.error('photo person check:', e.message); return null; }
+}
 app.post('/api/ai/product-photo', auth.requireAuth, rateLimit(20, 3600000, 'ai-photo'), requireFeature('ai'), async (req, res) => {
   if (!imagegen.isConfigured()) return res.status(503).json({ error: 'Tidying up photos is not set up on this server yet.' });
   if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not set up on this server.' });
@@ -12998,6 +13425,25 @@ app.post('/api/ai/product-photo', auth.requireAuth, rateLimit(20, 3600000, 'ai-p
   const image = cleanImage(req.body.image);
   if (!image) return res.status(400).json({ error: 'Send a photo to tidy up.' });
   try {
+    /* Consent before a person is redrawn.
+       This is the one place in Atwe where AI takes a photo somebody uploaded and
+       makes a NEW picture from it. That is fine for a mug. It is not fine for a
+       person who is not in the room — so if there is an identifiable person in
+       the shot, the upload stops here and asks, rather than quietly redrawing a
+       stranger's face. Saying yes is recorded against the photo.
+       Note the honest limit: it fails OPEN if the check itself errors, because
+       breaking a working feature on an API hiccup would be worse than the rare
+       miss — and it can only ask the uploader, since nothing here knows WHO is
+       in a photo, only that somebody is. */
+    if (req.body.consent !== true) {
+      const person = await photoHasPerson(image);
+      if (person === true) {
+        return res.json({
+          needsConsent: true,
+          message: 'There is a person in this photo. Atwe AI would draw a brand-new picture from it. Only carry on if that person is happy for you to.',
+        });
+      }
+    }
     // The picture service draws from words, not from a photo, so first look at
     // the photo and describe exactly what is in it. Describing it accurately is
     // the whole difference between "your product, tidied" and "something else".
@@ -13020,6 +13466,10 @@ app.post('/api/ai/product-photo', auth.requireAuth, rateLimit(20, 3600000, 'ai-p
     const url = await offloadMedia(out.dataUrl, 'product');
     // The description is returned too, so the seller can see what it understood
     // — if it got the product wrong, that is visible rather than mysterious.
+    if (req.body.consent === true) {
+      db.query('INSERT INTO ai_photo_consents (user_id, image_sha) VALUES ($1,$2)',
+        [req.user.id, _vcrypto.createHash('sha256').update(image).digest('hex')]).catch(() => {});
+    }
     res.json({ image: url, understood: desc, style });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not tidy up that photo.' }); }
 });
@@ -15086,9 +15536,110 @@ function mapCommunity(c, me) {
     members: c.members != null ? c.members : undefined,
     groups: c.groups != null ? c.groups : undefined,
     isAdmin: c.created_by === me, isMember: c.is_member === true || c.created_by === me,
+    boostCents: c.boost_cents || 0,
+    boostCount: c.boost_count || 0,
+    boostLevel: boostLevel(c.boost_cents),
     created_at: c.created_at,
   };
 }
+/* ── Community boosts ──────────────────────────────────────────────────────
+   A member puts real money behind a community they get value from. Two honest
+   rules keep this from being the arcade currency it could easily become:
+
+     · the money is a real transfer to the person who runs the community —
+       it is support, not a token the platform mints and sells back;
+     · a boost buys exactly ONE thing: the community sits higher in Discover,
+       with the level shown. No streaks, no badges to collect, no perks that
+       quietly become pay-to-win inside the community itself.
+
+   Levels are cumulative money, not a count, so ten people chipping in a dollar
+   and one person putting in ten reach the same place. */
+const BOOST_LEVELS = [
+  { level: 1, cents: 1000 },
+  { level: 2, cents: 5000 },
+  { level: 3, cents: 15000 },
+  { level: 4, cents: 50000 },
+];
+const BOOST_MIN_CENTS = 100;
+const BOOST_MAX_CENTS = 50000;
+function boostLevel(cents) {
+  let lv = 0;
+  for (const t of BOOST_LEVELS) if ((cents || 0) >= t.cents) lv = t.level;
+  return lv;
+}
+function boostNext(cents) {
+  const t = BOOST_LEVELS.find((x) => (cents || 0) < x.cents);
+  return t ? { level: t.level, cents: t.cents, remainingCents: t.cents - (cents || 0) } : null;
+}
+
+// Back a community from the wallet. Same shape as every other money route here:
+// velocity-checked, idempotent on the client id, and the transfer is what makes
+// it real — the counters only move once the money has actually moved.
+app.post('/api/communities/:id/boost', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'community-boost'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const amount = Math.round(Number(req.body.amountCents) || 0);
+  if (!(amount >= BOOST_MIN_CENTS && amount <= BOOST_MAX_CENTS)) {
+    return res.status(400).json({ error: 'Enter an amount between $1 and $500.' });
+  }
+  try {
+    const c = (await db.query('SELECT id, name, created_by FROM communities WHERE id = $1', [id])).rows[0];
+    if (!c) return res.status(404).json({ error: 'Community not found.' });
+    if (!c.created_by) return res.status(400).json({ error: 'This community has no owner to support.' });
+    if (c.created_by === req.user.id) return res.status(400).json({ error: 'You can’t boost your own community.' });
+    if (await blockedEither(req.user.id, c.created_by)) return res.status(403).json({ error: 'You can’t boost this community.' });
+    const vel = await walletVelocityCheck(req.user.id, amount);
+    if (!vel.ok) return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel));
+    const cid = req.body.clientId ? String(req.body.clientId).slice(0, 80) : null;
+    const idem = await walletClaimIdem(req.user.id, cid, 'boost');
+    if (!idem.claimed) return res.json(idem.result || { ok: true });
+    const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
+    if (bal < amount) { await walletReleaseIdem(req.user.id, cid, 'boost'); return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true }); }
+    const t = await walletTransfer(req.user.id, c.created_by, amount, 'Community boost', false);
+    if (!t.ok) { await walletReleaseIdem(req.user.id, cid, 'boost'); return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance.' : 'Could not boost.', insufficientBalance: !!t.insufficient }); }
+    await db.query('INSERT INTO community_boosts (community_id, user_id, amount_cents) VALUES ($1,$2,$3)', [id, req.user.id, amount]);
+    const upd = (await db.query(
+      'UPDATE communities SET boost_cents = boost_cents + $2, boost_count = boost_count + 1 WHERE id = $1 RETURNING boost_cents, boost_count',
+      [id, amount])).rows[0];
+    notify(c.created_by, req.user.id, 'community_boost', null, null, null, null);
+    rtPush(req.user.id, 'wallet', { type: 'update', amountCents: amount });
+    rtPush(c.created_by, 'wallet', { type: 'receive', amountCents: amount });
+    const out = {
+      ok: true,
+      boostCents: upd.boost_cents,
+      boostCount: upd.boost_count,
+      boostLevel: boostLevel(upd.boost_cents),
+      nextLevel: boostNext(upd.boost_cents),
+    };
+    await walletStoreIdem(req.user.id, cid, 'boost', out);
+    res.json(out);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not boost this community.' }); }
+});
+
+// Who has backed this community, and by how much. Public to members and
+// non-members alike — the whole point is that support is visible.
+app.get('/api/communities/:id/boosts', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const c = (await db.query('SELECT boost_cents, boost_count FROM communities WHERE id = $1', [id])).rows[0];
+    if (!c) return res.status(404).json({ error: 'Community not found.' });
+    const { rows } = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar, u.account_type, u.verified, SUM(b.amount_cents)::int AS total
+         FROM community_boosts b JOIN users u ON u.id = b.user_id
+        WHERE b.community_id = $1 AND COALESCE(u.deactivated,false) = false
+        GROUP BY u.id ORDER BY total DESC LIMIT 30`, [id]);
+    res.json({
+      boostCents: c.boost_cents, boostCount: c.boost_count,
+      boostLevel: boostLevel(c.boost_cents), nextLevel: boostNext(c.boost_cents),
+      backers: rows.map((u) => ({
+        id: u.id, name: u.name, username: u.username, avatar: mediaRef(u.avatar, 'avatar', u.id, 0),
+        accountType: u.account_type, verified: !!u.verified, totalCents: u.total,
+      })),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load backers.' }); }
+});
+
 // Create a community — also spins up its broadcast "announcement" channel.
 app.post('/api/communities', auth.requireAuth, rateLimit(10, 60000, 'community-create'), async (req, res) => {
   const name = (req.body.name || '').trim().slice(0, 60);
@@ -15118,10 +15669,11 @@ app.get('/api/communities', auth.requireAuth, async (req, res) => {
       : 'WHERE NOT EXISTS(SELECT 1 FROM community_members m WHERE m.community_id = c.id AND m.user_id = $1)';
     const { rows } = await db.query(
       `SELECT c.id, c.name, c.description, c.avatar, c.created_by, c.announce_group_id, c.created_at,
+              c.boost_cents, c.boost_count,
               (SELECT COUNT(*)::int FROM community_members m WHERE m.community_id = c.id) AS members,
               (SELECT COUNT(*)::int FROM community_groups g WHERE g.community_id = c.id) AS groups,
               EXISTS(SELECT 1 FROM community_members m WHERE m.community_id = c.id AND m.user_id = $1) AS is_member
-       FROM communities c ${where} ORDER BY c.created_at DESC LIMIT 100`,
+       FROM communities c ${where} ORDER BY c.boost_cents DESC, c.created_at DESC LIMIT 100`,
       [req.user.id]
     );
     res.json({ communities: rows.map((c) => mapCommunity(c, req.user.id)) });
@@ -15132,7 +15684,7 @@ app.get('/api/communities/:id', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   try {
-    const c = (await db.query('SELECT id, name, description, avatar, created_by, announce_group_id, created_at FROM communities WHERE id = $1', [id])).rows[0];
+    const c = (await db.query('SELECT id, name, description, avatar, created_by, announce_group_id, created_at, boost_cents, boost_count FROM communities WHERE id = $1', [id])).rows[0];
     if (!c) return res.status(404).json({ error: 'Community not found.' });
     const member = await isCommunityMember(id, req.user.id);
     const subs = await db.query(
@@ -27190,7 +27742,7 @@ app.post('/api/offers/:id/checkout', auth.requireAuth, blockImpersonation, rateL
       return res.status(400).json({ error: 'This offer is already being paid.' });
     }
     const revertOffer = () => db.query("UPDATE offers SET status = 'accepted', updated_at = now() WHERE id = $1 AND status = 'paying'", [id]).catch(() => {});
-    const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note: 'Accepted offer', shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation });
+    const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note: 'Accepted offer', shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation, pickupLocationId: ship.pickupLocationId });
     await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty) VALUES ($1,$2,$3,$4,1)', [orderId, o.product_id, p.name, unitPrice]);
     const stk = await applyStock(items);
     if (!stk.ok) { await db.query('DELETE FROM orders WHERE id = $1', [orderId]).catch(() => {}); await revertOffer(); return res.status(409).json({ error: stk.error, outOfStock: true }); }
@@ -29803,8 +30355,20 @@ async function resolveShipping(userId, body, items, opts) {
   // Local pickup: the buyer chose pickup AND every physical item offers it → no
   // ship-to, free, and the order is marked pickup with the seller's location.
   if (body.pickup && items.every((it) => it.kind !== 'physical' || it.pickup)) {
-    const loc = items.map((it) => it.pickup_location).filter(Boolean)[0] || null;
-    return { ok: true, needsShipping: false, shippingCents: 0, addr: null, pickup: true, pickupLocation: loc };
+    let loc = items.map((it) => it.pickup_location).filter(Boolean)[0] || null;
+    // A seller with branches lets the buyer pick which one to collect from. The
+    // id is checked against that seller's own ACTIVE shops, so a crafted request
+    // can't attach somebody else's branch (or a closed one) to an order.
+    let pickupLocationId = null;
+    const wantId = routeId(body.pickupLocationId);
+    if (Number.isInteger(wantId) && opts && opts.sellerId) {
+      const row = (await db.query(
+        'SELECT id, name FROM seller_locations WHERE id = $1 AND seller_id = $2 AND active = true',
+        [wantId, opts.sellerId])).rows[0];
+      if (!row) return { ok: false, error: 'That shop isn’t available for collection.' };
+      pickupLocationId = row.id; loc = row.name;
+    }
+    return { ok: true, needsShipping: false, shippingCents: 0, addr: null, pickup: true, pickupLocation: loc, pickupLocationId };
   }
   let shippingCents = items.reduce((s, it) => s + (it.kind === 'physical' && it.ship_free === false ? (it.ship_fee_cents || 0) : 0), 0);
   // Seller free-shipping threshold ("free over $50"): when the caller passes the
@@ -29957,13 +30521,13 @@ async function buyerIsBusiness(userId) {
   catch { return false; }
 }
 // Insert a pending order with its ship-to snapshot (immutable history the seller ships against).
-async function insertOrder({ buyerId, sellerId, total, note, shippingCents, taxCents, needsShipping, addr, discountCents, couponCode, pickup, pickupLocation, affiliateId, commissionCents, gift, giftNote, eta, localDelivery, deliveryZoneId }) {
+async function insertOrder({ buyerId, sellerId, total, note, shippingCents, taxCents, needsShipping, addr, discountCents, couponCode, pickup, pickupLocation, pickupLocationId, affiliateId, commissionCents, gift, giftNote, eta, localDelivery, deliveryZoneId }) {
   const a = addr || {};
   const { rows } = await db.query(
-    `INSERT INTO orders (buyer_id, seller_id, total_cents, note, shipping_cents, tax_cents, discount_cents, coupon_code, needs_shipping, pickup, pickup_location, affiliate_id, commission_cents, ship_name, ship_phone, ship_line1, ship_line2, ship_city, ship_region, ship_postal, ship_country, gift, gift_note, eta_min_at, eta_max_at, local_delivery, delivery_zone_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27) RETURNING id`,
+    `INSERT INTO orders (buyer_id, seller_id, total_cents, note, shipping_cents, tax_cents, discount_cents, coupon_code, needs_shipping, pickup, pickup_location, affiliate_id, commission_cents, ship_name, ship_phone, ship_line1, ship_line2, ship_city, ship_region, ship_postal, ship_country, gift, gift_note, eta_min_at, eta_max_at, local_delivery, delivery_zone_id, pickup_location_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28) RETURNING id`,
     [buyerId, sellerId, total, note || null, shippingCents || 0, taxCents || 0, discountCents || 0, couponCode || null, !!needsShipping, !!pickup, pickupLocation || null, affiliateId || null, commissionCents || 0, a.full_name || null, a.phone || null, a.line1 || null, a.line2 || null, a.city || null, a.region || null, a.postal || null, a.country || null, gift === true, (giftNote || '').toString().trim().slice(0, 300) || null,
-      (eta && eta.minAt) || null, (eta && eta.maxAt) || null, localDelivery === true, deliveryZoneId || null]
+      (eta && eta.minAt) || null, (eta && eta.maxAt) || null, localDelivery === true, deliveryZoneId || null, pickupLocationId || null]
   );
   return rows[0].id;
 }
@@ -30046,6 +30610,7 @@ async function recordOrderPaid(orderId, sellerCredited) {
   await db.query('DELETE FROM cart_items WHERE user_id = $1 AND product_id IN (SELECT id FROM products WHERE business_id = $2)', [o.buyer_id, o.seller_id]).catch(() => {});
   markCartRecovered(o.seller_id, o.buyer_id);
   creditShopCampaign(o.seller_id, o.buyer_id, o.total_cents);
+  drawDownLocationStock(orderId);   // a collection order comes off that branch's shelf
   repayAdvanceFromSale(o.seller_id, o.total_cents);
   // Tell the seller's own systems. Queued, never awaited — their server being
   // slow (or down) must not hold up an order that has already been paid for.
@@ -30258,6 +30823,7 @@ async function fundEscrowOrder(buyerId, sellerId, orderId, totalCents) {
   markCartRecovered(sellerId, buyerId);
   creditShopCampaign(sellerId, buyerId, totalCents);
   repayAdvanceFromSale(sellerId, totalCents);
+  drawDownLocationStock(orderId);   // a collection order comes off that branch's shelf
   try {
     if (await dmAllowed(buyerId, sellerId)) {
       const meta = { t: 'order', id: orderId, totalCents, escrow: true };
@@ -30869,7 +31435,7 @@ app.post('/api/orders', auth.requireAuth, blockImpersonation, rateLimit(20, 6000
     const eta = rt.localDelivery
       ? { minAt: new Date(Date.now() + rt.etaMinutes * 60000), maxAt: new Date(Date.now() + rt.etaMinutes * 60000) }
       : (ship.needsShipping ? await etaForProducts(cart.rows.map((r) => r.product_id), transitFromRate(rt.chosenRate)) : null);
-    const orderId = await insertOrder({ buyerId: req.user.id, sellerId, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null, gift: req.body.gift === true, giftNote: req.body.giftNote, eta, localDelivery: rt.localDelivery, deliveryZoneId: rt.deliveryZoneId });
+    const orderId = await insertOrder({ buyerId: req.user.id, sellerId, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation, pickupLocationId: ship.pickupLocationId, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null, gift: req.body.gift === true, giftNote: req.body.giftNote, eta, localDelivery: rt.localDelivery, deliveryZoneId: rt.deliveryZoneId });
     await attachCouponClaim(couponClaimId, orderId);
     for (const r of items) {
       await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty, variant_id, variant_label) VALUES ($1,$2,$3,$4,$5,$6,$7)', [orderId, r.product_id, r.name, r.price_cents, r.qty, r.variant_id, r.variant_label]);
@@ -30966,7 +31532,7 @@ app.post('/api/orders/buy', auth.requireAuth, blockImpersonation, rateLimit(20, 
     const eta = rt.localDelivery
       ? { minAt: new Date(Date.now() + rt.etaMinutes * 60000), maxAt: new Date(Date.now() + rt.etaMinutes * 60000) }
       : (ship.needsShipping ? await etaForProducts([productId], transitFromRate(rt.chosenRate)) : null);
-    const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null, affiliateId, commissionCents, gift: req.body.gift === true, giftNote: req.body.giftNote, eta, localDelivery: rt.localDelivery, deliveryZoneId: rt.deliveryZoneId });
+    const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation, pickupLocationId: ship.pickupLocationId, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null, affiliateId, commissionCents, gift: req.body.gift === true, giftNote: req.body.giftNote, eta, localDelivery: rt.localDelivery, deliveryZoneId: rt.deliveryZoneId });
     await attachCouponClaim(couponClaimId, orderId);
     if (promo) await bookPlatformPromo(promo.id, req.user.id, orderId, cp.discountCents, p.business_id);
     await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty, variant_id, variant_label) VALUES ($1,$2,$3,$4,$5,$6,$7)', [orderId, productId, p.name, unitPrice, qty, items[0].variant_id, items[0].variant_label]);
