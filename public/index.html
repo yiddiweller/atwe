@@ -8070,6 +8070,10 @@ body.light .ac-post-toolbar .msg-attach:active{background:rgba(0,0,0,.1);}
 .ac-prof-stats{display:flex;gap:22px;margin-top:16px;}
 .ac-stat{font-size:13.5px;color:var(--t3);cursor:default;}
 .ac-stat b{color:var(--t1);font-weight:700;}
+/* A community's boost level. Amber = information, per the colour ladder — it
+   tells you the members back this place; it is not an action. */
+.ac-boost-chip{display:inline-flex;align-items:center;gap:4px;background:var(--amber);color:#2a1f00;
+  font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;margin-left:7px;vertical-align:middle;white-space:nowrap;}
 .ac-prof-head{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);padding:14px 16px 2px;}
 body.light .ac-follow-btn.following{background:transparent;color:var(--t1);}
 /* Floating back arrow over a profile banner (no top menu, X-style) */
@@ -14227,6 +14231,15 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
   </div>
 </div>
 
+<!-- Community boost: back a community from your wallet -->
+<div class="overlay hidden" id="boostView" onclick="if(event.target===this)closeOverlay('boostView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Boost this community">
+    <button class="sheet-close" onclick="closeOverlay('boostView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Boost this community</div>
+    <div id="boostBody"></div>
+  </div>
+</div>
+
 <!-- Group invite link -->
 <div class="overlay hidden" id="groupInviteView" onclick="if(event.target===this)closeOverlay('groupInviteView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Invite link">
@@ -15026,6 +15039,18 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <div class="st-h">Where to send messages</div>
     <input class="jp-in" id="bfHook" maxlength="500" placeholder="https://your-server.example/atwe" aria-label="Webhook address"/>
     <div class="ac-disc-sub" style="margin-top:6px;">We post each message there, signed so you can check it came from us. Answer with <code>{"text":"…"}</code> and it replies straight away.</div>
+    <div class="st-h">Tie it to a place <span style="opacity:.6;font-weight:400;">optional</span></div>
+    <input class="jp-in" id="bfPlace" maxlength="80" placeholder="e.g. Borough Market" aria-label="Place name"/>
+    <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
+      <button class="ac-pill-btn" style="flex:1;" onclick="acBotUseLocation()">Use where I am now</button>
+      <select class="jp-in" id="bfRadius" aria-label="How near counts" style="flex:0 0 118px;margin:0;">
+        <option value="0.5">within 500 m</option>
+        <option value="2">within 2 km</option>
+        <option value="5" selected>within 5 km</option>
+        <option value="20">within 20 km</option>
+      </select>
+    </div>
+    <div class="ac-disc-sub" id="bfPlaceNote" style="margin-top:6px;">Only if it is worth using when you are actually there — a market, a venue, a campus. It then shows up in “Near you”. Leave it blank and nothing changes.</div>
     <div id="bfSecret"></div>
     <button class="ac-pill-btn accent" style="width:100%;margin-top:14px;" onclick="acSaveBot()">Save</button>
   </div>
@@ -16846,6 +16871,46 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <div class="jp-title" style="margin:0 0 2px;">Cart recovery</div>
     <div class="ac-disc-sub" style="margin:0 0 12px;">Win back shoppers who left items in their cart. One friendly Beam reminder.</div>
     <div id="cartRecoveryBody"></div>
+  </div>
+</div>
+
+<!-- Shops with more than one branch -->
+<div class="overlay hidden" id="locationsView" onclick="if(event.target===this)closeOverlay('locationsView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Your shops">
+    <button class="sheet-close" onclick="closeOverlay('locationsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Your shops</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Each place a customer can walk into and collect something.</div>
+    <div id="locationsBody"></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="locationForm" onclick="if(event.target===this)closeOverlay('locationForm')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Add a shop">
+    <button class="sheet-close" onclick="closeOverlay('locationForm')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="locFormTitle">Add a shop</div>
+    <input class="jp-in" id="lfName" maxlength="80" placeholder="What do you call it? e.g. High Street" aria-label="Shop name"/>
+    <input class="jp-in" id="lfAddress" maxlength="200" placeholder="Address" aria-label="Address" style="margin-top:8px;"/>
+    <input class="jp-in" id="lfNote" maxlength="200" placeholder="Anything a customer should know (optional)" aria-label="Note" style="margin-top:8px;"/>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:14px;" onclick="acSaveLocation()">Save</button>
+  </div>
+</div>
+
+<div class="overlay hidden" id="prodStockView" onclick="if(event.target===this)closeOverlay('prodStockView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="What is where">
+    <button class="sheet-close" onclick="closeOverlay('prodStockView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="prodStockTitle" style="margin:0 0 2px;">What is where</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">How many are on each shop's shelf.</div>
+    <div id="prodStockBody"></div>
+  </div>
+</div>
+
+<!-- Sell on other channels: the seller's catalog as an importable product feed -->
+<div class="overlay hidden" id="catalogFeedView" onclick="if(event.target===this)closeOverlay('catalogFeedView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Sell on other channels">
+    <button class="sheet-close" onclick="closeOverlay('catalogFeedView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Sell on other channels</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Give Google Shopping, Meta or another marketplace one address and it keeps itself up to date with your shop. Orders still happen here.</div>
+    <div id="catalogFeedBody"></div>
   </div>
 </div>
 
@@ -18867,7 +18932,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1645'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1646'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -27409,6 +27474,70 @@ async function acCommCreate() {
     closeOverlay('commCreate'); showNotif('Community created.'); acOpenCommunity(community.id);
   } catch (e) { showNotif(e.message || 'Could not create the community.'); }
 }
+/* ── Community boosts (client) ────────────────────────────────────────────
+   Support a community with real money from the wallet. What it buys is stated
+   plainly on the sheet: the community sits higher in Discover. Nothing inside
+   the community itself changes, so nobody can pay their way to influence. */
+const BOOST_AMOUNTS = [200, 500, 1000, 2500];
+function acBoostLevelChip(c) {
+  if (!c || !c.boostLevel) return '';
+  return `<span class="ac-boost-chip" title="Backed by its members">⚡ Level ${c.boostLevel}</span>`;
+}
+function acBoostBlock(c) {
+  if (!c) return '';
+  const lv = c.boostLevel || 0;
+  const cents = c.boostCents || 0;
+  const line = cents
+    ? `${acBoostLevelChip(c)} <span class="ac-disc-sub" style="display:inline;">$${(cents / 100).toFixed(2)} from ${c.boostCount} boost${c.boostCount === 1 ? '' : 's'}</span>`
+    : '<span class="ac-disc-sub" style="display:inline;">Not boosted yet.</span>';
+  // The owner can't boost their own — showing them the button would be a tease.
+  const btn = c.isAdmin ? '' : `<button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 13px;" onclick="acBoostOpen()">Boost</button>`;
+  return `<div class="ac-section-row" style="margin-top:14px;"><span class="ac-prof-head">Support</span>${btn}</div>
+    <div style="padding:0 2px 2px;">${line}</div>`;
+}
+async function acBoostOpen() {
+  const c = (AC._commCur && AC._commCur.community) || null;
+  if (!c) return;
+  showOverlay('boostView');
+  const b = document.getElementById('boostBody'); if (!b) return;
+  b.innerHTML = acSkelRows(2);
+  let d;
+  try { d = await API.req('GET', '/api/communities/' + AC._commId + '/boosts'); }
+  catch (e) { b.innerHTML = `<div class="ac-empty">${escHtml(e.message)}</div>`; return; }
+  AC._boostData = d;
+  const bal = (S.user && S.user.balanceCents) || 0;
+  const next = d.nextLevel;
+  const backers = (d.backers || []).length
+    ? d.backers.map(u => `<div class="ac-item" onclick="closeOverlay('boostView');acGoProfile('${escHtml(u.username || '')}')">
+        ${acAvatarHtml(u.name, u.avatar, '', acIsBiz(u))}
+        <div class="ac-item-main"><div class="ac-item-name">${escHtml(u.name || '')}${vbadge(acIsVerified(u))}</div>
+          <div class="ac-item-last">$${(u.totalCents / 100).toFixed(2)}</div></div></div>`).join('')
+    : '<div class="ac-empty" style="padding:12px;">Nobody has boosted this yet.</div>';
+  b.innerHTML = `
+    <div style="text-align:center;padding:2px 0 10px;">
+      <div class="ac-prof-name" style="justify-content:center;"><span class="ac-prof-name-txt">${escHtml((c && c.name) || 'Community')}</span></div>
+      <div class="ac-prof-handle">${d.boostLevel ? 'Level ' + d.boostLevel : 'Not boosted yet'} · $${((d.boostCents || 0) / 100).toFixed(2)} from ${d.boostCount} boost${d.boostCount === 1 ? '' : 's'}</div>
+      ${next ? `<div class="ac-disc-sub" style="margin-top:6px;">$${(next.remainingCents / 100).toFixed(2)} more reaches level ${next.level}.</div>` : ''}
+    </div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Your money goes to the person who runs this community — Atwe takes none of it. All it changes is where the community sits in Discover: nothing inside it is unlocked or gated, so no one can buy influence here.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      ${BOOST_AMOUNTS.map(a => `<button class="ac-pill-btn" onclick="acBoostSend(${a})">$${(a / 100).toFixed(0)}</button>`).join('')}
+    </div>
+    <div class="ac-disc-sub" style="margin-top:10px;">Your balance: $${(bal / 100).toFixed(2)}${bal < BOOST_AMOUNTS[0] ? ' — <button class="ac-pill-btn" style="padding:4px 12px;font-size:12px;" onclick="closeOverlay(\'boostView\');acOpenAddMoney()">add money</button>' : ''}</div>
+    <div class="ac-section-row" style="margin-top:16px;"><span class="ac-prof-head">Backers</span></div>
+    ${backers}`;
+}
+async function acBoostSend(amountCents) {
+  const cid = acPayCid();
+  try {
+    const r = await API.req('POST', '/api/communities/' + AC._commId + '/boost', { amountCents, clientId: cid });
+      acRefreshBalance();
+    acOrderSuccessPulse(null, r.boostLevel ? 'Boosted — level ' + r.boostLevel : 'Boosted');
+    closeOverlay('boostView');
+    acOpenCommunity(AC._commId);
+  } catch (e) { acHandlePayErr(e); }
+}
+
 async function acOpenCommunity(id) {
   AC._commId = id;
   showOverlay('commView');
@@ -27436,11 +27565,12 @@ async function acOpenCommunity(id) {
     body.innerHTML = `
       <div style="text-align:center;padding:6px 0 4px;">
         ${acGroupAvatarHtml({ name: c.name, avatar: c.avatar }, 'ac-grp-ava-lg')}
-        <div class="ac-prof-name" style="margin-top:10px;"><span class="ac-prof-name-txt">${escHtml(c.name)}</span></div>
+        <div class="ac-prof-name" style="margin-top:10px;justify-content:center;"><span class="ac-prof-name-txt">${escHtml(c.name)}</span>${acBoostLevelChip(c)}</div>
         <div class="ac-prof-handle">${c.members} member${c.members === 1 ? '' : 's'} · ${c.groups} group${c.groups === 1 ? '' : 's'}</div>
       </div>
       ${c.description ? `<div class="ev-desc">${escHtml(c.description)}</div>` : ''}
       ${joinBtn}
+      ${acBoostBlock(c)}
       ${announce}
       <div class="ac-section-row"><span class="ac-prof-head">Groups</span>${c.isAdmin ? '<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acCommAddGroup()">＋ Add group</button>' : ''}</div>
       ${groups}`;
@@ -29985,7 +30115,7 @@ const _NOTIF_TABS = [
   ['all', 'All', null],
   ['social', 'Replies & likes', ['like', 'reply', 'repost', 'mention', 'quote', 'follow', 'tagged', 'coauthor', 'story_reply', 'story_react', 'story_answer', 'feed_like', 'feed_comment', 'remix']],
   ['jobs', 'Jobs', ['job_application', 'job_match', 'app_reviewed', 'app_shortlisted', 'app_hired', 'app_rejected', 'referral_request', 'connection_request', 'connection_accepted', 'endorsement']],
-  ['money', 'Money', ['money_received', 'money_request', 'money_request_paid', 'money_request_declined', 'order', 'order_fulfilled', 'order_shipped', 'order_delivered', 'invoice', 'invoice_paid', 'invoice_reminder', 'tip', 'payment', 'escrow_released', 'escrow_refunded', 'refund_approved', 'refund_declined', 'split_request', 'split_paid', 'split_reminder', 'pool_contribution', 'gift_received', 'affiliate', 'referral']],
+  ['money', 'Money', ['money_received', 'money_request', 'money_request_paid', 'money_request_declined', 'order', 'order_fulfilled', 'order_shipped', 'order_delivered', 'invoice', 'invoice_paid', 'invoice_reminder', 'tip', 'payment', 'escrow_released', 'escrow_refunded', 'refund_approved', 'refund_declined', 'split_request', 'split_paid', 'split_reminder', 'pool_contribution', 'community_boost', 'gift_received', 'affiliate', 'referral']],
 ];
 function acRenderNotifList() {
   const el = document.getElementById('notifList'); if (!el) return;
@@ -30158,7 +30288,7 @@ function notifRow(n, i) {
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
-  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', event_reminder: 'is hosting an event starting soon', event_comment: 'commented on your event', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', appt_rescheduled: 'proposed a new appointment time', appt_reminder: 'has an appointment with you soon', call_reminder: 'has a call with you soon', stock_low: 'is running low — only a few left', stock_out: 'has sold out', event_spot: 'a spot opened up — you’re in!', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', invoice_reminder: 'sent a reminder about an unpaid invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', strike: 'issued a warning on your account', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', referral_milestone: 'you hit a referral milestone — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', listing_hidden: 'a listing of yours was hidden — check your messages', waitlist_invite: 'you’re off the waiting list — it’s ready for you', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', auction_outbid: 'outbid you on an auction. Bid again to stay in it', auction_won: 'you won the auction. Pay to claim it', auction_ended: 'won your auction. They’re paying now', group_join_paid: 'paid your group’s join fee. They’re in', crm_followup: 'is due a follow-up — you set the reminder', rinv_paused: 'a recurring invoice was paused — check the schedule', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', split_reminder: 'sent a reminder about your share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', story_answer: 'responded to your question', story_mention: 'mentioned you in their Daily', remix: 'remixed your video', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_adjustment: 'your wallet balance was adjusted by our team', cashout_released: 'your cash-out was approved and is on its way to your bank', cashout_returned: 'your cash-out wasn’t approved — the money is back in your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item', lead_active: 'posted something new — they\u2019re on one of your lead lists', lead_hiring: 'is hiring — they\u2019re on one of your lead lists', inbox_assigned: 'gave you a conversation to handle', dmca_removed: 'removed something of yours after a copyright claim. Tap to contest it', dmca_reinstated: 'put your content back after reviewing your counter-notice', imp_upheld: 'agreed — the account impersonating you has been actioned', imp_rejected: 'reviewed your impersonation report', webinar_signup: 'signed up for your webinar', webinar_live: 'is live now — the webinar you signed up for has started', webinar_updated: 'changed a webinar you signed up for', webinar_cancelled: 'cancelled a webinar you signed up for', delivery_on_way: 'is on the way with your order' };
+  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', event_reminder: 'is hosting an event starting soon', event_comment: 'commented on your event', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', appt_rescheduled: 'proposed a new appointment time', appt_reminder: 'has an appointment with you soon', call_reminder: 'has a call with you soon', stock_low: 'is running low — only a few left', stock_out: 'has sold out', event_spot: 'a spot opened up — you’re in!', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', invoice_reminder: 'sent a reminder about an unpaid invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', strike: 'issued a warning on your account', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', referral_milestone: 'you hit a referral milestone — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', listing_hidden: 'a listing of yours was hidden — check your messages', waitlist_invite: 'you’re off the waiting list — it’s ready for you', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', auction_outbid: 'outbid you on an auction. Bid again to stay in it', auction_won: 'you won the auction. Pay to claim it', auction_ended: 'won your auction. They’re paying now', group_join_paid: 'paid your group’s join fee. They’re in', crm_followup: 'is due a follow-up — you set the reminder', rinv_paused: 'a recurring invoice was paused — check the schedule', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', split_reminder: 'sent a reminder about your share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', story_answer: 'responded to your question', story_mention: 'mentioned you in their Daily', remix: 'remixed your video', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', community_boost: 'boosted your community', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_adjustment: 'your wallet balance was adjusted by our team', cashout_released: 'your cash-out was approved and is on its way to your bank', cashout_returned: 'your cash-out wasn’t approved — the money is back in your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item', lead_active: 'posted something new — they\u2019re on one of your lead lists', lead_hiring: 'is hiring — they\u2019re on one of your lead lists', inbox_assigned: 'gave you a conversation to handle', dmca_removed: 'removed something of yours after a copyright claim. Tap to contest it', dmca_reinstated: 'put your content back after reviewing your counter-notice', imp_upheld: 'agreed — the account impersonating you has been actioned', imp_rejected: 'reviewed your impersonation report', webinar_signup: 'signed up for your webinar', webinar_live: 'is live now — the webinar you signed up for has started', webinar_updated: 'changed a webinar you signed up for', webinar_cancelled: 'cancelled a webinar you signed up for', delivery_on_way: 'is on the way with your order' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -39457,6 +39587,7 @@ async function acOpenListing(id) {
         ${store}
       </div>
     </div>
+      <div id="acListingBranches" style="margin-top:16px;"></div>
       <div id="prodReviews" style="margin-top:16px;"></div>
       <div id="prodQA" style="margin-top:16px;"></div>
       ${moreSeller}${similar}`;
@@ -39465,6 +39596,7 @@ async function acOpenListing(id) {
     if (l.auction) { acLoadBids(l.id); if (l.auction.live) acStartAucTicker(l.id, l.auction.endsAt); }
     acLoadProductReviews(l.id);
     acLoadProductQA(l.id);
+    acLoadListingBranches(l.id);
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Could not load the listing.') + '</div>'; }
 }
 /* ── AI shopping concierge ── */
@@ -42315,16 +42447,29 @@ async function acDeleteAddress(id) {
 
 /* ── Checkout (address-aware) ── */
 // ctx: { mode:'buy'|'cart', productId|sellerId, qty, name, subtotalCents, shippingCents, needsShipping }
+function acPickBranch(id) { AC._coBranchId = id; acRenderCheckout(); }
 async function acOpenCheckout(ctx) {
   AC._co = ctx; AC._coAddrId = null; AC._coCoupon = null; AC._coDiscount = 0; AC._coQuote = null; AC._coRateId = null; AC._coPickup = false; AC._coNote = ''; AC._coGift = false; AC._coGiftNote = '';
   AC._coLocal = null; AC._coLocalOn = false;
   AC._coGiftCards = []; AC._coSource = null;
+  AC._coBranches = []; AC._coBranchId = null;
   showOverlay('checkoutView');
   const b = document.getElementById('checkoutBody'); b.innerHTML = acSkelRows(3);
   if (ctx.needsShipping) { await acLoadAddresses(); const def = (AC._addrs || []).find(a => a.isDefault) || (AC._addrs || [])[0]; AC._coAddrId = def ? def.id : null; }
   // Load my spendable gift cards so the checkout can offer them as a payment source
   // (escrow/bundle-fixed flows skip gift cards for now).
   if (ctx.mode !== 'bundle') { try { const { cards } = await API.req('GET', '/api/gift-cards'); AC._coGiftCards = (cards || []).filter(c => c.ownedByMe && !c.depleted && !c.frozen && c.balanceCents > 0); } catch (e) {} }
+  // Which of the seller's shops has this in — only asked for a single listing,
+  // where "this item" means one thing. A shop with no branches returns nothing
+  // and the pickup block reads exactly as it always did.
+  if (ctx.productId) {
+    try {
+      const av = await API.req('GET', '/api/listings/' + ctx.productId + '/availability');
+      AC._coBranches = av.locations || [];
+      const first = AC._coBranches.find(l => Number(l.stock) > 0);
+      AC._coBranchId = first ? first.id : null;
+    } catch (e) { AC._coBranches = []; }
+  }
   acRenderCheckout();
   if (acQuoteActive()) acRefreshQuote();
   if (ctx.needsShipping && ctx.sellerId) acCheckLocalDelivery();
@@ -42390,7 +42535,16 @@ function acRenderCheckout() {
     ? `<div class="co-sec-h">Fulfillment</div><div class="co-rates">${fulfillOpts.join('')}</div>` : '';
   let addrBlock = '';
   if (pickupMode) {
-    addrBlock = `<div class="co-sec-h">Pickup</div><div class="ac-disc-sub" style="padding:6px 2px;">Collect in person${c.pickupLocation ? ' · ' + escHtml(c.pickupLocation) : ''}. The seller will coordinate the time in chat.</div>`;
+    const branches = AC._coBranches || [];
+    // A shop with branches lets you pick which one to collect from, and says
+    // how many are on that shelf — sold-out branches can't be chosen.
+    const branchList = branches.length ? `<div class="co-rates">${branches.map(l => {
+      const out = Number(l.stock) <= 0;
+      return `<button class="co-rate${AC._coBranchId === l.id ? ' on' : ''}" ${out ? 'disabled style="opacity:.5;"' : `onclick="acPickBranch(${l.id})"`}>
+        <span class="co-rate-main"><span class="co-rate-name">${escHtml(l.name)}</span>${l.address ? `<span class="co-rate-days">${escHtml(l.address)}</span>` : ''}</span>
+        <span class="co-rate-price">${out ? 'None left' : l.stock + ' in stock'}</span></button>`;
+    }).join('')}</div>` : '';
+    addrBlock = `<div class="co-sec-h">Pickup</div>${branchList}<div class="ac-disc-sub" style="padding:6px 2px;">Collect in person${(!branches.length && c.pickupLocation) ? ' · ' + escHtml(c.pickupLocation) : ''}. The seller will coordinate the time in chat.</div>`;
   } else if (c.needsShipping) {
     const list = (AC._addrs || []).map(a => acAddrCard(a, true)).join('');
     addrBlock = `<div class="co-sec-h">Ship to</div>
@@ -43702,6 +43856,8 @@ async function acOpenStoreManage() {
     ${row(SI.megaphone, 'Send samples to creators', 'And see whether it turned into a post', 'closeOverlay(\'storeManageView\');acOpenSamples(\'business\')')}
     ${isBiz ? row(SI.megaphone, 'Find a creator', 'Post a brief and pick who makes it', 'closeOverlay(\'storeManageView\');acOpenBriefs(\'mine\')') : ''}
     ${row(SI.chart, 'Connect your systems', 'API keys and webhooks for your own software', 'acOpenDevTools()')}
+    ${row(SI.store, 'Your shops', 'More than one branch? Track what is where', 'acOpenLocations()')}
+    ${row(SI.megaphone, 'Sell on other channels', 'Feed your catalog to Google, Meta or a marketplace', 'acOpenCatalogFeed()')}
   </div>`;
   });
 }
@@ -43995,6 +44151,170 @@ async function acVacSave() {
   } catch (e) { showNotif(e.message || 'Could not update.'); }
 }
 // Cart recovery settings + counters (business owner).
+/* ── Sell on other channels: the catalog feed ─────────────────────────────
+   Two addresses (Google's XML shape, and a plain spreadsheet) that another
+   channel fetches on its own schedule. Off until the seller turns it on,
+   because the address is public by design — that is the only thing a channel
+   importer can use, having no account here. Rotating replaces it, which is the
+   fix if one ever leaks. */
+async function acOpenCatalogFeed() {
+  showOverlay('catalogFeedView');
+  const b = document.getElementById('catalogFeedBody'); if (!b) return;
+  b.innerHTML = acSkelRows(2);
+  let d;
+  try { d = await API.req('GET', '/api/catalog-feed'); }
+  catch (e) { b.innerHTML = `<div class="ac-empty">${escHtml(e.message)}</div>`; return; }
+  acRenderCatalogFeed(d);
+}
+function acCatalogFeedLink(label, url, note) {
+  return `<div class="site-feed-row" style="margin-top:10px;">
+    <div class="ac-disc-sub" style="margin:0 0 4px;font-weight:700;color:var(--t1);">${escHtml(label)}</div>
+    <div class="ac-disc-sub" style="margin:0 0 6px;">${escHtml(note)}</div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <input class="pf-finput" readonly value="${escHtml(url)}" onclick="this.select()" aria-label="${escHtml(label)} address" style="flex:1;min-width:0;font-size:12px;"/>
+      <button class="ac-pill-btn" onclick="acCopyText(${JSON.stringify(url)});showNotif('Copied.')">Copy</button>
+    </div>
+  </div>`;
+}
+function acRenderCatalogFeed(d) {
+  const b = document.getElementById('catalogFeedBody'); if (!b) return;
+  const on = !!d.on;
+  b.innerHTML = `
+    <div class="site-row" style="display:flex;align-items:center;justify-content:space-between;gap:14px;">
+      <div><div class="srt">Publish my catalog</div>
+        <div class="srs">${d.count} item${d.count === 1 ? '' : 's'} would be published. Anyone with the address can read it.</div></div>
+      <button class="ios-switch ${on ? 'on' : ''}" onclick="acCatalogFeedToggle(${on ? 'false' : 'true'})" aria-label="Publish my catalog"><span></span></button>
+    </div>
+    ${on && d.xml ? `
+      ${acCatalogFeedLink('Google, Meta and most marketplaces', d.xml, 'Paste this into Google Merchant Center or Meta Commerce as a scheduled feed.')}
+      ${acCatalogFeedLink('Spreadsheet', d.csv, 'For anything that wants a plain CSV, or to check what is being sent.')}
+      <button class="ac-pill-btn" style="margin-top:14px;" onclick="acCatalogFeedRotate()">Change the address</button>
+      <div class="ac-disc-sub" style="margin-top:8px;">Changing it stops the old address working straight away — do it if you ever shared it somewhere you shouldn't have. You would then re-paste the new one into each channel.</div>
+    ` : `<div class="ac-disc-sub" style="margin-top:12px;">Nothing is published while this is off.</div>`}
+    <div class="ac-disc-sub" style="margin-top:14px;">Only your live listings go out — hidden and sold-out items are marked out of stock, not removed. Orders are never taken from another channel: they always happen on Atwe, so your stock can't disagree with itself.</div>`;
+}
+async function acCatalogFeedToggle(on) {
+  try {
+    const d = await API.req('POST', '/api/catalog-feed', { on });
+    const n = await API.req('GET', '/api/catalog-feed');
+    acRenderCatalogFeed(n);
+    showNotif(d.on ? 'Your catalog is published.' : 'Stopped publishing.');
+  } catch (e) { showNotif(e.message); }
+}
+async function acCatalogFeedRotate() {
+  if (!(await appConfirm('Change the address?', 'The address you have already given to a channel will stop working, and you will need to paste the new one in.', 'Change it'))) return;
+  try {
+    await API.req('POST', '/api/catalog-feed', { rotate: true });
+    const n = await API.req('GET', '/api/catalog-feed');
+    acRenderCatalogFeed(n);
+    showNotif('New address ready.');
+  } catch (e) { showNotif(e.message); }
+}
+
+/* ── Shops with more than one branch (client) ─────────────────────────────
+   A manager for the seller's branches, and a per-product grid of what is on
+   each shelf. The online stock number is untouched by all of this — it is
+   said plainly on the screen so nobody expects otherwise. */
+async function acOpenLocations() {
+  showOverlay('locationsView');
+  const b = document.getElementById('locationsBody'); if (!b) return;
+  b.innerHTML = acSkelRows(2);
+  try { AC._locs = (await API.req('GET', '/api/locations')).locations || []; }
+  catch (e) { b.innerHTML = `<div class="ac-empty">${escHtml(e.message)}</div>`; return; }
+  acRenderLocations();
+}
+function acRenderLocations() {
+  const b = document.getElementById('locationsBody'); if (!b) return;
+  const list = (AC._locs || []).length ? (AC._locs).map(l => `<div class="b39-row">
+      <div class="b39-row-top"><span class="b39-name">${escHtml(l.name)}</span>${l.active ? '' : '<span class="b39-tag warn">closed</span>'}</div>
+      ${l.address ? `<div class="b39-sub">${escHtml(l.address)}</div>` : ''}
+      ${l.note ? `<div class="b39-sub">${escHtml(l.note)}</div>` : ''}
+      <div class="b39-acts">
+        <button class="ac-pill-btn" onclick="acLocFormOpen(${l.id})">Edit</button>
+        <button class="ac-pill-btn" onclick="acLocToggle(${l.id}, ${l.active ? 'false' : 'true'})">${l.active ? 'Mark closed' : 'Re-open'}</button>
+        <button class="ac-pill-btn danger" onclick="acLocDelete(${l.id})">Remove</button>
+      </div></div>`).join('')
+    : '<div class="ac-empty-sm">No branches yet. Add one for each shop you actually have.</div>';
+  b.innerHTML = list
+    + '<button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="acLocFormOpen()">Add a shop</button>'
+    + '<div class="ac-disc-sub" style="margin-top:12px;">These counts are for people collecting in person. Your online stock number is separate and still decides what can be ordered — that way the same item can never be sold twice.</div>';
+}
+function acLocFormOpen(id) {
+  const l = id ? (AC._locs || []).find(x => x.id === id) : null;
+  AC._locEdit = l || null;
+  showOverlay('locationForm');
+  const v = (k, val) => { const e = document.getElementById(k); if (e) e.value = val || ''; };
+  v('lfName', l ? l.name : '');
+  v('lfAddress', l ? l.address : '');
+  v('lfNote', l ? l.note : '');
+  const t = document.getElementById('locFormTitle'); if (t) t.textContent = l ? 'Edit this shop' : 'Add a shop';
+}
+async function acSaveLocation() {
+  const v = (k) => ((document.getElementById(k) || {}).value || '').trim();
+  const body = { name: v('lfName'), address: v('lfAddress'), note: v('lfNote') };
+  if (!body.name) { showNotif('Give this shop a name.'); return; }
+  try {
+    if (AC._locEdit) await API.req('PATCH', '/api/locations/' + AC._locEdit.id, body);
+    else await API.req('POST', '/api/locations', body);
+    closeOverlay('locationForm');
+    acOpenLocations();
+  } catch (e) { showNotif(e.message || 'Could not save that.'); }
+}
+async function acLocToggle(id, active) {
+  try { await API.req('PATCH', '/api/locations/' + id, { active }); acOpenLocations(); }
+  catch (e) { showNotif(e.message); }
+}
+async function acLocDelete(id) {
+  if (!(await appConfirm({ title: 'Remove this shop?', message: 'Its shelf counts go with it. Your listings and online stock are untouched.', confirmText: 'Remove' }))) return;
+  try { await API.req('DELETE', '/api/locations/' + id); acOpenLocations(); }
+  catch (e) { showNotif(e.message); }
+}
+
+/* Per-product: what is on each shelf. Opened from a listing the seller owns. */
+async function acOpenProductStock(productId, name) {
+  AC._stockPid = productId;
+  showOverlay('prodStockView');
+  const t = document.getElementById('prodStockTitle'); if (t) t.textContent = name || 'What is where';
+  const b = document.getElementById('prodStockBody'); if (!b) return;
+  b.innerHTML = acSkelRows(2);
+  let locs;
+  try { locs = (await API.req('GET', '/api/locations/product/' + productId)).locations || []; }
+  catch (e) { b.innerHTML = `<div class="ac-empty">${escHtml(e.message)}</div>`; return; }
+  if (!locs.length) {
+    b.innerHTML = '<div class="ac-empty-sm">You have not added any shops yet.</div>'
+      + '<button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="closeOverlay(\'prodStockView\');acOpenLocations()">Add a shop</button>';
+    return;
+  }
+  b.innerHTML = locs.map(l => `<div class="site-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 2px;">
+      <div style="min-width:0;"><div class="srt">${escHtml(l.name)}${l.active ? '' : ' <span class="b39-tag warn">closed</span>'}</div>
+        ${l.address ? `<div class="srs">${escHtml(l.address)}</div>` : ''}</div>
+      <input class="jp-in" type="number" min="0" style="flex:0 0 92px;margin:0;text-align:center;"
+        value="${Number(l.stock) || 0}" aria-label="How many at ${escHtml(l.name)}"
+        onchange="acSaveProductStock(${l.id}, this.value)"/>
+    </div>`).join('')
+    + '<div class="ac-disc-sub" style="margin-top:12px;">Saved as you type. A collection order takes one off the branch it is collected from.</div>';
+}
+async function acSaveProductStock(locationId, val) {
+  try {
+    await API.req('PUT', '/api/locations/' + locationId + '/stock', { productId: AC._stockPid, stock: Number(val) || 0 });
+    showNotif('Saved.');
+  } catch (e) { showNotif(e.message || 'Could not save that count.'); }
+}
+
+/* What a shopper sees on a listing: which branches have it in right now. */
+async function acLoadListingBranches(productId) {
+  const box = document.getElementById('acListingBranches'); if (!box) return;
+  try {
+    const d = await API.req('GET', '/api/listings/' + productId + '/availability');
+    const locs = (d.locations || []).filter(l => Number(l.stock) > 0);
+    if (!locs.length) { box.innerHTML = ''; return; }
+    box.innerHTML = `<div class="co-sec-h">In stock to collect</div>`
+      + locs.slice(0, 6).map(l => `<div class="site-row" style="display:flex;justify-content:space-between;gap:12px;padding:8px 2px;">
+          <div style="min-width:0;"><div class="srt">${escHtml(l.name)}</div>${l.address ? `<div class="srs">${escHtml(l.address)}</div>` : ''}</div>
+          <span class="ac-disc-sub" style="white-space:nowrap;">${l.stock} in stock</span></div>`).join('');
+  } catch (e) { box.innerHTML = ''; }
+}
+
 async function acOpenCartRecovery() {
   showOverlay('cartRecoveryView');
   const b = document.getElementById('cartRecoveryBody'); if (!b) return;
@@ -44422,7 +44742,7 @@ async function acCheckoutPay(payWith, giftCardId) {
   const key = 'co' + (c.mode === 'buy' ? c.productId : c.mode === 'bundle' ? 'b' + c.bundleId : c.mode === 'offer' ? 'o' + c.offerId : 's' + c.sellerId) + ':' + (payWith || '') + ':' + (giftCardId || '');
   if (!AC._buyCids[key]) AC._buyCids[key] = acPayCid();
   const body = { clientId: AC._buyCids[key] };
-  if (pickupMode) body.pickup = true;
+  if (pickupMode) { body.pickup = true; if (AC._coBranchId) body.pickupLocationId = AC._coBranchId; }
   else if (c.needsShipping) { body.addressId = AC._coAddrId; if (AC._coLocalOn) body.localDelivery = true; }
   if (!pickupMode && AC._coRateId) body.shipRateId = AC._coRateId;
   if (AC._coCoupon) body.couponCode = AC._coCoupon.code;
@@ -58725,9 +59045,10 @@ function acApplyLook() {
 }
 
 /* ─── Tidying up a listing photo ─── */
-let PHOTOFIX = { styles: [], style: 'clean', before: null, after: null, cb: null };
+let PHOTOFIX = { styles: [], style: 'clean', before: null, after: null, consent: false, cb: null };
 async function acOpenPhotoFix(image, onUse) {
-  PHOTOFIX = { ...PHOTOFIX, before: image || null, after: null, cb: typeof onUse === 'function' ? onUse : null };
+  // consent:false — permission is for one specific photo, so a new photo asks again.
+  PHOTOFIX = { ...PHOTOFIX, before: image || null, after: null, consent: false, cb: typeof onUse === 'function' ? onUse : null };
   showOverlay('photoFixView');
   const b = document.getElementById('photoFixBody'); if (b) b.innerHTML = acSkelRows(2);
   try { const r = await API.req('GET', '/api/ai/photo-styles'); PHOTOFIX.styles = r.styles || []; PHOTOFIX.enabled = r.enabled; }
@@ -58753,7 +59074,20 @@ async function acPhotoFixGo() {
   const out = document.getElementById('pfOut');
   if (btn) { btn.disabled = true; btn.textContent = 'Working…'; }
   try {
-    const r = await API.req('POST', '/api/ai/product-photo', { image: PHOTOFIX.before, style: PHOTOFIX.style });
+    const r = await API.req('POST', '/api/ai/product-photo', { image: PHOTOFIX.before, style: PHOTOFIX.style, consent: PHOTOFIX.consent === true });
+    // There is a person in the shot. Ask before redrawing them, once, and only
+    // carry on if the seller says the person is happy with it.
+    if (r.needsConsent) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Tidy it up'; }
+      const ok = await appConfirm({
+        title: 'Someone is in this photo',
+        message: (r.message || 'Atwe AI would draw a brand-new picture from it.') + ' Do you have their permission?',
+        confirmText: 'Yes, carry on',
+      });
+      if (!ok) { if (out) out.innerHTML = '<div class="ac-disc-sub" style="margin-top:12px;">Left as it is. Try a photo of just the product.</div>'; return; }
+      PHOTOFIX.consent = true;
+      return acPhotoFixGo();
+    }
     PHOTOFIX.after = r.image;
     if (out) out.innerHTML = `
       <div class="pf-pair">
@@ -59146,24 +59480,35 @@ async function acOpenBots(tab) {
 }
 function acRenderBotTabs() {
   const el = document.getElementById('botTabs'); if (!el) return;
-  el.innerHTML = [['discover', 'Find one'], ['installed', 'Added'], ['mine', 'Mine']]
+  el.innerHTML = [['discover', 'Find one'], ['near', 'Near you'], ['installed', 'Added'], ['mine', 'Mine']]
     .map(([k, l]) => `<button class="ac-jv ${BOTS.tab === k ? 'on' : ''}" onclick="acBotTab('${k}')">${l}</button>`).join('');
 }
 function acBotTab(t) { BOTS.tab = t; acRenderBotTabs(); acLoadBots(); }
 async function acLoadBots() {
   const b = document.getElementById('botsBody'); if (b) b.innerHTML = acSkelRows(3);
-  try { BOTS.list = (await API.req('GET', '/api/bots?scope=' + BOTS.tab)).bots || []; } catch (e) { BOTS.list = []; }
+  let nearErr = '';
+  if (BOTS.tab === 'near') {
+    // Asked for only when this tab is opened, never in the background.
+    try {
+      const pos = await acBotWhereAmI();
+      BOTS.list = (await API.req('GET', '/api/bots/nearby?lat=' + pos.lat + '&lng=' + pos.lng)).bots || [];
+    } catch (e) { BOTS.list = []; nearErr = (e && e.message) || 'Could not get your location.'; }
+  } else {
+    try { BOTS.list = (await API.req('GET', '/api/bots?scope=' + BOTS.tab)).bots || []; } catch (e) { BOTS.list = []; }
+  }
   if (!b) return;
+  if (nearErr) { b.innerHTML = '<div class="ac-empty-sm">' + escHtml(nearErr) + '</div>'; return; }
   b.innerHTML = (BOTS.list.length ? BOTS.list.map((x) => `<div class="b39-row">
       <div class="b39-row-top">
         <span class="b39-name">${escHtml(x.name)}</span>
         <span class="b39-tag">bot</span>${x.published ? '' : '<span class="b39-tag warn">private</span>'}</div>
       <div class="b39-sub">@${escHtml(x.username || '')}${x.about ? ' · ' + escHtml(x.about) : ''} · ${x.installs} added</div>
+      ${x.placeName ? `<div class="b39-sub">📍 ${escHtml(x.placeName)}${x.distanceKm != null ? ' · ' + acDistLabel(x.distanceKm) : ''}</div>` : ''}
       <div class="b39-acts">
         ${x.mine ? `<button class="ac-pill-btn" onclick="acBotEdit(${x.id})">Set it up</button>` : ''}
         <button class="ac-pill-btn ${x.installed ? '' : 'accent'}" onclick="acBotInstall(${x.id}, ${!x.installed})">${x.installed ? 'Remove' : 'Add to my chats'}</button>
       </div></div>`).join('')
-    : '<div class="ac-empty-sm">' + (BOTS.tab === 'mine' ? 'You have not made one yet.' : 'Nothing here yet.') + '</div>')
+    : '<div class="ac-empty-sm">' + (BOTS.tab === 'mine' ? 'You have not made one yet.' : (BOTS.tab === 'near' ? 'Nothing tied to a place near you.' : 'Nothing here yet.')) + '</div>')
     + (BOTS.tab === 'mine' ? '<button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="acBotFormOpen()">Make a bot</button>' : '');
 }
 function acBotFormOpen(bot) {
@@ -59175,6 +59520,11 @@ function acBotFormOpen(bot) {
   v('bfAbout', bot ? bot.about : '');
   v('bfHook', bot ? bot.webhookUrl : '');
   const h = document.getElementById('bfHandle'); if (h) h.disabled = !!bot;
+  v('bfPlace', bot ? (bot.placeName || '') : '');
+  AC._botGeo = bot && bot.lat != null ? { lat: bot.lat, lng: bot.lng } : null;
+  const rad = document.getElementById('bfRadius');
+  if (rad) rad.value = String((bot && bot.radiusKm) || 5);
+  acBotPlaceNote();
   const sec = document.getElementById('bfSecret');
   if (sec) sec.innerHTML = bot && bot.secret
     ? `<div class="st-h">Its secret</div><div class="b39-row" style="word-break:break-all;font-size:12.5px;">${escHtml(bot.secret)}</div>
@@ -59182,13 +59532,49 @@ function acBotFormOpen(bot) {
        <button class="ac-pill-btn" style="margin-top:8px;" onclick="acBotRotate(${bot.id})">Change it</button>`
     : '';
 }
+/* Where this device is, asked for once and only when the owner taps for it.
+   The coordinate never leaves the form until they save. */
+function acBotWhereAmI() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) return reject(new Error('This device can’t share a location.'));
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: +p.coords.latitude.toFixed(5), lng: +p.coords.longitude.toFixed(5) }),
+      () => reject(new Error('Location is switched off for Atwe. Turn it on to see what is nearby.')),
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 120000 }
+    );
+  });
+}
+function acBotPlaceNote() {
+  const n = document.getElementById('bfPlaceNote'); if (!n) return;
+  n.textContent = AC._botGeo
+    ? 'Pinned. People inside the distance you chose will see it under “Near you”.'
+    : 'Only if it is worth using when you are actually there — a market, a venue, a campus. It then shows up in “Near you”. Leave it blank and nothing changes.';
+}
+async function acBotUseLocation() {
+  try { AC._botGeo = await acBotWhereAmI(); acBotPlaceNote(); showNotif('Pinned to where you are.'); }
+  catch (e) { showNotif(e.message); }
+}
 function acBotEdit(id) { const b = BOTS.list.find((x) => x.id === id); if (b) acBotFormOpen(b); }
 async function acSaveBot() {
   const v = (id) => (document.getElementById(id) || {}).value || '';
   const body = { name: v('bfName').trim(), about: v('bfAbout').trim(), webhookUrl: v('bfHook').trim() };
+  // A place is only saved once we actually have coordinates for it — a name on
+  // its own would put a bot in "Near you" for nobody.
+  const place = v('bfPlace').trim();
+  if (AC._botEdit) {
+    body.placeName = place;
+    if (place && AC._botGeo) { body.lat = AC._botGeo.lat; body.lng = AC._botGeo.lng; body.radiusKm = Number(v('bfRadius')) || 5; }
+    else { body.lat = null; body.lng = null; body.radiusKm = null; }
+  }
   try {
     if (AC._botEdit) await API.req('PATCH', '/api/bots/' + AC._botEdit.id, body);
-    else { body.username = v('bfHandle').trim(); await API.req('POST', '/api/bots', body); }
+    else {
+      body.username = v('bfHandle').trim();
+      const made = await API.req('POST', '/api/bots', body);
+      if (place && AC._botGeo && made && made.bot) {
+        await API.req('PATCH', '/api/bots/' + made.bot.id, { placeName: place, lat: AC._botGeo.lat, lng: AC._botGeo.lng, radiusKm: Number(v('bfRadius')) || 5 });
+      }
+    }
     closeOverlay('botForm');
     acOpenBots('mine');
   } catch (e) { showNotif((e && e.message) || 'Could not save that.'); }

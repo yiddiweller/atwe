@@ -4506,6 +4506,82 @@ async function initSchema() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS shop_paused BOOLEAN NOT NULL DEFAULT false;`);
   // Storefront announcement line (Etsy-style), shown atop the shop.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS store_banner TEXT;`);
+  // Selling on other channels: a seller's catalog, published as a product feed
+  // that Google Shopping / Meta / a marketplace importer can fetch on a timer.
+  // The token IS the capability (the feed is public by design — that is what a
+  // channel importer can use), so it is rotatable and the feed can be switched
+  // off without losing it.
+  // Community boosts: a member puts real money behind a community they value.
+  // The money goes to the community's owner (it is support, not a platform
+  // token), and the running total decides where the community sits in Discover.
+  // Deliberately NOT a points/streak game — one number, one real effect.
+  await query(`
+    CREATE TABLE IF NOT EXISTS community_boosts (
+      id           SERIAL PRIMARY KEY,
+      community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+      user_id      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      amount_cents INTEGER NOT NULL,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS community_boosts_idx ON community_boosts (community_id, created_at DESC);`);
+  await query(`ALTER TABLE communities ADD COLUMN IF NOT EXISTS boost_cents INTEGER NOT NULL DEFAULT 0;`);
+  await query(`ALTER TABLE communities ADD COLUMN IF NOT EXISTS boost_count INTEGER NOT NULL DEFAULT 0;`);
+  // A mini-app tied to a place: a bot for a market, a venue, a campus, a shop —
+  // the sort of thing that is only useful if you are actually there. The bot is
+  // otherwise identical; these columns just decide whether it shows up in the
+  // "near you" list, and how far away still counts as near.
+  await query(`ALTER TABLE bots ADD COLUMN IF NOT EXISTS place_name TEXT;`);
+  await query(`ALTER TABLE bots ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;`);
+  await query(`ALTER TABLE bots ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;`);
+  await query(`ALTER TABLE bots ADD COLUMN IF NOT EXISTS radius_km DOUBLE PRECISION;`);
+  // A record that somebody was asked, and said yes, before Atwe AI redrew a
+  // photo with a person in it. Only a hash of the photo is kept — enough to
+  // show the confirmation was given for THAT picture, without storing it twice.
+  await query(`
+    CREATE TABLE IF NOT EXISTS ai_photo_consents (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      image_sha  TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS ai_photo_consents_idx ON ai_photo_consents (user_id, created_at DESC);`);
+  // Shops with more than one branch. The per-branch count is deliberately its
+  // own table rather than a rewrite of products.stock: the online shop keeps
+  // selling from ONE number exactly as before (so nothing about checkout,
+  // reservations or oversell protection changes), and this sits alongside it to
+  // answer the question a customer actually asks — "which of your shops has it
+  // right now, so I can come and collect it?"
+  await query(`
+    CREATE TABLE IF NOT EXISTS seller_locations (
+      id          SERIAL PRIMARY KEY,
+      seller_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name        TEXT NOT NULL,
+      address     TEXT,
+      note        TEXT,
+      lat         DOUBLE PRECISION,
+      lng         DOUBLE PRECISION,
+      active      BOOLEAN NOT NULL DEFAULT true,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS seller_locations_idx ON seller_locations (seller_id, active);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS location_stock (
+      location_id INTEGER NOT NULL REFERENCES seller_locations(id) ON DELETE CASCADE,
+      product_id  INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      stock       INTEGER NOT NULL DEFAULT 0,
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (location_id, product_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS location_stock_product_idx ON location_stock (product_id);`);
+  // Which branch a collection order is being picked up from.
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS pickup_location_id INTEGER REFERENCES seller_locations(id) ON DELETE SET NULL;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS catalog_feed_token TEXT;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS catalog_feed_on BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS users_catalog_feed_token_idx ON users (catalog_feed_token) WHERE catalog_feed_token IS NOT NULL;`);
   // Seller free-shipping threshold in cents (null = off): "free shipping over $X".
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS free_ship_over_cents INTEGER;`);
   // Special / holiday hours: dated exceptions to the weekly schedule.
