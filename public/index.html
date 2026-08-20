@@ -127,7 +127,7 @@ a{text-decoration:none;color:inherit;}
   /* Verified seal — neutral silver-white (dark) / slate (light): part of the
      grey family, deliberately never blue (blue would read as "this account
      is the primary action", which isn't what a verified badge means) */
-  --verify: var(--accent); /* verified seal = blue identity (blueprint §Home) */
+  --verify: #d3d5d7; /* verified seal = NEUTRAL SILVER, never blue (catalog b3) */
 
   /* Market up/down — a functional signal (positive/negative), so it borrows
      the same green/red as every other success/destructive use in the app */
@@ -4097,7 +4097,7 @@ body.light{
   --accent-tint:#FFFFFF;   /* Apple's own light-mode blue buttons use white text */
   --primary:#111114;--on-primary:#FFFFFF;   /* Light-theme primary: near-black fill, white label */
   --t1:#1D1D1F;--t2:#6E6E73;--t3:#6E6E73;--t4:#aab8c2;
-  --verify:var(--accent);
+  --verify:#5b7083;   /* light theme: slate silver — the seal is never blue */
   --rose:#007AFF;--rose-bg:rgba(0,122,255,.1);--rose-bg-2:rgba(0,122,255,.18);--rose-line:rgba(0,122,255,.4);
   --violet:#007AFF;--violet-bg:rgba(0,122,255,.12);--violet-line:rgba(0,122,255,.38);
 }
@@ -8070,6 +8070,10 @@ body.light .ac-post-toolbar .msg-attach:active{background:rgba(0,0,0,.1);}
 .ac-prof-stats{display:flex;gap:22px;margin-top:16px;}
 .ac-stat{font-size:13.5px;color:var(--t3);cursor:default;}
 .ac-stat b{color:var(--t1);font-weight:700;}
+/* The Pro badge: a quiet grey chip beside the name — a plan marker, never a
+   status colour. */
+.ac-pro-chip{display:inline-flex;align-items:center;background:var(--s2);color:var(--t2);
+  font-size:10px;font-weight:800;letter-spacing:.06em;padding:3px 8px;border-radius:999px;margin-left:7px;vertical-align:middle;}
 /* A community's boost level. Amber = information, per the colour ladder — it
    tells you the members back this place; it is not an action. */
 .ac-boost-chip{display:inline-flex;align-items:center;gap:4px;background:var(--amber);color:#2a1f00;
@@ -12404,7 +12408,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 <div class="iset-group"><button class="iset-row" onclick="closePlansFromSettings()"><span class="iset-ic"><svg viewBox="0 0 24 24"><polygon points="12 3 14.7 8.7 21 9.5 16.4 13.9 17.6 20.2 12 17.1 6.4 20.2 7.6 13.9 3 9.5 9.3 8.7"/></svg></span><div class="iset-main"><div class="iset-label">Your plan</div><div class="iset-sub">Unlock longer replies &amp; the verified badge</div></div><span class="iset-val accent" id="setPlanVal">Free</span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" id="settingsVerifiedRow"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.3 12.4l2.5 2.5 4.9-5"/></svg></span><div class="iset-main"><div class="iset-label" style="display:flex;align-items:center;gap:5px;">Verified<span class="iset-badge" id="settingsVerifiedBadge"></span></div><div class="iset-sub" id="settingsVerifiedDesc">Subscribe to Pro to get verified</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="acOpenCreatorSettings()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 20.5S4 16 4 9.8A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8 2.8C20 16 12 20.5 12 20.5z"/></svg></span><div class="iset-main"><div class="iset-label">Creator subscriptions</div><div class="iset-sub">Earn from subscriber-only posts</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenWallet&&acOpenWallet()"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2.6"/><path d="M3 10h18"/><circle cx="16.5" cy="14" r="1.2"/></svg></span><div class="iset-main"><div class="iset-label">Wallet</div><div class="iset-sub">Balance, send money, cash out</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Atwe Premium widens your AI replies and unlocks the verified badge. Creator tools let your followers support you directly.</div>
     </div>
     <div class="iset-body hidden" data-page="display" data-title="Display & accessibility">
-<div class="iset-group"><button class="iset-row" onclick="acOpenLanguage()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Language">Language</div><div class="iset-sub" id="setLangVal">English</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-sectlabel" data-i18n="Appearance">Appearance</div><div class="iset-group"><div class="theme-picker" id="themePicker"><button class="theme-card" data-theme="black" onclick="setTheme('black')" aria-label="Black theme"><span class="theme-swatch sw-black"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="Black">Black</span></button><button class="theme-card" data-theme="light" onclick="setTheme('light')" aria-label="Light theme"><span class="theme-swatch sw-light"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="Light">Light</span></button><button class="theme-card" data-theme="system" onclick="setTheme('system')" aria-label="System theme"><span class="theme-swatch sw-system"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="System">System</span></button></div></div><div class="iset-sectlabel" data-i18n="Accent colour">Accent colour</div><div class="iset-group"><div class="accent-picker" id="accentPicker"></div></div><div class="iset-cap" data-i18n="Pick any colour for buttons, links & highlights across the app.">Pick any colour for buttons, links &amp; highlights across the app.</div><div class="iset-group"><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M5 7V5h14v2"/><line x1="12" y1="5" x2="12" y2="19"/><line x1="9" y1="19" x2="15" y2="19"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Larger text">Larger text</div><div class="iset-sub" data-i18n="Increase text size across the app">Increase text size across the app</div></div><label class="ios-switch"><input type="checkbox" id="bigTextToggle" onchange="toggleBigText()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Reduce motion">Reduce motion</div><div class="iset-sub" data-i18n="Minimise animations & transitions">Minimise animations &amp; transitions</div></div><label class="ios-switch"><input type="checkbox" id="reduceMotionToggle" onchange="toggleReduceMotion()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/><line x1="3" y1="3" x2="21" y2="21"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Hide like counts">Hide like counts</div><div class="iset-sub" data-i18n="Don’t show like & repost numbers on posts">Don’t show like &amp; repost numbers on posts</div></div><label class="ios-switch"><input type="checkbox" id="hideCountsToggle" onchange="toggleHideCounts()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-cap" data-i18n="Appearance settings are saved on this device.">Appearance settings are saved on this device.</div>
+<div class="iset-group"><button class="iset-row" onclick="acOpenLanguage()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Language">Language</div><div class="iset-sub" id="setLangVal">English</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="acOpenCurrency()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M14.5 9a2.6 2.6 0 0 0-2.5-1.6C10.6 7.4 9.4 8.3 9.4 9.6c0 3 5.4 1.6 5.4 4.6 0 1.3-1.2 2.3-2.8 2.3A2.8 2.8 0 0 1 9.3 15"/><line x1="12" y1="5.6" x2="12" y2="7.4"/><line x1="12" y1="16.6" x2="12" y2="18.4"/></svg></span><div class="iset-main"><div class="iset-label">Currency</div><div class="iset-sub" id="setCurrencyVal">US Dollar</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-sectlabel" data-i18n="Appearance">Appearance</div><div class="iset-group"><div class="theme-picker" id="themePicker"><button class="theme-card" data-theme="black" onclick="setTheme('black')" aria-label="Black theme"><span class="theme-swatch sw-black"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="Black">Black</span></button><button class="theme-card" data-theme="light" onclick="setTheme('light')" aria-label="Light theme"><span class="theme-swatch sw-light"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="Light">Light</span></button><button class="theme-card" data-theme="system" onclick="setTheme('system')" aria-label="System theme"><span class="theme-swatch sw-system"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="System">System</span></button></div></div><div class="iset-sectlabel" data-i18n="Accent colour">Accent colour</div><div class="iset-group"><div class="accent-picker" id="accentPicker"></div></div><div class="iset-cap" data-i18n="Pick any colour for buttons, links & highlights across the app.">Pick any colour for buttons, links &amp; highlights across the app.</div><div class="iset-group"><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M5 7V5h14v2"/><line x1="12" y1="5" x2="12" y2="19"/><line x1="9" y1="19" x2="15" y2="19"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Larger text">Larger text</div><div class="iset-sub" data-i18n="Increase text size across the app">Increase text size across the app</div></div><label class="ios-switch"><input type="checkbox" id="bigTextToggle" onchange="toggleBigText()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Reduce motion">Reduce motion</div><div class="iset-sub" data-i18n="Minimise animations & transitions">Minimise animations &amp; transitions</div></div><label class="ios-switch"><input type="checkbox" id="reduceMotionToggle" onchange="toggleReduceMotion()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/><line x1="3" y1="3" x2="21" y2="21"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Hide like counts">Hide like counts</div><div class="iset-sub" data-i18n="Don’t show like & repost numbers on posts">Don’t show like &amp; repost numbers on posts</div></div><label class="ios-switch"><input type="checkbox" id="hideCountsToggle" onchange="toggleHideCounts()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-cap" data-i18n="Appearance settings are saved on this device.">Appearance settings are saved on this device.</div>
     </div>
     <div class="iset-body hidden" data-page="assistant" data-title="Atwe Assistant">
 <div class="iset-group"><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8"/><path d="M10 3v2.4M14 3v2.4M10 18.6V21M14 18.6V21M3 10h2.4M3 14h2.4M18.6 10H21M18.6 14H21"/></svg></span><div class="iset-main"><div class="iset-label">Active model</div></div><span class="iset-val" id="settingsModel">Atwe Standard</span></div><button class="iset-row" onclick="shareFromSettings()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.4"/><circle cx="17.5" cy="6" r="2.4"/><circle cx="17.5" cy="18" r="2.4"/><line x1="8.1" y1="10.9" x2="15.4" y2="7.1"/><line x1="8.1" y1="13.1" x2="15.4" y2="16.9"/></svg></span><div class="iset-main"><div class="iset-label">Share conversation</div><div class="iset-sub">Copy a link to this chat</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="clearHistory()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Clear chat history</div><div class="iset-sub">Delete all saved AI conversations</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Atwe AI is your built-in assistant. Conversations are saved to your account so you can pick up where you left off.</div>
@@ -12951,6 +12955,20 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 <!-- ──────────────────────────────────────────
      HELP CENTER
 ─────────────────────────────────────────── -->
+<div class="overlay hidden" id="helpArticlesView" onclick="if(event.target===this)closeOverlay('helpArticlesView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Help articles">
+    <button class="sheet-close" onclick="closeOverlay('helpArticlesView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 10px;">Help articles</div>
+    <div id="helpArticlesBody"></div>
+  </div>
+</div>
+<div class="overlay hidden" id="helpArticleView" onclick="if(event.target===this)closeOverlay('helpArticleView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Help article">
+    <button class="sheet-close" onclick="closeOverlay('helpArticleView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="helpArticleTitle" style="margin:0 0 10px;"></div>
+    <div id="helpArticleBody" class="ac-disc-sub" style="white-space:pre-wrap;line-height:1.6;color:var(--t2);"></div>
+  </div>
+</div>
 <div class="overlay hidden" id="helpOverlay">
   <div class="modal-card" role="dialog" aria-modal="true" aria-label="Help center">
     <button class="modal-x" onclick="closeHelp()" aria-label="Close">&times;</button>
@@ -12961,6 +12979,11 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <button class="btn-oauth" style="margin-bottom:20px;" onclick="openSupportAi()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       Ask Atwe Support
+    </button>
+
+    <button class="btn-oauth" style="margin-bottom:20px;" onclick="acOpenHelpArticles()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      Browse help articles
     </button>
 
     <div class="settings-section-title" style="margin-bottom:10px;">Contact support</div>
@@ -13201,6 +13224,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <div class="note-hint" id="inqIntro">Send a message and they’ll get back to you.</div>
     <input id="inqEmail" class="note-src-input" type="email" inputmode="email" maxlength="160" placeholder="Your email" autocomplete="email" style="margin-top:0;"/>
     <input id="inqPhone" class="note-src-input" type="tel" inputmode="tel" maxlength="40" placeholder="Your phone (optional)" autocomplete="tel"/>
+    <div id="inqQuestions"></div>
     <textarea id="inqMsg" class="note-input" rows="4" maxlength="2000" placeholder="How can they help you?" style="margin-top:10px;"></textarea>
     <button class="ac-pill-btn accent" id="inqSendBtn" style="width:100%;margin-top:12px;" onclick="acSubmitInquiry()">Send message</button>
   </div>
@@ -15095,8 +15119,10 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Edit the clip">
     <button class="sheet-close" onclick="closeOverlay('videoEditView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title">Edit the clip</div>
+    <div class="ac-disc-sub" style="margin:0 0 8px;">Trim it, burn a caption in, drop a green screen — or use it as filmed.</div>
     <video id="veVideo" class="ve-preview" playsinline muted controls></video>
     <div id="veControls"></div>
+    <button class="ac-pill-btn" style="width:100%;margin-top:10px;" onclick="acVeSkip()">Use as filmed — no edits</button>
   </div>
 </div>
 
@@ -15396,6 +15422,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <button class="as-item hidden" id="paAddContextBtn" onclick="closeOverlay('postActions');acAddNoteOpen(AC._paPostId)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="16" x2="12" y2="11"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> <span>Add context</span></button>
     <button class="as-item" onclick="paMute()"><svg viewBox="0 0 24 24"><path d="M11 5 6.5 9H3v6h3.5L11 19z"/><path d="M22 9.5l-5 5M17 9.5l5 5"/></svg> <span id="paMuteLabel">Mute</span></button>
     <button class="as-item danger" onclick="paBlock()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/></svg> <span id="paBlockLabel">Block</span></button>
+    <button class="as-item danger hidden" id="paReportPostBtn" onclick="paReportPost()"><svg viewBox="0 0 24 24"><path d="M5 21V4"/><path d="M5 4.5s1.2-1 4-1 5 2 8 2c1.4 0 2-.4 2-.4v9s-.6.6-2 .6c-3 0-5-2-8-2s-4 1-4 1z"/></svg> <span>Report this post</span></button>
     <button class="as-item danger" onclick="paReport()"><svg viewBox="0 0 24 24"><path d="M5 21V4"/><path d="M5 4.5s1.2-1 4-1 5 2 8 2c1.4 0 2-.4 2-.4v9s-.6.6-2 .6c-3 0-5-2-8-2s-4 1-4 1z"/></svg> <span id="paReportLabel">Report</span></button>
     <button class="as-cancel" onclick="closeOverlay('postActions')">Cancel</button>
   </div>
@@ -17601,10 +17628,36 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <span>Go live<small>You broadcast, the group watches</small></span></button>
 </div>
 <div class="ai-menu-scrim hidden" id="chatMenuScrim" onclick="acCloseChatMenu()"></div>
+<!-- The contact book: saved people by name + who saved you -->
+<div class="overlay hidden" id="smartLinkViewsView" onclick="if(event.target===this)closeOverlay('smartLinkViewsView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Who viewed">
+    <button class="sheet-close" onclick="closeOverlay('smartLinkViewsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="slvTitle" style="margin:0 0 10px;">Who viewed</div>
+    <div id="slvBody"></div>
+  </div>
+</div>
+<div class="overlay hidden" id="contactBookView" onclick="if(event.target===this)closeOverlay('contactBookView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Contacts">
+    <button class="sheet-close" onclick="closeOverlay('contactBookView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Contacts</div>
+    <div id="contactBookBody"></div>
+  </div>
+</div>
+<div class="overlay hidden" id="whoSavedMeView" onclick="if(event.target===this)closeOverlay('whoSavedMeView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Who saved me">
+    <button class="sheet-close" onclick="closeOverlay('whoSavedMeView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Who saved me</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">People who added you to their contacts. Their private notes stay theirs.</div>
+    <div id="whoSavedMeBody"></div>
+  </div>
+</div>
+
 <div class="ai-menu-pop hidden" id="chatMenuPop" role="menu" aria-label="Chat tools">
   <button class="aimp-item" role="menuitem" onclick="acChatMenuPick('search')"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><span>Search chats</span></button>
   <div class="aimp-sep"></div>
   <button class="aimp-item" role="menuitem" onclick="acChatMenuPick('starred')"><svg viewBox="0 0 24 24"><polygon points="12 2.5 14.7 8.6 21.5 9.3 16.5 13.9 17.9 20.6 12 17.1 6.1 20.6 7.5 13.9 2.5 9.3 9.3 8.6"/></svg><span>Starred messages</span></button>
+  <div class="aimp-sep"></div>
+  <button class="aimp-item" role="menuitem" onclick="acChatMenuPick('contacts')"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 19a6 6 0 0 1 12 0"/><path d="M17 8h5M17 12h5"/></svg><span>Contacts</span></button>
   <div class="aimp-sep"></div>
   <button class="aimp-item" role="menuitem" onclick="acChatMenuPick('readall')"><svg viewBox="0 0 24 24"><path d="M18 6 7 17l-4-4"/><path d="M22 8.5 13.5 17"/></svg><span>Mark all as read</span></button>
   <div class="aimp-sep"></div>
@@ -17918,6 +17971,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
         <div class="pf-sec-label">Contact form</div>
         <label class="pf-inq-row"><span>Show a “Contact” button on your profile</span><input type="checkbox" id="pfInquiry"/></label>
         <input class="pf-finput" id="pfInquiryIntro" maxlength="200" placeholder="Intro line (optional) — e.g. Tell us about your project" autocomplete="off"/>
+        <textarea class="pf-finput" id="pfInquiryQs" rows="3" maxlength="800" placeholder="Questions with fixed choices (optional), one per line:&#10;What make? = Toyota, Honda, Ford&#10;When? = This week, This month, Just looking" autocomplete="off" style="margin-top:8px;"></textarea>
         <div class="pf-hint">People send you a message + their contact details; you’ll see them in your Leads inbox.</div>
         <div class="pf-sec-label">Hiring</div>
         <label class="pf-inq-row"><span>Show a “We’re hiring” badge on your profile</span><input type="checkbox" id="pfHiring"/></label>
@@ -18285,6 +18339,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
         <input class="ac-groupname" id="acGroupName" type="text" placeholder="Group name (optional)" maxlength="60" oninput="acGroupCreateState()"/>
         <textarea class="ac-groupname ac-groupdesc" id="acGroupDesc" placeholder="Description (optional)" maxlength="500" rows="2" aria-label="Group description"></textarea>
         <textarea class="ac-groupname ac-groupdesc" id="acGroupRules" placeholder="Group rules (optional — new members must agree to join)" maxlength="2000" rows="3" aria-label="Group rules"></textarea>
+        <textarea class="ac-groupname ac-groupdesc" id="acGroupWelcome" placeholder="Welcome note (optional — shown once to each new member)" maxlength="1000" rows="2" aria-label="Welcome note"></textarea>
         <input class="ac-groupname" id="acGroupFee" type="number" min="0" max="500" step="1" placeholder="Join fee ($, optional — paid once from the joiner’s balance)" aria-label="Join fee" style="display:none;"/>
         <div class="ac-uname-row" id="acGroupUnameRow">
           <span class="ac-uname-prefix">group@</span>
@@ -19165,7 +19220,7 @@ async function onAuthSuccess(token, user) {
   API.setToken(token);
   S.token = token;
   S.guest = false;
-  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, businessTier: user.businessTier || 'none', headline: user.headline || null, pronouns: user.pronouns || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, specialHours: Array.isArray(user.specialHours) ? user.specialHours : [], hoursNote: user.hoursNote || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null , storeBanner: user.storeBanner || null, freeShipOverCents: user.freeShipOverCents || null, inquiryEnabled: !!user.inquiryEnabled, inquiryIntro: user.inquiryIntro || null, hiring: !!user.hiring, status: user.status || null };
+  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, businessTier: user.businessTier || 'none', headline: user.headline || null, pronouns: user.pronouns || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, specialHours: Array.isArray(user.specialHours) ? user.specialHours : [], hoursNote: user.hoursNote || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null , storeBanner: user.storeBanner || null, freeShipOverCents: user.freeShipOverCents || null, inquiryEnabled: !!user.inquiryEnabled, inquiryIntro: user.inquiryIntro || null, inquiryQuestions: Array.isArray(user.inquiryQuestions) ? user.inquiryQuestions : [], hiring: !!user.hiring, status: user.status || null };
   S.plan  = user.plan || 'free';
   Accounts.upsert(token, user);
   try { await loadFromServer(); } catch {}
@@ -19177,11 +19232,42 @@ async function onAuthSuccess(token, user) {
   rtConnect();
   consumePendingRoute();
   maybeClaimReferral();
+  acCheckLegalPending();
+  acLoadCurrency();
   // Arm feature-intro sheets a beat after a fresh sign-in/sign-up lands (onboarding,
   // if any, runs first and self-suppresses the sheets via the BLOCKERS guard).
   setTimeout(() => { _introReady = true; }, 1500);
 }
 // Claim a stashed referral code once, after sign-in (server enforces new-account + once).
+/* Updated terms/privacy: when a new version is published, the next boot asks
+   once. Accepting records exactly who accepted which version — the point of
+   versioned legal docs. Dismissal isn't offered; it simply asks again next boot. */
+async function acCheckLegalPending() {
+  if (!isAccount()) return;
+  let pending = [];
+  try { ({ pending } = await API.req('GET', '/api/legal/pending')); } catch (e) { return; }
+  if (!pending || !pending.length) return;
+  let docs = [];
+  try { ({ docs } = await API.req('GET', '/api/legal')); } catch (e) {}
+  const byId = new Map((docs || []).map(d => [d.id, d]));
+  const names = { terms: 'Terms of Service', privacy: 'Privacy Policy' };
+  const el = document.createElement('div');
+  el.className = 'overlay'; el.id = 'legalPendingView'; el.style.zIndex = '1200';
+  el.innerHTML = `<div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Updated terms">
+      <div class="jp-title" style="margin:0 0 6px;">We’ve updated ${pending.map(pd => names[pd.kind] || pd.kind).join(' and ')}</div>
+      <div class="ac-disc-sub" style="margin:0 0 10px;">Have a read — carrying on means you accept the new version.</div>
+      <div style="max-height:40vh;overflow:auto;">
+        ${pending.map(pd => { const d = byId.get(pd.id); return `<div class="ac-prof-head" style="padding:8px 2px 4px;">${escHtml(names[pd.kind] || pd.kind)} · v${escHtml(String(pd.version))}</div>
+          <div class="ac-disc-sub" style="white-space:pre-wrap;line-height:1.55;">${escHtml(((d && d.body) || '').slice(0, 6000))}</div>`; }).join('')}
+      </div>
+      <button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="acAcceptLegal(${JSON.stringify(pending.map(pd => pd.id))})">I accept</button>
+    </div>`;
+  document.body.appendChild(el);
+}
+async function acAcceptLegal(docIds) {
+  try { await API.req('POST', '/api/legal/accept', { docIds }); } catch (e) { showNotif(e.message || 'Could not record that.'); return; }
+  const el = document.getElementById('legalPendingView'); if (el) el.remove();
+}
 async function maybeClaimReferral() {
   let code; try { code = localStorage.getItem('atwe_ref'); } catch {}
   if (!code) return;
@@ -21969,6 +22055,35 @@ function translateStatic(root) {
 function i18nCurrentName() { const l = I18N_LANGS.find((x) => x.code === I18N.lang); return l ? l.name : 'English'; }
 function syncLangRow() { const v = document.getElementById('setLangVal'); if (v) v.textContent = i18nCurrentName(); }
 // Language picker sheet.
+/* Currency picker — display only, charges stay in dollars, said on the sheet. */
+async function acOpenCurrency() {
+  if (!AC._fxData) await acLoadCurrency();
+  const d = AC._fxData || { currencies: [{ code: 'USD', label: 'US Dollar' }], configured: false, mine: null };
+  const cur = (AC._fx && AC._fx.code) || d.mine || 'USD';
+  const rows = (d.currencies || []).map(c => `<button class="iset-row" onclick="acSetCurrency('${escHtml(c.code)}');closeOverlay('currencyView')">
+      <div class="iset-main"><div class="iset-label">${escHtml(c.label || c.code)} · ${escHtml(c.code)}</div></div>
+      ${cur === c.code ? '<svg class="iset-chev" viewBox="0 0 24 24" style="stroke:var(--accent);"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+    </button>`).join('');
+  let box = document.getElementById('currencyView');
+  if (!box) {
+    box = document.createElement('div');
+    box.className = 'overlay'; box.id = 'currencyView';
+    box.onclick = (e) => { if (e.target === box) closeOverlay('currencyView'); };
+    document.body.appendChild(box);
+  } else box.classList.remove('hidden');
+  box.innerHTML = `<div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Currency">
+    <button class="sheet-close" onclick="closeOverlay('currencyView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 4px;">Currency</div>
+    <div class="ac-disc-sub" style="margin:0 0 10px;">Prices show as an approximate figure in your currency. Everything still charges in US dollars — that is what the ≈ means.</div>
+    ${d.configured ? rows : rows + '<div class="ac-disc-sub" style="margin-top:8px;">Other currencies appear here once exchange rates are set up on the server.</div>'}
+  </div>`;
+}
+function syncCurrencyRow() {
+  const el = document.getElementById('setCurrencyVal'); if (!el) return;
+  const code = (AC._fx && AC._fx.code) || 'USD';
+  const c = ((AC._fxData || {}).currencies || []).find(x => x.code === code);
+  el.textContent = (c && c.label) || code;
+}
 function acOpenLanguage() {
   showOverlay('langView');
   const b = document.getElementById('langBody'); if (!b) return;
@@ -23988,6 +24103,7 @@ async function openMessages() {
     const { messages, unread } = await API.req('GET', '/api/messages');
     S.messages = messages || [];
     renderMessages();
+    acMaybeAskCsat();
     if (unread) API.req('POST', '/api/messages/read').catch(() => {});
     S.unread = 0;
     updateUnreadUI();
@@ -23996,6 +24112,32 @@ async function openMessages() {
   }
 }
 
+/* One quiet question when the team has replied: did that sort it? Yes/No, an
+   optional line on No. Asked at most once every 3 days, remembered per device. */
+function acMaybeAskCsat() {
+  const thread = document.getElementById('msgThread'); if (!thread || !S.messages.length) return;
+  const last = S.messages[S.messages.length - 1];
+  if (!last || last.sender !== 'admin') return;
+  let lastAsk = 0; try { lastAsk = Number(localStorage.getItem('atwe_csat_at') || 0); } catch (e) {}
+  if (Date.now() - lastAsk < 3 * 86400000) return;
+  const el = document.createElement('div');
+  el.className = 'msg-empty'; el.id = 'csatStrip';
+  el.style.cssText = 'padding:12px;opacity:.95;';
+  el.innerHTML = `Did that sort it out?
+    <div style="display:flex;gap:8px;justify-content:center;margin-top:8px;">
+      <button class="ac-pill-btn" onclick="acCsat(true)">Yes, sorted</button>
+      <button class="ac-pill-btn" onclick="acCsat(false)">Not really</button>
+    </div>`;
+  thread.appendChild(el);
+}
+async function acCsat(solved) {
+  try { localStorage.setItem('atwe_csat_at', String(Date.now())); } catch (e) {}
+  let comment = null;
+  if (!solved) comment = (prompt('What still needs sorting? (optional)') || '').trim() || null;
+  try { await API.req('POST', '/api/support/rate', { solved, comment }); } catch (e) {}
+  const el = document.getElementById('csatStrip');
+  if (el) el.innerHTML = solved ? 'Glad it’s sorted. Thanks for telling us.' : 'Thanks — we’ll keep at it.';
+}
 function closeMessages() {
   closeOverlay('messagesOverlay');
 }
@@ -24661,7 +24803,7 @@ function acMsgForward(id) {
   showOverlay('fwdSheet');
   fwdLoad();
 }
-function closeFwd() { AC._fwdFeedShare = null; closeOverlay('fwdSheet'); }
+function closeFwd() { AC._fwdFeedShare = null; AC._fwdCustomSend = null; closeOverlay('fwdSheet'); }
 async function fwdLoad() {
   try {
     const [conv, grp, circ] = await Promise.all([
@@ -24775,6 +24917,16 @@ function _fwdStartDraft(c) {
 // forward to all immediately.
 async function fwdSendSelected() {
   const sel = [..._fwdSel.values()]; if (!sel.length) return;
+  // Custom-send mode (e.g. sharing a pool card): the picked people go to the
+  // hook, which does its own server call per person. DMs only.
+  if (AC._fwdCustomSend) {
+    const fn = AC._fwdCustomSend; AC._fwdCustomSend = null;
+    closeFwd();
+    let ok = 0;
+    for (const t of sel) { if (t.type !== 'dm') continue; try { await fn(t.id); ok++; } catch (e) {} }
+    showNotif(ok ? ('Sent to ' + ok + (ok === 1 ? ' chat' : ' chats')) : 'Could not send it.');
+    return;
+  }
   const c = fwdContent(); if (!c) return;
   if (sel.length === 1) {
     const s = sel[0]; closeFwd();
@@ -26069,24 +26221,26 @@ function acOpenAiBrain(tab) {
 }
 function acRenderBrainTabs() {
   const el = document.getElementById('brainTabs'); if (!el) return;
-  el.innerHTML = [['memory', 'What it remembers'], ['tasks', 'What it does for you']]
+  el.innerHTML = [['memory', 'What it remembers'], ['tasks', 'What it does for you'], ['routines', 'Routines']]
     .map(([k, l]) => `<button class="ac-jv ${BRAIN.tab === k ? 'on' : ''}" onclick="acBrainTab('${k}')">${l}</button>`).join('');
 }
 function acBrainTab(t) { BRAIN.tab = t; acRenderBrainTabs(); acRenderBrain(); }
 async function acLoadBrain() {
   const b = document.getElementById('brainBody'); if (b) b.innerHTML = acSkelRows(3);
   try {
-    const [m, t] = await Promise.all([
+    const [m, t, w] = await Promise.all([
       API.req('GET', '/api/ai/memory').catch(() => ({ memories: [], enabled: true })),
       API.req('GET', '/api/ai/tasks').catch(() => ({ tasks: [], cadences: [] })),
+      API.req('GET', '/api/ai/workflows').catch(() => ({ workflows: [] })),
     ]);
-    BRAIN = { ...BRAIN, ...m, ...t };
+    BRAIN = { ...BRAIN, ...m, ...t, workflows: w.workflows || [] };
   } catch (e) {}
   acRenderBrain();
 }
 function acRenderBrain() {
   const b = document.getElementById('brainBody'); if (!b) return;
   if (BRAIN.tab === 'tasks') return acRenderBrainTasks(b);
+  if (BRAIN.tab === 'routines') return acRenderBrainRoutines(b);
   const rows = (BRAIN.memories || []).map(m => `<div class="mem-row">
       <div class="mem-txt">${escHtml(m.fact)}<div class="mem-src">${m.source === 'learned' ? 'Atwe AI noticed this' : 'you told it'}</div></div>
       <button class="mem-x" onclick="acForget(${m.id})" aria-label="Forget this">×</button>
@@ -26123,6 +26277,80 @@ async function acMemoryToggle(on) {
   catch (e) { showNotif(e.message); acLoadBrain(); }
 }
 const _BRAIN_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+/* Routines: several steps that run as ONE scheduled job, each step's answer
+   handed to the next — "pull my week's numbers, then write the summary, then
+   draft the post". A single step is just a task; this tab is for chains. */
+function acRenderBrainRoutines(b) {
+  const rows = (BRAIN.workflows || []).map(w => `<div class="dev-item">
+      <div class="dev-item-top"><span class="dev-name">${escHtml(w.name)}</span>
+        <span class="dev-pill ${w.status === 'active' ? 'ok' : 'off'}">${w.status === 'active' ? 'on' : 'paused'}</span></div>
+      <div class="dev-sub">${escHtml(w.cadenceLabel || w.cadence)}${w.cadence === 'weekly' ? ' on ' + _BRAIN_DAYS[w.weekday] : ''} at ${String(w.hour).padStart(2, '0')}:00${w.lastRunAt ? ' · last ran ' + acTime(w.lastRunAt) : ' · not run yet'}</div>
+      <ol class="dev-sub" style="margin:6px 0 0 18px;padding:0;">${(w.steps || []).map(st => `<li>${escHtml(typeof st === 'string' ? st : (st.prompt || ''))}</li>`).join('')}</ol>
+      ${w.lastResult ? `<div class="ref-note" style="margin-top:8px;color:var(--t2);font-size:13px;line-height:1.5;">${escHtml(String(w.lastResult).slice(0, 300))}</div>` : ''}
+      <div class="dev-acts">
+        <button class="ac-pill-btn" onclick="acRunWorkflow(${w.id})">Run it now</button>
+        <button class="ac-pill-btn" onclick="acWorkflowToggle(${w.id}, '${w.status === 'active' ? 'paused' : 'active'}')">${w.status === 'active' ? 'Pause' : 'Turn on'}</button>
+        <button class="ac-pill-btn" onclick="acDeleteWorkflow(${w.id})">Delete</button>
+      </div></div>`).join('') || '<div class="ac-empty-sm">No routines yet.</div>';
+  b.innerHTML = `
+    <div class="ac-disc-sub" style="margin:0 0 12px;">A routine is several steps run in order on a schedule — each step sees the one before's answer. The result lands in your Atwe inbox.</div>
+    ${rows}
+    <div class="dev-item" style="margin-top:14px;">
+      <div class="dev-name" style="margin-bottom:8px;">Build one</div>
+      <input class="jp-in" id="wfName" maxlength="80" placeholder="Name it (e.g. Friday wrap-up)"/>
+      <div id="wfSteps">
+        <textarea class="jp-in wf-step" rows="2" maxlength="1000" placeholder="Step 1 — e.g. Sum up this week's sales and orders" style="margin-top:8px;"></textarea>
+        <textarea class="jp-in wf-step" rows="2" maxlength="1000" placeholder="Step 2 — e.g. Turn that into a short post for my followers" style="margin-top:8px;"></textarea>
+      </div>
+      <button class="ac-link-btn" style="margin-top:6px;" onclick="acWfAddStep()">＋ Another step</button>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+        <select class="jp-in jp-sel" id="wfCadence" style="flex:1;min-width:130px;margin:0;">
+          ${(BRAIN.cadences || [{ key: 'weekly', label: 'Every week' }]).map(c => `<option value="${escHtml(c.key)}"${c.key === 'weekly' ? ' selected' : ''}>${escHtml(c.label)}</option>`).join('')}
+        </select>
+        <select class="jp-in jp-sel" id="wfDay" style="flex:1;min-width:120px;margin:0;">
+          ${_BRAIN_DAYS.map((d, i) => `<option value="${i}"${i === 5 ? ' selected' : ''}>${d}</option>`).join('')}
+        </select>
+        <select class="jp-in jp-sel" id="wfHour" style="width:110px;margin:0;">
+          ${Array.from({ length: 24 }, (_, h) => `<option value="${h}"${h === 8 ? ' selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('')}
+        </select>
+      </div>
+      <button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="acCreateWorkflow()">Save the routine</button>
+    </div>`;
+}
+function acWfAddStep() {
+  const box = document.getElementById('wfSteps'); if (!box) return;
+  if (box.querySelectorAll('.wf-step').length >= 6) { showNotif('Up to six steps.'); return; }
+  const t = document.createElement('textarea');
+  t.className = 'jp-in wf-step'; t.rows = 2; t.maxLength = 1000; t.style.marginTop = '8px';
+  t.placeholder = 'Another step';
+  box.appendChild(t);
+}
+async function acCreateWorkflow() {
+  const name = (document.getElementById('wfName') || {}).value || '';
+  const steps = [...document.querySelectorAll('#wfSteps .wf-step')].map(t => t.value.trim()).filter(Boolean);
+  if (!name.trim()) { showNotif('Name the routine.'); return; }
+  if (steps.length < 2) { showNotif('A routine needs at least two steps — one step is just a task.'); return; }
+  try {
+    await API.req('POST', '/api/ai/workflows', {
+      name: name.trim(), steps,
+      cadence: (document.getElementById('wfCadence') || {}).value,
+      weekday: Number((document.getElementById('wfDay') || {}).value),
+      hour: Number((document.getElementById('wfHour') || {}).value),
+    });
+    showNotif('Routine saved.'); acLoadBrain();
+  } catch (e) { showNotif(e.message || 'Could not save it.'); }
+}
+async function acRunWorkflow(id) {
+  try { await API.req('POST', '/api/ai/workflows/' + id + '/run', {}); showNotif('Running — the result lands in your Atwe inbox.'); }
+  catch (e) { showNotif(e.message); }
+}
+async function acWorkflowToggle(id, status) {
+  try { await API.req('PATCH', '/api/ai/workflows/' + id, { status }); acLoadBrain(); } catch (e) { showNotif(e.message); }
+}
+async function acDeleteWorkflow(id) {
+  if (!(await appConfirm({ title: 'Delete this routine?', confirmText: 'Delete', danger: true }))) return;
+  try { await API.req('DELETE', '/api/ai/workflows/' + id); acLoadBrain(); } catch (e) { showNotif(e.message); }
+}
 function acRenderBrainTasks(b) {
   const rows = (BRAIN.tasks || []).map(t => `<div class="dev-item">
       <div class="dev-item-top"><span class="dev-name">${escHtml(t.name)}</span>
@@ -30288,7 +30516,7 @@ function notifRow(n, i) {
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
-  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', event_reminder: 'is hosting an event starting soon', event_comment: 'commented on your event', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', appt_rescheduled: 'proposed a new appointment time', appt_reminder: 'has an appointment with you soon', call_reminder: 'has a call with you soon', stock_low: 'is running low — only a few left', stock_out: 'has sold out', event_spot: 'a spot opened up — you’re in!', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', invoice_reminder: 'sent a reminder about an unpaid invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', strike: 'issued a warning on your account', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', referral_milestone: 'you hit a referral milestone — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', listing_hidden: 'a listing of yours was hidden — check your messages', waitlist_invite: 'you’re off the waiting list — it’s ready for you', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', auction_outbid: 'outbid you on an auction. Bid again to stay in it', auction_won: 'you won the auction. Pay to claim it', auction_ended: 'won your auction. They’re paying now', group_join_paid: 'paid your group’s join fee. They’re in', crm_followup: 'is due a follow-up — you set the reminder', rinv_paused: 'a recurring invoice was paused — check the schedule', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', split_reminder: 'sent a reminder about your share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', story_answer: 'responded to your question', story_mention: 'mentioned you in their Daily', remix: 'remixed your video', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', community_boost: 'boosted your community', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_adjustment: 'your wallet balance was adjusted by our team', cashout_released: 'your cash-out was approved and is on its way to your bank', cashout_returned: 'your cash-out wasn’t approved — the money is back in your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item', lead_active: 'posted something new — they\u2019re on one of your lead lists', lead_hiring: 'is hiring — they\u2019re on one of your lead lists', inbox_assigned: 'gave you a conversation to handle', dmca_removed: 'removed something of yours after a copyright claim. Tap to contest it', dmca_reinstated: 'put your content back after reviewing your counter-notice', imp_upheld: 'agreed — the account impersonating you has been actioned', imp_rejected: 'reviewed your impersonation report', webinar_signup: 'signed up for your webinar', webinar_live: 'is live now — the webinar you signed up for has started', webinar_updated: 'changed a webinar you signed up for', webinar_cancelled: 'cancelled a webinar you signed up for', delivery_on_way: 'is on the way with your order' };
+  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', event_reminder: 'is hosting an event starting soon', event_comment: 'commented on your event', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', appt_rescheduled: 'proposed a new appointment time', appt_reminder: 'has an appointment with you soon', call_reminder: 'has a call with you soon', stock_low: 'is running low — only a few left', stock_out: 'has sold out', event_spot: 'a spot opened up — you’re in!', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', invoice_reminder: 'sent a reminder about an unpaid invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', strike: 'issued a warning on your account', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', referral_milestone: 'you hit a referral milestone — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', listing_hidden: 'a listing of yours was hidden — check your messages', waitlist_invite: 'you’re off the waiting list — it’s ready for you', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', auction_outbid: 'outbid you on an auction. Bid again to stay in it', auction_won: 'you won the auction. Pay to claim it', auction_ended: 'won your auction. They’re paying now', group_join_paid: 'paid your group’s join fee. They’re in', crm_followup: 'is due a follow-up — you set the reminder', rinv_paused: 'a recurring invoice was paused — check the schedule', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', split_reminder: 'sent a reminder about your share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', story_answer: 'responded to your question', story_mention: 'mentioned you in their Daily', remix: 'remixed your video', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', community_boost: 'boosted your community', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_adjustment: 'your wallet balance was adjusted by our team', cashout_released: 'your cash-out was approved and is on its way to your bank', cashout_returned: 'your cash-out wasn’t approved — the money is back in your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item', lead_active: 'posted something new — they\u2019re on one of your lead lists', lead_hiring: 'is hiring — they\u2019re on one of your lead lists', inbox_assigned: 'gave you a conversation to handle', dmca_removed: 'removed something of yours after a copyright claim. Tap to contest it', dmca_reinstated: 'put your content back after reviewing your counter-notice', imp_upheld: 'agreed — the account impersonating you has been actioned', imp_rejected: 'reviewed your impersonation report', experiment_done: 'your A/B test found its winner — it’s applied', auth_requested: 'asked for an item check on an order', auth_passed: 'your item passed its check', auth_failed: 'an item failed its check — the buyer is refunded', webinar_signup: 'signed up for your webinar', webinar_live: 'is live now — the webinar you signed up for has started', webinar_updated: 'changed a webinar you signed up for', webinar_cancelled: 'cancelled a webinar you signed up for', delivery_on_way: 'is on the way with your order' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -30813,13 +31041,10 @@ async function acFeedNotInterested(id) {
   if (card) card.style.display = 'none';
   showNotif('You’ll see fewer like this');
 }
-async function acFeedReport(id) {
+function acFeedReport(id) {
   closeOverlay('feedMoreSheet');
-  const p = AC._immPosts && AC._immPosts[id]; if (!p) return;
-  const ok = await appConfirm({ title: 'Report this video?', message: 'Our team will review it for violating Atwe’s guidelines.', confirmText: 'Report', danger: true });
-  if (!ok) return;
-  try { await API.req('POST', '/api/reports', { targetType: 'feedpost', targetId: id, reason: 'inappropriate' }); showNotif('Reported. Thank you'); }
-  catch (e) { showNotif(e.message || 'Could not report.'); }
+  // The full reason list, same as reporting anything else — never a hardcoded reason.
+  acOpenReport('feedpost', id, 'this video');
 }
 // Send the video in a message — reuses the forward picker to pick people/groups.
 function acFeedSendInMessage(id) {
@@ -33117,7 +33342,9 @@ async function acSyncChatPrefs() {
   if (AC._prefsLoadedFor === S.user?.id) return; // once per logged-in user
   AC._prefsLoadedFor = S.user?.id;
   try {
-    const { pins, archived, muted, muteUntil, unreadOnly, locked, hasLockPin, themes } = await API.req('GET', '/api/atchat/prefs');
+    const { pins, archived, muted, muteUntil, unreadOnly, locked, hasLockPin, themes, noExport } = await API.req('GET', '/api/atchat/prefs');
+    // The no-export set follows the ACCOUNT — the server copy wins over this device's.
+    if (Array.isArray(noExport)) { AC._noexport = new Set(noExport); try { localStorage.setItem('ac_noexport', JSON.stringify(noExport)); } catch {} }
     AC._locked = new Set(Array.isArray(locked) ? locked : []);
     AC._hasLockPin = !!hasLockPin;
     AC._themes = (themes && typeof themes === 'object') ? themes : {};
@@ -34525,6 +34752,7 @@ function acChatMenuPick(which) {
   acCloseChatMenu();
   if (which === 'search') acToggleChatSearch();
   else if (which === 'starred') acOpenStarred();
+  else if (which === 'contacts') acOpenContactBook();
   else if (which === 'readall') acMarkAllChatsRead();
   else if (which === 'archived') acEnterArchived();
   else if (which === 'lists') acOpenLabelManage();
@@ -36221,6 +36449,19 @@ function acOnPostFile(e, kind) {
     if (!file.type.startsWith('video/')) { showNotif('Please choose a video file.'); return; }
     if (file.size > AC_MEDIA_MAX) { showNotif('That video is too large (max 16 MB).'); return; }
     _acPostImgs = [];
+    // The editor (trim · caption · green-screen) opens first; "Use as is"
+    // falls straight through to the untouched clip.
+    if (typeof acOpenVideoEdit === 'function') {
+      acOpenVideoEdit(file, (outBlobOrDataUrl) => {
+        const done = (data) => { _acPostAtt = { data, kind: 'video' }; acRenderPostPrev(); acPostInput(); };
+        if (typeof outBlobOrDataUrl === 'string') { done(outBlobOrDataUrl); return; }
+        const rr = new FileReader();
+        rr.onload = () => done(rr.result);
+        rr.onerror = () => showNotif('Could not read that video.');
+        rr.readAsDataURL(outBlobOrDataUrl);
+      });
+      return;
+    }
     const r = new FileReader();
     r.onload = () => { _acPostAtt = { data: r.result, kind: 'video' }; acRenderPostPrev(); acPostInput(); };
     r.onerror = () => showNotif('Could not read that video.');
@@ -37033,7 +37274,7 @@ async function acOpenProfileViewers() {
   const el = document.getElementById('viewersBody'); el.innerHTML = acSkelRows(3);
   document.getElementById('viewersTitle').textContent = 'Who viewed your profile';
   try {
-    const { viewers, weekCount, private: isPrivate } = await API.req('GET', '/api/profile-views');
+    const { viewers, weekCount, private: isPrivate, proGated, hiddenCount } = await API.req('GET', '/api/profile-views');
     const teaser = weekCount
       ? `<div class="pv-teaser"><b>${weekCount}</b> ${weekCount === 1 ? 'person' : 'people'} viewed your profile this week</div>`
       : '';
@@ -37045,6 +37286,15 @@ async function acOpenProfileViewers() {
         <div class="pv-empty-t">You're browsing privately</div>
         <div class="pv-empty-s">While private browsing is on, your visits stay anonymous, so you can't see who viewed you either. Turn it off to reveal your viewers.</div>
         <button class="btn-white" style="margin-top:14px;" onclick="closeOverlay('viewersList');openSettings();setTimeout(()=>setNav('privacy'),120);">Change privacy settings</button>
+      </div>`;
+      return;
+    }
+    // The Pro perk: free sees the count, Pro sees who. Said plainly, one tap up.
+    if (proGated) {
+      el.innerHTML = teaser + `<div class="pv-empty">
+        <div class="pv-empty-t">${hiddenCount ? hiddenCount + (hiddenCount === 1 ? ' person is' : ' people are') + ' on your viewer list' : 'Your viewer list'}</div>
+        <div class="pv-empty-s">Seeing who they are is an Atwe Pro perk. The weekly count above is always free.</div>
+        <button class="btn-white" style="margin-top:14px;" onclick="closeOverlay('viewersList');openPlans()">See who — go Pro</button>
       </div>`;
       return;
     }
@@ -37325,7 +37575,7 @@ function acRenderProfile(d, mine) {
       <div class="ac-prof-top">
         ${acAvatarOpenable(u.name, u.avatar, 'user-avatar ac-prof-ava', acIsBiz(u), u.openToWork)}
       </div>
-      <div class="ac-prof-name"><span class="ac-prof-name-txt">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}${u.businessVerified ? BIZ_VBADGE : ''}${acAffBadge(u)}</div>
+      <div class="ac-prof-name"><span class="ac-prof-name-txt">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}${u.businessVerified ? BIZ_VBADGE : ''}${acAffBadge(u)}${u.pro ? '<span class="ac-pro-chip" title="Atwe Pro member">PRO</span>' : ''}</div>
       <div class="ac-prof-handle">@${escHtml(u.username)}${d.connectionDegree ? ` <span class="deg-chip">${d.connectionDegree === 1 ? '1st' : '2nd'}</span>` : ''}${u.pronouns ? ` <span class="ac-prof-pron">· ${escHtml(u.pronouns)}</span>` : ''}${(!mine && d.followsYou) ? ' <span class="ac-followsyou">Follows you</span>' : ''}</div>
       ${acBizVerifyLine(u, mine)}
       ${(!mine && u.paused) ? `<div class="ac-prof-paused" role="status" style="display:flex;gap:10px;align-items:flex-start;margin:12px var(--feed-gutter) 2px;padding:12px 14px;background:var(--s2);border:1px solid var(--b2);border-radius:14px;">
@@ -37529,7 +37779,7 @@ function acBizSections(d, mine) {
   // Contact / lead form: owner sees a leads inbox; a visitor sees a Contact button (when enabled).
   const contactRow = mine
     ? `<div class="ac-section-row"><span class="ac-prof-head">Leads</span><button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acOpenLeads()">Inbox</button></div>`
-    : (d.user.inquiryEnabled ? `<div class="ac-section-row"><span class="ac-prof-head">Contact</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 14px;" onclick="acContactBizOpen(${d.user.id}, ${jsAttr(d.user.name)}, ${jsAttr(d.user.inquiryIntro || '')})">Contact</button></div>` : '');
+    : (d.user.inquiryEnabled ? `<div class="ac-section-row"><span class="ac-prof-head">Contact</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 14px;" onclick='acContactBizOpen(${d.user.id}, ${jsAttr(d.user.name)}, ${jsAttr(d.user.inquiryIntro || "")}, ${JSON.stringify(d.user.inquiryQuestions || []).replace(/'/g, "&#39;")})'>Contact</button></div>` : '');
   const careersRow = `<div class="ac-section-row"><span class="ac-prof-head">Working here</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 13px;" onclick="acOpenCareers(${d.user.id})">Career page</button></div>
     <div id="acBizInsights"></div>`;
   return acBizReviewBar(d, mine) + acBizHoursHtml(d, mine) + storeRow + `<div id="acShopBox"></div>` + bookRow + contactRow + careersRow + `<div class="ac-section-row"><span class="ac-prof-head">Jobs</span>${postBtn}</div>${jobsHtml}
@@ -37537,8 +37787,16 @@ function acBizSections(d, mine) {
     <div class="ac-section-row" style="margin-top:14px;"><span class="ac-prof-head">Questions & answers</span></div><div id="acBizQA"></div>`;
 }
 // ── Contact / lead forms (business) ──
-function acContactBizOpen(bizId, name, intro) {
+function acContactBizOpen(bizId, name, intro, questions) {
   AC._inqBizId = bizId; AC._inqBizName = name;
+  AC._inqQs = Array.isArray(questions) ? questions : [];
+  const qb = document.getElementById('inqQuestions');
+  if (qb) qb.innerHTML = AC._inqQs.map((q, i) => `
+    <div class="ac-disc-sub" style="margin:10px 0 4px;font-weight:700;color:var(--t1);">${escHtml(q.q)}</div>
+    <select class="jp-in jp-sel inq-q" data-i="${i}" style="margin:0;">
+      <option value="">Choose…</option>
+      ${(q.choices || []).map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('')}
+    </select>`).join('');
   document.getElementById('inqTitle').textContent = 'Contact ' + (name || 'business');
   document.getElementById('inqIntro').textContent = intro || 'Send a message and they’ll get back to you.';
   document.getElementById('inqEmail').value = (S.user && (S.user.contactEmail || S.user.email)) || '';
@@ -37552,9 +37810,12 @@ async function acSubmitInquiry() {
   const message = (document.getElementById('inqMsg').value || '').trim();
   const email = (document.getElementById('inqEmail').value || '').trim();
   const phone = (document.getElementById('inqPhone').value || '').trim();
-  if (message.length < 3) return showNotif('Please write a short message.');
+  const qs = AC._inqQs || [];
+  const answers = [...document.querySelectorAll('#inqQuestions .inq-q')].map(sel => sel.value);
+  if (qs.length) { for (let i = 0; i < qs.length; i++) if (!answers[i]) return showNotif('Please answer: ' + qs[i].q); }
+  else if (message.length < 3) return showNotif('Please write a short message.');
   const btn = document.getElementById('inqSendBtn'); const lbl = btn.textContent; btn.disabled = true; btn.textContent = 'Sending…';
-  try { await API.req('POST', '/api/business/' + bizId + '/inquiry', { email, phone, message }); closeOverlay('contactBizSheet'); showNotif('Message sent to ' + (AC._inqBizName || 'the business') + '. They’ll be in touch.'); }
+  try { await API.req('POST', '/api/business/' + bizId + '/inquiry', { email, phone, message, answers }); closeOverlay('contactBizSheet'); showNotif('Message sent to ' + (AC._inqBizName || 'the business') + '. They’ll be in touch.'); }
   catch (e) { showNotif(e.message || 'Could not send your message.'); btn.disabled = false; btn.textContent = lbl; }
 }
 async function acOpenLeads() {
@@ -37570,7 +37831,8 @@ function acRenderLeads(list) {
     const contact = [q.email ? `<a href="mailto:${escHtml(q.email)}" onclick="event.stopPropagation()">${escHtml(q.email)}</a>` : '', q.phone ? `<a href="tel:${escHtml(q.phone)}" onclick="event.stopPropagation()">${escHtml(q.phone)}</a>` : ''].filter(Boolean).join(' · ');
     return `<div class="lead-card ${q.status === 'new' ? 'lead-new' : ''}">
       <div class="lead-head" onclick="closeOverlay('leadsView');acGoProfile(${jsAttr(q.from.username || '')})">${acAvatarHtml(q.from.name, q.from.avatar, 'user-avatar', q.from.accountType === 'business')}<div class="lead-who"><span class="lead-name">${escHtml(q.from.name)}${vbadge(!!q.from.verified)}</span><span class="lead-time">${acTime(q.created_at)}</span></div>${q.status === 'new' ? '<span class="lead-dot"></span>' : ''}</div>
-      <div class="lead-msg">${escHtml(q.message)}</div>
+      ${(q.answers || []).length ? `<div class="lead-msg" style="font-size:13.5px;">${q.answers.map(a => `<b>${escHtml(a.q)}</b> ${escHtml(a.a)}`).join('<br/>')}</div>` : ''}
+      ${q.message ? `<div class="lead-msg">${escHtml(q.message)}</div>` : ''}
       ${contact ? `<div class="lead-contact">${contact}</div>` : ''}
       <div class="lead-actions"><button class="ac-pill-btn accent" onclick="acLeadReply(${q.from.id})">Reply</button><button class="ac-pill-btn" onclick="acLeadArchive(${q.id},this)">Archive</button></div>
     </div>`;
@@ -38814,6 +39076,9 @@ function acRenderListingBuy(l, own) {
   // Make an offer (negotiate a price) — no-variant listings only; agreed price → order.
   const offerRow = (!own && !soldOut && !l.hasVariants)
     ? `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acMakeOfferOpen(${l.id}, ${unitPrice}, ${jsAttr(l.name)})"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-inline-end:6px;"><path d="M3 7h18v6a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Make an offer</button>` : '';
+  // Anyone who isn't the seller can flag the listing itself — reasons list, staff queue.
+  const reportRow = !own
+    ? `<button class="ac-link-btn" style="margin:6px 2px 0;color:var(--t3);" onclick="acOpenReport('listing', ${l.id}, ${jsAttr(l.name)})">Report this listing</button>` : '';
   // Affiliate: any non-owner can grab a referral link and earn a commission on sales.
   const earnRow = !own
     ? `<button class="ac-link-btn" style="margin:8px 2px 0;" onclick="acGetAffiliateLink(${l.id})"><svg viewBox="0 0 24 24" style="width:14px;height:14px;vertical-align:-2px;margin-inline-end:5px;fill:none;stroke:currentColor;stroke-width:2;"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg>Share &amp; earn — get an affiliate link</button>` : '';
@@ -38826,7 +39091,7 @@ function acRenderListingBuy(l, own) {
   // Owner: "Offer to savers" (Poshmark-style) — send everyone who wishlisted this a deal.
   const dealRow = (own && l.active && !l.hasVariants && l.kind !== 'service' && l.kind !== 'rental')
     ? `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acOfferSaversOpen(${l.id}, ${l.priceCents}, ${jsAttr(l.name)})"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-inline-end:6px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M20.6 13.4 12 22l-9-9V4a1 1 0 0 1 1-1h8.6z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>Send a deal to shoppers who saved this</button>` : '';
-  return `<div class="mkt-detail-meta"><span class="mkt-price">${priceLbl}</span><span class="shop-kind">${_PROD_KIND[l.kind] || 'Item'}</span>${stockBadge}${l.active ? '' : '<span class="shop-off">Hidden</span>'}</div>${shipLine}${wsRow}${escChip}${qtyRow}${buyRow}${dealRow}${subRow}${offerRow}${earnRow}`;
+  return `<div class="mkt-detail-meta"><span class="mkt-price">${priceLbl}</span><span class="shop-kind">${_PROD_KIND[l.kind] || 'Item'}</span>${stockBadge}${l.active ? '' : '<span class="shop-off">Hidden</span>'}</div>${shipLine}${wsRow}${escChip}${qtyRow}${buyRow}${dealRow}${subRow}${offerRow}${earnRow}${reportRow}`;
 }
 /* ── Ask Atwe AI across your own data ── */
 const _AI_ASK_EXAMPLES = ['What did I agree to ship this week?', 'Which invoices are still unpaid?', 'What was my last order from', 'Do I have appointments tomorrow?'];
@@ -38867,6 +39132,7 @@ async function acLoadSmartLinks() {
           <span class="inv-chip ${l.active ? 'st-paid' : 'st-cancelled'}">${l.clicks} click${l.clicks === 1 ? '' : 's'}</span></div>
         <div class="ac-item-last">${escHtml(location.origin.replace(/^https?:\/\//, ''))}/s/${escHtml(l.code)} → ${escHtml(l.url.slice(0, 44))}</div>
         <div style="display:flex;gap:8px;margin-top:7px;">
+          <button class="ac-pill-btn" style="padding:6px 14px;font-size:12.5px;" onclick="acSmartLinkViews(${l.id}, ${jsAttr(l.label || l.code)})">Who viewed</button>
           <button class="ac-pill-btn" style="padding:6px 14px;font-size:12.5px;" onclick="acSmartLinkCopy(${jsAttr(l.code)})">Copy</button>
           <button class="ac-pill-btn" style="padding:6px 14px;font-size:12.5px;" onclick="acSmartLinkToggle(${l.id}, ${l.active ? 'false' : 'true'})">${l.active ? 'Turn off' : 'Turn on'}</button>
           <button class="ac-pill-btn" style="padding:6px 14px;font-size:12.5px;color:var(--red);" onclick="acSmartLinkDelete(${l.id})">Delete</button>
@@ -38885,7 +39151,38 @@ async function acSmartLinkCreate() {
     acLoadSmartLinks();
   } catch (e) { showNotif(e.message || 'Could not create the link.'); }
 }
+// A same-origin /s/ link tapped anywhere in the app records an IDENTIFIED view
+// (fire-and-forget) before the normal navigation goes ahead.
+document.addEventListener('click', (e) => {
+  const a = e.target && e.target.closest && e.target.closest('a[href]');
+  if (!a || !S.token) return;
+  try {
+    const u = new URL(a.href, location.origin);
+    if (u.origin !== location.origin) return;
+    const m = /^\/s\/([a-z0-9]{4,16})$/.exec(u.pathname);
+    if (!m) return;
+    API.req('POST', '/api/smart-links/' + m[1] + '/view').catch(() => {});
+  } catch (err) {}
+}, true);
 function acSmartLinkCopy(code) { acCopyText(location.origin + '/s/' + code); showNotif('Link copied — share it anywhere.'); }
+/* Who opened this link — the reason a smart link exists. Named rows are people
+   who opened it inside Atwe while signed in; the rest is the honest anonymous
+   count (a browser click can't carry identity). */
+async function acSmartLinkViews(id, label) {
+  showOverlay('smartLinkViewsView');
+  const t = document.getElementById('slvTitle'); if (t) t.textContent = label || 'Who viewed';
+  const b = document.getElementById('slvBody'); if (!b) return;
+  b.innerHTML = acSkelRows(2);
+  try {
+    const d = await API.req('GET', '/api/smart-links/' + id + '/views');
+    const named = (d.viewers || []).map(u => `<div class="ac-item" onclick="closeOverlay('smartLinkViewsView');acGoProfile('${escHtml(u.username || '')}')">
+        ${acAvatarHtml(u.name, u.avatar, '', u.accountType === 'business')}
+        <div class="ac-item-main"><div class="ac-item-name">${escHtml(u.name || '')}${vbadge(!!u.verified)}</div>
+          <div class="ac-item-last">${u.times > 1 ? u.times + ' opens · ' : ''}last ${acTime(u.lastAt)}</div></div></div>`).join('');
+    b.innerHTML = (named || '<div class="ac-empty-sm">No signed-in viewers yet.</div>')
+      + `<div class="ac-disc-sub" style="margin-top:12px;">${d.anonymous} anonymous open${d.anonymous === 1 ? '' : 's'} from outside Atwe — a plain browser click can’t say who.</div>`;
+  } catch (e) { b.innerHTML = `<div class="ac-empty">${escHtml(e.message)}</div>`; }
+}
 async function acSmartLinkToggle(id, on) {
   try { await API.req('PATCH', '/api/smart-links/' + id, { active: on }); acLoadSmartLinks(); }
   catch (e) { showNotif(e.message || 'Could not update.'); }
@@ -39169,6 +39466,9 @@ async function acOpenAboutAccount(username) {
         ${row('<path d="M12 2l2.4 2.4 3.4-.5.6 3.3 3 1.6-1.5 3 1.5 3-3 1.6-.6 3.3-3.4-.5L12 22l-2.4-2.4-3.4.5-.6-3.3-3-1.6 1.5-3-1.5-3 3-1.6.6-3.3 3.4.5z"/><polyline points="9 12 11 14 15 10"/>', 'Verified', u.verified ? 'Yes — identity confirmed by Atwe' : 'Not verified')}
         ${biz ? row('<rect x="3" y="7" width="18" height="13" rx="2"/><polyline points="8.5 13 11 15.5 15.5 11"/>', 'Business verification', u.businessVerifyStatus === 'verified' ? 'Verified business' : 'Not verified as a business') : ''}
         ${u.location ? row('<path d="M12 21s-7-5.3-7-11a7 7 0 0 1 14 0c0 5.7-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>', 'Location', escHtml(u.location) + ' <span class="aa-sub">· self-reported</span>') : ''}
+        ${(u.nameHistory || []).length
+          ? row('<path d="M4 7h16M4 12h10M4 17h7"/>', 'Name changes', (u.nameHistory).map(h => 'was “' + escHtml(h.from) + '” until ' + escHtml(new Date(h.at).toLocaleDateString())).join('<br/>'))
+          : row('<path d="M4 7h16M4 12h10M4 17h7"/>', 'Name changes', 'None — same name since joining')}
       </div>
       ${mine ? '' : `<button class="ac-pill-btn" style="width:100%;margin-top:14px;color:var(--red);" onclick="closeOverlay('aboutAccountView');acOpenReport('user', ${u.id})">Report this account</button>`}`;
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Could not load this account.') + '</div>'; }
@@ -39831,9 +40131,20 @@ async function acPoolClose(id) {
   try { await API.req('POST', '/api/pools/' + id + '/close'); acOpenPool(id); } catch (e) { showNotif(e.message || 'Could not close.'); }
 }
 async function acPoolShare(id) {
+  // In-app: pick a person and the payable pool CARD lands in the chat (the
+  // server builds it — POST /api/pools/:id/share). Outside: the plain link.
+  const choice = await appConfirm({ title: 'Share this pool', message: 'Send the pool into a chat, where people can chip in with one tap?', confirmText: 'Send in a chat', cancelText: 'Copy the link' });
+  if (choice) { acPoolShareToChat(id); return; }
   const link = location.origin + '/?pool=' + id;
   if (navigator.share) { try { await navigator.share({ text: 'Chip in to my pool on Atwe', url: link }); return; } catch (e) {} }
   try { await navigator.clipboard.writeText(link); showNotif('Pool link copied.'); } catch (e) { showNotif(link); }
+}
+function acPoolShareToChat(id) {
+  AC._fwdCustomSend = async (uid) => { await API.req('POST', '/api/pools/' + id + '/share', { to: uid }); };
+  _fwdMsgId = null; AC._fwdFeedShare = { body: 'Pool' }; _fwdSel = new Map();
+  const si = document.getElementById('fwdSearchInput'); if (si) si.value = '';
+  document.getElementById('fwdList').innerHTML = '<div class="fwd-empty">Loading…</div>';
+  fwdUpdateBar(); showOverlay('fwdSheet'); fwdLoad();
 }
 /* ─── Team / multi-seat business accounts ─── */
 const TEAM_PERM_LABELS = { jobs: 'Post & manage jobs', qa: 'Answer Q&A', orders: 'Fulfill orders', reviews: 'Reply to reviews' };
@@ -40244,17 +40555,63 @@ async function acClearAiLog() {
   catch (e) { showNotif(e.message || 'Could not clear.'); }
 }
 // Seller sales dashboard.
-async function acOpenShopAnalytics() {
+/* Seller custom report: pick what to count and how to slice it, see it, or
+   take it away as a spreadsheet. */
+async function acShopReport(metric, dimension, days) {
+  AC._srM = metric || AC._srM || 'revenue';
+  AC._srD = dimension || AC._srD || 'day';
+  AC._srDays = days || AC._srDays || 30;
+  const box = document.getElementById('shopReportBox'); if (!box) return;
+  box.innerHTML = acSkelRows(2);
+  try {
+    const d = await API.req('GET', '/api/shop/report?metric=' + AC._srM + '&dimension=' + AC._srD + '&days=' + AC._srDays);
+    const sel = (id, list, cur, fn) => `<select class="jp-in jp-sel" style="flex:1;margin:0;" onchange="${fn}(this.value)">${list.map(o => `<option value="${o.key}"${o.key === cur ? ' selected' : ''}>${escHtml(o.label)}</option>`).join('')}</select>`;
+    const rows = (d.rows || []).slice(0, 30).map(x => `<div class="site-row" style="display:flex;justify-content:space-between;padding:7px 2px;">
+        <span class="srt" style="font-weight:600;">${escHtml(String(x.dim))}</span>
+        <span class="srs" style="font-weight:700;color:var(--t1);">${x.money ? acMoney(x.value) : x.value.toLocaleString()}</span>
+      </div>`).join('') || '<div class="ac-empty-sm">Nothing in that window yet.</div>';
+    box.innerHTML = `
+      <div class="co-sec-h" style="margin-top:16px;">Custom report</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${sel('srM', d.metrics, AC._srM, 'acSrSetMetric')}
+        ${sel('srD', d.dimensions, AC._srD, 'acSrSetDim')}
+        <select class="jp-in jp-sel" style="flex:0 0 110px;margin:0;" onchange="acSrSetDays(this.value)">
+          ${[7, 30, 90, 365].map(w => `<option value="${w}"${w === d.days ? ' selected' : ''}>${w} days</option>`).join('')}
+        </select>
+      </div>
+      <div style="margin-top:8px;">${rows}</div>
+      <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acShopReportCsv()">Download as a spreadsheet</button>`;
+  } catch (e) { box.innerHTML = `<div class="ac-empty">${escHtml(e.message)}</div>`; }
+}
+function acSrSetMetric(v) { acShopReport(v, null, null); }
+function acSrSetDim(v) { acShopReport(null, v, null); }
+function acSrSetDays(v) { acShopReport(null, null, Number(v)); }
+async function acShopReportCsv() {
+  try {
+    const res = await fetch('/api/shop/report.csv?metric=' + AC._srM + '&dimension=' + AC._srD + '&days=' + AC._srDays,
+      { headers: { Authorization: 'Bearer ' + S.token } });
+    if (!res.ok) throw new Error('Could not build the report.');
+    const blob = await res.blob(); const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'atwe-report.csv';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+  } catch (e) { showNotif(e.message); }
+}
+async function acOpenShopAnalytics(days) {
+  AC._saDays = days || AC._saDays || 14;
   showOverlay('shopAnalyticsView');
   const b = document.getElementById('shopAnalyticsBody'); b.innerHTML = acSkelRows(3);
   try {
-    const d = await API.req('GET', '/api/shop/analytics');
+    const d = await API.req('GET', '/api/shop/analytics?days=' + AC._saDays);
     const hasRevenue = d.revenueCents > 0;
     const max = Math.max(1, ...d.trend.map(t => t.revenueCents));
     const bars = d.trend.map(t => `<div class="sa-bar" style="height:${Math.round((t.revenueCents / max) * 100)}%" title="${t.day}: $${(t.revenueCents / 100).toFixed(2)}"></div>`).join('');
+    // The window row: what Pro unlocks is said plainly, not hidden.
+    const winRow = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">
+      ${[14, 30, 90, 365].map(w => `<button class="ac-pill-btn${(d.trendDays === w) ? ' accent' : ''}" style="padding:6px 13px;font-size:12.5px;" onclick="${w > (d.maxTrendDays || 30) ? 'openPlans()' : 'acOpenShopAnalytics(' + w + ')'}">${w === 365 ? '1 year' : w + ' days'}${w > (d.maxTrendDays || 30) ? ' · Pro' : ''}</button>`).join('')}
+    </div>${d.proClamped ? '<div class="ac-disc-sub" style="margin-top:6px;">Free looks back 30 days — Pro sees the full year.</div>' : ''}`;
     const chart = hasRevenue
-      ? `<div class="co-sec-h" style="margin-top:16px;">Last 14 days</div><div class="sa-chart">${bars}</div>`
-      : '<div class="ac-disc-sub" style="margin-top:14px;text-align:center;">No sales yet. Your revenue chart will appear here once you make a sale.</div>';
+      ? `${winRow}<div class="co-sec-h" style="margin-top:10px;">Last ${d.trendDays || 14} days</div><div class="sa-chart">${bars}</div>`
+      : winRow + '<div class="ac-disc-sub" style="margin-top:14px;text-align:center;">No sales yet. Your revenue chart will appear here once you make a sale.</div>';
     const top = d.topProducts.length ? `<div class="co-sec-h" style="margin-top:16px;">Top products</div>` + d.topProducts.map(p => `<div class="co-line"><span>${escHtml(p.name)} · ${p.units} sold</span><span>$${(p.revenueCents / 100).toFixed(2)}</span></div>`).join('') : '';
     b.innerHTML = `
       <div class="sa-grid">
@@ -40279,7 +40636,9 @@ async function acOpenShopAnalytics() {
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="ac-pill-btn" onclick="acExportSales(90)">Last 3 months</button>
         <button class="ac-pill-btn" onclick="acExportSales(365)">Last year</button>
-      </div>`;
+      </div>
+      <div id="shopReportBox"></div>`;
+    acShopReport();
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
 // AI analytics analyst — answers grounded on the shop's real numbers.
@@ -41122,6 +41481,8 @@ async function acOpenOrder(id) {
         } else if (o.shippedAt && !o.deliveredAt) action += `<button class="ac-pill-btn" style="width:100%;" onclick="acDeliverOrder()">Mark delivered</button>`;
         if (o.labelUrl) action += `<a class="ac-pill-btn" style="width:100%;margin-top:8px;display:block;box-sizing:border-box;text-align:center;" href="${escHtml(o.labelUrl)}" target="_blank" rel="noopener">📄 Shipping label${o.labelCostCents ? ' · $' + (o.labelCostCents / 100).toFixed(2) : ''}</a>`;
         if (o.shipTo) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acPackingSlip()">🖨 Packing slip</button>`;
+        // Cross-border: the customs paperwork, generated instead of dreaded.
+        if (o.shipTo && o.shipTo.country) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acCustomsForm()">🛃 Customs form (international)</button>`;
         if (o.localDelivery) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acOpenDelivery()">🚗 Local delivery runs</button>`;
       } else {
         if (o.shippedAt && !o.deliveredAt) action += `<button class="ac-pill-btn accent" style="width:100%;" onclick="acDeliverOrder()">I’ve received it</button>`;
@@ -41144,7 +41505,7 @@ async function acOpenOrder(id) {
       action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acRateBuyerOpen(${o.id}, ${jsAttr(o.buyer.name)})">★ Rate the buyer</button>`;
     }
     // ── Escrow / protection actions ──
-    if (o.status === 'escrow' && !o.mine) action += `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acConfirmOrder()">Confirm received · release payment</button><button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDisputeOrder()">Something's wrong. Open a dispute</button>`;
+    if (o.status === 'escrow' && !o.mine) action += `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acConfirmOrder()">Confirm received · release payment</button><button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acRequestAuth(${o.id})">Have it checked before I confirm</button><button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDisputeOrder()">Something's wrong. Open a dispute</button>`;
     else if (o.status === 'escrow' && o.mine) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDisputeOrder()">Open a dispute</button>`;
     if ((o.status === 'pending') || (o.mine && o.status === 'paid' && !o.needsShipping)) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acCancelOrder()">Cancel order</button>`;
     // A protection banner that explains the current state.
@@ -42345,7 +42706,31 @@ async function acSubmitDispute() {
 }
 
 /* ═══ Shop: product form shipping/stock, address book, checkout, reviews, fulfillment ═══ */
-function acMoney(c) { return '$' + ((c || 0) / 100).toFixed(2); }
+function acMoney(c) {
+  const fx = AC._fx;
+  if (fx && fx.code && fx.code !== 'USD' && fx.rate > 0) {
+    try { return '\u2248 ' + new Intl.NumberFormat(undefined, { style: 'currency', currency: fx.code }).format(((c || 0) / 100) * fx.rate); }
+    catch (e) { /* an odd code falls back to dollars */ }
+  }
+  return '$' + ((c || 0) / 100).toFixed(2);
+}
+/* Load the account's display currency once per boot. Prices are always CHARGED
+   in dollars — the ≈ mark keeps that honest. */
+async function acLoadCurrency() {
+  try {
+    const d = await API.req('GET', '/api/currency');
+    AC._fxData = d;
+    AC._fx = (d.mine && d.mine !== 'USD' && d.rates && d.rates[d.mine]) ? { code: d.mine, rate: Number(d.rates[d.mine]) } : null;
+  } catch (e) { AC._fx = null; }
+}
+async function acSetCurrency(code) {
+  try {
+    await API.req('PUT', '/api/currency', { code });
+    await acLoadCurrency();
+    showNotif(code === 'USD' ? 'Showing dollars.' : 'Prices now show \u2248 ' + code + ' (everything still charges in USD).');
+    if (typeof syncCurrencyRow === 'function') syncCurrencyRow();
+  } catch (e) { showNotif(e.message || 'Could not change that.'); }
+}
 function acAddrText(a) { return [a.line1, a.line2, [a.city, a.region, a.postal].filter(Boolean).join(', '), a.country].filter(Boolean).join(' · '); }
 // Show the stock / shipping fields only for physical products.
 function acProdKindChange() {
@@ -44077,7 +44462,29 @@ async function acOpenRestock() {
   b.innerHTML =
     (urgent.length ? '<div class="ac-prof-head" style="margin:2px 0 4px;">Running low</div>' + urgent.map(row).join('') : '') +
     (rest.length ? `<div class="ac-prof-head" style="margin:${urgent.length ? 16 : 2}px 0 4px;">Everything else</div>` + rest.map(row).join('') : '') +
-    '<button class="ac-pill-btn accent" style="width:100%;margin-top:16px;" onclick="acRestockCopy()">Copy reorder list</button>';
+    '<button class="ac-pill-btn accent" style="width:100%;margin-top:16px;" onclick="acRestockCopy()">Copy reorder list</button>'
+    + '<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acRestockPO()">Print a purchase order</button>';
+}
+/* A printable PURCHASE-ORDER draft built from the same restock numbers — the
+   document a seller hands their supplier. The supplier line is asked for at
+   print time (Atwe doesn't hold supplier records); everything else is filled. */
+function acRestockPO() {
+  const items = (AC._restock || []).filter(i => i.suggest > 0);
+  if (!items.length) { showNotif('Nothing needs reordering right now.'); return; }
+  const supplier = (prompt('Who is this order for? (supplier name — appears on the document)', '') || '').trim();
+  const w = window.open('', '_blank'); if (!w) { showNotif('Allow pop-ups to print the purchase order.'); return; }
+  const d = new Date();
+  const num = 'PO-' + d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') + '-' + String(Math.floor(Math.random() * 900) + 100);
+  const rows = items.map(i => `<tr><td>${escHtml(i.name)}</td><td>${i.suggest}</td><td>${i.stock} left · ${i.sold30} sold/30d</td><td></td></tr>`).join('');
+  w.document.write(`<html><head><title>${num}</title><style>body{font-family:system-ui,sans-serif;padding:32px;color:#111;max-width:720px;}h1{font-size:20px;margin:0;}table{width:100%;border-collapse:collapse;margin-top:16px;}td,th{border:1px solid #ccc;padding:8px 10px;text-align:start;font-size:14px;}th{background:#f5f5f5;}.meta{color:#555;margin-top:6px;font-size:14px;}.box{border:1px solid #ddd;border-radius:8px;padding:14px;margin-top:14px;font-size:14px;}.sig{margin-top:40px;display:flex;gap:40px;}.sig div{flex:1;border-top:1px solid #999;padding-top:6px;font-size:13px;color:#555;}</style></head><body>
+    <h1>Purchase order</h1>
+    <div class="meta">${num} · ${d.toLocaleDateString()}</div>
+    <div class="box"><b>From</b> ${escHtml((S.user && S.user.name) || '')}${S.user && S.user.username ? ' (@' + escHtml(S.user.username) + ')' : ''}</div>
+    ${supplier ? `<div class="box"><b>To</b> ${escHtml(supplier)}</div>` : ''}
+    <table><tr><th>Item</th><th>Quantity</th><th>Why</th><th>Unit price</th></tr>${rows}</table>
+    <div class="sig"><div>Authorised by</div><div>Date</div></div>
+    <script>window.print()<\/script></body></html>`);
+  w.document.close();
 }
 function acRestockCopy() {
   const items = (AC._restock || []).filter(i => i.suggest > 0);
@@ -44315,6 +44722,55 @@ async function acLoadListingBranches(productId) {
   } catch (e) { box.innerHTML = ''; }
 }
 
+/* ── The contact book ─────────────────────────────────────────────────────
+   People you SAVED, by name — distinct from the chat list (which is ordered
+   by conversation). Each row opens the person; the star saves/unsaves; a
+   second screen shows who has saved YOU. */
+async function acOpenContactBook() {
+  showOverlay('contactBookView');
+  const b = document.getElementById('contactBookBody'); if (!b) return;
+  b.innerHTML = acSkelRows(3);
+  let saved = [], people = [];
+  try { saved = (await API.req('GET', '/api/contacts/saved')).contacts || []; } catch (e) {}
+  try { people = (await API.req('GET', '/api/contacts')).contacts || []; } catch (e) {}
+  AC._cbSaved = new Set(saved.map(c => c.id));
+  const row = (u, isSaved) => `<div class="ac-item" onclick="closeOverlay('contactBookView');acGoProfile('${escHtml(u.username || '')}')">
+      ${acAvatarHtml(u.nickname || u.name, u.avatar, '', u.accountType === 'business')}
+      <div class="ac-item-main"><div class="ac-item-name">${escHtml(u.nickname || u.name || '')}${vbadge(!!u.verified)}${u.nickname ? ` <span class="muted" style="font-weight:400;">(${escHtml(u.name)})</span>` : ''}</div>
+        <div class="ac-item-last">@${escHtml(u.username || '')}${u.note ? ' · ' + escHtml(u.note.slice(0, 40)) : ''}</div></div>
+      <button class="ac-pill-btn" style="flex:0 0 auto;padding:5px 12px;" onclick="event.stopPropagation();acContactToggle(${u.id}, ${isSaved ? 'false' : 'true'}, this)">${isSaved ? 'Saved ✓' : 'Save'}</button>
+    </div>`;
+  const notSaved = people.filter(p => !AC._cbSaved.has(p.id));
+  b.innerHTML = `
+    <div class="ac-section-row"><span class="ac-prof-head">Saved contacts <span class="muted">· ${saved.length}</span></span>
+      <button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acOpenWhoSavedMe()">Who saved me</button></div>
+    ${saved.length ? saved.map(u => row(u, true)).join('') : '<div class="ac-empty-sm">Nobody saved yet — tap Save on anyone below.</div>'}
+    ${notSaved.length ? `<div class="ac-section-row" style="margin-top:14px;"><span class="ac-prof-head">Your people</span></div>
+      <div class="ac-disc-sub" style="margin:0 0 6px;">People you talk to or are connected with.</div>
+      ${notSaved.slice(0, 40).map(u => row(u, false)).join('')}` : ''}`;
+}
+async function acContactToggle(id, save, btn) {
+  try {
+    if (save) { await API.req('POST', '/api/contacts/' + id); if (btn) btn.textContent = 'Saved ✓'; }
+    else { await API.req('DELETE', '/api/contacts/' + id); if (btn) btn.textContent = 'Save'; }
+    acOpenContactBook();
+  } catch (e) { showNotif(e.message || 'Could not do that.'); }
+}
+async function acOpenWhoSavedMe() {
+  showOverlay('whoSavedMeView');
+  const b = document.getElementById('whoSavedMeBody'); if (!b) return;
+  b.innerHTML = acSkelRows(2);
+  try {
+    const { people } = await API.req('GET', '/api/contacts/reverse');
+    b.innerHTML = (people || []).length
+      ? people.map(u => `<div class="ac-item" onclick="closeOverlay('whoSavedMeView');closeOverlay('contactBookView');acGoProfile('${escHtml(u.username || '')}')">
+          ${acAvatarHtml(u.name, u.avatar, '', u.accountType === 'business')}
+          <div class="ac-item-main"><div class="ac-item-name">${escHtml(u.name || '')}${vbadge(!!u.verified)}</div>
+            <div class="ac-item-last">@${escHtml(u.username || '')}</div></div></div>`).join('')
+      : '<div class="ac-empty" style="padding:18px;">Nobody has saved you as a contact yet.</div>';
+  } catch (e) { b.innerHTML = `<div class="ac-empty">${escHtml(e.message)}</div>`; }
+}
+
 async function acOpenCartRecovery() {
   showOverlay('cartRecoveryView');
   const b = document.getElementById('cartRecoveryBody'); if (!b) return;
@@ -44372,7 +44828,7 @@ async function acOpenStorefront(biz) {
       : `<div class="ac-empty" style="padding:26px;">${isOwner ? 'No products yet. Add your first item.' : 'This store has no items yet.'}</div>`;
     // Seller announcement (one pinned line, e.g. "20% off this week").
     const ann = acStoreBannerHtml(isOwner ? (S.user && S.user.storeBanner) : biz.storeBanner);
-    b.innerHTML = `${head}${ann}${vac}${escLine}<div id="sfBundles"></div>${grid}`;
+    b.innerHTML = `${head}${searchRow}${ann}${vac}${escLine}<div id="sfBundles"></div>${grid}`;
     acLoadStorefrontBundles(biz.id, isOwner);
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:22px;">' + escHtml(e.message || 'Could not load the store.') + '</div>'; }
 }
@@ -45057,6 +45513,46 @@ function acOrderReceipt() {
     ${o.pickup ? `<p class="muted">Local pickup${o.pickupLocation ? ' · ' + escHtml(o.pickupLocation) : ''}</p>` : ''}
     <p class="muted" style="margin-top:22px;">Thank you for shopping on Atwe. Keep this receipt for your records.</p>
     <script>window.onload=function(){window.print();}<\/script></body></html>`);
+  w.document.close();
+}
+/* Item authentication (buyer): while the money is still held, ask for the item
+   to be checked. A failed check refunds through the escrow machinery. Hidden
+   behind config — with the program off, the button explains rather than dying. */
+async function acRequestAuth(orderId) {
+  let cfg = null;
+  try { cfg = (await API.req('GET', '/api/authentication/config')).config; } catch (e) {}
+  if (!cfg || !cfg.enabled) { showNotif('Authentication isn’t offered yet — it’s coming.'); return; }
+  const fee = cfg.feeCents ? ' It costs ' + acMoney(cfg.feeCents) + '.' : ' It’s free right now.';
+  const ok = await appConfirm({ title: 'Have this item checked?', message: 'The item is inspected before your money is released. If it fails the check, you’re refunded automatically.' + fee, confirmText: 'Request the check' });
+  if (!ok) return;
+  try {
+    const r = await API.req('POST', '/api/orders/' + orderId + '/authenticate');
+    showNotif(r.already ? 'A check is already underway.' : 'Requested — we’ll keep you posted here.');
+  } catch (e) { showNotif(e.message || 'Could not request that.'); }
+}
+/* A commercial-invoice / CN22-style customs declaration for an international
+   order, printable — the piece of "the paperwork" software can genuinely do.
+   Item values come from what the buyer actually paid; the seller adds origin
+   country + weight at print time (Atwe doesn't store either). */
+async function acCustomsForm() {
+  const o = AC._ordCur; if (!o || !o.shipTo) return;
+  const origin = (prompt('Country the goods are sent FROM (as it should appear on the form):', '') || '').trim();
+  const weight = (prompt('Total package weight (e.g. 1.2 kg):', '') || '').trim();
+  const w = window.open('', '_blank'); if (!w) { showNotif('Allow pop-ups to print the form.'); return; }
+  const a = o.shipTo;
+  const rows = o.items.map(it => `<tr><td>${escHtml(it.name)}</td><td>${it.qty}</td><td>$${((it.priceCents || 0) / 100).toFixed(2)}</td><td>$${(((it.priceCents || 0) * it.qty) / 100).toFixed(2)}</td></tr>`).join('');
+  const total = ((o.subtotalCents != null ? o.subtotalCents : o.totalCents) / 100).toFixed(2);
+  w.document.write(`<html><head><title>Customs declaration · Order #${o.id}</title><style>body{font-family:system-ui,sans-serif;padding:32px;color:#111;max-width:720px;}h1{font-size:19px;margin:0;}table{width:100%;border-collapse:collapse;margin-top:14px;}td,th{border:1px solid #bbb;padding:7px 10px;text-align:start;font-size:13.5px;}th{background:#f5f5f5;}.box{border:1px solid #ddd;border-radius:8px;padding:12px 14px;margin-top:12px;font-size:13.5px;}.sig{margin-top:36px;display:flex;gap:40px;}.sig div{flex:1;border-top:1px solid #999;padding-top:6px;font-size:12.5px;color:#555;}.small{color:#555;font-size:12px;margin-top:10px;}</style></head><body>
+    <h1>Customs declaration / Commercial invoice</h1>
+    <div class="small">Order #${o.id} · ${new Date(o.created_at || Date.now()).toLocaleDateString()} · Category: Sale of goods</div>
+    <div class="box"><b>From (exporter)</b><br>${escHtml((S.user && S.user.name) || '')}${origin ? '<br>' + escHtml(origin) : ''}</div>
+    <div class="box"><b>To (importer)</b><br>${escHtml(a.name || '')}<br>${escHtml(a.line1 || '')}${a.line2 ? '<br>' + escHtml(a.line2) : ''}<br>${escHtml([a.city, a.region, a.postal].filter(Boolean).join(', '))}<br>${escHtml(a.country || '')}</div>
+    <table><tr><th>Description of goods</th><th>Qty</th><th>Unit value (USD)</th><th>Total value (USD)</th></tr>${rows}
+      <tr><th colspan="3" style="text-align:end;">Declared value</th><th>$${total}</th></tr>
+      ${weight ? `<tr><th colspan="3" style="text-align:end;">Gross weight</th><th>${escHtml(weight)}</th></tr>` : ''}</table>
+    <div class="small">I, the undersigned, declare that the particulars given in this declaration are correct. This shipment contains no dangerous or prohibited articles.</div>
+    <div class="sig"><div>Sender's signature</div><div>Date</div></div>
+    <script>window.print()<\/script></body></html>`);
   w.document.close();
 }
 function acPackingSlip() {
@@ -46354,7 +46850,7 @@ function acOpenGroupCreate(variant) {
   acGroupConfigForm('create');
   acGroupApplyVariant(variant);
   document.getElementById('acGroupName').value = '';
-  document.getElementById('acGroupDesc').value = ''; document.getElementById('acGroupRules').value = ''; { const f = document.getElementById('acGroupFee'); f.style.display = ''; f.value = ''; }
+  document.getElementById('acGroupDesc').value = ''; document.getElementById('acGroupRules').value = ''; { const w = document.getElementById('acGroupWelcome'); if (w) w.value = ''; } { const f = document.getElementById('acGroupFee'); f.style.display = ''; f.value = ''; }
   document.getElementById('acGroupUsername').value = '';
   acGroupSetBroadcast(variant === 'channel');
   acSetGroupAvatar(null);
@@ -46385,7 +46881,7 @@ function acEditGroup() {
   acGroupConfigForm('edit');
   acGroupApplyVariant(variant);
   document.getElementById('acGroupName').value = AC.group.name || '';
-  document.getElementById('acGroupDesc').value = AC.group.description || ''; document.getElementById('acGroupRules').value = AC.group.rules || '';
+  document.getElementById('acGroupDesc').value = AC.group.description || ''; document.getElementById('acGroupRules').value = AC.group.rules || ''; { const w = document.getElementById('acGroupWelcome'); if (w) w.value = AC.group.welcome || ''; }
   { const f = document.getElementById('acGroupFee'); const isCreator = AC.group.createdBy === (S.user && S.user.id); f.style.display = isCreator ? '' : 'none'; f.value = AC.group.joinFeeCents ? (AC.group.joinFeeCents / 100) : ''; }
   document.getElementById('acGroupUsername').value = AC.group.username || '';
   acGroupSetBroadcast(!!AC.group.broadcast);
@@ -46487,6 +46983,7 @@ async function acSubmitGroup() {
   const name = document.getElementById('acGroupName').value.trim();
   const description = document.getElementById('acGroupDesc').value.trim();
   const rules = document.getElementById('acGroupRules').value.trim();
+  const welcome = document.getElementById('acGroupWelcome')?.value.trim() || '';
   const feeEl = document.getElementById('acGroupFee');
   const canSetFee = mode !== 'edit' || (AC.group && AC.group.createdBy === (S.user && S.user.id));
   const joinFeeCents = canSetFee && feeEl.style.display !== 'none' ? Math.max(0, Math.round((parseFloat(feeEl.value) || 0) * 100)) : null;
@@ -46496,14 +46993,14 @@ async function acSubmitGroup() {
     btn.disabled = true;
     try {
       if (mode === 'edit') {
-        const { group } = await API.req('PATCH', '/api/atchat/groups/' + AC.groupId, { contact: true, name, description, rules, avatar: AC.groupAvatar, ...(joinFeeCents != null ? { joinFeeCents } : {}) });
+        const { group } = await API.req('PATCH', '/api/atchat/groups/' + AC.groupId, { contact: true, name, description, rules, welcome, avatar: AC.groupAvatar, ...(joinFeeCents != null ? { joinFeeCents } : {}) });
         AC.group = { ...AC.group, ...group };
         showNotif('Group updated.');
         acOpenGroup(AC.groupId);
       } else {
         const members = [...AC.groupSel.keys()];
         if (!members.length) { showNotif('Add at least one person.'); btn.disabled = false; return; }
-        const { group } = await API.req('POST', '/api/atchat/groups', { contact: true, name, description, rules, avatar: AC.groupAvatar, members, ...(joinFeeCents != null ? { joinFeeCents } : {}) });
+        const { group } = await API.req('POST', '/api/atchat/groups', { contact: true, name, description, rules, welcome, avatar: AC.groupAvatar, members, ...(joinFeeCents != null ? { joinFeeCents } : {}) });
         showNotif('Group created!');
         acOpenGroup(group.id);
       }
@@ -46861,6 +47358,7 @@ async function acJoinViaInvite() {
     const r = await API.req('POST', '/api/atchat/invite/' + encodeURIComponent(AC._joinCode) + '/join', AC._joinHasRules ? { acceptRules: true } : {});
     closeOverlay('joinInviteView');
     showNotif('Joined ' + (r.name || 'the group') + '.');
+    AC._justJoinedGroup = r.groupId;   // the open below shows the welcome once
     acOpenGroup(r.groupId);
   } catch (e) {
     // Server says rules exist we didn't show (added since the preview) — show
@@ -49966,8 +50464,25 @@ function acRenderMyStickers() {
   const body = document.getElementById('stickerBody');
   const list = AC._myStickers || [];
   const add = `<button class="stk-add" onclick="document.getElementById('stkFile').click()" aria-label="Add a sticker"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>Add</span></button>`;
-  const cells = list.map(s => `<div class="stk-cell"><button class="stk-send" onclick="acSendMySticker(${s.id})"><img src="${s.image}" alt="Sticker" loading="lazy"/></button><button class="stk-del" onclick="event.stopPropagation();acDeleteSticker(${s.id})" aria-label="Remove">&times;</button></div>`).join('');
-  body.innerHTML = `<div class="stk-mine-grid">${add}${cells}</div>` + (list.length ? '' : '<div class="ac-empty" style="padding:14px 8px 2px;font-size:12.5px;">Add an image (a transparent PNG works best) to make it a sticker you can send.</div>');
+  const cell = (st) => `<div class="stk-cell"><button class="stk-send" onclick="acSendMySticker(${st.id})"><img src="${st.image}" alt="Sticker" loading="lazy"/></button><button class="stk-del" onclick="event.stopPropagation();acDeleteSticker(${st.id})" aria-label="Remove">&times;</button><button class="stk-del" style="left:2px;right:auto;" onclick="event.stopPropagation();acStickerPack(${st.id})" aria-label="Move to a pack" title="Move to a pack">▣</button></div>`;
+  // Grouped by pack, loose stickers last — a pack is just a name you give them.
+  const packs = {};
+  list.forEach(st => { (packs[st.pack || ''] = packs[st.pack || ''] || []).push(st); });
+  const names = Object.keys(packs).filter(Boolean).sort();
+  let html = '';
+  for (const nm of names) html += `<div class="ac-prof-head" style="padding:8px 4px 2px;">${escHtml(nm)}</div><div class="stk-mine-grid">${packs[nm].map(cell).join('')}</div>`;
+  html += (names.length ? `<div class="ac-prof-head" style="padding:8px 4px 2px;">Everything else</div>` : '') + `<div class="stk-mine-grid">${add}${(packs[''] || []).map(cell).join('')}</div>`;
+  body.innerHTML = html + (list.length ? '' : '<div class="ac-empty" style="padding:14px 8px 2px;font-size:12.5px;">Add an image (a transparent PNG works best) to make it a sticker you can send.</div>');
+}
+async function acStickerPack(id) {
+  const cur = ((AC._myStickers || []).find(x => x.id === id) || {}).pack || '';
+  const pack = prompt('Which pack? (leave empty to remove it from its pack)', cur);
+  if (pack === null) return;
+  try {
+    await API.req('PATCH', '/api/stickers/' + id, { pack: pack.trim() });
+    const st = (AC._myStickers || []).find(x => x.id === id); if (st) st.pack = pack.trim() || null;
+    acRenderMyStickers();
+  } catch (e) { showNotif(e.message || 'Could not move it.'); }
 }
 // Downscale a picked image to a compact sticker, exporting PNG so transparency
 // (the whole point of a sticker) survives — downscaleImage() emits JPEG and would
@@ -50380,6 +50895,7 @@ function acOpenUserActions(anchor, id, showFollow, postId) {
   const at = '@' + (a.username || '');
   document.getElementById('paShareLabel').textContent = 'Share ' + at;
   document.getElementById('paReportLabel').textContent = 'Report ' + at;
+  const prp = document.getElementById('paReportPostBtn'); if (prp) prp.classList.toggle('hidden', !AC._paPostId);
   const blocked = AC._blockedIds && AC._blockedIds.has(a.id);
   document.getElementById('paBlockLabel').textContent = (blocked ? 'Unblock ' : 'Block ') + at;
   const muted = AC._mutedIds && AC._mutedIds.has(a.id);
@@ -50617,6 +51133,11 @@ async function paBlock() {
 function paReport() {
   const a = AC._paAuthor; if (!a) return; closeOverlay('postActions');
   acOpenReport('user', a.id, '@' + a.username);
+}
+// Report the CONTENT, not the person — its own report with the full reason list.
+function paReportPost() {
+  const id = AC._paPostId; if (!id) return; closeOverlay('postActions');
+  acOpenReport('post', id, 'this post');
 }
 
 async function startCall(media, peerOverride) {
@@ -52805,6 +53326,20 @@ async function acOpenGroup(id) {
   acCapCache(AC._grpCache, id); // touch LRU
   try {
     const d = await API.req('GET', '/api/atchat/groups/' + id);
+    // A group's welcome note greets a member ONCE (fresh join, or first open on
+    // this device) — the "guided onboarding" moment, never a recurring nag.
+    try {
+      const g0 = d && d.group;
+      if (g0 && g0.welcome) {
+        const seenKey = 'ac_welcomed_g' + id;
+        const fresh = AC._justJoinedGroup === id || !localStorage.getItem(seenKey);
+        AC._justJoinedGroup = null;
+        if (fresh) {
+          localStorage.setItem(seenKey, '1');
+          setTimeout(() => appConfirm({ title: 'Welcome to ' + (g0.name || 'the group'), message: g0.welcome.slice(0, 900), confirmText: 'Thanks' }).catch(() => {}), 600);
+        }
+      }
+    } catch (e) {}
     if (AC._loadSeq !== _seq) return; // a newer thread was opened while this one loaded
     (AC._grpCache = AC._grpCache || {})[id] = d; acCapCache(AC._grpCache, id);
     acApplyGroupData(id, d, !cached, false);
@@ -54104,6 +54639,15 @@ async function acSendOne(tmp) {
     if (!_wasFailed && !isSticker) acUndoToast('Message sent', 'Undo', () => acRetractSend(message.id));
   } catch (e) {
     tmp.pending = false; tmp.failed = true; acRenderThread();
+    // The group's rules first: read → agree → the message retries itself.
+    if (e && e.body && e.body.needsRules && AC.gid) {
+      const ok = await appConfirm({ title: 'This group has rules', message: (e.body.rules || '').slice(0, 1200) + '\n\nAgree to them to post here.', confirmText: 'I agree' });
+      if (ok) {
+        try { await API.req('POST', '/api/atchat/groups/' + AC.gid + '/accept-rules'); setTimeout(() => acSendOne(tmp), 0); return; }  // after finally clears _inflight
+        catch (err) { showNotif(err.message || 'Could not record that.'); }
+      }
+      return;
+    }
     // AutoMod / permission rejections: tell the sender WHY it failed (Discord
     // does) — other failures keep the quiet failed-bubble + retry affordance.
     if (e && e.body && (e.body.automod || e.body.permission)) showNotif(e.message);
@@ -55861,7 +56405,9 @@ function openProfileEdit(focusUsername) {
   document.getElementById('pfHoursSec').classList.toggle('hidden', !isBiz);
   if (isBiz) { renderPfHours(S.user?.businessHours); renderPfSpecial(S.user?.specialHours || []); const hn = document.getElementById('pfHoursNote'); if (hn) hn.value = S.user?.hoursNote || ''; _pfGeo = (S.user?.lat != null && S.user?.lng != null) ? { lat: S.user.lat, lng: S.user.lng } : undefined; acRenderPfGeo(); }
   { const cta = document.getElementById('pfCta'); if (cta) cta.value = S.user?.profileCta || ''; }
-  { const iq = document.getElementById('pfInquiry'); if (iq) iq.checked = !!S.user?.inquiryEnabled; const ii = document.getElementById('pfInquiryIntro'); if (ii) ii.value = S.user?.inquiryIntro || ''; }
+  { const iq = document.getElementById('pfInquiry'); if (iq) iq.checked = !!S.user?.inquiryEnabled; const ii = document.getElementById('pfInquiryIntro'); if (ii) ii.value = S.user?.inquiryIntro || '';
+    const iqs = document.getElementById('pfInquiryQs');
+    if (iqs) iqs.value = (S.user?.inquiryQuestions || []).map(q => q.q + ' = ' + (q.choices || []).join(', ')).join('\n'); }
   { const hi = document.getElementById('pfHiring'); if (hi) hi.checked = !!S.user?.hiring; }
   document.getElementById('unameWrap').classList.toggle('has-val', !!S.user?.username);
   const pfAv = document.getElementById('pfAvatar');
@@ -55983,7 +56529,7 @@ async function saveProfile() {
     note: document.getElementById('pfNote').value.trim(),
     socials,
   };
-  if (acIsBiz(S.user)) { payload.businessHours = readPfHours(); payload.specialHours = readPfSpecial(); payload.hoursNote = document.getElementById('pfHoursNote')?.value || ''; payload.profileCta = document.getElementById('pfCta')?.value || null; payload.inquiryEnabled = !!document.getElementById('pfInquiry')?.checked; payload.inquiryIntro = document.getElementById('pfInquiryIntro')?.value || ''; payload.hiring = !!document.getElementById('pfHiring')?.checked; }
+  if (acIsBiz(S.user)) { payload.businessHours = readPfHours(); payload.specialHours = readPfSpecial(); payload.hoursNote = document.getElementById('pfHoursNote')?.value || ''; payload.profileCta = document.getElementById('pfCta')?.value || null; payload.inquiryEnabled = !!document.getElementById('pfInquiry')?.checked; payload.inquiryIntro = document.getElementById('pfInquiryIntro')?.value || ''; payload.inquiryQuestions = (document.getElementById('pfInquiryQs')?.value || '').split('\n').map(line => { const i = line.indexOf('='); if (i < 1) return null; return { q: line.slice(0, i).trim(), choices: line.slice(i + 1).split(',').map(c => c.trim()).filter(Boolean) }; }).filter(q => q && q.q && q.choices.length >= 2); payload.hiring = !!document.getElementById('pfHiring')?.checked; }
   // Geo: only send when changed (new point or explicit clear). Both keys go together.
   if (acIsBiz(S.user) && _pfGeo !== undefined) { payload.lat = _pfGeo ? _pfGeo.lat : null; payload.lng = _pfGeo ? _pfGeo.lng : null; }
   if (_pendingAvatar !== undefined) payload.avatar = _pendingAvatar;
@@ -56008,7 +56554,7 @@ async function saveProfile() {
     if ('hoursNote' in payload) S.user.hoursNote = payload.hoursNote.trim() || null;
     if ('profileCta' in payload) S.user.profileCta = user.profileCta || null;
     if ('hiring' in payload) S.user.hiring = payload.hiring;
-    if ('inquiryEnabled' in payload) { S.user.inquiryEnabled = payload.inquiryEnabled; S.user.inquiryIntro = payload.inquiryIntro || null; }
+    if ('inquiryEnabled' in payload) { S.user.inquiryEnabled = payload.inquiryEnabled; S.user.inquiryIntro = payload.inquiryIntro || null; S.user.inquiryQuestions = payload.inquiryQuestions || []; }
     if ('lat' in payload) { S.user.lat = payload.lat; S.user.lng = payload.lng; _pfGeo = undefined; }
     Store.save();
     initUI();
@@ -56033,6 +56579,29 @@ function shareFromSettings() {
 }
 
 /* Help center */
+/* The help-center reader — what the admin CMS publishes, members can read. */
+async function acOpenHelpArticles() {
+  showOverlay('helpArticlesView');
+  const b = document.getElementById('helpArticlesBody'); if (!b) return;
+  b.innerHTML = acSkelRows(3);
+  try {
+    const { articles } = await API.req('GET', '/api/help');
+    AC._helpArts = articles || [];
+    if (!AC._helpArts.length) { b.innerHTML = '<div class="ac-empty" style="padding:16px;">No articles yet.</div>'; return; }
+    const byCat = {};
+    AC._helpArts.forEach(a => { (byCat[a.category || 'General'] = byCat[a.category || 'General'] || []).push(a); });
+    b.innerHTML = Object.entries(byCat).map(([cat, arts]) => `
+      <div class="ac-prof-head" style="padding:10px 2px 4px;">${escHtml(cat)}</div>
+      ${arts.map(a => `<button class="iset-row" onclick="acOpenHelpArticle(${a.id})"><div class="iset-main"><div class="iset-label">${escHtml(a.title)}</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`).join('')}`).join('');
+  } catch (e) { b.innerHTML = `<div class="ac-empty">${escHtml(e.message)}</div>`; }
+}
+function acOpenHelpArticle(id) {
+  const a = (AC._helpArts || []).find(x => x.id === id); if (!a) return;
+  showOverlay('helpArticleView');
+  document.getElementById('helpArticleTitle').textContent = a.title;
+  document.getElementById('helpArticleBody').textContent = a.body || '';
+  API.req('POST', '/api/help/' + encodeURIComponent(a.slug) + '/view').catch(() => {});
+}
 function openHelp() {
   // Guests don't have a support thread — send them to sign in first.
   if (!isAccount()) { closeSettings(); openLogin(); return; }
@@ -57815,7 +58384,7 @@ const _bootDone = (async function boot() {
     if (user) {
       S.token = API.token();
       S.guest = false;
-      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, businessTier: user.businessTier || 'none', headline: user.headline || null, pronouns: user.pronouns || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, specialHours: Array.isArray(user.specialHours) ? user.specialHours : [], hoursNote: user.hoursNote || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null , storeBanner: user.storeBanner || null, freeShipOverCents: user.freeShipOverCents || null, inquiryEnabled: !!user.inquiryEnabled, inquiryIntro: user.inquiryIntro || null, hiring: !!user.hiring, status: user.status || null };
+      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, businessTier: user.businessTier || 'none', headline: user.headline || null, pronouns: user.pronouns || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, specialHours: Array.isArray(user.specialHours) ? user.specialHours : [], hoursNote: user.hoursNote || null, profileCta: user.profileCta || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null, introSeen: Array.isArray(user.introSeen) ? user.introSeen : [], paused: !!user.paused, pauseMessage: user.pauseMessage || null , storeBanner: user.storeBanner || null, freeShipOverCents: user.freeShipOverCents || null, inquiryEnabled: !!user.inquiryEnabled, inquiryIntro: user.inquiryIntro || null, inquiryQuestions: Array.isArray(user.inquiryQuestions) ? user.inquiryQuestions : [], hiring: !!user.hiring, status: user.status || null };
       S.plan  = user.plan || 'free';
       Accounts.upsert(API.token(), user);
       try { await loadFromServer(); } catch {}
@@ -59906,6 +60475,11 @@ function acVeUse() {
   if (!VEDIT.out) return;
   const f = new File([VEDIT.out], 'clip.webm', { type: 'video/webm' });
   if (VEDIT.cb) VEDIT.cb(f);
+  closeOverlay('videoEditView');
+}
+// Skip the edit entirely — the original clip goes through untouched.
+function acVeSkip() {
+  if (VEDIT.cb && VEDIT.file) VEDIT.cb(VEDIT.file);
   closeOverlay('videoEditView');
 }
 
