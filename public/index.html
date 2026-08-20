@@ -14464,6 +14464,12 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <div class="jp-title">New issue</div>
     <input class="jp-in" id="nlIssueTitle" type="text" placeholder="Issue title" maxlength="160"/>
     <textarea class="jp-in jp-ta" id="nlIssueBody" rows="9" placeholder="Write your article…" maxlength="20000"></textarea>
+    <select class="jp-in jp-sel" id="nlIssueTier" style="margin-top:8px;">
+      <option value="0">Every subscriber can read it</option>
+      <option value="1">Tier 1 and above</option>
+      <option value="2">Tier 2 and above</option>
+      <option value="3">Tier 3 only</option>
+    </select>
     <button class="ac-pill-btn accent jp-submit" onclick="acPublishIssue()">Publish &amp; notify subscribers</button>
   </div>
 </div>
@@ -18987,7 +18993,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1646'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1647'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -28019,7 +28025,7 @@ async function acOpenNewsletter(id) {
       </div>
       ${n.description ? `<div class="ev-desc">${escHtml(n.description)}</div>` : ''}
       ${subBtn}
-      ${n.mine ? `<div class="ev-rsvp-row" style="margin-top:8px;"><button onclick="acDeleteNewsletter()" style="color:var(--red);"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>Delete newsletter</button></div>` : ''}
+      ${n.mine ? `<div class="ev-rsvp-row" style="margin-top:8px;"><button onclick="acEditNlTiers()"><svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/></svg>Paid tiers…</button><button onclick="acDeleteNewsletter()" style="color:var(--red);"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>Delete newsletter</button></div>` : ''}
       <div class="ba-sec" style="margin-top:14px;">Issues</div>
       ${issues}`;
   } catch (e) { body.innerHTML = '<div class="ac-empty">That newsletter is no longer available.</div>'; }
@@ -28028,10 +28034,38 @@ async function acToggleNlSub() {
   const d = AC._nlCur; if (!d) return;
   const now = !d.newsletter.subscribed;
   try {
-    const r = await API.req('POST', '/api/newsletters/' + d.newsletter.id + '/subscribe', { subscribe: now });
+    // Tiers, when the writer offers them: pick one before paying.
+    let tierId = null;
+    if (now) {
+      try {
+        const { tiers } = await API.req('GET', '/api/newsletters/' + d.newsletter.id + '/tiers');
+        if (tiers && tiers.length) {
+          const pick = prompt('Pick a tier:\n' + tiers.map((t, i) => (i + 1) + '. ' + t.name + ' — $' + (t.priceCents / 100).toFixed(2) + '/issue access').join('\n') + '\n\nType the number:', '1');
+          if (pick === null) return;
+          const t = tiers[Math.max(1, Math.min(tiers.length, parseInt(pick, 10) || 1)) - 1];
+          tierId = t.id;
+        }
+      } catch (e) {}
+    }
+    const r = await API.req('POST', '/api/newsletters/' + d.newsletter.id + '/subscribe', { subscribe: now, tierId });
     if (r.url) { location.href = r.url; return; } // paid → Stripe checkout
     acOpenNewsletter(d.newsletter.id);
   } catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+/* The writer's tier editor — up to three "Name = $price" lines. */
+async function acEditNlTiers() {
+  const d = AC._nlCur; if (!d) return;
+  let cur = [];
+  try { ({ tiers: cur } = await API.req('GET', '/api/newsletters/' + d.newsletter.id + '/tiers')); } catch (e) {}
+  const txt = prompt('Tiers, one per line as  Name = price  (up to three; empty removes them all):',
+    (cur || []).map(t => t.name + ' = ' + (t.priceCents / 100).toFixed(2)).join('\n') || 'Supporter = 3\nInsider = 8');
+  if (txt === null) return;
+  const tiers = txt.split('\n').map(line => {
+    const i = line.indexOf('='); if (i < 1) return null;
+    return { name: line.slice(0, i).trim(), priceCents: Math.round(parseFloat(line.slice(i + 1).replace(/[^0-9.]/g, '')) * 100) };
+  }).filter(t => t && t.name && t.priceCents >= 100);
+  try { await API.req('PUT', '/api/newsletters/' + d.newsletter.id + '/tiers', { tiers }); showNotif(tiers.length ? 'Tiers saved.' : 'Tiers removed.'); acOpenNewsletter(d.newsletter.id); }
+  catch (e) { showNotif(e.message || 'Could not save the tiers.'); }
 }
 async function acDeleteNewsletter() {
   const d = AC._nlCur; if (!d) return;
@@ -28049,7 +28083,7 @@ async function acPublishIssue() {
   const title = document.getElementById('nlIssueTitle').value.trim();
   if (!title) { showNotif('Give the issue a title.'); return; }
   try {
-    await API.req('POST', '/api/newsletters/' + id + '/issues', { title, body: document.getElementById('nlIssueBody').value.trim() });
+    await API.req('POST', '/api/newsletters/' + id + '/issues', { title, body: document.getElementById('nlIssueBody').value.trim(), minTierLevel: Number((document.getElementById('nlIssueTier') || {}).value) || 0 });
     closeOverlay('nlIssueCompose'); showNotif('Issue published. Subscribers notified.');
     acOpenNewsletter(id);
   } catch (e) { showNotif(e.message || 'Could not publish.'); }
@@ -47039,7 +47073,7 @@ function acOpenGroupInfo() {
   const isOwner = AC.group.createdBy === S.user?.id; // the creator can delete the whole group/channel
   const list = members.map(m => {
     const badge = m.isOwner ? '<span class="ac-admin-badge">Admin</span>'
-      : (m.isAdmin ? '<span class="ac-admin-badge">Admin</span>' : '');
+      : (m.isAdmin ? '<span class="ac-admin-badge">Admin</span>' : (m.roleName ? '<span class="ac-admin-badge" style="opacity:.75;">' + escHtml(m.roleName) + '</span>' : ''));
     // Admins can manage any member except themselves and the creator → tap opens
     // the member-action sheet; everyone else taps straight through to the profile.
     const manageable = isAdmin && m.id !== S.user?.id && !m.isOwner;
@@ -47109,6 +47143,7 @@ function acOpenGroupInfo() {
     ${editBtn}
     ${isAdmin ? `<button class="ac-info-act" onclick="acOpenGroupInsights()"><svg viewBox="0 0 24 24"><line x1="4" y1="20" x2="20" y2="20"/><rect x="6" y="11" width="3" height="9" rx="1"/><rect x="11" y="6" width="3" height="14" rx="1"/><rect x="16" y="9" width="3" height="11" rx="1"/></svg> Group insights</button>` : ''}
     ${isAdmin ? `<button class="ac-info-act" onclick="acOpenGroupAutomod()"><svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg> Blocked words</button>` : ''}
+    ${isAdmin ? `<button class="ac-info-act" onclick="acGroupRolesManage()"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 19a6 6 0 0 1 12 0"/><path d="M17 4l1.2 2.4L21 7l-2 2 .5 2.8L17 10.5 14.5 11.8 15 9 13 7l2.8-.6z"/></svg> Roles</button>` : ''}
     ${(isAdmin || (!isChannel && AC.group.permAddMembers !== 'admins')) ? `<button class="ac-info-act accent" onclick="acGroupAddPeople()"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg> Add people</button>` : ''}
     <button class="ac-info-act" onclick="acOpenGroupInvite()"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07L11 5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07L13 19"/></svg> Invite via link</button>
     ${shareBtn}
@@ -47245,8 +47280,56 @@ function acGroupMemberActions(uid) {
     </div>
     <button class="ac-pill-btn" style="width:100%;" onclick="closeOverlay('gmemActions');acGoProfile('${m.username}')">View profile</button>
     ${roleBtn}
+    <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acGroupPickCustomRole(${m.id})">${m.roleName ? 'Role: ' + escHtml(m.roleName) + ' — change…' : 'Give a role…'}</button>
     <button class="ac-pill-btn danger" style="width:100%;margin-top:8px;" onclick="acGroupRemoveMember(${m.id})">Remove from group</button>`;
   showOverlay('gmemActions');
+}
+/* Custom roles: give this member one of the group's roles (or none). */
+async function acGroupPickCustomRole(uid) {
+  let roles = [];
+  try { ({ roles } = await API.req('GET', '/api/atchat/groups/' + AC.groupId + '/roles')); } catch (e) {}
+  if (!roles.length) {
+    const make = await appConfirm({ title: 'No roles yet', message: 'Create a role first — a named set of permissions like “Moderator”.', confirmText: 'Create one' });
+    if (make) acGroupRolesManage();
+    return;
+  }
+  const pick = prompt('Which role?\n0. None (plain member)\n' + roles.map((r, i) => (i + 1) + '. ' + r.name).join('\n') + '\n\nType the number:', '1');
+  if (pick === null) return;
+  const n = parseInt(pick, 10);
+  const roleId = (Number.isInteger(n) && n >= 1 && n <= roles.length) ? roles[n - 1].id : null;
+  try {
+    await API.req('POST', '/api/atchat/groups/' + AC.groupId + '/members/' + uid + '/custom-role', { roleId });
+    const m = (AC.members || []).find(x => x.id === uid);
+    if (m) { m.roleId = roleId; m.roleName = roleId ? roles[n - 1].name : null; }
+    closeOverlay('gmemActions');
+    showNotif(roleId ? 'Role given.' : 'Back to a plain member.');
+  } catch (e) { showNotif(e.message || 'Could not set the role.'); }
+}
+/* The group's role list: create / rename permissions / delete. Line-based and
+   plain: each permission is a yes/no question. */
+async function acGroupRolesManage() {
+  let roles = [];
+  try { ({ roles } = await API.req('GET', '/api/atchat/groups/' + AC.groupId + '/roles')); } catch (e) {}
+  const PERM_LABELS = { post: 'Post messages', media: 'Send photos & media', addMembers: 'Add members', pin: 'Pin messages', deleteOthers: 'Remove others’ messages' };
+  const listing = roles.length ? roles.map(r => '· ' + r.name + ' (' + Object.keys(PERM_LABELS).filter(k => r.perms[k]).map(k => PERM_LABELS[k]).join(', ') + ')').join('\n') : '(none yet)';
+  const act = prompt('Roles in this group:\n' + listing + '\n\nType NEW to create one, DELETE <name> to remove one, or Cancel:', 'NEW');
+  if (act === null) return;
+  if (/^delete\s+/i.test(act)) {
+    const nm = act.replace(/^delete\s+/i, '').trim().toLowerCase();
+    const r = roles.find(x => x.name.toLowerCase() === nm);
+    if (!r) { showNotif('No role by that name.'); return; }
+    try { await API.req('DELETE', '/api/atchat/groups/' + AC.groupId + '/roles/' + r.id); showNotif('Role removed — holders become plain members.'); }
+    catch (e) { showNotif(e.message); }
+    return;
+  }
+  const name = prompt('Name the role (e.g. Moderator):', '');
+  if (!name || !name.trim()) return;
+  const perms = {};
+  for (const [k, lbl] of Object.entries(PERM_LABELS)) {
+    perms[k] = await appConfirm({ title: name.trim(), message: 'Can this role: ' + lbl.toLowerCase() + '?', confirmText: 'Yes', cancelText: 'No' });
+  }
+  try { await API.req('POST', '/api/atchat/groups/' + AC.groupId + '/roles', { name: name.trim(), perms }); showNotif('Role created — hand it out from any member’s sheet.'); }
+  catch (e) { showNotif(e.message || 'Could not create it.'); }
 }
 async function acGroupSetRole(uid, makeAdmin) {
   try {
@@ -47398,7 +47481,15 @@ function acRenderCallLinks(links) {
     </div>
     <button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="acStartCallLink(${jsAttr(link.code)},'video')">Start video call</button>
     <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acStartCallLink(${jsAttr(link.code)},'audio')">Start voice call</button>
+    <div class="site-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;">
+      <div style="min-width:0;"><div class="srt">Waiting room</div><div class="srs">People hold at the door until you let them in.</div></div>
+      <button class="ios-switch ${link.lobby ? 'on' : ''}" onclick="acCallLinkLobby(${jsAttr(link.code)}, ${link.lobby ? 'false' : 'true'})" aria-label="Waiting room"><span></span></button>
+    </div>
     <button class="ac-pill-btn danger" style="width:100%;margin-top:8px;" onclick="acRevokeCallLink(${jsAttr(link.code)})">Reset link</button>`;
+}
+async function acCallLinkLobby(code, on) {
+  try { await API.req('PATCH', '/api/call-links/' + encodeURIComponent(code), { lobby: on }); acOpenCallLinks(); }
+  catch (e) { showNotif(e.message || 'Could not change that.'); }
 }
 function acCopyCallLink(url) {
   if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => showNotif('Link copied.'), () => showNotif(url));
@@ -52416,7 +52507,17 @@ async function gcEnterLink(code, media, title) {
   gcShow();
   gcAddTile(gcMeId(), { id: gcMeId(), name: (S.user && S.user.name) || 'You', avatar: (S.user && S.user.avatar) || null }, true);
   let peers = [];
-  try { const r = await API.req('POST', '/api/rt/call-link/join', { code }); peers = r.peers || []; }
+  try {
+    const r = await API.req('POST', '/api/rt/call-link/join', { code });
+    if (r.waiting) {
+      // Held at the door. The tile board shows the wait; the 'admitted' push
+      // (or the host ending the call) resolves it.
+      GROUPCALL.waiting = true;
+      showNotif('Waiting for the host to let you in…');
+      return;
+    }
+    peers = r.peers || [];
+  }
   catch (e) { showNotif((e && e.message) || 'Could not join the call.'); gcCleanup(); return; }
   if (!GROUPCALL || GROUPCALL.link !== code) return; // left while joining
   for (const pid of peers) gcOffer(pid);
@@ -52558,7 +52659,22 @@ function callLinkOnSignal(d) {
     if (GROUPCALL && GROUPCALL.link === d.link) { showNotif('The host ended the call.'); gcCleanup(); }
     return;
   }
+  // A knock at the waiting-room door — only meaningful to the host, wherever they are.
+  if (d.kind === 'knock') {
+    const who = (d.user && (d.user.name || '@' + (d.user.username || ''))) || 'Someone';
+    appConfirm({ title: who + ' is at the door', message: 'Let them into your call?', confirmText: 'Let them in' })
+      .then((ok) => { if (ok) API.req('POST', '/api/rt/call-link/admit', { code: d.link, userId: d.user && d.user.id }).catch((e) => showNotif(e.message)); })
+      .catch(() => {});
+    return;
+  }
   if (!GROUPCALL || GROUPCALL.link !== d.link) return;
+  // The host let us in: the held join goes through for real this time.
+  if (d.kind === 'admitted' && GROUPCALL.waiting) {
+    const code = GROUPCALL.link, media = GROUPCALL.media, title = GROUPCALL.title;
+    gcCleanup();
+    setTimeout(() => gcEnterLink(code, media, title), 50);
+    return;
+  }
   gcApplyMeshSignal(d);
 }
 function gcUpdateRoster(d) {

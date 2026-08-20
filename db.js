@@ -4601,6 +4601,36 @@ async function initSchema() {
   // can carry a welcome note shown to each new member once.
   await query(`ALTER TABLE at_group_members ADD COLUMN IF NOT EXISTS rules_accepted_at TIMESTAMPTZ;`);
   await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS welcome TEXT;`);
+  // Call-link waiting room: joiners hold at the door until the host lets them in.
+  await query(`ALTER TABLE call_links ADD COLUMN IF NOT EXISTS lobby BOOLEAN NOT NULL DEFAULT false;`);
+  // Custom group roles: a named permission set an admin creates and hands to
+  // members — Discord's model on Atwe's groups. A member without one keeps
+  // today's default behaviour exactly.
+  await query(`
+    CREATE TABLE IF NOT EXISTS group_roles (
+      id         SERIAL PRIMARY KEY,
+      group_id   INTEGER NOT NULL REFERENCES at_groups(id) ON DELETE CASCADE,
+      name       TEXT NOT NULL,
+      color      TEXT,
+      perms      JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS group_roles_group_idx ON group_roles(group_id);`);
+  await query(`ALTER TABLE at_group_members ADD COLUMN IF NOT EXISTS role_id INTEGER REFERENCES group_roles(id) ON DELETE SET NULL;`);
+  // Newsletter TIERS: several price levels; a higher level unlocks more issues.
+  await query(`
+    CREATE TABLE IF NOT EXISTS newsletter_tiers (
+      id            SERIAL PRIMARY KEY,
+      newsletter_id INTEGER NOT NULL REFERENCES newsletters(id) ON DELETE CASCADE,
+      name          TEXT NOT NULL,
+      price_cents   INTEGER NOT NULL,
+      level         INTEGER NOT NULL DEFAULT 1,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`ALTER TABLE newsletter_subs ADD COLUMN IF NOT EXISTS tier_id INTEGER REFERENCES newsletter_tiers(id) ON DELETE SET NULL;`);
+  await query(`ALTER TABLE newsletter_issues ADD COLUMN IF NOT EXISTS min_tier_level INTEGER NOT NULL DEFAULT 0;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_free_boost_at TIMESTAMPTZ;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_noexport TEXT[] NOT NULL DEFAULT '{}';`);
   // A record of who renamed themselves, and from what — the About-this-account

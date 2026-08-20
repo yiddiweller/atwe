@@ -1004,7 +1004,8 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'newsletter_sub') {
       const s = event.data.object, m = s.metadata || {};
       const uid = parseInt(m.user_id, 10), nid = parseInt(m.newsletter_id, 10);
-      if (Number.isInteger(uid) && Number.isInteger(nid)) await db.query(`INSERT INTO newsletter_subs (newsletter_id, user_id, paid) VALUES ($1,$2,true) ON CONFLICT (newsletter_id, user_id) DO UPDATE SET paid = true`, [nid, uid]);
+      const tid = parseInt(m.tier_id, 10);
+      if (Number.isInteger(uid) && Number.isInteger(nid)) await db.query(`INSERT INTO newsletter_subs (newsletter_id, user_id, paid, tier_id) VALUES ($1,$2,true,$3) ON CONFLICT (newsletter_id, user_id) DO UPDATE SET paid = true, tier_id = COALESCE($3, newsletter_subs.tier_id)`, [nid, uid, Number.isInteger(tid) ? tid : null]);
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'invoice') {
       const s = event.data.object, m = s.metadata || {};
       const invId = parseInt(m.invoice_id, 10);
@@ -3221,12 +3222,12 @@ app.post('/api/call-links', auth.requireAuth, rateLimit(30, 60000, 'clink-create
 app.get('/api/call-links', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      "SELECT code, title, media, active, created_at FROM call_links WHERE host_id = $1 AND active = true ORDER BY created_at DESC LIMIT 50",
+      "SELECT code, title, media, active, lobby, created_at FROM call_links WHERE host_id = $1 AND active = true ORDER BY created_at DESC LIMIT 50",
       [req.user.id]
     );
     res.json({ links: rows.map((r) => ({
       code: r.code, title: r.title, media: r.media, url: `${mailer.appUrl()}/?call=${r.code}`,
-      count: (callLinkRooms.get(r.code) || new Map()).size, createdAt: r.created_at,
+      count: (callLinkRooms.get(r.code) || new Map()).size, lobby: !!r.lobby, createdAt: r.created_at,
     })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your call links.' }); }
 });
@@ -3257,17 +3258,54 @@ app.delete('/api/call-links/:code', auth.requireAuth, async (req, res) => {
     if (!rowCount) return res.status(404).json({ error: 'Call link not found.' });
     const room = callLinkRooms.get(code);
     if (room) { for (const id of room.keys()) rtPush(id, 'call-link', { kind: 'ended', link: code }); callLinkRooms.delete(code); }
+    callLinkAdmitted.delete(code);
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not revoke the call link.' }); }
 });
 
 // Join (or start) a call-link room. Returns the peers already present to offer to.
+app.post('/api/rt/call-link/admit', auth.requireAuth, rateLimit(60, 60000, 'clink-admit'), async (req, res) => {
+  const code = String(req.body.code || '');
+  const uid = routeId(req.body.userId);
+  if (!Number.isInteger(uid)) return res.status(400).json({ error: 'Invalid user.' });
+  try {
+    const { rows } = await db.query('SELECT host_id, active FROM call_links WHERE code = $1', [code]);
+    if (!rows[0] || !rows[0].active) return res.status(404).json({ error: 'This call link is no longer active.' });
+    if (rows[0].host_id !== req.user.id) return res.status(403).json({ error: 'Only the host can let people in.' });
+    if (!callLinkAdmitted.has(code)) callLinkAdmitted.set(code, new Set());
+    callLinkAdmitted.get(code).add(uid);
+    rtPush(uid, 'call-link', { kind: 'admitted', link: code });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not let them in.' }); }
+});
+app.patch('/api/call-links/:code', auth.requireAuth, async (req, res) => {
+  const code = String(req.params.code || '');
+  if (typeof req.body.lobby !== 'boolean') return res.status(400).json({ error: 'Nothing to change.' });
+  try {
+    const r = await db.query('UPDATE call_links SET lobby = $3 WHERE code = $1 AND host_id = $2 RETURNING lobby', [code, req.user.id, req.body.lobby]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Link not found.' });
+    if (!req.body.lobby) callLinkAdmitted.delete(code);   // door open = nobody left knocking
+    res.json({ ok: true, lobby: r.rows[0].lobby });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not change that.' }); }
+});
+// Who the host has waved through, per room — in-memory like the room itself.
+const callLinkAdmitted = new Map(); // code -> Set<userId>
 app.post('/api/rt/call-link/join', auth.requireAuth, rateLimit(120, 60000, 'clink-join'), async (req, res) => {
   const code = String(req.body.code || '');
+  let link;
   try {
-    const { rows } = await db.query('SELECT active FROM call_links WHERE code = $1', [code]);
-    if (!rows[0] || !rows[0].active) return res.status(404).json({ error: 'This call link is no longer active.' });
+    const { rows } = await db.query('SELECT active, host_id, lobby FROM call_links WHERE code = $1', [code]);
+    link = rows[0];
+    if (!link || !link.active) return res.status(404).json({ error: 'This call link is no longer active.' });
   } catch (e) { return res.status(500).json({ error: 'Could not join the call.' }); }
+  // The waiting room: everyone except the host (and anyone already admitted)
+  // holds at the door. The host hears the knock and decides.
+  if (link.lobby && link.host_id !== req.user.id && !(callLinkAdmitted.get(code) || new Set()).has(req.user.id)) {
+    let who = null;
+    try { who = await chatIdentity(req.user.id); } catch {}
+    rtPush(link.host_id, 'call-link', { kind: 'knock', link: code, user: who ? { id: who.id, name: who.name, username: who.username, avatar: who.avatar || null } : { id: req.user.id } });
+    return res.json({ waiting: true });
+  }
   let room = callLinkRooms.get(code);
   const withVideo = req.body.video === true;
   const cap = withVideo ? GROUP_CALL_MAX : groupCallCap(room);
@@ -9490,6 +9528,102 @@ async function isGroupMember(groupId, userId) {
 // A group admin = the creator (implicit super-admin) OR a member promoted to
 // role='admin'. Used to gate every admin-only group action (edit info, invite
 // links, channel posting, approve requests, add/remove/promote members).
+/* ═══════════════════════════════════════════════
+   CUSTOM GROUP ROLES  —  named permission sets
+   ───────────────────────────────────────────────
+   An admin creates roles ("Moderator", "Announcer") with granular switches —
+   post · send media · add members · pin · remove others' messages — and hands
+   one to a member. The rules of engagement:
+     · admins/creator always can everything, exactly as before;
+     · a member WITHOUT a role keeps today's defaults untouched;
+     · a member WITH a role gets exactly what the role says — a granted switch
+       opens a door the group default kept shut (media in an admins-only-media
+       group, pinning, moderating), and post:false quiets them without a kick.
+═══════════════════════════════════════════════ */
+const GROUP_ROLE_PERMS = ['post', 'media', 'addMembers', 'pin', 'deleteOthers'];
+const GROUP_ROLE_CAP = 10;
+function cleanRolePerms(v) {
+  const out = {};
+  for (const k of GROUP_ROLE_PERMS) out[k] = !!(v && v[k]);
+  return out;
+}
+// The single permission question. `fallback` is what the group's existing
+// behaviour would have said for a role-less member.
+async function groupRolePerm(gid, uid, perm, fallback) {
+  try {
+    const r = (await db.query(
+      `SELECT gr.perms FROM at_group_members m JOIN group_roles gr ON gr.id = m.role_id
+        WHERE m.group_id = $1 AND m.user_id = $2`, [gid, uid])).rows[0];
+    if (!r) return fallback;
+    return !!(r.perms && r.perms[perm]);
+  } catch (e) { return fallback; }   // a lookup hiccup never changes behaviour
+}
+
+app.get('/api/atchat/groups/:id/roles', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  try {
+    if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+    const { rows } = await db.query('SELECT id, name, color, perms FROM group_roles WHERE group_id = $1 ORDER BY id', [gid]);
+    res.json({ roles: rows.map((r) => ({ id: r.id, name: r.name, color: r.color || null, perms: cleanRolePerms(r.perms) })), permKeys: GROUP_ROLE_PERMS });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the roles.' }); }
+});
+app.post('/api/atchat/groups/:id/roles', auth.requireAuth, rateLimit(30, 60000, 'group-role'), async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  const name = String(req.body.name || '').trim().slice(0, 30);
+  if (!name) return res.status(400).json({ error: 'Name the role.' });
+  try {
+    if (!(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only a group admin can manage roles.' });
+    const n = (await db.query('SELECT COUNT(*)::int AS n FROM group_roles WHERE group_id = $1', [gid])).rows[0].n;
+    if (n >= GROUP_ROLE_CAP) return res.status(400).json({ error: 'Up to ' + GROUP_ROLE_CAP + ' roles per group.' });
+    const { rows } = await db.query('INSERT INTO group_roles (group_id, name, perms) VALUES ($1,$2,$3) RETURNING id',
+      [gid, name, JSON.stringify(cleanRolePerms(req.body.perms))]);
+    res.status(201).json({ ok: true, id: rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the role.' }); }
+});
+app.patch('/api/atchat/groups/:id/roles/:rid', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id), rid = routeId(req.params.rid);
+  if (!Number.isInteger(gid) || !Number.isInteger(rid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    if (!(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only a group admin can manage roles.' });
+    const sets = [], vals = [];
+    if (typeof req.body.name === 'string' && req.body.name.trim()) { vals.push(req.body.name.trim().slice(0, 30)); sets.push(`name = $${vals.length}`); }
+    if (req.body.perms) { vals.push(JSON.stringify(cleanRolePerms(req.body.perms))); sets.push(`perms = $${vals.length}`); }
+    if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
+    vals.push(rid, gid);
+    const r = await db.query(`UPDATE group_roles SET ${sets.join(', ')} WHERE id = $${vals.length - 1} AND group_id = $${vals.length}`, vals);
+    if (!r.rowCount) return res.status(404).json({ error: 'Role not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the role.' }); }
+});
+app.delete('/api/atchat/groups/:id/roles/:rid', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id), rid = routeId(req.params.rid);
+  if (!Number.isInteger(gid) || !Number.isInteger(rid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    if (!(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only a group admin can manage roles.' });
+    const r = await db.query('DELETE FROM group_roles WHERE id = $1 AND group_id = $2', [rid, gid]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Role not found.' });
+    res.json({ ok: true });   // members holding it fall back to plain members (SET NULL)
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the role.' }); }
+});
+// Hand a role to a member (or take it back with roleId: null).
+app.post('/api/atchat/groups/:id/members/:uid/custom-role', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id), uid = routeId(req.params.uid);
+  if (!Number.isInteger(gid) || !Number.isInteger(uid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    if (!(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only a group admin can assign roles.' });
+    let rid = null;
+    if (req.body.roleId != null) {
+      rid = routeId(req.body.roleId);
+      const ok = (await db.query('SELECT 1 FROM group_roles WHERE id = $1 AND group_id = $2', [rid, gid])).rows[0];
+      if (!ok) return res.status(404).json({ error: 'Role not found.' });
+    }
+    const r = await db.query('UPDATE at_group_members SET role_id = $3 WHERE group_id = $1 AND user_id = $2', [gid, uid, rid]);
+    if (!r.rowCount) return res.status(404).json({ error: 'That person isn’t in the group.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not assign the role.' }); }
+});
 async function isGroupAdmin(groupId, userId) {
   const { rows } = await db.query(
     `SELECT 1 FROM at_groups g
@@ -9783,8 +9917,9 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     );
     if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
     const members = await db.query(
-      `SELECT u.id, u.name, u.username, u.avatar, u.verified, m.role, m.last_read_at FROM at_group_members m
-       JOIN users u ON u.id = m.user_id WHERE m.group_id = $1
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified, m.role, m.role_id, gr.name AS role_name, m.last_read_at FROM at_group_members m
+       JOIN users u ON u.id = m.user_id LEFT JOIN group_roles gr ON gr.id = m.role_id
+       WHERE m.group_id = $1
        ORDER BY (u.id = $2) DESC, (m.role = 'admin') DESC, m.joined_at`,
       [gid, g.rows[0].created_by]
     );
@@ -9819,7 +9954,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       requests,
       lastRead,
       live: ls ? liveStreamPublic(ls) : null,
-      members: members.rows.map((m) => ({ id: m.id, name: m.name, username: m.username, avatar: m.avatar || null, verified: !!m.verified, isOwner: m.id === g.rows[0].created_by, isAdmin: m.id === g.rows[0].created_by || m.role === 'admin', lastReadAt: m.last_read_at || null })),
+      members: members.rows.map((m) => ({ id: m.id, name: m.name, username: m.username, avatar: m.avatar || null, verified: !!m.verified, isOwner: m.id === g.rows[0].created_by, isAdmin: m.id === g.rows[0].created_by || m.role === 'admin', roleId: m.role_id || null, roleName: m.role_name || null, lastReadAt: m.last_read_at || null })),
       messages: (backfillImageSizes(msgs.rows, 'at_group_messages'), msgs.rows).map((m) => mediaRefMsg({
         id: m.id, body: m.body, image: m.image || null,
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null, duration_sec: m.duration_sec || null,
@@ -9910,16 +10045,25 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, blockLimited, rate
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
     // Broadcast ("channel") groups are admin-post-only.
     const gb = await db.query('SELECT broadcast, slow_mode_seconds, blocked_words, perm_send_media FROM at_groups WHERE id = $1', [gid]);
-    if (gb.rows[0] && gb.rows[0].broadcast && !(await isGroupAdmin(gid, req.user.id))) {
-      return res.status(403).json({ error: 'Only an admin can post in this channel.' });
+    const _isAdm = await isGroupAdmin(gid, req.user.id);
+    if (gb.rows[0] && gb.rows[0].broadcast && !_isAdm) {
+      // A custom role with `post` lets a member post even in a channel.
+      if (!(await groupRolePerm(gid, req.user.id, 'post', false))) {
+        return res.status(403).json({ error: 'Only an admin can post in this channel.' });
+      }
+    }
+    // A role with post switched OFF quiets that member without removing them.
+    if (!_isAdm && !(await groupRolePerm(gid, req.user.id, 'post', true))) {
+      return res.status(403).json({ permission: true, error: 'Your role in this group can’t post messages.' });
     }
     // AutoMod: a blocked word stops the message AT SEND (Discord model — it
     // never lands, and the sender is told why). Admins are exempt.
     if (body && gb.rows[0] && (gb.rows[0].blocked_words || []).length && automodHit(body, gb.rows[0].blocked_words) && !(await isGroupAdmin(gid, req.user.id))) {
       return res.status(400).json({ automod: true, error: 'That message includes a word this group doesn’t allow.' });
     }
-    // Permission: media restricted to admins (plain text still allowed for everyone).
-    if ((image || imgs.length || media.data) && gb.rows[0] && gb.rows[0].perm_send_media === 'admins' && !(await isGroupAdmin(gid, req.user.id))) {
+    // Permission: media restricted to admins — unless the member's role grants it.
+    if ((image || imgs.length || media.data) && gb.rows[0] && gb.rows[0].perm_send_media === 'admins' && !_isAdm
+        && !(await groupRolePerm(gid, req.user.id, 'media', false))) {
       return res.status(403).json({ permission: true, error: 'Only admins can send photos and media in this group.' });
     }
     // Slow mode (Telegram-style): non-admin members wait N seconds between their
@@ -10043,7 +10187,7 @@ app.delete('/api/atchat/groups/:id/messages/:mid', auth.requireAuth, async (req,
     if (scope === 'everyone') {
       // The sender — or a group admin (WhatsApp-style moderation) — can remove a
       // message for everyone. Admins moderating keeps spam/abuse out of groups.
-      const canModerate = m.sender_id === req.user.id || (await isGroupAdmin(gid, req.user.id));
+      const canModerate = m.sender_id === req.user.id || (await isGroupAdmin(gid, req.user.id)) || (await groupRolePerm(gid, req.user.id, 'deleteOthers', false));
       if (!canModerate) return res.status(403).json({ error: 'Only the sender or a group admin can delete this for everyone.' });
       await db.query(`UPDATE at_group_messages SET deleted_all = true, body = '', image = NULL, images = NULL, media = NULL, media_kind = NULL, media_name = NULL, meta = NULL, reactions = '{}' WHERE id = $1`, [mid]);
       fanGroup(gid, req.user.id, 'dm_deleted', { groupId: gid, id: mid });
@@ -15274,7 +15418,7 @@ app.post('/api/atchat/groups/:id/members', auth.requireAuth, async (req, res) =>
       return res.status(403).json({ error: 'Only a channel admin can add members.' });
     }
     // Permission v2: a regular group can also restrict adding to admins.
-    if (gi.rows[0] && !gi.rows[0].broadcast && gi.rows[0].perm_add_members === 'admins' && !(await isGroupAdmin(gid, req.user.id))) {
+    if (gi.rows[0] && !gi.rows[0].broadcast && gi.rows[0].perm_add_members === 'admins' && !(await isGroupAdmin(gid, req.user.id)) && !(await groupRolePerm(gid, req.user.id, 'addMembers', false))) {
       return res.status(403).json({ error: 'Only an admin can add members to this group.' });
     }
     // "Who can add you to groups": each candidate's preference can refuse the add
@@ -34197,6 +34341,37 @@ app.delete('/api/newsletters/:id', auth.requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete.' }); }
 });
+/* Newsletter TIERS: up to three price levels; a higher level unlocks more.
+   Replaced as a whole list by the owner — existing subscribers keep their
+   tier row (SET NULL only if a tier is deleted, which reads as level 0/basic). */
+app.get('/api/newsletters/:id/tiers', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rows } = await db.query('SELECT id, name, price_cents, level FROM newsletter_tiers WHERE newsletter_id = $1 ORDER BY level', [id]);
+    res.json({ tiers: rows.map((t) => ({ id: t.id, name: t.name, priceCents: t.price_cents, level: t.level })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the tiers.' }); }
+});
+app.put('/api/newsletters/:id/tiers', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const list = (Array.isArray(req.body.tiers) ? req.body.tiers : [])
+    .map((t) => ({ name: String((t && t.name) || '').trim().slice(0, 40), priceCents: Math.round(Number(t && t.priceCents) || 0) }))
+    .filter((t) => t.name && t.priceCents >= 100 && t.priceCents <= 100000)
+    .slice(0, 3);
+  try {
+    const own = (await db.query('SELECT 1 FROM newsletters WHERE id = $1 AND owner_id = $2', [id, req.user.id])).rows[0];
+    if (!own) return res.status(404).json({ error: 'Not found.' });
+    await db.query('DELETE FROM newsletter_tiers WHERE newsletter_id = $1', [id]);
+    const out = [];
+    for (let i = 0; i < list.length; i++) {
+      const { rows } = await db.query('INSERT INTO newsletter_tiers (newsletter_id, name, price_cents, level) VALUES ($1,$2,$3,$4) RETURNING id',
+        [id, list[i].name, list[i].priceCents, i + 1]);
+      out.push({ id: rows[0].id, ...list[i], level: i + 1 });
+    }
+    res.json({ ok: true, tiers: out });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the tiers.' }); }
+});
 app.post('/api/newsletters/:id/subscribe', auth.requireAuth, blockImpersonation, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
@@ -34204,7 +34379,14 @@ app.post('/api/newsletters/:id/subscribe', auth.requireAuth, blockImpersonation,
     const n = await db.query('SELECT owner_id, price_cents, title FROM newsletters WHERE id = $1', [id]);
     if (!n.rows[0]) return res.status(404).json({ error: 'That newsletter is no longer available.' });
     if (req.body.subscribe === false) { await db.query('DELETE FROM newsletter_subs WHERE newsletter_id = $1 AND user_id = $2', [id, req.user.id]); return res.json({ ok: true, subscribed: false }); }
-    const price = n.rows[0].price_cents || 0;
+    let price = n.rows[0].price_cents || 0;
+    // A chosen tier's price replaces the single price; validated to THIS newsletter.
+    let tier = null;
+    if (req.body.tierId != null) {
+      tier = (await db.query('SELECT id, price_cents FROM newsletter_tiers WHERE id = $1 AND newsletter_id = $2', [routeId(req.body.tierId), id])).rows[0] || null;
+      if (!tier) return res.status(400).json({ error: 'That tier no longer exists.' });
+      price = tier.price_cents;
+    }
     // Paid newsletter: a non-owner who hasn't paid must check out first.
     if (price > 0 && n.rows[0].owner_id !== req.user.id) {
       const already = await db.query('SELECT paid FROM newsletter_subs WHERE newsletter_id = $1 AND user_id = $2', [id, req.user.id]);
@@ -34214,11 +34396,11 @@ app.post('/api/newsletters/:id/subscribe', auth.requireAuth, blockImpersonation,
           const origin = `${req.protocol}://${req.get('host')}`;
           const session = await billing.createPaymentSession(
             { id: req.user.id, email: me.email, stripe_customer_id: me.stripe_customer_id },
-            { amountCents: price, productName: 'Subscribe: ' + n.rows[0].title, metadata: { type: 'newsletter_sub', newsletter_id: String(id) }, successUrl: `${origin}/?nlsub=success`, cancelUrl: `${origin}/?nlsub=cancel` }
+            { amountCents: price, productName: 'Subscribe: ' + n.rows[0].title, metadata: { type: 'newsletter_sub', newsletter_id: String(id), tier_id: tier ? String(tier.id) : '' }, successUrl: `${origin}/?nlsub=success`, cancelUrl: `${origin}/?nlsub=cancel` }
           );
           return res.json({ url: session.url });
         }
-        await db.query('INSERT INTO newsletter_subs (newsletter_id, user_id, paid) VALUES ($1,$2,true) ON CONFLICT (newsletter_id, user_id) DO UPDATE SET paid = true', [id, req.user.id]); // demo: instant paid sub
+        await db.query('INSERT INTO newsletter_subs (newsletter_id, user_id, paid, tier_id) VALUES ($1,$2,true,$3) ON CONFLICT (newsletter_id, user_id) DO UPDATE SET paid = true, tier_id = $3', [id, req.user.id, tier ? tier.id : null]); // demo: instant paid sub
         return res.json({ ok: true, subscribed: true });
       }
     }
@@ -34233,11 +34415,12 @@ app.post('/api/newsletters/:id/issues', auth.requireAuth, rateLimit(20, 60000, '
   const title = (req.body.title || '').trim().slice(0, 160);
   if (!title) return res.status(400).json({ error: 'Give the issue a title.' });
   const body = (req.body.body || '').trim().slice(0, 20000);
+  const minTier = Math.max(0, Math.min(3, parseInt(req.body.minTierLevel, 10) || 0));
   try {
     const n = await db.query('SELECT owner_id FROM newsletters WHERE id = $1', [id]);
     if (!n.rows[0]) return res.status(404).json({ error: 'Not found.' });
     if (n.rows[0].owner_id !== req.user.id) return res.status(403).json({ error: 'Only the owner can publish issues.' });
-    const ins = await db.query('INSERT INTO newsletter_issues (newsletter_id, title, body) VALUES ($1,$2,$3) RETURNING id, title, body, created_at', [id, title, body]);
+    const ins = await db.query('INSERT INTO newsletter_issues (newsletter_id, title, body, min_tier_level) VALUES ($1,$2,$3,$4) RETURNING id, title, body, created_at', [id, title, body, minTier]);
     const subs = await db.query('SELECT user_id FROM newsletter_subs WHERE newsletter_id = $1 AND user_id <> $2', [id, req.user.id]);
     for (const s of subs.rows) notify(s.user_id, req.user.id, 'newsletter_issue');
     res.json({ issue: { id: ins.rows[0].id, title: ins.rows[0].title, body: ins.rows[0].body, createdAt: ins.rows[0].created_at } });
@@ -34248,7 +34431,7 @@ app.get('/api/newsletters/issues/:id', auth.requireAuth, async (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   try {
     const { rows } = await db.query(
-      `SELECT i.id, i.title, i.body, i.created_at, i.newsletter_id, n.title AS nl_title, n.owner_id,
+      `SELECT i.id, i.title, i.body, i.created_at, i.min_tier_level, i.newsletter_id, n.title AS nl_title, n.owner_id,
               u.name AS owner_name, u.username AS owner_username, u.avatar AS owner_avatar, u.verified AS owner_verified
        FROM newsletter_issues i JOIN newsletters n ON n.id = i.newsletter_id JOIN users u ON u.id = n.owner_id WHERE i.id = $1`,
       [id]
@@ -34256,10 +34439,18 @@ app.get('/api/newsletters/issues/:id', auth.requireAuth, async (req, res) => {
     const r = rows[0];
     if (!r) return res.status(404).json({ error: 'That issue is no longer available.' });
     // Paid newsletter: only the owner and paid subscribers can read the full issue.
-    const nl = await db.query('SELECT price_cents FROM newsletters WHERE id = $1', [r.newsletter_id]);
-    if ((nl.rows[0]?.price_cents || 0) > 0 && r.owner_id !== req.user.id) {
-      const sub = await db.query('SELECT paid FROM newsletter_subs WHERE newsletter_id = $1 AND user_id = $2', [r.newsletter_id, req.user.id]);
-      if (!(sub.rows[0] && sub.rows[0].paid)) return res.status(402).json({ error: 'Subscribe to read this issue.', locked: true });
+    const nl = await db.query('SELECT price_cents, (SELECT COUNT(*)::int FROM newsletter_tiers t WHERE t.newsletter_id = newsletters.id) AS tiers FROM newsletters WHERE id = $1', [r.newsletter_id]);
+    const hasPaywall = (nl.rows[0]?.price_cents || 0) > 0 || (nl.rows[0]?.tiers || 0) > 0;
+    if (hasPaywall && r.owner_id !== req.user.id) {
+      const sub = await db.query(
+        `SELECT s.paid, COALESCE(t.level, 0) AS level FROM newsletter_subs s LEFT JOIN newsletter_tiers t ON t.id = s.tier_id
+          WHERE s.newsletter_id = $1 AND s.user_id = $2`, [r.newsletter_id, req.user.id]);
+      const mine = sub.rows[0];
+      if (!(mine && mine.paid)) return res.status(402).json({ error: 'Subscribe to read this issue.', locked: true });
+      // Tier-gated issue: a lower tier sees an honest "higher tier" lock.
+      if ((r.min_tier_level || 0) > (mine.level || 0)) {
+        return res.status(402).json({ error: 'This issue is for a higher tier.', locked: true, needsTierLevel: r.min_tier_level });
+      }
     }
     res.json({ issue: {
       id: r.id, title: r.title, body: r.body, createdAt: r.created_at,
