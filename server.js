@@ -78,7 +78,11 @@ app.use((req, _res, next) => {
   if (!/^\/api\/(ai\/|chat|explain)/.test(p)) return next();
   const name = p.startsWith('/api/ai/') ? p.slice(8).split('/')[0].slice(0, 40)
     : p.replace(/^\/api\//, '').split('/')[0].slice(0, 40);
-  _aiCtx.run({ feature: name || 'other' }, next);
+  // The bearer is decoded here only to ATTRIBUTE usage — auth still happens in
+  // each route. A bad or absent token just means an anonymous usage row.
+  let uid = null;
+  try { const d = auth.verifyToken((req.headers.authorization || '').replace(/^Bearer\s+/i, '')); uid = (d && d.id) || null; } catch (e) {}
+  _aiCtx.run({ feature: name || 'other', userId: uid }, next);
 });
 /* ─── Model choice + failover (admin-configurable, no deploy) ──────────────
    Two tiers are hardcoded across ~32 call sites: a "smart" model and a "fast"
@@ -137,12 +141,13 @@ function aiShouldFailover(err) {
   const realCreate = anthropic.messages.create.bind(anthropic.messages);
   const meter = (feature, model, out) => {
     if (!db.isConfigured()) return;
+    const uid = (_aiCtx.getStore() || {}).userId || null;
     if (out) {
       const u = out.usage || {};
-      db.query(`INSERT INTO ai_usage (feature, model, in_tokens, out_tokens, ok) VALUES ($1,$2,$3,$4,true)`,
-        [feature, model, u.input_tokens || 0, u.output_tokens || 0]).catch(() => {});
+      db.query(`INSERT INTO ai_usage (feature, model, in_tokens, out_tokens, ok, user_id) VALUES ($1,$2,$3,$4,true,$5)`,
+        [feature, model, u.input_tokens || 0, u.output_tokens || 0, uid]).catch(() => {});
     } else {
-      db.query(`INSERT INTO ai_usage (feature, model, ok) VALUES ($1,$2,false)`, [feature, model]).catch(() => {});
+      db.query(`INSERT INTO ai_usage (feature, model, ok, user_id) VALUES ($1,$2,false,$3)`, [feature, model, uid]).catch(() => {});
     }
   };
   anthropic.messages.create = async function (params, ...rest) {
@@ -1639,7 +1644,7 @@ app.get('/api/config', auth.optionalAuth, (req, res) => {
     emailEnabled: mailer.isConfigured(),
     pushEnabled: push.isConfigured(),         // PWA push available?
     vapidPublicKey: push.publicKey(),         // public — needed to subscribe
-    gifEnabled: !!process.env.TENOR_API_KEY,  // GIF search available?
+    gifEnabled: !!(process.env.TENOR_API_KEY || process.env.GIPHY_API_KEY),  // GIF search available (Tenor or Giphy)?
     taxEnabled: shiptax.taxConfigured(),       // sales tax at checkout?
     shippingRatesEnabled: shiptax.ratesConfigured(), // selectable carrier rates?
     shippingLabelsEnabled: shiplabels.isConfigured(), // real carrier label purchase (Shippo)?
@@ -1861,6 +1866,7 @@ function publicUser(row) {
     cartRecoveryDelayHours: row.cart_recovery_delay_hours || 1,
     cartRemindersOff: !!row.cart_reminders_off,
     inquiryEnabled: !!row.inquiry_enabled,
+    inquiryQuestions: Array.isArray(row.inquiry_questions) ? row.inquiry_questions : [],
     inquiryIntro: row.inquiry_intro || null,
     status: userStatus(row),
     lat: row.lat != null ? Number(row.lat) : null,
@@ -4564,7 +4570,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, sms_phone, phone_verified, sms_alerts, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, business_verify_tier, allow_remix, dm_connections_only, otw_visibility, has_password, totp_enabled, id_verified, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, intro_seen, business_hours, special_hours, hours_note, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, paused, pause_message, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off, store_banner, free_ship_over_cents, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, hiring, pronouns FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, sms_phone, phone_verified, sms_alerts, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, business_verify_tier, allow_remix, dm_connections_only, otw_visibility, has_password, totp_enabled, id_verified, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, intro_seen, business_hours, special_hours, hours_note, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, paused, pause_message, profile_cta, cart_recovery_enabled, cart_recovery_delay_hours, cart_reminders_off, store_banner, free_ship_over_cents, inquiry_enabled, inquiry_intro, inquiry_questions, status_emoji, status_text, status_expires_at, hiring, pronouns FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -4636,6 +4642,26 @@ app.post('/api/auth/2fa/disable', auth.requireAuth, blockImpersonation, async (r
 /* ─── GIF search (Tenor proxy; optional, env-gated) ─── */
 app.get('/api/gif/search', auth.requireAuth, rateLimit(60, 60000, 'gif-search'), async (req, res) => {
   const key = process.env.TENOR_API_KEY;
+  // No Tenor key? Giphy works as the second provider — same shape back.
+  if (!key && process.env.GIPHY_API_KEY) {
+    const gq = (req.query.q || '').toString().trim().slice(0, 80);
+    const off = Math.max(0, parseInt(req.query.pos, 10) || 0);
+    try {
+      const gbase = gq
+        ? `https://api.giphy.com/v1/gifs/search?q=${encodeURIComponent(gq)}&`
+        : 'https://api.giphy.com/v1/gifs/trending?';
+      const gr = await fetch(`${gbase}api_key=${encodeURIComponent(process.env.GIPHY_API_KEY)}&limit=24&offset=${off}&rating=g`);
+      if (!gr.ok) return res.status(502).json({ error: 'GIF search is unavailable right now.' });
+      const gd = await gr.json();
+      const gifs = (gd.data || []).map((g) => {
+        const im = g.images || {};
+        const full = (im.original && im.original.url) || (im.fixed_height && im.fixed_height.url);
+        const preview = (im.fixed_height_small && im.fixed_height_small.url) || full;
+        return full ? { url: full, preview } : null;
+      }).filter(Boolean);
+      return res.json({ configured: true, gifs, next: String(off + 24) });
+    } catch (err) { return res.status(502).json({ error: 'GIF search is unavailable right now.' }); }
+  }
   if (!key) return res.json({ configured: false, gifs: [] });
   const q = (req.query.q || '').toString().trim().slice(0, 80);
   const pos = (req.query.pos || '').toString().slice(0, 40);
@@ -4932,6 +4958,17 @@ function specialFor(specialHours, dateObj) {
 }
 app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
   const name = (req.body.name || '').trim();
+  // A rename is recorded (old name + when) for the About-this-account panel —
+  // fire-and-forget, capped at the last 20, and only when the name really changed.
+  if (name) {
+    db.query('SELECT name, name_history FROM users WHERE id = $1', [req.user.id]).then(({ rows }) => {
+      const cur = rows[0];
+      if (!cur || cur.name === name) return;
+      const hist = (Array.isArray(cur.name_history) ? cur.name_history : []).slice(-19);
+      hist.push({ from: cur.name, at: new Date().toISOString() });
+      return db.query('UPDATE users SET name_history = $2 WHERE id = $1', [req.user.id, JSON.stringify(hist)]);
+    }).catch(() => {});
+  }
   const username = (req.body.username || '').trim();
   if (!name) return res.status(400).json({ error: 'Name is required.' });
   if (name.length > 80) return res.status(400).json({ error: 'Name is too long.' });
@@ -5032,6 +5069,19 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
   // Contact / lead form (business): a toggle + an optional intro line.
   if ('inquiryEnabled' in req.body) { vals.push(req.body.inquiryEnabled === true); fields.push(`inquiry_enabled = $${vals.length}`); }
   if ('inquiryIntro' in req.body) { vals.push((req.body.inquiryIntro || '').trim().slice(0, 200) || null); fields.push(`inquiry_intro = $${vals.length}`); }
+  // The business's own questions with FIXED choices (≤5 questions, ≤8 choices
+  // each) — anything malformed is dropped rather than stored.
+  if ('inquiryQuestions' in req.body) {
+    const qs = (Array.isArray(req.body.inquiryQuestions) ? req.body.inquiryQuestions : [])
+      .map((x) => ({
+        q: String((x && x.q) || '').trim().slice(0, 120),
+        choices: (Array.isArray(x && x.choices) ? x.choices : []).map((c) => String(c).trim().slice(0, 60)).filter(Boolean).slice(0, 8),
+      }))
+      .filter((x) => x.q && x.choices.length >= 2)
+      .slice(0, 5);
+    vals.push(qs.length ? JSON.stringify(qs) : null);
+    fields.push(`inquiry_questions = $${vals.length}`);
+  }
   // Business primary CTA pill (book / order / message). Anything else clears it.
   if ('profileCta' in req.body) {
     const c = req.body.profileCta;
@@ -5779,6 +5829,56 @@ app.get('/api/contacts', auth.requireAuth, async (req, res) => {
 // A private note about a person (LinkedIn-style CRM-lite): "met at the expo,
 // interested in bulk orders". Owner-scoped on the contacts row — the person
 // never sees it and is never told it exists. Empty clears it.
+/* Explicitly SAVE somebody as a contact (distinct from the derived "your
+   people" list above, which is DM history + connections). The saved list is
+   what the contact book shows; the person is told once, like WhatsApp. */
+app.post('/api/contacts/:id', auth.requireAuth, rateLimit(60, 60000, 'contact-save'), async (req, res) => {
+  const other = routeId(req.params.id);
+  if (!Number.isInteger(other) || other === req.user.id) return res.status(400).json({ error: 'Invalid user.' });
+  try {
+    const u = (await db.query('SELECT id FROM users WHERE id = $1 AND NOT COALESCE(deactivated, false)', [other])).rows[0];
+    if (!u) return res.status(404).json({ error: 'Person not found.' });
+    if (await blockedEither(req.user.id, other)) return res.status(403).json({ error: 'You can’t add this person.' });
+    const r = await db.query('INSERT INTO contacts (owner_id, contact_id) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING owner_id', [req.user.id, other]);
+    if (r.rowCount) notify(other, req.user.id, 'contact', null, null, null, null);
+    res.json({ ok: true, saved: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add them.' }); }
+});
+app.delete('/api/contacts/:id', auth.requireAuth, async (req, res) => {
+  const other = routeId(req.params.id);
+  if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user.' });
+  try {
+    await db.query('DELETE FROM contacts WHERE owner_id = $1 AND contact_id = $2', [req.user.id, other]);
+    res.json({ ok: true, saved: false });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove them.' }); }
+});
+// The saved contact book itself, with the per-person extras on each row.
+app.get('/api/contacts/saved', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.account_type, c.created_at,
+              c.notes, c.nickname
+         FROM contacts c JOIN users u ON u.id = c.contact_id
+        WHERE c.owner_id = $1 AND NOT COALESCE(u.deactivated, false)
+          AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $1 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = $1))
+        ORDER BY lower(COALESCE(NULLIF(c.nickname, ''), u.name))`,
+      [req.user.id]);
+    res.json({ contacts: rows.map((u) => ({ id: u.id, name: u.name, nickname: u.nickname || null, note: u.notes || null, username: u.username, avatar: mediaRef(u.avatar, 'avatar', u.id), verified: !!u.verified, accountType: u.account_type === 'business' ? 'business' : 'personal', savedAt: u.created_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your contacts.' }); }
+});
+// Reverse: who has saved YOU. Only that they did, never their notes.
+app.get('/api/contacts/reverse', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.account_type, c.created_at
+         FROM contacts c JOIN users u ON u.id = c.owner_id
+        WHERE c.contact_id = $1 AND NOT COALESCE(u.deactivated, false)
+          AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $1 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = $1))
+        ORDER BY c.created_at DESC LIMIT 200`,
+      [req.user.id]);
+    res.json({ people: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: mediaRef(u.avatar, 'avatar', u.id), verified: !!u.verified, accountType: u.account_type === 'business' ? 'business' : 'personal', savedAt: u.created_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load that.' }); }
+});
 app.put('/api/contacts/:id/note', auth.requireAuth, rateLimit(60, 60000, 'contact-note'), async (req, res) => {
   const other = routeId(req.params.id);
   if (!Number.isInteger(other) || other === req.user.id) return res.status(400).json({ error: 'Invalid user.' });
@@ -6074,9 +6174,22 @@ const cleanMuteUntil = (o) => {
   }
   return out;
 };
+/* No-export / no-save for one conversation. On the ACCOUNT, so a new phone
+   keeps the choice. Honest scope, stated in the UI: it stops YOUR side's
+   export and file-saving — the other person's copy is theirs. */
+app.post('/api/atchat/noexport', auth.requireAuth, rateLimit(60, 60000, 'noexport'), async (req, res) => {
+  const key = String(req.body.key || '').trim().slice(0, 40);
+  if (!/^[dgt0-9:]+$/.test(key)) return res.status(400).json({ error: 'Invalid conversation.' });
+  const on = req.body.on === true || req.body.on === 'true';
+  try {
+    if (on) await db.query(`UPDATE users SET chat_noexport = (SELECT ARRAY(SELECT DISTINCT unnest(chat_noexport || $2::text[]))) WHERE id = $1`, [req.user.id, [key]]);
+    else await db.query('UPDATE users SET chat_noexport = array_remove(chat_noexport, $2) WHERE id = $1', [req.user.id, key]);
+    res.json({ ok: true, key, on });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
 app.get('/api/atchat/prefs', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT chat_pins, chat_archived, chat_muted, chat_mute_until, chat_unread_only, chat_locked, chat_lock_pin, chat_themes FROM users WHERE id = $1', [req.user.id]);
+    const { rows } = await db.query('SELECT chat_pins, chat_archived, chat_muted, chat_mute_until, chat_unread_only, chat_locked, chat_lock_pin, chat_themes, chat_noexport FROM users WHERE id = $1', [req.user.id]);
     const r = rows[0] || {};
     res.json({
       pins: Array.isArray(r.chat_pins) ? r.chat_pins : [],
@@ -6089,6 +6202,7 @@ app.get('/api/atchat/prefs', auth.requireAuth, async (req, res) => {
       locked: Array.isArray(r.chat_locked) ? r.chat_locked : [],
       hasLockPin: !!r.chat_lock_pin,
       themes: (r.chat_themes && typeof r.chat_themes === 'object' && !Array.isArray(r.chat_themes)) ? r.chat_themes : {},
+      noExport: Array.isArray(r.chat_noexport) ? r.chat_noexport : [],
     });
   } catch (err) {
     console.error(err);
@@ -7144,7 +7258,7 @@ app.post('/api/admin/push-broadcast', auth.requireAdmin, rateLimit(10, 3600000, 
   const title = (req.body.title || '').toString().trim().slice(0, 80);
   const body = (req.body.body || '').toString().trim().slice(0, 200);
   const url = (req.body.url || '').toString().trim().slice(0, 300) || '/';
-  const audience = BROADCAST_AUDIENCES[req.body.audience] ? req.body.audience : 'all';
+  const audience = await validAudience(req.body.audience);
   if (!title || !body) return res.status(400).json({ error: 'A title and a line of text are both needed.' });
   if (!push.isConfigured()) return res.status(503).json({ error: 'Push isn’t set up on this server yet.' });
   try {
@@ -7152,7 +7266,7 @@ app.post('/api/admin/push-broadcast', auth.requireAdmin, rateLimit(10, 3600000, 
     // receive one — so the honest count is subscribers, not members.
     const { rows } = await db.query(
       `SELECT DISTINCT u.id FROM users u JOIN push_subscriptions s ON s.user_id = u.id
-        WHERE ${audienceWhere(audience)}`);
+        WHERE ${await audienceWhere(audience)}`);
     adminAudit(req, 'push.broadcast', 'system', null, { audience, title, recipients: rows.length });
     res.json({ ok: true, sending: rows.length });
     // Fire after responding: a big send must never hold the dashboard open.
@@ -7164,12 +7278,12 @@ app.post('/api/admin/push-broadcast', auth.requireAdmin, rateLimit(10, 3600000, 
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send it.' }); }
 });
 app.get('/api/admin/push-reach', auth.requireAdmin, async (req, res) => {
-  const audience = BROADCAST_AUDIENCES[req.query.audience] ? req.query.audience : 'all';
+  const audience = await validAudience(req.query.audience);
   try {
     const n = (await db.query(
       `SELECT COUNT(DISTINCT u.id)::int AS n FROM users u JOIN push_subscriptions s ON s.user_id = u.id
-        WHERE ${audienceWhere(audience)}`)).rows[0].n;
-    const members = (await db.query(`SELECT COUNT(*)::int AS n FROM users WHERE ${audienceWhere(audience)}`)).rows[0].n;
+        WHERE ${await audienceWhere(audience)}`)).rows[0].n;
+    const members = (await db.query(`SELECT COUNT(*)::int AS n FROM users WHERE ${await audienceWhere(audience)}`)).rows[0].n;
     res.json({ audience, reachable: n, members, pushEnabled: push.isConfigured() });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not count.' }); }
 });
@@ -7418,8 +7532,13 @@ app.delete('/api/admin/help/:id', auth.requirePerm('support'), async (req, res) 
    One question after a support conversation, reported per staffer. */
 app.post('/api/support/rate', auth.requireAuth, rateLimit(10, 3600000, 'csat'), async (req, res) => {
   try {
-    await db.query('INSERT INTO support_ratings (user_id, solved, comment) VALUES ($1,$2,$3)',
-      [req.user.id, req.body.solved === true, (req.body.comment || '').toString().trim().slice(0, 500) || null]);
+    // Credited to whichever staffer last handled this member's thread, so the
+    // per-staffer report means something.
+    const staff = (await db.query(
+      `SELECT assigned_to FROM support_requests WHERE user_id = $1 AND assigned_to IS NOT NULL ORDER BY created_at DESC LIMIT 1`,
+      [req.user.id]).catch(() => ({ rows: [] }))).rows[0];
+    await db.query('INSERT INTO support_ratings (user_id, staff_id, solved, comment) VALUES ($1,$2,$3,$4)',
+      [req.user.id, (staff && staff.assigned_to) || null, req.body.solved === true, (req.body.comment || '').toString().trim().slice(0, 500) || null]);
     res.status(201).json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not record that.' }); }
 });
@@ -7434,8 +7553,15 @@ app.get('/api/admin/support-ratings', auth.requirePerm('support'), async (req, r
          LEFT JOIN users u ON u.id = r.user_id
         WHERE r.created_at BETWEEN $1 AND $2 AND r.comment IS NOT NULL
         ORDER BY r.created_at DESC LIMIT 50`, [from, to])).rows;
+    // Per-staffer: how the members THEY handled rated the outcome.
+    const byStaff = (await db.query(
+      `SELECT u.name, u.username, COUNT(*)::int AS n, COUNT(*) FILTER (WHERE r.solved)::int AS solved
+         FROM support_ratings r JOIN users u ON u.id = r.staff_id
+        WHERE r.created_at BETWEEN $1 AND $2
+        GROUP BY u.id ORDER BY n DESC LIMIT 30`, [from, to])).rows
+      .map((x) => ({ name: x.name, username: x.username, total: x.n, solved: x.solved, solvedPct: x.n ? Math.round((x.solved / x.n) * 100) : null }));
     res.json({ from, to, total: t.n, solved: t.solved,
-      solvedPct: t.n ? Math.round((t.solved / t.n) * 100) : null, recent });
+      solvedPct: t.n ? Math.round((t.solved / t.n) * 100) : null, byStaff, recent });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load.' }); }
 });
 /* ─── Terms and privacy, versioned ──────────────────────────────────────────
@@ -7640,10 +7766,53 @@ app.post('/api/admin/id-verifications/:id/:action', auth.requirePerm('users'), a
    A saved filter that stays live. "Businesses with no posts in 30 days" is a
    question, not a fixed list of people — so the QUESTION is stored and re-run,
    and the answer is whoever matches today. */
+/* A segment's saved filters, turned into SQL. Every value is either checked
+   against a fixed list or forced to an integer before it is inlined, so a
+   stored segment can never smuggle anything into a query — the same bargain
+   the user-list filters make. Unknown/invalid entries are simply ignored. */
+function segmentWhere(filters) {
+  const f = filters || {};
+  const conds = [];
+  if (['free', 'pro'].includes(f.plan)) conds.push(`plan = '${f.plan}'`);
+  if (['personal', 'business'].includes(f.type)) conds.push(`account_type = '${f.type}'`);
+  if (['active', 'limited', 'suspended', 'banned'].includes(f.status)) conds.push(`COALESCE(status,'active') = '${f.status}'`);
+  if (f.verified === 'true') conds.push('verified = true');
+  if (f.bizVerified === 'true') conds.push(`business_verify_status = 'verified'`);
+  if (f.deactivated === 'true') conds.push('COALESCE(deactivated, false) = true');
+  if (f.frozen === 'true') conds.push('COALESCE(wallet_frozen, false) = true');
+  if (f.staff === 'true') conds.push(`(is_admin = true OR (admin_perms IS NOT NULL AND jsonb_typeof(admin_perms) = 'array' AND jsonb_array_length(admin_perms) > 0))`);
+  {
+    const TAGS = ['vip', 'partner', 'watchlist', 'beta', 'press', 'refunded'];
+    if (TAGS.includes(f.tag)) conds.push(`admin_tags && ARRAY['${f.tag}']::text[]`);
+  }
+  { const d = parseInt(f.joinedDays, 10); if (Number.isInteger(d) && d > 0 && d <= 3650) conds.push(`created_at > now() - interval '${d} days'`); }
+  { const d = parseInt(f.inactiveDays, 10); if (Number.isInteger(d) && d > 0 && d <= 3650) conds.push(`(last_login_at IS NULL OR last_login_at < now() - interval '${d} days')`); }
+  return conds.length ? conds.join(' AND ') : 'TRUE';
+}
+function isSegmentKey(k) { return /^segment:\d+$/.test(String(k || '')); }
+// A broadcast audience can now be a saved segment ("segment:<id>") as well as
+// one of the fixed keys. Validated against the live table, so a deleted
+// segment can't be picked; one deleted AFTER being scheduled resolves to
+// nobody (WHERE FALSE) rather than silently becoming "everyone".
+async function validAudience(key) {
+  if (BROADCAST_AUDIENCES[key]) return key;
+  if (isSegmentKey(key)) {
+    const id = parseInt(key.slice(8), 10);
+    const row = (await db.query('SELECT id FROM admin_segments WHERE id = $1', [id])).rows[0];
+    if (row) return key;
+  }
+  return 'all';
+}
 app.get('/api/admin/segments', auth.requirePerm('users'), async (_req, res) => {
   try {
     const { rows } = await db.query('SELECT * FROM admin_segments ORDER BY created_at DESC LIMIT 100');
-    res.json({ segments: rows.map((x) => ({ id: x.id, name: x.name, filters: x.filters || {}, createdAt: x.created_at })) });
+    // Each with a LIVE count — that is what makes it an audience, not a snapshot.
+    const out = [];
+    for (const x of rows) {
+      const n = (await db.query(`SELECT COUNT(*)::int AS n FROM users WHERE ${segmentWhere(x.filters)} AND NOT COALESCE(deactivated,false) AND COALESCE(is_demo,false) = false`)).rows[0].n;
+      out.push({ id: x.id, name: x.name, filters: x.filters || {}, count: n, createdAt: x.created_at });
+    }
+    res.json({ segments: out });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the segments.' }); }
 });
 app.post('/api/admin/segments', auth.requirePerm('users'), async (req, res) => {
@@ -8395,7 +8564,7 @@ app.get('/api/chat-forms/:id/responses', auth.requireAuth, async (req, res) => {
 const STICKER_CAP = 100;
 app.get('/api/stickers', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT id, image FROM stickers WHERE owner_id = $1 ORDER BY created_at DESC LIMIT 200', [req.user.id]);
+    const { rows } = await db.query('SELECT id, image, pack FROM stickers WHERE owner_id = $1 ORDER BY pack NULLS LAST, created_at DESC LIMIT 200', [req.user.id]);
     res.json({ stickers: rows });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load stickers.' }); }
 });
@@ -8405,9 +8574,21 @@ app.post('/api/stickers', auth.requireAuth, rateLimit(60, 60000, 'sticker-add'),
   try {
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM stickers WHERE owner_id = $1', [req.user.id]);
     if (cnt.rows[0].n >= STICKER_CAP) return res.status(400).json({ error: `You can keep up to ${STICKER_CAP} stickers.` });
-    const { rows } = await db.query('INSERT INTO stickers (owner_id, image) VALUES ($1, $2) RETURNING id, image', [req.user.id, image]);
+    const pack = String(req.body.pack || '').trim().slice(0, 40) || null;
+    const { rows } = await db.query('INSERT INTO stickers (owner_id, image, pack) VALUES ($1, $2, $3) RETURNING id, image, pack', [req.user.id, image, pack]);
     res.json({ sticker: rows[0] });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the sticker.' }); }
+});
+// Put a sticker in a pack (or take it out with an empty name).
+app.patch('/api/stickers/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const pack = String(req.body.pack || '').trim().slice(0, 40) || null;
+  try {
+    const r = await db.query('UPDATE stickers SET pack = $3 WHERE id = $1 AND owner_id = $2', [id, req.user.id, pack]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Sticker not found.' });
+    res.json({ ok: true, pack });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not move it.' }); }
 });
 app.delete('/api/stickers/:id', auth.requireAuth, async (req, res) => {
   const id = parseInt(req.params.id, 10);
@@ -9342,6 +9523,7 @@ app.post('/api/atchat/groups', auth.requireAuth, rateLimit(20, 60000, 'group-cre
   if (avatar === undefined) return res.status(400).json({ error: 'That image could not be used.' });
   const description = ((req.body.description || '').toString().trim().slice(0, 500)) || null;
   const rules = ((req.body.rules || '').toString().trim().slice(0, 2000)) || null;
+  const welcome = ((req.body.welcome || '').toString().trim().slice(0, 1000)) || null;
   const joinFeeCents = (() => { const f = Math.round(Number(req.body.joinFeeCents) || 0); return (f >= 0 && f <= 50000) ? f : 0; })();
   const broadcast = !contact && req.body.broadcast === true;
   const members = Array.isArray(req.body.members) ? req.body.members : [];
@@ -9371,8 +9553,8 @@ app.post('/api/atchat/groups', auth.requireAuth, rateLimit(20, 60000, 'group-cre
     let g;
     try {
       g = await db.query(
-        'INSERT INTO at_groups (name, username, avatar, created_by, broadcast, description, rules, join_fee_cents) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id',
-        [name, username, avatar, req.user.id, broadcast, description, rules, joinFeeCents]
+        'INSERT INTO at_groups (name, username, avatar, created_by, broadcast, description, rules, welcome, join_fee_cents) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id',
+        [name, username, avatar, req.user.id, broadcast, description, rules, welcome, joinFeeCents]
       );
     } catch (e) {
       if (e.code === '23505') return res.status(409).json({ error: 'That group username is already taken.' });
@@ -9432,6 +9614,7 @@ app.patch('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     if (typeof req.body.broadcast === 'boolean') { vals.push(req.body.broadcast); fields.push(`broadcast = $${vals.length}`); }
     if ('description' in req.body) { vals.push(((req.body.description || '').toString().trim().slice(0, 500)) || null); fields.push(`description = $${vals.length}`); }
     if ('rules' in req.body) { vals.push(((req.body.rules || '').toString().trim().slice(0, 2000)) || null); fields.push(`rules = $${vals.length}`); }
+    if ('welcome' in req.body) { vals.push(((req.body.welcome || '').toString().trim().slice(0, 1000)) || null); fields.push(`welcome = $${vals.length}`); }
     if ('joinFeeCents' in req.body) {
       // Money control stays with the CREATOR, not every admin.
       if (g.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the group creator can set a join fee.' });
@@ -9580,7 +9763,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
     const g = await db.query(
-      `SELECT g.id, g.name, g.username, g.avatar, g.created_by, g.broadcast, g.disappearing, g.slow_mode_seconds, g.description, g.rules, g.blocked_words, g.perm_send_media, g.perm_add_members,
+      `SELECT g.id, g.name, g.username, g.avatar, g.created_by, g.broadcast, g.disappearing, g.slow_mode_seconds, g.description, g.rules, g.welcome, g.blocked_words, g.perm_send_media, g.perm_add_members,
               (SELECT (m.muted AND (m.muted_until IS NULL OR m.muted_until > now())) FROM at_group_members m WHERE m.group_id = g.id AND m.user_id = $2) AS muted
        FROM at_groups g WHERE g.id = $1`,
       [gid, req.user.id]
@@ -9672,9 +9855,30 @@ app.post('/api/atchat/groups/:id/permissions', auth.requireAuth, async (req, res
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update permissions.' }); }
 });
+// Agreeing to a group's rules, recorded: who, when.
+app.post('/api/atchat/groups/:id/accept-rules', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  try {
+    const r = await db.query('UPDATE at_group_members SET rules_accepted_at = COALESCE(rules_accepted_at, now()) WHERE group_id = $1 AND user_id = $2', [gid, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Group not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not record that.' }); }
+});
 app.post('/api/atchat/groups/:id/messages', auth.requireAuth, blockLimited, rateLimit(60, 60000, 'group-send'), async (req, res) => {
   const gid = routeId(req.params.id);
   if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  // Rules gate on POSTING: a group with rules takes messages only from members
+  // who have agreed to them (admins exempt — they wrote them).
+  try {
+    const gate = (await db.query(
+      `SELECT g.rules, m.rules_accepted_at, (g.created_by = $2 OR m.role = 'admin') AS is_admin
+         FROM at_groups g JOIN at_group_members m ON m.group_id = g.id AND m.user_id = $2
+        WHERE g.id = $1`, [gid, req.user.id])).rows[0];
+    if (gate && gate.rules && !gate.rules_accepted_at && !gate.is_admin) {
+      return res.status(400).json({ needsRules: true, rules: gate.rules, error: 'Please agree to the group rules first.' });
+    }
+  } catch (e) { /* the gate never blocks on its own error */ }
   { const g = await writeGuard(req.user.id, req.body.body); if (g) return res.status(400).json({ error: g, blockedLink: true }); }
   await resolveMediaRefs(req.body); // a forwarded photo arrives as its /api/media URL — resolve to the stored bytes
   const body = (req.body.body || '').trim();
@@ -15315,7 +15519,7 @@ app.post('/api/atchat/invite/:code/join', auth.requireAuth, async (req, res) => 
     // Join fee (paid groups): claim-first charge; a short balance never admits.
     const fee = await chargeGroupJoinFee(gid, req.user.id, !!req.user.imp);
     if (fee.error) return res.status(fee.error.status).json(fee.error.body);
-    await db.query('INSERT INTO at_group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [gid, req.user.id]);
+    await db.query('INSERT INTO at_group_members (group_id, user_id, rules_accepted_at) VALUES ($1, $2, CASE WHEN $3 THEN now() END) ON CONFLICT DO NOTHING', [gid, req.user.id, req.body.acceptRules === true]);
     res.json({ ok: true, groupId: gid, name: g.rows[0].name });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not join the group.' }); }
 });
@@ -15741,7 +15945,7 @@ app.post('/api/communities/:id/groups', auth.requireAuth, async (req, res) => {
     if (c.created_by !== req.user.id) return res.status(403).json({ error: 'Only the community admin can add groups.' });
     const g = await db.query('INSERT INTO at_groups (name, created_by) VALUES ($1, $2) RETURNING id', [name, req.user.id]);
     const gid = g.rows[0].id;
-    await db.query('INSERT INTO at_group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [gid, req.user.id]);
+    await db.query('INSERT INTO at_group_members (group_id, user_id, rules_accepted_at) VALUES ($1, $2, CASE WHEN $3 THEN now() END) ON CONFLICT DO NOTHING', [gid, req.user.id, req.body.acceptRules === true]);
     await db.query('INSERT INTO community_groups (community_id, group_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id, gid]);
     res.status(201).json({ ok: true, groupId: gid, name });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the group.' }); }
@@ -15762,7 +15966,7 @@ app.post('/api/communities/:id/groups/:gid/join', auth.requireAuth, async (req, 
     }
     const fee = await chargeGroupJoinFee(gid, req.user.id, !!req.user.imp);
     if (fee.error) return res.status(fee.error.status).json(fee.error.body);
-    await db.query('INSERT INTO at_group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [gid, req.user.id]);
+    await db.query('INSERT INTO at_group_members (group_id, user_id, rules_accepted_at) VALUES ($1, $2, CASE WHEN $3 THEN now() END) ON CONFLICT DO NOTHING', [gid, req.user.id, req.body.acceptRules === true]);
     res.json({ ok: true, groupId: gid });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not join the group.' }); }
 });
@@ -16759,7 +16963,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query(`SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, business_verify_tier, otw_visibility, profile_cta, pinned_post_id, sub_price_cents, sub_blurb, created_at, deactivated, paused, pause_message, connections_visible, business_hours, special_hours, hours_note, shop_paused, shop_pause_message, store_banner, hiring, pronouns, inquiry_enabled, inquiry_intro, status_emoji, status_text, status_expires_at, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, (SELECT username FROM users bu WHERE bu.id = users.aff_business_id) AS aff_business_username FROM users WHERE lower(username) = lower($1)`, [handle]);
+    const u = await db.query(`SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, business_verify_tier, otw_visibility, profile_cta, pinned_post_id, sub_price_cents, sub_blurb, plan, created_at, name_history, deactivated, paused, pause_message, connections_visible, business_hours, special_hours, hours_note, shop_paused, shop_pause_message, store_banner, hiring, pronouns, inquiry_enabled, inquiry_intro, inquiry_questions, status_emoji, status_text, status_expires_at, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, (SELECT username FROM users bu WHERE bu.id = users.aff_business_id) AS aff_business_username FROM users WHERE lower(username) = lower($1)`, [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     // A hibernated (deactivated) account's profile is hidden from everyone but the owner.
@@ -16903,7 +17107,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     res.json({
       myNote,
       businessJobs, businessPeople, mutualConnections, mutualPeople, reviewSummary, trustScore, followedBy, followedByCount,
-      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, pronouns: t.pronouns || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', businessTier: bizTier(t), businessTierLabel: BIZ_TIER_LABEL[bizTier(t)] || null, openToWork: t.otw_visibility === 'everyone', profileCta: ['book', 'order', 'message'].includes(t.profile_cta) ? t.profile_cta : null, joinedAt: t.created_at || null, paused: !!t.paused, pauseMessage: t.paused ? (t.pause_message || null) : null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null, specialHours: Array.isArray(t.special_hours) ? t.special_hours : [], hoursNote: t.hours_note || null, shopPaused: !!t.shop_paused, shopPauseMessage: t.shop_paused ? (t.shop_pause_message || null) : null, storeBanner: t.store_banner || null, hiring: !!t.hiring, inquiryEnabled: !!t.inquiry_enabled, inquiryIntro: t.inquiry_intro || null, status: userStatus(t), affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: t.aff_business_username || null } : null },
+      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, pronouns: t.pronouns || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', businessTier: bizTier(t), businessTierLabel: BIZ_TIER_LABEL[bizTier(t)] || null, openToWork: t.otw_visibility === 'everyone', profileCta: ['book', 'order', 'message'].includes(t.profile_cta) ? t.profile_cta : null, joinedAt: t.created_at || null, paused: !!t.paused, pauseMessage: t.paused ? (t.pause_message || null) : null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null, specialHours: Array.isArray(t.special_hours) ? t.special_hours : [], hoursNote: t.hours_note || null, shopPaused: !!t.shop_paused, shopPauseMessage: t.shop_paused ? (t.shop_pause_message || null) : null, storeBanner: t.store_banner || null, hiring: !!t.hiring, inquiryEnabled: !!t.inquiry_enabled, inquiryIntro: t.inquiry_intro || null, inquiryQuestions: Array.isArray(t.inquiry_questions) ? t.inquiry_questions : [], status: userStatus(t), pro: t.plan === 'pro', nameHistory: Array.isArray(t.name_history) ? t.name_history.slice(-5).reverse() : [], affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: t.aff_business_username || null } : null },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       education: edu.rows.map(mapEducation),
       certifications: certs.rows.map(mapCertification),
@@ -17241,6 +17445,11 @@ app.get('/api/profile-views', auth.requireAuth, async (req, res) => {
        ORDER BY v.viewed_at DESC LIMIT 100`,
       [req.user.id]
     );
+    // The Pro perk, enforced here and only here: free sees the count and how
+    // many people are on the list; Pro sees who they are.
+    if (!(await isPro(req.user.id))) {
+      return res.json({ weekCount: cnt.rows[0].n, viewers: [], hiddenCount: rows.length, proGated: true, private: false });
+    }
     res.json({ weekCount: cnt.rows[0].n, viewers: rows.map((u) => ({ ...mapConnUser(u), viewedAt: u.viewed_at })), private: false });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load viewers.' }); }
 });
@@ -18948,7 +19157,7 @@ app.post('/api/social/posts', auth.requireAuth, blockLimited, rateLimit(40, 6000
 // Edit a post's text (X-style). Author-only, and only within a short window
 // after publishing. Re-indexes hashtags; stamps edited_at so the UI can show
 // an "Edited" label. Media / poll / targeting are not changed by an edit.
-const POST_EDIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes (blueprint §Home)
+const POST_EDIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour, per the feature catalog (was 15 min)
 app.patch('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
@@ -19438,6 +19647,18 @@ app.post('/api/social/posts/:id/promote', auth.requireAuth, blockImpersonation, 
     if (!p.rows[0]) return res.status(404).json({ error: 'That post is no longer available.' });
     if (p.rows[0].user_id !== req.user.id) return res.status(403).json({ error: 'You can only advertise your own posts.' });
     if (p.rows[0].parent_id != null || p.rows[0].to_main === false) return res.status(400).json({ error: 'Only your main-feed posts can be advertised.' });
+    // The Pro perk: one free promotion each month — claimed atomically so two
+    // taps can't both be the free one.
+    if (await isPro(req.user.id)) {
+      const free = await db.query(
+        `UPDATE users SET last_free_boost_at = now()
+          WHERE id = $1 AND (last_free_boost_at IS NULL OR last_free_boost_at < now() - interval '30 days') RETURNING id`,
+        [req.user.id]);
+      if (free.rowCount) {
+        await db.query(`UPDATE posts SET promoted_until = now() + make_interval(days => $2) WHERE id = $1`, [id, days]);
+        return res.json({ ok: true, promoted: true, freeBoost: true, message: 'Promoted — your free monthly Pro boost.' });
+      }
+    }
     const amountCents = days * AD_PER_DAY_CENTS;
     // Real payment when Stripe is configured; otherwise the demo instant-advertise.
     if (billing.isConfigured()) {
@@ -21599,6 +21820,14 @@ app.put('/api/open-to-work', auth.requireAuth, async (req, res) => {
 // Browse "open to work" listings (the Workers tab) with optional filters.
 app.get('/api/worker-listings', auth.requireAuth, async (req, res) => {
   const conds = ['NOT u.deactivated'], params = [];
+  // Open-to-work visibility on the board itself: 'off' hides the listing,
+  // 'recruiters' shows it only when the viewer is a business.
+  {
+    const bizViewer = (await db.query("SELECT 1 FROM users WHERE id = $1 AND account_type = 'business'", [req.user.id]).catch(() => ({ rows: [] }))).rows[0];
+    conds.push(bizViewer
+      ? `(u.otw_visibility IS NULL OR u.otw_visibility IN ('everyone','recruiters'))`
+      : `(u.otw_visibility IS NULL OR u.otw_visibility = 'everyone')`);
+  }
   const q = (req.query.q || '').trim();
   if (q) {
     const tokens = [...new Set(q.toLowerCase().split(/[\s,]+/).filter((t) => t.length >= 2))].slice(0, 8);
@@ -21632,7 +21861,7 @@ app.get('/api/worker-listings', auth.requireAuth, async (req, res) => {
 /* ═══════════════════════════════════════════════
    REPORTS  —  flag a job / worker / user / post for admin review
 ═══════════════════════════════════════════════ */
-const REPORT_TYPES = ['job', 'worker', 'user', 'post', 'feedpost', 'review', 'business_review'];
+const REPORT_TYPES = ['job', 'worker', 'user', 'post', 'feedpost', 'review', 'business_review', 'listing'];
 const REPORT_REASONS = ['illegal', 'ip', 'sensitive', 'underage', 'prostitution', 'privacy', 'illegal_sales', 'dislike', 'doxxing', 'spam', 'harassment', 'hate', 'scam', 'inappropriate', 'fake', 'other'];
 app.post('/api/reports', auth.requireAuth, rateLimit(20, 60000, 'report'), async (req, res) => {
   const targetType = String(req.body.targetType || '');
@@ -22167,7 +22396,9 @@ function experimentVariant(exp, req) {
   return bucket < (exp.split || 50) ? variants[0] : variants[1];
 }
 // What the client should render. Also records that they SAW it, once.
-app.get('/api/experiments', auth.optionalAuth, async (req, res) => {
+// Platform-level variants (distinct path — /api/experiments belongs to the
+// seller listing A/B screen; registering both on one path silently broke it).
+app.get('/api/platform-experiments', auth.optionalAuth, async (req, res) => {
   const out = {};
   for (const exp of _experiments) {
     const v = experimentVariant(exp, req);
@@ -22640,7 +22871,7 @@ app.get('/api/admin/broadcasts', auth.requireAdmin, async (req, res) => {
 app.post('/api/admin/broadcasts', auth.requireAdmin, async (req, res) => {
   const body = String(req.body.body || '').trim();
   const subject = String(req.body.subject || '').trim().slice(0, 160) || null;
-  const audience = BROADCAST_AUDIENCES[req.body.audience] ? req.body.audience : 'all';
+  const audience = await validAudience(req.body.audience);
   const byEmail = req.body.byEmail !== false;
   const byPush = req.body.byPush === true;
   const wantSchedule = !!req.body.sendAt;
@@ -22669,7 +22900,7 @@ app.patch('/api/admin/broadcasts/:id', auth.requireAdmin, async (req, res) => {
   const put = (col, v) => { args.push(v); sets.push(`${col} = $${args.length}`); };
   if (typeof req.body.body === 'string' && req.body.body.trim()) put('body', req.body.body.trim().slice(0, 4000));
   if (typeof req.body.subject === 'string') put('subject', req.body.subject.trim().slice(0, 160) || null);
-  if (BROADCAST_AUDIENCES[req.body.audience]) put('audience', req.body.audience);
+  if (req.body.audience && (await validAudience(req.body.audience)) === req.body.audience) put('audience', req.body.audience);
   if (typeof req.body.byEmail === 'boolean') put('by_email', req.body.byEmail);
   if (typeof req.body.byPush === 'boolean') put('by_push', req.body.byPush);
   if ('sendAt' in req.body) {
@@ -24087,6 +24318,8 @@ app.patch('/api/admin/reports/:id', auth.requirePerm('moderation'), async (req, 
       else if (tt === 'post') await db.query('DELETE FROM posts WHERE id = $1', [ti]).catch(() => {});
       else if (tt === 'review') await db.query('DELETE FROM product_reviews WHERE id = $1', [ti]).catch(() => {});
       else if (tt === 'business_review') await db.query('DELETE FROM business_reviews WHERE id = $1', [ti]).catch(() => {});
+      // A reported LISTING is hidden, not destroyed — order history references it.
+      else if (tt === 'listing') await db.query('UPDATE products SET active = false WHERE id = $1', [ti]).catch(() => {});
       // 'user' removal is intentionally manual (use Delete user) to avoid accidents.
     }
     await db.query('UPDATE reports SET status = $1 WHERE id = $2', [status, id]);
@@ -24108,6 +24341,7 @@ app.patch('/api/admin/reports', auth.requirePerm('moderation'), async (req, res)
         if (r.target_type === 'job') await db.query('DELETE FROM jobs WHERE id = $1', [r.target_id]).catch(() => {});
         else if (r.target_type === 'worker') await db.query('DELETE FROM worker_listings WHERE user_id = $1', [r.target_id]).catch(() => {});
         else if (r.target_type === 'post') await db.query('DELETE FROM posts WHERE id = $1', [r.target_id]).catch(() => {});
+        else if (r.target_type === 'listing') await db.query('UPDATE products SET active = false WHERE id = $1', [r.target_id]).catch(() => {});
       }
     }
     const upd = await db.query('UPDATE reports SET status = $1 WHERE id = ANY($2) AND status = $3', [status, ids, 'open']);
@@ -24140,6 +24374,16 @@ app.get('/api/admin/search-content', auth.requirePerm('moderation'), async (req,
         `SELECT pr.id, pr.name, u.username FROM products pr JOIN users u ON u.id = pr.business_id
          WHERE pr.name ILIKE $1 ORDER BY pr.created_at DESC LIMIT 15`, [like]);
       l.rows.forEach((r) => results.push({ kind: 'listing', id: r.id, label: r.name, sub: '@' + (r.username || '?') }));
+    }
+    if (type === 'all' || type === 'orders') {
+      // By order number (exact) or either party's name/handle.
+      const oid = /^#?(\d{1,10})$/.exec(q);
+      const o = await db.query(
+        `SELECT o.id, o.status, o.total_cents, b.name AS buyer, s.username AS seller
+           FROM orders o LEFT JOIN users b ON b.id = o.buyer_id LEFT JOIN users s ON s.id = o.seller_id
+          WHERE ${oid ? 'o.id = $2 OR ' : ''}(b.name ILIKE $1 OR b.username ILIKE $1 OR s.name ILIKE $1 OR s.username ILIKE $1)
+          ORDER BY o.created_at DESC LIMIT 15`, oid ? [like, Number(oid[1])] : [like]);
+      o.rows.forEach((r) => results.push({ kind: 'order', id: r.id, label: 'Order #' + r.id + ' · $' + ((r.total_cents || 0) / 100).toFixed(2), sub: (r.buyer || '?') + ' → @' + (r.seller || '?') + ' · ' + r.status }));
     }
     res.json({ results });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Search failed.' }); }
@@ -27954,10 +28198,19 @@ app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
   if (!Number.isInteger(bid)) return res.status(400).json({ error: 'Invalid id.' });
   try {
     const owner = bid === req.user.id;
-    const { rows } = await db.query(
-      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.pinned DESC, p.created_at DESC LIMIT 200`,
-      [bid]
-    );
+    const q = String(req.query.q || '').trim().slice(0, 80);
+    const COLS = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'}`;
+    let rows;
+    if (q) {
+      const like = '%' + q.replace(/[\\%_]/g, '\\$&') + '%';
+      ({ rows } = await db.query(`${COLS} AND (p.name ILIKE $2 OR p.description ILIKE $2 OR p.category ILIKE $2) ORDER BY p.pinned DESC, p.created_at DESC LIMIT 200`, [bid, like]));
+      // Nothing? The same typo-tolerant fallback the marketplace search uses.
+      if (!rows.length && await trgmAvailable()) {
+        ({ rows } = await db.query(`${COLS} AND similarity(p.name, $2) > 0.25 ORDER BY similarity(p.name, $2) DESC LIMIT 200`, [bid, q]));
+      }
+    } else {
+      ({ rows } = await db.query(`${COLS} ORDER BY p.pinned DESC, p.created_at DESC LIMIT 200`, [bid]));
+    }
     const products = rows.map((r) => mapProduct(r, { owner }));
     // Bestseller (Etsy-style): the shop's most-sold item(s) get a badge — earned,
     // never bought. Needs at least 3 units sold and 2+ items in the shop so a
@@ -28644,6 +28897,37 @@ app.post('/api/experiments', auth.requireAuth, rateLimit(20, 60000, 'exp-create'
   }
 });
 // Stop a test — optionally APPLYING version B to the real listing first.
+const EXP_FLUSH_MS = 60 * 60 * 1000;
+async function flushExperiments() {
+  if (!db.isConfigured()) return 0;
+  const { rows } = await db.query("SELECT * FROM product_experiments WHERE status = 'running'").catch(() => ({ rows: [] }));
+  let acted = 0;
+  for (const e of rows) {
+    const va = Number(e.views_a) || 0, vb = Number(e.views_b) || 0;
+    const oa = Number(e.orders_a) || 0, ob = Number(e.orders_b) || 0;
+    if (va < 100 || vb < 100 || (oa + ob) < 10) continue;   // not enough evidence yet
+    const ra = oa / va, rb = ob / vb;
+    let winner = null;
+    if (rb >= ra * 1.25) winner = 'b';
+    else if (ra >= rb * 1.25) winner = 'a';
+    if (!winner) continue;
+    // Claim-first, same as the manual stop — the seller may be pressing Stop
+    // at this exact moment.
+    const claimed = (await db.query(
+      "UPDATE product_experiments SET status = 'stopped', ended_at = now() WHERE id = $1 AND status = 'running' RETURNING *", [e.id])).rows[0];
+    if (!claimed) continue;
+    if (winner === 'b') {
+      if (e.field === 'title') await db.query('UPDATE products SET name = $1 WHERE id = $2', [e.value_b, e.product_id]).catch(() => {});
+      else await db.query('UPDATE products SET price_cents = $1 WHERE id = $2', [parseInt(e.value_b, 10), e.product_id]).catch(() => {});
+      await db.query("UPDATE product_experiments SET status = 'applied' WHERE id = $1", [e.id]).catch(() => {});
+    }
+    notify(e.seller_id, e.seller_id, 'experiment_done', null, null, null, null);
+    acted++;
+  }
+  return acted;
+}
+registerJob('experiments', 'A/B tests · auto-conclude', EXP_FLUSH_MS);
+setInterval(trackJob('experiments', flushExperiments), EXP_FLUSH_MS).unref?.();
 app.post('/api/experiments/:id/stop', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
@@ -32659,9 +32943,66 @@ app.get('/api/orders/:id/review-buyer', auth.requireAuth, async (req, res) => {
 });
 // Seller sales dashboard: revenue, orders, units, status breakdown, top products,
 // and a 14-day sales trend — over the caller's own sales (paid-and-beyond orders).
+/* ── Seller custom reports ────────────────────────────────────────────────
+   Pick a measure and a breakdown over the seller's OWN sales, download it as
+   a spreadsheet. Both axes come from fixed lists — nothing from the request
+   ever reaches the SQL as text. */
+const SHOP_REPORT_METRICS = {
+  revenue: { label: 'Revenue',      sql: 'COALESCE(SUM(o.total_cents),0)::bigint',      money: true },
+  orders:  { label: 'Orders',       sql: 'COUNT(DISTINCT o.id)::int' },
+  units:   { label: 'Units sold',   sql: 'COALESCE(SUM(oi.qty),0)::int' },
+  buyers:  { label: 'Unique buyers', sql: 'COUNT(DISTINCT o.buyer_id)::int' },
+};
+const SHOP_REPORT_DIMS = {
+  day:     { label: 'By day',      sql: `to_char(o.created_at::date, 'YYYY-MM-DD')` },
+  product: { label: 'By product',  sql: 'oi.name' },
+  country: { label: 'By country',  sql: `COALESCE(NULLIF(o.ship_country, ''), 'Unknown')` },
+  status:  { label: 'By status',   sql: 'o.status' },
+};
+async function runShopReport(sellerId, metricKey, dimKey, days) {
+  const metric = SHOP_REPORT_METRICS[metricKey] || SHOP_REPORT_METRICS.revenue;
+  const dim = SHOP_REPORT_DIMS[dimKey] || SHOP_REPORT_DIMS.day;
+  const d = Math.max(1, Math.min(365, parseInt(days, 10) || 30));
+  const { rows } = await db.query(
+    `SELECT ${dim.sql} AS dim, ${metric.sql} AS val
+       FROM orders o LEFT JOIN order_items oi ON oi.order_id = o.id
+      WHERE o.seller_id = $1 AND o.status IN ('paid','fulfilled','escrow','released','delivered')
+        AND o.created_at > now() - make_interval(days => $2)
+      GROUP BY 1 ORDER BY 2 DESC LIMIT 200`, [sellerId, d]);
+  return { metric, dim, days: d, rows };
+}
+app.get('/api/shop/report', auth.requireAuth, async (req, res) => {
+  try {
+    const r = await runShopReport(req.user.id, req.query.metric, req.query.dimension, req.query.days);
+    res.json({
+      metric: req.query.metric || 'revenue', dimension: req.query.dimension || 'day', days: r.days,
+      metrics: Object.entries(SHOP_REPORT_METRICS).map(([k, v]) => ({ key: k, label: v.label })),
+      dimensions: Object.entries(SHOP_REPORT_DIMS).map(([k, v]) => ({ key: k, label: v.label })),
+      rows: r.rows.map((x) => ({ dim: x.dim, value: Number(x.val), money: !!r.metric.money })),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build the report.' }); }
+});
+app.get('/api/shop/report.csv', auth.requireAuth, async (req, res) => {
+  try {
+    const r = await runShopReport(req.user.id, req.query.metric, req.query.dimension, req.query.days);
+    const cell = (v) => { const t = String(v == null ? '' : v); return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+    const lines = [r.dim.label + ',' + r.metric.label];
+    for (const x of r.rows) lines.push(cell(x.dim) + ',' + (r.metric.money ? (Number(x.val) / 100).toFixed(2) : Number(x.val)));
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="atwe-report.csv"');
+    res.send(lines.join('\n') + '\n');
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build the report.' }); }
+});
 app.get('/api/shop/analytics', auth.requireAuth, async (req, res) => {
   const PAID = `('paid','fulfilled','escrow','released')`;
   try {
+    // "A full year of your numbers" is the Pro perk — the request can ask for
+    // any window, the plan decides the ceiling (validated int, never raw text).
+    const maxDays = proLimit('analyticsDays', (await isPro(req.user.id)) ? 'pro' : 'free');
+    let days = parseInt(req.query.days, 10);
+    if (!Number.isInteger(days) || days < 7) days = 14;
+    const proClamped = days > maxDays;
+    days = Math.min(days, maxDays);
     const head = (await db.query(
       `SELECT COUNT(*)::int AS orders, COALESCE(SUM(total_cents),0)::bigint AS revenue_cents,
               COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
@@ -32676,7 +33017,7 @@ app.get('/api/shop/analytics', auth.requireAuth, async (req, res) => {
        WHERE o.seller_id = $1 AND o.status IN ${PAID} GROUP BY oi.name ORDER BY units DESC LIMIT 5`, [req.user.id]);
     const trend = await db.query(
       `SELECT to_char(d::date,'YYYY-MM-DD') AS day, COALESCE(SUM(o.total_cents),0)::bigint AS revenue_cents
-       FROM generate_series(now()::date - interval '13 days', now()::date, interval '1 day') d
+       FROM generate_series(now()::date - interval '${days - 1} days', now()::date, interval '1 day') d
        LEFT JOIN orders o ON o.seller_id = $1 AND o.status IN ${PAID} AND o.created_at::date = d::date
        GROUP BY d ORDER BY d`, [req.user.id]);
     // Money taken at the till is still money taken. Counting it separately AND
@@ -32691,7 +33032,7 @@ app.get('/api/shop/analytics', auth.requireAuth, async (req, res) => {
          LEFT JOIN pos_sales s ON s.seller_id = $1 AND s.status = 'paid' AND s.paid_at::date = d::date
         GROUP BY d ORDER BY d`, [req.user.id])).rows;
     const tillByDay = Object.fromEntries(tillTrend.map((r) => [r.day, Number(r.cents)]));
-    res.json({
+    res.json({ trendDays: days, maxTrendDays: maxDays, proClamped,
       orders: head.orders, revenueCents: Number(head.revenue_cents), units, pending: head.pending, toShip: head.to_ship,
       till: { sales: till.sales, revenueCents: Number(till.cents) },
       totalRevenueCents: Number(head.revenue_cents) + Number(till.cents),
@@ -32755,13 +33096,26 @@ app.post('/api/business/:id/inquiry', auth.requireAuth, rateLimit(10, 3600000, '
   const message = (req.body.message || '').toString().trim().slice(0, 2000);
   const email = (req.body.email || '').toString().trim().slice(0, 160) || null;
   const phone = (req.body.phone || '').toString().trim().slice(0, 40) || null;
-  if (message.length < 3) return res.status(400).json({ error: 'Please write a short message.' });
   try {
-    const biz = (await db.query('SELECT account_type, inquiry_enabled FROM users WHERE id = $1', [bizId])).rows[0];
+    const biz = (await db.query('SELECT account_type, inquiry_enabled, inquiry_questions FROM users WHERE id = $1', [bizId])).rows[0];
     if (!biz || biz.account_type !== 'business' || !biz.inquiry_enabled) return res.status(404).json({ error: 'This business isn’t taking inquiries.' });
     if (await blockedEither(req.user.id, bizId)) return res.status(403).json({ error: 'You can’t contact this business.' });
-    await db.query('INSERT INTO business_inquiries (business_id, from_id, email, phone, message) VALUES ($1,$2,$3,$4,$5)',
-      [bizId, req.user.id, email, phone, message]);
+    // Structured answers: each must be one of THAT question's own choices — the
+    // whole point is that a lead can only contain real options.
+    let answers = null;
+    const qs = Array.isArray(biz.inquiry_questions) ? biz.inquiry_questions : [];
+    if (!qs.length && message.length < 3) return res.status(400).json({ error: 'Please write a short message.' });
+    if (qs.length) {
+      const got = Array.isArray(req.body.answers) ? req.body.answers : [];
+      answers = [];
+      for (let i = 0; i < qs.length; i++) {
+        const pick = String(got[i] == null ? '' : got[i]);
+        if (!qs[i].choices.includes(pick)) return res.status(400).json({ error: 'Please answer: ' + qs[i].q });
+        answers.push({ q: qs[i].q, a: pick });
+      }
+    }
+    await db.query('INSERT INTO business_inquiries (business_id, from_id, email, phone, message, answers) VALUES ($1,$2,$3,$4,$5,$6)',
+      [bizId, req.user.id, email, phone, message, answers ? JSON.stringify(answers) : null]);
     notify(bizId, req.user.id, 'inquiry', null);
     res.status(201).json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send your message.' }); }
@@ -32770,13 +33124,13 @@ app.post('/api/business/:id/inquiry', auth.requireAuth, rateLimit(10, 3600000, '
 app.get('/api/business/inquiries', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT i.id, i.email, i.phone, i.message, i.status, i.created_at,
+      `SELECT i.id, i.email, i.phone, i.message, i.answers, i.status, i.created_at,
               u.id AS from_id, u.name AS from_name, u.username AS from_username, u.avatar AS from_avatar, u.verified AS from_verified, u.account_type AS from_type
        FROM business_inquiries i JOIN users u ON u.id = i.from_id
        WHERE i.business_id = $1 ORDER BY (i.status = 'new') DESC, i.created_at DESC LIMIT 200`, [req.user.id]);
     const newCount = rows.filter((r) => r.status === 'new').length;
     res.json({ newCount, inquiries: rows.map((r) => ({
-      id: r.id, email: r.email, phone: r.phone, message: r.message, status: r.status, created_at: r.created_at,
+      id: r.id, email: r.email, phone: r.phone, message: r.message, answers: Array.isArray(r.answers) ? r.answers : [], status: r.status, created_at: r.created_at,
       from: { id: r.from_id, name: r.from_name, username: r.from_username, avatar: mediaRef(r.from_avatar, 'avatar', r.from_id), verified: !!r.from_verified, accountType: r.from_type === 'business' ? 'business' : 'personal' },
     })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your leads.' }); }
@@ -35563,7 +35917,11 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
       let fConds = '';
       if (req.query.ptype === 'personal' || req.query.ptype === 'business') { fParams.push(req.query.ptype); fConds += ` AND account_type = $${fParams.length}`; }
       if (req.query.verified === '1') fConds += ' AND verified = true';
-      if (req.query.otw === '1') fConds += ` AND otw_visibility = 'everyone'`;
+      if (req.query.otw === '1') {
+        // 'recruiters' shows only to business viewers — that is the whole tier.
+        const bizViewer = (await db.query('SELECT 1 FROM users WHERE id = $1 AND account_type = \'business\'', [req.user.id]).catch(() => ({ rows: [] }))).rows[0];
+        fConds += bizViewer ? ` AND otw_visibility IN ('everyone','recruiters')` : ` AND otw_visibility = 'everyone'`;
+      }
       const loc = (req.query.loc || '').toString().trim().slice(0, 80);
       if (loc) { fParams.push('%' + loc.replace(/[%_\\]/g, '\\$&') + '%'); fConds += ` AND location ILIKE $${fParams.length}`; }
       // Professional filters (the stacked LinkedIn set). Each one is a separate
@@ -36294,11 +36652,13 @@ app.delete('/api/admin/users/:id', auth.requirePerm('users'), async (req, res) =
 // Distinct from delete — the account and its content stay, but the person is locked
 // out. Live sessions are revoked immediately; login is blocked while suspended/banned.
 /* ─── Bulk user actions ─────────────────────────────────────────────────────
-   Act on many accounts at once. Deliberately narrow: tag, untag, verify,
-   unverify, message and export. Suspend/ban are NOT bulk-able — an enforcement
-   decision should be made per account, with a reason, not swept across a
-   selection. */
-const BULK_ACTIONS = ['tag', 'untag', 'verify', 'unverify', 'message', 'export'];
+   Act on many accounts at once: tag, untag, verify, unverify, message, export,
+   and suspend. Bulk suspend exists for the spam-wave case (fifty bot signups at
+   once); it demands ONE written reason that applies to every selected account,
+   and each suspension is audit-logged individually so the trail reads the same
+   as fifty single decisions. Ban stays one-at-a-time on purpose — permanent
+   removal should never be a sweep. */
+const BULK_ACTIONS = ['tag', 'untag', 'verify', 'unverify', 'message', 'export', 'suspend'];
 app.post('/api/admin/users/bulk', auth.requirePerm('users'), async (req, res) => {
   const action = BULK_ACTIONS.includes(req.body.action) ? req.body.action : null;
   const ids = [...new Set((Array.isArray(req.body.ids) ? req.body.ids : []).map((x) => parseInt(x, 10)).filter(Number.isInteger))].slice(0, 500);
@@ -36327,6 +36687,17 @@ app.post('/api/admin/users/bulk', auth.requirePerm('users'), async (req, res) =>
         `INSERT INTO admin_messages (user_id, sender, body, read_by_user, read_by_admin)
          SELECT id, 'admin', $2, false, true FROM users WHERE id = ANY($1)`, [safe, body]);
       affected = r.rowCount;
+    } else if (action === 'suspend') {
+      const reason = (req.body.reason || '').toString().trim().slice(0, 300);
+      if (!reason) return res.status(400).json({ error: 'Write the reason — it applies to every selected account.' });
+      const days = Math.max(1, Math.min(3650, parseInt(req.body.days, 10) || 7));
+      for (const uid of safe) {
+        await applyAccountStatus(req, uid, 'suspended', reason, days);
+        notify(uid, req.user.id, 'strike', null, null, null, null);
+        adminAudit(req, 'user.status', 'user', uid, { status: 'suspended', reason, days, bulk: true });
+        affected++;
+      }
+      extra = { reason, days };
     } else if (action === 'export') {
       const { rows } = await db.query(
         `SELECT id, name, email, username, plan, account_type, COALESCE(status,'active') AS status, verified, created_at, last_login_at
@@ -37764,7 +38135,12 @@ app.get('/api/admin/finance', auth.requirePerm('revenue'), async (_req, res) => 
 });
 
 // ─── Admin: Growth analytics — signups, active users (DAU/WAU/MAU), retention ───
-app.get('/api/admin/growth', auth.requirePerm('growth'), async (_req, res) => {
+app.get('/api/admin/growth', auth.requirePerm('growth'), async (req, res) => {
+  // Trend length is pickable (30–365 days); the DAU/WAU/MAU windows stay fixed
+  // because that is what those words mean.
+  let trendDays = parseInt(req.query.days, 10);
+  if (!Number.isInteger(trendDays) || trendDays < 7) trendDays = 30;
+  if (trendDays > 365) trendDays = 365;
   const num = (v) => parseInt(v, 10) || 0;
   try {
     const signups = await db.query(`SELECT
@@ -37783,10 +38159,10 @@ app.get('/api/admin/growth', auth.requirePerm('growth'), async (_req, res) => {
         COUNT(DISTINCT user_id) FILTER (WHERE last_seen > now()-interval '7 days')::int  AS wau,
         COUNT(DISTINCT user_id) FILTER (WHERE last_seen > now()-interval '30 days')::int AS mau
       FROM auth_sessions`).then(r => r.rows[0]).catch(() => ({ dau: 0, wau: 0, mau: 0 }));
-    // 30-day zero-filled signup trend.
+    // Zero-filled signup trend, length pickable (trendDays is a validated int).
     const trend = await db.query(`
       SELECT to_char(d.day,'YYYY-MM-DD') AS day, COALESCE(c.n,0)::int AS n
-      FROM generate_series((now()-interval '29 days')::date, now()::date, interval '1 day') d(day)
+      FROM generate_series((now()-interval '${trendDays - 1} days')::date, now()::date, interval '1 day') d(day)
       LEFT JOIN (SELECT created_at::date AS day, COUNT(*) AS n FROM users GROUP BY 1) c ON c.day = d.day
       ORDER BY d.day`).then(r => r.rows).catch(() => []);
     const mau = num(active.mau);
@@ -38195,12 +38571,22 @@ app.get('/api/admin/online', auth.requirePerm('growth'), async (req, res) => {
 // window. All interval/bucket/series values come from a fixed whitelist keyed by
 // `range`, so nothing from the request is interpolated into SQL.
 app.get('/api/admin/analytics', auth.requirePerm('growth'), async (req, res) => {
-  const range = ['today', 'week', 'year'].includes(req.query.range) ? req.query.range : 'week';
-  const spec = {
+  const range = ['today', 'week', 'year', 'custom'].includes(req.query.range) ? req.query.range : 'week';
+  let spec = {
     today: { interval: '1 day', bucket: 'hour', series: 24 },
     week: { interval: '7 days', bucket: 'day', series: 7 },
     year: { interval: '1 year', bucket: 'month', series: 12 },
   }[range];
+  if (range === 'custom') {
+    // A whole number of days back — validated to an int, so the interpolation
+    // below still never sees request text.
+    let days = parseInt(req.query.days, 10);
+    if (!Number.isInteger(days) || days < 1) days = 30;
+    if (days > 365) days = 365;
+    spec = days <= 2 ? { interval: days + ' days', bucket: 'hour', series: days * 24 }
+      : days <= 120 ? { interval: days + ' days', bucket: 'day', series: days }
+      : { interval: days + ' days', bucket: 'month', series: Math.ceil(days / 30) };
+  }
   const since = `now() - interval '${spec.interval}'`;
   const bk = spec.bucket;
   try {
@@ -38472,16 +38858,30 @@ const BROADCAST_AUDIENCES = {
 };
 // Every audience also excludes deactivated and demo accounts — a broadcast should
 // never reach someone who hibernated their account or a seeded demo user.
-function audienceWhere(key) {
-  const a = BROADCAST_AUDIENCES[key] || BROADCAST_AUDIENCES.all;
-  return `(${a.where}) AND NOT COALESCE(deactivated, false) AND COALESCE(is_demo, false) = false`;
+async function audienceWhere(key) {
+  let base;
+  if (isSegmentKey(key)) {
+    const id = parseInt(String(key).slice(8), 10);
+    const row = (await db.query('SELECT filters FROM admin_segments WHERE id = $1', [id]).catch(() => ({ rows: [] }))).rows[0];
+    base = row ? segmentWhere(row.filters) : 'FALSE'; // a deleted segment reaches nobody, never everybody
+  } else {
+    base = (BROADCAST_AUDIENCES[key] || BROADCAST_AUDIENCES.all).where;
+  }
+  return `(${base}) AND NOT COALESCE(deactivated, false) AND COALESCE(is_demo, false) = false`;
 }
 app.get('/api/admin/broadcast/audiences', auth.requireAdmin, async (_req, res) => {
   try {
     const out = [];
     for (const [key, a] of Object.entries(BROADCAST_AUDIENCES)) {
-      const { rows } = await db.query(`SELECT COUNT(*)::int AS n FROM users WHERE ${audienceWhere(key)}`);
+      const { rows } = await db.query(`SELECT COUNT(*)::int AS n FROM users WHERE ${await audienceWhere(key)}`);
       out.push({ key, label: a.label, count: rows[0].n });
+    }
+    // Saved segments follow, so "businesses with no posts in 30d" is pickable
+    // right next to the fixed audiences.
+    const segs = (await db.query('SELECT id, name FROM admin_segments ORDER BY created_at DESC LIMIT 50').catch(() => ({ rows: [] }))).rows;
+    for (const sg of segs) {
+      const { rows } = await db.query(`SELECT COUNT(*)::int AS n FROM users WHERE ${await audienceWhere('segment:' + sg.id)}`);
+      out.push({ key: 'segment:' + sg.id, label: 'Segment · ' + sg.name, count: rows[0].n, segment: true });
     }
     res.json({ audiences: out, pushEnabled: push.isConfigured() });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not count the audiences.' }); }
@@ -38492,8 +38892,8 @@ app.get('/api/admin/broadcast/audiences', auth.requireAdmin, async (_req, res) =
 async function runBroadcast(b) {
   const body = String(b.body || '').trim();
   const subject = String(b.subject || '').trim().slice(0, 160);
-  const audience = BROADCAST_AUDIENCES[b.audience] ? b.audience : 'all';
-  const where = audienceWhere(audience);
+  const audience = (BROADCAST_AUDIENCES[b.audience] || isSegmentKey(b.audience)) ? b.audience : 'all';
+  const where = await audienceWhere(audience);
   const { rowCount } = await db.query(
     `INSERT INTO admin_messages (user_id, sender, body, read_by_user, read_by_admin)
      SELECT id, 'admin', $1, false, true FROM users WHERE ${where}`,
@@ -39365,8 +39765,14 @@ app.use((err, req, res, next) => {
   if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Request is too large.' });
   if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON body.' });
   console.error(err);
+  logServerError(req.method + ' ' + (req.path || req.url || '?'), err);   // the admin Error log reads from this
   res.status(500).json({ error: 'Something went wrong. Please try again.' });
 });
+// Errors that never reach Express still land in the admin Error log. Neither
+// hook exits: this server prefers staying up (the pre-existing behaviour) and
+// making the fault VISIBLE over dying quietly.
+process.on('unhandledRejection', (err) => { console.error('unhandledRejection:', err); try { logServerError('unhandledRejection', err); } catch (e) {} });
+process.on('uncaughtException', (err) => { console.error('uncaughtException:', err); try { logServerError('uncaughtException', err); } catch (e) {} });
 
 /* ═══════════════════════════════════════════════
    SPA DEEP LINKS
@@ -39477,9 +39883,47 @@ app.get('/s/:code', rateLimit(120, 60000, 'smartlink-hit'), async (req, res, nex
     const r = (await db.query('SELECT id, dest_url, active FROM smart_links WHERE code = $1', [code])).rows[0];
     if (!r || r.active === false) return next();
     db.query('UPDATE smart_links SET clicks = clicks + 1 WHERE id = $1', [r.id]).catch(() => {});
+    // The per-view record. A browser link click carries no Atwe identity, so
+    // this row is anonymous — the authed /view ping below fills in "who" when
+    // the link is opened from inside the app.
+    db.query('INSERT INTO smart_link_views (link_id, referrer) VALUES ($1,$2)',
+      [r.id, String(req.headers.referer || '').slice(0, 300) || null]).catch(() => {});
     res.setHeader('Referrer-Policy', 'no-referrer');
     return res.redirect(302, r.dest_url);
   } catch (e) { return next(); }
+});
+// Opened from inside Atwe by a signed-in member: the view is IDENTIFIED. This is
+// what turns a smart link into "who viewed what" instead of a bare counter.
+app.post('/api/smart-links/:code/view', auth.requireAuth, rateLimit(60, 60000, 'smartlink-view'), async (req, res) => {
+  const code = String(req.params.code || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 16);
+  try {
+    const r = (await db.query('SELECT id, owner_id FROM smart_links WHERE code = $1 AND active IS NOT FALSE', [code])).rows[0];
+    if (!r) return res.status(404).json({ error: 'Link not found.' });
+    if (r.owner_id !== req.user.id) {  // the owner opening their own link isn't a lead
+      await db.query('INSERT INTO smart_link_views (link_id, viewer_id) VALUES ($1,$2)', [r.id, req.user.id]);
+      await db.query('UPDATE smart_links SET clicks = clicks + 1 WHERE id = $1', [r.id]).catch(() => {});
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not record that.' }); }
+});
+// Who viewed one of MY links: named viewers first, then the anonymous tally.
+app.get('/api/smart-links/:id/views', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const own = (await db.query('SELECT 1 FROM smart_links WHERE id = $1 AND owner_id = $2', [id, req.user.id])).rows[0];
+    if (!own) return res.status(404).json({ error: 'Link not found.' });
+    const named = (await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar, u.account_type, u.verified, MAX(v.created_at) AS last_at, COUNT(*)::int AS times
+         FROM smart_link_views v JOIN users u ON u.id = v.viewer_id
+        WHERE v.link_id = $1 AND NOT COALESCE(u.deactivated, false)
+        GROUP BY u.id ORDER BY MAX(v.created_at) DESC LIMIT 100`, [id])).rows;
+    const anon = (await db.query('SELECT COUNT(*)::int AS n FROM smart_link_views WHERE link_id = $1 AND viewer_id IS NULL', [id])).rows[0].n;
+    res.json({
+      viewers: named.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: mediaRef(u.avatar, 'avatar', u.id), verified: !!u.verified, accountType: u.account_type, lastAt: u.last_at, times: u.times })),
+      anonymous: anon,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the views.' }); }
 });
 
 app.get('*', async (req, res, next) => {

@@ -4575,6 +4575,33 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS location_stock_product_idx ON location_stock (product_id);`);
   // Which branch a collection order is being picked up from.
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS pickup_location_id INTEGER REFERENCES seller_locations(id) ON DELETE SET NULL;`);
+  // Conversations the account has marked no-export/no-save — kept on the
+  // ACCOUNT (not the device) so the choice follows them to a new phone.
+  // Smart links: one row per VIEW — who (when they were signed in), when, and
+  // where from. This is the entire point of a smart link over a plain one.
+  await query(`
+    CREATE TABLE IF NOT EXISTS smart_link_views (
+      id         SERIAL PRIMARY KEY,
+      link_id    INTEGER NOT NULL REFERENCES smart_links(id) ON DELETE CASCADE,
+      viewer_id  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      referrer   TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS smart_link_views_idx ON smart_link_views (link_id, created_at DESC);`);
+  // Inquiry form questions a business writes itself — fixed answer choices, so
+  // a lead arrives structured ("Make: Toyota") instead of free text.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS inquiry_questions JSONB;`);
+  await query(`ALTER TABLE business_inquiries ADD COLUMN IF NOT EXISTS answers JSONB;`);
+  // Rules acceptance is RECORDED per member (who agreed, when) — and a group
+  // can carry a welcome note shown to each new member once.
+  await query(`ALTER TABLE at_group_members ADD COLUMN IF NOT EXISTS rules_accepted_at TIMESTAMPTZ;`);
+  await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS welcome TEXT;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_free_boost_at TIMESTAMPTZ;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_noexport TEXT[] NOT NULL DEFAULT '{}';`);
+  // A record of who renamed themselves, and from what — the About-this-account
+  // transparency panel reads it. Capped in the app layer, append-only here.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS name_history JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS catalog_feed_token TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS catalog_feed_on BOOLEAN NOT NULL DEFAULT false;`);
   await query(`CREATE UNIQUE INDEX IF NOT EXISTS users_catalog_feed_token_idx ON users (catalog_feed_token) WHERE catalog_feed_token IS NOT NULL;`);
@@ -5364,6 +5391,8 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS stickers_owner_idx ON stickers(owner_id, created_at DESC);`);
+  // Sticker PACKS: a label grouping your stickers ("Logos", "Reactions").
+  await query(`ALTER TABLE stickers ADD COLUMN IF NOT EXISTS pack TEXT;`);
 
   // Group join requests (for shareable group@username links). The group admin
   // (at_groups.created_by) approves; approval moves the row into at_group_members.

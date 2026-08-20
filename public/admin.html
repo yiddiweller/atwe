@@ -2855,6 +2855,12 @@ async function removeLock(username){
 
 /* ─── Traffic analytics ─── */
 let TRAFFIC = null, TRAFFIC_RANGE = 'week', TRAFFIC_T = null;
+let TRAFFIC_DAYS = 30;
+function setTrafficCustom(){
+  const d = parseInt(prompt('How many days back? (1–365)', String(TRAFFIC_DAYS)), 10);
+  if (!Number.isInteger(d) || d < 1) return;
+  TRAFFIC_DAYS = Math.min(365, d); TRAFFIC_RANGE = 'custom'; renderTrafficView();
+}
 function renderTrafficView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
@@ -2863,6 +2869,7 @@ function renderTrafficView(){
         <button class="tf-r ${TRAFFIC_RANGE==='today'?'on':''}" onclick="setTrafficRange('today')">Today</button>
         <button class="tf-r ${TRAFFIC_RANGE==='week'?'on':''}" onclick="setTrafficRange('week')">7 days</button>
         <button class="tf-r ${TRAFFIC_RANGE==='year'?'on':''}" onclick="setTrafficRange('year')">1 year</button>
+        <button class="tf-r ${TRAFFIC_RANGE==='custom'?'on':''}" onclick="setTrafficCustom()">${TRAFFIC_RANGE==='custom' ? 'Last ' + TRAFFIC_DAYS + ' days' : 'Custom…'}</button>
       </div>
       <div id="tfLive" class="tf-live"></div>
     </div>
@@ -2876,7 +2883,7 @@ async function loadTraffic(){
   try {
     // The numbers and the names, together — one refresh, one repaint.
     const [t, o] = await Promise.all([
-      api('GET', '/api/admin/analytics?range=' + TRAFFIC_RANGE),
+      api('GET', '/api/admin/analytics?range=' + TRAFFIC_RANGE + (TRAFFIC_RANGE === 'custom' ? '&days=' + TRAFFIC_DAYS : '')),
       api('GET', '/api/admin/online').catch(() => null),   // never let this hide the traffic figures
     ]);
     TRAFFIC = t; ONLINE = o; renderTraffic();
@@ -3113,14 +3120,17 @@ function renderGrowthView(){
   clearInterval(GRO_T);
   GRO_T = setInterval(() => { if (VIEW === 'growth') loadGrowth(); else clearInterval(GRO_T); }, 30000);
 }
+let GRO_DAYS = 30;
+function setGrowthDays(d){ GRO_DAYS = d; loadGrowth(); }
 async function loadGrowth(){
-  try { const g = await api('GET', '/api/admin/growth'); renderGrowth(g); }
+  try { const g = await api('GET', '/api/admin/growth?days=' + GRO_DAYS); renderGrowth(g); }
   catch (e){ const el = document.getElementById('groBody'); if (el) el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
 }
 function renderGrowth(g){
   const max = Math.max(1, ...g.trend.map(x => x.n));
   const bars = g.trend.map(x => { const h = Math.max(2, Math.round(x.n / max * 100)); const d = new Date(x.day); const lbl = (d.getMonth()+1)+'/'+d.getDate(); return `<div class="tf-bar" title="${lbl}: ${x.n} signups"><div class="tf-barfill" style="height:${h}%"></div><span class="tf-barlbl">${lbl}</span></div>`; }).join('');
   document.getElementById('groBody').innerHTML = `
+    <div class="tf-ranges" style="margin-bottom:10px;">${[30,90,180,365].map(d => `<button class="tf-r ${GRO_DAYS===d?'on':''}" onclick="setGrowthDays(${d})">${d}d</button>`).join('')}</div>
     <div class="rev-hero"><div class="rl">New signups · last 30 days</div><div class="rv">${g.signups.d30.toLocaleString()}</div><div class="rd">${g.signups.total.toLocaleString()} total accounts · ${g.signups.d1} today · ${g.signups.d7} this week</div></div>
     <div class="tf-cards">
       <div class="tf-card"><div class="tf-cl">Daily active (DAU)</div><div class="tf-cv">${g.active.dau.toLocaleString()}</div></div>
@@ -6050,9 +6060,14 @@ async function palRun(q){
   if (q.length < 2) { box.innerHTML = ''; return; }
   try {
     const { results } = await api('GET', '/api/admin/search-content?type=all&q=' + encodeURIComponent(q));
+    // Dashboard sections match by NAME too — "audit", "site", "growth"…
+    const ql = q.toLowerCase();
+    Object.entries(NAV_TITLES || {}).forEach(([v, title]) => {
+      if (title.toLowerCase().includes(ql) && canSee(v)) results.unshift({ kind: 'section', id: v, label: title, sub: 'Open this section' });
+    });
     box.innerHTML = results.length ? results.map(r => `
       <button class="site-row" style="width:100%;background:none;border:none;text-align:start;cursor:pointer;"
-              onclick="palOpen(${jstr(r.kind)}, ${r.id}, ${jstr(r.username || '')})">
+              onclick="palOpen(${jstr(r.kind)}, ${jstr(r.id)}, ${jstr(r.username || '')})">
         <div style="min-width:0;"><div class="srt">${esc(r.label)}</div><div class="srs">${esc(r.sub || r.kind)}</div></div>
         <span class="pill">${esc(r.kind)}</span>
       </button>`).join('') : '<div class="empty">Nothing found.</div>';
@@ -6060,8 +6075,10 @@ async function palRun(q){
 }
 function palOpen(kind, id){
   closeModal();
-  if (kind === 'user') { switchTab('users'); setTimeout(() => openUser && openUser(id), 200); }
+  if (kind === 'section') switchTab(id);
+  else if (kind === 'user') { switchTab('users'); setTimeout(() => openUser && openUser(Number(id)), 200); }
   else if (kind === 'post') switchTab('posts');
+  else if (kind === 'order') switchTab('orders');
   else switchTab('catalog');
 }
 document.addEventListener('keydown', (e) => {
@@ -6524,6 +6541,43 @@ async function clearErrors(id){
    never holds the document itself. */
 /* Saved views: the filter combinations you actually use, one tap away. */
 let VIEWS = [];
+/* ── Segments: a saved filter that lives on the SERVER as an audience ──
+   Different from "Saved views" (a personal shortcut on this device's list):
+   a segment has a live member count, and shows up as a pickable audience in
+   the broadcast composer — save "away 30 days" once, email them any time. */
+let SEGMENTS = [];
+async function loadSegments(){
+  try { SEGMENTS = (await api('GET', '/api/admin/segments')).segments || []; } catch (e) { SEGMENTS = []; }
+  renderSegments();
+}
+function renderSegments(){
+  const box = document.getElementById('segRow'); if (!box) return;
+  const active = Object.entries(UFILT).some(([, v]) => v);
+  box.innerHTML = '<span class="muted" style="font-size:11px;align-self:center;margin-right:2px;">SEGMENTS</span>'
+    + SEGMENTS.map((g, i) =>
+      `<button class="bc-aud" onclick="useSegment(${i})" title="Apply — also pickable as a broadcast audience">${esc(g.name)} · ${g.count}</button>`).join('')
+    + (active ? `<button class="bc-aud" onclick="saveSegment()">＋ Save as segment</button>` : '')
+    + (SEGMENTS.length ? `<button class="bc-aud" onclick="dropSegment()">Remove…</button>` : '');
+}
+function useSegment(i){
+  const g = SEGMENTS[i]; if (!g) return;
+  UFILT = { ...g.filters };
+  clearUserSel(); load();
+}
+async function saveSegment(){
+  const name = prompt('Name this segment (it becomes a broadcast audience too):');
+  if (!name || !name.trim()) return;
+  try { await api('POST', '/api/admin/segments', { name: name.trim(), filters: { ...UFILT } }); notify('Segment saved.'); loadSegments(); }
+  catch (e){ notify(e.message); }
+}
+async function dropSegment(){
+  const name = prompt('Which segment? Type its name:\n\n' + SEGMENTS.map(g => g.name).join('\n'));
+  if (!name) return;
+  const g = SEGMENTS.find(x => x.name.toLowerCase() === name.trim().toLowerCase());
+  if (!g) { notify('No segment by that name.'); return; }
+  try { await api('DELETE', '/api/admin/segments/' + g.id); loadSegments(); }
+  catch (e){ notify(e.message); }
+}
 async function loadViews(){
   try { const r = await api('GET', '/api/admin/views'); VIEWS = r.views || []; } catch (e) { VIEWS = []; }
   renderViews();
@@ -6787,10 +6841,11 @@ async function renderRetentionView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
     <div class="panel"><h3>Retention</h3>
-      <div class="sub">Each row is everyone who joined that week. The columns are the weeks after — the share of that group still showing up. Week 0 is always high (they just joined); what matters is how gently the numbers fall to the right.</div></div>
+      <div class="sub">Each row is everyone who joined that week. The columns are the weeks after — the share of that group still showing up. Week 0 is always high (they just joined); what matters is how gently the numbers fall to the right.</div>
+      <div class="tf-ranges" style="margin-top:10px;">${[4, 8, 12, 16].map(w => `<button class="tf-r ${(window.RET_WEEKS || 8) === w ? 'on' : ''}" onclick="window.RET_WEEKS=${w};renderRetentionView()">${w} weeks</button>`).join('')}</div></div>
     <div id="retBox"><div class="ld"><span class="ab-mark"></span></div></div>`;
   try {
-    const { cohorts, weeks } = await api('GET', '/api/admin/retention?weeks=8');
+    const { cohorts, weeks } = await api('GET', '/api/admin/retention?weeks=' + (window.RET_WEEKS || 8));
     if (!cohorts.length) { document.getElementById('retBox').innerHTML = '<div class="empty">Not enough history yet.</div>'; return; }
     const head = ['<th>Joined</th><th>People</th>'].concat(Array.from({ length: weeks }, (_, i) => `<th>W${i}</th>`)).join('');
     const rows = cohorts.map(c => `<tr><td>${fmtDate(c.week)}</td><td><b>${c.size}</b></td>` +
@@ -7227,7 +7282,7 @@ function toggleUserFilter(key, val){
 }
 // Re-drawn after every user-list render so the "save this view" affordance
 // appears exactly when there is something worth saving.
-function afterUsersRender(){ if (typeof renderViews === 'function') renderViews(); }
+function afterUsersRender(){ if (typeof renderViews === 'function') renderViews(); if (typeof loadSegments === 'function') loadSegments(); }
 function clearUserSel(){ USEL = new Set(); syncBulkBar(); document.querySelectorAll('.usel').forEach(c => { c.checked = false; }); }
 function toggleUserSel(id, on){ if (on) USEL.add(id); else USEL.delete(id); syncBulkBar(); }
 function syncBulkBar(){
@@ -7242,6 +7297,12 @@ async function bulkUsers(action){
   if (action === 'message') {
     const m = prompt('Message to send to ' + ids.length + ' member' + (ids.length === 1 ? '' : 's') + ':', '');
     if (!m) return; body.body = m;
+  }
+  if (action === 'suspend') {
+    const why = prompt('Suspend ' + ids.length + ' account' + (ids.length === 1 ? '' : 's') + ' — the reason (applies to all of them):', '');
+    if (!why || !why.trim()) return;
+    const d = parseInt(prompt('For how many days?', '7'), 10);
+    body.reason = why.trim(); body.days = (Number.isInteger(d) && d > 0) ? d : 7;
   }
   if (action === 'export') {
     // A download, not JSON — go through fetch so the CSV lands as a file.
@@ -7280,6 +7341,7 @@ function renderUsersView(){
     <div class="bc-auds" id="userFilters" style="margin:0 0 12px;">${USER_FILTERS.map(f =>
       `<button class="bc-aud${UFILT[f.key] === f.val ? ' on' : ''}" onclick="toggleUserFilter('${f.key}','${f.val}')">${esc(f.label)}</button>`).join('')}</div>
     <div class="bc-auds" id="savedViews" style="margin:0 0 12px;"></div>
+    <div class="bc-auds" id="segRow" style="margin:0 0 12px;"></div>
     <div id="bulkBar" class="bulk-bar" style="display:none;">
       <span id="bulkCount">0 selected</span>
       <select id="bulkTag" class="in" style="width:auto;margin:0;">${ADMIN_TAG_LIST.map(t => `<option value="${t}">${t}</option>`).join('')}</select>
@@ -7288,6 +7350,7 @@ function renderUsersView(){
       <button class="act" onclick="bulkUsers('verify')">Verify</button>
       <button class="act" onclick="bulkUsers('message')">Message…</button>
       <button class="act" onclick="bulkUsers('export')">Export CSV</button>
+      <button class="act danger" onclick="bulkUsers('suspend')">Suspend…</button>
       <button class="act" onclick="clearUserSel()">Clear</button>
     </div>
     <div class="users" id="userList"></div>`;
