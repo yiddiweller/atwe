@@ -19079,7 +19079,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1658'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1659'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -32688,7 +32688,7 @@ function acGoProfileHub() {
     html += '<div class="me-catlabel">Business</div><div class="me-group">';
     // Shown to anyone who WORKS an inbox, not only to business owners — a staff
     // member's whole job here is answering it, and they need a way in.
-    if (AC._inboxAccess) html += item('Customer inbox', _ME_IC.people, "acOpenInbox()", null);
+    if (AC._inboxAccess || acIsBiz(u)) html += item('Customer inbox', _ME_IC.people, "acOpenInbox()", null);
     html += item('Business dashboard', _ME_IC.grid, "acOpenDashboard()", null);
     html += item('Sales pipeline', _ME_IC.people, "acOpenCrm()", null);
     html += item('Smart links', _ME_IC.link || _ME_IC.share || _ME_IC.grid, "acOpenSmartLinks()", null);
@@ -40323,8 +40323,12 @@ async function acOpenInbox() {
     if (!AC._inboxBiz.length) {
       document.getElementById('inboxBizBar').innerHTML = '';
       document.getElementById('inboxTabs').innerHTML = '';
-      document.getElementById('inboxBody').innerHTML =
-        `<div class="ac-empty" style="padding:22px;">No customer inbox yet.<div class="ac-empty-sub" style="margin-top:6px;">A business owner turns this on in Manage store, then picks who can answer.</div></div>`;
+      const mine = acIsBiz(S.user);
+      document.getElementById('inboxBody').innerHTML = mine
+        ? `<div class="ac-empty" style="padding:22px 14px;">Your customers' messages reach only you.
+             <div class="ac-empty-sub" style="margin:8px 0 16px;">Turn on the team inbox and your staff can answer them with you — as the business, signed with their name.</div>
+             <button class="ac-pill-btn accent" style="width:100%;" onclick="closeOverlay('inboxView');acOpenInboxSetup()">Set up the team inbox</button></div>`
+        : `<div class="ac-empty" style="padding:22px;">Nothing to answer.<div class="ac-empty-sub" style="margin-top:6px;">A business you work for has to add you to their team and tick “Answer customer messages”.</div></div>`;
       return;
     }
     if (!AC._inboxBizId || !AC._inboxBiz.some(b => b.id === AC._inboxBizId)) AC._inboxBizId = AC._inboxBiz[0].id;
