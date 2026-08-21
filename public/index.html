@@ -7245,6 +7245,35 @@ body.light .rev-sum-v{color:var(--on-green);}
 .rev-bar-fill{display:block;height:100%;border-radius:999px;background:var(--amber);}
 .rev-bar-c{font-size:12px;color:var(--t3);min-width:20px;text-align:right;
   font-variant-numeric:tabular-nums;}
+/* ── Category averages: what people actually judged ── */
+.rev-cats{display:flex;gap:0;overflow-x:auto;-webkit-overflow-scrolling:touch;
+  margin:2px 0 14px;padding-bottom:2px;scrollbar-width:none;}
+.rev-cats::-webkit-scrollbar{display:none;}
+.rev-cat{flex:0 0 auto;min-width:96px;padding:2px 16px 2px 0;margin-right:16px;
+  border-right:1px solid var(--b2);}
+.rev-cat:last-child{border-right:none;margin-right:0;}
+.rev-cat-l{font-size:12.5px;color:var(--t2);white-space:nowrap;}
+.rev-cat-n{font-size:17px;font-weight:750;color:var(--t1);margin-top:1px;
+  font-variant-numeric:tabular-nums;}
+.rev-cat-ic{display:block;margin-top:6px;}
+.rev-cat-ic svg{width:20px;height:20px;fill:none;stroke:var(--t2);stroke-width:1.6;
+  stroke-linecap:round;stroke-linejoin:round;}
+/* the category pickers while writing */
+.rev-subs{margin:10px 0 4px;padding-top:10px;border-top:1px solid var(--b2);}
+.rev-subs-h{font-size:13px;font-weight:750;color:var(--t2);margin-bottom:6px;}
+.rev-subs-h span{font-weight:500;color:var(--t3);}
+.rev-sub{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:5px 0;}
+.rev-sub-l{font-size:13.5px;color:var(--t1);}
+.rev-sub-stars{display:flex;gap:2px;flex:0 0 auto;}
+.rev-substar{background:none;border:none;padding:2px;cursor:pointer;line-height:0;}
+.rev-substar svg{width:19px;height:19px;fill:var(--s3);}
+.rev-substar.on svg{fill:var(--amber);}
+/* and on the review itself */
+.rev-subchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.rev-subchip{font-size:11.5px;color:var(--t2);background:var(--s2);
+  border-radius:var(--r-pill);padding:3px 9px;}
+.rev-subchip b{color:var(--t1);font-weight:750;}
+.rev-since{font-size:12px;color:var(--t3);margin-top:1px;}
 /* the ask */
 .rev-ask-wrap{display:flex;flex-direction:column;gap:8px;margin:8px 0 12px;}
 .rev-ask{display:flex;align-items:center;gap:11px;width:100%;padding:12px 14px;border:none;
@@ -7290,6 +7319,38 @@ body.light .rev-verified{color:var(--on-green);}
 .rev-media{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;}
 .rev-media-it{width:84px;height:84px;object-fit:cover;border-radius:10px;background:var(--s3);cursor:pointer;}
 /* Trust score chip on a profile */
+/* ── The three numbers, as one block ── */
+.host-stats{display:flex;align-items:stretch;margin:12px 0 2px;padding:12px 4px;
+  border-radius:var(--r-lg);background:var(--s1);}
+.hs-cell{flex:1;min-width:0;text-align:center;padding:0 6px;}
+.hs-cell + .hs-cell{border-left:1px solid var(--b2);}
+.hs-n{font-size:19px;font-weight:800;letter-spacing:-.02em;color:var(--t1);line-height:1.15;
+  font-variant-numeric:tabular-nums;}
+.hs-star{font-size:14px;margin-left:1px;}
+.hs-l{font-size:11.5px;color:var(--t3);margin-top:2px;}
+/* ── The plain facts ── */
+.about-facts{margin:12px 0 2px;display:flex;flex-direction:column;gap:11px;}
+.af-row{display:flex;align-items:flex-start;gap:11px;font-size:14.5px;color:var(--t1);
+  background:none;border:none;padding:0;font-family:inherit;text-align:left;width:100%;}
+.af-link{cursor:pointer;}
+.af-ic{flex:0 0 auto;width:20px;height:20px;margin-top:1px;}
+.af-ic svg{width:20px;height:20px;fill:none;stroke:var(--t2);stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round;}
+.af-more{display:flex;flex-direction:column;gap:11px;}
+.af-showall{align-self:flex-start;margin-top:2px;padding:8px 16px;border:none;
+  border-radius:var(--r-pill);background:var(--s2);color:var(--t1);font-size:13.5px;
+  font-weight:700;cursor:pointer;font-family:inherit;}
+/* ── Identity, explained ── */
+.idv-card{border-radius:var(--r-xl);padding:22px 20px;margin:2px 0 14px;color:#fff;
+  background:linear-gradient(140deg,#FF0033,#AA00FF);}
+.idv-mark{width:40px;height:40px;margin-bottom:12px;}
+.idv-mark svg{width:40px;height:40px;fill:none;stroke:#fff;stroke-width:1.6;
+  stroke-linecap:round;stroke-linejoin:round;}
+.idv-name{font-size:18px;font-weight:800;letter-spacing:-.02em;}
+.idv-since{font-size:15px;font-weight:600;opacity:.92;margin-top:1px;}
+.idv-blurb{font-size:13.5px;line-height:1.5;opacity:.9;margin-top:12px;max-width:30ch;}
+.idv-how{font-size:14px;color:var(--t1);margin-bottom:6px;}
+.idv-caveat{font-size:13.5px;color:var(--t2);line-height:1.55;margin:0;}
 /* ── Reputation ──
    A real element, not a chip lost in a meta row: the number is the point, so it
    leads. Colour follows the ladder — grey while nothing has happened, green at
@@ -14865,6 +14926,11 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
       <div class="rev-starpick" id="revStarPick"></div>
       <div class="rev-word" id="revWord"></div>
     </div>
+    <!-- optional, and said to be optional: the detail that helps the next person -->
+    <div class="rev-subs hidden" id="revSubs">
+      <div class="rev-subs-h">Anything more? <span>Optional</span></div>
+      <div id="revSubsRows"></div>
+    </div>
     <textarea class="jp-in jp-ta" id="revBody" rows="4" placeholder="How did it go? What should the next person know?" maxlength="2000"></textarea>
     <div class="prod-thumbs" id="revBizThumbs" style="margin-top:8px;"></div>
     <button class="ac-link-btn" style="margin:4px 2px;" onclick="document.getElementById('revBizFile').click()">＋ Add photos / video</button>
@@ -16963,6 +17029,15 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 </div>
 
 <!-- Team / multi-seat business accounts -->
+<!-- What identity checking is, and what it is not -->
+<div class="overlay hidden" id="identityView" onclick="if(event.target===this)closeOverlay('identityView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Identity verified">
+    <button class="sheet-close" onclick="closeOverlay('identityView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Identity verified</div>
+    <div id="identityBody"></div>
+  </div>
+</div>
+
 <!-- What the reputation number is made of -->
 <div class="overlay hidden" id="trustView" onclick="if(event.target===this)closeOverlay('trustView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Reputation">
@@ -18211,6 +18286,10 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
         <label class="pf-flabel" for="pfWebsite">Website</label>
         <input class="pf-finput" id="pfWebsite" maxlength="120" placeholder="yoursite.com" autocapitalize="none" autocomplete="off" inputmode="url"/>
       </div>
+      <!-- The plain facts. Every one optional; the ones left blank never appear. -->
+      <div class="pf-sec-label">A bit about you</div>
+      <div class="ac-disc-sub" style="margin:-4px 2px 8px;">Short, plain lines people actually read. Leave any of them blank.</div>
+      <div id="pfFacts"></div>
       <div class="pf-sec-label">Contact</div>
       <div class="pf-field">
         <label class="pf-flabel" for="pfEmail">Email</label>
@@ -19253,7 +19332,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1665'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1666'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -37830,6 +37909,77 @@ function acCertSeal(label) {
   return `<span class="cert-seal">${CERT_MARK}${escHtml(label || 'Certified')}</span>`;
 }
 const _REP_STAR = '<svg class="tc-star" viewBox="0 0 24 24" aria-hidden="true"><polygon points="12 2 14.9 8.6 22 9.2 16.6 13.9 18.2 21 12 17.3 5.8 21 7.4 13.9 2 9.2 9.1 8.6"/></svg>';
+/* ── The three numbers, together ──
+   Reviews, rating, and how long they have been here. Apart they are scattered
+   through a page; together they are the thing somebody actually checks before
+   dealing with a stranger, and it takes one glance. */
+function acHostStats(u, d) {
+  const ts = d.trustScore || {};
+  const years = u.joinedAt ? Math.floor((Date.now() - new Date(u.joinedAt).getTime()) / (365.25 * 864e5)) : null;
+  const cells = [
+    ts.ratingCount ? [acCompact(ts.ratingCount), ts.ratingCount === 1 ? 'Review' : 'Reviews'] : null,
+    ts.ratingCount ? [ts.ratingAvg + '<span class="hs-star">★</span>', 'Rating'] : null,
+    years != null ? [years < 1 ? '<1' : years, years === 1 ? 'Year here' : 'Years here'] : null,
+  ].filter(Boolean);
+  if (cells.length < 2) return '';   // one lonely number is not a stats block
+  return `<div class="host-stats">${cells.map(([n, l]) =>
+    `<div class="hs-cell"><div class="hs-n">${n}</div><div class="hs-l">${escHtml(l)}</div></div>`).join('')}</div>`;
+}
+/* ── The plain facts ──
+   A wall of bio prose gets skimmed. Five labelled lines get read. */
+function acAboutFacts(u) {
+  const facts = u.aboutFacts || [];
+  const id = u.identity;
+  if (!facts.length && !id) return '';
+  const rows = facts.map((f) =>
+    `<div class="af-row"><span class="af-ic">${_AF_IC[f.icon] || _AF_IC.spark}</span><span>${escHtml(f.label)}: ${escHtml(f.value)}</span></div>`);
+  // Long lists collapse: the first five, then the rest behind a button.
+  const head = rows.slice(0, 5).join(''), rest = rows.slice(5).join('');
+  /* Identity is never collapsed. It is the one line here that is about whether
+     to trust somebody rather than about who they are, and burying the most
+     important row behind a "Show all" would be exactly the wrong choice. */
+  let idRow = '';
+  if (id) {
+    AC._identity = id; AC._identityName = u.name;
+    idRow = `<button class="af-row af-link" onclick="acOpenIdentity()">
+      <span class="af-ic">${_AF_IC.shield}</span><span><u>Identity verified</u></span></button>`;
+  }
+  return `<div class="about-facts">${head}
+    ${rest ? `<div class="af-more hidden" id="afMore">${rest}</div>
+      <button class="af-showall" id="afShowAll" onclick="acAboutShowAll()">Show all</button>` : ''}
+    ${idRow}</div>`;
+}
+function acAboutShowAll() {
+  document.getElementById('afMore').classList.remove('hidden');
+  document.getElementById('afShowAll').classList.add('hidden');
+}
+/* What identity checking is — and, said just as plainly, what it is not. */
+function acOpenIdentity() {
+  const id = AC._identity; if (!id) return;
+  let since = '';
+  try { since = new Date(id.since).toLocaleDateString([], { month: 'long', year: 'numeric' }); } catch (_) {}
+  document.getElementById('identityBody').innerHTML = `
+    <div class="idv-card">
+      <div class="idv-mark">${_AF_IC.shield}</div>
+      <div class="idv-name">${escHtml(AC._identityName || '')}</div>
+      <div class="idv-since">Verified${since ? ' since ' + escHtml(since) : ''}</div>
+      <div class="idv-blurb">Trust is what makes Atwe work. Checking that people are who they say they are is part of how we build it.</div>
+    </div>
+    <div class="idv-how"><b>${escHtml(id.method)}</b></div>
+    <p class="idv-caveat">${escHtml(id.caveat)}</p>`;
+  showOverlay('identityView');
+}
+const _AF_IC = {
+  work:   '<svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+  globe:  '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18"/></svg>',
+  speech: '<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-8 8H7l-4 3v-6a8 8 0 0 1 8-8h2a8 8 0 0 1 8 3z"/></svg>',
+  heart:  '<svg viewBox="0 0 24 24"><path d="M20.8 6.6a5 5 0 0 0-7.1 0L12 8.3l-1.7-1.7a5 5 0 1 0-7.1 7.1L12 21l8.8-7.3a5 5 0 0 0 0-7.1z"/></svg>',
+  clock:  '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>',
+  star:   '<svg viewBox="0 0 24 24"><polygon points="12 2 14.9 8.6 22 9.2 16.6 13.9 18.2 21 12 17.3 5.8 21 7.4 13.9 2 9.2 9.1 8.6"/></svg>',
+  paw:    '<svg viewBox="0 0 24 24"><circle cx="7" cy="9" r="2"/><circle cx="12" cy="6" r="2"/><circle cx="17" cy="9" r="2"/><path d="M12 12c-3 0-5 2.4-5 4.5S9 20 12 20s5-1.4 5-3.5S15 12 12 12z"/></svg>',
+  spark:  '<svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg>',
+  shield: '<svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><polyline points="9 12 11 14 15 10"/></svg>',
+};
 function acTrustBand(ts) {
   return ts.isNew ? 'new' : ts.score >= 90 ? 'high' : ts.score >= 60 ? 'mid' : ts.score >= 45 ? 'ok' : 'low';
 }
@@ -37998,7 +38148,9 @@ function acRenderProfile(d, mine) {
       ${u.bio ? `<div class="ac-prof-bio">${acLinkifyPost(u.bio)}</div>` : ''}
       ${acProfMeta(u)}
       ${!mine && d.myNote ? `<div class="prof-mynote" onclick="acPrivateNoteOpen()" role="button" aria-label="Edit your private note"><b>📝 Note to self</b> · only you can see this<div>${escHtml(d.myNote)}</div></div>` : ''}
+      ${acHostStats(u, d)}
       ${acTrustChip(d.trustScore)}
+      ${acAboutFacts(u)}
       ${acProfMore(u)}
       ${acProfileCtaPill(u, mine)}
       ${acHiringBanner(u, d)}
@@ -38454,7 +38606,7 @@ async function acOpenReviews(username, bizId, opts) {
     if (AC._revVerified) q.push('verified=true');
     const d = await API.req('GET', '/api/business/' + bizId + '/reviews?' + q.join('&'));
     AC._revData = d;
-    head.innerHTML = acRevSummary(d) + acRevAskRow(d) + acRevFilters(d);
+    head.innerHTML = acRevSummary(d) + acRevCategories(d) + acRevAskRow(d) + acRevFilters(d);
     list.innerHTML = d.reviews.length
       ? d.reviews.map(acReviewCard).join('')
       : `<div class="ac-empty" style="padding:22px;">${(AC._revStar || AC._revVerified) ? 'No reviews match that filter.' : 'No reviews yet. Be the first.'}</div>`;
@@ -38482,6 +38634,32 @@ function acRevSummary(d) {
     <div class="rev-sum-bars">${bars}</div>
   </div>`;
 }
+/* ── What people actually judged ──
+   One star tells a reader a review was bad. Six categories tell them it was
+   late but beautifully made — which is the thing the next person needs in
+   order to decide whether that matters to them. */
+function acRevCategories(d) {
+  const cats = d.subRatings || [];
+  if (!cats.length) return '';
+  return `<div class="rev-cats">${cats.map((c) => `
+    <div class="rev-cat" title="${escHtml(c.count + ' rated this')}">
+      <div class="rev-cat-l">${escHtml(c.label)}</div>
+      <div class="rev-cat-n">${c.score}</div>
+      <span class="rev-cat-ic">${_REV_CAT_IC[c.icon] || _REV_CAT_IC.check}</span>
+    </div>`).join('')}</div>`;
+}
+const _REV_CAT_IC = {
+  check:  '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="9 12 11 14 15 10"/></svg>',
+  gem:    '<svg viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 12L2 9z"/><path d="M2 9h20M9 3 7 9l5 12 5-12-2-6"/></svg>',
+  box:    '<svg viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg>',
+  speech: '<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-8 8H7l-4 3v-6a8 8 0 0 1 8-8h2a8 8 0 0 1 8 3z"/></svg>',
+  tag:    '<svg viewBox="0 0 24 24"><path d="M20 12 12 20 3 11V3h8z"/><circle cx="7.5" cy="7.5" r="1.3"/></svg>',
+  spray:  '<svg viewBox="0 0 24 24"><path d="M9 8h6v13H9z"/><path d="M11 8V4h4M18 5h.01M20 8h.01M18 11h.01"/></svg>',
+  key:    '<svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="4"/><path d="m11 11 9 9M17 17l2-2M15 15l2-2"/></svg>',
+  map:    '<svg viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></svg>',
+  clock:  '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>',
+};
+
 /* Asking at the right moment is the whole trick. If this viewer has something
    unreviewed with this person, the page opens by offering it — by name, so it
    is obvious what they would be writing about. */
@@ -38538,12 +38716,24 @@ function acReviewCard(r) {
     <div class="rec-head" onclick="acGoProfile(${jsAttr(r.reviewer.username)})">${acAvatarHtml(r.reviewer.name, r.reviewer.avatar)}
       <div class="rec-who">
         <div class="rec-name">${escHtml(r.reviewer.name)}${vbadge(acIsVerified(r.reviewer))}${r.reviewer.certified ? acCertSeal('Certified') : ''}</div>
+        <div class="rev-since">${escHtml(acYearsHere(r.reviewer.since))}</div>
         <div class="rec-meta">${acStars(r.rating)} <span class="rev-when">${escHtml(acTime(r.createdAt))}</span></div>
       </div>${del}</div>
     ${proof}${forWhat}
     ${r.body ? `<div class="rec-body">${escHtml(r.body)}</div>` : ''}
+    ${(r.subRatings || []).length ? `<div class="rev-subchips">${r.subRatings.map((x) =>
+      `<span class="rev-subchip">${escHtml(x.label)} <b>${x.score}</b></span>`).join('')}</div>` : ''}
     ${media}${response}
     <div class="rev-actions">${respondBtn}${reportBtn}</div></div>`;
+}
+/* A five-star review from somebody who joined yesterday and one from somebody
+   eight years in are not the same evidence. Say which. */
+function acYearsHere(since) {
+  if (!since) return '';
+  const y = Math.floor((Date.now() - new Date(since).getTime()) / (365.25 * 864e5));
+  if (y >= 1) return y + (y === 1 ? ' year on Atwe' : ' years on Atwe');
+  const m = Math.floor((Date.now() - new Date(since).getTime()) / (30 * 864e5));
+  return m >= 1 ? m + (m === 1 ? ' month on Atwe' : ' months on Atwe') : 'New to Atwe';
 }
 const _REV_TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 
@@ -38579,7 +38769,9 @@ function acWriteReview(kind, refId, ctxIn) {
     block.classList.add('hidden');
     whoLabel.classList.add('hidden');
   }
-  acRenderStarPick(); acRenderThingStars(); acRevBizThumbs();
+  AC._revSubs = {};
+  AC._revSubCats = (ctx && ctx.subCategories) || [];
+  acRenderStarPick(); acRenderThingStars(); acRenderSubRatings(); acRevBizThumbs();
   showOverlay('reviewWrite');
 }
 const _REV_WHO_LABEL = { order: 'The seller', stay: 'The host', appointment: 'The person' };
@@ -38592,6 +38784,27 @@ function acRenderThingStars() {
   if (w) w.textContent = _REV_WORDS[AC._revThingStars || 0] || '';
 }
 function acPickThingStar(n) { AC._revThingStars = n; acRenderThingStars(); }
+/* Each category gets its own small row of stars. All optional — somebody in a
+   hurry gives one overall rating and leaves, and that is a complete review. */
+function acRenderSubRatings() {
+  const box = document.getElementById('revSubs'), rows = document.getElementById('revSubsRows');
+  if (!box || !rows) return;
+  const cats = AC._revSubCats || [];
+  box.classList.toggle('hidden', !cats.length);
+  if (!cats.length) { rows.innerHTML = ''; return; }
+  rows.innerHTML = cats.map((c) => `<div class="rev-sub">
+    <span class="rev-sub-l">${escHtml(c.label)}</span>
+    <span class="rev-sub-stars">${[1, 2, 3, 4, 5].map((i) =>
+      `<button class="rev-substar ${i <= (AC._revSubs[c.key] || 0) ? 'on' : ''}" onclick="acPickSub(${jsAttr(c.key)},${i})" aria-label="${i} star${i === 1 ? '' : 's'} for ${escHtml(c.label)}"><svg viewBox="0 0 24 24"><polygon points="12 2 14.9 8.6 22 9.2 16.6 13.9 18.2 21 12 17.3 5.8 21 7.4 13.9 2 9.2 9.1 8.6"/></svg></button>`).join('')}</span>
+  </div>`).join('');
+}
+function acPickSub(key, n) {
+  // Tapping the same star again clears it — a rating given by accident must be
+  // as easy to take back as it was to give.
+  AC._revSubs[key] = AC._revSubs[key] === n ? 0 : n;
+  if (!AC._revSubs[key]) delete AC._revSubs[key];
+  acRenderSubRatings();
+}
 // The word beside the stars: people pick a rating far more confidently when
 // they can see what each one is being taken to mean.
 const _REV_WORDS = ['', 'Poor', 'Not great', 'Okay', 'Good', 'Excellent'];
@@ -38631,7 +38844,8 @@ async function acSubmitBizReview() {
   const body = document.getElementById('revBody').value.trim();
   try {
     await API.req('POST', '/api/business/' + AC._revBiz + '/reviews', {
-      rating: AC._revStars, body, media: AC._revBizMedia || [], kind: AC._revKind, refId: AC._revRef });
+      rating: AC._revStars, body, media: AC._revBizMedia || [], kind: AC._revKind, refId: AC._revRef,
+      subRatings: AC._revSubs || {} });
     /* The thing's rating is a separate review on a separate record — it belongs
        to the listing, not to the person, and it must survive them changing what
        they sell. Optional: somebody who only wants to rate the person still can.
@@ -57297,6 +57511,32 @@ function setPfBanner(url) {
   if (url) { b.style.setProperty('--banner', `url("${url}")`); b.classList.add('has-img'); }
   else { b.style.removeProperty('--banner'); b.classList.remove('has-img'); }
 }
+const _PF_FACTS = [
+  ['work',     'My work',                 'e.g. Carpenter'],
+  ['lives',    'Lives in',                'e.g. Manchester'],
+  ['speaks',   'Speaks',                  'e.g. English and Urdu'],
+  ['always',   'For customers, I always', 'e.g. Reply the same day'],
+  ['since',    'Doing this since',        'e.g. 2014'],
+  ['obsessed', "I'm obsessed with",       'e.g. Proper joinery'],
+  ['pets',     'Pets',                    'e.g. Two cats'],
+  ['funfact',  'Fun fact',                'Something people remember'],
+];
+function acRenderPfFacts(facts) {
+  const box = document.getElementById('pfFacts'); if (!box) return;
+  const f = facts || {};
+  box.innerHTML = _PF_FACTS.map(([k, label, ph]) => `<div class="pf-field">
+    <label class="pf-flabel" for="pff-${k}">${escHtml(label)}</label>
+    <input class="pf-finput" id="pff-${k}" maxlength="120" placeholder="${escHtml(ph)}" value="${escHtml(f[k] || '')}"/>
+  </div>`).join('');
+}
+function acReadPfFacts() {
+  const out = {};
+  for (const [k] of _PF_FACTS) {
+    const el = document.getElementById('pff-' + k);
+    if (el && el.value.trim()) out[k] = el.value.trim().slice(0, 120);
+  }
+  return out;
+}
 function openProfileEdit(focusUsername) {
   closeProfileMenu();
   _pendingAvatar = undefined; _pendingBanner = undefined;
@@ -57305,6 +57545,7 @@ function openProfileEdit(focusUsername) {
   document.getElementById('pfHeadline').value = S.user?.headline || '';
   { const pn = document.getElementById('pfPronouns'); if (pn) pn.value = S.user?.pronouns || ''; }
   document.getElementById('pfBio').value = S.user?.bio || '';
+  acRenderPfFacts(S.user?.aboutFacts);
   document.getElementById('pfLocation').value = S.user?.location || '';
   document.getElementById('pfWebsite').value = S.user?.website || '';
   document.getElementById('pfEmail').value = S.user?.contactEmail || '';
@@ -57433,6 +57674,7 @@ async function saveProfile() {
     headline: document.getElementById('pfHeadline').value.trim(),
     pronouns: document.getElementById('pfPronouns').value.trim(),
     bio: document.getElementById('pfBio').value.trim(),
+    aboutFacts: acReadPfFacts(),
     location: document.getElementById('pfLocation').value.trim(),
     website: document.getElementById('pfWebsite').value.trim(),
     contactEmail: document.getElementById('pfEmail').value.trim(),
