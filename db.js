@@ -4981,6 +4981,32 @@ async function initSchema() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS cert_note TEXT;`);
   // Told once, the first time they earn it — not on every profile read.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS cert_notified_at TIMESTAMPTZ;`);
+
+  /* ── Reviews that follow a real dealing ──
+     A review is far more useful when you can see it came from somebody who
+     actually bought, stayed or booked. So a review now records WHICH dealing it
+     came from (kind + ref_id). NULL means a general review — still allowed and
+     still shown, the way a walk-in customer can review a shop on Google, but
+     marked as unverified and, importantly, NOT counted toward the reputation
+     score. That is the difference that matters: anyone may have their say, but
+     only people who actually dealt with you can move your number. */
+  await query(`ALTER TABLE business_reviews ADD COLUMN IF NOT EXISTS kind TEXT;`);
+  await query(`ALTER TABLE business_reviews ADD COLUMN IF NOT EXISTS ref_id INTEGER;`);
+  await query(`ALTER TABLE business_reviews ADD COLUMN IF NOT EXISTS media TEXT[];`);
+  await query(`ALTER TABLE business_reviews ADD COLUMN IF NOT EXISTS responded_at TIMESTAMPTZ;`);
+  /* Two rules, not one. A general review is still one per reviewer, so nobody
+     can shout twice. A dealing review is one PER DEALING, because booking the
+     same host three times genuinely is three things to review. The old
+     table-level UNIQUE could not express that, so it is replaced by a pair of
+     partial indexes — no migration, existing rows keep working. */
+  await query(`ALTER TABLE business_reviews DROP CONSTRAINT IF EXISTS business_reviews_business_id_reviewer_id_key;`);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS business_reviews_general_idx
+                 ON business_reviews(business_id, reviewer_id) WHERE ref_id IS NULL;`);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS business_reviews_dealing_idx
+                 ON business_reviews(kind, ref_id, reviewer_id) WHERE ref_id IS NOT NULL;`);
+  await query(`CREATE INDEX IF NOT EXISTS business_reviews_subject_idx ON business_reviews(business_id, created_at DESC);`);
+  // An appointment is finished work: it can be reviewed like anything else.
+  await query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;`);
   await query(`CREATE INDEX IF NOT EXISTS users_cert_active_idx ON users(cert_active) WHERE cert_active;`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_business_idx ON business_team(business_id);`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_member_idx ON business_team(member_id, status);`);
