@@ -5158,6 +5158,40 @@ async function initSchema() {
       UNIQUE (job_id, courier_id)
     );`);
   await query(`CREATE INDEX IF NOT EXISTS delivery_offers_job_idx ON delivery_offers(job_id, created_at DESC);`);
+
+  /* ── Customer inbox categories ──
+     "What can we help with?" — the owner's own words, and the conversation goes
+     to the people who handle that. Deliberately OFF by default: one shared
+     inbox stays the default, because a category nobody staffs is worse than no
+     category at all. Everything here is additive — a business that never sets
+     one up sees exactly the inbox it has today. */
+  await query(`
+    CREATE TABLE IF NOT EXISTS inbox_categories (
+      id          SERIAL PRIMARY KEY,
+      business_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name        TEXT NOT NULL,
+      emoji       TEXT,
+      -- sent the instant somebody picks it, if the owner wrote one
+      auto_reply  TEXT,
+      position    INTEGER NOT NULL DEFAULT 0,
+      active      BOOLEAN NOT NULL DEFAULT true,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );`);
+  await query(`CREATE INDEX IF NOT EXISTS inbox_categories_biz_idx ON inbox_categories(business_id, position, id);`);
+  /* Who handles what. NO rows for a category means "anyone on the inbox team"
+     — the fallback that stops a queue becoming a black hole. */
+  await query(`
+    CREATE TABLE IF NOT EXISTS inbox_category_members (
+      category_id INTEGER NOT NULL REFERENCES inbox_categories(id) ON DELETE CASCADE,
+      member_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (category_id, member_id)
+    );`);
+  // Which one this conversation is about, and whether we have already asked.
+  await query(`ALTER TABLE inbox_conversations ADD COLUMN IF NOT EXISTS category_id INTEGER REFERENCES inbox_categories(id) ON DELETE SET NULL;`);
+  await query(`ALTER TABLE inbox_conversations ADD COLUMN IF NOT EXISTS asked_at TIMESTAMPTZ;`);
+  // The switch, and the line above the buttons.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS inbox_menu BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS inbox_menu_intro TEXT;`);
   await query(`CREATE INDEX IF NOT EXISTS users_cert_active_idx ON users(cert_active) WHERE cert_active;`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_business_idx ON business_team(business_id);`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_member_idx ON business_team(member_id, status);`);

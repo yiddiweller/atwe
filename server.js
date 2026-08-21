@@ -3248,18 +3248,220 @@ async function migrateOldAssignments() {
 
    Offered right after an automatic reply, because that is the moment it is
    wanted, and never more than once while a request is already waiting. */
+/* ══════════════════════════════════════════════
+   "WHAT CAN WE HELP WITH?"  —  inbox categories
+   ──────────────────────────────────────────────
+   A shop with one person answering everything wants one queue. A company with
+   a returns desk and a refunds desk wants the message to reach the right desk.
+   So this is OFF unless an owner turns it on and writes their own options.
+
+   The rule that keeps it safe: a category with NOBODY assigned notifies the
+   whole inbox team. A queue that swallows messages because the one person on
+   it is away would be worse than having no categories at all.
+════════════════════════════════════════════════ */
+const INBOX_CAT_MAX = 8;          // a menu of fifteen is worse than no menu
+const INBOX_CAT_NAME_MAX = 40;
+async function inboxCategories(businessId, activeOnly) {
+  const { rows } = await db.query(
+    `SELECT c.*, COALESCE(json_agg(json_build_object('id', u.id, 'name', u.name, 'username', u.username)
+              ORDER BY u.name) FILTER (WHERE u.id IS NOT NULL), '[]') AS members
+       FROM inbox_categories c
+       LEFT JOIN inbox_category_members m ON m.category_id = c.id
+       LEFT JOIN users u ON u.id = m.member_id
+      WHERE c.business_id = $1 ${activeOnly ? 'AND c.active' : ''}
+      GROUP BY c.id ORDER BY c.position ASC, c.id ASC`, [businessId]);
+  return rows.map((c) => ({
+    id: c.id, name: c.name, emoji: c.emoji || null, autoReply: c.auto_reply || null,
+    position: c.position, active: c.active, members: c.members,
+  }));
+}
+/* Is the menu actually usable? Switched on is not enough — it also needs
+   something to show, and the business needs a team inbox in the first place. */
+async function inboxMenuFor(businessId) {
+  try {
+    const b = (await db.query('SELECT inbox_menu, inbox_menu_intro FROM users WHERE id = $1', [businessId])).rows[0];
+    if (!b || !b.inbox_menu) return null;
+    if (!(await hasTeamInbox(businessId))) return null;
+    const cats = await inboxCategories(businessId, true);
+    if (!cats.length) return null;
+    return { intro: b.inbox_menu_intro || 'What can we help with?', categories: cats };
+  } catch (e) { return null; }
+}
+/* Who to tell about a conversation in this category. Nobody assigned means
+   everybody who works the inbox — the fallback that stops a black hole. */
+async function inboxCategoryStaff(businessId, categoryId) {
+  const all = `SELECT $1::int AS id
+    UNION
+   SELECT t.member_id FROM business_team t
+    WHERE t.business_id = $1 AND t.status = 'active'
+      AND (t.role = 'admin' OR COALESCE((t.permissions->>'inbox')::boolean, false) = true)`;
+  try {
+    if (categoryId) {
+      const named = await db.query(
+        `SELECT m.member_id AS id FROM inbox_category_members m
+           JOIN inbox_categories c ON c.id = m.category_id
+          WHERE m.category_id = $1 AND c.business_id = $2`, [categoryId, businessId]);
+      if (named.rowCount) return named.rows.map((r) => r.id);
+    }
+    return (await db.query(all, [businessId])).rows.map((r) => r.id);
+  } catch (e) { return [businessId]; }
+}
+
+// ── Owner setup ──
+app.get('/api/inbox/categories/:businessId', auth.requireAuth, async (req, res) => {
+  const bid = routeId(req.params.businessId);
+  if (!Number.isInteger(bid)) return res.status(400).json({ error: 'Invalid business.' });
+  try {
+    if (!(await canActAs(req.user.id, bid, 'inbox'))) return res.status(403).json({ error: 'Not allowed.' });
+    const b = (await db.query('SELECT inbox_menu, inbox_menu_intro FROM users WHERE id = $1', [bid])).rows[0] || {};
+    res.json({
+      enabled: !!b.inbox_menu, intro: b.inbox_menu_intro || '',
+      categories: await inboxCategories(bid, false), max: INBOX_CAT_MAX,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load that.' }); }
+});
+app.put('/api/inbox/categories/:businessId', auth.requireAuth, async (req, res) => {
+  const bid = routeId(req.params.businessId);
+  if (!Number.isInteger(bid)) return res.status(400).json({ error: 'Invalid business.' });
+  try {
+    if (!(await canActAs(req.user.id, bid, 'inbox'))) return res.status(403).json({ error: 'Not allowed.' });
+    if ('enabled' in req.body || 'intro' in req.body) {
+      await db.query('UPDATE users SET inbox_menu = COALESCE($2, inbox_menu), inbox_menu_intro = COALESCE($3, inbox_menu_intro) WHERE id = $1',
+        [bid, 'enabled' in req.body ? !!req.body.enabled : null,
+         'intro' in req.body ? ((req.body.intro || '').toString().trim().slice(0, 120) || null) : null]);
+    }
+    if (Array.isArray(req.body.categories)) {
+      const cats = req.body.categories.slice(0, INBOX_CAT_MAX);
+      const keep = [];
+      for (let i = 0; i < cats.length; i++) {
+        const c = cats[i] || {};
+        const name = (c.name || '').toString().trim().slice(0, INBOX_CAT_NAME_MAX);
+        if (!name) continue;
+        const emoji = (c.emoji || '').toString().trim().slice(0, 8) || null;
+        const auto = (c.autoReply || '').toString().trim().slice(0, 500) || null;
+        let id = Number.isInteger(parseInt(c.id, 10)) ? parseInt(c.id, 10) : null;
+        if (id) {
+          const upd = await db.query(
+            `UPDATE inbox_categories SET name = $3, emoji = $4, auto_reply = $5, position = $6, active = true
+              WHERE id = $1 AND business_id = $2 RETURNING id`, [id, bid, name, emoji, auto, i]);
+          if (!upd.rowCount) id = null;
+        }
+        if (!id) {
+          id = (await db.query(
+            `INSERT INTO inbox_categories (business_id, name, emoji, auto_reply, position)
+             VALUES ($1,$2,$3,$4,$5) RETURNING id`, [bid, name, emoji, auto, i])).rows[0].id;
+        }
+        // Who handles it. An empty list is meaningful: it means anyone.
+        if (Array.isArray(c.memberIds)) {
+          await db.query('DELETE FROM inbox_category_members WHERE category_id = $1', [id]);
+          const ids = c.memberIds.map((n) => parseInt(n, 10)).filter(Number.isInteger).slice(0, 30);
+          if (ids.length) {
+            // Only people who genuinely work this inbox can be put on a desk.
+            await db.query(
+              `INSERT INTO inbox_category_members (category_id, member_id)
+               SELECT $1, x.id FROM unnest($2::int[]) AS x(id)
+                WHERE x.id = $3 OR EXISTS (SELECT 1 FROM business_team t
+                      WHERE t.business_id = $3 AND t.member_id = x.id AND t.status = 'active'
+                        AND (t.role = 'admin' OR COALESCE((t.permissions->>'inbox')::boolean, false) = true))
+               ON CONFLICT DO NOTHING`, [id, ids, bid]);
+          }
+        }
+        keep.push(id);
+      }
+      /* Removed ones are deactivated rather than deleted: conversations point
+         at them, and a customer's history should still say "Returns" long
+         after the owner reshuffles the menu. */
+      await db.query(
+        `UPDATE inbox_categories SET active = false WHERE business_id = $1 AND NOT (id = ANY($2::int[]))`,
+        [bid, keep.length ? keep : [0]]);
+    }
+    res.json({ ok: true, categories: await inboxCategories(bid, false) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save that.' }); }
+});
+
 async function offerHuman(businessId, customerId) {
   try {
     if (!(await hasTeamInbox(businessId))) return;           // no team = already a person
     const c = (await db.query(
-      `SELECT needs_human FROM inbox_conversations
+      `SELECT needs_human, asked_at FROM inbox_conversations
         WHERE business_id = $1 AND customer_id = $2 AND thread_id IS NULL`, [businessId, customerId])).rows[0];
     if (c && c.needs_human) return;                          // already asked; don't nag
     const b = (await db.query('SELECT business_hours, special_hours FROM users WHERE id = $1', [businessId])).rows[0];
     const open = b ? businessOpenNow(Array.isArray(b.business_hours) ? b.business_hours : null, b.special_hours) : null;
+    /* Two front doors on one message would be clumsy. When a business has a
+       menu, the menu IS the front door — it is offered separately, on the
+       first message, and "Something else" does the job this card used to. */
+    if (await inboxMenuFor(businessId)) return;
     await pushMetaCard(businessId, customerId, { t: 'askhuman', open: open === true });
   } catch (e) { /* the chat is fine without the offer */ }
 }
+
+/* "What can we help with?", asked once per conversation on the customer's
+   first message. Never a gate: they can ignore it entirely and type, and the
+   message lands in the inbox either way. */
+async function offerInboxMenu(businessId, customerId) {
+  try {
+    if (businessId === customerId) return;
+    const menu = await inboxMenuFor(businessId);
+    if (!menu) return;
+    // Claim the ask, so two messages sent at once cannot produce two menus.
+    const claim = await db.query(
+      `UPDATE inbox_conversations SET asked_at = now()
+        WHERE business_id = $1 AND customer_id = $2 AND thread_id IS NULL AND asked_at IS NULL
+        RETURNING id`, [businessId, customerId]);
+    if (!claim.rowCount) return;
+    const b = (await db.query('SELECT business_hours, special_hours FROM users WHERE id = $1', [businessId])).rows[0];
+    const open = b ? businessOpenNow(Array.isArray(b.business_hours) ? b.business_hours : null, b.special_hours) : null;
+    await pushMetaCard(businessId, customerId, {
+      t: 'inboxmenu', open: open === true, intro: menu.intro,
+      options: menu.categories.map((x) => ({ id: x.id, name: x.name, emoji: x.emoji })),
+    });
+  } catch (e) { /* the chat is fine without the offer */ }
+}
+
+/* The customer tapped one. Tags the conversation, sends the owner's instant
+   reply if there is one, and tells the people who handle it — or everyone, if
+   nobody is on that desk. */
+app.post('/api/atchat/inbox-category/:businessId', auth.requireAuth, rateLimit(20, 60000, 'inbox-cat'), async (req, res) => {
+  const bid = routeId(req.params.businessId);
+  if (!Number.isInteger(bid)) return res.status(400).json({ error: 'Invalid business.' });
+  const catId = parseInt(req.body.categoryId, 10);
+  try {
+    if (!(await hasTeamInbox(bid))) return res.status(400).json({ error: 'This business answers personally already.' });
+    if (!(await dmAllowed(bid, req.user.id))) return res.status(403).json({ error: 'Cannot message this business.' });
+    // "Something else" arrives with no id and behaves exactly like asking for a person.
+    let cat = null;
+    if (Number.isInteger(catId)) {
+      cat = (await db.query(
+        'SELECT * FROM inbox_categories WHERE id = $1 AND business_id = $2 AND active', [catId, bid])).rows[0];
+      if (!cat) return res.status(404).json({ error: 'That option is no longer available.' });
+    }
+    await inboxTouch(bid, req.user.id, null, 'customer');
+    const upd = await db.query(
+      `UPDATE inbox_conversations
+          SET category_id = $3, needs_human = true, human_at = now(), asked_at = COALESCE(asked_at, now()),
+              state = CASE WHEN state = 'solved' THEN 'open' ELSE state END
+        WHERE business_id = $1 AND customer_id = $2 AND thread_id IS NULL
+        RETURNING id, assigned_to`, [bid, req.user.id, cat ? cat.id : null]);
+    const conv = upd.rows[0];
+    const staff = await inboxCategoryStaff(bid, cat ? cat.id : null);
+    for (const pid of staff) {
+      if (conv && conv.assigned_to && pid !== conv.assigned_to) continue;   // assigned: only bother its owner
+      rtPush(pid, 'inbox', { type: 'needs-human', convId: conv ? conv.id : null, businessId: bid, categoryId: cat ? cat.id : null });
+      notify(pid, req.user.id, 'message', null);
+    }
+    const b = (await db.query('SELECT name, business_hours, special_hours FROM users WHERE id = $1', [bid])).rows[0];
+    const open = b ? businessOpenNow(Array.isArray(b.business_hours) ? b.business_hours : null, b.special_hours) : null;
+    // The owner's own words first, if they wrote any, then what happens next.
+    if (cat && cat.auto_reply) await deliverDM(bid, req.user.id, cat.auto_reply, null);
+    const who = cat ? `the ${cat.name.toLowerCase()} team` : 'the team';
+    const line = open === false
+      ? `Thanks — someone from ${who} will pick this up when we open. ${nextOpenLine(b)}`.trim()
+      : `Thanks — someone from ${who} is picking this up now.`;
+    await deliverDM(bid, req.user.id, line, null);
+    res.json({ ok: true, open: open === true, category: cat ? { id: cat.id, name: cat.name } : null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not pass that on.' }); }
+});
 
 /* The customer asked for a person. Puts them at the top of the queue, tells the
    staff who can answer, and — this is the part that matters — answers back
@@ -3342,6 +3544,9 @@ function mapInboxConv(r) {
     lastMessage: r.last_body || null,
     lastAt: r.last_msg_at,
     unread: Number(r.unread || 0),
+    // What the customer said it was about, kept even if the owner later
+    // reshuffles the menu — the history should still read true.
+    category: r.category_id ? { id: r.category_id, name: r.category_name, emoji: r.category_emoji || null } : null,
     openedAt: r.opened_at, solvedAt: r.solved_at,
   };
 }
@@ -3350,6 +3555,7 @@ const INBOX_CONV_SELECT = `
   SELECT c.*, u.name AS customer_name, u.username AS customer_username, u.avatar AS customer_avatar,
          u.verified AS customer_verified, u.account_type AS customer_type,
          a.name AS assignee_name, a.username AS assignee_username,
+         cat.name AS category_name, cat.emoji AS category_emoji,
          (SELECT m.body FROM at_messages m
            WHERE ((m.sender_id = c.customer_id AND m.recipient_id = c.business_id)
                OR (m.sender_id = c.business_id AND m.recipient_id = c.customer_id))
@@ -3362,7 +3568,8 @@ const INBOX_CONV_SELECT = `
              AND m.read_at IS NULL AND NOT m.deleted_all) AS unread
     FROM inbox_conversations c
     JOIN users u ON u.id = c.customer_id
-    LEFT JOIN users a ON a.id = c.assigned_to`;
+    LEFT JOIN users a ON a.id = c.assigned_to
+    LEFT JOIN inbox_categories cat ON cat.id = c.category_id`;
 
 /* ── Which businesses can this person work the inbox for? ──
    Their own business account if it has one on, plus any team they are on with
@@ -3410,6 +3617,14 @@ app.get('/api/inbox/:businessId', auth.requireAuth, async (req, res) => {
     if (state) { params.push(state); where += ` AND c.state = $${params.length}`; }
     else where += " AND c.state <> 'solved'";   // the default view is work still to do
     if (mine) { params.push(req.user.id); where += ` AND c.assigned_to = $${params.length}`; }
+    // Filter to one desk. "mine" here means my desks, not my assigned tickets.
+    const catId = parseInt(req.query.category, 10);
+    if (Number.isInteger(catId)) { params.push(catId); where += ` AND c.category_id = $${params.length}`; }
+    else if (req.query.category === 'none') where += ' AND c.category_id IS NULL';
+    else if (req.query.category === 'mine') {
+      params.push(req.user.id);
+      where += ` AND c.category_id IN (SELECT category_id FROM inbox_category_members WHERE member_id = $${params.length})`;
+    }
     const { rows } = await db.query(
       `${INBOX_CONV_SELECT} ${where}
         ORDER BY (c.needs_human AND c.state <> 'solved') DESC, c.last_msg_at DESC LIMIT 200`, params);
@@ -3429,8 +3644,53 @@ app.get('/api/inbox/:businessId', auth.requireAuth, async (req, res) => {
        SELECT u.id, u.name, u.username FROM business_team t JOIN users u ON u.id = t.member_id
         WHERE t.business_id = $1 AND t.status = 'active'
           AND (t.role = 'admin' OR COALESCE((t.permissions->>'inbox')::boolean, false) = true)`, [bid])).rows;
-    res.json({ conversations: rows.map(mapInboxConv), counts, team });
+    /* The desks, with how much is waiting on each — so a filter row can show
+       "Returns 3" rather than making somebody click to find out. Only counts
+       work still to do; a solved pile is not a queue. */
+    const cats = (await db.query(
+      `SELECT c.id, c.name, c.emoji,
+              count(v.id) FILTER (WHERE v.state <> 'solved')::int AS n
+         FROM inbox_categories c
+         LEFT JOIN inbox_conversations v ON v.category_id = c.id
+        WHERE c.business_id = $1 AND c.active
+        GROUP BY c.id ORDER BY c.position ASC, c.id ASC`, [bid])).rows;
+    const uncat = (await db.query(
+      `SELECT count(*)::int AS n FROM inbox_conversations
+        WHERE business_id = $1 AND category_id IS NULL AND state <> 'solved'`, [bid])).rows[0].n;
+    res.json({
+      conversations: rows.map(mapInboxConv), counts, team,
+      categories: cats.map((c) => ({ id: c.id, name: c.name, emoji: c.emoji || null, count: c.n })),
+      uncategorised: uncat,
+    });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the inbox.' }); }
+});
+
+/* Move a conversation to another desk. Customers guess, and a customer who
+   guessed wrong should not have to start again — so staff can put it right
+   without the customer doing anything. */
+app.patch('/api/inbox/:businessId/:convId/category', auth.requireAuth, async (req, res) => {
+  const bid = routeId(req.params.businessId), cid = routeId(req.params.convId);
+  if (!Number.isInteger(bid) || !Number.isInteger(cid)) return res.status(400).json({ error: 'Invalid request.' });
+  try {
+    if (!(await canWorkInbox(req.user.id, bid))) return res.status(403).json({ error: 'Not allowed.' });
+    const raw = req.body.categoryId;
+    let catId = null;
+    if (raw != null && raw !== '') {
+      catId = parseInt(raw, 10);
+      if (!Number.isInteger(catId)) return res.status(400).json({ error: 'Which desk?' });
+      const ok = await db.query('SELECT 1 FROM inbox_categories WHERE id = $1 AND business_id = $2', [catId, bid]);
+      if (!ok.rowCount) return res.status(404).json({ error: 'That desk no longer exists.' });
+    }
+    const { rows } = await db.query(
+      'UPDATE inbox_conversations SET category_id = $3 WHERE id = $1 AND business_id = $2 RETURNING id',
+      [cid, bid, catId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Conversation not found.' });
+    // Tell whoever handles the desk it just landed on.
+    for (const pid of await inboxCategoryStaff(bid, catId)) {
+      if (pid !== req.user.id) rtPush(pid, 'inbox', { type: 'moved', convId: cid, businessId: bid, categoryId: catId });
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not move that.' }); }
 });
 
 /* One conversation, read as the BUSINESS — the staff member is looking at the
@@ -7874,11 +8134,21 @@ app.post('/api/atchat/with/:id', auth.requireAuth, blockLimited, rateLimit(40, 6
       // skip the push/bell so the recipient's phone stays quiet.
       if (req.body.silent !== true) notify(other, req.user.id, 'message', null);
       maybeAutoReply(other, req.user.id, body).catch(() => {});
+      /* The menu is asked on the FIRST message, not off the back of an
+         automatic reply — a business that turns categories on but has no
+         greeting configured would otherwise never show one, and would
+         reasonably conclude the feature was broken. */
       // Keep the business's team inbox in step with the chat, rather than making
       // it a separate thing someone has to remember to update. A no-op unless
       // the recipient is a business running one.
       inboxTouch(other, req.user.id, thread, 'customer')
-        .then((c) => { if (c) rtPush(other, 'inbox', { type: 'inbound', convId: c.id }); })
+        .then((c) => {
+          if (c) rtPush(other, 'inbox', { type: 'inbound', convId: c.id });
+          /* AFTER the conversation exists, not before — the menu claims its
+             one-and-only ask by updating that row, and a claim against a row
+             that is not there yet would silently never show a menu at all. */
+          return offerInboxMenu(other, req.user.id);
+        })
         .catch(() => {});
       routeToBots({ senderId: req.user.id, text: body, groupId: null, userId: other }).catch(() => {});
     }
