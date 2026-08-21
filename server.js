@@ -1787,10 +1787,8 @@ app.post('/api/admin/demo', auth.requireAdmin, async (req, res) => {
 });
 
 // "Immerse" the calling account into the demo while demo mode is ON: auto-follow a varied
-// spread of ~40 demo people so its feed + stories fill up like an active, established user's
-// (the real app is follow-based — this makes the demo authentic on EVERY device/account, not
-// just the one that toggled demo mode). No-op when demo mode is off or the account is already
-// immersed. Reverses automatically on demo teardown (the follow rows cascade with the users).
+// spread of ~40 demo people so its feed + stories fill up like an active, established user's.
+// No-op when demo mode is off or already immersed. Reverses automatically on demo teardown.
 app.post('/api/demo/immerse', auth.requireAuth, async (req, res) => {
   if (!_demoMode) return res.json({ demo: false, followed: 0 });
   try {
@@ -8496,6 +8494,21 @@ function logServerError(route, err) {
      ON CONFLICT (route, message) DO UPDATE SET count = server_errors.count + 1, last_at = now(), stack = COALESCE(EXCLUDED.stack, server_errors.stack)`,
     [String(route || '').slice(0, 200), message, stack]).catch(() => {});
 }
+/* ─── Admin: the Complete Product Book (confidential PDF) ───
+   Served ONLY to authenticated admins — the book is internal, so it must never
+   live under public/ where anyone with the URL could fetch it. The file ships
+   in the repo at docs/, which deploys with the app. */
+app.get('/api/admin/product-book', auth.requireAdmin, (_req, res) => {
+  const file = path.join(__dirname, 'docs', 'ATWE-Complete-Product-Book.pdf');
+  res.sendFile(file, {
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="ATWE-Complete-Product-Book.pdf"',
+    },
+  }, (err) => {
+    if (err && !res.headersSent) res.status(404).json({ error: 'The Product Book is not on this deploy.' });
+  });
+});
 app.get('/api/admin/errors', auth.requireAdmin, async (req, res) => {
   try {
     const { rows } = await db.query(
@@ -18721,7 +18734,7 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
       // the client's seen-set drops the boundary post so it never duplicates.
       if (before && !isNaN(before.getTime())) { params.push(before.toISOString()); where += ` AND p.created_at <= $${params.length}`; }
       if (seenIds.length) { params.push(seenIds); where += ` AND p.id <> ALL($${params.length}::int[])`; }
-      orderBy = ` ORDER BY GREATEST(p.created_at, COALESCE((SELECT MAX(rp.created_at) FROM post_reposts rp WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))), p.created_at)) DESC LIMIT 60`;
+      orderBy = ` ORDER BY GREATEST(p.created_at, COALESCE((SELECT MAX(rp.created_at) FROM post_reposts rp WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))), p.created_at)) DESC LIMIT 24`;
     } else {
       // For You = engagement + recency, now PERSONALIZED to the viewer: a post is
       // boosted when it carries a hashtag they follow ($3), its author shares one of
@@ -18793,25 +18806,29 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
            + (CASE WHEN array_length($5::text[], 1) IS NOT NULL AND EXISTS(SELECT 1 FROM post_hashtags ph WHERE ph.post_id = p.id AND ph.tag = ANY($5::text[])) THEN $13::float ELSE 0 END)
            + (CASE WHEN array_length($7::int[], 1) IS NOT NULL AND p.user_id = ANY($7::int[]) THEN $12::float ELSE 0 END)
            - (CASE WHEN p.user_id IN (SELECT author_id FROM post_hides WHERE user_id = $1) THEN $14::float ELSE 0 END)
-         ) DESC, p.created_at DESC LIMIT 60`;
+         ) DESC, p.created_at DESC LIMIT 24`;
     }
     let { rows } = await db.query(
       POSTS_SELECT + where + orderBy,
       params
     );
-    // Refresh freshness (For You, first page): when the ranked + already-seen-
-    // suppressed query comes back sparse/empty because the viewer has recently seen
-    // everything, return a FRESH RANDOM mix of the full pool instead — so a
-    // pull-to-refresh always fills the screen AND changes every time (like a real
-    // feed), never a stale repeat and never an empty "Nothing here yet".
+    // Refresh fallback (For You, first page): when the ranked + already-seen-
+    // suppressed query comes back sparse because the viewer recently saw everything,
+    // fill the screen from the RECENT pool (bypassing the seen-filter) so it's never
+    // an empty "Nothing here yet". Ordered by created_at DESC (index-backed) — NOT
+    // `ORDER BY random()`, which forced a full-table scan + sort of every post and
+    // was the cause of multi-second Home loads on every reopen. `diversifyFeed`
+    // below still shuffles authors/topics so it doesn't read as a static list.
     if (!following && firstPage && rows.length < 10 && seenSuppressClause) {
       ({ rows } = await db.query(
-        POSTS_SELECT + where.replace(seenSuppressClause, '') + ' ORDER BY random() LIMIT 60',
+        POSTS_SELECT + where.replace(seenSuppressClause, '') + ' ORDER BY p.created_at DESC LIMIT 24',
         [req.user.id]
       ));
     }
     // A near-full page means there's almost certainly another page behind it.
-    const hasMore = rows.length >= 55;
+    // Smaller first page (24) = far less base64/per-row work → faster first paint;
+    // infinite scroll loads the rest on demand.
+    const hasMore = rows.length >= 22;
     let posts = rows.map(mapPost);
     // For You only: spread topics/authors out (diversity rerank) so one prolific
     // author or one hot hashtag can't dominate the feed, then hoist promoted posts.
@@ -38683,22 +38700,6 @@ app.get('/api/admin/growth', auth.requirePerm('growth'), async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
-});
-
-/* ─── Admin: the Complete Product Book (confidential PDF) ───
-   Served ONLY to authenticated admins — the book is internal, so it must never
-   live under public/ where anyone with the URL could fetch it. The file ships
-   in the repo at docs/, which deploys with the app. */
-app.get('/api/admin/product-book', auth.requireAdmin, (_req, res) => {
-  const file = path.join(__dirname, 'docs', 'ATWE-Complete-Product-Book.pdf');
-  res.sendFile(file, {
-    headers: {
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': 'inline; filename="ATWE-Complete-Product-Book.pdf"',
-    },
-  }, (err) => {
-    if (err && !res.headersSent) res.status(404).json({ error: 'The Product Book is not on this deploy.' });
-  });
 });
 
 /* ─── Admin: platform overview metrics ─── */
