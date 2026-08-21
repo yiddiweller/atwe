@@ -3691,6 +3691,12 @@ async function notifySelf(userId, type, productId) {
 const PUSH_VERBS = {
   certified: 'You are now Atwe Certified',
   review_invite: 'How did it go? Leave a review',
+  delivery_offer: 'offered to deliver your order',
+  delivery_approve_needed: 'needs your approval on a courier',
+  delivery_agreed: 'the courier is agreed — it is on its way',
+  delivery_picked_up: 'has picked up your order',
+  delivery_delivered: 'says your order has been delivered',
+  delivery_paid: 'you have been paid for that delivery',
   like: 'liked your post', reply: 'replied to your post', follow: 'followed you',
   message: 'sent you a message', call: 'called you', video_call: 'video-called you',
   chat_request: 'wants to chat with you', mention: 'mentioned you', quote: 'quoted your post',
@@ -6982,6 +6988,9 @@ async function flushCrmFollowUps() {
 }
 const CRM_FLUSH_MS = Math.max(5000, parseInt(process.env.CRM_FLUSH_MS, 10) || 5 * 60000);
 registerJob('crm_followups', 'CRM follow-up reminders', CRM_FLUSH_MS); setInterval(trackJob('crm_followups', flushCrmFollowUps), CRM_FLUSH_MS).unref?.();
+{ const _dvMs = Math.max(60000, parseInt(process.env.DELIVERY_FLUSH_MS, 10) || 600000);
+  registerJob('delivery_release', 'Delivery fees released to couriers', _dvMs);
+  setInterval(trackJob('delivery_release', flushDeliveryReleases), _dvMs).unref?.(); }
 
 // Rename a chat (WhatsApp-contact-style): YOUR private name for a person, shown
 // only to you in Beam (chat list + open thread). Empty clears it — back to their
@@ -34402,8 +34411,8 @@ function mapReview(r, viewerId, mediaKind) {
 
    Three kinds today — a bought order, a finished stay, a completed appointment
    — and adding a fourth (a delivery) is one more clause here and nowhere else. */
-const REVIEW_KINDS = new Set(['order', 'stay', 'appointment']);
-const REVIEW_KIND_LABEL = { order: 'Order', stay: 'Stay', appointment: 'Appointment' };
+const REVIEW_KINDS = new Set(['order', 'stay', 'appointment', 'delivery']);
+const REVIEW_KIND_LABEL = { order: 'Order', stay: 'Stay', appointment: 'Appointment', delivery: 'Delivery' };
 async function reviewableDealings(reviewerId, subjectId) {
   if (!reviewerId || !subjectId || reviewerId === subjectId) return [];
   try {
@@ -34433,6 +34442,12 @@ async function reviewableDealings(reviewerId, subjectId) {
       SELECT 'appointment', a.id, a.when_at, a.service, a.service_id, 'service'
         FROM appointments a
        WHERE a.customer_id = $1 AND a.business_id = $2 AND a.status = 'completed'
+      UNION ALL
+      -- somebody carried it across town and got paid for it: a dealing between
+      -- the courier and BOTH ends, so either may rate them
+      SELECT 'delivery', d.id, d.paid_at, d.what, NULL, NULL
+        FROM delivery_jobs d
+       WHERE d.courier_id = $2 AND d.status = 'paid' AND (d.buyer_id = $1 OR d.seller_id = $1)
       ORDER BY at DESC LIMIT 50`, [reviewerId, subjectId]);
     if (!rows.length) return [];
     // Drop the ones already reviewed — asking twice for the same thing is nagging.
@@ -34484,6 +34499,7 @@ async function ownsDealing(reviewerId, subjectId, kind, refId) {
     order: `SELECT 1 FROM orders WHERE id=$3 AND buyer_id=$1 AND seller_id=$2 AND status IN ('fulfilled','delivered','released')`,
     stay: `SELECT 1 FROM rental_bookings WHERE id=$3 AND guest_id=$1 AND host_id=$2 AND status='paid' AND end_date <= now()::date`,
     appointment: `SELECT 1 FROM appointments WHERE id=$3 AND customer_id=$1 AND business_id=$2 AND status='completed'`,
+    delivery: `SELECT 1 FROM delivery_jobs WHERE id=$3 AND courier_id=$2 AND status='paid' AND ($1 IN (buyer_id, seller_id))`,
   }[kind];
   try { return (await db.query(sql, [reviewerId, subjectId, refId])).rowCount > 0; } catch (e) { return false; }
 }
@@ -34660,6 +34676,460 @@ app.get('/api/browse', auth.requireAuth, async (req, res) => {
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load categories.' }); }
 });
+
+/* ══════════════════════════════════════════════
+   PEER DELIVERY  —  somebody nearby brings it over
+   ──────────────────────────────────────────────
+   The rule that shapes everything else: a courier is agreed by BOTH the seller
+   and the buyer, never by one of them. It is somebody else's parcel and
+   somebody else's address, so one party alone must not be able to hand it to a
+   stranger. Everything below is built so that rule cannot be worked around —
+   the state only moves to "agreed" when both flags are true, and the flags are
+   set by two different routes each of which checks who is calling.
+
+   The money is held the moment they agree and released only when the buyer
+   confirms it arrived: a courier is never asked to work on a promise, and a
+   buyer never pays for a parcel that never came.
+════════════════════════════════════════════════ */
+const DELIVERY_BASE_CENTS = 400;      // turning up at all
+const DELIVERY_PER_KM_CENTS = 80;     // and then how far it actually is
+const DELIVERY_MIN_CENTS = 400;
+const DELIVERY_MAX_CENTS = 5000;      // a hard ceiling, whatever anyone types
+/* Without a geocoder we cannot always measure between two addresses, and
+   pretending otherwise would put a made-up number in front of somebody about
+   to accept a price. So when there are no coordinates the poster picks a band,
+   and the band is used honestly — as a range, described as one. */
+const DELIVERY_BANDS = {
+  near:   { label: 'Under 2 km',  km: 1.5 },
+  local:  { label: '2 – 5 km',    km: 3.5 },
+  across: { label: '5 – 10 km',   km: 7.5 },
+  far:    { label: 'Over 10 km',  km: 14 },
+};
+function deliveryFee(km) {
+  const cents = DELIVERY_BASE_CENTS + Math.round((Number(km) || 0) * DELIVERY_PER_KM_CENTS);
+  return Math.max(DELIVERY_MIN_CENTS, Math.min(DELIVERY_MAX_CENTS, cents));
+}
+// Straight-line distance. Roads are longer, which is why the fee has a base on
+// top rather than pretending this is a route.
+function kmBetween(aLat, aLng, bLat, bLng) {
+  if ([aLat, aLng, bLat, bLng].some((v) => v == null || Number.isNaN(Number(v)))) return null;
+  const R = 6371, rad = (d) => (Number(d) * Math.PI) / 180;
+  const dLat = rad(bLat - aLat), dLng = rad(bLng - aLng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return Math.round(R * 2 * Math.asin(Math.min(1, Math.sqrt(h))) * 10) / 10;
+}
+/* A courier may name their own price, but only within sight of the suggestion:
+   an offer of 1p is a way to win a job and then not turn up, and an offer of
+   £200 is a way to catch somebody not reading. */
+function deliveryOfferAllowed(suggested, cents) {
+  const lo = Math.max(DELIVERY_MIN_CENTS, Math.floor(suggested * 0.6));
+  const hi = Math.min(DELIVERY_MAX_CENTS, Math.ceil(suggested * 2));
+  return cents >= lo && cents <= hi ? null : { lo, hi };
+}
+const DELIVERY_AUTO_RELEASE_DAYS = 3;
+function mapDeliveryJob(j, viewerId) {
+  const mine = { seller: j.seller_id === viewerId, buyer: j.buyer_id === viewerId, courier: j.courier_id === viewerId };
+  return {
+    id: j.id, orderId: j.order_id, status: j.status, what: j.what,
+    pickup: j.pickup_label, dropoff: j.dropoff_label,
+    distanceKm: j.distance_km == null ? null : Number(j.distance_km),
+    distanceBand: j.distance_band ? (DELIVERY_BANDS[j.distance_band] || {}).label || null : null,
+    suggestedCents: j.suggested_cents, feeCents: j.fee_cents, note: j.note || null,
+    // Shown plainly, because "waiting on the buyer" is the single most useful
+    // thing to know when a delivery is sitting still.
+    sellerOk: j.seller_ok, buyerOk: j.buyer_ok,
+    courier: j.courier_id ? {
+      id: j.courier_id, name: j.courier_name, username: j.courier_username,
+      avatar: mediaRef(j.courier_avatar, 'avatar', j.courier_id),
+      verified: !!j.courier_verified, certified: !!j.courier_certified,
+    } : null,
+    seller: { id: j.seller_id, name: j.seller_name, username: j.seller_username },
+    buyer: { id: j.buyer_id, name: j.buyer_name, username: j.buyer_username },
+    mine, iAm: mine.seller ? 'seller' : mine.buyer ? 'buyer' : mine.courier ? 'courier' : null,
+    agreedAt: j.agreed_at, pickedUpAt: j.picked_up_at, deliveredAt: j.delivered_at, paidAt: j.paid_at,
+    autoReleaseAt: j.auto_release_at, createdAt: j.created_at,
+    cancelledReason: j.cancelled_reason || null,
+  };
+}
+const DELIVERY_SELECT = `SELECT j.*,
+  s.name AS seller_name, s.username AS seller_username,
+  b.name AS buyer_name, b.username AS buyer_username,
+  c.name AS courier_name, c.username AS courier_username, c.avatar AS courier_avatar,
+  c.verified AS courier_verified, c.cert_active AS courier_certified
+  FROM delivery_jobs j
+  JOIN users s ON s.id = j.seller_id
+  JOIN users b ON b.id = j.buyer_id
+  LEFT JOIN users c ON c.id = j.courier_id`;
+
+/* Post a delivery. Either party to a paid order may ask for one — usually the
+   seller, since it is their parcel to send, but a buyer waiting on something
+   should not have to ask permission to arrange its collection. */
+app.post('/api/deliveries', auth.requireAuth, rateLimit(20, 60000, 'deliv-post'), async (req, res) => {
+  const orderId = parseInt(req.body.orderId, 10);
+  if (!Number.isInteger(orderId)) return res.status(400).json({ error: 'Which order is this for?' });
+  const band = DELIVERY_BANDS[req.body.band] ? req.body.band : null;
+  const note = (req.body.note || '').toString().trim().slice(0, 300) || null;
+  try {
+    const o = (await db.query(
+      `SELECT o.id, o.buyer_id, o.seller_id, o.status, o.ship_line1, o.ship_city, o.ship_postal,
+              (SELECT string_agg(oi.name, ', ') FROM order_items oi WHERE oi.order_id = o.id) AS what
+         FROM orders o WHERE o.id = $1`, [orderId])).rows[0];
+    if (!o) return res.status(404).json({ error: 'Order not found.' });
+    if (o.buyer_id !== req.user.id && o.seller_id !== req.user.id)
+      return res.status(403).json({ error: 'Only the buyer or the seller can arrange this.' });
+    // Paid, not yet delivered: there is nothing to fetch before the money is in
+    // and nothing to fetch after it has already arrived.
+    if (!['paid', 'escrow', 'fulfilled'].includes(o.status))
+      return res.status(400).json({ error: 'This order isn’t ready to be collected yet.' });
+    const live = await db.query(
+      `SELECT id FROM delivery_jobs WHERE order_id = $1 AND status NOT IN ('cancelled','paid')`, [orderId]);
+    if (live.rowCount) return res.status(409).json({ error: 'A delivery is already arranged for this order.', jobId: live.rows[0].id });
+
+    /* Measure it when we honestly can — both ends need coordinates — and
+       otherwise use the band the poster chose. Never invent a distance. */
+    const ends = (await db.query('SELECT id, lat, lng FROM users WHERE id = ANY($1::int[])', [[o.seller_id, o.buyer_id]])).rows;
+    const sell = ends.find((u) => u.id === o.seller_id) || {}, buy = ends.find((u) => u.id === o.buyer_id) || {};
+    let km = kmBetween(sell.lat, sell.lng, buy.lat, buy.lng);
+    if (km == null && !band) return res.status(400).json({ error: 'Roughly how far is it?', needBand: true });
+    if (km == null) km = DELIVERY_BANDS[band].km;
+    const suggested = deliveryFee(km);
+    const dropoff = [o.ship_line1, o.ship_city, o.ship_postal].filter(Boolean).join(', ') || null;
+    const { rows } = await db.query(
+      `INSERT INTO delivery_jobs (order_id, posted_by, seller_id, buyer_id, what, pickup_label, dropoff_label,
+                                  distance_km, distance_band, suggested_cents, note)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+      [orderId, req.user.id, o.seller_id, o.buyer_id, (o.what || 'An order').slice(0, 200),
+       null, dropoff, km, band, suggested, note]);
+    // Tell the other party, because it is their parcel or their address too.
+    notify(o.seller_id === req.user.id ? o.buyer_id : o.seller_id, req.user.id, 'delivery_posted', null, null, null, null, null, rows[0].id);
+    const j = (await db.query(`${DELIVERY_SELECT} WHERE j.id = $1`, [rows[0].id])).rows[0];
+    res.status(201).json({ job: mapDeliveryJob(j, req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post that delivery.' }); }
+});
+
+/* What a courier can pick up. Deliberately not "everything everywhere": your
+   own order is not a job you can take, and neither is one you are party to. */
+app.get('/api/deliveries/open', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `${DELIVERY_SELECT}
+        WHERE j.status = 'open' AND j.seller_id <> $1 AND j.buyer_id <> $1
+          AND NOT EXISTS (SELECT 1 FROM blocks bl WHERE (bl.blocker_id = $1 AND bl.blocked_id IN (j.seller_id, j.buyer_id))
+                                                     OR (bl.blocked_id = $1 AND bl.blocker_id IN (j.seller_id, j.buyer_id)))
+        ORDER BY j.created_at DESC LIMIT 50`, [req.user.id]);
+    const jobs = rows.map((j) => mapDeliveryJob(j, req.user.id));
+    // Which of these they have already offered on, so the list can say so.
+    const mineOffers = await db.query(
+      'SELECT job_id, fee_cents, status FROM delivery_offers WHERE courier_id = $1 AND job_id = ANY($2::int[])',
+      [req.user.id, jobs.map((j) => j.id)]);
+    const byJob = new Map(mineOffers.rows.map((o) => [o.job_id, o]));
+    res.json({ jobs: jobs.map((j) => Object.assign(j, { myOffer: byJob.get(j.id) || null })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load deliveries.' }); }
+});
+
+// Everything I am part of, in any role.
+app.get('/api/deliveries', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `${DELIVERY_SELECT} WHERE j.seller_id = $1 OR j.buyer_id = $1 OR j.courier_id = $1
+        ORDER BY j.created_at DESC LIMIT 60`, [req.user.id]);
+    res.json({ jobs: rows.map((j) => mapDeliveryJob(j, req.user.id)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load deliveries.' }); }
+});
+
+// One job, with its offers. Only people who have business with it may look.
+app.get('/api/deliveries/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const j = (await db.query(`${DELIVERY_SELECT} WHERE j.id = $1`, [id])).rows[0];
+    if (!j) return res.status(404).json({ error: 'Delivery not found.' });
+    const party = [j.seller_id, j.buyer_id, j.courier_id].includes(req.user.id);
+    // A courier who offered can see their own job while it is still open.
+    const offered = !party && j.status === 'open' &&
+      (await db.query('SELECT 1 FROM delivery_offers WHERE job_id = $1 AND courier_id = $2', [id, req.user.id])).rowCount > 0;
+    if (!party && !offered && j.status !== 'open') return res.status(404).json({ error: 'Delivery not found.' });
+    const job = mapDeliveryJob(j, req.user.id);
+    /* The offers, each with the courier's reputation attached — which is the
+       entire reason the last three phases exist. Deciding whether to hand
+       somebody a parcel is exactly the moment a number like that is for.
+       Only the two parties see the full list; a courier sees their own. */
+    const offers = (await db.query(
+      `SELECT o.*, u.name, u.username, u.avatar, u.verified, u.cert_active, u.created_at AS joined
+         FROM delivery_offers o JOIN users u ON u.id = o.courier_id
+        WHERE o.job_id = $1 ${party ? '' : 'AND o.courier_id = $2'}
+        ORDER BY o.created_at ASC`, party ? [id] : [id, req.user.id])).rows;
+    job.offers = await Promise.all(offers.map(async (o) => ({
+      id: o.id, feeCents: o.fee_cents, note: o.note || null, status: o.status, createdAt: o.created_at,
+      courier: {
+        id: o.courier_id, name: o.name, username: o.username, avatar: mediaRef(o.avatar, 'avatar', o.courier_id),
+        verified: !!o.verified, certified: !!o.cert_active, since: o.joined,
+        reputation: party ? await userTrustScore(o.courier_id) : null,
+      },
+    })));
+    res.json({ job });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load that delivery.' }); }
+});
+
+// Offer to do it.
+app.post('/api/deliveries/:id/offers', auth.requireAuth, rateLimit(30, 60000, 'deliv-offer'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const cents = Math.round(Number(req.body.feeCents));
+  const note = (req.body.note || '').toString().trim().slice(0, 200) || null;
+  try {
+    const j = (await db.query('SELECT * FROM delivery_jobs WHERE id = $1', [id])).rows[0];
+    if (!j) return res.status(404).json({ error: 'Delivery not found.' });
+    if (j.status !== 'open') return res.status(409).json({ error: 'This delivery has already been arranged.' });
+    if ([j.seller_id, j.buyer_id].includes(req.user.id))
+      return res.status(400).json({ error: 'You can’t deliver your own order.' });
+    if (!(await requireHandle(req, res))) return;
+    if (await blockedEither(req.user.id, j.seller_id) || await blockedEither(req.user.id, j.buyer_id))
+      return res.status(403).json({ error: 'You can’t take this one.' });
+    if (!Number.isInteger(cents)) return res.status(400).json({ error: 'What would you do it for?' });
+    const band = deliveryOfferAllowed(j.suggested_cents, cents);
+    if (band) return res.status(400).json({
+      error: `Offers on this one need to be between $${(band.lo / 100).toFixed(2)} and $${(band.hi / 100).toFixed(2)}.`, lo: band.lo, hi: band.hi });
+    // Changing your mind about the price is normal; two offers from one person is not.
+    const { rows } = await db.query(
+      `INSERT INTO delivery_offers (job_id, courier_id, fee_cents, note) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (job_id, courier_id) DO UPDATE SET fee_cents = $3, note = $4, status = 'offered', created_at = now()
+       RETURNING id`, [id, req.user.id, cents, note]);
+    for (const who of [j.seller_id, j.buyer_id]) notify(who, req.user.id, 'delivery_offer', null, null, null, null, null, id);
+    res.status(201).json({ ok: true, id: rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send that offer.' }); }
+});
+
+// Take it back.
+app.delete('/api/deliveries/:id/offers', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    await db.query(`UPDATE delivery_offers SET status = 'withdrawn' WHERE job_id = $1 AND courier_id = $2 AND status = 'offered'`, [id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not withdraw.' }); }
+});
+
+/* ── The approval, which is the whole point ──
+   Seller and buyer each approve, separately, through this one route. The route
+   works out which of the two is calling and sets only THAT flag — it is not
+   possible to approve on somebody else's behalf, whatever is in the request.
+   The job only becomes agreed when both are true, and the money is held at
+   that same instant, inside one transaction with the state change, so a
+   courier can never be told "you have it" without the fee already secured. */
+app.post('/api/deliveries/:id/approve', auth.requireAuth, blockImpersonation, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const offerId = parseInt(req.body.offerId, 10);
+  if (!Number.isInteger(offerId)) return res.status(400).json({ error: 'Which offer?' });
+  try {
+    const j = (await db.query('SELECT * FROM delivery_jobs WHERE id = $1', [id])).rows[0];
+    if (!j) return res.status(404).json({ error: 'Delivery not found.' });
+    if (j.status !== 'open') return res.status(409).json({ error: 'This delivery has already been arranged.' });
+    const isSeller = j.seller_id === req.user.id, isBuyer = j.buyer_id === req.user.id;
+    if (!isSeller && !isBuyer) return res.status(403).json({ error: 'Only the buyer and the seller decide this.' });
+    const off = (await db.query(
+      `SELECT * FROM delivery_offers WHERE id = $1 AND job_id = $2 AND status = 'offered'`, [offerId, id])).rows[0];
+    if (!off) return res.status(404).json({ error: 'That offer is no longer available.' });
+    /* If the other side already approved a DIFFERENT courier, this is a change
+       of mind, not a second approval — start again from this one so the two
+       flags can never end up pointing at two different people. */
+    const switching = j.fee_cents != null && j.courier_id !== off.courier_id;
+    const sellerOk = switching ? isSeller : (j.seller_ok || isSeller);
+    const buyerOk  = switching ? isBuyer  : (j.buyer_ok  || isBuyer);
+
+    if (!(sellerOk && buyerOk)) {
+      await db.query(
+        'UPDATE delivery_jobs SET courier_id = $2, fee_cents = $3, seller_ok = $4, buyer_ok = $5 WHERE id = $1',
+        [id, off.courier_id, off.fee_cents, sellerOk, buyerOk]);
+      const waitingOn = sellerOk ? j.buyer_id : j.seller_id;
+      notify(waitingOn, req.user.id, 'delivery_approve_needed', null, null, null, null, null, id);
+      return res.json({ ok: true, agreed: false, waitingOn: sellerOk ? 'buyer' : 'seller' });
+    }
+
+    /* Both have said yes. Hold the fee from whoever posted the job, and flip
+       the state, in ONE transaction — so a crash between the two can never
+       leave a courier working for money that was never taken, or money taken
+       for a job that never started. */
+    const payer = j.posted_by;
+    const v = await walletVelocityCheck(payer, off.fee_cents);
+    if (!v.ok) return res.status(walletVelocityStatus(v)).json(walletVelocityError(v));
+    const client = await db.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const bal = await client.query('SELECT balance_cents FROM users WHERE id = $1 FOR UPDATE', [payer]);
+      if (!bal.rows[0] || bal.rows[0].balance_cents < off.fee_cents) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          error: payer === req.user.id
+            ? 'Top up your balance to cover the delivery fee, then approve again.'
+            : 'The person who arranged this needs to top up before it can go ahead.',
+          insufficientBalance: true });
+      }
+      await client.query('UPDATE users SET balance_cents = balance_cents - $2 WHERE id = $1', [payer, off.fee_cents]);
+      await client.query(
+        `INSERT INTO wallet_tx (user_id, peer_id, kind, delta_cents, balance_after, note)
+         VALUES ($1,$2,'delivery_hold',$3,(SELECT balance_cents FROM users WHERE id = $1),$4)`,
+        [payer, off.courier_id, -off.fee_cents, 'Delivery fee held']);
+      const upd = await client.query(
+        `UPDATE delivery_jobs SET status = 'agreed', courier_id = $2, fee_cents = $3,
+                seller_ok = true, buyer_ok = true, held_cents = $3, agreed_at = now()
+          WHERE id = $1 AND status = 'open' RETURNING id`, [id, off.courier_id, off.fee_cents]);
+      if (!upd.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'This delivery has already been arranged.' }); }
+      await client.query(`UPDATE delivery_offers SET status = 'accepted' WHERE id = $1`, [offerId]);
+      await client.query(`UPDATE delivery_offers SET status = 'declined' WHERE job_id = $1 AND id <> $2 AND status = 'offered'`, [id, offerId]);
+      await client.query('COMMIT');
+    } catch (e) { await client.query('ROLLBACK'); throw e; }
+    finally { client.release(); }
+
+    notify(off.courier_id, req.user.id, 'delivery_agreed', null, null, null, null, null, id);
+    notify(isSeller ? j.buyer_id : j.seller_id, req.user.id, 'delivery_agreed', null, null, null, null, null, id);
+    rtPush(payer, 'wallet', { type: 'delivery_hold' });
+    res.json({ ok: true, agreed: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not approve that.' }); }
+});
+
+// Say no. Clears this side's approval and puts the job back out to everyone.
+app.post('/api/deliveries/:id/decline', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const offerId = parseInt(req.body.offerId, 10);
+  try {
+    const j = (await db.query('SELECT * FROM delivery_jobs WHERE id = $1', [id])).rows[0];
+    if (!j) return res.status(404).json({ error: 'Delivery not found.' });
+    if (![j.seller_id, j.buyer_id].includes(req.user.id))
+      return res.status(403).json({ error: 'Only the buyer and the seller decide this.' });
+    if (j.status !== 'open') return res.status(409).json({ error: 'This delivery has already been arranged.' });
+    if (Number.isInteger(offerId)) await db.query(`UPDATE delivery_offers SET status = 'declined' WHERE id = $1 AND job_id = $2`, [offerId, id]);
+    // Whoever it was pointing at, it is not pointing at them any more.
+    await db.query('UPDATE delivery_jobs SET courier_id = NULL, fee_cents = NULL, seller_ok = false, buyer_ok = false WHERE id = $1', [id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not decline.' }); }
+});
+
+// Courier: I have it.
+app.post('/api/deliveries/:id/picked-up', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rows } = await db.query(
+      `UPDATE delivery_jobs SET status = 'picked_up', picked_up_at = now()
+        WHERE id = $1 AND courier_id = $2 AND status = 'agreed' RETURNING seller_id, buyer_id`, [id, req.user.id]);
+    if (!rows[0]) return res.status(409).json({ error: 'That isn’t something you can do right now.' });
+    for (const who of [rows[0].seller_id, rows[0].buyer_id]) notify(who, req.user.id, 'delivery_picked_up', null, null, null, null, null, id);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+
+/* Courier: I have dropped it off. This does NOT release the money — saying you
+   delivered something is not the same as it having arrived. It starts a clock:
+   the buyer confirms, or after a few days it releases anyway, because a silent
+   buyer must not be able to keep a courier's fee for ever. */
+app.post('/api/deliveries/:id/delivered', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rows } = await db.query(
+      `UPDATE delivery_jobs SET status = 'delivered', delivered_at = now(),
+              auto_release_at = now() + make_interval(days => $3)
+        WHERE id = $1 AND courier_id = $2 AND status IN ('agreed','picked_up')
+        RETURNING seller_id, buyer_id`, [id, req.user.id, DELIVERY_AUTO_RELEASE_DAYS]);
+    if (!rows[0]) return res.status(409).json({ error: 'That isn’t something you can do right now.' });
+    notify(rows[0].buyer_id, req.user.id, 'delivery_delivered', null, null, null, null, null, id);
+    notify(rows[0].seller_id, req.user.id, 'delivery_delivered', null, null, null, null, null, id);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+
+/* Pay the courier. Claim-first: the status flip and the credit happen in one
+   transaction guarded on the current state, so two taps — or a tap racing the
+   auto-release — pay exactly once. */
+async function settleDelivery(jobId, by) {
+  const client = await db.getPool().connect();
+  try {
+    await client.query('BEGIN');
+    const j = (await client.query(
+      `UPDATE delivery_jobs SET status = 'paid', paid_at = now()
+        WHERE id = $1 AND status = 'delivered' RETURNING *`, [jobId])).rows[0];
+    if (!j) { await client.query('ROLLBACK'); return null; }
+    await client.query('UPDATE users SET balance_cents = balance_cents + $2 WHERE id = $1', [j.courier_id, j.held_cents]);
+    await client.query(
+      `INSERT INTO wallet_tx (user_id, peer_id, kind, delta_cents, balance_after, note)
+       VALUES ($1,$2,'delivery_earned',$3,(SELECT balance_cents FROM users WHERE id = $1),$4)`,
+      [j.courier_id, j.buyer_id, j.held_cents, 'Delivery completed']);
+    await client.query('COMMIT');
+    notify(j.courier_id, by || j.buyer_id, 'delivery_paid', null, null, null, null, null, j.id);
+    rtPush(j.courier_id, 'wallet', { type: 'delivery_paid' });
+    return j;
+  } catch (e) { await client.query('ROLLBACK'); throw e; }
+  finally { client.release(); }
+}
+// Buyer: it arrived.
+app.post('/api/deliveries/:id/confirm', auth.requireAuth, blockImpersonation, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const j = (await db.query('SELECT buyer_id, status FROM delivery_jobs WHERE id = $1', [id])).rows[0];
+    if (!j) return res.status(404).json({ error: 'Delivery not found.' });
+    if (j.buyer_id !== req.user.id) return res.status(403).json({ error: 'Only the person receiving it can confirm.' });
+    const done = await settleDelivery(id, req.user.id);
+    if (!done) return res.status(409).json({ error: 'That isn’t something you can do right now.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not confirm.' }); }
+});
+
+/* Call it off. Before a courier is agreed anybody involved may; afterwards the
+   held money has to go back, so it is refunded in the same transaction as the
+   cancellation. Once it is picked up it is too late to simply cancel — the
+   parcel is in somebody's hands. */
+app.post('/api/deliveries/:id/cancel', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const why = (req.body.reason || '').toString().trim().slice(0, 200) || null;
+  try {
+    const j = (await db.query('SELECT * FROM delivery_jobs WHERE id = $1', [id])).rows[0];
+    if (!j) return res.status(404).json({ error: 'Delivery not found.' });
+    const party = [j.seller_id, j.buyer_id, j.courier_id].includes(req.user.id);
+    if (!party) return res.status(403).json({ error: 'Not yours to cancel.' });
+    if (['paid', 'cancelled'].includes(j.status)) return res.status(409).json({ error: 'This is already finished.' });
+    if (j.status === 'picked_up' || j.status === 'delivered')
+      return res.status(409).json({ error: 'It is already on its way — sort it out between you, or open a dispute.' });
+    const client = await db.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const upd = await client.query(
+        `UPDATE delivery_jobs SET status = 'cancelled', cancelled_reason = $2
+          WHERE id = $1 AND status IN ('open','agreed') RETURNING held_cents, posted_by`, [id, why]);
+      if (!upd.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'This is already finished.' }); }
+      const held = upd.rows[0].held_cents;
+      if (held > 0) {
+        await client.query('UPDATE users SET balance_cents = balance_cents + $2 WHERE id = $1', [upd.rows[0].posted_by, held]);
+        await client.query(
+          `INSERT INTO wallet_tx (user_id, peer_id, kind, delta_cents, balance_after, note)
+           VALUES ($1,$2,'delivery_refund',$3,(SELECT balance_cents FROM users WHERE id = $1),$4)`,
+          [upd.rows[0].posted_by, j.courier_id, held, 'Delivery cancelled']);
+      }
+      await client.query('COMMIT');
+    } catch (e) { await client.query('ROLLBACK'); throw e; }
+    finally { client.release(); }
+    for (const who of [j.seller_id, j.buyer_id, j.courier_id]) {
+      if (who && who !== req.user.id) notify(who, req.user.id, 'delivery_cancelled', null, null, null, null, null, id);
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel.' }); }
+});
+
+/* A silent buyer must not be able to hold a courier's fee for ever. Same shape
+   as the escrow flusher: claim, then pay, guarded on state so it cannot pay twice. */
+async function flushDeliveryReleases() {
+  try {
+    const { rows } = await db.query(
+      `SELECT id FROM delivery_jobs WHERE status = 'delivered' AND auto_release_at IS NOT NULL AND auto_release_at <= now() LIMIT 50`);
+    let n = 0;
+    for (const r of rows) { if (await settleDelivery(r.id, null)) n++; }
+    return n;
+  } catch (e) { console.error('flushDeliveryReleases', e.message); return 0; }
+}
 
 /* ── Recently viewed ──
    Recorded fire-and-forget on the way into a listing, a service or a profile,
@@ -34854,6 +35324,12 @@ const SUB_RATINGS = {
     { key: 'communication', label: 'Communication',   icon: 'speech' },
     { key: 'value',         label: 'Value',           icon: 'tag' },
   ],
+  // What is worth judging about somebody who carried a parcel across town.
+  delivery: [
+    { key: 'punctuality',   label: 'Speed',           icon: 'clock' },
+    { key: 'care',          label: 'Care taken',      icon: 'gem' },
+    { key: 'communication', label: 'Communication',   icon: 'speech' },
+  ],
 };
 // Every category any kind uses, for validating and for labelling an aggregate.
 const SUB_RATING_META = Object.values(SUB_RATINGS).flat()
@@ -34863,7 +35339,7 @@ const SUB_RATING_META = Object.values(SUB_RATINGS).flat()
    in, so the summary row and a single review's chips could disagree — which
    reads as carelessness even when every number is right. Roughly: what the
    thing was like, then how it was handled, then what it cost. */
-const SUB_RATING_ORDER = ['cleanliness', 'accuracy', 'quality', 'checkin', 'punctuality',
+const SUB_RATING_ORDER = ['cleanliness', 'accuracy', 'quality', 'care', 'checkin', 'punctuality',
   'delivery', 'communication', 'location', 'value'];
 const subRatingRank = (k) => { const i = SUB_RATING_ORDER.indexOf(k); return i < 0 ? 99 : i; };
 function cleanSubRatings(raw, kind) {
@@ -35282,6 +35758,9 @@ app.get('/api/reviews/pending', auth.requireAuth, async (req, res) => {
       UNION ALL
       SELECT 'appointment', a.id, a.business_id, a.when_at, a.service, a.service_id, 'service'
         FROM appointments a WHERE a.customer_id = $1 AND a.status = 'completed'
+      UNION ALL
+      SELECT 'delivery', d.id, d.courier_id, d.paid_at, d.what, NULL, NULL
+        FROM delivery_jobs d WHERE d.status = 'paid' AND (d.buyer_id = $1 OR d.seller_id = $1)
       ORDER BY at DESC LIMIT 60`, [req.user.id]);
     if (!rows.length) return res.json({ pending: [] });
     const done = await db.query(
