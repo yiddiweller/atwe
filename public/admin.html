@@ -2493,6 +2493,29 @@ function renderSite(){
       <div id="pmList" style="margin-top:12px;"></div>
     </div>
     <div class="panel">
+      <h3>Legal details <span class="muted">· who Atwe legally is</span></h3>
+      <div class="sub">Your Terms and Privacy Policy are written, but they don't yet say which company stands behind them. Fill these in and both pages update straight away — no deploy. Every field is optional: anything you leave blank simply doesn't appear.</div>
+      <div id="legalWarn" class="sub" style="margin-top:8px;"></div>
+      <div style="display:grid;gap:8px;margin-top:12px;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input class="in" id="lgEntity" maxlength="120" placeholder="Registered company name (e.g. Atwe Ltd)" style="flex:1;min-width:220px;margin:0;"/>
+          <input class="in" id="lgReg" maxlength="60" placeholder="Company number" style="width:190px;margin:0;"/>
+        </div>
+        <input class="in" id="lgAddress" maxlength="300" placeholder="Registered address, as it appears on the register" style="margin:0;"/>
+        <input class="in" id="lgJuris" maxlength="120" placeholder="Governing law and courts (e.g. England and Wales)" style="margin:0;"/>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input class="in" id="lgEmail" maxlength="120" placeholder="Contact email for Terms" style="flex:1;min-width:200px;margin:0;"/>
+          <input class="in" id="lgPrivEmail" maxlength="120" placeholder="Contact email for Privacy" style="flex:1;min-width:200px;margin:0;"/>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="act accent" onclick="saveLegalEntity()">Save</button>
+          <a class="act" href="/terms.html" target="_blank" rel="noopener">View Terms</a>
+          <a class="act" href="/privacy.html" target="_blank" rel="noopener">View Privacy</a>
+        </div>
+      </div>
+      <div class="sub" style="margin-top:10px;">A solicitor should confirm the governing law and that the wording suits how you actually operate. Atwe can hold the facts; it can't choose them for you.</div>
+    </div>
+    <div class="panel">
       <h3>Platform fee <span class="muted">· your marketplace take-rate</span></h3>
       <div class="sub">A share of each completed sale, taken from the <b>seller's</b> proceeds when they're paid — never added on top of what the buyer sees, so a listed price stays the price. Atwe starts at <b>1%</b>; set <b>0</b> to take nothing. Whatever you save here is what applies from that moment on.</div>
       <div id="feeStats" class="sub" style="margin-top:8px;"></div>
@@ -2528,6 +2551,7 @@ function renderSite(){
   loadChangelog();
   loadBlockedDomains();
   loadPlatformFee();
+  loadLegalEntity();
   loadPromos();
 }
 // Atwe-funded promo codes. Distinct from a seller's own coupon: Atwe absorbs it.
@@ -2557,6 +2581,34 @@ async function createPromo(){
 }
 async function togglePromo(id, active){
   try { await api('PATCH', '/api/admin/promos/' + id, { active }); loadPromos(); }
+  catch (e){ notify(e.message); }
+}
+// The company behind the Terms and Privacy Policy. Missing details aren't a
+// cosmetic gap — they're the part a dispute actually turns on — so say so.
+async function loadLegalEntity(){
+  try {
+    const { legal } = await api('GET', '/api/admin/legal-entity');
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+    set('lgEntity', legal.entity); set('lgReg', legal.regNumber); set('lgAddress', legal.address);
+    set('lgJuris', legal.jurisdiction); set('lgEmail', legal.contactEmail); set('lgPrivEmail', legal.privacyEmail);
+    const missing = [];
+    if (!legal.entity) missing.push('company name');
+    if (!legal.address) missing.push('registered address');
+    if (!legal.jurisdiction) missing.push('governing law');
+    if (!legal.contactEmail) missing.push('contact email');
+    const w = document.getElementById('legalWarn'); if (!w) return;
+    w.innerHTML = missing.length
+      ? '<b style="color:var(--danger,#FF0033);">Still missing:</b> ' + missing.join(', ') + '.'
+      : '<b style="color:var(--ok,#88FF00);">Complete.</b> Both pages name your company.';
+  } catch (e){ const w = document.getElementById('legalWarn'); if (w) w.textContent = e.message; }
+}
+async function saveLegalEntity(){
+  const val = id => (document.getElementById(id) || {}).value || '';
+  const legal = {
+    entity: val('lgEntity').trim(), regNumber: val('lgReg').trim(), address: val('lgAddress').trim(),
+    jurisdiction: val('lgJuris').trim(), contactEmail: val('lgEmail').trim(), privacyEmail: val('lgPrivEmail').trim(),
+  };
+  try { await api('PUT', '/api/admin/legal-entity', { legal }); notify('Saved. Terms and Privacy updated.'); loadLegalEntity(); }
   catch (e){ notify(e.message); }
 }
 // Your marketplace take-rate. Shown next to what it would have earned, so the

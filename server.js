@@ -23,6 +23,8 @@ const apple = require('./apple');
 const demo = require('./demo');
 const reservedSeed = require('./reserved-seed');
 const FEATURE_CONTROLS = require('./feature-controls-data');
+const { HELP_ARTICLES } = require('./help-content');
+const MODERATION_SEED = require('./moderation-seed');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -689,6 +691,26 @@ async function chargePlatformFee(sellerId, orderId, grossCents) {
 // wallet top-up — they cash out to their bank from there), then take the fee.
 // Called only from the Stripe webhook, and only when recordOrderPaid actually
 // flipped the order pending -> paid, so a replayed event can never pay twice.
+// Fill an EMPTY help centre with the starter articles. Only ever runs when
+// there are none at all: the moment the owner writes, edits or deletes one,
+// their help centre is theirs and a deploy must never write over it.
+async function seedHelpArticles() {
+  try {
+    const { rows } = await db.query('SELECT COUNT(*)::int AS n FROM help_articles');
+    if (rows[0].n > 0) return 0;
+    let n = 0;
+    for (let i = 0; i < HELP_ARTICLES.length; i++) {
+      const a = HELP_ARTICLES[i];
+      const r = await db.query(
+        `INSERT INTO help_articles (slug, title, body, category, published, position)
+         VALUES ($1,$2,$3,$4,true,$5) ON CONFLICT (slug) DO NOTHING`,
+        [a.slug, a.title, a.body, a.category, i]);
+      n += r.rowCount;
+    }
+    if (n) console.log(`📘  Help centre seeded with ${n} starter article(s).`);
+    return n;
+  } catch (e) { console.error('seedHelpArticles', e.message); return 0; }
+}
 async function settleCardOrderToSeller(orderId) {
   try {
     const o = (await db.query('SELECT seller_id, total_cents FROM orders WHERE id = $1', [orderId])).rows[0];
@@ -1309,6 +1331,85 @@ function sendWellKnown(res, file) {
 }
 app.get('/.well-known/apple-app-site-association', (_req, res) => sendWellKnown(res, 'apple-app-site-association'));
 app.get('/.well-known/assetlinks.json', (_req, res) => sendWellKnown(res, 'assetlinks.json'));
+
+/* ═══════════════════════════════════════════════
+   LEGAL IDENTITY  —  who Atwe legally IS
+   ───────────────────────────────────────────────
+   Terms and a Privacy Policy that never name the company behind them, where it
+   is registered, whose law applies or how to write to it are not much use to
+   anyone — least of all in a dispute. Those are facts only the owner knows, so
+   they live in settings and are rendered into both pages rather than being
+   edited into the HTML by a developer.
+
+   Every field is optional and every one degrades: a blank field simply drops
+   its line, and with nothing filled in at all the pages read exactly as they
+   did before. Nothing ever renders as an empty bracket or a "TBC".
+═══════════════════════════════════════════════ */
+const LEGAL_KEY = 'legal_entity';
+let _legal = { entity: '', regNumber: '', address: '', jurisdiction: '', contactEmail: '', privacyEmail: '' };
+function normalizeLegal(v) {
+  const src = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+  const str = (k, max) => String(src[k] == null ? '' : src[k]).trim().slice(0, max);
+  const mail = (k) => { const e = str(k, 120).toLowerCase(); return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e) ? e : ''; };
+  return {
+    entity: str('entity', 120),
+    regNumber: str('regNumber', 60),
+    address: str('address', 300),
+    jurisdiction: str('jurisdiction', 120),
+    contactEmail: mail('contactEmail'),
+    privacyEmail: mail('privacyEmail'),
+  };
+}
+// Fill the placeholders in terms.html / privacy.html. The files are read fresh
+// on a cache miss and the result is cached per page, cleared whenever the
+// settings change — so a save shows up immediately without a redeploy.
+const LEGAL_PAGES = { '/terms.html': 'terms.html', '/privacy.html': 'privacy.html' };
+let _legalCache = {};
+function legalWhoHtml() {
+  const L = _legal;
+  if (!L.entity) return '';
+  const bits = [];
+  bits.push(`Atwe is operated by <strong>${escapeHtml(L.entity)}</strong>`
+    + (L.regNumber ? ` (registered number ${escapeHtml(L.regNumber)})` : '') + '.');
+  if (L.address) bits.push(`Registered address: ${escapeHtml(L.address)}.`);
+  return `  <div class="card"><p style="margin:0;">${bits.join(' ')}</p></div>\n`;
+}
+function legalLawHtml() {
+  const L = _legal;
+  if (!L.jurisdiction) return '';
+  const j = escapeHtml(L.jurisdiction);
+  return `  <h2>Governing law</h2>\n`
+    + `  <p>These Terms are governed by the laws of <strong>${j}</strong>, and any dispute arising out of them `
+    + `is subject to the exclusive jurisdiction of the courts of ${j}.</p>\n`;
+}
+function renderLegalPage(file, which) {
+  if (_legalCache[file]) return _legalCache[file];
+  let html;
+  try { html = require('fs').readFileSync(path.join(__dirname, 'public', file), 'utf8'); }
+  catch { return null; }
+  const email = which === 'privacy'
+    ? (_legal.privacyEmail || _legal.contactEmail || 'privacy@atwe.com')
+    : (_legal.contactEmail || 'support@atwe.com');
+  const post = (_legal.entity && _legal.address)
+    ? `<br/>Or by post: ${escapeHtml(_legal.entity)}, ${escapeHtml(_legal.address)}.`
+    : '';
+  html = html
+    .replace('<!--ATWE_LEGAL_WHO-->', legalWhoHtml())
+    .replace('<!--ATWE_LEGAL_LAW-->', legalLawHtml())
+    .replace('<!--ATWE_LEGAL_EMAIL-->', escapeHtml(email))
+    .replace('<!--ATWE_LEGAL_POST-->', post);
+  _legalCache[file] = html;
+  return html;
+}
+for (const [route, file] of Object.entries(LEGAL_PAGES)) {
+  const which = file.startsWith('privacy') ? 'privacy' : 'terms';
+  app.get(route, (_req, res, next) => {
+    const html = renderLegalPage(file, which);
+    if (html == null) return next();
+    res.set('Cache-Control', 'no-cache, must-revalidate');
+    res.type('html').send(html);
+  });
+}
 
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders(res, filePath) {
@@ -20653,6 +20754,23 @@ app.post('/api/admin/waitlists/:id/invite', auth.requirePerm('growth'), async (r
    replies, likes and moderation all work normally, with no special-case feed
    plumbing to go wrong. */
 const ATWE_OFFICIAL_USERNAME = (process.env.ATWE_OFFICIAL_USERNAME || 'atwe').toLowerCase();
+// Make sure the official @atwe account exists, so Atwe can post as itself from
+// the first day. Idempotent, and silent when it is already there.
+async function ensureOfficialAccount() {
+  try {
+    const have = (await db.query('SELECT id FROM users WHERE lower(username) = $1', [ATWE_OFFICIAL_USERNAME])).rows[0];
+    if (have) return false;
+    const hash = await auth.hashPassword(_vcrypto.randomBytes(48).toString('hex'));
+    const email = `no-reply+${ATWE_OFFICIAL_USERNAME}@atwe.internal`;
+    await db.query(
+      `INSERT INTO users (name, email, password_hash, username, account_type, verified, email_verified, headline)
+       VALUES ('Atwe', $1, $2, $3, 'business', true, true, 'Product news and tips from Atwe')
+       ON CONFLICT DO NOTHING`, [email, hash, ATWE_OFFICIAL_USERNAME]);
+    await db.query('DELETE FROM reserved_usernames WHERE lower(username) = $1', [ATWE_OFFICIAL_USERNAME]).catch(() => {});
+    console.log(`✅  Official @${ATWE_OFFICIAL_USERNAME} account created.`);
+    return true;
+  } catch (e) { console.error('ensureOfficialAccount', e.message); return false; }
+}
 app.get('/api/admin/official-account', auth.requireAdmin, async (_req, res) => {
   try {
     const u = (await db.query('SELECT id, name, username FROM users WHERE lower(username) = $1', [ATWE_OFFICIAL_USERNAME])).rows[0];
@@ -37478,6 +37596,19 @@ app.get('/api/admin/platform-fee', auth.requirePerm('revenue'), async (_req, res
     res.json({ fee: _platformFee, last30: { grossCents: Number(rows[0].gross), orders: rows[0].orders, feeEarnedCents: Number(earned) } });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the fee.' }); }
 });
+app.get('/api/admin/legal-entity', auth.requireAdmin, (_req, res) => {
+  res.json({ legal: _legal });
+});
+app.put('/api/admin/legal-entity', auth.requireAdmin, async (req, res) => {
+  const next = normalizeLegal(req.body.legal);
+  try {
+    await db.setSetting(LEGAL_KEY, next);
+    _legal = next;
+    _legalCache = {};                 // both pages re-render on the next request
+    adminAudit(req, 'legal.update', 'settings', null, next);
+    res.json({ ok: true, legal: _legal });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the legal details.' }); }
+});
 app.put('/api/admin/platform-fee', auth.requireAdmin, async (req, res) => {
   const next = normalizeFee(req.body.fee);
   try {
@@ -40336,10 +40467,15 @@ db.init()
   .then(() => { if (db.isConfigured()) return db.getSetting(DEMO_KEY).then((v) => { _demoMode = !!v; }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(RANKING_KEY).then((v) => { _rankingWeights = normalizeRankingWeights(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(FLAGS_KEY).then((v) => { _featureFlags = normalizeFeatureFlags(v); }).catch(() => {}); })
-  .then(() => { if (db.isConfigured()) return db.getSetting(MODLISTS_KEY).then((v) => applyModLists(v)).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return db.getSetting(MODLISTS_KEY)
+    .then((v) => applyModLists(v || { terms: MODERATION_SEED.BLOCK_TERMS, domains: MODERATION_SEED.BLOCK_DOMAINS }))
+    .catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(CONTROLS_KEY).then((v) => { _featureControls = normalizeControls(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return loadBlockedDomains().catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(FEE_KEY).then((v) => { if (v) _platformFee = normalizeFee(v); }).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return db.getSetting(LEGAL_KEY).then((v) => { _legal = normalizeLegal(v); _legalCache = {}; }).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return seedHelpArticles().catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return ensureOfficialAccount().catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(TAXONOMY_KEY).then((v) => { _taxonomy = normalizeTaxonomy(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return backfillSkillCanonicals().catch(() => {}); })
   .then(() => { if (db.isConfigured()) return loadIpBlocks().catch(() => {}); })
