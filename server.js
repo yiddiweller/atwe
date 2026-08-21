@@ -2677,6 +2677,7 @@ const MEDIA_KINDS = {
   'grp-media':  { table: 'at_group_messages', col: 'media'  },
   'grp-meta-media': { table: 'at_group_messages', col: 'meta', jsonKey: 'media' },
   'grp-meta-img':   { table: 'at_group_messages', col: 'meta', jsonKey: 'image' },
+  'review':     { table: 'business_reviews',  col: 'media', array: true },
   'avatar':     { table: 'users',             col: 'avatar' },
   'banner':     { table: 'users',             col: 'banner' },
   'prod-video': { table: 'products',          col: 'video'  },
@@ -3667,6 +3668,7 @@ async function notifySelf(userId, type, productId) {
 // Short server-side verb map for push bodies (mirrors the client's notif copy).
 const PUSH_VERBS = {
   certified: 'You are now Atwe Certified',
+  review_invite: 'How did it go? Leave a review',
   like: 'liked your post', reply: 'replied to your post', follow: 'followed you',
   message: 'sent you a message', call: 'called you', video_call: 'video-called you',
   chat_request: 'wants to chat with you', mention: 'mentioned you', quote: 'quoted your post',
@@ -33285,6 +33287,13 @@ app.post('/api/orders/:id/label/buy', auth.requireAuth, blockImpersonation, asyn
 // acting user, so it notifies the buyer attributed to the seller (an informational
 // "your order was delivered", mirroring how other system-triggered notifs in this app
 // attribute to the other party in the relationship rather than passing a null actor).
+/* The ask. Fired the moment a dealing is genuinely finished — not before, so
+   nobody is asked to rate a parcel that has not arrived. Fire-and-forget: a
+   missed invitation must never fail the thing that just completed. */
+function inviteReview(reviewerId, subjectId, kind, refId) {
+  if (!reviewerId || !subjectId || reviewerId === subjectId) return;
+  notify(reviewerId, subjectId, 'review_invite', null, null, null, null, null, refId);
+}
 async function markOrderDelivered(id, o, notifyUserId, notifyActorId) {
   const setStatus = o.status === 'paid' ? ", status = 'fulfilled'" : '';
   await db.query(`UPDATE orders SET delivered_at = now()${setStatus} WHERE id = $1`, [id]);
@@ -33292,6 +33301,8 @@ async function markOrderDelivered(id, o, notifyUserId, notifyActorId) {
   rtPush(o.buyer_id, 'order', { id, delivered: true });
   rtPush(o.seller_id, 'order', { id, delivered: true });
   sendOrderDeliveredEmail(id, notifyUserId).catch(() => {});
+  // It has arrived, so now is exactly when the buyer has something to say.
+  inviteReview(o.buyer_id, o.seller_id, 'order', id);
 }
 app.post('/api/orders/:id/deliver', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
@@ -34222,11 +34233,72 @@ app.get('/api/shop/analytics', auth.requireAuth, async (req, res) => {
 ═══════════════════════════════════════════════ */
 function mapReview(r, viewerId) {
   return {
-    id: r.id, rating: r.rating, body: r.body || '', response: r.response || null, createdAt: r.created_at,
+    id: r.id, rating: r.rating, body: r.body || '', response: r.response || null,
+    respondedAt: r.responded_at || null, createdAt: r.created_at,
+    // Media rides by URL like everything else heavy — never inlined as base64.
+    media: Array.isArray(r.media) ? r.media.map((m, i) => mediaRef(m, 'review', r.id, i)) : [],
+    // Where it came from, so a reader can weigh it: a real dealing, or not.
+    verified: !!r.ref_id,
+    forWhat: r.for_what || (r.kind ? REVIEW_KIND_LABEL[r.kind] : null),
+    kind: r.kind || null,
     mine: r.reviewer_id === viewerId,
-    reviewer: { id: r.reviewer_id, name: r.reviewer_name, username: r.reviewer_username, avatar: r.reviewer_avatar || null, verified: !!r.reviewer_verified },
+    reviewer: { id: r.reviewer_id, name: r.reviewer_name, username: r.reviewer_username, avatar: mediaRef(r.reviewer_avatar, 'avatar', r.reviewer_id), verified: !!r.reviewer_verified, certified: !!r.reviewer_certified },
   };
 }
+/* ── What you are allowed to review, and why ──
+   A review carries weight when the reader can see it came from somebody who
+   actually dealt with you. This returns every finished dealing between two
+   people that has not been reviewed yet, so the app can ask for a review at
+   the right moment and label the ones that are real.
+
+   Three kinds today — a bought order, a finished stay, a completed appointment
+   — and adding a fourth (a delivery) is one more clause here and nowhere else. */
+const REVIEW_KINDS = new Set(['order', 'stay', 'appointment']);
+const REVIEW_KIND_LABEL = { order: 'Order', stay: 'Stay', appointment: 'Appointment' };
+async function reviewableDealings(reviewerId, subjectId) {
+  if (!reviewerId || !subjectId || reviewerId === subjectId) return [];
+  try {
+    const { rows } = await db.query(`
+      -- something they bought from this seller
+      SELECT 'order' AS kind, o.id AS ref_id, o.created_at AS at,
+             (SELECT string_agg(oi.name, ', ') FROM order_items oi WHERE oi.order_id = o.id) AS what
+        FROM orders o
+       WHERE o.buyer_id = $1 AND o.seller_id = $2
+         AND o.status IN ('fulfilled','delivered','released')
+      UNION ALL
+      -- a stay that has actually happened
+      SELECT 'stay', b.id, b.created_at, p.name
+        FROM rental_bookings b LEFT JOIN products p ON p.id = b.product_id
+       WHERE b.guest_id = $1 AND b.host_id = $2 AND b.status = 'paid' AND b.end_date <= now()::date
+      UNION ALL
+      -- work that was seen through to the end
+      SELECT 'appointment', a.id, a.when_at, a.service
+        FROM appointments a
+       WHERE a.customer_id = $1 AND a.business_id = $2 AND a.status = 'completed'
+      ORDER BY at DESC LIMIT 50`, [reviewerId, subjectId]);
+    if (!rows.length) return [];
+    // Drop the ones already reviewed — asking twice for the same thing is nagging.
+    const done = await db.query(
+      'SELECT kind, ref_id FROM business_reviews WHERE reviewer_id = $1 AND business_id = $2 AND ref_id IS NOT NULL',
+      [reviewerId, subjectId]);
+    const seen = new Set(done.rows.map((r) => r.kind + ':' + r.ref_id));
+    return rows
+      .filter((r) => !seen.has(r.kind + ':' + r.ref_id))
+      .map((r) => ({ kind: r.kind, refId: r.ref_id, at: r.at, what: r.what || REVIEW_KIND_LABEL[r.kind] }));
+  } catch (e) { console.error('reviewableDealings', e.message); return []; }
+}
+// Is THIS particular dealing one the reviewer may write about? Checked on write,
+// so a hand-made request cannot claim a dealing that never happened.
+async function ownsDealing(reviewerId, subjectId, kind, refId) {
+  if (!REVIEW_KINDS.has(kind) || !Number.isInteger(refId)) return false;
+  const sql = {
+    order: `SELECT 1 FROM orders WHERE id=$3 AND buyer_id=$1 AND seller_id=$2 AND status IN ('fulfilled','delivered','released')`,
+    stay: `SELECT 1 FROM rental_bookings WHERE id=$3 AND guest_id=$1 AND host_id=$2 AND status='paid' AND end_date <= now()::date`,
+    appointment: `SELECT 1 FROM appointments WHERE id=$3 AND customer_id=$1 AND business_id=$2 AND status='completed'`,
+  }[kind];
+  try { return (await db.query(sql, [reviewerId, subjectId, refId])).rowCount > 0; } catch (e) { return false; }
+}
+
 async function businessReviewSummary(businessId) {
   const r = await db.query('SELECT COUNT(*)::int AS count, COALESCE(AVG(rating), 0)::numeric(3,2) AS avg FROM business_reviews WHERE business_id = $1', [businessId]);
   return { count: r.rows[0].count || 0, average: Number(r.rows[0].avg) || 0 };
@@ -34315,8 +34387,8 @@ async function userTrustScore(userId) {
         -- every rating they have received, from either side of a deal
         (SELECT COUNT(*) FROM product_reviews r JOIN products p ON p.id = r.product_id WHERE p.business_id = $1)::int AS pr_c,
         (SELECT COALESCE(AVG(r.rating),0) FROM product_reviews r JOIN products p ON p.id = r.product_id WHERE p.business_id = $1)::float AS pr_a,
-        (SELECT COUNT(*) FROM business_reviews WHERE business_id = $1)::int AS br_c,
-        (SELECT COALESCE(AVG(rating),0) FROM business_reviews WHERE business_id = $1)::float AS br_a,
+        (SELECT COUNT(*) FROM business_reviews WHERE business_id = $1 AND ref_id IS NOT NULL)::int AS br_c,
+        (SELECT COALESCE(AVG(rating),0) FROM business_reviews WHERE business_id = $1 AND ref_id IS NOT NULL)::float AS br_a,
         (SELECT COUNT(*) FROM buyer_reviews WHERE subject_id = $1)::int AS byr_c,
         (SELECT COALESCE(AVG(rating),0) FROM buyer_reviews WHERE subject_id = $1)::float AS byr_a
       FROM users u WHERE u.id = $1`, [userId]);
@@ -34458,36 +34530,144 @@ app.post('/api/business/:id/reviews', auth.requireAuth, rateLimit(20, 60000, 're
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) return res.status(400).json({ error: 'Pick a rating from 1 to 5 stars.' });
   const body = (req.body.body || '').trim().slice(0, 2000);
   try {
-    if (id === req.user.id) return res.status(400).json({ error: 'You can’t review your own business.' });
-    const b = await db.query('SELECT account_type FROM users WHERE id = $1', [id]);
-    if (!b.rows[0]) return res.status(404).json({ error: 'Business not found.' });
-    if (b.rows[0].account_type !== 'business') return res.status(400).json({ error: 'Only business accounts can be reviewed.' });
-    if (await blockedEither(req.user.id, id)) return res.status(403).json({ error: 'You can’t review this business.' });
-    // A new review (not an edit) resets any existing business response.
-    await db.query(
-      `INSERT INTO business_reviews (business_id, reviewer_id, rating, body) VALUES ($1,$2,$3,$4)
-       ON CONFLICT (business_id, reviewer_id) DO UPDATE SET rating = $3, body = $4, response = NULL, created_at = now()`,
-      [id, req.user.id, rating, body]
-    );
+    if (id === req.user.id) return res.status(400).json({ error: 'You can’t review yourself.' });
+    const b = await db.query('SELECT username FROM users WHERE id = $1 AND NOT COALESCE(deactivated,false)', [id]);
+    // A private seller or a host takes payment the same as a shop does, so they
+    // are reviewable the same way — the old business-accounts-only rule left
+    // every host and every personal seller with no reviews at all.
+    if (!b.rows[0] || !b.rows[0].username) return res.status(404).json({ error: 'Account not found.' });
+    if (await blockedEither(req.user.id, id)) return res.status(403).json({ error: 'You can’t review this account.' });
+
+    /* A review tied to a real dealing is the one that carries weight. The
+       dealing is re-checked here rather than trusted from the request, so a
+       hand-made call cannot claim a purchase that never happened. Without one
+       the review still stands — a walk-in customer should be able to say their
+       piece — but it is marked unverified and does not move the reputation. */
+    const kind = REVIEW_KINDS.has(req.body.kind) ? req.body.kind : null;
+    const refId = Number.isInteger(parseInt(req.body.refId, 10)) ? parseInt(req.body.refId, 10) : null;
+    const verified = kind && refId ? await ownsDealing(req.user.id, id, kind, refId) : false;
+    if (kind && refId && !verified) return res.status(403).json({ error: 'We couldn’t find that dealing on your account.' });
+    // Editing a review re-sends the photos it was served, which are our own
+    // media URLs by then — resolve them back before validating, or an edit
+    // would silently drop every picture the reviewer already added.
+    await resolveMediaRefs(req.body);
+    const media = cleanReviewMedia(req.body.media);
+    if (media === undefined) return res.status(400).json({ error: 'Those photos couldn’t be attached. Try smaller ones.' });
+
+    if (verified) {
+      // One review per dealing — booking the same host twice is two things to review.
+      await db.query(
+        `INSERT INTO business_reviews (business_id, reviewer_id, rating, body, media, kind, ref_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)
+         ON CONFLICT (kind, ref_id, reviewer_id) WHERE ref_id IS NOT NULL
+         DO UPDATE SET rating = $3, body = $4, media = $5, response = NULL, responded_at = NULL, created_at = now()`,
+        [id, req.user.id, rating, body, media, kind, refId]);
+    } else {
+      // A general review stays one per reviewer, so nobody can shout twice.
+      await db.query(
+        `INSERT INTO business_reviews (business_id, reviewer_id, rating, body, media)
+         VALUES ($1,$2,$3,$4,$5)
+         ON CONFLICT (business_id, reviewer_id) WHERE ref_id IS NULL
+         DO UPDATE SET rating = $3, body = $4, media = $5, response = NULL, responded_at = NULL, created_at = now()`,
+        [id, req.user.id, rating, body, media]);
+    }
     notify(id, req.user.id, 'review');
-    res.json({ ok: true });
+    res.json({ ok: true, verified });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save your review.' }); }
 });
 // Reviews for a business (public) + summary + my own review.
 app.get('/api/business/:id/reviews', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid business id.' });
+  // Newest first by default; a reader looking for problems wants the low ones,
+  // and somebody sizing up a seller wants the ones other people found useful.
+  const SORTS = {
+    recent: 'r.created_at DESC',
+    high: 'r.rating DESC, r.created_at DESC',
+    low: 'r.rating ASC, r.created_at DESC',
+  };
+  const order = SORTS[req.query.sort] || SORTS.recent;
+  const star = [1, 2, 3, 4, 5].includes(parseInt(req.query.star, 10)) ? parseInt(req.query.star, 10) : null;
   try {
+    const params = [id, req.user.id];
+    let filter = '';
+    if (star) { params.push(star); filter = ` AND r.rating = $${params.length}`; }
+    if (req.query.verified === 'true') filter += ' AND r.ref_id IS NOT NULL';
     const { rows } = await db.query(
-      `SELECT r.id, r.rating, r.body, r.response, r.created_at, r.reviewer_id,
-              u.name AS reviewer_name, u.username AS reviewer_username, u.avatar AS reviewer_avatar, u.verified AS reviewer_verified
+      `SELECT r.id, r.rating, r.body, r.response, r.responded_at, r.created_at, r.reviewer_id, r.media, r.kind, r.ref_id,
+              u.name AS reviewer_name, u.username AS reviewer_username, u.avatar AS reviewer_avatar,
+              u.verified AS reviewer_verified, u.cert_active AS reviewer_certified,
+              CASE r.kind
+                WHEN 'order' THEN (SELECT string_agg(oi.name, ', ') FROM order_items oi WHERE oi.order_id = r.ref_id)
+                WHEN 'stay' THEN (SELECT p.name FROM rental_bookings b LEFT JOIN products p ON p.id = b.product_id WHERE b.id = r.ref_id)
+                WHEN 'appointment' THEN (SELECT a.service FROM appointments a WHERE a.id = r.ref_id)
+              END AS for_what
        FROM business_reviews r JOIN users u ON u.id = r.reviewer_id
-       WHERE r.business_id = $1 ORDER BY (r.reviewer_id = $2) DESC, r.created_at DESC LIMIT 200`,
-      [id, req.user.id]
-    );
+       WHERE r.business_id = $1${filter}
+       ORDER BY (r.reviewer_id = $2) DESC, ${order} LIMIT 200`, params);
+    /* The star breakdown every serious review page has: not just "4.6 from 38"
+       but how those 38 actually split, so one furious review among many happy
+       ones reads as what it is. Computed over ALL of them, never the filtered
+       view — a breakdown that changes when you filter by it is nonsense. */
+    const dist = await db.query(
+      `SELECT rating, COUNT(*)::int AS n, COUNT(*) FILTER (WHERE ref_id IS NOT NULL)::int AS verified
+         FROM business_reviews WHERE business_id = $1 GROUP BY rating`, [id]);
+    const breakdown = [5, 4, 3, 2, 1].map((n) => ({ stars: n, count: (dist.rows.find((d) => d.rating === n) || {}).n || 0 }));
+    const total = breakdown.reduce((a, b) => a + b.count, 0);
     const summary = await businessReviewSummary(id);
-    res.json({ reviews: rows.map((r) => mapReview(r, req.user.id)), summary, mine: rows.find((r) => r.reviewer_id === req.user.id) ? mapReview(rows.find((r) => r.reviewer_id === req.user.id), req.user.id) : null });
+    const mineRow = rows.find((r) => r.reviewer_id === req.user.id);
+    res.json({
+      reviews: rows.map((r) => mapReview(r, req.user.id)),
+      summary,
+      breakdown: breakdown.map((b) => ({ ...b, pct: total ? Math.round((b.count / total) * 100) : 0 })),
+      verifiedCount: dist.rows.reduce((a, d) => a + d.verified, 0),
+      mine: mineRow ? mapReview(mineRow, req.user.id) : null,
+      // What this viewer could still write about — the app asks at the right moment.
+      canReview: await reviewableDealings(req.user.id, id),
+    });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load reviews.' }); }
+});
+
+/* Everything still waiting on a review from this member, across every kind of
+   dealing and every person they dealt with. This is what makes "when you finish
+   with somebody, you get asked" true rather than aspirational. */
+app.get('/api/reviews/pending', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT 'order' AS kind, o.id AS ref_id, o.seller_id AS subject_id, o.created_at AS at,
+             (SELECT string_agg(oi.name, ', ') FROM order_items oi WHERE oi.order_id = o.id) AS what
+        FROM orders o WHERE o.buyer_id = $1 AND o.status IN ('fulfilled','delivered','released')
+      UNION ALL
+      SELECT 'stay', b.id, b.host_id, b.created_at, p.name
+        FROM rental_bookings b LEFT JOIN products p ON p.id = b.product_id
+       WHERE b.guest_id = $1 AND b.status = 'paid' AND b.end_date <= now()::date
+      UNION ALL
+      SELECT 'appointment', a.id, a.business_id, a.when_at, a.service
+        FROM appointments a WHERE a.customer_id = $1 AND a.status = 'completed'
+      ORDER BY at DESC LIMIT 60`, [req.user.id]);
+    if (!rows.length) return res.json({ pending: [] });
+    const done = await db.query(
+      'SELECT kind, ref_id FROM business_reviews WHERE reviewer_id = $1 AND ref_id IS NOT NULL', [req.user.id]);
+    const seen = new Set(done.rows.map((r) => r.kind + ':' + r.ref_id));
+    const open = rows.filter((r) => !seen.has(r.kind + ':' + r.ref_id)).slice(0, 20);
+    if (!open.length) return res.json({ pending: [] });
+    const who = await db.query(
+      `SELECT id, name, username, avatar, account_type, verified, cert_active FROM users
+        WHERE id = ANY($1::int[]) AND username IS NOT NULL AND NOT COALESCE(deactivated,false)`,
+      [[...new Set(open.map((r) => r.subject_id))]]);
+    const byId = new Map(who.rows.map((u) => [u.id, u]));
+    res.json({
+      pending: open.filter((r) => byId.has(r.subject_id)).map((r) => {
+        const u = byId.get(r.subject_id);
+        return {
+          kind: r.kind, refId: r.ref_id, at: r.at, what: r.what || REVIEW_KIND_LABEL[r.kind],
+          kindLabel: REVIEW_KIND_LABEL[r.kind],
+          subject: { id: u.id, name: u.name, username: u.username, avatar: mediaRef(u.avatar, 'avatar', u.id),
+            accountType: u.account_type, verified: !!u.verified, certified: !!u.cert_active },
+        };
+      }),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your reviews.' }); }
 });
 // Business responds to a review (owner only).
 app.post('/api/business/reviews/:id/respond', auth.requireAuth, async (req, res) => {
@@ -34498,7 +34678,7 @@ app.post('/api/business/reviews/:id/respond', auth.requireAuth, async (req, res)
     const r = await db.query('SELECT business_id, reviewer_id FROM business_reviews WHERE id = $1', [id]);
     if (!r.rows[0]) return res.status(404).json({ error: 'Review not found.' });
     if (!(await canActAs(req.user.id, r.rows[0].business_id, 'reviews'))) return res.status(403).json({ error: 'You don’t have permission to respond for this business.' });
-    await db.query('UPDATE business_reviews SET response = $1 WHERE id = $2', [response || null, id]);
+    await db.query('UPDATE business_reviews SET response = $1, responded_at = CASE WHEN $1::text IS NULL THEN NULL ELSE now() END WHERE id = $2', [response || null, id]);
     if (response) notify(r.rows[0].reviewer_id, r.rows[0].business_id, 'review_reply');
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save your response.' }); }
@@ -35142,7 +35322,11 @@ app.patch('/api/appointments/:id', auth.requireAuth, blockImpersonation, async (
     if (!isBiz && !isCust) return res.status(403).json({ error: 'Not allowed.' });
     if ((status === 'confirmed' || status === 'declined') && !isBiz) return res.status(403).json({ error: 'Only the business can confirm or decline.' });
     if (status === 'completed' && !isBiz) return res.status(403).json({ error: 'Only the business can mark it completed.' });
-    await db.query('UPDATE appointments SET status = $1 WHERE id = $2', [status, id]);
+    await db.query(
+      'UPDATE appointments SET status = $1, completed_at = CASE WHEN $1 = \'completed\' THEN now() ELSE completed_at END WHERE id = $2',
+      [status, id]);
+    // The work is done, so the customer now has something worth saying.
+    if (status === 'completed') inviteReview(a.rows[0].customer_id, a.rows[0].business_id, 'appointment', id);
     // Settle any held deposit: completed → release to the business; declined/cancelled → refund the customer.
     if (a.rows[0].deposit_status === 'held') {
       if (status === 'completed') await settleApptDeposit(id, 'business').catch(() => {});
