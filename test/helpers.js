@@ -66,15 +66,24 @@ async function login(user) {
   return token;
 }
 
-function waitForHealth(timeoutMs = 20000) {
+/* Answering the port and being ready to serve are two different things: on a
+   fresh database the schema takes seconds to build, and until it does the
+   server correctly says "still setting up". Waiting only for the port made
+   this harness race the boot, which shows up as tests that fail on a new
+   database and pass on a warm one — the worst kind. Health reports "starting"
+   until the schema is built, so wait for that. */
+function waitForHealth(timeoutMs = 60000) {
   const deadline = Date.now() + timeoutMs;
   return new Promise((resolve, reject) => {
     (async function poll() {
       try {
         const res = await fetch(BASE + '/api/health');
-        if (res.ok) return resolve(true);
+        if (res.ok) {
+          const body = await res.json().catch(() => ({}));
+          if (body.db !== 'starting') return resolve(true);
+        }
       } catch { /* not up yet */ }
-      if (Date.now() > deadline) return reject(new Error('server did not become healthy'));
+      if (Date.now() > deadline) return reject(new Error('server did not become ready'));
       setTimeout(poll, 250);
     })();
   });

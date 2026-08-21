@@ -5056,6 +5056,30 @@ async function initSchema() {
       UNIQUE (service_id, reviewer_id)
     );`);
   await query(`CREATE INDEX IF NOT EXISTS service_reviews_svc_idx ON service_reviews(service_id, created_at DESC);`);
+
+  /* ── The trust surface: who somebody is, and what people actually said ──
+     Modelled on what a person genuinely needs in order to decide about a
+     stranger. Three parts, and none of them is decoration.
+
+     1. FACTS ABOUT THE PERSON. Not a paragraph of prose — a handful of plain,
+        scannable facts: what they do, where they are, what they speak, what
+        they always do for customers. A wall of bio text is skimmed; five
+        labelled lines are read.
+     2. IDENTITY. Separate from the verified badge, which is about being
+        notable. This one is about being who you say you are, and it is
+        deliberately honest about what it does NOT prove.
+     3. RATINGS THAT SAY WHY. One star tells you a review was bad; six tell
+        you it was late but well made, which is the thing the next person
+        needs. */
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS about_facts JSONB NOT NULL DEFAULT '{}'::jsonb;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS id_verified_at TIMESTAMPTZ;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS id_verify_method TEXT;`);
+  /* Sub-ratings ride ON the review rather than in their own table: they are
+     never read without it, they die with it, and a JSONB map means adding a
+     category later is a line of config instead of a migration. */
+  await query(`ALTER TABLE business_reviews ADD COLUMN IF NOT EXISTS sub_ratings JSONB;`);
+  await query(`ALTER TABLE product_reviews ADD COLUMN IF NOT EXISTS sub_ratings JSONB;`);
+  await query(`ALTER TABLE service_reviews ADD COLUMN IF NOT EXISTS sub_ratings JSONB;`);
   await query(`CREATE INDEX IF NOT EXISTS users_cert_active_idx ON users(cert_active) WHERE cert_active;`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_business_idx ON business_team(business_id);`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_member_idx ON business_team(member_id, status);`);

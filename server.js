@@ -2318,6 +2318,8 @@ function publicUser(row) {
     pronouns: row.pronouns || null,
     socials: (row.socials && typeof row.socials === 'object' && !Array.isArray(row.socials)) ? row.socials : {},
     businessHours: Array.isArray(row.business_hours) ? row.business_hours : null,
+    aboutFacts: (row.about_facts && typeof row.about_facts === 'object' && !Array.isArray(row.about_facts)) ? row.about_facts : {},
+    idVerifiedAt: row.id_verified_at || null,
     specialHours: Array.isArray(row.special_hours) ? row.special_hours : [],
     hoursNote: row.hours_note || null,
     hiring: !!row.hiring,
@@ -6057,6 +6059,13 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
     fields.push(`headline = $${vals.length}`);
   }
   if ('pronouns' in req.body) { vals.push((req.body.pronouns || '').trim().slice(0, 30) || null); fields.push(`pronouns = $${vals.length}`); }
+  // The plain facts. Unknown keys are dropped rather than stored, so this can
+  // never become a free-form bucket for whatever the client felt like sending.
+  if ('aboutFacts' in req.body) {
+    const facts = cleanAboutFacts(req.body.aboutFacts);
+    if (facts === undefined) return res.status(400).json({ error: 'Those details couldn’t be saved.' });
+    vals.push(JSON.stringify(facts)); fields.push(`about_facts = $${vals.length}`);
+  }
   if ('businessHours' in req.body) {
     vals.push(normalizeBusinessHours(req.body.businessHours));
     fields.push(`business_hours = $${vals.length}`);
@@ -18133,7 +18142,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query(`SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, business_verify_tier, otw_visibility, profile_cta, pinned_post_id, sub_price_cents, sub_blurb, plan, created_at, name_history, deactivated, paused, pause_message, connections_visible, business_hours, special_hours, hours_note, shop_paused, shop_pause_message, store_banner, hiring, pronouns, inquiry_enabled, inquiry_intro, inquiry_questions, status_emoji, status_text, status_expires_at, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, (SELECT username FROM users bu WHERE bu.id = users.aff_business_id) AS aff_business_username FROM users WHERE lower(username) = lower($1)`, [handle]);
+    const u = await db.query(`SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, about_facts, id_verified_at, id_verify_method, account_type, business_verify_status, business_verify_tier, otw_visibility, profile_cta, pinned_post_id, sub_price_cents, sub_blurb, plan, created_at, name_history, deactivated, paused, pause_message, connections_visible, business_hours, special_hours, hours_note, shop_paused, shop_pause_message, store_banner, hiring, pronouns, inquiry_enabled, inquiry_intro, inquiry_questions, status_emoji, status_text, status_expires_at, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, (SELECT username FROM users bu WHERE bu.id = users.aff_business_id) AS aff_business_username FROM users WHERE lower(username) = lower($1)`, [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     // A hibernated (deactivated) account's profile is hidden from everyone but the owner.
@@ -18277,7 +18286,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     res.json({
       myNote,
       businessJobs, businessPeople, mutualConnections, mutualPeople, reviewSummary, trustScore, followedBy, followedByCount,
-      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, pronouns: t.pronouns || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', businessTier: bizTier(t), businessTierLabel: BIZ_TIER_LABEL[bizTier(t)] || null, openToWork: t.otw_visibility === 'everyone', profileCta: ['book', 'order', 'message'].includes(t.profile_cta) ? t.profile_cta : null, joinedAt: t.created_at || null, paused: !!t.paused, pauseMessage: t.paused ? (t.pause_message || null) : null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null, specialHours: Array.isArray(t.special_hours) ? t.special_hours : [], hoursNote: t.hours_note || null, shopPaused: !!t.shop_paused, shopPauseMessage: t.shop_paused ? (t.shop_pause_message || null) : null, storeBanner: t.store_banner || null, hiring: !!t.hiring, inquiryEnabled: !!t.inquiry_enabled, inquiryIntro: t.inquiry_intro || null, inquiryQuestions: Array.isArray(t.inquiry_questions) ? t.inquiry_questions : [], status: userStatus(t), pro: t.plan === 'pro', nameHistory: Array.isArray(t.name_history) ? t.name_history.slice(-5).reverse() : [], affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: t.aff_business_username || null } : null },
+      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, pronouns: t.pronouns || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', businessTier: bizTier(t), businessTierLabel: BIZ_TIER_LABEL[bizTier(t)] || null, openToWork: t.otw_visibility === 'everyone', profileCta: ['book', 'order', 'message'].includes(t.profile_cta) ? t.profile_cta : null, joinedAt: t.created_at || null, aboutFacts: mapAboutFacts(t.about_facts), identity: idVerification(t), paused: !!t.paused, pauseMessage: t.paused ? (t.pause_message || null) : null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null, specialHours: Array.isArray(t.special_hours) ? t.special_hours : [], hoursNote: t.hours_note || null, shopPaused: !!t.shop_paused, shopPauseMessage: t.shop_paused ? (t.shop_pause_message || null) : null, storeBanner: t.store_banner || null, hiring: !!t.hiring, inquiryEnabled: !!t.inquiry_enabled, inquiryIntro: t.inquiry_intro || null, inquiryQuestions: Array.isArray(t.inquiry_questions) ? t.inquiry_questions : [], status: userStatus(t), pro: t.plan === 'pro', nameHistory: Array.isArray(t.name_history) ? t.name_history.slice(-5).reverse() : [], affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: t.aff_business_username || null } : null },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       education: edu.rows.map(mapEducation),
       certifications: certs.rows.map(mapCertification),
@@ -34356,8 +34365,16 @@ function mapReview(r, viewerId, mediaKind) {
     verified: !!r.ref_id,
     forWhat: r.for_what || (r.kind ? REVIEW_KIND_LABEL[r.kind] : null),
     kind: r.kind || null,
+    // What they judged, category by category.
+    subRatings: (r.sub_ratings && typeof r.sub_ratings === 'object') ? Object.entries(r.sub_ratings)
+      .filter(([k, v]) => SUB_RATING_META[k] && v >= 1 && v <= 5)
+      .sort(([a], [b]) => subRatingRank(a) - subRatingRank(b))
+      .map(([k, v]) => ({ key: k, label: SUB_RATING_META[k].label, score: v })) : [],
     mine: r.reviewer_id === viewerId,
-    reviewer: { id: r.reviewer_id, name: r.reviewer_name, username: r.reviewer_username, avatar: mediaRef(r.reviewer_avatar, 'avatar', r.reviewer_id), verified: !!r.reviewer_verified, certified: !!r.reviewer_certified },
+    // How long the reviewer has been here: a five-star review from somebody who
+    // joined yesterday and one from somebody eight years in are not the same
+    // evidence, and the reader should be able to see which is which.
+    reviewer: { id: r.reviewer_id, name: r.reviewer_name, username: r.reviewer_username, avatar: mediaRef(r.reviewer_avatar, 'avatar', r.reviewer_id), verified: !!r.reviewer_verified, certified: !!r.reviewer_certified, since: r.reviewer_since || null },
   };
 }
 /* ── What you are allowed to review, and why ──
@@ -34411,6 +34428,8 @@ async function reviewableDealings(reviewerId, subjectId) {
     const rated = await ratedThings(reviewerId, open);
     return open.map((r) => ({
       kind: r.kind, refId: r.ref_id, at: r.at, what: r.what || REVIEW_KIND_LABEL[r.kind],
+      // What is worth judging about THIS kind of dealing.
+      subCategories: SUB_RATINGS[r.kind] || [],
       thing: r.thing_id ? {
         kind: r.thing_kind, id: r.thing_id, name: r.what || null,
         label: THING_LABEL[r.kind] || 'What you got',
@@ -34488,6 +34507,150 @@ const TRUST_TIERS = [[90, 'Excellent'], [75, 'Great'], [60, 'Good'], [45, 'Fair'
    Staff can override in both directions. A grant ignores the number, for the
    people we know deserve it before the numbers catch up. A block also ignores
    the number, and beats a grant, so a mark can always be taken away. */
+/* ── Identity, and being straight about what it proves ──
+   A different claim from the verified badge, which says "this account really
+   is that well-known name". This one says "somebody checked that a real person
+   with matching details stands behind this account" — and, just as importantly,
+   it says out loud what it does NOT prove. Airbnb's own wording is the model:
+   the process has safeguards, but it does not guarantee that somebody is who
+   they say they are. A trust signal that oversells itself is worse than none,
+   because people rely on it.
+
+   No ID provider is wired up yet, so this is deliberately staff-granted rather
+   than a self-serve button that would imply a check nobody performed. */
+const ID_VERIFY_METHODS = { document: 'Government ID', staff: 'Checked by our team' };
+function idVerification(row) {
+  if (!row || !row.id_verified_at) return null;
+  return {
+    since: row.id_verified_at,
+    method: ID_VERIFY_METHODS[row.id_verify_method] || ID_VERIFY_METHODS.staff,
+    // Sent with the payload rather than hardcoded in the app, so the promise
+    // and the caveat can never drift apart between platforms.
+    caveat: 'Our checks compare someone’s details against trusted sources or a government ID. They have safeguards, but they cannot guarantee that a person is who they say they are.',
+  };
+}
+app.post('/api/admin/users/:id/identity', auth.requirePerm('users'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
+  const on = req.body.verified === true || req.body.verified === 'true';
+  const method = ID_VERIFY_METHODS[req.body.method] ? req.body.method : 'staff';
+  try {
+    const { rows } = await db.query(
+      `UPDATE users SET id_verified_at = CASE WHEN $2 THEN COALESCE(id_verified_at, now()) ELSE NULL END,
+                        id_verify_method = CASE WHEN $2 THEN $3 ELSE NULL END
+       WHERE id = $1 RETURNING id, name, username, id_verified_at, id_verify_method`, [id, on, method]);
+    if (!rows[0]) return res.status(404).json({ error: 'User not found.' });
+    adminAudit(req, on ? 'identity.verify' : 'identity.unverify', 'user', id, { method });
+    notify(id, req.user.id, on ? 'identity_verified' : 'identity_unverified');
+    res.json({ user: rows[0] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+/* ── The plain facts about a person ──
+   A curated set, not free-form: a fixed list is scannable, translatable, and
+   cannot become a dumping ground. Each is optional and each is short. */
+const ABOUT_FACTS = [
+  { key: 'work',      label: 'My work',                 icon: 'work',   ph: 'e.g. Carpenter' },
+  { key: 'lives',     label: 'Lives in',                icon: 'globe',  ph: 'e.g. Manchester' },
+  { key: 'speaks',    label: 'Speaks',                  icon: 'speech', ph: 'e.g. English and Urdu' },
+  { key: 'always',    label: 'For customers, I always', icon: 'heart',  ph: 'e.g. Reply the same day' },
+  { key: 'since',     label: 'Doing this since',        icon: 'clock',  ph: 'e.g. 2014' },
+  { key: 'obsessed',  label: "I'm obsessed with",       icon: 'star',   ph: 'e.g. Proper joinery' },
+  { key: 'pets',      label: 'Pets',                    icon: 'paw',    ph: 'e.g. Two cats' },
+  { key: 'funfact',   label: 'Fun fact',                icon: 'spark',  ph: 'Something people remember' },
+];
+const ABOUT_FACT_KEYS = new Set(ABOUT_FACTS.map((f) => f.key));
+const ABOUT_FACT_MAX = 120;
+function cleanAboutFacts(raw) {
+  if (raw == null) return {};
+  if (typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const out = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (!ABOUT_FACT_KEYS.has(k)) continue;              // unknown keys are dropped, never stored
+    const t = String(v == null ? '' : v).trim().slice(0, ABOUT_FACT_MAX);
+    if (t) out[k] = t;
+  }
+  return out;
+}
+function mapAboutFacts(facts) {
+  if (!facts || typeof facts !== 'object') return [];
+  // Fixed order, so a profile always reads the same way down the page.
+  return ABOUT_FACTS.filter((f) => facts[f.key]).map((f) => ({ key: f.key, label: f.label, icon: f.icon, value: facts[f.key] }));
+}
+
+/* ── Sub-ratings: why the stars were what they were ──
+   Airbnb asks six things after a stay and shows the average of each, which is
+   how you learn a flat was spotless but hard to find. The categories differ by
+   what was actually being judged — "check-in" means nothing about a jumper —
+   so they are defined per kind of dealing, and every one is optional. */
+const SUB_RATINGS = {
+  order: [
+    { key: 'accuracy',      label: 'As described', icon: 'check' },
+    { key: 'quality',       label: 'Quality',      icon: 'gem' },
+    { key: 'delivery',      label: 'Delivery',     icon: 'box' },
+    { key: 'communication', label: 'Communication', icon: 'speech' },
+    { key: 'value',         label: 'Value',        icon: 'tag' },
+  ],
+  stay: [
+    { key: 'cleanliness',   label: 'Cleanliness',  icon: 'spray' },
+    { key: 'accuracy',      label: 'Accuracy',     icon: 'check' },
+    { key: 'checkin',       label: 'Check-in',     icon: 'key' },
+    { key: 'communication', label: 'Communication', icon: 'speech' },
+    { key: 'location',      label: 'Location',     icon: 'map' },
+    { key: 'value',         label: 'Value',        icon: 'tag' },
+  ],
+  appointment: [
+    { key: 'quality',       label: 'Quality of work', icon: 'gem' },
+    { key: 'punctuality',   label: 'Punctuality',     icon: 'clock' },
+    { key: 'communication', label: 'Communication',   icon: 'speech' },
+    { key: 'value',         label: 'Value',           icon: 'tag' },
+  ],
+};
+// Every category any kind uses, for validating and for labelling an aggregate.
+const SUB_RATING_META = Object.values(SUB_RATINGS).flat()
+  .reduce((m, c) => (m[c.key] = m[c.key] || c, m), {});
+/* One deliberate order for showing them, everywhere. Left to itself the order
+   would come from whatever sequence the keys happened to be written or stored
+   in, so the summary row and a single review's chips could disagree — which
+   reads as carelessness even when every number is right. Roughly: what the
+   thing was like, then how it was handled, then what it cost. */
+const SUB_RATING_ORDER = ['cleanliness', 'accuracy', 'quality', 'checkin', 'punctuality',
+  'delivery', 'communication', 'location', 'value'];
+const subRatingRank = (k) => { const i = SUB_RATING_ORDER.indexOf(k); return i < 0 ? 99 : i; };
+function cleanSubRatings(raw, kind) {
+  if (raw == null) return null;
+  if (typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const allowed = new Set((SUB_RATINGS[kind] || Object.values(SUB_RATING_META)).map((c) => c.key));
+  const out = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (!allowed.has(k)) continue;
+    const n = Math.round(Number(v));
+    if (n >= 1 && n <= 5) out[k] = n;                   // anything else is simply not a rating
+  }
+  return Object.keys(out).length ? out : null;
+}
+/* The averages, in the order the categories are defined, so the row reads the
+   same every time. Only categories somebody actually rated appear — an empty
+   column labelled 4.0 out of nothing would be a lie. */
+function aggregateSubRatings(rows) {
+  const sums = {}, counts = {};
+  for (const r of rows) {
+    const sr = r.sub_ratings;
+    if (!sr || typeof sr !== 'object') continue;
+    for (const [k, v] of Object.entries(sr)) {
+      if (!SUB_RATING_META[k] || !(v >= 1 && v <= 5)) continue;
+      sums[k] = (sums[k] || 0) + v; counts[k] = (counts[k] || 0) + 1;
+    }
+  }
+  return Object.keys(SUB_RATING_META)
+    .filter((k) => counts[k])
+    .sort((a, b) => subRatingRank(a) - subRatingRank(b))
+    .map((k) => ({
+      key: k, label: SUB_RATING_META[k].label, icon: SUB_RATING_META[k].icon,
+      score: Math.round((sums[k] / counts[k]) * 10) / 10, count: counts[k],
+    }));
+}
+
 /* ── How every serious marketplace actually combines the two (researched) ──
    There are two coherent models, and which one is right depends on one thing:
    whether a listing belongs to exactly one seller.
@@ -34763,15 +34926,19 @@ app.post('/api/business/:id/reviews', auth.requireAuth, rateLimit(20, 60000, 're
     await resolveMediaRefs(req.body);
     const media = cleanReviewMedia(req.body.media);
     if (media === undefined) return res.status(400).json({ error: 'Those photos couldn’t be attached. Try smaller ones.' });
+    // Which categories apply depends on what the dealing was; anything outside
+    // that set is dropped rather than stored.
+    const subs = cleanSubRatings(req.body.subRatings, kind);
+    if (subs === undefined) return res.status(400).json({ error: 'Those ratings couldn’t be saved.' });
 
     if (verified) {
       // One review per dealing — booking the same host twice is two things to review.
       await db.query(
-        `INSERT INTO business_reviews (business_id, reviewer_id, rating, body, media, kind, ref_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)
+        `INSERT INTO business_reviews (business_id, reviewer_id, rating, body, media, kind, ref_id, sub_ratings)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
          ON CONFLICT (kind, ref_id, reviewer_id) WHERE ref_id IS NOT NULL
-         DO UPDATE SET rating = $3, body = $4, media = $5, response = NULL, responded_at = NULL, created_at = now()`,
-        [id, req.user.id, rating, body, media, kind, refId]);
+         DO UPDATE SET rating = $3, body = $4, media = $5, sub_ratings = $8, response = NULL, responded_at = NULL, created_at = now()`,
+        [id, req.user.id, rating, body, media, kind, refId, subs ? JSON.stringify(subs) : null]);
     } else {
       // A general review stays one per reviewer, so nobody can shout twice.
       await db.query(
@@ -34804,9 +34971,9 @@ app.get('/api/business/:id/reviews', auth.requireAuth, async (req, res) => {
     if (star) { params.push(star); filter = ` AND r.rating = $${params.length}`; }
     if (req.query.verified === 'true') filter += ' AND r.ref_id IS NOT NULL';
     const { rows } = await db.query(
-      `SELECT r.id, r.rating, r.body, r.response, r.responded_at, r.created_at, r.reviewer_id, r.media, r.kind, r.ref_id,
+      `SELECT r.id, r.rating, r.body, r.response, r.responded_at, r.created_at, r.reviewer_id, r.media, r.kind, r.ref_id, r.sub_ratings,
               u.name AS reviewer_name, u.username AS reviewer_username, u.avatar AS reviewer_avatar,
-              u.verified AS reviewer_verified, u.cert_active AS reviewer_certified,
+              u.verified AS reviewer_verified, u.cert_active AS reviewer_certified, u.created_at AS reviewer_since,
               CASE r.kind
                 WHEN 'order' THEN (SELECT string_agg(oi.name, ', ') FROM order_items oi WHERE oi.order_id = r.ref_id)
                 WHEN 'stay' THEN (SELECT p.name FROM rental_bookings b LEFT JOIN products p ON p.id = b.product_id WHERE b.id = r.ref_id)
@@ -34823,6 +34990,12 @@ app.get('/api/business/:id/reviews', auth.requireAuth, async (req, res) => {
       `SELECT rating, COUNT(*)::int AS n, COUNT(*) FILTER (WHERE ref_id IS NOT NULL)::int AS verified
          FROM business_reviews WHERE business_id = $1 GROUP BY rating`, [id]);
     const breakdown = [5, 4, 3, 2, 1].map((n) => ({ stars: n, count: (dist.rows.find((d) => d.rating === n) || {}).n || 0 }));
+    /* The category averages, computed over EVERY review rather than the filtered
+       view — the same reason the star breakdown is: a summary that moves when
+       you filter by it is not a summary. */
+    const allSubs = await db.query(
+      'SELECT sub_ratings FROM business_reviews WHERE business_id = $1 AND sub_ratings IS NOT NULL', [id]);
+    const subRatings = aggregateSubRatings(allSubs.rows);
     const total = breakdown.reduce((a, b) => a + b.count, 0);
     const summary = await businessReviewSummary(id);
     const mineRow = rows.find((r) => r.reviewer_id === req.user.id);
@@ -34830,6 +35003,7 @@ app.get('/api/business/:id/reviews', auth.requireAuth, async (req, res) => {
       reviews: rows.map((r) => mapReview(r, req.user.id)),
       summary,
       breakdown: breakdown.map((b) => ({ ...b, pct: total ? Math.round((b.count / total) * 100) : 0 })),
+      subRatings,
       verifiedCount: dist.rows.reduce((a, d) => a + d.verified, 0),
       mine: mineRow ? mapReview(mineRow, req.user.id) : null,
       // What this viewer could still write about — the app asks at the right moment.
@@ -34875,6 +35049,7 @@ app.get('/api/reviews/pending', auth.requireAuth, async (req, res) => {
         return {
           kind: r.kind, refId: r.ref_id, at: r.at, what: r.what || REVIEW_KIND_LABEL[r.kind],
           kindLabel: REVIEW_KIND_LABEL[r.kind],
+          subCategories: SUB_RATINGS[r.kind] || [],
           thing: r.thing_id ? {
             kind: r.thing_kind, id: r.thing_id, name: r.what || null,
             label: THING_LABEL[r.kind] || 'What you got',
