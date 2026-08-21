@@ -8,6 +8,18 @@ const H = require('./helpers');
 
 const opts = { skip: H.SKIP ? 'no TEST_DATABASE_URL/DATABASE_URL set' : false };
 
+// Some money side-effects (the platform fee, loyalty points) are deliberately
+// fire-and-forget so a hiccup can never unwind a real sale — poll for them
+// rather than sleeping a fixed guess.
+async function waitFor(fn, timeoutMs = 5000) {
+  const until = Date.now() + timeoutMs;
+  for (;;) {
+    if (await fn()) return true;
+    if (Date.now() > until) throw new Error('waitFor timed out');
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
 before(async () => { if (!H.SKIP) await H.startServer(); });
 after(async () => { await H.stopServer(); });
 
@@ -370,4 +382,60 @@ test('the database rejects a negative wallet balance', opts, async () => {
     (e) => e.code === '23514', // check_violation
     'users_balance_nonneg CHECK fires'
   );
+});
+
+/* ─────────────────────── PLATFORM FEE (Atwe's take-rate) ───────────────────
+   The fee ships at 1% and is taken from the SELLER's proceeds the moment they
+   are actually paid — never added on top of the price the buyer was shown. It
+   must fire on every route where a seller's balance is credited, or Atwe
+   silently earns nothing on that kind of sale (which is exactly how the
+   gift-card path used to behave). */
+
+test('a wallet-paid order takes the 1% fee from the seller', opts, async () => {
+  const seller = await H.seedUser({ accountType: 'business' });
+  const buyer = await H.seedUser({ balanceCents: 100000 });
+  const [ts, tb] = [await H.login(seller), await H.login(buyer)];
+  const p = await H.api('POST', '/api/products', { token: ts, body: { name: 'Fee item', priceCents: 400, kind: 'digital' } });
+  const r = await H.api('POST', '/api/orders/buy', { token: tb, body: { productId: p.body.product.id, qty: 1, payWith: 'balance', clientId: H.uniq('cid') } });
+  assert.equal(r.status, 200, 'order paid from balance');
+  const pool = H.getPool();
+  await waitFor(async () => (await pool.query("SELECT 1 FROM company_revenue WHERE payer_id = $1 AND source = 'fee'", [seller.id])).rowCount > 0);
+  const bal = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [seller.id]);
+  assert.equal(bal.rows[0].balance_cents, 396, 'seller keeps the sale minus 1%');
+  const fee = await pool.query("SELECT amount_cents FROM company_revenue WHERE payer_id = $1 AND source = 'fee'", [seller.id]);
+  assert.equal(fee.rowCount, 1, 'exactly one fee row');
+  assert.equal(Number(fee.rows[0].amount_cents), 4, 'fee booked as company revenue');
+});
+
+test('a gift-card-funded order takes the fee too', opts, async () => {
+  const seller = await H.seedUser({ accountType: 'business' });
+  const giver = await H.seedUser({ balanceCents: 900 });
+  const buyer = await H.seedUser();
+  const [ts, tg, tb] = [await H.login(seller), await H.login(giver), await H.login(buyer)];
+  const g = await H.api('POST', '/api/gift-cards', { token: tg, body: { amountCents: 400, to: buyer.username, clientId: H.uniq('cid') } });
+  assert.ok(g.body.card, 'gift card issued');
+  await H.api('POST', `/api/gift-cards/${g.body.card.id}/claim`, { token: tb });
+  const p = await H.api('POST', '/api/products', { token: ts, body: { name: 'Gift item', priceCents: 300, kind: 'digital' } });
+  const r = await H.api('POST', '/api/orders/buy', { token: tb, body: { productId: p.body.product.id, qty: 1, payWith: 'balance', giftCardId: g.body.card.id, clientId: H.uniq('cid') } });
+  assert.equal(r.body.giftPartCents, 300, 'the card really funded the order');
+  const pool = H.getPool();
+  await waitFor(async () => (await pool.query("SELECT 1 FROM company_revenue WHERE payer_id = $1 AND source = 'fee'", [seller.id])).rowCount > 0);
+  const bal = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [seller.id]);
+  assert.equal(bal.rows[0].balance_cents, 297, 'seller keeps the sale minus 1%');
+});
+
+test('escrow takes the fee on release, not while the money is held', opts, async () => {
+  const seller = await H.seedUser({ accountType: 'business' });
+  const buyer = await H.seedUser({ balanceCents: 100000 });
+  const [ts, tb] = [await H.login(seller), await H.login(buyer)];
+  const p = await H.api('POST', '/api/products', { token: ts, body: { name: 'Escrow item', priceCents: 400, kind: 'digital' } });
+  const r = await H.api('POST', '/api/orders/buy', { token: tb, body: { productId: p.body.product.id, qty: 1, payWith: 'balance', protected: true, clientId: H.uniq('cid') } });
+  assert.equal(r.body.escrow, true, 'held in escrow');
+  const pool = H.getPool();
+  const held = await pool.query("SELECT 1 FROM company_revenue WHERE payer_id = $1 AND source = 'fee'", [seller.id]);
+  assert.equal(held.rowCount, 0, 'no fee while the money is still held');
+  await H.api('POST', `/api/orders/${r.body.orderId}/confirm`, { token: tb });
+  await waitFor(async () => (await pool.query("SELECT 1 FROM company_revenue WHERE payer_id = $1 AND source = 'fee'", [seller.id])).rowCount > 0);
+  const bal = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [seller.id]);
+  assert.equal(bal.rows[0].balance_cents, 396, 'seller keeps the release minus 1%');
 });
