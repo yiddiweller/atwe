@@ -86,4 +86,4 @@ async function lookupCountry(ip) {
   }
 }
 
-module.exports = { lookup, lookupCountry, isConfigured };
+module.exports = { lookup, lookupCountry, isConfigured, isPublicIp };

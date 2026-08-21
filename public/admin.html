@@ -2968,7 +2968,7 @@ async function loadTraffic(){
     // The numbers and the names, together — one refresh, one repaint.
     const [t, o] = await Promise.all([
       api('GET', '/api/admin/analytics?range=' + TRAFFIC_RANGE + (TRAFFIC_RANGE === 'custom' ? '&days=' + TRAFFIC_DAYS : '')),
-      api('GET', '/api/admin/online').catch(() => null),   // never let this hide the traffic figures
+      api('GET', '/api/admin/online?window=' + ONLINE_WINDOW).catch(() => null),   // never let this hide the traffic figures
     ]);
     TRAFFIC = t; ONLINE = o; renderTraffic();
   }
@@ -2980,7 +2980,7 @@ async function loadTraffic(){
    row opens the same detail as the Users tab. Someone who is not signed in is
    shown as a Guest with wherever they are, because a page view records nothing
    else about them and pretending otherwise would be a privacy problem. */
-let ONLINE = null;
+let ONLINE = null, ONLINE_WINDOW = 'live';
 function onAgo(iso){
   const s = Math.max(0, Math.round((Date.now() - new Date(iso)) / 1000));
   if (s < 45) return 'just now';
@@ -2998,13 +2998,14 @@ function onMemberRow(m){
   if (m.accountType === 'business') tags.push('<span class="on-tag biz">Business</span>');
   if (m.plan === 'pro') tags.push('<span class="on-tag pro">Pro</span>');
   if (m.status && m.status !== 'active') tags.push(`<span class="on-tag bad">${esc(m.status)}</span>`);
-  const meta = [m.location, m.device].filter(Boolean).join(' · ');
+  if (m.platform && m.platform !== 'web') tags.push(`<span class="on-tag">${esc(PLAT_LABEL[m.platform] || m.platform)}</span>`);
+  const metaBits = [placeHtml(m.location, m.geoSource), m.device ? esc(m.device) : ''].filter(Boolean).join(' · ');
   return `<button class="on-row" onclick="openUser(${m.id})">
     ${onAva(m)}
     <span class="on-main">
       <span class="on-name">${esc(m.name || '—')}${m.verified ? '<span class="on-check">✓</span>' : ''}${tags.join('')}</span>
       <span class="on-sub">@${esc(m.username || '')}${m.headline ? ' · ' + esc(m.headline) : ''}</span>
-      <span class="on-meta">${esc(meta || 'Location unknown')}</span>
+      <span class="on-meta">${metaBits}</span>
     </span>
     <span class="on-when">${m.live ? '<span class="on-live"><span class="tf-dot"></span>live</span>' : esc(onAgo(m.lastSeen))}</span>
   </button>`;
@@ -3013,22 +3014,48 @@ function onGuestRow(g){
   return `<div class="on-row guest">
     <span class="on-ava noimg">${ON_PERSON}</span>
     <span class="on-main">
-      <span class="on-name">Guest<span class="on-tag">not signed in</span></span>
-      <span class="on-sub">${esc(g.location || 'Location unknown')}</span>
-      <span class="on-meta">${g.views} page${g.views === 1 ? '' : 's'}${g.path ? ' · ' + esc(g.path) : ''}</span>
+      <span class="on-name">Guest<span class="on-tag">not signed in</span>${g.platform && g.platform !== 'web' ? `<span class="on-tag">${esc(PLAT_LABEL[g.platform] || g.platform)}</span>` : ''}</span>
+      <span class="on-sub">${placeHtml(g.location, g.geoSource)}</span>
+      <span class="on-meta">${g.views} view${g.views === 1 ? '' : 's'}${g.path && g.path !== '/app' ? ' · ' + esc(g.path) : ''}</span>
     </span>
     <span class="on-when">${esc(onAgo(g.lastSeen))}</span>
   </div>`;
 }
+const ON_WINDOWS = [
+  { k:'live', label:'Live now',      note:'active in the last five minutes' },
+  { k:'day',  label:'Last 24 hours', note:'anyone who used Atwe today' },
+  { k:'week', label:'Last 7 days',   note:'anyone who used Atwe this week' },
+];
+const PLAT_LABEL = { web:'Website', ios:'iPhone app', android:'Android app' };
+function setOnlineWindow(k){ ONLINE_WINDOW = k; loadTraffic(); }
 function onlinePanel(){
   const o = ONLINE;
-  if (!o) return '<div class="panel"><h3>Who is online</h3><div class="empty">Could not load who is online.</div></div>';
+  const tabs = ON_WINDOWS.map(w =>
+    `<button class="tf-r ${ONLINE_WINDOW===w.k?'on':''}" onclick="setOnlineWindow('${w.k}')">${w.label}</button>`).join('');
+  const shell = (inner) => `<div class="panel">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+        <h3 style="margin:0;">Who is here</h3><div class="tf-ranges">${tabs}</div>
+      </div>${inner}</div>`;
+  if (!o) return shell('<div class="empty">Could not load who is here.</div>');
+
   const rows = o.members.map(onMemberRow).join('') + o.guests.map(onGuestRow).join('');
   const head = `${o.counts.members} member${o.counts.members === 1 ? '' : 's'} · ${o.counts.guests} guest${o.counts.guests === 1 ? '' : 's'}`;
-  return `<div class="panel"><h3>Who is online <span class="muted" style="font-weight:500;">${head}</span></h3>
-    ${rows || '<div class="empty">Nobody is on the site right now.</div>'}
-    <div class="muted" style="margin-top:10px;">Anyone active in the last five minutes. A guest is a visitor who is not signed in — a page view records only where they are, nothing that identifies them.</div>
-  </div>`;
+  // Where they were, split by what they were using — the phone apps included.
+  const plat = Object.entries(o.byPlatform || {}).filter(([,n]) => n > 0)
+    .map(([k,n]) => `<span class="on-tag">${esc(PLAT_LABEL[k] || k)} ${n}</span>`).join(' ');
+  const cur = ON_WINDOWS.find(w => w.k === (o.window || 'live')) || ON_WINDOWS[0];
+  const empty = o.window === 'live' ? 'Nobody is on Atwe right now.' : 'Nobody used Atwe in that time.';
+  return shell(`
+    <div class="sub" style="margin:-2px 0 10px;">${head}${plat ? ' &nbsp;·&nbsp; ' + plat : ''}</div>
+    ${rows || `<div class="empty">${empty}</div>`}
+    <div class="muted" style="margin-top:10px;">Showing ${esc(cur.note)}. A guest is a visitor who is not signed in — nothing that identifies them is recorded, only where they are.
+    A location marked <b>approximate</b> was guessed from the network address, which is often wrong on a mobile connection; the rest were reported by the device itself.</div>`);
+}
+// Say plainly how sure we are about a place, rather than stating a guess as fact.
+function placeHtml(loc, source){
+  if (!loc) return '<span class="muted">Location unknown</span>';
+  if (source === 'lookup') return `${esc(loc)} <span class="on-tag" title="Guessed from the network address — often wrong on a mobile connection.">approximate</span>`;
+  return esc(loc);
 }
 function tfNum(n){ return (n||0).toLocaleString(); }
 function tfChange(cur, prev){
@@ -3064,6 +3091,25 @@ function renderTraffic(){
   const cityRows = t.cities.length ? t.cities.map(c => `
     <div class="tf-loc"><span class="tf-loc-n">${esc(c.city)}${c.country ? `<span class="muted">, ${esc(c.country)}</span>` : ''}</span>
       <span class="tf-loc-v">${tfNum(c.views)}</span></div>`).join('') : '<div class="empty">No city data yet.</div>';
+  // What Atwe was used ON, and how the places were arrived at.
+  const plats = t.platforms || [];
+  const maxP = Math.max(1, ...plats.map(p => p.views));
+  const platRows = plats.length ? plats.map(p => `
+    <div class="tf-loc"><span class="tf-loc-n">${esc(PLAT_LABEL[p.platform] || p.platform)}</span>
+      <div class="tf-loc-bar"><div style="width:${Math.round(p.views / maxP * 100)}%"></div></div>
+      <span class="tf-loc-v">${tfNum(p.views)}</span></div>`).join('') : '<div class="empty">Nothing yet.</div>';
+  const ACC_LABEL = {
+    device: 'The device told us — exact country',
+    edge:   'The network told us — exact country',
+    lookup: 'Guessed from the address — approximate',
+  };
+  const accs = t.accuracy || [];
+  const accTotal = accs.reduce((n, a) => n + a.views, 0) || 1;
+  const accRows = accs.length ? accs.map(a => `
+    <div class="tf-loc"><span class="tf-loc-n">${esc(ACC_LABEL[a.source] || a.source)}</span>
+      <div class="tf-loc-bar"><div style="width:${Math.round(a.views / accTotal * 100)}%"></div></div>
+      <span class="tf-loc-v">${Math.round(a.views / accTotal * 100)}%</span></div>`).join('')
+    : '<div class="empty">Nothing yet.</div>';
   const geoNote = t.geoEnabled ? '' : '<div class="muted" style="margin-top:8px;">Location lookup is off — set <code>GEOIP_URL</code> (or unset <code>GEOIP_DISABLED</code>) to break traffic down by place.</div>';
   document.getElementById('tfBody').innerHTML = `
     <div class="tf-cards">
@@ -3073,6 +3119,11 @@ function renderTraffic(){
     </div>
     ${onlinePanel()}
     <div class="panel"><h3>Views · ${rangeLabel}</h3><div class="tf-chart">${bars}</div></div>
+    <div class="tf-locs">
+      <div class="panel"><h3>Where Atwe was used</h3>${platRows}
+        <div class="muted" style="margin-top:8px;">The phone apps are counted here too — they talk to Atwe without loading a web page, so they used to be invisible on this screen.</div></div>
+      <div class="panel"><h3>How the locations were worked out</h3>${accRows}</div>
+    </div>
     <div class="tf-locs">
       <div class="panel"><h3>Top countries</h3>${countryRows}${geoNote}</div>
       <div class="panel"><h3>Top cities</h3>${cityRows}</div>
