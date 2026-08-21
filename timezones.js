@@ -459,16 +459,29 @@ function cityOfZone(zone) {
   return last ? last.replace(/_/g, ' ') : null;
 }
 
-// The country's English name, from the runtime's own locale data.
+/* Codes that are shaped like a country and are not one. A network edge sends
+   these when it cannot work out where somebody is — ZZ and XX for "unknown",
+   T1 for traffic arriving over Tor, and EU / AP when it can only narrow it to
+   a continent. Treating them as countries files a visitor under a place named
+   "Unknown Region", which reads as a real country in a list of real countries
+   and is worse than admitting we do not know. */
+const NOT_A_COUNTRY = new Set(['ZZ', 'XX', 'T1', 'A1', 'A2', 'O1', 'EU', 'AP']);
+
+// The country's English name, from the runtime's own locale data. Null when the
+// code is not a country we can actually name — the caller then has nothing to
+// claim, which is the honest outcome.
 let _names = null;
 function countryName(code) {
   const c = String(code || '').trim().toUpperCase();
-  if (!/^[A-Z]{2}$/.test(c)) return null;
+  if (!/^[A-Z]{2}$/.test(c) || NOT_A_COUNTRY.has(c)) return null;
   try {
     if (!_names) _names = new Intl.DisplayNames(['en'], { type: 'region' });
     const n = _names.of(c);
-    return n && n !== c ? n : c;
-  } catch (e) { return c; }
+    // DisplayNames hands back the code itself for anything it does not know,
+    // and "Unknown Region" for the reserved ones. Neither is a place.
+    if (!n || n === c || /unknown/i.test(n)) return null;
+    return n;
+  } catch (e) { return null; }
 }
 
-module.exports = { countryOfZone, cityOfZone, countryName, ZONE_COUNTRY };
+module.exports = { countryOfZone, cityOfZone, countryName, NOT_A_COUNTRY, ZONE_COUNTRY };
