@@ -242,6 +242,24 @@
   .tf-live{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--t2);font-weight:600;}
   .tf-dot{width:8px;height:8px;border-radius:50%;background:var(--green,var(--green));box-shadow:0 0 0 4px rgba(136,255,0,.16);animation:tfpulse 2s ease-in-out infinite;}
   @keyframes tfpulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+  /* Who used Atwe, split by app. Three tiles, always all three, so a zero on
+     Android is a visible fact rather than a missing row. */
+  .plat-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;}
+  .plat-tile{display:flex;align-items:center;gap:13px;background:var(--s1);border-radius:var(--r-md);padding:15px 17px;}
+  .plat-ic{width:38px;height:38px;flex:0 0 auto;display:grid;place-items:center;border-radius:11px;background:var(--s2);}
+  .plat-ic svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+  .plat-ic.plat-web{color:var(--accent);background:var(--accent-dim,rgba(0,136,255,.16));}
+  .plat-ic.plat-ios{color:var(--t1);}
+  .plat-ic.plat-android{color:var(--green);background:rgba(136,255,0,.14);}
+  .plat-body{display:flex;flex-direction:column;min-width:0;}
+  .plat-name{font-size:12.5px;color:var(--t3);}
+  .plat-n{font-size:25px;font-weight:800;letter-spacing:-.02em;line-height:1.15;font-variant-numeric:tabular-nums;}
+  .plat-unit{font-size:12.5px;font-weight:600;color:var(--t3);margin-left:6px;letter-spacing:0;}
+  .plat-sub{font-size:12px;color:var(--t3);margin-top:2px;}
+  /* The same three, as a chip on a row in Who is here. */
+  .on-tag.plat-web{background:var(--accent-dim,rgba(0,136,255,.16));color:var(--accent);}
+  .on-tag.plat-ios{background:rgba(255,255,255,.10);color:var(--t1);}
+  .on-tag.plat-android{background:rgba(136,255,0,.16);color:var(--green);}
   .tf-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px;}
   .tf-card{background:var(--s1);border:none;border-radius:var(--r-md);padding:16px 18px;}
   .tf-cl{font-size:12.5px;color:var(--t3);margin-bottom:8px;}
@@ -2998,7 +3016,7 @@ function onMemberRow(m){
   if (m.accountType === 'business') tags.push('<span class="on-tag biz">Business</span>');
   if (m.plan === 'pro') tags.push('<span class="on-tag pro">Pro</span>');
   if (m.status && m.status !== 'active') tags.push(`<span class="on-tag bad">${esc(m.status)}</span>`);
-  if (m.platform && m.platform !== 'web') tags.push(`<span class="on-tag">${esc(PLAT_LABEL[m.platform] || m.platform)}</span>`);
+  tags.push(platTag(m.platform));
   const metaBits = [placeHtml(m.location, m.geoSource), m.device ? esc(m.device) : ''].filter(Boolean).join(' · ');
   return `<button class="on-row" onclick="openUser(${m.id})">
     ${onAva(m)}
@@ -3014,7 +3032,7 @@ function onGuestRow(g){
   return `<div class="on-row guest">
     <span class="on-ava noimg">${ON_PERSON}</span>
     <span class="on-main">
-      <span class="on-name">Guest<span class="on-tag">not signed in</span>${g.platform && g.platform !== 'web' ? `<span class="on-tag">${esc(PLAT_LABEL[g.platform] || g.platform)}</span>` : ''}</span>
+      <span class="on-name">Guest<span class="on-tag">not signed in</span>${platTag(g.platform)}</span>
       <span class="on-sub">${placeHtml(g.location, g.geoSource)}</span>
       <span class="on-meta">${g.views} view${g.views === 1 ? '' : 's'}${g.path && g.path !== '/app' ? ' · ' + esc(g.path) : ''}</span>
     </span>
@@ -3026,7 +3044,18 @@ const ON_WINDOWS = [
   { k:'day',  label:'Last 24 hours', note:'anyone who used Atwe today' },
   { k:'week', label:'Last 7 days',   note:'anyone who used Atwe this week' },
 ];
-const PLAT_LABEL = { web:'Website', ios:'iPhone app', android:'Android app' };
+const PLAT_LABEL = { web:'Web', ios:'iPhone app', android:'Android app' };
+const PLAT_ICON = {
+  web:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18"/></svg>',
+  ios:'<svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2.4"/><line x1="10.6" y1="18.4" x2="13.4" y2="18.4"/></svg>',
+  android:'<svg viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="12" rx="2"/><path d="M8 7L6.6 4.4M16 7l1.4-2.6"/><circle cx="9.5" cy="11" r=".6"/><circle cx="14.5" cy="11" r=".6"/></svg>',
+};
+// Which app someone is on. Shown for EVERY row, the website included — a tag
+// only on the phone apps left a web row blank, which reads as "unknown".
+function platTag(p){
+  const k = PLAT_LABEL[p] ? p : 'web';
+  return `<span class="on-tag plat-${k}">${esc(PLAT_LABEL[k])}</span>`;
+}
 function setOnlineWindow(k){ ONLINE_WINDOW = k; loadTraffic(); }
 function onlinePanel(){
   const o = ONLINE;
@@ -3094,10 +3123,34 @@ function renderTraffic(){
   // What Atwe was used ON, and how the places were arrived at.
   const plats = t.platforms || [];
   const maxP = Math.max(1, ...plats.map(p => p.views));
-  const platRows = plats.length ? plats.map(p => `
-    <div class="tf-loc"><span class="tf-loc-n">${esc(PLAT_LABEL[p.platform] || p.platform)}</span>
-      <div class="tf-loc-bar"><div style="width:${Math.round(p.views / maxP * 100)}%"></div></div>
-      <span class="tf-loc-v">${tfNum(p.views)}</span></div>`).join('') : '<div class="empty">Nothing yet.</div>';
+  // One tile per app, always all three — a missing tile reads as "no data",
+  // whereas a zero is a fact worth seeing.
+  const byPlat = Object.fromEntries(plats.map(p => [p.platform, p]));
+  const platTotalPeople = plats.reduce((n, p) => n + p.visitors, 0);
+  // Rounding each share on its own lets three of them add up to 101%, which
+  // reads as a bug. Largest remainder: floor everything, then hand the leftover
+  // points to whoever was rounded down hardest, so they always total 100.
+  const platShare = (() => {
+    const out = { web:0, ios:0, android:0 };
+    if (!platTotalPeople) return out;
+    const raw = ['web','ios','android'].map(k => ({ k, v: ((byPlat[k] || {}).visitors || 0) / platTotalPeople * 100 }));
+    raw.forEach(r => { out[r.k] = Math.floor(r.v); });
+    let left = 100 - raw.reduce((n, r) => n + Math.floor(r.v), 0);
+    raw.slice().sort((a, b) => (b.v % 1) - (a.v % 1)).forEach(r => { if (left > 0) { out[r.k]++; left--; } });
+    return out;
+  })();
+  const platRows = ['web','ios','android'].map(k => {
+    const p = byPlat[k] || { views:0, visitors:0 };
+    const share = platShare[k];
+    return `<div class="plat-tile">
+      <span class="plat-ic plat-${k}">${PLAT_ICON[k]}</span>
+      <span class="plat-body">
+        <span class="plat-name">${esc(PLAT_LABEL[k])}</span>
+        <span class="plat-n">${tfNum(p.visitors)}<span class="plat-unit">${p.visitors === 1 ? 'person' : 'people'}</span></span>
+        <span class="plat-sub">${tfNum(p.views)} view${p.views === 1 ? '' : 's'}${platTotalPeople ? ' · ' + share + '%' : ''}</span>
+      </span>
+    </div>`;
+  }).join('');
   const ACC_LABEL = {
     device: 'The device told us — exact country',
     edge:   'The network told us — exact country',
@@ -3117,11 +3170,13 @@ function renderTraffic(){
       <div class="tf-card"><div class="tf-cl">Unique visitors</div><div class="tf-cv">${tfNum(t.totals.visitors)}</div><div class="tf-cd ${uc.cls}">${uc.txt} <span class="muted">vs previous</span></div></div>
       <div class="tf-card"><div class="tf-cl">All-time views</div><div class="tf-cv">${tfNum(t.allTime.views)}</div><div class="tf-cd muted">${tfNum(t.allTime.visitors)} visitors total</div></div>
     </div>
+    <div class="panel"><h3>Who used Atwe · ${rangeLabel} <span class="muted" style="font-weight:500;">by app</span></h3>
+      <div class="plat-tiles">${platRows}</div>
+      <div class="muted" style="margin-top:10px;">The phone apps are counted here too. They talk to Atwe without ever loading a web page, so before this they were invisible on this screen however much they were used.</div>
+    </div>
     ${onlinePanel()}
     <div class="panel"><h3>Views · ${rangeLabel}</h3><div class="tf-chart">${bars}</div></div>
     <div class="tf-locs">
-      <div class="panel"><h3>Where Atwe was used</h3>${platRows}
-        <div class="muted" style="margin-top:8px;">The phone apps are counted here too — they talk to Atwe without loading a web page, so they used to be invisible on this screen.</div></div>
       <div class="panel"><h3>How the locations were worked out</h3>${accRows}</div>
     </div>
     <div class="tf-locs">
