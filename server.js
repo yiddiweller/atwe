@@ -1438,6 +1438,169 @@ async function siteAllowUsers() {
   } catch (e) { return ids.map((id) => ({ id, name: 'Member #' + id, username: null, email: null, avatar: null })); }
 }
 
+/* ═══════════════════════════════════════════════
+   SETUP  —  what is connected, and what each gap costs
+   ───────────────────────────────────────────────
+   Every outside service Atwe can use is optional: without it the app still
+   runs, it just quietly does less. That "quietly" is the problem — an owner
+   can't see which parts of their own product are switched off. This screen
+   says it out loud: what is live, what is not, what each missing piece would
+   turn on, and exactly where to get it.
+
+   It reads the SAME isConfigured() checks the features themselves use, so it
+   can never drift from reality — if this says "on", the feature is on.
+═══════════════════════════════════════════════ */
+const SETUP_GROUPS = [
+  {
+    group: 'Essential',
+    items: [
+      { key: 'db', label: 'Database', on: () => db.isConfigured(), env: ['DATABASE_URL'],
+        gives: 'Accounts, messages, money — everything that is remembered.',
+        without: 'Almost nothing works. This is the one thing that is not optional.',
+        where: 'Railway → your Postgres plugin injects it automatically.' },
+      { key: 'jwt', label: 'Sign-in secret', on: () => !!process.env.JWT_SECRET, env: ['JWT_SECRET'],
+        gives: 'Signs everybody’s login so it can’t be forged.',
+        without: 'An insecure development value is used and every session breaks on restart. Must be set before real members.',
+        where: 'Invent one long random string and paste it into Railway → Variables.' },
+      { key: 'appurl', label: 'Site address', on: () => !!process.env.APP_URL, env: ['APP_URL'],
+        gives: 'Correct links in emails, share links, QR codes and the product feed.',
+        without: 'Links in emails point nowhere useful.',
+        where: 'Set it to https://atwe.com in Railway → Variables.' },
+    ],
+  },
+  {
+    group: 'Money',
+    items: [
+      { key: 'stripe', label: 'Card payments (Stripe)', on: () => billing.isConfigured(),
+        env: ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_PRICE_ID'],
+        gives: 'Real card payments: topping up a wallet, Atwe Pro, event tickets, paid subscriptions, boosts.',
+        without: 'Every payment is a DEMO grant — the money is pretend. Fine for testing, never for real members.',
+        where: 'stripe.com → Developers → API keys. Then add a webhook to /api/billing/webhook and paste its signing secret. Turn Connect on in the same dashboard for cash-out to bank.' },
+      { key: 'connect', label: 'Cash out to a bank (Stripe Connect)', on: () => billing.isConnectConfigured && billing.isConnectConfigured(),
+        env: ['STRIPE_SECRET_KEY'],
+        gives: 'Members move their Atwe balance to a real bank account.',
+        without: 'Cash-out is a demo: the balance drops but no money leaves.',
+        where: 'Same Stripe account — enable Connect (Express accounts).' },
+      { key: 'tax', label: 'Sales tax', on: () => shiptax.taxConfigured(), env: ['SALES_TAX_RATES', 'SALES_TAX_RATE', 'TAX_API_URL', 'TAX_API_KEY'],
+        gives: 'Tax added at checkout and recorded on the order.',
+        without: 'Every order charges zero tax. Legal exposure once you sell for real.',
+        where: 'Simplest: SALES_TAX_RATES as a small JSON of region → rate. Or plug in a tax API.' },
+      { key: 'fx', label: 'Currency conversion', on: () => !!process.env.FX_RATES, env: ['FX_RATES'],
+        gives: 'The currency picker offers more than dollars (display only — charges stay USD).',
+        without: 'Members only ever see US dollars.',
+        where: 'FX_RATES as JSON, e.g. {"EUR":0.92,"GBP":0.79}. Refresh it when you like.' },
+    ],
+  },
+  {
+    group: 'Atwe AI',
+    items: [
+      { key: 'ai', label: 'Atwe AI', on: () => !!process.env.ANTHROPIC_API_KEY, env: ['ANTHROPIC_API_KEY'],
+        gives: 'Everything AI: the assistant, writing help, job matching, resumes, moderation, summaries, the shopping concierge, agent actions.',
+        without: 'Roughly 25 features say "not set up on this server". The single biggest switch on this page.',
+        where: 'console.anthropic.com → API keys.' },
+      { key: 'imagegen', label: 'Making pictures', on: () => imagegen.isConfigured(), env: ['IMAGE_API_URL', 'IMAGE_API_KEY'],
+        gives: 'Generate a picture from words, and "tidy up" a product photo.',
+        without: 'Both say they are not set up. (The consent step for photos with people in them lives here too.)',
+        where: 'Any image API that takes a prompt — the code is provider-agnostic.' },
+      { key: 'stt', label: 'Voice-note transcripts', on: () => stt.isConfigured(), env: ['STT_API_URL', 'STT_API_KEY'],
+        gives: 'Voice notes get a written transcript under them, for both people.',
+        without: 'Voice notes still send and play — just no text.',
+        where: 'Any Whisper-compatible speech-to-text endpoint.' },
+    ],
+  },
+  {
+    group: 'Reaching people',
+    items: [
+      { key: 'email', label: 'Email', on: () => mailer.isConfigured(), env: ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'MAIL_FROM'],
+        gives: 'Verification links, password resets, order confirmations, shipping updates, sign-in alerts, your broadcasts.',
+        without: 'Every one of those is written to the server log instead of sent. Nobody can reset a password.',
+        where: 'Any SMTP provider (Resend, Postmark, SendGrid, Gmail app password).' },
+      { key: 'push', label: 'Push notifications', on: () => push.isConfigured(), env: ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT'],
+        gives: 'Alerts on a phone when the app is closed — messages, orders, money.',
+        without: 'Notifications only appear while a tab is open. The come-back-to-Atwe nudge never sends.',
+        where: 'Generate a VAPID key pair (npx web-push generate-vapid-keys).' },
+      { key: 'sms', label: 'Text messages', on: () => sms.isConfigured(), env: ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM'],
+        gives: 'Text alerts for the two things that matter: a new sign-in, and money received.',
+        without: 'Nothing is texted (it is logged instead).',
+        where: 'twilio.com → a number + the account SID and auth token.' },
+    ],
+  },
+  {
+    group: 'Media & calls',
+    items: [
+      { key: 'storage', label: 'Photo & video storage', on: () => storage.isConfigured(), env: ['S3_BUCKET', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_ENDPOINT', 'S3_REGION', 'CDN_URL'],
+        gives: 'Photos and video live in proper storage: big uploads, long video, fast loading worldwide.',
+        without: 'Media is stored inside the database as text. It works, but it is capped small (~16MB) and gets slow as it grows. Worth doing before you have many members.',
+        where: 'Cloudflare R2 or Backblaze B2 (both cheap, S3-compatible). Point CDN_URL at the public bucket.' },
+      { key: 'turn', label: 'Calls that connect anywhere', on: () => !!(process.env.CLOUDFLARE_TURN_KEY_ID || process.env.TURN_URL),
+        env: ['CLOUDFLARE_TURN_KEY_ID', 'CLOUDFLARE_TURN_API_TOKEN'],
+        gives: 'Voice and video calls that work on mobile networks and behind office firewalls.',
+        without: 'Calls fall back to a free public relay — they often fail to connect on 4G/5G. The most common "calls don’t work" cause.',
+        where: 'Cloudflare dashboard → Calls → TURN. Free tier is generous.' },
+      { key: 'gif', label: 'GIF search', on: () => !!(process.env.TENOR_API_KEY || process.env.GIPHY_API_KEY), env: ['TENOR_API_KEY', 'GIPHY_API_KEY'],
+        gives: 'Searching GIFs in chat and the composer.',
+        without: 'The GIF tab says it is not set up. Stickers and emoji still work.',
+        where: 'Google Tenor API key (free) or a Giphy key.' },
+    ],
+  },
+  {
+    group: 'Selling & shipping',
+    items: [
+      { key: 'labels', label: 'Shipping labels', on: () => shiplabels.isConfigured(), env: ['SHIPPO_API_KEY', 'SHIPPO_WEBHOOK_SECRET'],
+        gives: 'Sellers buy a real postage label in the app, and delivery is detected automatically.',
+        without: 'Sellers type the carrier and tracking number by hand. Everything else about shipping still works.',
+        where: 'goshippo.com → API key. Add a track_updated webhook to /api/webhooks/shippo with a secret you choose.' },
+      { key: 'rates', label: 'Live carrier prices', on: () => shiptax.ratesConfigured(), env: ['SHIPPING_RATES', 'SHIPPING_API_URL', 'SHIPPING_API_KEY'],
+        gives: 'Buyers pick from real shipping options at checkout.',
+        without: 'Checkout uses the seller’s own flat fee. Perfectly workable.',
+        where: 'SHIPPING_RATES as a small JSON list of options, or a carrier API.' },
+    ],
+  },
+  {
+    group: 'Sign-in options',
+    items: [
+      { key: 'google', label: 'Sign in with Google', on: () => !!process.env.GOOGLE_CLIENT_ID, env: ['GOOGLE_CLIENT_ID'],
+        gives: 'One-tap Google sign-up and sign-in.',
+        without: 'The Google button is hidden. Email + password still works.',
+        where: 'Google Cloud Console → OAuth client ID (Web).' },
+      { key: 'apple', label: 'Sign in with Apple', on: () => !!process.env.APPLE_CLIENT_ID, env: ['APPLE_CLIENT_ID', 'APPLE_APP_ID', 'APPLE_DOMAIN_ASSOCIATION'],
+        gives: 'Apple sign-in — and Apple REQUIRES it in the App Store if you offer Google.',
+        without: 'The Apple button is hidden. Blocks App Store review later.',
+        where: 'Apple Developer → Certificates, Identifiers & Profiles → Services ID.' },
+    ],
+  },
+  {
+    group: 'Nice to have',
+    items: [
+      { key: 'finance', label: 'Live share prices', on: () => finance.isConfigured(), env: ['FINANCE_PROVIDER', 'FINNHUB_API_KEY'],
+        gives: 'Prices and charts on $TICKER pages.',
+        without: 'Already on by default using a free source — a key only makes it sturdier.',
+        where: 'finnhub.io if the free source ever gets rate-limited.' },
+      { key: 'vault', label: 'Encrypted vault key', on: () => !!process.env.DRIVE_KEY, env: ['DRIVE_KEY'],
+        gives: 'The admin vault encrypts what you store in it.',
+        without: 'The vault refuses to store secrets.',
+        where: 'Any long random string in Railway → Variables.' },
+      { key: 'admin2fa', label: 'Force staff 2FA', on: () => process.env.REQUIRE_ADMIN_2FA === 'true', env: ['REQUIRE_ADMIN_2FA'],
+        gives: 'Nobody reaches the dashboard without two-factor. Recommended once you have staff.',
+        without: 'Staff can sign in with a password alone.',
+        where: 'Set REQUIRE_ADMIN_2FA=true — but turn 2FA on for your own account FIRST.' },
+    ],
+  },
+];
+
+app.get('/api/admin/setup', auth.requireAdmin, (_req, res) => {
+  const groups = SETUP_GROUPS.map((g) => ({
+    group: g.group,
+    items: g.items.map((it) => {
+      let on = false;
+      try { on = !!it.on(); } catch (e) { on = false; }
+      return { key: it.key, label: it.label, on, env: it.env, gives: it.gives, without: it.without, where: it.where };
+    }),
+  }));
+  const all = groups.flatMap((g) => g.items);
+  res.json({ groups, total: all.length, connected: all.filter((i) => i.on).length });
+});
+
 app.get('/api/admin/site', auth.requireAdmin, async (_req, res) => {
   await loadSiteLock();
   if (!_siteLock.code) { _siteLock.code = genCode(_siteLock.codeLength); }

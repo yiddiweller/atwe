@@ -1123,6 +1123,7 @@
       <button class="tab" data-v="emailbrand" onclick="switchTab('emailbrand')">Email design</button>
       <button class="tab" data-v="aistudio" onclick="switchTab('aistudio')">AI Studio</button>
       <button class="tab" data-v="ops" onclick="switchTab('ops')">Operations</button>
+      <button class="tab" data-v="setup" onclick="switchTab('setup')">Setup</button>
       <button class="tab" data-v="site" onclick="switchTab('site')">Site</button>
       <button class="tab" data-v="storage" onclick="switchTab('storage')">Storage</button>
       <button class="tab" data-v="webinars" onclick="switchTab('webinars')">Webinars</button>
@@ -1580,7 +1581,7 @@ const TAB_PERM = {
   announcements: 'super', demand: 'growth', groups: 'moderation', ops: 'super', numbers: 'growth',
   safety: 'moderation',
   approvals: 'super', copyright: 'moderation', impersonation: 'moderation',
-  alerts: 'super', aistudio: 'super',
+  setup: 'super', alerts: 'super', aistudio: 'super',
   fraud: 'revenue', modqa: 'moderation', broadcasts: 'super',
   storage: 'super', cluster: 'super', webinars: 'moderation',
   appreviews: 'support', advances: 'revenue',
@@ -1667,7 +1668,7 @@ const NAV_TITLES = {
   announcements:'Announcements', demand:'Demand', groups:'Groups & channels', ops:'Operations', numbers:'Numbers',
   safety:'Safety tools',
   approvals:'Approvals', copyright:'Copyright claims', impersonation:'Impersonation',
-  alerts:'Alerts', aistudio:'AI Studio',
+  setup:'Setup', alerts:'Alerts', aistudio:'AI Studio',
   fraud:'Fraud rules', modqa:'Moderator QA', broadcasts:'Broadcasts',
   developers:'Developers', apilog:'API log', incidents:'Status page',
   chargebacks:'Chargebacks', reports2:'Report builder', churn:'Churn',
@@ -1724,6 +1725,7 @@ function renderView(){
   else if (VIEW === 'ads') renderAdsAdminView();
   else if (VIEW === 'affiliations') renderAffAdminView();
   else if (VIEW === 'traffic') renderTrafficView();
+  else if (VIEW === 'setup') renderSetupView();
   else if (VIEW === 'site') renderSiteView();
   else if (VIEW === 'usernames') renderUsernamesView();
   else if (VIEW === 'posts') renderPostsView();
@@ -2269,6 +2271,36 @@ let DEMO = { on:false, count:0 };
 let FLAGS = { flags:{}, meta:[] };
 let CRASHES = { crashes: [] };
 let JOBS = { jobs:[] };
+/* What is connected, and what each gap costs. Reads the same checks the
+   features use, so it can never claim something works when it doesn't. */
+async function renderSetupView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div id="setupBody"><div class="ld"><span class="ab-mark"></span></div></div>';
+  let d;
+  try { d = await api('GET', '/api/admin/setup'); }
+  catch (e){ document.getElementById('setupBody').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; return; }
+  const pct = d.total ? Math.round((d.connected / d.total) * 100) : 0;
+  const card = (it) => `<div class="site-row" style="display:block;border-top:1px solid var(--b1);padding:12px 0;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span class="jdot ${it.on ? 'green' : 'grey'}"></span>
+        <span class="srt">${esc(it.label)}</span>
+        <span class="pill ${it.on ? 'pro' : ''}" style="margin-inline-start:auto;">${it.on ? 'connected' : 'not set up'}</span>
+      </div>
+      <div class="srs" style="margin-top:6px;">${esc(it.gives)}</div>
+      ${it.on ? '' : `<div class="srs" style="margin-top:4px;color:var(--amber);">Without it: ${esc(it.without)}</div>
+        <div class="srs" style="margin-top:4px;">Where to get it: ${esc(it.where)}</div>
+        <div class="srs" style="margin-top:4px;opacity:.75;">Railway variable${it.env.length > 1 ? 's' : ''}: <code>${it.env.map(esc).join('</code>, <code>')}</code></div>`}
+    </div>`;
+  document.getElementById('setupBody').innerHTML = `
+    <div class="panel">
+      <h3>Setup <span class="muted">· ${d.connected} of ${d.total} connected</span></h3>
+      <div class="sub">Everything outside Atwe that it can plug into. Each one is optional — without it the app keeps running and quietly does less. This page is where that "quietly" stops. Add a key in Railway → Variables, redeploy, and the light turns green.</div>
+      <div class="tf-chart" style="height:8px;margin-top:12px;background:var(--s2);border-radius:99px;overflow:hidden;">
+        <div style="height:100%;width:${pct}%;background:var(--accent);"></div>
+      </div>
+    </div>
+    ${d.groups.map(g => `<div class="panel"><h3>${esc(g.group)}</h3>${g.items.map(card).join('')}</div>`).join('')}`;
+}
 async function renderSiteView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = '<div class="ld"><span class="ab-mark"></span></div>';
