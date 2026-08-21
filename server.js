@@ -2073,6 +2073,14 @@ app.post('/api/feedback', auth.requireAuth, rateLimit(10, 60000, 'feedback'), as
 });
 
 app.get('/api/test', async (_req, res) => {
+  // No key is a CONFIGURATION state, not a fault: say so with a 503 and a clear
+  // message, the same as every other optional integration. Returning a 500 here
+  // logged a stack trace into the admin error list on every key-less deploy and
+  // told whoever ran the diagnostic nothing about what to actually do.
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(503).json({ status: 'not-configured',
+      error: 'Atwe AI is not set up on this server. Add ANTHROPIC_API_KEY to switch it on.' });
+  }
   try {
     const msg = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
