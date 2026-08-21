@@ -4238,6 +4238,13 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .msg-team-note b{color:var(--t1);font-weight:700;}
 /* The signature under a staff reply — the company said it, this person wrote it. */
 .msg-sig{display:block;margin:3px 0 0 12px;font-size:11px;color:var(--t3);letter-spacing:.01em;}
+/* The "talk to a person" card, and the flag it raises in the staff queue. */
+.mc-human{padding:12px 14px;}
+.mc-human-t{font-size:14px;font-weight:700;}
+.mc-human-s{font-size:12.5px;color:var(--t3);margin:3px 0 10px;}
+.mc-human-btn{width:100%;}
+.ibx-human{font-size:10px;font-weight:800;letter-spacing:.02em;padding:2px 7px;border-radius:999px;
+  background:rgba(255,0,51,.14);color:var(--red);}
 /* ── The shared team inbox ── */
 .ibx-n{display:inline-block;min-width:17px;padding:0 5px;margin-left:5px;border-radius:999px;
   background:var(--accent);color:#fff;font-size:10.5px;font-weight:800;line-height:17px;text-align:center;}
@@ -19072,7 +19079,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1656'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1657'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -40365,6 +40372,7 @@ function acInboxRow(c) {
     <span class="ibx-main">
       <span class="ibx-top">
         <span class="ibx-name">${escHtml(c.customer.name || '@' + c.customer.username)}</span>
+        ${c.needsHuman ? '<span class="ibx-human">Asked for a person</span>' : ''}
         <span class="ibx-state ${stateCls}">${INBOX_STATE_LABEL[c.state] || c.state}</span>
         ${c.unread ? `<span class="ibx-unread">${c.unread}</span>` : ''}
       </span>
@@ -54354,6 +54362,18 @@ if (!window._hugResizeBound) {
 // end-to-end encrypted (messages are stored server-side so history syncs across
 // devices) — so this never claims E2EE; it states the real protection (encrypted
 // in transit + private to the chat) and taps through to the plain-English detail.
+/* Ask for a human. Puts the customer at the top of the business's queue and
+   tells the staff who can answer; the reply that comes back says whether
+   somebody is on it now or when they open, rather than leaving them guessing. */
+async function acAskHuman() {
+  const biz = AC.peer && AC.peer.id; if (!biz) return;
+  try {
+    await API.req('POST', `/api/atchat/ask-human/${biz}`);
+    showNotif('Passed to the team.');
+    acReloadOpenThread();
+  } catch (e) { showNotif(e.message || 'Could not pass that on.'); }
+}
+
 /* Talking to a company, not to whoever owns it.
 
    When a business runs a shared inbox, several people can read and answer — so
@@ -55592,6 +55612,17 @@ function acMetaCard(m) {
     const opts = (meta.options || []).map(o =>
       `<button class="mc-btnrow"${(!m.mine && live) ? ` onclick="event.stopPropagation();acTapReplyButton(${jsAttr(o)})"` : ' disabled'}>${escHtml(o)}</button>`).join('');
     return `<div class="meta-card mc-buttons"><div class="mc-btn-text">${escHtml(meta.text || '')}</div><div class="mc-btn-list">${opts}</div></div>`;
+  }
+  if (meta.t === 'askhuman') {
+    /* The way out of the automatic answers. Shown to the CUSTOMER only — the
+       business's own copy is just a record that it was offered. Honest about
+       what happens next: somebody now, or when we open. */
+    if (m.mine) return `<div class="meta-card mc-human"><div class="mc-human-t">Offered to pass this to the team</div></div>`;
+    return `<div class="meta-card mc-human">
+      <div class="mc-human-t">Not what you needed?</div>
+      <div class="mc-human-s">${meta.open ? 'Someone from the team is around now.' : 'The team will pick it up when they open.'}</div>
+      <button class="ac-pill-btn accent mc-human-btn"${live ? ' onclick="event.stopPropagation();acAskHuman()"' : ' disabled'}>Talk to a person</button>
+    </div>`;
   }
   if (meta.t === 'form') {
     // A fillable card. The recipient answers in place; the sender's copy just

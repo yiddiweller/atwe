@@ -4948,6 +4948,12 @@ async function initSchema() {
                  ON inbox_conversations(business_id, state, last_msg_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS inbox_conv_assignee_idx
                  ON inbox_conversations(assigned_to, state);`);
+  /* Asked for a person. The front desk answers what it can from the business's
+     own FAQ and stock; when that is not enough the customer says so, and this
+     is the flag that puts them in front of a human instead of leaving them
+     arguing with a robot. Sorted to the top of the queue. */
+  await query(`ALTER TABLE inbox_conversations ADD COLUMN IF NOT EXISTS needs_human BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE inbox_conversations ADD COLUMN IF NOT EXISTS human_at TIMESTAMPTZ;`);
   // The switch. Off by default: a business that has not asked for a team inbox
   // behaves exactly as it always has.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS team_inbox BOOLEAN NOT NULL DEFAULT false;`);

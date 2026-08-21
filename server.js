@@ -3197,6 +3197,89 @@ async function migrateOldAssignments() {
   } catch (e) { console.error('migrateOldAssignments', e.message); return 0; }
 }
 
+/* ── The front door ───────────────────────────────────────────────────────────
+   A company's chat should not leave someone stuck talking to a machine. Atwe
+   already answers what it can from the business's own FAQ, stock, prices and
+   opening hours; this is the way out of that when it is not enough.
+
+   Offered right after an automatic reply, because that is the moment it is
+   wanted, and never more than once while a request is already waiting. */
+async function offerHuman(businessId, customerId) {
+  try {
+    if (!(await hasTeamInbox(businessId))) return;           // no team = already a person
+    const c = (await db.query(
+      `SELECT needs_human FROM inbox_conversations
+        WHERE business_id = $1 AND customer_id = $2 AND thread_id IS NULL`, [businessId, customerId])).rows[0];
+    if (c && c.needs_human) return;                          // already asked; don't nag
+    const b = (await db.query('SELECT business_hours, special_hours FROM users WHERE id = $1', [businessId])).rows[0];
+    const open = b ? businessOpenNow(Array.isArray(b.business_hours) ? b.business_hours : null, b.special_hours) : null;
+    await pushMetaCard(businessId, customerId, { t: 'askhuman', open: open === true });
+  } catch (e) { /* the chat is fine without the offer */ }
+}
+
+/* The customer asked for a person. Puts them at the top of the queue, tells the
+   staff who can answer, and — this is the part that matters — answers back
+   honestly rather than leaving them wondering: somebody is on it, or here is
+   when we open. */
+app.post('/api/atchat/ask-human/:businessId', auth.requireAuth, rateLimit(10, 60000, 'ask-human'), async (req, res) => {
+  const bid = routeId(req.params.businessId);
+  if (!Number.isInteger(bid)) return res.status(400).json({ error: 'Invalid business.' });
+  try {
+    if (!(await hasTeamInbox(bid))) return res.status(400).json({ error: 'This business answers personally already.' });
+    if (!(await dmAllowed(bid, req.user.id))) return res.status(403).json({ error: 'Cannot message this business.' });
+    await inboxTouch(bid, req.user.id, null, 'customer');
+    const upd = await db.query(
+      `UPDATE inbox_conversations
+          SET needs_human = true, human_at = now(),
+              state = CASE WHEN state = 'solved' THEN 'open' ELSE state END
+        WHERE business_id = $1 AND customer_id = $2 AND thread_id IS NULL
+        RETURNING id, assigned_to`, [bid, req.user.id]);
+    const conv = upd.rows[0];
+    // Tell the people who can actually do something about it.
+    const staff = (await db.query(
+      `SELECT $1::int AS id
+        UNION
+       SELECT t.member_id FROM business_team t
+        WHERE t.business_id = $1 AND t.status = 'active'
+          AND (t.role = 'admin' OR COALESCE((t.permissions->>'inbox')::boolean, false) = true)`, [bid])).rows;
+    for (const p of staff) {
+      if (conv && conv.assigned_to && p.id !== conv.assigned_to) continue;   // assigned: only bother its owner
+      rtPush(p.id, 'inbox', { type: 'needs-human', convId: conv ? conv.id : null, businessId: bid });
+      notify(p.id, req.user.id, 'message', null);
+    }
+    // Say what happens next, in the chat, from the business.
+    const b = (await db.query('SELECT name, business_hours, special_hours FROM users WHERE id = $1', [bid])).rows[0];
+    const open = b ? businessOpenNow(Array.isArray(b.business_hours) ? b.business_hours : null, b.special_hours) : null;
+    const line = open === false
+      ? `Thanks — someone from the team will pick this up when we open. ${nextOpenLine(b)}`.trim()
+      : 'Thanks — someone from the team is picking this up now.';
+    await deliverDM(bid, req.user.id, line, null);
+    res.json({ ok: true, open: open === true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not pass that on.' }); }
+});
+
+/* "We open Monday at 9am" — said only when it can be said accurately. A business
+   with no hours set gets nothing rather than a guess. */
+function nextOpenLine(b) {
+  const hours = b && Array.isArray(b.business_hours) ? b.business_hours : null;
+  if (!hours || hours.length !== 7) return '';
+  const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const now = new Date();
+  const todayIdx = (now.getDay() + 6) % 7;                  // the table runs Mon..Sun
+  for (let i = 0; i < 7; i++) {
+    const idx = (todayIdx + i) % 7;
+    const d = hours[idx];
+    if (!d || d.closed || !d.open) continue;
+    if (i === 0) {
+      const [h, m] = String(d.open).split(':').map(Number);
+      if (now.getHours() * 60 + now.getMinutes() < h * 60 + m) return `We open today at ${d.open}.`;
+      continue;
+    }
+    return `We open ${i === 1 ? 'tomorrow' : 'on ' + DAYS[idx]} at ${d.open}.`;
+  }
+  return '';
+}
+
 // The staff-facing shape of a conversation.
 function mapInboxConv(r) {
   return {
@@ -3210,6 +3293,7 @@ function mapInboxConv(r) {
       accountType: r.customer_type === 'business' ? 'business' : 'personal',
     },
     assignedTo: r.assigned_to ? { id: r.assigned_to, name: r.assignee_name, username: r.assignee_username } : null,
+    needsHuman: !!r.needs_human,
     lastFrom: r.last_from || null,
     lastMessage: r.last_body || null,
     lastAt: r.last_msg_at,
@@ -3283,14 +3367,16 @@ app.get('/api/inbox/:businessId', auth.requireAuth, async (req, res) => {
     else where += " AND c.state <> 'solved'";   // the default view is work still to do
     if (mine) { params.push(req.user.id); where += ` AND c.assigned_to = $${params.length}`; }
     const { rows } = await db.query(
-      `${INBOX_CONV_SELECT} ${where} ORDER BY c.last_msg_at DESC LIMIT 200`, params);
+      `${INBOX_CONV_SELECT} ${where}
+        ORDER BY (c.needs_human AND c.state <> 'solved') DESC, c.last_msg_at DESC LIMIT 200`, params);
     const counts = (await db.query(
       `SELECT count(*) FILTER (WHERE state = 'new')::int AS new,
               count(*) FILTER (WHERE state = 'open')::int AS open,
               count(*) FILTER (WHERE state = 'waiting')::int AS waiting,
               count(*) FILTER (WHERE state = 'solved')::int AS solved,
               count(*) FILTER (WHERE assigned_to = $2 AND state <> 'solved')::int AS mine,
-              count(*) FILTER (WHERE assigned_to IS NULL AND state <> 'solved')::int AS unassigned
+              count(*) FILTER (WHERE assigned_to IS NULL AND state <> 'solved')::int AS unassigned,
+              count(*) FILTER (WHERE needs_human AND state <> 'solved')::int AS waiting_human
          FROM inbox_conversations WHERE business_id = $1`, [bid, req.user.id])).rows[0];
     // Who the work can be handed to.
     const team = (await db.query(
@@ -3374,7 +3460,8 @@ app.post('/api/inbox/:businessId/:convId/reply', auth.requireAuth, rateLimit(120
     await db.query(
       `UPDATE inbox_conversations
           SET assigned_to = COALESCE(assigned_to, $2), assigned_at = COALESCE(assigned_at, now()),
-              opened_at = COALESCE(opened_at, now())
+              opened_at = COALESCE(opened_at, now()),
+              needs_human = false          -- a person just answered; the ask is met
         WHERE id = $1`, [cid, req.user.id]);
     await inboxTouch(bid, conv.customer_id, conv.thread_id, 'business');
     rtPush(bid, 'inbox', { type: 'reply', convId: cid });
@@ -7448,6 +7535,9 @@ async function maybeAutoReply(businessId, customerId, inboundBody) {
          ON CONFLICT (business_id, peer_id, kind) DO UPDATE SET sent_at = now()`,
         [businessId, customerId, kind]
       );
+      // A machine just answered. Offer the way out of it, so nobody is left
+      // arguing with a robot when what they need is a person.
+      offerHuman(businessId, customerId).catch(() => {});
     };
     // Instant answers (FAQ): a question the business pre-answered replies
     // itself — the MOST SPECIFIC auto-message, so it outranks greeting/away.
