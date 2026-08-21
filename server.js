@@ -34227,35 +34227,103 @@ async function businessReviewSummary(businessId) {
   return { count: r.rows[0].count || 0, average: Number(r.rows[0].avg) || 0 };
 }
 // Unified per-user trust score (0–100): tenure + completed orders (buyer & seller) +
-// ratings received (product reviews as seller, business reviews, and — once Feature 3
-// adds them — buyer reviews) + verification. Deterministic, computed on read.
-const TRUST_TIERS = [[90, 'Excellent'], [75, 'Great'], [60, 'Good'], [40, 'Fair'], [0, 'New']];
+/* ═══════════════════════════════════════════════
+   REPUTATION  —  one number, 0 to 100, that means something
+   ───────────────────────────────────────────────
+   Everyone starts at 50: we know nothing about them yet, so the number says
+   nothing about them yet. From there it is earned or lost, and it is COMPUTED
+   from real events every time rather than kept as a running tally. That matters
+   for two reasons: a stored counter drifts and can never be corrected, and a
+   bad week two years ago would follow somebody forever. Computed means the
+   rules can be improved and everyone's number is instantly right again.
+
+   Ratings are deliberately two-directional. A five-star average earns; a
+   one-star average costs the same amount. Three stars is the middle and moves
+   nothing — because "average" is exactly what 50 already means.
+
+   The penalties that come from orders are RATES, not counts, and are ramped by
+   how much history there is. One cancellation out of one order is not evidence
+   of anything; three out of a hundred is not either. Three out of five is.
+═══════════════════════════════════════════════ */
+const TRUST_BASE = 50;
+const TRUST_TIERS = [[90, 'Excellent'], [75, 'Great'], [60, 'Good'], [45, 'Fair'], [0, 'Low']];
+
 async function userTrustScore(userId) {
   try {
-    const u = (await db.query('SELECT created_at, email_verified, verified FROM users WHERE id = $1', [userId])).rows[0];
-    if (!u) return null;
-    const ageMonths = Math.max(0, (Date.now() - new Date(u.created_at).getTime()) / (30 * 864e5));
-    const oc = (await db.query(
-      `SELECT COUNT(*) FILTER (WHERE buyer_id = $1 AND status IN ('paid','fulfilled','delivered','released'))::int AS bought,
-              COUNT(*) FILTER (WHERE seller_id = $1 AND status IN ('fulfilled','delivered','released'))::int AS sold
-         FROM orders WHERE buyer_id = $1 OR seller_id = $1`, [userId])).rows[0];
-    const pr = (await db.query('SELECT COUNT(*)::int c, COALESCE(AVG(r.rating),0)::float a FROM product_reviews r JOIN products p ON p.id = r.product_id WHERE p.business_id = $1', [userId])).rows[0];
-    const br = (await db.query('SELECT COUNT(*)::int c, COALESCE(AVG(rating),0)::float a FROM business_reviews WHERE business_id = $1', [userId])).rows[0];
-    let buyerRev = { c: 0, a: 0 };
-    try { buyerRev = (await db.query('SELECT COUNT(*)::int c, COALESCE(AVG(rating),0)::float a FROM buyer_reviews WHERE subject_id = $1', [userId])).rows[0]; } catch (e) { /* table arrives with two-way reviews */ }
-    const ratingCount = (pr.c || 0) + (br.c || 0) + (buyerRev.c || 0);
-    const ratingAvg = ratingCount ? ((pr.a * pr.c + br.a * br.c + buyerRev.a * buyerRev.c) / ratingCount) : 0;
-    const completed = (oc.bought || 0) + (oc.sold || 0);
-    let score = 0;
-    score += Math.min(20, ageMonths * 2);                                   // tenure (≤20)
-    score += Math.min(30, completed * 3);                                   // marketplace activity (≤30)
-    score += ratingCount ? (ratingAvg / 5) * 40 * Math.min(1, ratingCount / 5) : 0; // ratings, ramped (≤40)
-    score += (u.email_verified ? 5 : 0) + (u.verified ? 5 : 0);            // verification (≤10)
-    score = Math.max(0, Math.min(100, Math.round(score)));
-    const tier = (TRUST_TIERS.find(([t]) => score >= t) || [0, 'New'])[1];
-    return { score, tier, completedOrders: completed, ratingAvg: Math.round(ratingAvg * 10) / 10, ratingCount };
-  } catch (e) { return null; }
+    const { rows } = await db.query(`
+      SELECT
+        u.created_at, u.email_verified, u.verified,
+        -- what they have actually completed
+        (SELECT COUNT(*) FROM orders o WHERE (o.buyer_id = $1 AND o.status IN ('paid','fulfilled','delivered','released'))
+                                          OR (o.seller_id = $1 AND o.status IN ('fulfilled','delivered','released')))::int AS completed,
+        (SELECT COUNT(*) FROM orders o WHERE o.buyer_id = $1 OR o.seller_id = $1)::int AS all_orders,
+        (SELECT COUNT(*) FROM rental_bookings b WHERE (b.guest_id = $1 OR b.host_id = $1) AND b.status = 'paid')::int AS stays,
+        -- what they cancelled themselves
+        (SELECT COUNT(*) FROM orders o WHERE (o.buyer_id = $1 OR o.seller_id = $1) AND o.status = 'cancelled')::int AS cancelled,
+        -- returns upheld against them as the seller
+        (SELECT COUNT(*) FROM order_returns r WHERE r.seller_id = $1 AND r.status IN ('approved','refunded'))::int AS returns_lost,
+        -- a dispute that went the buyer's way: they were the seller and it was refunded
+        (SELECT COUNT(*) FROM orders o WHERE o.seller_id = $1 AND o.disputed_at IS NOT NULL AND o.status = 'refunded')::int AS disputes_lost,
+        -- reports staff agreed with
+        (SELECT COUNT(*) FROM reports rp WHERE rp.reported_id = $1 AND rp.status = 'resolved')::int AS reports_upheld,
+        -- every rating they have received, from either side of a deal
+        (SELECT COUNT(*) FROM product_reviews r JOIN products p ON p.id = r.product_id WHERE p.business_id = $1)::int AS pr_c,
+        (SELECT COALESCE(AVG(r.rating),0) FROM product_reviews r JOIN products p ON p.id = r.product_id WHERE p.business_id = $1)::float AS pr_a,
+        (SELECT COUNT(*) FROM business_reviews WHERE business_id = $1)::int AS br_c,
+        (SELECT COALESCE(AVG(rating),0) FROM business_reviews WHERE business_id = $1)::float AS br_a,
+        (SELECT COUNT(*) FROM buyer_reviews WHERE subject_id = $1)::int AS byr_c,
+        (SELECT COALESCE(AVG(rating),0) FROM buyer_reviews WHERE subject_id = $1)::float AS byr_a
+      FROM users u WHERE u.id = $1`, [userId]);
+    const r = rows[0];
+    if (!r) return null;
+
+    const ratingCount = r.pr_c + r.br_c + r.byr_c;
+    const ratingAvg = ratingCount
+      ? (r.pr_a * r.pr_c + r.br_a * r.br_c + r.byr_a * r.byr_c) / ratingCount : 0;
+    const ageMonths = Math.max(0, (Date.now() - new Date(r.created_at).getTime()) / (30 * 864e5));
+    // How much to believe a rate at all. Two orders tell you nothing.
+    const confidence = (n, full) => Math.min(1, n / full);
+
+    // ── earned ──────────────────────────────────────────────────────────────
+    // Ratings cut both ways: 5★ → +25, 3★ → 0, 1★ → −25, ramped by how many.
+    const ratings = ratingCount
+      ? ((ratingAvg - 3) / 2) * 25 * confidence(ratingCount, 5) : 0;
+    const done     = Math.min(12, (r.completed / 30) * 12);
+    const stays    = Math.min(6, (r.stays / 10) * 6);
+    const tenure   = Math.min(5, (ageMonths / 12) * 5);
+    const verified = (r.email_verified ? 2 : 0) + (r.verified ? 3 : 0);
+
+    // ── lost ────────────────────────────────────────────────────────────────
+    const cancelRate = r.all_orders ? r.cancelled / r.all_orders : 0;
+    const cancels = Math.min(12, cancelRate * 40) * confidence(r.all_orders, 5);
+    const soldish = Math.max(1, r.completed);
+    const returns = Math.min(10, (r.returns_lost / soldish) * 35) * confidence(r.completed, 5);
+    // These two are serious enough to count individually rather than as a rate.
+    const disputes = Math.min(20, r.disputes_lost * 8);
+    const reported = Math.min(25, r.reports_upheld * 10);
+
+    const earned = ratings + done + stays + tenure + verified;
+    const lost = cancels + returns + disputes + reported;
+    const score = Math.max(0, Math.min(100, Math.round(TRUST_BASE + earned - lost)));
+
+    // Nothing has happened yet, so the number is a starting point and not a
+    // judgement. Say "New" rather than implying 50 was earned.
+    const noHistory = !r.completed && !ratingCount && !r.stays;
+    const tier = noHistory ? 'New' : (TRUST_TIERS.find(([t]) => score >= t) || [0, 'Low'])[1];
+
+    return {
+      score, tier, isNew: noHistory,
+      completedOrders: r.completed,
+      stays: r.stays,
+      ratingAvg: Math.round(ratingAvg * 10) / 10,
+      ratingCount,
+      // What moved it, so a profile can show the reasons rather than a bare number.
+      up: { ratings: Math.round(Math.max(0, ratings)), orders: Math.round(done), stays: Math.round(stays), tenure: Math.round(tenure), verified },
+      down: { ratings: Math.round(Math.max(0, -ratings)), cancelled: Math.round(cancels), returns: Math.round(returns), disputes: Math.round(disputes), reported: Math.round(reported) },
+    };
+  } catch (e) { console.error('userTrustScore', e.message); return null; }
 }
+
 // Leave or update a review for a business (1:1 per reviewer; upsert).
 // ── Contact / lead forms (business) ──
 // A visitor submits the contact form on a business profile → a private lead.
