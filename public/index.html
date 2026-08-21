@@ -7245,6 +7245,95 @@ body.light .rev-sum-v{color:var(--on-green);}
 .rev-bar-fill{display:block;height:100%;border-radius:999px;background:var(--amber);}
 .rev-bar-c{font-size:12px;color:var(--t3);min-width:20px;text-align:right;
   font-variant-numeric:tabular-nums;}
+/* ── Topic chips: what keeps coming up ── */
+.rev-topics{display:flex;gap:7px;overflow-x:auto;-webkit-overflow-scrolling:touch;
+  margin:0 0 12px;padding-bottom:2px;scrollbar-width:none;}
+.rev-topics::-webkit-scrollbar{display:none;}
+.rev-topic{flex:0 0 auto;padding:7px 13px;border:none;border-radius:var(--r-pill);
+  background:var(--s1);color:var(--t2);font-size:12.5px;font-weight:600;cursor:pointer;
+  font-family:inherit;white-space:nowrap;}
+.rev-topic b{color:var(--t1);font-weight:800;margin-left:2px;}
+.rev-topic.on{background:var(--primary);color:var(--on-primary);}
+.rev-topic.on b{color:var(--on-primary);}
+/* ── Listing highlights ── */
+.lst-highlights{display:flex;flex-direction:column;gap:14px;margin:14px 0 2px;
+  padding-top:14px;border-top:1px solid var(--b2);}
+.lh-row{display:flex;align-items:flex-start;gap:13px;}
+.lh-ic{flex:0 0 auto;width:24px;height:24px;margin-top:1px;}
+.lh-ic svg{width:24px;height:24px;fill:none;stroke:var(--t1);stroke-width:1.6;
+  stroke-linecap:round;stroke-linejoin:round;}
+.lh-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.lh-t{font-size:14.5px;font-weight:750;color:var(--t1);}
+.lh-s{font-size:13.5px;color:var(--t2);line-height:1.45;}
+/* ── Browse: tiles, then real examples ── */
+.br-tiles{display:flex;gap:10px;overflow-x:auto;-webkit-overflow-scrolling:touch;
+  margin:4px 0 14px;padding-bottom:4px;scrollbar-width:none;}
+.br-tiles::-webkit-scrollbar{display:none;}
+.br-tile{flex:0 0 auto;width:88px;padding:12px 6px 10px;border:none;border-radius:var(--r-lg);
+  background:var(--s1);cursor:pointer;font-family:inherit;display:flex;flex-direction:column;
+  align-items:center;gap:6px;transition:background var(--t-fast) var(--ease);}
+@media(hover:hover){.br-tile:hover{background:var(--s2);}}
+.br-tile.on{background:var(--primary);}
+.br-tile-ic svg{width:26px;height:26px;fill:none;stroke:var(--t1);stroke-width:1.5;
+  stroke-linecap:round;stroke-linejoin:round;}
+.br-tile.on .br-tile-ic svg{stroke:var(--on-primary);}
+.br-tile-l{font-size:11.5px;font-weight:650;color:var(--t1);text-align:center;line-height:1.25;}
+.br-tile.on .br-tile-l,.br-tile.on .br-tile-n{color:var(--on-primary);}
+.br-tile-n{font-size:11px;color:var(--t3);}
+.br-sec{margin:0 0 18px;}
+.br-sec-h{display:flex;align-items:center;gap:6px;width:100%;background:none;border:none;
+  padding:0 0 8px;font-family:inherit;font-size:16.5px;font-weight:800;color:var(--t1);
+  letter-spacing:-.01em;cursor:pointer;text-align:left;}
+.br-sec-n{font-size:12.5px;font-weight:600;color:var(--t3);}
+.br-sec-go{width:16px;height:16px;fill:none;stroke:var(--t3);stroke-width:2.4;
+  stroke-linecap:round;stroke-linejoin:round;}
+.br-row{display:flex;gap:10px;overflow-x:auto;-webkit-overflow-scrolling:touch;
+  padding-bottom:4px;scrollbar-width:none;}
+.br-row::-webkit-scrollbar{display:none;}
+.br-card{flex:0 0 auto;width:146px;background:none;border:none;padding:0;cursor:pointer;
+  font-family:inherit;display:flex;flex-direction:column;gap:5px;text-align:left;}
+.br-card-img{width:146px;height:104px;border-radius:var(--r-md);background:var(--s2)
+  center/cover no-repeat;display:flex;align-items:center;justify-content:center;}
+.br-card-img.noimg svg{width:28px;height:28px;fill:none;stroke:var(--t3);stroke-width:1.5;}
+.br-card-t{font-size:13.5px;font-weight:700;color:var(--t1);line-height:1.3;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.br-card-s{font-size:12px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* ── Recently viewed ── */
+.rv-row{display:flex;gap:10px;overflow-x:auto;-webkit-overflow-scrolling:touch;
+  padding:0 0 4px;margin-bottom:6px;scrollbar-width:none;}
+.rv-row::-webkit-scrollbar{display:none;}
+.rv-card{flex:0 0 auto;width:120px;background:none;border:none;padding:0;cursor:pointer;
+  font-family:inherit;display:flex;flex-direction:column;gap:5px;text-align:left;}
+.rv-img{width:120px;height:88px;border-radius:var(--r-md);background:var(--s2) center/cover no-repeat;
+  display:flex;align-items:center;justify-content:center;}
+.rv-img.noimg svg{width:26px;height:26px;fill:none;stroke:var(--t3);stroke-width:1.5;}
+.rv-ava{width:120px;height:88px;border-radius:var(--r-md);background:var(--s2);
+  display:flex;align-items:center;justify-content:center;}
+.rv-ava .user-avatar{width:52px;height:52px;}
+.rv-t{font-size:13px;font-weight:700;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rv-s{font-size:11.5px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* ── Qualifications, and everything else they offer ── */
+.qual-rows{display:flex;flex-direction:column;gap:13px;margin-top:4px;}
+.qual-row{display:flex;align-items:flex-start;gap:12px;}
+.qual-ic{flex:0 0 auto;width:22px;height:22px;margin-top:1px;}
+.qual-ic svg{width:22px;height:22px;fill:none;stroke:var(--t2);stroke-width:1.6;
+  stroke-linecap:round;stroke-linejoin:round;}
+.qual-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}
+.qual-t{font-size:14px;font-weight:750;color:var(--t1);}
+.qual-s{font-size:13px;color:var(--t2);line-height:1.45;}
+.prov-list{display:flex;flex-direction:column;gap:10px;margin-top:4px;}
+.prov-row{display:flex;align-items:flex-start;gap:12px;width:100%;padding:10px;border:none;
+  border-radius:var(--r-lg);background:var(--s1);cursor:pointer;font-family:inherit;text-align:left;
+  transition:background var(--t-fast) var(--ease);}
+@media(hover:hover){.prov-row:hover{background:var(--s2);}}
+.prov-img{flex:0 0 auto;width:72px;height:72px;border-radius:var(--r-md);
+  background:var(--s2) center/cover no-repeat;display:flex;align-items:center;justify-content:center;}
+.prov-img.noimg svg{width:24px;height:24px;fill:none;stroke:var(--t3);stroke-width:1.5;}
+.prov-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;}
+.prov-t{font-size:14.5px;font-weight:750;color:var(--t1);}
+.prov-d{font-size:13px;color:var(--t2);line-height:1.4;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.prov-r{font-size:13px;font-weight:700;color:var(--t1);}
 /* ── Category averages: what people actually judged ── */
 .rev-cats{display:flex;gap:0;overflow-x:auto;-webkit-overflow-scrolling:touch;
   margin:2px 0 14px;padding-bottom:2px;scrollbar-width:none;}
@@ -17029,6 +17118,16 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 </div>
 
 <!-- Team / multi-seat business accounts -->
+<!-- Browse by category: tiles, then a row of real examples under each -->
+<div class="overlay hidden" id="browseView" onclick="if(event.target===this)closeOverlay('browseView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Browse">
+    <button class="sheet-close" onclick="closeOverlay('browseView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Browse</div>
+    <div id="browseTiles"></div>
+    <div id="browseBody"></div>
+  </div>
+</div>
+
 <!-- What identity checking is, and what it is not -->
 <div class="overlay hidden" id="identityView" onclick="if(event.target===this)closeOverlay('identityView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Identity verified">
@@ -19332,7 +19431,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1666'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1667'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -27906,6 +28005,7 @@ function acSearchDiscover() {
     T("acOpenMarketplace()", 'Marketplace', I.marketplace),
     T("acGoJobsBoard('jobs')", 'Jobs', I.findjob),
     T("acOpenServices()", 'Services', I.services),
+    T("acOpenBrowse()", 'Browse by category', I.services),
     T("acOpenDirectory()", 'Businesses', I.businesses),
     T("acOpenEvents()", 'Events', I.events),
     T("acOpenCourses('discover')", 'Courses', I.courses),
@@ -30478,7 +30578,7 @@ function acDoSearch(q) {
   if (_searchScope === 'companies') { if (!q) acLoadCompanies(''); else _searchT = setTimeout(() => acLoadCompanies(q), 250); return; }
   if (_searchScope === 'services') { if (!q) acLoadServices(''); else _searchT = setTimeout(() => acLoadServices(q), 250); return; } // services show even with no query
   if (!q && _searchScope === 'posts') { el.innerHTML = acPostSearchHelp(); return; }
-  if (!q) { el.innerHTML = '<div id="acRecentProfiles"></div><div id="acRecentSearches" class="xp-recent"></div>' + acSearchDiscover(); acRenderRecentProfiles(); acLoadRecentSearches(); acLoadCollections(); acLoadTrending(); acLoadNearYou(); return; }
+  if (!q) { el.innerHTML = '<div id="acRecentViewed"></div><div id="acRecentProfiles"></div><div id="acRecentSearches" class="xp-recent"></div>' + acSearchDiscover(); acLoadRecentViewed(); acRenderRecentProfiles(); acLoadRecentSearches(); acLoadCollections(); acLoadTrending(); acLoadNearYou(); return; }
   _searchT = setTimeout(async () => {
     try {
       const d = await API.req('GET', '/api/search?scope=' + _searchScope + '&q=' + encodeURIComponent(q) + (_searchScope === 'people' ? acPeopleFilterQS() : ''));
@@ -38594,7 +38694,7 @@ function acBizReviewBar(d, mine) {
 const REV_SORTS = [['recent', 'Most recent'], ['high', 'Highest first'], ['low', 'Lowest first']];
 async function acOpenReviews(username, bizId, opts) {
   AC._revBiz = bizId; AC._revBizUser = username;
-  if (!opts) { AC._revSort = 'recent'; AC._revStar = null; AC._revVerified = false; }
+  if (!opts) { AC._revSort = 'recent'; AC._revStar = null; AC._revVerified = false; AC._revTopic = null; }
   showOverlay('reviewsView');
   const head = document.getElementById('reviewsBody');
   const list = document.getElementById('reviewsList');
@@ -38604,12 +38704,13 @@ async function acOpenReviews(username, bizId, opts) {
     const q = ['sort=' + (AC._revSort || 'recent')];
     if (AC._revStar) q.push('star=' + AC._revStar);
     if (AC._revVerified) q.push('verified=true');
+    if (AC._revTopic) q.push('topic=' + encodeURIComponent(AC._revTopic));
     const d = await API.req('GET', '/api/business/' + bizId + '/reviews?' + q.join('&'));
     AC._revData = d;
-    head.innerHTML = acRevSummary(d) + acRevCategories(d) + acRevAskRow(d) + acRevFilters(d);
+    head.innerHTML = acRevSummary(d) + acRevCategories(d) + acRevTopics(d) + acRevAskRow(d) + acRevFilters(d);
     list.innerHTML = d.reviews.length
       ? d.reviews.map(acReviewCard).join('')
-      : `<div class="ac-empty" style="padding:22px;">${(AC._revStar || AC._revVerified) ? 'No reviews match that filter.' : 'No reviews yet. Be the first.'}</div>`;
+      : `<div class="ac-empty" style="padding:22px;">${(AC._revStar || AC._revVerified || AC._revTopic) ? 'No reviews match that filter.' : 'No reviews yet. Be the first.'}</div>`;
   } catch (e) { head.innerHTML = '<div class="ac-empty">Could not load reviews.</div>'; }
 }
 /* The number, and — the part most apps leave out — how it is made up. */
@@ -38682,16 +38783,32 @@ function acRevFilters(d) {
   if (!(d.summary && d.summary.count)) return '';
   const chip = (on, label, onclick) => `<button class="rev-chip ${on ? 'on' : ''}" onclick="${onclick}">${escHtml(label)}</button>`;
   return `<div class="rev-filters">
-    ${chip(!AC._revStar && !AC._revVerified, 'All', 'acRevFilterClear()')}
+    ${chip(!AC._revStar && !AC._revVerified && !AC._revTopic, 'All', 'acRevFilterClear()')}
     ${d.verifiedCount ? chip(AC._revVerified, 'Verified only', 'acRevFilterVerified()') : ''}
     <select class="rev-sort" onchange="acRevSort(this.value)" aria-label="Sort reviews">
       ${REV_SORTS.map(([v, l]) => `<option value="${v}"${AC._revSort === v ? ' selected' : ''}>${l}</option>`).join('')}
     </select>
   </div>`;
 }
+/* ── What people keep mentioning ──
+   Not a score — a count. Tapping one shows those reviews so the reader judges
+   the tone for themselves, which is the honest way round: we say what came up
+   often, they decide whether it came up well. */
+function acRevTopics(d) {
+  const t = d.topics || [];
+  if (!t.length) return '';
+  return `<div class="rev-topics">${t.map((x) => `
+    <button class="rev-topic ${AC._revTopic === x.key ? 'on' : ''}" onclick="acRevFilterTopic(${jsAttr(x.key)})"
+      aria-label="${escHtml(x.count + ' reviews mention ' + x.label)}">
+      ${escHtml(x.label)} <b>${x.count}</b></button>`).join('')}</div>`;
+}
+function acRevFilterTopic(key) {
+  AC._revTopic = AC._revTopic === key ? null : key;
+  acOpenReviews(AC._revBizUser, AC._revBiz, 1);
+}
 function acRevFilterStar(n) { AC._revStar = AC._revStar === n ? null : n; acOpenReviews(AC._revBizUser, AC._revBiz, 1); }
 function acRevFilterVerified() { AC._revVerified = !AC._revVerified; acOpenReviews(AC._revBizUser, AC._revBiz, 1); }
-function acRevFilterClear() { AC._revStar = null; AC._revVerified = false; acOpenReviews(AC._revBizUser, AC._revBiz, 1); }
+function acRevFilterClear() { AC._revStar = null; AC._revVerified = false; AC._revTopic = null; acOpenReviews(AC._revBizUser, AC._revBiz, 1); }
 function acRevSort(v) { AC._revSort = v; acOpenReviews(AC._revBizUser, AC._revBiz, 1); }
 
 /* One review, in full: who, when, what for, what they said, what they showed,
@@ -39795,6 +39912,25 @@ const _MKT_BOX_SVG = '<svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.7
 
 /* ─── Marketplace: post-style listings anyone can sell + buy ─── */
 // A listing rendered post-style: seller header, photo, title, price, Buy / cart / view more.
+/* ── The three things worth knowing ──
+   Every one comes from something we actually hold — a real rating, a real
+   count, a real setting. Nothing is written for effect, because a highlight
+   that turns out to be untrue costs more trust than it ever won. */
+function acListingHighlights(l) {
+  const h = l.highlights || [];
+  if (!h.length) return '';
+  return `<div class="lst-highlights">${h.map((x) => `
+    <div class="lh-row"><span class="lh-ic">${_LH_IC[x.icon] || _LH_IC.spark}</span>
+      <span class="lh-main"><span class="lh-t">${escHtml(x.title)}</span><span class="lh-s">${escHtml(x.text)}</span></span>
+    </div>`).join('')}</div>`;
+}
+const _LH_IC = Object.assign({
+  star:  '<svg viewBox="0 0 24 24"><polygon points="12 2 14.9 8.6 22 9.2 16.6 13.9 18.2 21 12 17.3 5.8 21 7.4 13.9 2 9.2 9.1 8.6"/></svg>',
+  truck: '<svg viewBox="0 0 24 24"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"/><circle cx="6.5" cy="18" r="1.7"/><circle cx="17" cy="18" r="1.7"/></svg>',
+  zap:   '<svg viewBox="0 0 24 24"><polygon points="13 2 4 14 11 14 10 22 20 10 13 10"/></svg>',
+  seal:  '<svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="6"/><path d="M8.2 13.6 7 22l5-2.6L17 22l-1.2-8.4"/></svg>',
+  spark: '<svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg>',
+}, _REV_CAT_IC);
 function acListingCard(l) {
   const biz = l.seller.accountType === 'business';
   const thumb = (l.images && l.images[0]) || l.image;
@@ -40694,6 +40830,7 @@ async function acOpenListing(id) {
         <div class="jp-title" style="margin:8px 0 2px;">${escHtml(l.name)}</div>
         ${ratingLine}
         ${soldLine}
+        ${acListingHighlights(l)}
         ${vpick}
         <div id="mktBuyArea">${acRenderListingBuy(l, own)}</div>
         ${l.description ? `<div class="mkt-detail-desc">${escHtml(l.description)}</div>` : ''}
@@ -41748,6 +41885,108 @@ function acRenderSellGrid() {
 ═══════════════════════════════════════════════ */
 const _SERVICE_CATS = ['Home & Repair', 'Cleaning', 'Plumbing', 'Electrical', 'Moving', 'Beauty', 'Wellness', 'Entertainment', 'Photography', 'Events', 'Tutoring', 'Tech & IT', 'Design', 'Marketing', 'Legal', 'Accounting', 'Auto', 'Pets', 'Fitness', 'Childcare'];
 // Open the Services & local hub.
+/* ── Browse ──
+   Somebody who does not yet know what they want cannot use a search box. What
+   they can use is a row of categories and, under each, a handful of real
+   examples. Categories with nothing behind them are never shown — a tile that
+   leads to an empty page is worse than no tile. */
+/* ── Recently viewed ──
+   The fastest route back to something somebody was already looking at, which
+   on a marketplace is most of what people are doing. Mixed on purpose: a
+   listing, a service and a profile sit side by side, exactly as they browsed. */
+async function acLoadRecentViewed() {
+  const box = document.getElementById('acRecentViewed'); if (!box) return;
+  try {
+    const { items } = await API.req('GET', '/api/recent');
+    if (!items || !items.length) { box.innerHTML = ''; return; }
+    box.innerHTML = `<div class="xp-catlabel">Recently viewed</div>
+      <div class="rv-row">${items.map(acRecentCard).join('')}</div>`;
+  } catch (e) { box.innerHTML = ''; }
+}
+function acRecentCard(r) {
+  const it = r.item;
+  if (r.kind === 'profile') {
+    return `<button class="rv-card" onclick="acGoProfile(${jsAttr(it.username)})">
+      <span class="rv-ava">${acAvatarHtml(it.name, it.avatar, 'user-avatar', it.accountType === 'business')}</span>
+      <span class="rv-t">${escHtml(it.name)}</span>
+      <span class="rv-s">${escHtml(it.headline || '@' + it.username)}</span></button>`;
+  }
+  const open = r.kind === 'listing' ? `acOpenListing(${Number(it.id)})` : `acOpenService(${Number(it.id)})`;
+  const img = it.image || (it.images && it.images[0]);
+  const sub = r.kind === 'listing'
+    ? '$' + (((it.priceFromCents || it.priceCents) || 0) / 100).toFixed(2)
+    : [it.rate, it.area].filter(Boolean).join(' · ');
+  return `<button class="rv-card" onclick="${open}">
+    <span class="rv-img ${img ? '' : 'noimg'}"${img ? ` style="background-image:url('${escHtml(img)}')"` : ''}>${img ? '' : _BR_IC.other}</span>
+    <span class="rv-t">${escHtml(it.name || it.title || '')}</span>
+    <span class="rv-s">${escHtml(sub || '')}</span></button>`;
+}
+async function acOpenBrowse(category) {
+  AC._browseCat = category || null;
+  showOverlay('browseView');
+  const tiles = document.getElementById('browseTiles'), body = document.getElementById('browseBody');
+  body.innerHTML = '<div class="ac-empty" style="padding:28px;">Loading…</div>';
+  try {
+    const d = await API.req('GET', '/api/browse' + (category ? '?category=' + encodeURIComponent(category) : ''));
+    AC._browseData = d;
+    tiles.innerHTML = (d.categories || []).length ? `<div class="br-tiles">
+      ${category ? `<button class="br-tile on" onclick="acOpenBrowse()"><span class="br-tile-ic">${_BR_IC.all}</span><span class="br-tile-l">All</span></button>` : ''}
+      ${(d.categories || []).map((c) => `<button class="br-tile ${AC._browseCat === c.category ? 'on' : ''}" onclick="acOpenBrowse(${jsAttr(c.category)})">
+        <span class="br-tile-ic">${_BR_IC[_brIcon(c.category)] || _BR_IC.other}</span>
+        <span class="br-tile-l">${escHtml(c.category)}</span>
+        <span class="br-tile-n">${c.count}</span></button>`).join('')}</div>` : '';
+    body.innerHTML = (d.sections || []).length ? d.sections.map((sec) => `
+      <div class="br-sec">
+        <button class="br-sec-h" onclick="acOpenBrowse(${jsAttr(sec.category)})">
+          ${escHtml(sec.category)} <span class="br-sec-n">${sec.total}</span>
+          <svg class="br-sec-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        <div class="br-row">${sec.items.map(acBrowseCard).join('')}</div>
+      </div>`).join('')
+      : '<div class="ac-empty" style="padding:22px;">Nothing here yet. Once people list services, they show up by category.</div>';
+  } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load categories.</div>'; }
+}
+function acBrowseCard(x) {
+  const img = x.image
+    ? `<div class="br-card-img" style="background-image:url('${escHtml(x.image)}')"></div>`
+    : `<div class="br-card-img noimg">${_BR_IC.other}</div>`;
+  return `<button class="br-card" onclick="acOpenService(${Number(x.id)})">
+    ${img}
+    <span class="br-card-t">${escHtml(x.title)}</span>
+    <span class="br-card-s">${escHtml([x.rate, x.area].filter(Boolean).join(' · ') || (x.provider && x.provider.name) || '')}</span>
+  </button>`;
+}
+// The category names are free text, so the icon is matched on what they say.
+function _brIcon(cat) {
+  const c = (cat || '').toLowerCase();
+  if (/clean/.test(c)) return 'clean';
+  if (/plumb|electric|repair|home/.test(c)) return 'tools';
+  if (/beauty|hair|makeup/.test(c)) return 'beauty';
+  if (/well|fitness|massage|spa/.test(c)) return 'wellness';
+  if (/photo|design|art/.test(c)) return 'camera';
+  if (/event|entertain|music/.test(c)) return 'event';
+  if (/tutor|teach|child/.test(c)) return 'book';
+  if (/tech|it\b|dev|market/.test(c)) return 'chip';
+  if (/legal|account|finance/.test(c)) return 'doc';
+  if (/auto|car|moving|deliver/.test(c)) return 'car';
+  if (/pet/.test(c)) return 'paw';
+  return 'other';
+}
+const _BR_IC = {
+  all:      '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18"/></svg>',
+  clean:    '<svg viewBox="0 0 24 24"><path d="M9 8h6v13H9z"/><path d="M11 8V4h4M18 5h.01M20 8h.01"/></svg>',
+  tools:    '<svg viewBox="0 0 24 24"><path d="M14 6a4 4 0 1 0 4 4l3.5 3.5-3 3L15 13a4 4 0 0 0-1-7z"/><path d="m9 15-6 6"/></svg>',
+  beauty:   '<svg viewBox="0 0 24 24"><path d="M9 3h6v7a3 3 0 0 1-6 0z"/><path d="M12 13v8"/></svg>',
+  wellness: '<svg viewBox="0 0 24 24"><path d="M20.8 6.6a5 5 0 0 0-7.1 0L12 8.3l-1.7-1.7a5 5 0 1 0-7.1 7.1L12 21l8.8-7.3a5 5 0 0 0 0-7.1z"/></svg>',
+  camera:   '<svg viewBox="0 0 24 24"><path d="M3 8h4l2-3h6l2 3h4v12H3z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+  event:    '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+  book:     '<svg viewBox="0 0 24 24"><path d="M4 4h7a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4z"/><path d="M20 4h-7a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h7z"/></svg>',
+  chip:     '<svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4"/></svg>',
+  doc:      '<svg viewBox="0 0 24 24"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v4h4M9 12h6M9 16h6"/></svg>',
+  car:      '<svg viewBox="0 0 24 24"><path d="M4 15h16v-3l-2-5H6l-2 5z"/><circle cx="7.5" cy="17.5" r="1.7"/><circle cx="16.5" cy="17.5" r="1.7"/></svg>',
+  paw:      '<svg viewBox="0 0 24 24"><circle cx="7" cy="9" r="2"/><circle cx="12" cy="6" r="2"/><circle cx="17" cy="9" r="2"/><path d="M12 12c-3 0-5 2.4-5 4.5S9 20 12 20s5-1.4 5-3.5S15 12 12 12z"/></svg>',
+  other:    '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+};
 function acOpenServices() {
   AC._svcQ = ''; AC._svcCat = '';
   showOverlay('servicesView');
@@ -41865,8 +42104,48 @@ async function acOpenService(id) {
       <div class="mkt-detail-meta">${s.rate ? `<span class="mkt-price">${escHtml(s.rate)}</span>` : ''}${meta ? `<span class="shop-kind">${meta}</span>` : ''}</div>
       ${s.description ? `<div class="mkt-detail-desc">${escHtml(s.description)}</div>` : ''}
       ${acDetailsView(s)}
+      ${acQualifications(p)}
+      ${acMoreFromProvider(s)}
       ${actions}`;
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Could not load the service.') + '</div>'; }
+}
+/* ── Can this person actually do the job? ──
+   All of it already lived on their profile; none of it was on the page where
+   somebody is actually deciding. Every line is derived from real dated
+   history, so "9 years" is counted, never claimed. */
+function acQualifications(p) {
+  const rows = [
+    p.years ? ['clock', p.years + (p.years === 1 ? ' year of experience' : ' years of experience'),
+      p.current ? escHtml(p.current) : ''] : null,
+    p.education ? ['book', 'Education and training', escHtml(p.education)] : null,
+    (p.certifications || []).length ? ['doc', 'Qualifications', p.certifications.map(escHtml).join(' · ')] : null,
+    (p.topSkills || []).length ? ['star', 'Skills',
+      p.topSkills.map((k) => escHtml(k.name) + (k.assessed ? ' ✓' : '') +
+        (k.endorsements ? ' (' + k.endorsements + ')' : '')).join(' · ')] : null,
+  ].filter(Boolean);
+  if (!rows.length) return '';
+  return `<div class="co-sec-h" style="margin-top:18px;">Their qualifications</div>
+    <div class="qual-rows">${rows.map(([ic, t, sub]) => `
+      <div class="qual-row"><span class="qual-ic">${_LH_IC[ic] || _BR_IC[ic] || _LH_IC.spark}</span>
+        <span class="qual-main"><span class="qual-t">${t}</span>${sub ? `<span class="qual-s">${sub}</span>` : ''}</span>
+      </div>`).join('')}</div>`;
+}
+/* Everything else they offer. One provider, several things — the whole person
+   on one page, instead of a page per service and no way between them. */
+function acMoreFromProvider(s) {
+  const more = s.moreFromProvider || [];
+  if (!more.length) return '';
+  const name = ((s.provider && s.provider.name) || '').split(' ')[0] || 'them';
+  return `<div class="co-sec-h" style="margin-top:18px;">More from ${escHtml(name)}</div>
+    <div class="prov-list">${more.map((m) => `
+      <button class="prov-row" onclick="acOpenService(${Number(m.id)})">
+        <span class="prov-img ${m.image ? '' : 'noimg'}"${m.image ? ` style="background-image:url('${escHtml(m.image)}')"` : ''}>${m.image ? '' : _BR_IC.other}</span>
+        <span class="prov-main">
+          <span class="prov-t">${escHtml(m.title)}</span>
+          ${m.description ? `<span class="prov-d">${escHtml(m.description)}</span>` : ''}
+          ${m.rate ? `<span class="prov-r">${escHtml(m.rate)}</span>` : ''}
+        </span></button>`).join('')}</div>
+    <div class="ac-disc-sub" style="margin:8px 2px 0;">Message ${escHtml(name)} to ask about anything not listed.</div>`;
 }
 // Offer (or edit) a service.
 function acOpenServiceForm(editId) {

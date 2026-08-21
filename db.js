@@ -5080,6 +5080,21 @@ async function initSchema() {
   await query(`ALTER TABLE business_reviews ADD COLUMN IF NOT EXISTS sub_ratings JSONB;`);
   await query(`ALTER TABLE product_reviews ADD COLUMN IF NOT EXISTS sub_ratings JSONB;`);
   await query(`ALTER TABLE service_reviews ADD COLUMN IF NOT EXISTS sub_ratings JSONB;`);
+
+  /* ── Recently viewed ──
+     One row per person per thing, moved to the top when they look again, so a
+     member's list is a short set of DISTINCT things rather than the same
+     listing forty times. Polymorphic on purpose: a shopper's recent list mixes
+     listings, services and profiles, exactly as they browsed them. */
+  await query(`
+    CREATE TABLE IF NOT EXISTS recent_views (
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind        TEXT NOT NULL,
+      ref_id      INTEGER NOT NULL,
+      viewed_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, kind, ref_id)
+    );`);
+  await query(`CREATE INDEX IF NOT EXISTS recent_views_user_idx ON recent_views(user_id, viewed_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS users_cert_active_idx ON users(cert_active) WHERE cert_active;`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_business_idx ON business_team(business_id);`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_member_idx ON business_team(member_id, status);`);

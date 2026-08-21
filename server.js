@@ -18234,6 +18234,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     }
     const reviewSummary = t.account_type === 'business' ? await businessReviewSummary(t.id) : null;
     const trustScore = await userTrustScore(t.id); // unified marketplace trust signal
+    if (t.id !== req.user.id) recordRecentView(req.user.id, 'profile', t.id);
     // Mutual connections: people connected to BOTH me and this profile. A bare
     // count ("3 mutual connections") is far less useful than the names — "via
     // Sarah" is what makes an introduction possible — so return up to three
@@ -26542,7 +26543,21 @@ app.get('/api/services/:id', auth.requireAuth, async (req, res) => {
     const r = await db.query(SERVICE_SELECT + ' WHERE s.id = $1', [id]);
     const s = r.rows[0];
     if (!s || (!s.active && s.user_id !== req.user.id)) return res.status(404).json({ error: 'That service is no longer available.' });
-    res.json({ service: mapService(s) });
+    /* The provider's qualifications, alongside the service itself. All of it
+       already lives on their profile — experience, education, certifications,
+       skills — and none of it was reachable from the page where somebody is
+       actually deciding whether this person can do the job. */
+    const svc = mapService(s);
+    svc.provider = Object.assign(svc.provider || {}, await providerQualifications(s.user_id));
+    // Everything else this provider offers, so one page shows the whole person.
+    try {
+      const more = await db.query(
+        `${SERVICE_SELECT} WHERE s.user_id = $1 AND s.active AND s.id <> $2 ORDER BY s.created_at DESC LIMIT 8`,
+        [s.user_id, id]);
+      svc.moreFromProvider = more.rows.map(mapService);
+    } catch (e) { svc.moreFromProvider = []; }
+    recordRecentView(req.user.id, 'service', id);
+    res.json({ service: svc });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the service.' }); }
 });
 app.patch('/api/services/:id', auth.requireAuth, async (req, res) => {
@@ -30208,6 +30223,8 @@ app.get('/api/listings/:id', auth.requireAuth, async (req, res) => {
       );
       listing.similar = sim.rows.map(mapListing);
     } catch (e) { listing.similar = []; }
+    listing.highlights = await listingHighlights(listing);
+    recordRecentView(req.user.id, 'listing', listing.id);
     res.json({ listing });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the listing.' }); }
 });
@@ -34546,6 +34563,238 @@ app.post('/api/admin/users/:id/identity', auth.requirePerm('users'), async (req,
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 
+/* ── Can this person actually do the job? ──
+   Airbnb's chef page answers it with three lines: years of experience, a
+   career highlight, education and training. Atwe already knows all of that —
+   it is on the profile as work history, schooling, certificates and endorsed
+   skills — it simply was not on the page where the question gets asked.
+   Derived, never written: "9 years" is counted from real dated experience. */
+async function providerQualifications(userId) {
+  const out = { years: null, current: null, education: null, certifications: [], topSkills: [] };
+  try {
+    const [exp, edu, certs, skills] = await Promise.all([
+      db.query(`SELECT title, company, start_year, end_year FROM experiences WHERE user_id = $1
+                ORDER BY COALESCE(end_year, 999999) DESC, COALESCE(start_year,0) DESC`, [userId]),
+      db.query(`SELECT school, degree, field FROM education WHERE user_id = $1
+                ORDER BY COALESCE(end_year, 999999) DESC LIMIT 1`, [userId]),
+      db.query(`SELECT name, issuer FROM certifications WHERE user_id = $1
+                ORDER BY COALESCE(issue_year,0) DESC LIMIT 3`, [userId]),
+      db.query(`SELECT s.name, s.assessed, COUNT(e.endorser_id)::int AS endorsements
+                  FROM user_skills s LEFT JOIN skill_endorsements e ON e.skill_id = s.id
+                 WHERE s.user_id = $1 GROUP BY s.id, s.name, s.assessed
+                 ORDER BY s.assessed DESC, endorsements DESC LIMIT 4`, [userId]),
+    ]);
+    // Years in the trade: the span from their earliest start to now, not a sum
+    // of overlapping roles — two jobs at once is not two careers.
+    const starts = exp.rows.map((e) => e.start_year).filter((y) => y > 1900);
+    if (starts.length) {
+      const y = new Date().getFullYear() - Math.min(...starts);
+      if (y >= 1) out.years = y;
+    }
+    const cur = exp.rows.find((e) => !e.end_year) || exp.rows[0];
+    if (cur) out.current = [cur.title, cur.company].filter(Boolean).join(' at ');
+    const e0 = edu.rows[0];
+    if (e0) out.education = [e0.degree, e0.field, e0.school].filter(Boolean).join(', ');
+    out.certifications = certs.rows.map((c) => [c.name, c.issuer].filter(Boolean).join(' · '));
+    out.topSkills = skills.rows.map((s) => ({ name: s.name, assessed: !!s.assessed, endorsements: s.endorsements }));
+  } catch (e) { console.error('providerQualifications', e.message); }
+  return out;   // a service page must still open with or without a CV
+}
+
+/* ── Browsing by category ──
+   Somebody who does not yet know what they want cannot use a search box. What
+   they can use is a row of categories and, under each, a handful of real
+   examples — which is exactly how every marketplace worth using opens.
+
+   Built on the categories that already exist on services rather than by
+   inventing a taxonomy nobody has filled in. Empty categories are dropped:
+   a tile that leads to nothing is worse than no tile.
+
+   ONE query for every category, not one per category. A page of ten carousels
+   must not be ten round trips — a lateral join gets the top few of each in a
+   single pass. */
+const BROWSE_PER_CATEGORY = 8;
+app.get('/api/browse', auth.requireAuth, async (req, res) => {
+  const only = (req.query.category || '').trim().slice(0, 60) || null;
+  try {
+    const { rows } = await db.query(`
+      WITH cats AS (
+        SELECT DISTINCT category FROM services
+         WHERE active AND category IS NOT NULL AND category <> ''
+           AND ($2::text IS NULL OR category = $2)
+      )
+      SELECT c.category, x.*
+        FROM cats c
+        JOIN LATERAL (
+          ${SERVICE_SELECT}
+           WHERE s.active AND s.category = c.category
+             AND u.username IS NOT NULL AND NOT COALESCE(u.deactivated,false)
+             AND NOT EXISTS (SELECT 1 FROM blocks b
+               WHERE (b.blocker_id = $1 AND b.blocked_id = s.user_id)
+                  OR (b.blocker_id = s.user_id AND b.blocked_id = $1))
+           ORDER BY s.created_at DESC
+           LIMIT ${BROWSE_PER_CATEGORY}
+        ) x ON true`, [req.user.id, only]);
+    // How many each category holds in total, so a tile can say so.
+    const counts = await db.query(
+      `SELECT category, COUNT(*)::int AS n FROM services s JOIN users u ON u.id = s.user_id
+        WHERE s.active AND s.category IS NOT NULL AND s.category <> ''
+          AND u.username IS NOT NULL AND NOT COALESCE(u.deactivated,false)
+        GROUP BY category`);
+    const byCat = new Map();
+    for (const r of rows) {
+      if (!byCat.has(r.category)) byCat.set(r.category, []);
+      byCat.get(r.category).push(mapService(r));
+    }
+    const sections = [...byCat.entries()]
+      .map(([category, items]) => ({
+        category, items,
+        total: (counts.rows.find((c) => c.category === category) || {}).n || items.length,
+      }))
+      // Busiest first: the categories with something in them lead the page.
+      .sort((a, b) => b.total - a.total);
+    res.json({
+      sections,
+      // The tile row. Only categories that actually have something behind them.
+      categories: sections.map((s) => ({ category: s.category, count: s.total })),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load categories.' }); }
+});
+
+/* ── Recently viewed ──
+   Recorded fire-and-forget on the way into a listing, a service or a profile,
+   because a browsing history must never be the reason a page is slow to open
+   or fails to open at all. */
+const RECENT_KINDS = new Set(['listing', 'service', 'profile']);
+const RECENT_CAP = 24;
+function recordRecentView(userId, kind, refId) {
+  if (!userId || !RECENT_KINDS.has(kind) || !Number.isInteger(refId)) return;
+  db.query(
+    `INSERT INTO recent_views (user_id, kind, ref_id) VALUES ($1,$2,$3)
+     ON CONFLICT (user_id, kind, ref_id) DO UPDATE SET viewed_at = now()`, [userId, kind, refId])
+    .then(() => db.query(
+      // Keep it short. A history nobody trims turns into a table nobody reads.
+      `DELETE FROM recent_views WHERE user_id = $1 AND viewed_at < (
+         SELECT viewed_at FROM recent_views WHERE user_id = $1 ORDER BY viewed_at DESC OFFSET $2 LIMIT 1)`,
+      [userId, RECENT_CAP]))
+    .catch(() => {});
+}
+app.get('/api/recent', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT kind, ref_id, viewed_at FROM recent_views WHERE user_id = $1 ORDER BY viewed_at DESC LIMIT 12', [req.user.id]);
+    if (!rows.length) return res.json({ items: [] });
+    const ids = (k) => rows.filter((r) => r.kind === k).map((r) => r.ref_id);
+    const [listings, services, people] = await Promise.all([
+      ids('listing').length ? db.query(`${LISTING_SELECT} WHERE p.id = ANY($1::int[]) AND p.active`, [ids('listing')]) : { rows: [] },
+      ids('service').length ? db.query(`${SERVICE_SELECT} WHERE s.id = ANY($1::int[]) AND s.active`, [ids('service')]) : { rows: [] },
+      ids('profile').length ? db.query(
+        `SELECT id, name, username, avatar, account_type, verified, cert_active, headline FROM users
+          WHERE id = ANY($1::int[]) AND username IS NOT NULL AND NOT COALESCE(deactivated,false)`, [ids('profile')]) : { rows: [] },
+    ]);
+    const byKind = {
+      listing: new Map(listings.rows.map((r) => [r.id, { kind: 'listing', item: mapListing(r) }])),
+      service: new Map(services.rows.map((r) => [r.id, { kind: 'service', item: mapService(r) }])),
+      profile: new Map(people.rows.map((u) => [u.id, { kind: 'profile', item: {
+        id: u.id, name: u.name, username: u.username, avatar: mediaRef(u.avatar, 'avatar', u.id),
+        accountType: u.account_type, verified: !!u.verified, certified: !!u.cert_active, headline: u.headline || null } }])),
+    };
+    // Rows the viewer may no longer see (deleted, hidden, blocked) simply drop out.
+    res.json({ items: rows.map((r) => byKind[r.kind] && byKind[r.kind].get(r.ref_id)).filter(Boolean) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your recent items.' }); }
+});
+
+/* ── The three things worth knowing about a listing ──
+   Airbnb puts three icon-and-a-line rows near the top of a listing — "Clean,
+   comfortable and consistent", "Full kitchen and free laundry". Every one here
+   is derived from something we actually hold: a real rating, a real count, a
+   real setting. Nothing is written by a model and nothing is invented, because
+   a highlight that turns out to be untrue costs more trust than it ever won.
+   Ordered by how much a buyer would care, and only the best three are shown —
+   ten highlights is a list, and a list is not a highlight. */
+async function listingHighlights(l) {
+  const out = [];
+  try {
+    // What people who actually bought it keep rating well.
+    if (l.reviewCount >= 3) {
+      const subs = await db.query(
+        `SELECT sub_ratings FROM product_reviews WHERE product_id = $1 AND sub_ratings IS NOT NULL`, [l.id]);
+      const best = aggregateSubRatings(subs.rows).filter((c) => c.count >= 3 && c.score >= 4.5)
+        .sort((a, b) => b.score - a.score)[0];
+      if (best) out.push({ icon: best.icon, title: best.label + ' ' + best.score + ' out of 5',
+        text: `Buyers rate this ${best.label.toLowerCase()} ${best.score}, across ${best.count} reviews.` });
+      if (l.rating >= 4.7) out.push({ icon: 'star', title: 'Highly rated',
+        text: `${l.rating} out of 5 from ${l.reviewCount} ${l.reviewCount === 1 ? 'review' : 'reviews'}.` });
+    }
+    // How many have actually gone out of the door — the plainest possible proof.
+    const sold = (await db.query(
+      `SELECT COALESCE(SUM(oi.qty),0)::int AS n FROM order_items oi JOIN orders o ON o.id = oi.order_id
+        WHERE oi.product_id = $1 AND o.status IN ('fulfilled','delivered','released')`, [l.id])).rows[0].n;
+    if (sold >= 5) out.push({ icon: 'box', title: `Sold ${sold} times`, text: 'Orders that were completed, not just placed.' });
+    /* Settings the seller chose — but only the ones that actually distinguish
+       this listing. Free delivery is the DEFAULT on Atwe, so saying it here
+       would put the same line on nearly every listing in the shop, which tells
+       a reader precisely nothing. (It is stated at checkout, where it matters.)
+       Pickup is opt-in, so offering it really is worth knowing. */
+    if (l.pickup) out.push({ icon: 'map', title: 'Local pickup', text: l.pickupLocation ? `Collect from ${l.pickupLocation}.` : 'You can collect this in person.' });
+    if (l.kind === 'digital') out.push({ icon: 'zap', title: 'Instant delivery', text: 'Sent to you the moment you pay.' });
+    if (l.seller && l.seller.certified) out.push({ icon: 'seal', title: 'Atwe Certified seller',
+      text: 'Earned by dealing well, over enough dealings for it to count.' });
+    // Only when there is nothing better to say: honest, and better than silence.
+    if (!out.length && !l.reviewCount) out.push({ icon: 'spark', title: 'New listing', text: 'No reviews yet — you could be the first.' });
+  } catch (e) { /* a listing must still open if a highlight cannot be worked out */ }
+  return out.slice(0, 3);
+}
+
+/* ── What people keep mentioning ──
+   Airbnb mines review text and shows "Hospitality 74", "Walkability 15" —
+   which is genuinely useful, because it tells you what this place is KNOWN for
+   rather than only how it scored. Done here by matching a curated dictionary
+   rather than by a model: it is deterministic, it costs nothing, it works
+   without an API key, and — the part that matters — it can be explained. A
+   chip that says 15 means fifteen reviews used one of these words, which is a
+   claim we can stand behind. Word boundaries, so "value" never matches
+   "valuables" and "art" never matches "apart".
+
+   Deliberately NOT sentiment: a chip counts mentions, not praise. Tapping one
+   filters to those reviews so the reader judges the tone themselves. */
+const REVIEW_TOPICS = [
+  { key: 'quality',      label: 'Quality',        words: ['quality', 'well made', 'craftsmanship', 'sturdy', 'durable', 'flimsy', 'cheaply made'] },
+  { key: 'value',        label: 'Value',          words: ['value', 'price', 'priced', 'worth it', 'bargain', 'overpriced', 'expensive', 'cheap'] },
+  { key: 'friendliness', label: 'Friendliness',   words: ['friendly', 'lovely', 'kind', 'polite', 'welcoming', 'rude', 'helpful'] },
+  { key: 'communication',label: 'Communication',  words: ['communication', 'replied', 'reply', 'responsive', 'answered', 'messages', 'kept me updated', 'ignored'] },
+  { key: 'speed',        label: 'Speed',          words: ['fast', 'quick', 'quickly', 'prompt', 'same day', 'slow', 'delay', 'delayed', 'late'] },
+  { key: 'delivery',     label: 'Delivery',       words: ['delivery', 'delivered', 'shipping', 'shipped', 'postage', 'arrived', 'courier', 'tracking'] },
+  { key: 'packaging',    label: 'Packaging',      words: ['packaging', 'packaged', 'wrapped', 'boxed', 'damaged', 'intact'] },
+  { key: 'cleanliness',  label: 'Cleanliness',    words: ['clean', 'cleanliness', 'spotless', 'tidy', 'immaculate', 'dirty', 'dusty', 'grubby'] },
+  { key: 'location',     label: 'Location',       words: ['location', 'located', 'nearby', 'walk', 'walking distance', 'central', 'quiet street', 'transport'] },
+  { key: 'comfort',      label: 'Comfort',        words: ['comfortable', 'comfy', 'cosy', 'cozy', 'spacious', 'roomy', 'cramped', 'uncomfortable'] },
+  { key: 'accuracy',     label: 'As described',   words: ['as described', 'as pictured', 'exactly as', 'accurate', 'photos', 'misleading', 'not as described'] },
+  { key: 'checkin',      label: 'Getting in',     words: ['check in', 'check-in', 'checkin', 'key', 'keys', 'code', 'entry', 'arrival'] },
+];
+// One regex per topic, built once. \y is a word boundary in Postgres.
+const REVIEW_TOPIC_RX = REVIEW_TOPICS.map((t) => ({
+  ...t, rx: '\\y(' + t.words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')\\y',
+}));
+const REVIEW_TOPIC_BY_KEY = REVIEW_TOPIC_RX.reduce((m, t) => (m[t.key] = t, m), {});
+/* One query, one pass over the reviews, a count per topic. Cheaper and far
+   simpler than pulling every review body into Node to count there. */
+async function reviewTopics(businessId) {
+  try {
+    const cols = REVIEW_TOPIC_RX.map((t, i) => `COUNT(*) FILTER (WHERE body ~* $${i + 2})::int AS t${i}`).join(', ');
+    const params = [businessId, ...REVIEW_TOPIC_RX.map((t) => t.rx)];
+    const { rows } = await db.query(
+      `SELECT ${cols} FROM business_reviews WHERE business_id = $1 AND body <> ''`, params);
+    const r = rows[0] || {};
+    return REVIEW_TOPIC_RX
+      .map((t, i) => ({ key: t.key, label: t.label, count: r['t' + i] || 0 }))
+      // One mention is an anecdote, not a theme.
+      .filter((t) => t.count >= 2)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  } catch (e) { console.error('reviewTopics', e.message); return []; }
+}
+
 /* ── The plain facts about a person ──
    A curated set, not free-form: a fixed list is scannable, translatable, and
    cannot become a dumping ground. Each is optional and each is short. */
@@ -34970,6 +35219,8 @@ app.get('/api/business/:id/reviews', auth.requireAuth, async (req, res) => {
     let filter = '';
     if (star) { params.push(star); filter = ` AND r.rating = $${params.length}`; }
     if (req.query.verified === 'true') filter += ' AND r.ref_id IS NOT NULL';
+    const topic = REVIEW_TOPIC_BY_KEY[req.query.topic];
+    if (topic) { params.push(topic.rx); filter += ` AND r.body ~* $${params.length}`; }
     const { rows } = await db.query(
       `SELECT r.id, r.rating, r.body, r.response, r.responded_at, r.created_at, r.reviewer_id, r.media, r.kind, r.ref_id, r.sub_ratings,
               u.name AS reviewer_name, u.username AS reviewer_username, u.avatar AS reviewer_avatar,
@@ -34996,6 +35247,7 @@ app.get('/api/business/:id/reviews', auth.requireAuth, async (req, res) => {
     const allSubs = await db.query(
       'SELECT sub_ratings FROM business_reviews WHERE business_id = $1 AND sub_ratings IS NOT NULL', [id]);
     const subRatings = aggregateSubRatings(allSubs.rows);
+    const topics = await reviewTopics(id);
     const total = breakdown.reduce((a, b) => a + b.count, 0);
     const summary = await businessReviewSummary(id);
     const mineRow = rows.find((r) => r.reviewer_id === req.user.id);
@@ -35003,7 +35255,7 @@ app.get('/api/business/:id/reviews', auth.requireAuth, async (req, res) => {
       reviews: rows.map((r) => mapReview(r, req.user.id)),
       summary,
       breakdown: breakdown.map((b) => ({ ...b, pct: total ? Math.round((b.count / total) * 100) : 0 })),
-      subRatings,
+      subRatings, topics,
       verifiedCount: dist.rows.reduce((a, d) => a + d.verified, 0),
       mine: mineRow ? mapReview(mineRow, req.user.id) : null,
       // What this viewer could still write about — the app asks at the right moment.
