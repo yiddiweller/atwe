@@ -2678,6 +2678,7 @@ const MEDIA_KINDS = {
   'grp-meta-media': { table: 'at_group_messages', col: 'meta', jsonKey: 'media' },
   'grp-meta-img':   { table: 'at_group_messages', col: 'meta', jsonKey: 'image' },
   'review':     { table: 'business_reviews',  col: 'media', array: true },
+  'svc-review': { table: 'service_reviews',   col: 'media', array: true },
   'avatar':     { table: 'users',             col: 'avatar' },
   'banner':     { table: 'users',             col: 'banner' },
   'prod-video': { table: 'products',          col: 'video'  },
@@ -33999,12 +34000,27 @@ app.post('/api/orders/:id/dispute', auth.requireAuth, rateLimit(10, 60000, 'orde
 ═══════════════════════════════════════════════ */
 // A buyer may review a product only if they have an order containing it that reached a
 // "received" state (paid / fulfilled / delivered / released). One review per (product, buyer).
+/* "Have you actually had this thing?" — which is not the same question as
+   "did you place an order". A rental is a products row you BOOK, never one you
+   order, so looking only at orders quietly made every house, car and piece of
+   hire equipment unreviewable. Both routes in, one answer. */
 async function hasPurchased(userId, productId) {
   const r = await db.query(
     `SELECT 1 FROM order_items oi JOIN orders o ON o.id = oi.order_id
-     WHERE oi.product_id = $1 AND o.buyer_id = $2 AND o.status IN ('paid','fulfilled','delivered','released') LIMIT 1`,
+      WHERE oi.product_id = $1 AND o.buyer_id = $2 AND o.status IN ('paid','fulfilled','delivered','released')
+     UNION ALL
+     SELECT 1 FROM rental_bookings b
+      WHERE b.product_id = $1 AND b.guest_id = $2 AND b.status = 'paid' AND b.end_date <= now()::date
+     LIMIT 1`,
     [productId, userId]
   );
+  return r.rowCount > 0;
+}
+// The same question for a bookable service: did they sit through it?
+async function hasHadService(userId, serviceId) {
+  const r = await db.query(
+    `SELECT 1 FROM appointments WHERE service_id = $1 AND customer_id = $2 AND status = 'completed' LIMIT 1`,
+    [serviceId, userId]);
   return r.rowCount > 0;
 }
 // List a product's reviews + summary (avg + count), plus whether the viewer can review
@@ -34030,7 +34046,7 @@ app.get('/api/products/:id/reviews', auth.requireAuth, async (req, res) => {
     // `reviews` permission — the same rule business-review responses use.
     const prod = (await db.query('SELECT business_id FROM products WHERE id = $1', [id])).rows[0];
     const canRespond = prod ? await canActAs(req.user.id, prod.business_id, 'reviews') : false;
-    res.json({ reviews, summary: { count: sum.count, avg: Number(sum.avg) }, canReview: purchased && !mine, purchased, mine, canRespond });
+    res.json({ reviews, summary: { count: sum.count, avg: Number(sum.avg), average: Number(sum.avg) }, canReview: purchased && !mine, purchased, mine, canRespond });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load reviews.' }); }
 });
 // Leave / update a product review (verified buyers only).
@@ -34056,6 +34072,86 @@ app.post('/api/products/:id/reviews', auth.requireAuth, rateLimit(20, 60000, 'pr
     emitWebhook(prod.business_id, 'review.created', { productId: id, rating, reviewId: r.rows[0].id });
     res.status(201).json({ ok: true, id: r.rows[0].id });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save your review.' }); }
+});
+/* ── Rating the service itself ──
+   The mirror of product reviews, for the thing a business actually did rather
+   than the person who did it. Same shape deliberately: same gate (you must
+   have sat through it), same one-per-customer upsert, same right of reply. */
+app.get('/api/services/:id/reviews', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const svc = (await db.query('SELECT id, name, business_id FROM business_services WHERE id = $1', [id])).rows[0];
+    if (!svc) return res.status(404).json({ error: 'Service not found.' });
+    const { rows } = await db.query(
+      `SELECT r.id, r.rating, r.body, r.media, r.response, r.responded_at, r.created_at, r.reviewer_id,
+              u.name AS reviewer_name, u.username AS reviewer_username, u.avatar AS reviewer_avatar,
+              u.verified AS reviewer_verified, u.cert_active AS reviewer_certified
+         FROM service_reviews r JOIN users u ON u.id = r.reviewer_id
+        WHERE r.service_id = $1 ORDER BY (r.reviewer_id = $2) DESC, r.created_at DESC LIMIT 200`,
+      [id, req.user.id]);
+    const sum = (await db.query(
+      'SELECT COUNT(*)::int AS count, COALESCE(AVG(rating),0)::float AS avg FROM service_reviews WHERE service_id = $1', [id])).rows[0];
+    const mineRow = rows.find((r) => r.reviewer_id === req.user.id);
+    res.json({
+      service: { id: svc.id, name: svc.name, businessId: svc.business_id },
+      reviews: rows.map((r) => Object.assign(mapReview(r, req.user.id, 'svc-review'), { verified: true })),
+      summary: { count: sum.count, average: Math.round(sum.avg * 10) / 10 },
+      mine: mineRow ? mapReview(mineRow, req.user.id, 'svc-review') : null,
+      canReview: svc.business_id !== req.user.id && await hasHadService(req.user.id, id),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load reviews.' }); }
+});
+app.post('/api/services/:id/reviews', auth.requireAuth, rateLimit(20, 60000, 'svc-review'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const rating = Math.round(Number(req.body.rating));
+  if (!(rating >= 1 && rating <= 5)) return res.status(400).json({ error: 'Pick a rating from 1 to 5 stars.' });
+  const body = (req.body.body || '').toString().trim().slice(0, 2000) || null;
+  await resolveMediaRefs(req.body);
+  const media = cleanReviewMedia(req.body.media);
+  if (media === undefined) return res.status(400).json({ error: 'Those photos couldn’t be attached. Try smaller ones.' });
+  try {
+    const svc = (await db.query('SELECT business_id FROM business_services WHERE id = $1', [id])).rows[0];
+    if (!svc) return res.status(404).json({ error: 'Service not found.' });
+    if (svc.business_id === req.user.id) return res.status(400).json({ error: 'You can’t review your own service.' });
+    if (!(await hasHadService(req.user.id, id)))
+      return res.status(403).json({ error: 'Only people who have had this service can review it.', needBooking: true });
+    const r = await db.query(
+      `INSERT INTO service_reviews (service_id, reviewer_id, rating, body, media) VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (service_id, reviewer_id)
+       DO UPDATE SET rating = $3, body = $4, media = $5, response = NULL, responded_at = NULL, created_at = now()
+       RETURNING id`, [id, req.user.id, rating, body, media]);
+    notify(svc.business_id, req.user.id, 'product_review');
+    res.status(201).json({ ok: true, id: r.rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save your review.' }); }
+});
+app.delete('/api/services/:id/reviews', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    await db.query('DELETE FROM service_reviews WHERE service_id = $1 AND reviewer_id = $2', [id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove your review.' }); }
+});
+// The business answers, exactly as it can on a product review.
+app.post('/api/services/reviews/:id/respond', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const response = (req.body.response || '').toString().trim().slice(0, 2000);
+  try {
+    const r = (await db.query(
+      `SELECT r.reviewer_id, s.business_id FROM service_reviews r
+         JOIN business_services s ON s.id = r.service_id WHERE r.id = $1`, [id])).rows[0];
+    if (!r) return res.status(404).json({ error: 'Review not found.' });
+    if (!(await canActAs(req.user.id, r.business_id, 'reviews')))
+      return res.status(403).json({ error: 'You don’t have permission to reply to reviews.' });
+    await db.query(
+      'UPDATE service_reviews SET response = $1, responded_at = CASE WHEN $1::text IS NULL THEN NULL ELSE now() END WHERE id = $2',
+      [response || null, id]);
+    if (response) notify(r.reviewer_id, r.business_id, 'review_reply');
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save your response.' }); }
 });
 app.delete('/api/products/:id/reviews', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
@@ -34231,12 +34327,12 @@ app.get('/api/shop/analytics', auth.requireAuth, async (req, res) => {
 /* ═══════════════════════════════════════════════
    BUSINESS REVIEWS & RATINGS
 ═══════════════════════════════════════════════ */
-function mapReview(r, viewerId) {
+function mapReview(r, viewerId, mediaKind) {
   return {
     id: r.id, rating: r.rating, body: r.body || '', response: r.response || null,
     respondedAt: r.responded_at || null, createdAt: r.created_at,
     // Media rides by URL like everything else heavy — never inlined as base64.
-    media: Array.isArray(r.media) ? r.media.map((m, i) => mediaRef(m, 'review', r.id, i)) : [],
+    media: Array.isArray(r.media) ? r.media.map((m, i) => mediaRef(m, mediaKind || 'review', r.id, i)) : [],
     // Where it came from, so a reader can weigh it: a real dealing, or not.
     verified: !!r.ref_id,
     forWhat: r.for_what || (r.kind ? REVIEW_KIND_LABEL[r.kind] : null),
@@ -34261,18 +34357,27 @@ async function reviewableDealings(reviewerId, subjectId) {
     const { rows } = await db.query(`
       -- something they bought from this seller
       SELECT 'order' AS kind, o.id AS ref_id, o.created_at AS at,
-             (SELECT string_agg(oi.name, ', ') FROM order_items oi WHERE oi.order_id = o.id) AS what
+             (SELECT string_agg(oi.name, ', ') FROM order_items oi WHERE oi.order_id = o.id) AS what,
+             -- the item itself is rateable only when the order is a single line;
+             -- a five-item basket has no one "thing" to put stars against
+             -- MIN, not a bare column: HAVING makes this an aggregate query, so
+             -- the value has to be aggregated too. With exactly one row MIN is
+             -- that row, and a custom line with no product yields NULL, which is
+             -- the honest answer — there is nothing to rate.
+             (SELECT MIN(oi.product_id) FROM order_items oi WHERE oi.order_id = o.id
+               HAVING COUNT(*) = 1) AS thing_id,
+             'product' AS thing_kind
         FROM orders o
        WHERE o.buyer_id = $1 AND o.seller_id = $2
          AND o.status IN ('fulfilled','delivered','released')
       UNION ALL
       -- a stay that has actually happened
-      SELECT 'stay', b.id, b.created_at, p.name
+      SELECT 'stay', b.id, b.created_at, p.name, b.product_id, 'product'
         FROM rental_bookings b LEFT JOIN products p ON p.id = b.product_id
        WHERE b.guest_id = $1 AND b.host_id = $2 AND b.status = 'paid' AND b.end_date <= now()::date
       UNION ALL
       -- work that was seen through to the end
-      SELECT 'appointment', a.id, a.when_at, a.service
+      SELECT 'appointment', a.id, a.when_at, a.service, a.service_id, 'service'
         FROM appointments a
        WHERE a.customer_id = $1 AND a.business_id = $2 AND a.status = 'completed'
       ORDER BY at DESC LIMIT 50`, [reviewerId, subjectId]);
@@ -34282,10 +34387,39 @@ async function reviewableDealings(reviewerId, subjectId) {
       'SELECT kind, ref_id FROM business_reviews WHERE reviewer_id = $1 AND business_id = $2 AND ref_id IS NOT NULL',
       [reviewerId, subjectId]);
     const seen = new Set(done.rows.map((r) => r.kind + ':' + r.ref_id));
-    return rows
-      .filter((r) => !seen.has(r.kind + ':' + r.ref_id))
-      .map((r) => ({ kind: r.kind, refId: r.ref_id, at: r.at, what: r.what || REVIEW_KIND_LABEL[r.kind] }));
+    const open = rows.filter((r) => !seen.has(r.kind + ':' + r.ref_id));
+    // Which of those things has this person already put stars against?
+    const rated = await ratedThings(reviewerId, open);
+    return open.map((r) => ({
+      kind: r.kind, refId: r.ref_id, at: r.at, what: r.what || REVIEW_KIND_LABEL[r.kind],
+      thing: r.thing_id ? {
+        kind: r.thing_kind, id: r.thing_id, name: r.what || null,
+        label: THING_LABEL[r.kind] || 'What you got',
+        rated: rated.has(r.thing_kind + ':' + r.thing_id),
+      } : null,
+    }));
   } catch (e) { console.error('reviewableDealings', e.message); return []; }
+}
+/* What the thing is called, in the words somebody would actually use. "Rate the
+   product" is what a database would say; "How was the place?" is what a person
+   asks after a weekend away. */
+const THING_LABEL = { order: 'The item', stay: 'The place', appointment: 'The service' };
+// Which of these things the reviewer has already rated, in one round trip.
+async function ratedThings(reviewerId, rows) {
+  const products = rows.filter((r) => r.thing_kind === 'product' && r.thing_id).map((r) => r.thing_id);
+  const services = rows.filter((r) => r.thing_kind === 'service' && r.thing_id).map((r) => r.thing_id);
+  const out = new Set();
+  try {
+    if (products.length) {
+      const p = await db.query('SELECT product_id FROM product_reviews WHERE reviewer_id = $1 AND product_id = ANY($2::int[])', [reviewerId, products]);
+      p.rows.forEach((r) => out.add('product:' + r.product_id));
+    }
+    if (services.length) {
+      const v = await db.query('SELECT service_id FROM service_reviews WHERE reviewer_id = $1 AND service_id = ANY($2::int[])', [reviewerId, services]);
+      v.rows.forEach((r) => out.add('service:' + r.service_id));
+    }
+  } catch (e) { /* worst case we offer a rating they already gave; the write upserts */ }
+  return out;
 }
 // Is THIS particular dealing one the reviewer may write about? Checked on write,
 // so a hand-made request cannot claim a dealing that never happened.
@@ -34635,14 +34769,16 @@ app.get('/api/reviews/pending', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT 'order' AS kind, o.id AS ref_id, o.seller_id AS subject_id, o.created_at AS at,
-             (SELECT string_agg(oi.name, ', ') FROM order_items oi WHERE oi.order_id = o.id) AS what
+             (SELECT string_agg(oi.name, ', ') FROM order_items oi WHERE oi.order_id = o.id) AS what,
+             (SELECT MIN(oi.product_id) FROM order_items oi WHERE oi.order_id = o.id HAVING COUNT(*) = 1) AS thing_id,
+             'product' AS thing_kind
         FROM orders o WHERE o.buyer_id = $1 AND o.status IN ('fulfilled','delivered','released')
       UNION ALL
-      SELECT 'stay', b.id, b.host_id, b.created_at, p.name
+      SELECT 'stay', b.id, b.host_id, b.created_at, p.name, b.product_id, 'product'
         FROM rental_bookings b LEFT JOIN products p ON p.id = b.product_id
        WHERE b.guest_id = $1 AND b.status = 'paid' AND b.end_date <= now()::date
       UNION ALL
-      SELECT 'appointment', a.id, a.business_id, a.when_at, a.service
+      SELECT 'appointment', a.id, a.business_id, a.when_at, a.service, a.service_id, 'service'
         FROM appointments a WHERE a.customer_id = $1 AND a.status = 'completed'
       ORDER BY at DESC LIMIT 60`, [req.user.id]);
     if (!rows.length) return res.json({ pending: [] });
@@ -34656,12 +34792,18 @@ app.get('/api/reviews/pending', auth.requireAuth, async (req, res) => {
         WHERE id = ANY($1::int[]) AND username IS NOT NULL AND NOT COALESCE(deactivated,false)`,
       [[...new Set(open.map((r) => r.subject_id))]]);
     const byId = new Map(who.rows.map((u) => [u.id, u]));
+    const rated = await ratedThings(req.user.id, open);
     res.json({
       pending: open.filter((r) => byId.has(r.subject_id)).map((r) => {
         const u = byId.get(r.subject_id);
         return {
           kind: r.kind, refId: r.ref_id, at: r.at, what: r.what || REVIEW_KIND_LABEL[r.kind],
           kindLabel: REVIEW_KIND_LABEL[r.kind],
+          thing: r.thing_id ? {
+            kind: r.thing_kind, id: r.thing_id, name: r.what || null,
+            label: THING_LABEL[r.kind] || 'What you got',
+            rated: rated.has(r.thing_kind + ':' + r.thing_id),
+          } : null,
           subject: { id: u.id, name: u.name, username: u.username, avatar: mediaRef(u.avatar, 'avatar', u.id),
             accountType: u.account_type, verified: !!u.verified, certified: !!u.cert_active },
         };
@@ -34866,8 +35008,18 @@ app.get('/api/business/:id/services', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid business id.' });
   try {
-    const { rows } = await db.query('SELECT id, name, duration_min, deposit_cents FROM business_services WHERE business_id = $1 ORDER BY created_at ASC', [id]);
-    res.json({ services: rows.map((s) => ({ id: s.id, name: s.name, durationMin: s.duration_min, depositCents: s.deposit_cents || 0 })) });
+    // Carry each service's own rating, so somebody choosing between them can see
+    // which one people were actually happy with — the whole point of rating the
+    // service separately from the person who provides it.
+    const { rows } = await db.query(
+      `SELECT s.id, s.name, s.duration_min, s.deposit_cents,
+              (SELECT COUNT(*)::int FROM service_reviews r WHERE r.service_id = s.id) AS review_count,
+              (SELECT COALESCE(AVG(r.rating),0)::float FROM service_reviews r WHERE r.service_id = s.id) AS rating
+         FROM business_services s WHERE s.business_id = $1 ORDER BY s.created_at ASC`, [id]);
+    res.json({ services: rows.map((s) => ({
+      id: s.id, name: s.name, durationMin: s.duration_min, depositCents: s.deposit_cents || 0,
+      rating: Math.round(s.rating * 10) / 10, reviewCount: s.review_count,
+    })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load services.' }); }
 });
 app.post('/api/business/services', auth.requireAuth, rateLimit(30, 60000, 'svc-add'), async (req, res) => {
@@ -34991,10 +35143,21 @@ app.post('/api/business/:id/appointments', auth.requireAuth, blockImpersonation,
     }
     // Deposit: if a serviceId is given and that service requires one, hold it in escrow
     // from the customer's wallet balance (refundable on cancel/decline).
-    let depositCents = 0;
+    let depositCents = 0, serviceId = null;
     if (req.body.serviceId != null) {
-      const svc = (await db.query('SELECT deposit_cents FROM business_services WHERE id = $1 AND business_id = $2', [parseInt(req.body.serviceId, 10), id])).rows[0];
-      if (svc && svc.deposit_cents > 0) depositCents = svc.deposit_cents;
+      const sid = parseInt(req.body.serviceId, 10);
+      const svc = (await db.query('SELECT id, deposit_cents FROM business_services WHERE id = $1 AND business_id = $2', [sid, id])).rows[0];
+      if (svc) {
+        serviceId = svc.id;
+        if (svc.deposit_cents > 0) depositCents = svc.deposit_cents;
+      }
+    }
+    // Booked by name from the free-text fallback? Match it up if it is unambiguous,
+    // so a customer who typed the service still gets to rate it afterwards.
+    if (serviceId == null) {
+      const byName = await db.query(
+        'SELECT id FROM business_services WHERE business_id = $1 AND lower(name) = lower($2) LIMIT 2', [id, service]);
+      if (byName.rowCount === 1) serviceId = byName.rows[0].id;
     }
     if (depositCents > 0) {
       const v = await walletVelocityCheck(req.user.id, depositCents);
@@ -35007,7 +35170,7 @@ app.post('/api/business/:id/appointments', auth.requireAuth, blockImpersonation,
     const client = await db.getPool().connect();
     try {
       await client.query('BEGIN');
-      const ins = await client.query('INSERT INTO appointments (business_id, customer_id, service, when_at, note, deposit_cents, status) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id', [id, req.user.id, service, when.toISOString(), note, depositCents, isSlot ? 'confirmed' : 'requested']);
+      const ins = await client.query('INSERT INTO appointments (business_id, customer_id, service, service_id, when_at, note, deposit_cents, status) VALUES ($1,$2,$3,$8,$4,$5,$6,$7) RETURNING id', [id, req.user.id, service, when.toISOString(), note, depositCents, isSlot ? 'confirmed' : 'requested', serviceId]);
       apptId = ins.rows[0].id;
       if (depositCents > 0) {
         const bal = await client.query('SELECT balance_cents FROM users WHERE id = $1 FOR UPDATE', [req.user.id]);

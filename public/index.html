@@ -7277,6 +7277,11 @@ body.light .rev-verified{color:var(--on-green);}
 .rev-resp-t{font-weight:500;color:var(--t3);}
 .rev-actions{display:flex;gap:8px;margin-top:8px;}
 .rev-actions:empty{display:none;}
+/* two ratings, kept visibly apart — the thing, then the person */
+.rev-block{margin:2px 0 4px;}
+.rev-block + .rev-block{padding-top:10px;border-top:1px solid var(--b2);margin-top:10px;}
+.rev-block-h{font-size:13px;font-weight:750;color:var(--t2);text-align:center;margin-bottom:4px;}
+.rev-block-h.hidden{display:none;}
 /* the word beside the stars while you pick */
 .rev-word{min-height:17px;font-size:13px;font-weight:700;color:var(--t2);margin:-2px 0 6px;text-align:center;}
 .rev-forrow{font-size:13px;color:var(--t2);background:var(--s1);border-radius:var(--r-md);
@@ -14848,8 +14853,18 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <div class="jp-title" id="reviewWriteTitle">Write a review</div>
     <!-- which dealing this is about, so a review is never floating free -->
     <div id="revForRow"></div>
-    <div class="rev-starpick" id="revStarPick"></div>
-    <div class="rev-word" id="revWord"></div>
+    <!-- the thing: the place, the item, the service -->
+    <div class="rev-block hidden" id="revThingBlock">
+      <div class="rev-block-h" id="revThingLabel">The place</div>
+      <div class="rev-starpick" id="revThingStars"></div>
+      <div class="rev-word" id="revThingWord"></div>
+    </div>
+    <!-- the person -->
+    <div class="rev-block">
+      <div class="rev-block-h hidden" id="revWhoLabel">The person</div>
+      <div class="rev-starpick" id="revStarPick"></div>
+      <div class="rev-word" id="revWord"></div>
+    </div>
     <textarea class="jp-in jp-ta" id="revBody" rows="4" placeholder="How did it go? What should the next person know?" maxlength="2000"></textarea>
     <div class="prod-thumbs" id="revBizThumbs" style="margin-top:8px;"></div>
     <button class="ac-link-btn" style="margin:4px 2px;" onclick="document.getElementById('revBizFile').click()">＋ Add photos / video</button>
@@ -19238,7 +19253,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1663'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1664'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -38534,20 +38549,48 @@ const _REV_TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 /* Writing one. When it is about a specific dealing the sheet says so, because
    "review this seller" and "review the jumper that arrived late" are different
    thoughts and the second one is the useful one. */
-function acWriteReview(kind, refId) {
+function acWriteReview(kind, refId, ctxIn) {
   const mine = AC._revData && AC._revData.mine;
   const editing = !kind && mine;
   AC._revStars = editing ? mine.rating : 0;
   AC._revKind = kind || null; AC._revRef = refId || null;
   AC._revBizMedia = editing ? (mine.media || []).slice() : [];
   document.getElementById('reviewWriteTitle').textContent = editing ? 'Edit your review' : 'Write a review';
-  const ctx = (AC._revData.canReview || []).find((c) => c.kind === kind && c.refId === refId);
+  const ctx = ctxIn || ((AC._revData && AC._revData.canReview) || []).find((c) => c.kind === kind && c.refId === refId);
   document.getElementById('revForRow').innerHTML = ctx
     ? `<div class="rev-forrow">${escHtml(ctx.what || '')}<span> · ${escHtml(acTime(ctx.at))}</span></div>` : '';
   document.getElementById('revBody').value = editing ? (mine.body || '') : '';
-  acRenderStarPick(); acRevBizThumbs();
+  /* The thing and the person are two different judgements. One host can keep a
+     lovely flat and a grim one; a perfect flat can have a landlord who never
+     answers. So they get their own stars, side by side, clearly labelled — and
+     the second row only appears when there IS a single thing to rate (a
+     five-item basket has no one "thing" to put stars against). */
+  AC._revThing = (ctx && ctx.thing && !ctx.thing.rated) ? ctx.thing : null;
+  AC._revThingStars = 0;
+  const block = document.getElementById('revThingBlock');
+  const whoLabel = document.getElementById('revWhoLabel');
+  if (AC._revThing) {
+    block.classList.remove('hidden');
+    document.getElementById('revThingLabel').textContent = AC._revThing.label;
+    whoLabel.classList.remove('hidden');
+    whoLabel.textContent = _REV_WHO_LABEL[kind] || 'The person';
+  } else {
+    block.classList.add('hidden');
+    whoLabel.classList.add('hidden');
+  }
+  acRenderStarPick(); acRenderThingStars(); acRevBizThumbs();
   showOverlay('reviewWrite');
 }
+const _REV_WHO_LABEL = { order: 'The seller', stay: 'The host', appointment: 'The person' };
+function acRenderThingStars() {
+  const el = document.getElementById('revThingStars'); if (!el) return;
+  let h = '';
+  for (let i = 1; i <= 5; i++) h += `<button class="rev-star ${i <= (AC._revThingStars || 0) ? 'on' : ''}" onclick="acPickThingStar(${i})" aria-label="${i} star${i === 1 ? '' : 's'} for ${escHtml((AC._revThing && AC._revThing.label) || 'it')}"><svg viewBox="0 0 24 24"><polygon points="12 2 14.9 8.6 22 9.2 16.6 13.9 18.2 21 12 17.3 5.8 21 7.4 13.9 2 9.2 9.1 8.6"/></svg></button>`;
+  el.innerHTML = h;
+  const w = document.getElementById('revThingWord');
+  if (w) w.textContent = _REV_WORDS[AC._revThingStars || 0] || '';
+}
+function acPickThingStar(n) { AC._revThingStars = n; acRenderThingStars(); }
 // The word beside the stars: people pick a rating far more confidently when
 // they can see what each one is being taken to mean.
 const _REV_WORDS = ['', 'Poor', 'Not great', 'Okay', 'Good', 'Excellent'];
@@ -38584,10 +38627,21 @@ async function acRevBizPickMedia(e) {
 }
 async function acSubmitBizReview() {
   if (!AC._revStars) { showNotif('Pick a star rating.'); return; }
+  const body = document.getElementById('revBody').value.trim();
   try {
     await API.req('POST', '/api/business/' + AC._revBiz + '/reviews', {
-      rating: AC._revStars, body: document.getElementById('revBody').value.trim(),
-      media: AC._revBizMedia || [], kind: AC._revKind, refId: AC._revRef });
+      rating: AC._revStars, body, media: AC._revBizMedia || [], kind: AC._revKind, refId: AC._revRef });
+    /* The thing's rating is a separate review on a separate record — it belongs
+       to the listing, not to the person, and it must survive them changing what
+       they sell. Optional: somebody who only wants to rate the person still can.
+       It is sent AFTER the person review so a failure here can never lose that
+       one, and it never blocks the confirmation. */
+    if (AC._revThing && AC._revThingStars) {
+      const path = AC._revThing.kind === 'service'
+        ? '/api/services/' + AC._revThing.id + '/reviews'
+        : '/api/products/' + AC._revThing.id + '/reviews';
+      await API.req('POST', path, { rating: AC._revThingStars, body }).catch(() => {});
+    }
     closeOverlay('reviewWrite'); showNotif('Thanks — your review is up.');
     acOpenReviews(AC._revBizUser, AC._revBiz);
     if (AC.profile && AC.profile.user && AC.profile.user.id === AC._revBiz) acGoProfile(AC._revBizUser);
@@ -38622,9 +38676,10 @@ async function acOpenPendingReviews() {
   } catch (e) { box.innerHTML = '<div class="ac-empty">Could not load.</div>'; }
 }
 async function acWriteFromPending(username, id, kind, refId) {
+  const ctx = (AC._pendingRevs || []).find((p) => p.kind === kind && p.refId === refId);
   closeOverlay('pendingReviews');
   await acOpenReviews(username, id);
-  acWriteReview(kind, refId);
+  acWriteReview(kind, refId, ctx);
 }
 /* ─── Tips ─── */
 function paTip() { const a = AC._paAuthor; closeOverlay('postActions'); if (a) acOpenTip(a.id, a.name); }
