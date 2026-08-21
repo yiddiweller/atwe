@@ -5095,6 +5095,69 @@ async function initSchema() {
       PRIMARY KEY (user_id, kind, ref_id)
     );`);
   await query(`CREATE INDEX IF NOT EXISTS recent_views_user_idx ON recent_views(user_id, viewed_at DESC);`);
+
+  /* ══════════════════════════════════════════════
+     PEER DELIVERY  —  somebody nearby brings it over
+     ──────────────────────────────────────────────
+     Distinct from delivery_runs, which is a business delivering with its own
+     driver. This is an open marketplace: a delivery gets posted, anyone can
+     offer to do it, and — the part that matters — BOTH the seller and the
+     buyer have to agree to the person before they can take it. Neither side
+     alone can hand a stranger somebody else's parcel.
+
+     The money is held the moment both agree and released only when the buyer
+     confirms it arrived, so a courier is never asked to work on a promise and
+     a buyer never pays for a parcel that never came.
+  ══════════════════════════════════════════════ */
+  await query(`
+    CREATE TABLE IF NOT EXISTS delivery_jobs (
+      id            SERIAL PRIMARY KEY,
+      order_id      INTEGER REFERENCES orders(id) ON DELETE CASCADE,
+      posted_by     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      seller_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      buyer_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      -- open → agreed → picked_up → delivered → paid, or cancelled
+      status        TEXT NOT NULL DEFAULT 'open',
+      what          TEXT NOT NULL DEFAULT '',
+      pickup_label  TEXT,
+      dropoff_label TEXT,
+      distance_km   NUMERIC(6,2),
+      -- the band chosen when we have no coordinates to measure between
+      distance_band TEXT,
+      suggested_cents INTEGER NOT NULL DEFAULT 0,
+      fee_cents     INTEGER,
+      courier_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      -- BOTH of these must be true. Neither party can approve for the other.
+      seller_ok     BOOLEAN NOT NULL DEFAULT false,
+      buyer_ok      BOOLEAN NOT NULL DEFAULT false,
+      held_cents    INTEGER NOT NULL DEFAULT 0,
+      auto_release_at TIMESTAMPTZ,
+      note          TEXT,
+      agreed_at     TIMESTAMPTZ,
+      picked_up_at  TIMESTAMPTZ,
+      delivered_at  TIMESTAMPTZ,
+      paid_at       TIMESTAMPTZ,
+      cancelled_reason TEXT,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );`);
+  // One live delivery per order. A finished or cancelled one may be reposted.
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS delivery_jobs_order_live_idx
+                 ON delivery_jobs(order_id)
+               WHERE order_id IS NOT NULL AND status NOT IN ('cancelled','paid');`);
+  await query(`CREATE INDEX IF NOT EXISTS delivery_jobs_open_idx ON delivery_jobs(status, created_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS delivery_jobs_courier_idx ON delivery_jobs(courier_id, created_at DESC);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS delivery_offers (
+      id          SERIAL PRIMARY KEY,
+      job_id      INTEGER NOT NULL REFERENCES delivery_jobs(id) ON DELETE CASCADE,
+      courier_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      fee_cents   INTEGER NOT NULL,
+      note        TEXT,
+      status      TEXT NOT NULL DEFAULT 'offered',
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (job_id, courier_id)
+    );`);
+  await query(`CREATE INDEX IF NOT EXISTS delivery_offers_job_idx ON delivery_offers(job_id, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS users_cert_active_idx ON users(cert_active) WHERE cert_active;`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_business_idx ON business_team(business_id);`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_member_idx ON business_team(member_id, status);`);
