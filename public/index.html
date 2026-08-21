@@ -4226,6 +4226,61 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .msg-enc{align-self:stretch;max-width:none;display:flex;align-items:center;justify-content:center;gap:7px;margin:8px 0 12px;padding:7px 13px;border:none;cursor:pointer;
   background:var(--accent-dim);color:var(--accent);border-radius:12px;font-size:11.5px;line-height:1.35;text-align:center;font-family:inherit;}
 .msg-enc svg{flex-shrink:0;width:14px;height:14px;fill:none;stroke:var(--accent);stroke-width:1.8;}
+/* Talking to a company. The notice sits under the privacy chip at the top of a
+   conversation with a business that answers as a team, and becomes the name of
+   whoever picked it up once someone has. Grey, not accent — it is information,
+   not an action, and it should not compete with the chat. */
+.msg-team-note{align-self:stretch;max-width:none;display:flex;align-items:center;justify-content:center;gap:7px;
+  margin:0 0 12px;padding:7px 13px;background:var(--s1);color:var(--t2);border-radius:12px;
+  font-size:11.5px;line-height:1.35;text-align:center;}
+.msg-team-note svg{flex-shrink:0;width:14px;height:14px;fill:none;stroke:var(--t3);stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round;}
+.msg-team-note b{color:var(--t1);font-weight:700;}
+/* The signature under a staff reply — the company said it, this person wrote it. */
+.msg-sig{display:block;margin:3px 0 0 12px;font-size:11px;color:var(--t3);letter-spacing:.01em;}
+/* ── The shared team inbox ── */
+.ibx-n{display:inline-block;min-width:17px;padding:0 5px;margin-left:5px;border-radius:999px;
+  background:var(--accent);color:#fff;font-size:10.5px;font-weight:800;line-height:17px;text-align:center;}
+.ibx-row{display:flex;gap:11px;align-items:flex-start;width:100%;padding:12px 4px;border:none;background:none;
+  text-align:left;cursor:pointer;font-family:inherit;color:var(--t1);border-bottom:1px solid var(--b2);}
+.ibx-row:last-child{border-bottom:none;}
+@media(hover:hover){.ibx-row:hover{background:rgba(255,255,255,.025);}}
+.ibx-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.ibx-top{display:flex;align-items:center;gap:7px;}
+.ibx-name{font-size:14.5px;font-weight:700;letter-spacing:-.01em;}
+.ibx-state{font-size:10px;font-weight:800;letter-spacing:.02em;padding:2px 7px;border-radius:999px;
+  background:var(--s2);color:var(--t2);}
+.ibx-state.new{background:var(--accent-dim);color:var(--accent);}
+.ibx-state.waiting{background:rgba(255,187,0,.16);color:var(--amber);}
+.ibx-state.done{background:rgba(136,255,0,.14);color:var(--green);}
+.ibx-unread{min-width:18px;padding:0 5px;border-radius:999px;background:var(--accent);color:#fff;
+  font-size:10.5px;font-weight:800;line-height:18px;text-align:center;}
+.ibx-last{font-size:13px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ibx-you{color:var(--t3);}
+.ibx-meta{font-size:11.5px;color:var(--t3);}
+/* One conversation */
+.ibx-head{display:flex;align-items:center;gap:11px;margin:2px 0 10px;}
+.ibx-head-main{min-width:0;}
+.ibx-head-name{font-size:16px;font-weight:750;display:flex;align-items:center;}
+.ibx-head-user{border:none;background:none;padding:0;color:var(--accent);font:inherit;font-size:13px;cursor:pointer;}
+.ibx-controls{display:flex;gap:8px;margin-bottom:10px;}
+.ibx-sel{flex:1;min-width:0;padding:8px 10px;border-radius:10px;border:1px solid var(--b2);
+  background:var(--s1);color:var(--t1);font:inherit;font-size:13px;}
+.ibx-thread{max-height:46vh;overflow-y:auto;padding:4px 2px;background:var(--s1);border-radius:14px;}
+.ibx-msg{display:flex;flex-direction:column;margin:8px 10px;max-width:82%;}
+.ibx-msg.in{align-items:flex-start;}
+.ibx-msg.out{align-items:flex-end;margin-left:auto;}
+.ibx-bub{padding:8px 12px;border-radius:16px;font-size:14px;line-height:1.4;white-space:pre-wrap;word-break:break-word;}
+.ibx-msg.in .ibx-bub{background:var(--s2);color:var(--t1);}
+.ibx-msg.out .ibx-bub{background:var(--accent);color:#fff;}
+.ibx-media{font-style:italic;opacity:.75;}
+.ibx-sig,.ibx-time{font-size:10.5px;color:var(--t3);margin-top:2px;}
+.ibx-sig{font-weight:700;}
+.ibx-reply{display:flex;gap:8px;align-items:flex-end;margin-top:10px;}
+.ibx-reply textarea{flex:1;min-width:0;padding:10px 12px;border-radius:14px;border:1px solid var(--b2);
+  background:var(--s1);color:var(--t1);font:inherit;font-size:14px;resize:vertical;}
+.ibx-hint{font-size:11.5px;color:var(--t3);margin-top:7px;text-align:center;}
+.msg-row.me .msg-sig{margin:3px 12px 0 0;text-align:right;}
 /* "Show earlier messages" pill — tops a long thread's rendered window (iOS memory:
    only the recent window paints on open; this renders the previous chunk in place). */
 .msg-earlier-row{display:flex;justify-content:center;margin:10px 0 12px;}
@@ -16564,16 +16619,6 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 </div>
 
 <!-- Team inbox: a shared inbox with an owner per conversation -->
-<div class="overlay hidden" id="teamInboxView" onclick="if(event.target===this)closeOverlay('teamInboxView')">
-  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Team inbox">
-    <button class="sheet-close" onclick="closeOverlay('teamInboxView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-    <div class="jp-title">Team inbox</div>
-    <div class="ac-disc-sub" style="margin:0 0 10px;">Hand a conversation to someone on your team so it's clear who's answering.</div>
-    <div id="teamInboxTabs" class="ac-job-views" style="margin-bottom:10px;"></div>
-    <div id="teamInboxBody"></div>
-  </div>
-</div>
-
 <!-- Career page — a business's roles, people and culture in one place -->
 <div class="overlay hidden" id="careersView" onclick="if(event.target===this)closeOverlay('careersView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Career page">
@@ -16746,6 +16791,40 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 </div>
 
 <!-- Team / multi-seat business accounts -->
+<!-- ── Shared team inbox: the business's customer conversations ── -->
+<div class="overlay hidden" id="inboxView" onclick="if(event.target===this)closeOverlay('inboxView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Customer inbox">
+    <button class="sheet-close" onclick="closeOverlay('inboxView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Inbox</div>
+    <div id="inboxBizBar" class="ac-job-views" style="margin:6px 0 10px;"></div>
+    <div id="inboxTabs" class="ac-job-views" style="margin:0 0 10px;"></div>
+    <div id="inboxBody"></div>
+  </div>
+</div>
+
+<!-- One customer conversation, worked as the business -->
+<div class="overlay hidden" id="inboxConvView" onclick="if(event.target===this)closeOverlay('inboxConvView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Conversation">
+    <button class="sheet-close" onclick="closeOverlay('inboxConvView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="inboxConvHead"></div>
+    <div id="inboxConvThread" class="ibx-thread"></div>
+    <div class="ibx-reply">
+      <textarea id="inboxReplyText" rows="2" placeholder="Reply as the business…" aria-label="Reply"></textarea>
+      <button class="ac-pill-btn accent" id="inboxReplyBtn" onclick="acInboxSend()">Send</button>
+    </div>
+    <div class="ibx-hint">Your reply is sent from the business, signed with your first name.</div>
+  </div>
+</div>
+
+<!-- The owner's switch: answer as a team, and who may -->
+<div class="overlay hidden" id="inboxSetupView" onclick="if(event.target===this)closeOverlay('inboxSetupView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Team inbox settings">
+    <button class="sheet-close" onclick="closeOverlay('inboxSetupView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Team inbox</div>
+    <div id="inboxSetupBody"></div>
+  </div>
+</div>
+
 <div class="overlay hidden" id="teamView" onclick="if(event.target===this)closeOverlay('teamView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Team">
     <button class="sheet-close" onclick="closeOverlay('teamView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -18993,7 +19072,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1655'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1656'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -32557,6 +32636,7 @@ function acGoProfileHub() {
     // the bar (acMeScreen is in AC_OWN_HEADER) so the hero leads with a clean top.
     acStopMic(); syncTopbar('profile'); acShow('acMeScreen', null);
     acLoadChangelogBadge(); // quiet "what's new" dot
+    acCheckInboxAccess();   // does this person work a business's customer inbox?
     const u = S.user || {}, isAdmin = !!u.is_admin, verified = meVerified();
     // `color` is accepted for back-compat with existing call sites but no longer
     // used — icon tiles are plain glyphs now, no per-row background at all.
@@ -32599,6 +32679,9 @@ function acGoProfileHub() {
     // Library · Money · Planning · App.
     // Business
     html += '<div class="me-catlabel">Business</div><div class="me-group">';
+    // Shown to anyone who WORKS an inbox, not only to business owners — a staff
+    // member's whole job here is answering it, and they need a way in.
+    if (AC._inboxAccess) html += item('Customer inbox', _ME_IC.people, "acOpenInbox()", null);
     html += item('Business dashboard', _ME_IC.grid, "acOpenDashboard()", null);
     html += item('Sales pipeline', _ME_IC.people, "acOpenCrm()", null);
     html += item('Smart links', _ME_IC.link || _ME_IC.share || _ME_IC.grid, "acOpenSmartLinks()", null);
@@ -32634,7 +32717,7 @@ function acGoProfileHub() {
     html += item('Saved replies & forms', _ME_IC.sent || _ME_IC.bmk, "acOpenBizTools()", null);
     html += item('Your day', _ME_IC.bell, "acOpenBriefing()", null);
     if (acIsBiz(S.user)) html += item('Interested in you', _ME_IC.eye || _ME_IC.people, "acOpenIntent()", null);
-    if (acIsBiz(S.user)) html += item('Team inbox', _ME_IC.people, "acOpenTeamInbox()", null);
+
     html += item('Message insights', _ME_IC.chart || _ME_IC.people, "acOpenConvStats()", null);
     html += item('Resumes', _ME_IC.resumes, "acOpenResumes()", null);
     html += item('Open to work', _ME_IC.otw, "acOpenPrefs()", null);
@@ -40190,8 +40273,220 @@ function acPoolShareToChat(id) {
   document.getElementById('fwdList').innerHTML = '<div class="fwd-empty">Loading…</div>';
   fwdUpdateBar(); showOverlay('fwdSheet'); fwdLoad();
 }
+/* Does this person work anybody's customer inbox — their own business's, or one
+   they are on the team of? Checked when the Me hub opens, and the hub is redrawn
+   if the answer changed, so the row appears for staff without them being told it
+   exists. One small request, and only when the answer is not already known. */
+async function acCheckInboxAccess() {
+  try {
+    const { businesses } = await API.req('GET', '/api/inbox/desks');
+    const has = !!(businesses && businesses.length);
+    if (has === AC._inboxAccess) return;      // nothing changed — no redraw
+    AC._inboxAccess = has;
+    if (has && document.getElementById('acMeScreen') && !document.getElementById('acMeScreen').classList.contains('hidden')) acGoProfileHub();
+  } catch (e) { /* the hub works with or without the row */ }
+}
+
+/* ═══════════════════════════════════════════════
+   SHARED TEAM INBOX
+   ───────────────────────────────────────────────
+   A business's customer conversations, worked by whoever is on the team rather
+   than landing in one person's chat list. Each one has a state and an owner, so
+   nothing sits there with everyone assuming somebody else has it.
+
+   A reply goes out FROM the business, signed with the person's first name: the
+   company is talking, a named human is accountable.
+═══════════════════════════════════════════════ */
+const INBOX_TABS = [
+  { k: 'active', label: 'To do' },
+  { k: 'mine',   label: 'Mine' },
+  { k: 'new',    label: 'New' },
+  { k: 'waiting',label: 'Waiting' },
+  { k: 'solved', label: 'Done' },
+];
+const INBOX_STATE_LABEL = { new: 'New', open: 'Open', waiting: 'Waiting on them', solved: 'Done' };
+
+async function acOpenInbox() {
+  showOverlay('inboxView');
+  AC._inboxTab = AC._inboxTab || 'active';
+  document.getElementById('inboxBody').innerHTML = acSkelRows(3);
+  try {
+    const { businesses } = await API.req('GET', '/api/inbox/desks');
+    AC._inboxBiz = businesses || [];
+    if (!AC._inboxBiz.length) {
+      document.getElementById('inboxBizBar').innerHTML = '';
+      document.getElementById('inboxTabs').innerHTML = '';
+      document.getElementById('inboxBody').innerHTML =
+        `<div class="ac-empty" style="padding:22px;">No customer inbox yet.<div class="ac-empty-sub" style="margin-top:6px;">A business owner turns this on in Manage store, then picks who can answer.</div></div>`;
+      return;
+    }
+    if (!AC._inboxBizId || !AC._inboxBiz.some(b => b.id === AC._inboxBizId)) AC._inboxBizId = AC._inboxBiz[0].id;
+    // Only worth a switcher when they work more than one.
+    document.getElementById('inboxBizBar').innerHTML = AC._inboxBiz.length > 1
+      ? AC._inboxBiz.map(b => `<button class="ac-jv ${b.id === AC._inboxBizId ? 'on' : ''}" onclick="acInboxPickBiz(${b.id})">${escHtml(b.name || ('@' + b.username))}${b.counts && b.counts.active ? ` <span class="ibx-n">${b.counts.active}</span>` : ''}</button>`).join('')
+      : '';
+    acInboxLoad();
+  } catch (e) {
+    document.getElementById('inboxBody').innerHTML = `<div class="ac-empty">${escHtml(e.message)}</div>`;
+  }
+}
+function acInboxPickBiz(id) { AC._inboxBizId = id; acOpenInbox(); }
+function acInboxTab(k) { AC._inboxTab = k; acInboxLoad(); }
+
+async function acInboxLoad() {
+  const body = document.getElementById('inboxBody'); if (!body) return;
+  body.innerHTML = acSkelRows(3);
+  const tab = AC._inboxTab || 'active';
+  const q = tab === 'mine' ? '?mine=true' : (tab === 'active' ? '' : '?state=' + tab);
+  try {
+    const d = await API.req('GET', `/api/inbox/${AC._inboxBizId}${q}`);
+    AC._inboxData = d;
+    const c = d.counts || {};
+    document.getElementById('inboxTabs').innerHTML = INBOX_TABS.map(t => {
+      const n = t.k === 'active' ? (c.new + c.open + c.waiting) : t.k === 'mine' ? c.mine : c[t.k];
+      return `<button class="ac-jv ${tab === t.k ? 'on' : ''}" onclick="acInboxTab('${t.k}')">${t.label}${n ? ` <span class="ibx-n">${n}</span>` : ''}</button>`;
+    }).join('');
+    const list = d.conversations || [];
+    if (!list.length) {
+      body.innerHTML = `<div class="ac-empty" style="padding:22px;">${tab === 'solved' ? 'Nothing finished yet.' : tab === 'mine' ? 'Nothing assigned to you.' : 'Nothing waiting. All caught up.'}</div>`;
+      return;
+    }
+    body.innerHTML = list.map(acInboxRow).join('');
+  } catch (e) {
+    body.innerHTML = `<div class="ac-empty">${escHtml(e.message)}</div>`;
+  }
+}
+
+function acInboxRow(c) {
+  const who = c.assignedTo ? escHtml(String(c.assignedTo.name || '').split(/\s+/)[0]) : null;
+  const stateCls = c.state === 'new' ? 'new' : c.state === 'waiting' ? 'waiting' : c.state === 'solved' ? 'done' : 'open';
+  return `<button class="ibx-row" onclick="acInboxOpen(${c.id})">
+    ${acAvatarHtml(c.customer.name, c.customer.avatar, 'user-avatar sm', c.customer.accountType === 'business')}
+    <span class="ibx-main">
+      <span class="ibx-top">
+        <span class="ibx-name">${escHtml(c.customer.name || '@' + c.customer.username)}</span>
+        <span class="ibx-state ${stateCls}">${INBOX_STATE_LABEL[c.state] || c.state}</span>
+        ${c.unread ? `<span class="ibx-unread">${c.unread}</span>` : ''}
+      </span>
+      <span class="ibx-last">${c.lastFrom === 'business' ? '<span class="ibx-you">You: </span>' : ''}${escHtml((c.lastMessage || '').slice(0, 90) || 'No messages yet')}</span>
+      <span class="ibx-meta">${who ? `${who} has this` : 'Nobody has this yet'} · ${escHtml(acTime(c.lastAt))}</span>
+    </span>
+  </button>`;
+}
+
+async function acInboxOpen(convId) {
+  AC._inboxConv = convId;
+  showOverlay('inboxConvView');
+  document.getElementById('inboxConvThread').innerHTML = acSkelRows(3);
+  document.getElementById('inboxConvHead').innerHTML = '';
+  try {
+    const d = await API.req('GET', `/api/inbox/${AC._inboxBizId}/${convId}`);
+    AC._inboxConvData = d;
+    const c = d.conversation;
+    const team = (AC._inboxData && AC._inboxData.team) || [];
+    document.getElementById('inboxConvHead').innerHTML = `
+      <div class="ibx-head">
+        ${acAvatarHtml(c.customer.name, c.customer.avatar, 'user-avatar', c.customer.accountType === 'business')}
+        <div class="ibx-head-main">
+          <div class="ibx-head-name">${escHtml(c.customer.name || '')}${vbadge(c.customer.verified)}</div>
+          <button class="ibx-head-user" onclick="closeOverlay('inboxConvView');closeOverlay('inboxView');acGoProfile('${escHtml(c.customer.username)}')">@${escHtml(c.customer.username)}</button>
+        </div>
+      </div>
+      <div class="ibx-controls">
+        <select class="ibx-sel" aria-label="Status" onchange="acInboxSet('state', this.value)">
+          ${['new','open','waiting','solved'].map(st => `<option value="${st}"${c.state === st ? ' selected' : ''}>${INBOX_STATE_LABEL[st]}</option>`).join('')}
+        </select>
+        <select class="ibx-sel" aria-label="Assigned to" onchange="acInboxSet('assignedTo', this.value)">
+          <option value="">Nobody</option>
+          ${team.map(t => `<option value="${t.id}"${c.assignedTo && c.assignedTo.id === t.id ? ' selected' : ''}>${escHtml(t.name || '@' + t.username)}</option>`).join('')}
+        </select>
+      </div>`;
+    document.getElementById('inboxConvThread').innerHTML = (d.messages || []).map(acInboxMsg).join('')
+      || '<div class="ac-empty">No messages yet.</div>';
+    const th = document.getElementById('inboxConvThread'); th.scrollTop = th.scrollHeight;
+  } catch (e) {
+    document.getElementById('inboxConvThread').innerHTML = `<div class="ac-empty">${escHtml(e.message)}</div>`;
+  }
+}
+
+function acInboxMsg(m) {
+  const sig = m.mine && m.sentBy && m.sentBy.name
+    ? `<span class="ibx-sig">${escHtml(String(m.sentBy.name).split(/\s+/)[0])}</span>` : '';
+  const media = (m.image || (m.images && m.images.length) || m.media)
+    ? '<div class="ibx-media">[attachment]</div>' : '';
+  return `<div class="ibx-msg ${m.mine ? 'out' : 'in'}">
+    <div class="ibx-bub">${m.deletedAll ? '<i>Deleted</i>' : (escHtml(m.body || '') || media || '&nbsp;')}</div>
+    ${sig}<span class="ibx-time">${escHtml(acTime(m.created_at))}</span>
+  </div>`;
+}
+
+async function acInboxSet(field, value) {
+  try {
+    const body = {};
+    body[field] = field === 'assignedTo' ? (value ? parseInt(value, 10) : null) : value;
+    await API.req('PATCH', `/api/inbox/${AC._inboxBizId}/${AC._inboxConv}`, body);
+    showNotif('Updated');
+    acInboxLoad();
+  } catch (e) { showNotif(e.message); }
+}
+
+async function acInboxSend() {
+  const el = document.getElementById('inboxReplyText');
+  const body = (el.value || '').trim();
+  if (!body) { el.focus(); return; }
+  const btn = document.getElementById('inboxReplyBtn');
+  btn.disabled = true;
+  try {
+    const d = await API.req('POST', `/api/inbox/${AC._inboxBizId}/${AC._inboxConv}/reply`, { body });
+    el.value = '';
+    const th = document.getElementById('inboxConvThread');
+    th.insertAdjacentHTML('beforeend', acInboxMsg(d.message));
+    th.scrollTop = th.scrollHeight;
+    acInboxLoad();
+  } catch (e) { showNotif(e.message); }
+  finally { btn.disabled = false; }
+}
+
+/* The owner's switch: turn the team inbox on, and see who can answer. */
+async function acOpenInboxSetup() {
+  showOverlay('inboxSetupView');
+  const b = document.getElementById('inboxSetupBody');
+  b.innerHTML = acSkelRows(2);
+  try {
+    const d = await API.req('GET', '/api/business/team-inbox');
+    const canAnswer = (d.team || []).filter(t => t.role === 'admin' || t.inbox);
+    b.innerHTML = `
+      <div class="iset-group" style="margin-top:0;">
+        <div class="iset-row" data-static>
+          <div class="iset-main">
+            <div class="iset-label">Answer as a team</div>
+            <div class="iset-sub">Customer messages go to a shared inbox your staff can work, instead of only reaching you.</div>
+          </div>
+          <label class="ios-switch"><input type="checkbox" ${d.enabled ? 'checked' : ''} onchange="acToggleTeamInbox(this.checked)" aria-label="Answer as a team"/><span class="ios-track"></span><span class="ios-knob"></span></label>
+        </div>
+      </div>
+      <div class="ac-disc-sub" style="margin:12px 2px;">
+        ${d.enabled
+          ? `Your customers are told their messages are handled by your team, and see the first name of whoever picks one up. Replies are sent from <b>${escHtml(S.user.name || 'your business')}</b>, signed by the person.`
+          : 'While this is off, messages to your business reach only you, exactly as they do now.'}
+      </div>
+      <div class="ac-prof-head" style="padding:8px 2px 6px;">Who can answer</div>
+      ${canAnswer.length
+        ? canAnswer.map(t => `<div class="ac-item"><div class="ac-item-inner"><div class="ac-item-main"><div class="ac-item-name">${escHtml(t.name || '')}</div><div class="ac-item-sub">@${escHtml(t.username || '')} · ${escHtml(t.role)}</div></div></div></div>`).join('')
+        : '<div class="ac-empty" style="padding:14px;">Nobody yet. Invite staff under Team and tick “Answer customer messages”.</div>'}
+      <button class="ac-pill-btn" style="margin-top:14px;width:100%;background:var(--s2);" onclick="closeOverlay('inboxSetupView');acOpenTeam('team')">Manage team</button>`;
+  } catch (e) { b.innerHTML = `<div class="ac-empty">${escHtml(e.message)}</div>`; }
+}
+async function acToggleTeamInbox(on) {
+  try {
+    await API.req('PUT', '/api/business/team-inbox', { enabled: !!on });
+    showNotif(on ? 'Team inbox on' : 'Team inbox off');
+    acOpenInboxSetup();
+  } catch (e) { showNotif(e.message); }
+}
+
 /* ─── Team / multi-seat business accounts ─── */
-const TEAM_PERM_LABELS = { jobs: 'Post & manage jobs', qa: 'Answer Q&A', orders: 'Fulfill orders', reviews: 'Reply to reviews' };
+const TEAM_PERM_LABELS = { inbox: 'Answer customer messages', jobs: 'Post & manage jobs', qa: 'Answer Q&A', orders: 'Fulfill orders', reviews: 'Reply to reviews' };
 function acOpenTeam(tab) { AC._teamTab = tab || 'team'; showOverlay('teamView'); acTeamTab(AC._teamTab); }
 function acTeamTab(s) {
   AC._teamTab = s;
@@ -42611,51 +42906,10 @@ async function acOpenConvStats() {
    The business's conversations with an owner each, so two people never both
    think they're handling it — and nobody's message quietly goes unanswered. */
 const TEAM_INBOX_TABS = [['all', 'Open'], ['mine', 'Mine'], ['unassigned', 'Unassigned'], ['done', 'Done']];
-async function acOpenTeamInbox() {
-  AC._tiFilter = AC._tiFilter || 'all';
-  showOverlay('teamInboxView');
-  acLoadTeamInbox();
-}
-function acTeamInboxTab(f) { AC._tiFilter = f; acLoadTeamInbox(); }
-async function acLoadTeamInbox() {
-  const box = document.getElementById('teamInboxBody'), tabs = document.getElementById('teamInboxTabs');
-  if (!box) return;
-  box.innerHTML = acSkelRows(3);
-  try {
-    const d = await API.req('GET', '/api/atchat/inbox?filter=' + (AC._tiFilter || 'all'));
-    if (tabs) tabs.innerHTML = TEAM_INBOX_TABS.map(([k, l]) =>
-      `<button class="ac-jv${AC._tiFilter === k ? ' on' : ''}" onclick="acTeamInboxTab(${jsAttr(k)})">${l}${d.counts[k] ? ' ' + d.counts[k] : ''}</button>`).join('');
-    box.innerHTML = d.conversations.length ? d.conversations.map((c) => `
-      <div class="ti-row">
-        <div class="ti-top" onclick="acOpenChat(${c.peer.id})">
-          ${acAvatarHtml(c.peer.name, c.peer.avatar, 'user-avatar', c.peer.accountType === 'business')}
-          <div style="min-width:0;flex:1;">
-            <div class="ac-item-name">${escHtml(c.peer.name)}${vbadge(c.peer.verified)}${c.waiting ? '<span class="ti-wait">waiting</span>' : ''}</div>
-            <div class="ti-sub">${c.assignee ? escHtml(c.assignee.name) + ' has this' : 'Nobody has picked this up'}${c.unread ? ` \u00b7 ${c.unread} unread` : ''}</div>
-          </div>
-          <button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 14px;" onclick="event.stopPropagation();acAssignConv(${c.peer.id})">${c.assignee ? 'Reassign' : 'Assign'}</button>
-        </div>
-      </div>`).join('')
-      : '<div class="ac-empty" style="padding:16px;">Nothing here.</div>';
-  } catch (e) { box.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load the inbox.')}</div>`; }
-}
-async function acAssignConv(peerId) {
-  try {
-    const { members } = await API.req('GET', '/api/business/team').catch(() => ({ members: [] }));
-    const opts = [{ id: S.user.id, label: 'Me' }]
-      .concat((members || []).filter((m) => m.status === 'active').map((m) => ({ id: m.id, label: m.name })))
-      .concat([{ id: '', label: 'Nobody (put it back)' }, { id: 'done', label: 'Mark as done' }]);
-    const pick = await acPickFromList(opts, 'Who should handle this?');
-    if (pick == null) return;
-    const id = pick.id !== undefined ? pick.id : pick;
-    const body = id === 'done' ? { assigneeId: null, state: 'done' } : { assigneeId: id === '' ? null : id };
-    await API.req('POST', '/api/atchat/inbox/' + peerId + '/assign', body);
-    acLoadTeamInbox();
-  } catch (e) { showNotif(e.message || 'Could not update.'); }
-}
-/* Career page — everything a jobseeker wants about a business on one screen:
-   the open roles, who works there, and what the business itself has been
-   posting (the closest honest thing to "what it's like here"). */
+/* The old team inbox could only triage — list conversations, assign an owner,
+   mark one done. It could not reply, so the owner still had to answer everything
+   personally, which is exactly the complaint. It now opens the inbox that can. */
+async function acOpenTeamInbox() { return acOpenInbox(); }
 async function acOpenCareers(bizId) {
   const body = document.getElementById('careersBody'); if (!body) return;
   body.innerHTML = acSkelRows(3);
@@ -44238,6 +44492,7 @@ async function acOpenStoreManage() {
     chart: '<svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>',
     wallet: '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H5"/><circle cx="16.5" cy="12.5" r="1.3"/></svg>',
     megaphone: '<svg viewBox="0 0 24 24"><path d="M3 11v2a2 2 0 0 0 2 2h1l2 6h2l-1.5-6H11l8 4V5l-8 4H5a2 2 0 0 0-2 2z"/><path d="M15 9v6"/></svg>',
+    people: '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
   };
   const row = (icon, title, sub, onclick, badge) => `<button class="iset-row" onclick="${onclick}">
     <span class="iset-ic">${icon}</span>
@@ -44261,6 +44516,7 @@ async function acOpenStoreManage() {
     </div>` : '';
   b.innerHTML = setup + `<div class="iset-group">
     ${isBiz ? row(SI.store, 'View storefront', 'See your store the way buyers do', "closeOverlay('storeManageView');acOpenMyStorefront()") : ''}
+    ${isBiz ? row(SI.people, 'Team inbox', 'Let your staff answer customer messages with you', "closeOverlay('storeManageView');acOpenInboxSetup()") : ''}
     ${row(SI.box, 'Products', count ? count + ' listing' + (count === 1 ? '' : 's') : 'Add items or services to sell', 'closeOverlay(\'storeManageView\');acOpenSell()')}
     ${row(SI.gift, 'Bundles', 'Group products into a saver price', 'closeOverlay(\'storeManageView\');acOpenBundles()')}
     ${row(SI.tag, 'Coupons', 'Discount codes for checkout', 'closeOverlay(\'storeManageView\');acOpenCoupons()')}
@@ -49349,6 +49605,9 @@ async function acOpenChat(id, threadId) {
 function acApplyDmData(id, d, firstPaint, fromCache) {
   if (!firstPaint) d.messages = acMergeLive(d.messages, AC.messages); // keep SSE msgs the snapshot predates
   AC.peer = d.peer; AC.messages = d.messages || [];
+  // Is this business answered by a team, and has somebody picked it up?
+  AC._handledByTeam = !!d.handledByTeam;
+  AC._agent = d.agent || null;
   // Pick the secret chat back up and unscramble what is already here. Not
   // awaited — the thread paints straight away and the secret bubbles fill in a
   // frame or two later, rather than everything waiting on the maths.
@@ -54095,6 +54354,26 @@ if (!window._hugResizeBound) {
 // end-to-end encrypted (messages are stored server-side so history syncs across
 // devices) — so this never claims E2EE; it states the real protection (encrypted
 // in transit + private to the chat) and taps through to the plain-English detail.
+/* Talking to a company, not to whoever owns it.
+
+   When a business runs a shared inbox, several people can read and answer — so
+   the customer is told, plainly, once, at the top of the conversation. Saying
+   nothing would be the easy thing and the wrong one: someone writing what they
+   think is a private message to the owner deserves to know it reaches a desk.
+
+   Once a person picks it up, their first name is shown, because "Dina from Atwe
+   is helping you" is the difference between a support desk and a stranger. */
+function acTeamInboxNotice() {
+  if (!AC._handledByTeam) return '';
+  const biz = escHtml((AC.peer && (AC.peer.name || AC.peer.username)) || 'this business');
+  const who = AC._agent ? escHtml(AC._agent) : null;
+  return `<div class="msg-team-note">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    <span>${who
+      ? `<b>${who}</b> from ${biz} is helping you.`
+      : `Messages here are handled by the ${biz} team.`}</span>
+  </div>`;
+}
 function acChatPrivacyNotice() {
   return `<button class="msg-enc" onclick="acShowChatPrivacy()">
     <span>Messages are encrypted in transit and private to this chat.<br>Tap to learn more.</span>
@@ -54166,7 +54445,7 @@ function acRenderThread() {
   const msgs = winStart > 0 ? AC.messages.slice(winStart) : AC.messages;
   let html = winStart > 0
     ? '<div class="msg-earlier-row"><button class="msg-earlier" onclick="acThreadEarlier()">Show earlier messages</button></div>'
-    : acChatPrivacyNotice();
+    : acChatPrivacyNotice() + acTeamInboxNotice();
   let lastT = 0, lastDay = '';
   msgs.forEach((m, i) => {
    try {
@@ -54294,7 +54573,12 @@ function acRenderThread() {
     // "New messages" divider — sits right before the first unread incoming message.
     const divider = (AC._unreadDivId != null && String(m.id) === String(AC._unreadDivId))
       ? '<div class="msg-divider"><span>Unread messages</span></div>' : '';
-    html += ghead + divider + `<div class="msg-row ${rowCls}"${rowAttrs}>${selCheck}<div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''}${bubTap}>${inner}</div>${reaxHtml}${starHtml}</div><span class="msg-slidetime">${sideTime}</span></div>` + status;
+    /* Who at the business wrote this. The bubble is FROM the company — that is
+       the point — so the person is a quiet signature under it, not a second
+       name in the header competing with the company's own. */
+    const sigHtml = (!m.mine && m.sentBy && m.sentBy.name)
+      ? `<span class="msg-sig">${escHtml(String(m.sentBy.name).trim().split(/\s+/)[0])}</span>` : '';
+    html += ghead + divider + `<div class="msg-row ${rowCls}"${rowAttrs}>${selCheck}<div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''}${bubTap}>${inner}</div>${sigHtml}${reaxHtml}${starHtml}</div><span class="msg-slidetime">${sideTime}</span></div>` + status;
     lastT = t;
    } catch (err) { console.error('message render failed', m && m.id, err); } // one bad message can't blank the thread
   });

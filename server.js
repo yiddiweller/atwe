@@ -3118,6 +3118,351 @@ async function canActAs(userId, businessId, perm) {
   } catch (e) { return false; }
 }
 
+/* ═══════════════════════════════════════════════
+   SHARED TEAM INBOX  —  a business answers as a company, not as its owner
+   ───────────────────────────────────────────────
+   A business account is an account, so messaging @atwe has always reached one
+   person. For a real company that reads as "I texted the owner". With the team
+   inbox on, several people can work the same conversations, each one has a state
+   and an owner so nothing is silently left, and a reply goes out FROM the
+   business signed by the person who wrote it — the company is speaking, a named
+   human is accountable.
+
+   Nothing about how messages are STORED changes. They stay ordinary DMs between
+   the customer and the business account, so every existing tool — search, media,
+   calls, disappearing messages, labels, saved replies — keeps working with no
+   migration and no special case. This is only the ticket layer over the top.
+═══════════════════════════════════════════════ */
+const INBOX_STATES = ['new', 'open', 'waiting', 'solved'];
+
+// Is this account running a team inbox? (business + switched on)
+async function hasTeamInbox(businessId) {
+  try {
+    const r = await db.query("SELECT account_type, team_inbox FROM users WHERE id = $1", [businessId]);
+    const u = r.rows[0];
+    return !!(u && u.account_type === 'business' && u.team_inbox);
+  } catch (e) { return false; }
+}
+// May this person work the business's inbox? The owner always can; a team member
+// needs the `inbox` permission (an admin has every permission).
+const canWorkInbox = (userId, businessId) => canActAs(userId, businessId, 'inbox');
+
+/* Make sure a conversation exists for this customer, and move it along.
+   Called on every message either way, so the inbox reflects the chat rather than
+   being a separate thing someone has to remember to update.
+
+   A customer message REOPENS a solved conversation — a reply to something marked
+   done is a new problem, and leaving it closed is how support tickets get lost. */
+async function inboxTouch(businessId, customerId, threadId, from) {
+  try {
+    if (!(await hasTeamInbox(businessId))) return null;
+    const t = Number.isInteger(threadId) ? threadId : null;
+    const r = await db.query(
+      `INSERT INTO inbox_conversations (business_id, customer_id, thread_id, state, last_msg_at, last_from)
+       VALUES ($1,$2,$3,'new',now(),$4)
+       ON CONFLICT (business_id, customer_id, COALESCE(thread_id, 0)) DO UPDATE
+         SET last_msg_at = now(),
+             last_from   = EXCLUDED.last_from,
+             state = CASE
+               WHEN $4 = 'customer' AND inbox_conversations.state = 'solved' THEN 'open'
+               WHEN $4 = 'customer' AND inbox_conversations.state = 'waiting' THEN 'open'
+               WHEN $4 = 'business' AND inbox_conversations.state IN ('new','open') THEN 'waiting'
+               ELSE inbox_conversations.state END,
+             solved_at = CASE WHEN $4 = 'customer' THEN NULL ELSE inbox_conversations.solved_at END,
+             solved_by = CASE WHEN $4 = 'customer' THEN NULL ELSE inbox_conversations.solved_by END
+       RETURNING id, state, assigned_to`,
+      [businessId, customerId, t, from === 'business' ? 'business' : 'customer']);
+    return r.rows[0] || null;
+  } catch (e) { console.error('inboxTouch', e.message); return null; }
+}
+
+/* The team inbox that existed before this could triage but not answer: it kept
+   who owned a conversation in `dm_assignments`, with an open/done state. That
+   work is somebody's actual queue, so it is carried over rather than dropped —
+   once, idempotently, on boot. The old table is left alone. */
+async function migrateOldAssignments() {
+  try {
+    const r = await db.query(
+      `INSERT INTO inbox_conversations (business_id, customer_id, thread_id, state, assigned_to, assigned_at, last_msg_at, last_from)
+       SELECT a.business_id, a.peer_id, NULL,
+              CASE WHEN a.state = 'done' THEN 'solved' ELSE 'open' END,
+              a.assignee_id,
+              CASE WHEN a.assignee_id IS NOT NULL THEN a.updated_at ELSE NULL END,
+              a.updated_at, NULL
+         FROM dm_assignments a
+         JOIN users u ON u.id = a.business_id AND u.account_type = 'business'
+        ON CONFLICT (business_id, customer_id, COALESCE(thread_id, 0)) DO NOTHING`);
+    if (r.rowCount) console.log(`📥  Carried ${r.rowCount} assigned conversation(s) into the team inbox.`);
+    return r.rowCount;
+  } catch (e) { console.error('migrateOldAssignments', e.message); return 0; }
+}
+
+// The staff-facing shape of a conversation.
+function mapInboxConv(r) {
+  return {
+    id: r.id,
+    state: r.state,
+    threadId: r.thread_id || null,
+    customer: {
+      id: r.customer_id, name: r.customer_name, username: r.customer_username,
+      avatar: mediaRef(r.customer_avatar, 'avatar', r.customer_id),
+      verified: !!r.customer_verified,
+      accountType: r.customer_type === 'business' ? 'business' : 'personal',
+    },
+    assignedTo: r.assigned_to ? { id: r.assigned_to, name: r.assignee_name, username: r.assignee_username } : null,
+    lastFrom: r.last_from || null,
+    lastMessage: r.last_body || null,
+    lastAt: r.last_msg_at,
+    unread: Number(r.unread || 0),
+    openedAt: r.opened_at, solvedAt: r.solved_at,
+  };
+}
+
+const INBOX_CONV_SELECT = `
+  SELECT c.*, u.name AS customer_name, u.username AS customer_username, u.avatar AS customer_avatar,
+         u.verified AS customer_verified, u.account_type AS customer_type,
+         a.name AS assignee_name, a.username AS assignee_username,
+         (SELECT m.body FROM at_messages m
+           WHERE ((m.sender_id = c.customer_id AND m.recipient_id = c.business_id)
+               OR (m.sender_id = c.business_id AND m.recipient_id = c.customer_id))
+             AND m.thread_id IS NOT DISTINCT FROM c.thread_id
+             AND NOT m.deleted_all
+           ORDER BY m.created_at DESC LIMIT 1) AS last_body,
+         (SELECT count(*) FROM at_messages m
+           WHERE m.sender_id = c.customer_id AND m.recipient_id = c.business_id
+             AND m.thread_id IS NOT DISTINCT FROM c.thread_id
+             AND m.read_at IS NULL AND NOT m.deleted_all) AS unread
+    FROM inbox_conversations c
+    JOIN users u ON u.id = c.customer_id
+    LEFT JOIN users a ON a.id = c.assigned_to`;
+
+/* ── Which businesses can this person work the inbox for? ──
+   Their own business account if it has one on, plus any team they are on with
+   the `inbox` permission. Drives the switcher at the top of the Inbox screen. */
+app.get('/api/inbox/desks', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified
+         FROM users u
+        WHERE u.id = $1 AND u.account_type = 'business' AND u.team_inbox = true
+        UNION
+       SELECT u.id, u.name, u.username, u.avatar, u.verified
+         FROM business_team t JOIN users u ON u.id = t.business_id
+        WHERE t.member_id = $1 AND t.status = 'active' AND u.team_inbox = true
+          AND (t.role = 'admin' OR COALESCE((t.permissions->>'inbox')::boolean, false) = true)`,
+      [req.user.id]);
+    const businesses = [];
+    for (const r of rows) {
+      const counts = await db.query(
+        `SELECT count(*) FILTER (WHERE state <> 'solved')::int AS active,
+                count(*) FILTER (WHERE state = 'new')::int AS fresh,
+                count(*) FILTER (WHERE assigned_to = $2 AND state <> 'solved')::int AS mine
+           FROM inbox_conversations WHERE business_id = $1`, [r.id, req.user.id]);
+      businesses.push({
+        id: r.id, name: r.name, username: r.username,
+        avatar: mediaRef(r.avatar, 'avatar', r.id), verified: !!r.verified,
+        isOwner: r.id === req.user.id,
+        counts: counts.rows[0],
+      });
+    }
+    res.json({ businesses });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your inboxes.' }); }
+});
+
+/* ── The inbox itself ── */
+app.get('/api/inbox/:businessId', auth.requireAuth, async (req, res) => {
+  const bid = routeId(req.params.businessId);
+  if (!Number.isInteger(bid)) return res.status(400).json({ error: 'Invalid business.' });
+  if (!(await canWorkInbox(req.user.id, bid))) return res.status(403).json({ error: 'You do not work this inbox.' });
+  const state = INBOX_STATES.includes(req.query.state) ? req.query.state : null;
+  const mine = req.query.mine === 'true';
+  try {
+    const params = [bid];
+    let where = 'WHERE c.business_id = $1';
+    if (state) { params.push(state); where += ` AND c.state = $${params.length}`; }
+    else where += " AND c.state <> 'solved'";   // the default view is work still to do
+    if (mine) { params.push(req.user.id); where += ` AND c.assigned_to = $${params.length}`; }
+    const { rows } = await db.query(
+      `${INBOX_CONV_SELECT} ${where} ORDER BY c.last_msg_at DESC LIMIT 200`, params);
+    const counts = (await db.query(
+      `SELECT count(*) FILTER (WHERE state = 'new')::int AS new,
+              count(*) FILTER (WHERE state = 'open')::int AS open,
+              count(*) FILTER (WHERE state = 'waiting')::int AS waiting,
+              count(*) FILTER (WHERE state = 'solved')::int AS solved,
+              count(*) FILTER (WHERE assigned_to = $2 AND state <> 'solved')::int AS mine,
+              count(*) FILTER (WHERE assigned_to IS NULL AND state <> 'solved')::int AS unassigned
+         FROM inbox_conversations WHERE business_id = $1`, [bid, req.user.id])).rows[0];
+    // Who the work can be handed to.
+    const team = (await db.query(
+      `SELECT u.id, u.name, u.username FROM users u WHERE u.id = $1
+        UNION
+       SELECT u.id, u.name, u.username FROM business_team t JOIN users u ON u.id = t.member_id
+        WHERE t.business_id = $1 AND t.status = 'active'
+          AND (t.role = 'admin' OR COALESCE((t.permissions->>'inbox')::boolean, false) = true)`, [bid])).rows;
+    res.json({ conversations: rows.map(mapInboxConv), counts, team });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the inbox.' }); }
+});
+
+/* One conversation, read as the BUSINESS — the staff member is looking at the
+   company's thread, not their own, so the query runs from the business's side
+   and authorization is the inbox permission rather than being a party to it. */
+app.get('/api/inbox/:businessId/:convId', auth.requireAuth, async (req, res) => {
+  const bid = routeId(req.params.businessId), cid = routeId(req.params.convId);
+  if (!Number.isInteger(bid) || !Number.isInteger(cid)) return res.status(400).json({ error: 'Invalid request.' });
+  if (!(await canWorkInbox(req.user.id, bid))) return res.status(403).json({ error: 'You do not work this inbox.' });
+  try {
+    const conv = (await db.query(`${INBOX_CONV_SELECT} WHERE c.id = $1 AND c.business_id = $2`, [cid, bid])).rows[0];
+    if (!conv) return res.status(404).json({ error: 'Conversation not found.' });
+    const { rows } = await db.query(
+      `SELECT m.id, m.sender_id, m.body, m.image, m.images, m.media, m.media_kind, m.media_name,
+              m.duration_sec, m.created_at, m.read_at, m.deleted_all, m.reply_to, m.edited,
+              m.forwarded, m.meta, m.sent_by, s.name AS sent_by_name
+         FROM at_messages m LEFT JOIN users s ON s.id = m.sent_by
+        WHERE ((m.sender_id = $1 AND m.recipient_id = $2) OR (m.sender_id = $2 AND m.recipient_id = $1))
+          AND m.thread_id IS NOT DISTINCT FROM $3
+          AND NOT ($2 = ANY(m.deleted_for))
+          AND (m.expires_at IS NULL OR m.expires_at > now())
+        ORDER BY m.created_at ASC LIMIT 400`,
+      [conv.customer_id, bid, conv.thread_id]);
+    const messages = rows.map((m) => mediaRefMsg({
+      id: m.id, body: m.deleted_all ? '' : m.body, image: m.image, images: m.images || [],
+      media: m.media, media_kind: m.media_kind, media_name: m.media_name, duration_sec: m.duration_sec,
+      created_at: m.created_at, reply_to: m.reply_to, edited: !!m.edited, forwarded: !!m.forwarded,
+      meta: m.meta, deletedAll: !!m.deleted_all,
+      // "mine" here means the BUSINESS said it — that is the side the staff are on.
+      mine: m.sender_id === bid,
+      sentBy: m.sent_by ? { id: m.sent_by, name: m.sent_by_name } : null,
+    }, 'dm'));
+    // Opening it marks the customer's messages read for the business.
+    db.query(`UPDATE at_messages SET read_at = now()
+               WHERE sender_id = $1 AND recipient_id = $2 AND thread_id IS NOT DISTINCT FROM $3 AND read_at IS NULL`,
+      [conv.customer_id, bid, conv.thread_id]).catch(() => {});
+    res.json({ conversation: mapInboxConv(conv), messages });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not open the conversation.' }); }
+});
+
+/* Reply — as the business, signed by the person. */
+app.post('/api/inbox/:businessId/:convId/reply', auth.requireAuth, rateLimit(120, 60000, 'inbox-reply'), async (req, res) => {
+  const bid = routeId(req.params.businessId), cid = routeId(req.params.convId);
+  if (!Number.isInteger(bid) || !Number.isInteger(cid)) return res.status(400).json({ error: 'Invalid request.' });
+  if (!(await canWorkInbox(req.user.id, bid))) return res.status(403).json({ error: 'You do not work this inbox.' });
+  const body = String(req.body.body || '').trim().slice(0, 4000);
+  if (!body) return res.status(400).json({ error: 'Write a reply first.' });
+  try {
+    const conv = (await db.query('SELECT * FROM inbox_conversations WHERE id = $1 AND business_id = $2', [cid, bid])).rows[0];
+    if (!conv) return res.status(404).json({ error: 'Conversation not found.' });
+    if (!(await dmAllowed(bid, conv.customer_id))) return res.status(403).json({ error: 'This customer cannot be messaged.' });
+    const dsec = await dmDisappearSeconds(bid, conv.customer_id);
+    const ins = await db.query(
+      `INSERT INTO at_messages (sender_id, recipient_id, body, thread_id, sent_by, expires_at)
+       VALUES ($1,$2,$3,$4,$5,${dsec ? `now() + interval '${dsec} seconds'` : 'NULL'})
+       RETURNING id, body, created_at`,
+      [bid, conv.customer_id, body, conv.thread_id, req.user.id]);
+    const r = ins.rows[0];
+    const who = (await db.query('SELECT name FROM users WHERE id = $1', [req.user.id])).rows[0];
+    const msg = {
+      id: r.id, body: r.body, image: null, images: [], media: null, media_kind: null, media_name: null,
+      created_at: r.created_at, reply_to: null, forwarded: false, meta: null,
+      threadId: conv.thread_id || null,
+      sentBy: { id: req.user.id, name: who ? who.name : null },
+    };
+    rtPush(conv.customer_id, 'msg', { kind: 'dm', peerId: bid, message: { ...msg, mine: false } });
+    rtPush(bid, 'msg', { kind: 'dm', peerId: conv.customer_id, message: { ...msg, mine: true } });
+    notify(conv.customer_id, bid, 'message', null);
+    // Replying takes it on: an unassigned conversation becomes yours, because
+    // the person who answered is the person the customer is now waiting on.
+    await db.query(
+      `UPDATE inbox_conversations
+          SET assigned_to = COALESCE(assigned_to, $2), assigned_at = COALESCE(assigned_at, now()),
+              opened_at = COALESCE(opened_at, now())
+        WHERE id = $1`, [cid, req.user.id]);
+    await inboxTouch(bid, conv.customer_id, conv.thread_id, 'business');
+    rtPush(bid, 'inbox', { type: 'reply', convId: cid });
+    res.json({ ok: true, message: { ...msg, mine: true } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the reply.' }); }
+});
+
+/* Assign it, or change its state. */
+app.patch('/api/inbox/:businessId/:convId', auth.requireAuth, async (req, res) => {
+  const bid = routeId(req.params.businessId), cid = routeId(req.params.convId);
+  if (!Number.isInteger(bid) || !Number.isInteger(cid)) return res.status(400).json({ error: 'Invalid request.' });
+  if (!(await canWorkInbox(req.user.id, bid))) return res.status(403).json({ error: 'You do not work this inbox.' });
+  const sets = [], params = [cid, bid];
+  try {
+    if (req.body.state !== undefined) {
+      const st = String(req.body.state);
+      if (!INBOX_STATES.includes(st)) return res.status(400).json({ error: 'Unknown state.' });
+      params.push(st); sets.push(`state = $${params.length}`);
+      if (st === 'solved') { params.push(req.user.id); sets.push(`solved_at = now(), solved_by = $${params.length}`); }
+      else sets.push('solved_at = NULL, solved_by = NULL');
+      if (st === 'open') sets.push('opened_at = COALESCE(opened_at, now())');
+    }
+    if (req.body.assignedTo !== undefined) {
+      const to = req.body.assignedTo;
+      if (to === null) sets.push('assigned_to = NULL, assigned_at = NULL');
+      else {
+        const uid = parseInt(to, 10);
+        if (!Number.isInteger(uid)) return res.status(400).json({ error: 'Invalid person.' });
+        // Only somebody who actually works this inbox can be handed the work.
+        if (!(await canWorkInbox(uid, bid))) return res.status(400).json({ error: 'That person does not work this inbox.' });
+        params.push(uid); sets.push(`assigned_to = $${params.length}, assigned_at = now()`);
+      }
+    }
+    if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
+    const { rows } = await db.query(
+      `UPDATE inbox_conversations SET ${sets.join(', ')} WHERE id = $1 AND business_id = $2 RETURNING id`, params);
+    if (!rows[0]) return res.status(404).json({ error: 'Conversation not found.' });
+    const conv = (await db.query(`${INBOX_CONV_SELECT} WHERE c.id = $1`, [cid])).rows[0];
+    // Tell the person it was handed to — an assignment nobody sees is not an assignment.
+    if (req.body.assignedTo && parseInt(req.body.assignedTo, 10) !== req.user.id) {
+      rtPush(parseInt(req.body.assignedTo, 10), 'inbox', { type: 'assigned', convId: cid, businessId: bid });
+    }
+    rtPush(bid, 'inbox', { type: 'update', convId: cid });
+    res.json({ ok: true, conversation: mapInboxConv(conv) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the conversation.' }); }
+});
+
+/* The switch, and who can work it. Owner only — this decides who reads the
+   business's customer messages, which is not a staff-level decision. */
+app.get('/api/business/team-inbox', auth.requireAuth, async (req, res) => {
+  try {
+    const u = (await db.query('SELECT account_type, team_inbox FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!u || u.account_type !== 'business') return res.status(403).json({ error: 'Business accounts only.' });
+    const team = (await db.query(
+      `SELECT t.member_id AS id, u.name, u.username, t.role,
+              COALESCE((t.permissions->>'inbox')::boolean, false) AS inbox
+         FROM business_team t JOIN users u ON u.id = t.member_id
+        WHERE t.business_id = $1 AND t.status = 'active' ORDER BY u.name`, [req.user.id])).rows;
+    res.json({ enabled: !!u.team_inbox, team });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the setting.' }); }
+});
+app.put('/api/business/team-inbox', auth.requireAuth, async (req, res) => {
+  try {
+    const u = (await db.query('SELECT account_type FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!u || u.account_type !== 'business') return res.status(403).json({ error: 'Business accounts only.' });
+    const on = req.body.enabled === true;
+    await db.query('UPDATE users SET team_inbox = $2 WHERE id = $1', [req.user.id, on]);
+    // Turning it on adopts the conversations that already exist, so the inbox is
+    // not empty on the first day — the history is the point.
+    if (on) {
+      await db.query(
+        `INSERT INTO inbox_conversations (business_id, customer_id, thread_id, state, last_msg_at, last_from)
+         SELECT $1,
+                CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END,
+                m.thread_id,
+                CASE WHEN m.sender_id = $1 THEN 'waiting' ELSE 'new' END,
+                max(m.created_at),
+                CASE WHEN m.sender_id = $1 THEN 'business' ELSE 'customer' END
+           FROM at_messages m
+          WHERE (m.sender_id = $1 OR m.recipient_id = $1)
+            AND CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END <> $1
+          GROUP BY 2, 3, 4, 6
+         ON CONFLICT (business_id, customer_id, COALESCE(thread_id, 0)) DO NOTHING`, [req.user.id]).catch((e) => console.error('inbox adopt', e.message));
+    }
+    res.json({ ok: true, enabled: on });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the setting.' }); }
+});
+
 // Record a notification for `userId` caused by `actorId` (and push it live).
 // `feedId` deep-links feed notifications; `groupId` deep-links group ones
 // (post_id stays null for those).
@@ -6945,7 +7290,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     // Seeing the thread starts the self-destruct timer on any unseen secret messages.
     await startSecretTimers(req.user.id, other, thread);
     const { rows } = await db.query(
-      `SELECT id, sender_id, body, image, images, media, media_kind, media_name, duration_sec, image_w, image_h, created_at, read_at, deleted_all, reply_to, edited, forwarded, meta, client_id, view_once, secret, cipher, cipher_iv, expires_at, ($1 = ANY(viewed_by)) AS viewed,
+      `SELECT id, sender_id, body, image, images, media, media_kind, media_name, duration_sec, image_w, image_h, created_at, read_at, deleted_all, reply_to, edited, forwarded, meta, client_id, view_once, secret, cipher, cipher_iv, expires_at, sent_by, (SELECT name FROM users WHERE id = at_messages.sent_by) AS sent_by_name, ($1 = ANY(viewed_by)) AS viewed,
               ($1 = ANY(hidden_for)) AS hidden, ($1 = ANY(starred_by)) AS starred, (pinned_at IS NOT NULL) AS pinned, reactions FROM at_messages
        WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
          AND thread_id IS NOT DISTINCT FROM $3
@@ -6992,10 +7337,27 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
         connectGated = !!(g.rows[0] && g.rows[0].dm_connections_only);
       }
     } catch (e) { /* permission extras are best-effort */ }
+    /* Talking to a company, not to whoever owns it. When the business runs a
+       team inbox the customer is told so — once, plainly — and once somebody
+       picks the conversation up they get that person's first name, because
+       "Dina from Atwe is helping you" is the difference between a support desk
+       and a stranger's phone. */
+    let handledByTeam = false, agent = null;
+    try {
+      if (peer.account_type === 'business' && (await hasTeamInbox(other))) {
+        handledByTeam = true;
+        const a = (await db.query(
+          `SELECT u.name FROM inbox_conversations c JOIN users u ON u.id = c.assigned_to
+            WHERE c.business_id = $1 AND c.customer_id = $2 AND c.thread_id IS NOT DISTINCT FROM $3
+              AND c.state <> 'solved'`, [other, req.user.id, thread])).rows[0];
+        if (a && a.name) agent = String(a.name).trim().split(/\s+/)[0];   // first name only
+      }
+    } catch (e) { /* the chat still works if this cannot be worked out */ }
     res.json({
       peer: { id: peer.id, name: peer.name, username: peer.username, avatar: mediaRef(peer.avatar, 'avatar', peer.id), accountType: peer.account_type === 'business' ? 'business' : 'personal',
         // Your private name for them (chat rename) — only ever shown to YOU.
         nickname: (await db.query('SELECT nickname FROM contacts WHERE owner_id = $1 AND contact_id = $2', [req.user.id, other])).rows[0]?.nickname || null },
+      handledByTeam, agent,
       canMessage, request, incomingRequest, connectGated, thread,
       disappearing: await dmDisappearSeconds(req.user.id, other),
       // Work out the shape of any photo we have not measured yet, once, and
@@ -7011,6 +7373,9 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
         image_w: m.image_w || null, image_h: m.image_h || null,
         viewOnce: vo, viewed: vo ? !!m.viewed : false,
         created_at: m.created_at, mine: m.sender_id === req.user.id, read_at: showReceipts ? (m.read_at || null) : null, clientId: m.client_id || null,
+        // Which person at the business wrote this. The message is FROM the
+        // company; this is the name signed underneath it.
+        sentBy: m.sent_by ? { id: m.sent_by, name: m.sent_by_name || null } : null,
         deleted: !!m.deleted_all, hidden: !!m.hidden, starred: !!m.starred, pinned: !!m.pinned, reactions: m.reactions || {},
         reply_to: m.reply_to || null, edited: !!m.edited, forwarded: !!m.forwarded, meta: m.meta || null,
         secret: !!m.secret, expiresAt: m.expires_at || null,
@@ -7357,6 +7722,12 @@ app.post('/api/atchat/with/:id', auth.requireAuth, blockLimited, rateLimit(40, 6
       // skip the push/bell so the recipient's phone stays quiet.
       if (req.body.silent !== true) notify(other, req.user.id, 'message', null);
       maybeAutoReply(other, req.user.id, body).catch(() => {});
+      // Keep the business's team inbox in step with the chat, rather than making
+      // it a separate thing someone has to remember to update. A no-op unless
+      // the recipient is a business running one.
+      inboxTouch(other, req.user.id, thread, 'customer')
+        .then((c) => { if (c) rtPush(other, 'inbox', { type: 'inbound', convId: c.id }); })
+        .catch(() => {});
       routeToBots({ senderId: req.user.id, text: body, groupId: null, userId: other }).catch(() => {});
     }
     try { experimentGoal('message', req.user.id, req); } catch (e) { /* measurement never blocks a message */ }
@@ -25326,9 +25697,12 @@ app.post('/api/business/verify', auth.requireAuth, rateLimit(5, 3600000, 'biz-ve
 const TEAM_ROLES = ['admin', 'manager', 'staff'];
 // Default permission set per role (a member can be fine-tuned beyond this).
 function defaultPerms(role) {
-  if (role === 'admin') return { jobs: true, qa: true, orders: true, reviews: true };
-  if (role === 'manager') return { jobs: true, qa: true, orders: true, reviews: true };
-  return { qa: true, reviews: true }; // staff: customer-facing by default
+  // `inbox` = may work the shared team inbox. Answering customers is what staff
+  // are for, so it comes as standard — but it only means anything once the owner
+  // switches the team inbox on, and they tick each person individually anyway.
+  if (role === 'admin') return { jobs: true, qa: true, orders: true, reviews: true, inbox: true };
+  if (role === 'manager') return { jobs: true, qa: true, orders: true, reviews: true, inbox: true };
+  return { qa: true, reviews: true, inbox: true }; // staff: customer-facing by default
 }
 function cleanPerms(p) {
   const out = {}; if (p && typeof p === 'object') for (const k of TEAM_PERMS) if (p[k]) out[k] = true;
@@ -40759,6 +41133,7 @@ db.init()
   .then(() => { if (db.isConfigured()) return db.getSetting(LEGAL_KEY).then((v) => { _legal = normalizeLegal(v); _legalCache = {}; }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return seedHelpArticles().catch(() => {}); })
   .then(() => { if (db.isConfigured()) return ensureOfficialAccount().catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return migrateOldAssignments().catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(TAXONOMY_KEY).then((v) => { _taxonomy = normalizeTaxonomy(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return backfillSkillCanonicals().catch(() => {}); })
   .then(() => { if (db.isConfigured()) return loadIpBlocks().catch(() => {}); })

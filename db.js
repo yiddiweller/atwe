@@ -4911,6 +4911,51 @@ async function initSchema() {
       UNIQUE (business_id, member_id)
     );
   `);
+  /* ── Shared team inbox ──────────────────────────────────────────────────
+     A business account is one account, so a customer messaging it reaches one
+     person's inbox — which reads as "I texted the owner", not "I contacted the
+     company". This is the ticket layer that sits OVER those messages.
+
+     Deliberately nothing moves. A conversation is still ordinary DMs between the
+     customer and the business account, exactly where they already live, so
+     search, media, calls, disappearing messages and every existing tool keep
+     working untouched. This table only records the things a support desk needs
+     that a chat does not have: what state it is in, and whose job it is.
+
+     One row per conversation. A pair can hold several parallel conversations
+     (dm_threads), so the key includes the thread — with COALESCE, because NULL
+     (the main conversation) is not equal to itself in a unique index. */
+  await query(`
+    CREATE TABLE IF NOT EXISTS inbox_conversations (
+      id           SERIAL PRIMARY KEY,
+      business_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      customer_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      thread_id    INTEGER REFERENCES dm_threads(id) ON DELETE CASCADE,
+      state        TEXT NOT NULL DEFAULT 'new',        -- new | open | waiting | solved
+      assigned_to  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      assigned_at  TIMESTAMPTZ,
+      opened_at    TIMESTAMPTZ,
+      solved_at    TIMESTAMPTZ,
+      solved_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      last_msg_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      last_from    TEXT,                                -- customer | business
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS inbox_conv_key_idx
+                 ON inbox_conversations(business_id, customer_id, COALESCE(thread_id, 0));`);
+  await query(`CREATE INDEX IF NOT EXISTS inbox_conv_biz_idx
+                 ON inbox_conversations(business_id, state, last_msg_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS inbox_conv_assignee_idx
+                 ON inbox_conversations(assigned_to, state);`);
+  // The switch. Off by default: a business that has not asked for a team inbox
+  // behaves exactly as it always has.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS team_inbox BOOLEAN NOT NULL DEFAULT false;`);
+  /* Who actually typed it. A staff reply is sent BY the business — that is the
+     whole point, the customer is talking to the company — but the person behind
+     it is recorded, so the customer can be told a real name and the owner can
+     see who said what. NULL means the account itself sent it. */
+  await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS sent_by INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_business_idx ON business_team(business_id);`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_member_idx ON business_team(member_id, status);`);
   // Cash-out: a Stripe Connect (Express) account id per user — earned once they
