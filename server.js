@@ -641,7 +641,10 @@ const CONTROLS_KEY = 'feature_controls';
    price is always the price. 0 (the default) means Atwe takes nothing, which is
    exactly how the marketplace has behaved until now. */
 const FEE_KEY = 'platform_fee';
-let _platformFee = { pct: 0, minCents: 0, exemptVerified: false };
+// The take-rate Atwe starts with. A value saved in the dashboard always wins;
+// this is only what applies while nobody has ever set one.
+const DEFAULT_FEE = { pct: 1, minCents: 0, exemptVerified: false };
+let _platformFee = { ...DEFAULT_FEE };
 function normalizeFee(v) {
   const src = (v && typeof v === 'object') ? v : {};
   const pct = Number(src.pct);
@@ -679,6 +682,20 @@ async function chargePlatformFee(sellerId, orderId, grossCents) {
     rtPush(sellerId, 'wallet', { type: 'update' });
     return fee;
   } catch (_) { return 0; }
+}
+// A card-paid marketplace order: the buyer's money landed in Atwe's Stripe
+// account, not in any member's balance, so nothing has reached the SELLER yet.
+// Credit their Atwe balance with the sale (the same custodial arrangement as a
+// wallet top-up — they cash out to their bank from there), then take the fee.
+// Called only from the Stripe webhook, and only when recordOrderPaid actually
+// flipped the order pending -> paid, so a replayed event can never pay twice.
+async function settleCardOrderToSeller(orderId) {
+  try {
+    const o = (await db.query('SELECT seller_id, total_cents FROM orders WHERE id = $1', [orderId])).rows[0];
+    if (!o || !(o.total_cents > 0)) return;
+    await walletCreditStandalone(o.seller_id, o.total_cents, 'receive', `Order #${orderId}`);
+    await chargePlatformFee(o.seller_id, orderId, o.total_cents);
+  } catch (e) { console.error('settleCardOrderToSeller', orderId, e); }
 }
 const CONTROL_KEYS = FEATURE_CONTROLS.map((f) => f.key);
 let _featureControls = {}; // { key: false } = OFF
@@ -1014,7 +1031,8 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
       const s = event.data.object, m = s.metadata || {};
       const orderId = parseInt(m.order_id, 10);
       if (Number.isInteger(orderId)) {
-        await recordOrderPaid(orderId); moneyMoved = true;
+        if (await recordOrderPaid(orderId)) await settleCardOrderToSeller(orderId);
+        moneyMoved = true;
         // If this order came from an accepted offer's Checkout, flip the offer to
         // 'paid' now that the charge actually completed (it was left 'paying' at
         // checkout-session-creation time, not marked paid early).
@@ -31389,6 +31407,9 @@ async function payOrderFromSources(buyerId, sellerId, orderId, totalCents, giftC
     await walletCredit(client, sellerId, totalCents, 'receive', buyerId, 'Order payment');
     await client.query('COMMIT');
     await recordOrderPaid(orderId, true);
+    // The seller's own balance was just credited the full sale here, exactly as in
+    // payOrderFromBalance — so the take-rate applies to a gift-card sale too.
+    chargePlatformFee(sellerId, orderId, totalCents).catch(() => {});
     rtPush(buyerId, 'wallet', { type: 'update', amountCents: balancePart });
     rtPush(sellerId, 'wallet', { type: 'update', amountCents: totalCents });
     return { ok: true, giftPart, balancePart };
@@ -40319,7 +40340,7 @@ db.init()
   .then(() => { if (db.isConfigured()) return db.getSetting(MODLISTS_KEY).then((v) => applyModLists(v)).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(CONTROLS_KEY).then((v) => { _featureControls = normalizeControls(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return loadBlockedDomains().catch(() => {}); })
-  .then(() => { if (db.isConfigured()) return db.getSetting(FEE_KEY).then((v) => { _platformFee = normalizeFee(v); }).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return db.getSetting(FEE_KEY).then((v) => { if (v) _platformFee = normalizeFee(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(TAXONOMY_KEY).then((v) => { _taxonomy = normalizeTaxonomy(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return backfillSkillCanonicals().catch(() => {}); })
   .then(() => { if (db.isConfigured()) return loadIpBlocks().catch(() => {}); })

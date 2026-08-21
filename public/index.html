@@ -18993,7 +18993,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1648'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1649'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -38370,7 +38370,7 @@ async function acPotMoveSubmit() {
 }
 function acWalletRow(t) {
   const credit = t.deltaCents >= 0;
-  const title = t.kind === 'topup' ? 'Added money' : t.kind === 'cashout' ? 'Cashed out to bank' : t.kind === 'receive' ? ('From ' + (t.peer ? t.peer.name : 'someone')) : ('To ' + (t.peer ? t.peer.name : 'someone'));
+  const title = t.kind === 'topup' ? 'Added money' : t.kind === 'cashout' ? 'Cashed out to bank' : t.kind === 'platform_fee' ? 'Atwe fee' : t.kind === 'receive' ? ('From ' + (t.peer ? t.peer.name : 'someone')) : ('To ' + (t.peer ? t.peer.name : 'someone'));
   const when = acTime(t.createdAt);
   const ic = t.kind === 'topup'
     ? '<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
@@ -38384,7 +38384,7 @@ function acWalletRow(t) {
 }
 // Cash-App-style transaction detail: tap a ledger row → the full record —
 // amount, who, note, exact time, running balance and the ledger reference.
-const _WTX_LABELS = { topup: 'Added money', cashout: 'Cashed out to bank', receive: 'Money received', send: 'Money sent', pot_in: 'Moved into a pot', pot_out: 'Moved out of a pot', escrow_hold: 'Held for a protected order', escrow_release: 'Protected order released', escrow_refund: 'Protected order refunded', deposit_hold: 'Booking deposit held', shipping_label: 'Shipping label', return_label: 'Return label', handle: 'Handle purchase', order: 'Order', tip: 'Tip', gift_card: 'Gift card' };
+const _WTX_LABELS = { topup: 'Added money', cashout: 'Cashed out to bank', receive: 'Money received', send: 'Money sent', pot_in: 'Moved into a pot', pot_out: 'Moved out of a pot', escrow_hold: 'Held for a protected order', escrow_release: 'Protected order released', escrow_refund: 'Protected order refunded', deposit_hold: 'Booking deposit held', shipping_label: 'Shipping label', return_label: 'Return label', handle: 'Handle purchase', order: 'Order', tip: 'Tip', gift_card: 'Gift card', platform_fee: 'Atwe marketplace fee' };
 function acOpenWalletTx(id) {
   const t = (AC._walletTx || []).find((x) => x.id === id); if (!t) return;
   const credit = t.deltaCents >= 0;
