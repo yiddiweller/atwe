@@ -5007,6 +5007,34 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS business_reviews_subject_idx ON business_reviews(business_id, created_at DESC);`);
   // An appointment is finished work: it can be reviewed like anything else.
   await query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;`);
+  /* ── Rating the THING, separately from the person ──
+     Airbnb's model, and it is the right one: after a stay you say what you
+     thought of the FLAT and, separately, of the HOST. They are genuinely
+     different judgements — one host can keep a lovely flat and a grim one, and
+     a perfect flat can have a landlord who never answers the phone. Collapsing
+     them into a single number loses the thing a reader most wants to know.
+
+     An appointment recorded its service as free text, so there was nothing to
+     attach a rating to. It now remembers WHICH service was booked. */
+  await query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS service_id INTEGER REFERENCES business_services(id) ON DELETE SET NULL;`);
+  /* Services get their own reviews, mirroring the ones products already have.
+     A rental house needs no new table — it is a products row, so it uses the
+     product reviews that already exist; it simply could never reach them,
+     because "did you buy this" only ever looked at orders. */
+  await query(`
+    CREATE TABLE IF NOT EXISTS service_reviews (
+      id          SERIAL PRIMARY KEY,
+      service_id  INTEGER NOT NULL REFERENCES business_services(id) ON DELETE CASCADE,
+      reviewer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      rating      INTEGER NOT NULL,
+      body        TEXT NOT NULL DEFAULT '',
+      media       TEXT[],
+      response    TEXT,
+      responded_at TIMESTAMPTZ,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (service_id, reviewer_id)
+    );`);
+  await query(`CREATE INDEX IF NOT EXISTS service_reviews_svc_idx ON service_reviews(service_id, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS users_cert_active_idx ON users(cert_active) WHERE cert_active;`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_business_idx ON business_team(business_id);`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_member_idx ON business_team(member_id, status);`);
