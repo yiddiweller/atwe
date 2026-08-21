@@ -3666,6 +3666,7 @@ async function notifySelf(userId, type, productId) {
 
 // Short server-side verb map for push bodies (mirrors the client's notif copy).
 const PUSH_VERBS = {
+  certified: 'You are now Atwe Certified',
   like: 'liked your post', reply: 'replied to your post', follow: 'followed you',
   message: 'sent you a message', call: 'called you', video_call: 'video-called you',
   chat_request: 'wants to chat with you', mention: 'mentioned you', quote: 'quoted your post',
@@ -12280,7 +12281,11 @@ app.post('/api/passkeys/login/finish', rateLimit(20, 60000, 'pk-login2'), async 
     const full = (await db.query('SELECT * FROM users WHERE id = $1', [pk.uid])).rows[0];
     const token = await issueSession(full, req);
     sendLoginAlertEmail(full, req).catch(() => {});
-    notify(full.id, full.id, 'login');
+    // Security alert. notify() drops self-notifications by design, so a
+    // sign-in alert is written directly — the same as the password and
+    // social sign-in paths do a few hundred lines up.
+    db.query('INSERT INTO notifications (user_id, actor_id, type) VALUES ($1, $1, $2)', [full.id, 'login']).catch(() => {});
+    rtPush(full.id, 'notif', { type: 'login' });
     res.json({ token, user: publicUser(full) });
   } catch (err) {
     res.status(400).json({ error: String(err.message || 'That passkey did not work.') });
@@ -29401,7 +29406,7 @@ app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
 // render post-style and link to a business storefront).
 function mapListing(r) {
   return Object.assign(mapProduct(r), {
-    seller: { id: r.business_id, name: r.seller_name, username: r.seller_username, avatar: r.seller_avatar || null, accountType: r.seller_account_type === 'business' ? 'business' : 'personal', verified: !!r.seller_verified },
+    seller: { id: r.business_id, name: r.seller_name, username: r.seller_username, avatar: r.seller_avatar || null, accountType: r.seller_account_type === 'business' ? 'business' : 'personal', verified: !!r.seller_verified, certified: !!r.seller_certified },
     createdAt: r.created_at,
     // Seller-wide free-shipping threshold, advertised on the listing.
     freeShipOverCents: Number(r.seller_free_ship_over) > 0 ? Number(r.seller_free_ship_over) : null,
@@ -29409,7 +29414,7 @@ function mapListing(r) {
 }
 const LISTING_SELECT = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
   p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS},
-  u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified, u.free_ship_over_cents AS seller_free_ship_over
+  u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified, u.cert_active AS seller_certified, u.free_ship_over_cents AS seller_free_ship_over
   FROM products p JOIN users u ON u.id = p.business_id`;
 
 /* ─── Sponsored product ads (Amazon Sponsored Products / Etsy Ads-style) ───
@@ -34248,11 +34253,52 @@ async function businessReviewSummary(businessId) {
 const TRUST_BASE = 50;
 const TRUST_TIERS = [[90, 'Excellent'], [75, 'Great'], [60, 'Good'], [45, 'Fair'], [0, 'Low']];
 
+/* ── Atwe Certified ──
+   A mark worth having is one that is hard to get. Two conditions, both
+   required: a reputation of 90 or better AND real volume behind it. The volume
+   floor is the important half — without it, a brand-new account with a handful
+   of friendly ratings would eventually creep to 90 on a record nobody could
+   judge, and the mark would mean nothing to the person reading it.
+
+   Staff can override in both directions. A grant ignores the number, for the
+   people we know deserve it before the numbers catch up. A block also ignores
+   the number, and beats a grant, so a mark can always be taken away. */
+const CERT_MIN_SCORE = 90;
+/* Volume means completed DEALINGS, not orders alone. A host with ten finished
+   stays has exactly as much of a track record as a seller with ten shipped
+   orders, and counting only orders would have quietly shut every host out. */
+const CERT_MIN_DEALINGS = 10;
+const CERT_LABEL = 'Atwe Certified';
+
+/* The cached copy exists so a page of twenty listings can show the mark without
+   running twenty reputation calculations. It is written only when the answer
+   has actually changed, and never awaited — a stale cache for a few seconds is
+   harmless, a slow profile is not. */
+function syncCertCache(userId, certified) {
+  db.query('UPDATE users SET cert_active = $2 WHERE id = $1 AND cert_active IS DISTINCT FROM $2', [userId, certified])
+    .catch(() => {});
+}
+/* Told once, ever. The claim is the guarded UPDATE itself, so it does not
+   matter that a profile can be read by many people at once — exactly one of
+   those reads wins and sends the notification. */
+async function announceCertificate(userId) {
+  try {
+    const claimed = await db.query(
+      'UPDATE users SET cert_notified_at = now() WHERE id = $1 AND cert_notified_at IS NULL RETURNING id', [userId]);
+    if (!claimed.rowCount) return;
+    // A self-notification, like the sign-in alert: notify() drops those.
+    await db.query('INSERT INTO notifications (user_id, actor_id, type) VALUES ($1, $1, $2)', [userId, 'certified']);
+    rtPush(userId, 'notif', { type: 'certified' });
+    sendPushForNotif(userId, userId, 'certified').catch(() => {});
+  } catch (e) { /* a missed announcement must never break a profile */ }
+}
+
 async function userTrustScore(userId) {
   try {
     const { rows } = await db.query(`
       SELECT
         u.created_at, u.email_verified, u.verified,
+        u.cert_manual, u.cert_blocked, u.cert_active, u.cert_at, u.cert_notified_at,
         -- what they have actually completed
         (SELECT COUNT(*) FROM orders o WHERE (o.buyer_id = $1 AND o.status IN ('paid','fulfilled','delivered','released'))
                                           OR (o.seller_id = $1 AND o.status IN ('fulfilled','delivered','released')))::int AS completed,
@@ -34311,8 +34357,29 @@ async function userTrustScore(userId) {
     const noHistory = !r.completed && !ratingCount && !r.stays;
     const tier = noHistory ? 'New' : (TRUST_TIERS.find(([t]) => score >= t) || [0, 'Low'])[1];
 
+    /* The mark. A block beats everything; otherwise a hand-granted mark stands
+       on its own, and an earned one needs both the score and the volume. */
+    const dealings = r.completed + r.stays;
+    const earnedCert = score >= CERT_MIN_SCORE && dealings >= CERT_MIN_DEALINGS;
+    const certified = !r.cert_blocked && (r.cert_manual || earnedCert);
+    // Keep the cached copy honest, so lists can trust it without recomputing.
+    if (certified !== r.cert_active) syncCertCache(userId, certified);
+    // And tell them once — the first time, not on every profile read.
+    if (certified && !r.cert_notified_at) announceCertificate(userId);
+
     return {
       score, tier, isNew: noHistory,
+      certified,
+      certifiedKind: certified ? (r.cert_manual && !earnedCert ? 'granted' : 'earned') : null,
+      certifiedAt: r.cert_at || null,
+      certLabel: CERT_LABEL,
+      // What is still missing, so somebody close to it can see the gap.
+      certNeeds: certified || r.cert_blocked ? null : {
+        score: Math.max(0, CERT_MIN_SCORE - score),
+        dealings: Math.max(0, CERT_MIN_DEALINGS - dealings),
+        minScore: CERT_MIN_SCORE, minDealings: CERT_MIN_DEALINGS,
+      },
+      dealings,
       completedOrders: r.completed,
       stays: r.stays,
       ratingAvg: Math.round(ratingAvg * 10) / 10,
@@ -37707,6 +37774,7 @@ app.get('/api/admin/users', auth.requirePerm('users'), async (req, res) => {
              u.verified, u.verify_requested_at, u.account_type, u.business_verify_status, u.business_verify_tier, u.admin_tags,
              u.status, u.status_reason, u.suspended_until, u.deactivated,
              u.wallet_frozen, u.wallet_frozen_reason, u.reach_limited,
+             u.cert_active, u.cert_manual, u.cert_blocked,
              COUNT(c.id)::int AS chat_count,
              MAX(c.updated_at) AS last_chat_at,
              (SELECT COUNT(*)::int FROM admin_messages am
@@ -38870,6 +38938,67 @@ app.post('/api/admin/users/:id/wallet-freeze', auth.requirePerm('users'), async 
     adminAudit(req, frozen ? 'wallet.freeze' : 'wallet.unfreeze', 'user', id, { reason });
     notify(id, req.user.id, frozen ? 'wallet_frozen' : 'wallet_unfrozen');
     res.json({ user: rows[0] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+/* ── Atwe Certified: the staff override ──
+   Three actions, because there are genuinely three outcomes and folding them
+   into a boolean would lose one: GRANT the mark by hand, BLOCK it regardless
+   of the number, or CLEAR both and let the calculation decide again. */
+const CERT_ACTIONS = new Set(['grant', 'block', 'auto']);
+app.post('/api/admin/users/:id/certificate', auth.requirePerm('users'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
+  const action = String(req.body.action || '');
+  if (!CERT_ACTIONS.has(action)) return res.status(400).json({ error: 'Choose grant, block or auto.' });
+  const note = (req.body.note ? String(req.body.note) : '').slice(0, 300) || null;
+  try {
+    const before = (await db.query('SELECT cert_active FROM users WHERE id = $1', [id])).rows[0];
+    if (!before) return res.status(404).json({ error: 'User not found.' });
+    const { rows } = await db.query(
+      `UPDATE users SET cert_manual = $2, cert_blocked = $3, cert_note = $4,
+                        cert_by = $5, cert_at = CASE WHEN $2 THEN now() ELSE cert_at END
+       WHERE id = $1 RETURNING id, name, username, cert_manual, cert_blocked, cert_at, cert_note`,
+      [id, action === 'grant', action === 'block', note, req.user.id]);
+    // The staff decision changes the answer, so recompute rather than guess:
+    // the same calculation the profile uses, which refreshes the cached copy.
+    const ts = await userTrustScore(id);
+    adminAudit(req, 'certificate.' + action, 'user', id, { note });
+    // Only say something when the outcome actually moved for the member.
+    if (ts && ts.certified !== before.cert_active) {
+      notify(id, req.user.id, ts.certified ? 'certified_granted' : 'certified_removed');
+    }
+    res.json({ user: rows[0], trustScore: ts });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+// Everyone who currently holds the mark, and how they got it.
+app.get('/api/admin/certificates', auth.requirePerm('users'), async (req, res) => {
+  const q = String(req.query.q || '').trim().slice(0, 60);
+  const like = '%' + q.replace(/[%_\\]/g, (c) => '\\' + c) + '%';
+  try {
+    const { rows } = await db.query(
+      `SELECT id, name, username, avatar, account_type, verified,
+              cert_manual, cert_blocked, cert_at, cert_note, cert_active,
+              (SELECT name FROM users a WHERE a.id = u.cert_by) AS cert_by_name
+         FROM users u
+        WHERE (cert_active OR cert_manual OR cert_blocked)
+          AND ($1 = '' OR name ILIKE $2 OR username ILIKE $2)
+        ORDER BY cert_blocked ASC, cert_manual DESC, cert_at DESC NULLS LAST, id DESC
+        LIMIT 200`, [q, like]);
+    const counts = (await db.query(
+      `SELECT COUNT(*) FILTER (WHERE cert_active)::int AS active,
+              COUNT(*) FILTER (WHERE cert_manual)::int AS granted,
+              COUNT(*) FILTER (WHERE cert_blocked)::int AS blocked FROM users`)).rows[0];
+    res.json({
+      members: rows.map((r) => ({
+        id: r.id, name: r.name, username: r.username, avatar: mediaRef(r.avatar, 'avatar', r.id),
+        accountType: r.account_type, verified: r.verified,
+        certified: r.cert_active, granted: r.cert_manual, blocked: r.cert_blocked,
+        at: r.cert_at, note: r.cert_note, by: r.cert_by_name,
+      })),
+      counts, minScore: CERT_MIN_SCORE, minDealings: CERT_MIN_DEALINGS, label: CERT_LABEL,
+    });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 

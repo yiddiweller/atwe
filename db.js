@@ -4962,6 +4962,26 @@ async function initSchema() {
      it is recorded, so the customer can be told a real name and the owner can
      see who said what. NULL means the account itself sent it. */
   await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS sent_by INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
+
+  /* ── Atwe Certified ──
+     The mark a member earns by dealing well over real volume, or that staff
+     award by hand. Three separate flags, because they answer three different
+     questions and must not be collapsed into one:
+       cert_manual   staff granted it deliberately, regardless of the number
+       cert_blocked  staff withheld it, regardless of the number — this wins
+       cert_active   the last computed answer, cached ONLY so that lists
+                     (search results, listing cards) can show the mark without
+                     recomputing a whole reputation per row. Never the source
+                     of truth; always refreshed from the live calculation. */
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS cert_manual BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS cert_blocked BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS cert_active BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS cert_by INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS cert_at TIMESTAMPTZ;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS cert_note TEXT;`);
+  // Told once, the first time they earn it — not on every profile read.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS cert_notified_at TIMESTAMPTZ;`);
+  await query(`CREATE INDEX IF NOT EXISTS users_cert_active_idx ON users(cert_active) WHERE cert_active;`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_business_idx ON business_team(business_id);`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_member_idx ON business_team(member_id, status);`);
   // Cash-out: a Stripe Connect (Express) account id per user — earned once they

@@ -7645,6 +7645,7 @@ async function openUser(id){
       <button class="act" onclick="openLimits(${u.id})">Sending limits…</button>
       <button class="act" onclick="openLinked(${u.id})">Linked accounts…</button>
       <button class="act${u.wallet_frozen ? ' accent' : ''}" onclick="setWalletFreeze(${u.id}, ${u.wallet_frozen ? 'false' : 'true'})">${u.wallet_frozen ? 'Unfreeze wallet' : 'Freeze wallet…'}</button>
+      <button class="act${u.cert_active ? ' accent' : ''}" onclick="openCertificate(${u.id})" title="Atwe Certified — earned at 90+ reputation with 10+ completed orders or stays, or awarded by hand.">${u.cert_blocked ? 'Certificate: blocked' : u.cert_manual ? 'Certificate: granted' : u.cert_active ? 'Certified (earned)' : 'Certificate…'}</button>
       <button class="act${u.reach_limited ? ' accent' : ''}" onclick="setReach(${u.id}, ${u.reach_limited ? 'false' : 'true'})" title="Their followers still see everything; strangers stop being shown their posts">${u.reach_limited ? 'Restore their reach' : 'Reduce their reach…'}</button>
       ${u.is_admin ? '' : `<button class="act" onclick="impersonateUser(${u.id})">View as user…</button>`}
       <button class="act danger" onclick="removeUser(${u.id})">Delete user</button>
@@ -8005,6 +8006,34 @@ async function setWalletFreeze(id, frozen){
     const { user } = await api('POST', '/api/admin/users/' + id + '/wallet-freeze', body);
     merge({ ...user, wallet_frozen: user.wallet_frozen, wallet_frozen_reason: user.wallet_frozen_reason });
     notify(frozen ? 'Wallet frozen.' : 'Wallet unfrozen.');
+    if (modalOpen()) openUser(id);
+  } catch (e) { notify(e.message); }
+}
+/* Atwe Certified. Most people never need this — the mark is earned. Staff step
+   in for the two cases the calculation cannot know about: somebody who plainly
+   deserves it before the numbers catch up, and somebody who must not have it
+   whatever the numbers say. */
+async function openCertificate(id){
+  const u = USERS.find(x => x.id === id); if (!u) return;
+  const who = u.username ? '@' + u.username : u.email;
+  const now = u.cert_blocked ? 'blocked by staff'
+    : u.cert_manual ? 'granted by staff'
+    : u.cert_active ? 'earned (90+ reputation, 10+ completed orders or stays)'
+    : 'not certified';
+  const pick = prompt(
+    'Atwe Certified — ' + who + '\nCurrently: ' + now +
+    '\n\nType one:\n  grant  — award the mark by hand, whatever the number says' +
+    '\n  block  — withhold it, whatever the number says' +
+    '\n  auto   — clear both and let the reputation decide', u.cert_active ? 'block' : 'grant');
+  if (!pick) return;
+  const action = String(pick).trim().toLowerCase();
+  if (!['grant','block','auto'].includes(action)) { notify('Type grant, block or auto.'); return; }
+  const note = action === 'auto' ? '' : (prompt('Note for the record (optional):', u.cert_note || '') || '');
+  try {
+    const r = await api('POST', '/api/admin/users/' + id + '/certificate', { action, note });
+    const t = r.trustScore || {};
+    merge({ ...r.user, cert_active: !!t.certified, cert_manual: !!r.user.cert_manual, cert_blocked: !!r.user.cert_blocked });
+    notify(t.certified ? 'Certified — the mark now shows on their profile.' : 'Not certified.');
     if (modalOpen()) openUser(id);
   } catch (e) { notify(e.message); }
 }
