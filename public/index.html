@@ -7294,7 +7294,9 @@ body.light .rev-verified{color:var(--on-green);}
   color:var(--t1);text-align:left;transition:background var(--t-fast) var(--ease);}
 @media(hover:hover){.trust-card:hover{background:var(--s2);}}
 .tc-num{flex:0 0 auto;font-size:26px;font-weight:800;letter-spacing:-.03em;line-height:1;
-  font-variant-numeric:tabular-nums;}
+  font-variant-numeric:tabular-nums;display:inline-flex;align-items:center;gap:.14em;}
+.tc-star{width:.62em;height:.62em;flex:0 0 auto;fill:currentColor;}
+.tv-num .tc-star{width:.56em;height:.56em;}
 .tv-scale{font-size:12.5px;color:var(--t3);margin:-4px 0 12px;}
 .tc-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}
 .tc-tier{font-size:14px;font-weight:750;}
@@ -7337,7 +7339,8 @@ body.light .tv-num.high{color:var(--on-green);}
 .trust-card.new  .tc-num{color:var(--t2);}
 /* the explanation */
 .tv-head{display:flex;align-items:baseline;gap:11px;margin:2px 0 10px;}
-.tv-num{font-size:40px;font-weight:800;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums;}
+.tv-num{font-size:40px;font-weight:800;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums;
+  display:inline-flex;align-items:center;gap:.13em;}
 .tv-num.high{color:var(--green);}
 .tv-num.low{color:var(--red);}
 .tv-num.new,.tv-num.ok{color:var(--t2);}
@@ -19235,7 +19238,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1662'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1663'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -37811,6 +37814,7 @@ const CERT_MARK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 function acCertSeal(label) {
   return `<span class="cert-seal">${CERT_MARK}${escHtml(label || 'Certified')}</span>`;
 }
+const _REP_STAR = '<svg class="tc-star" viewBox="0 0 24 24" aria-hidden="true"><polygon points="12 2 14.9 8.6 22 9.2 16.6 13.9 18.2 21 12 17.3 5.8 21 7.4 13.9 2 9.2 9.1 8.6"/></svg>';
 function acTrustBand(ts) {
   return ts.isNew ? 'new' : ts.score >= 90 ? 'high' : ts.score >= 60 ? 'mid' : ts.score >= 45 ? 'ok' : 'low';
 }
@@ -37821,9 +37825,9 @@ function acTrustChip(ts) {
   const sub = ts.isNew
     ? 'No dealings yet'
     : [ts.completedOrders ? ts.completedOrders + ' order' + (ts.completedOrders === 1 ? '' : 's') : null,
-       ts.ratingCount ? ts.ratingAvg + '★ from ' + ts.ratingCount : null].filter(Boolean).join(' · ');
+       ts.ratingCount ? ts.ratingAvg + ' stars from ' + ts.ratingCount : null].filter(Boolean).join(' · ');
   return `<button class="trust-card ${band}" onclick="acOpenTrust()" aria-label="Reputation ${ts.score} out of 100">
-    <span class="tc-num">${ts.score}</span>
+    <span class="tc-num">${_REP_STAR}${ts.score}</span>
     <span class="tc-body">
       <span class="tc-tier">${escHtml(ts.tier)}</span>
       ${sub ? `<span class="tc-sub">${escHtml(sub)}</span>` : ''}
@@ -37869,7 +37873,7 @@ function acOpenTrust() {
     ['Reports upheld', 0, ts.down.reported],
   ].filter(([, u, d]) => u || d);
   document.getElementById('trustBody').innerHTML = `
-    <div class="tv-head"><div class="tv-num ${ts.certified ? 'cert' : acTrustBand(ts)}">${ts.score}</div>
+    <div class="tv-head"><div class="tv-num ${ts.certified ? 'cert' : acTrustBand(ts)}">${_REP_STAR}${ts.score}</div>
       <div class="tv-tier">${escHtml(ts.tier)}</div></div>
     <div class="tv-scale">Reputation runs from 0 to 100</div>
     ${acCertBlock(ts)}
