@@ -5762,7 +5762,7 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
 /* ONE verified badge everywhere: a neutral silver/white seal with the check knocked
    out. Sized .9em/.9em so it always scales with the font-size of whatever element it
    sits inside — the markup must place it INSIDE the name's own font-sized span (see
-   CLAUDE.md "One verified badge everywhere"), or it'll inherit the wrong ambient
+   the project guide, "One verified badge everywhere"), or it'll inherit the wrong ambient
    size instead of matching that specific display name. `vertical-align` sits the
    badge like an actual character in the name — its bottom edge on (or, by a small
    deliberate `-.08em` nudge, just a hair below) the bottom of the surrounding
@@ -18993,7 +18993,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1651'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1652'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -19040,9 +19040,12 @@ const S = {
   unread: 0,
 };
 
+// Display only. `label` is the sole field read anywhere (see syncModelLabel);
+// the SERVER decides which model actually answers and ignores anything the
+// client sends, so no real model name belongs in this shipped, public file.
 const MODELS = [
-  { label: 'Atwe Standard', id: 'claude-sonnet-4-6' },
-  { label: 'Atwe Advanced', id: 'claude-sonnet-4-6' },
+  { label: 'Atwe Standard', id: 'atwe-standard' },
+  { label: 'Atwe Advanced', id: 'atwe-advanced' },
 ];
 
 /* ═══════════════════════════════════════════════
