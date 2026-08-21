@@ -439,3 +439,88 @@ test('escrow takes the fee on release, not while the money is held', opts, async
   const bal = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [seller.id]);
   assert.equal(bal.rows[0].balance_cents, 396, 'seller keeps the release minus 1%');
 });
+
+/* ───────────────────── SHARED TEAM INBOX (authorization) ──────────────────
+   Staff answering as a business is a real authorization boundary: it decides
+   who may read a company's customer messages and speak in its name. These
+   cover the two ways it was actually wrong when it was first written. */
+
+test('turning the team inbox off takes staff access away with it', opts, async () => {
+  const pool = H.getPool();
+  const biz = await H.seedUser({ accountType: 'business' });
+  const staff = await H.seedUser();
+  const cust = await H.seedUser();
+  const [tb, ts, tc] = [await H.login(biz), await H.login(staff), await H.login(cust)];
+  await H.api('PUT', '/api/business/team-inbox', { token: tb, body: { enabled: true } });
+  await H.api('POST', '/api/business/team', { token: tb, body: { username: staff.username, role: 'staff', permissions: { inbox: true } } });
+  await H.api('POST', `/api/business/team/${biz.id}/respond`, { token: ts, body: { accept: true } });
+  await H.api('POST', `/api/atchat/with/${biz.id}`, { token: tc, body: { body: 'hello', clientId: H.uniq('cid') } });
+  await waitFor(async () => (await pool.query('SELECT 1 FROM inbox_conversations WHERE business_id = $1', [biz.id])).rowCount > 0);
+  const conv = (await pool.query('SELECT id FROM inbox_conversations WHERE business_id = $1', [biz.id])).rows[0];
+
+  let r = await H.api('GET', `/api/inbox/${biz.id}`, { token: ts });
+  assert.equal(r.status, 200, 'staff can work it while it is on');
+
+  // The switch is the owner's consent. Withdrawing it must actually withdraw it —
+  // checking only the team permission left staff reading customer messages and
+  // answering as the company after the owner had turned the whole thing off.
+  await H.api('PUT', '/api/business/team-inbox', { token: tb, body: { enabled: false } });
+  r = await H.api('GET', `/api/inbox/${biz.id}`, { token: ts });
+  assert.equal(r.status, 403, 'and cannot once it is off');
+  r = await H.api('POST', `/api/inbox/${biz.id}/${conv.id}/reply`, { token: ts, body: { body: 'still here' } });
+  assert.equal(r.status, 403, 'nor reply as the company once it is off');
+});
+
+test('one business cannot reach another business inbox', opts, async () => {
+  const pool = H.getPool();
+  const a = await H.seedUser({ accountType: 'business' });
+  const b = await H.seedUser({ accountType: 'business' });
+  const staffA = await H.seedUser();
+  const cust = await H.seedUser();
+  const [ta, tbz, tsa, tc] = [await H.login(a), await H.login(b), await H.login(staffA), await H.login(cust)];
+  for (const [biz, tok] of [[a, ta], [b, tbz]]) await H.api('PUT', '/api/business/team-inbox', { token: tok, body: { enabled: true } });
+  await H.api('POST', '/api/business/team', { token: ta, body: { username: staffA.username, role: 'staff', permissions: { inbox: true } } });
+  await H.api('POST', `/api/business/team/${a.id}/respond`, { token: tsa, body: { accept: true } });
+  await H.api('POST', `/api/atchat/with/${b.id}`, { token: tc, body: { body: 'hi B', clientId: H.uniq('cid') } });
+  await waitFor(async () => (await pool.query('SELECT 1 FROM inbox_conversations WHERE business_id = $1', [b.id])).rowCount > 0);
+  const convB = (await pool.query('SELECT id FROM inbox_conversations WHERE business_id = $1', [b.id])).rows[0];
+
+  assert.equal((await H.api('GET', `/api/inbox/${b.id}`, { token: tsa })).status, 403, 'cannot list another business inbox');
+  assert.equal((await H.api('GET', `/api/inbox/${b.id}/${convB.id}`, { token: tsa })).status, 403, 'cannot read one');
+  assert.equal((await H.api('POST', `/api/inbox/${b.id}/${convB.id}/reply`, { token: tsa, body: { body: 'x' } })).status, 403, 'cannot answer as one');
+  // and the other business's conversation id, presented at their OWN door
+  assert.equal((await H.api('GET', `/api/inbox/${a.id}/${convB.id}`, { token: tsa })).status, 404, 'nor through their own inbox');
+  assert.equal((await H.api('POST', `/api/inbox/${a.id}/${convB.id}/reply`, { token: tsa, body: { body: 'x' } })).status, 404, 'nor reply that way');
+});
+
+test('a business messaging itself does not become a support ticket', opts, async () => {
+  const pool = H.getPool();
+  const biz = await H.seedUser({ accountType: 'business' });
+  const tb = await H.login(biz);
+  await H.api('PUT', '/api/business/team-inbox', { token: tb, body: { enabled: true } });
+  // Messaging yourself is a real feature. It is not a customer enquiry, and it
+  // must never show in the business's own queue as a conversation with itself.
+  await H.api('POST', `/api/atchat/with/${biz.id}`, { token: tb, body: { body: 'note to self', clientId: H.uniq('cid') } });
+  await new Promise((r) => setTimeout(r, 400));
+  const n = (await pool.query('SELECT count(*)::int AS n FROM inbox_conversations WHERE business_id = $1 AND customer_id = $1', [biz.id])).rows[0].n;
+  assert.equal(n, 0, 'no self-conversation ticket');
+});
+
+/* ─────────────────── LOCATION (never state a guess as a fact) ─────────────── */
+
+test('a network edge that does not know the country produces no country', opts, async () => {
+  const tz = require('../timezones');
+  // An edge sends these when it cannot work out where somebody is. Treating one
+  // as a country files a visitor under a place named "Unknown Region", which
+  // reads as real in a list of real countries.
+  for (const code of ['ZZ', 'XX', 'T1', 'EU', 'AP', 'A1']) {
+    assert.equal(tz.countryName(code), null, `${code} is not a country`);
+  }
+  for (const [code, name] of [['GB', 'United Kingdom'], ['IL', 'Israel'], ['US', 'United States']]) {
+    assert.equal(tz.countryName(code), name, `${code} is`);
+  }
+  // and a zone only ever resolves through IANA's own table
+  assert.equal(tz.countryOfZone('Asia/Jerusalem'), 'IL');
+  assert.equal(tz.countryOfZone('Nope/Nowhere'), null);
+  assert.equal(tz.countryOfZone("'; DROP TABLE users;--"), null);
+});

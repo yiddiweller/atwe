@@ -631,9 +631,14 @@ function requestPlace(req) {
     const code = tz.countryOfZone(zone);
     return { country: tz.countryName(code), countryCode: code, city: tz.cityOfZone(zone), source: 'device', zone };
   }
+  // The edge's own answer — but only when it actually named a country. It sends
+  // ZZ / XX / T1 / EU and friends when it could not work one out, and filing a
+  // visitor under those puts a place called "Unknown Region" in the list of
+  // countries. countryName returns null for every one of them.
   const edge = String(((req && req.headers) || {})['cf-ipcountry'] || '').trim().toUpperCase();
-  if (/^[A-Z]{2}$/.test(edge) && edge !== 'XX' && edge !== 'T1') {
-    return { country: tz.countryName(edge), countryCode: edge, city: null, source: 'edge', zone: null };
+  const edgeName = tz.countryName(edge);
+  if (edgeName) {
+    return { country: edgeName, countryCode: edge, city: null, source: 'edge', zone: null };
   }
   return null;   // nothing authoritative — the caller falls back to a lookup
 }
@@ -3145,7 +3150,18 @@ async function hasTeamInbox(businessId) {
 }
 // May this person work the business's inbox? The owner always can; a team member
 // needs the `inbox` permission (an admin has every permission).
-const canWorkInbox = (userId, businessId) => canActAs(userId, businessId, 'inbox');
+/* Two conditions, not one. The permission says a person is allowed to work an
+   inbox; the switch says the business HAS one. Checking only the permission
+   meant an owner who turned the team inbox off still had staff reading their
+   customers' messages and answering as the company — the owner withdrew
+   consent and nothing happened. The switch is the consent, so it is checked
+   every time, for the owner too: with it off there is no shared inbox to work,
+   and those conversations are back in the owner's own chat list where they
+   started. */
+async function canWorkInbox(userId, businessId) {
+  if (!(await hasTeamInbox(businessId))) return false;
+  return canActAs(userId, businessId, 'inbox');
+}
 
 /* Make sure a conversation exists for this customer, and move it along.
    Called on every message either way, so the inbox reflects the chat rather than
@@ -3155,6 +3171,11 @@ const canWorkInbox = (userId, businessId) => canActAs(userId, businessId, 'inbox
    done is a new problem, and leaving it closed is how support tickets get lost. */
 async function inboxTouch(businessId, customerId, threadId, from) {
   try {
+    // Messaging yourself is a real feature (a notes-to-self chat), and a
+    // business owner uses it like anyone else. It is not a customer enquiry,
+    // so it must never appear in their own support queue as a conversation
+    // with themselves.
+    if (businessId === customerId) return null;
     if (!(await hasTeamInbox(businessId))) return null;
     const t = Number.isInteger(threadId) ? threadId : null;
     const r = await db.query(
