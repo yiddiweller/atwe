@@ -24,6 +24,7 @@ const demo = require('./demo');
 const reservedSeed = require('./reserved-seed');
 const FEATURE_CONTROLS = require('./feature-controls-data');
 const { HELP_ARTICLES } = require('./help-content');
+const tz = require('./timezones');
 const MODERATION_SEED = require('./moderation-seed');
 
 const app = express();
@@ -575,13 +576,93 @@ function ipMatches(ip, rule) {
   const mask = bits === 0 ? 0 : (~0 << (32 - bits)) >>> 0;
   return ((a & mask) >>> 0) === ((b & mask) >>> 0);
 }
+/* ═══════════════════════════════════════════════
+   WHO AND WHERE  —  identifying the visitor behind the proxies
+   ───────────────────────────────────────────────
+   `req.ip` is not the visitor's address. Express derives it from the number of
+   proxy hops it is told to trust, and a platform edge often adds more than one,
+   so what comes back can be a router in the hosting provider's own datacentre.
+   Geolocate THAT and every member appears to live wherever the edge does —
+   which is exactly how someone in Israel came out as being in the UK.
+
+   So: prefer the header the edge SETS ITSELF (a client cannot forge those; the
+   edge overwrites whatever arrived), then the first genuinely public address in
+   the forwarded chain, and only then whatever Express concluded.
+═══════════════════════════════════════════════ */
+const EDGE_IP_HEADERS = ['cf-connecting-ip', 'true-client-ip', 'fastly-client-ip', 'x-real-ip'];
+function clientIp(req) {
+  const h = (req && req.headers) || {};
+  const norm = (v) => String(v || '').trim().replace(/^::ffff:/, '');
+  for (const k of EDGE_IP_HEADERS) {
+    const v = norm(h[k]);
+    if (v && geoip.isPublicIp(v)) return v;
+  }
+  // "client, proxy1, proxy2" — the first PUBLIC entry. Taking the leftmost
+  // blindly picks up a private LAN address on some setups, which geolocates
+  // to nothing at all.
+  for (const part of String(h['x-forwarded-for'] || '').split(',')) {
+    const v = norm(part);
+    if (v && geoip.isPublicIp(v)) return v;
+  }
+  return norm(req && req.ip);
+}
+// Which app is this — the website, or one of the phone apps? The mobile client
+// says so in a header; browsers never send it.
+function clientPlatform(req) {
+  const c = String(((req && req.headers) || {})['x-atwe-client'] || '').trim().toLowerCase();
+  if (c === 'ios' || c === 'android') return c;
+  const ua = String(((req && req.headers) || {})['user-agent'] || '');
+  if (/AtweApp\/(iOS|iPhone|iPad)/i.test(ua)) return 'ios';
+  if (/AtweApp\/Android/i.test(ua)) return 'android';
+  return 'web';
+}
+// The device's own time-zone setting, when it tells us. Worth far more than an
+// address on a mobile network — see timezones.js.
+function clientZone(req) {
+  const z = String(((req && req.headers) || {})['x-atwe-tz'] || '').trim();
+  return (z && z.length <= 60 && tz.countryOfZone(z)) ? z : null;
+}
+// Where this request came from, as best anyone can tell, and how sure we are.
+// `source` is the honest part: 'device' means the device told us, 'edge' means
+// the network did, 'lookup' means we guessed from the address.
+function requestPlace(req) {
+  const zone = clientZone(req);
+  if (zone) {
+    const code = tz.countryOfZone(zone);
+    return { country: tz.countryName(code), countryCode: code, city: tz.cityOfZone(zone), source: 'device', zone };
+  }
+  const edge = String(((req && req.headers) || {})['cf-ipcountry'] || '').trim().toUpperCase();
+  if (/^[A-Z]{2}$/.test(edge) && edge !== 'XX' && edge !== 'T1') {
+    return { country: tz.countryName(edge), countryCode: edge, city: null, source: 'edge', zone: null };
+  }
+  return null;   // nothing authoritative — the caller falls back to a lookup
+}
+
 function reqIp(req) {
   const fwd = String((req && req.headers && req.headers['x-forwarded-for']) || '').split(',')[0].trim();
   return (fwd || (req && req.ip) || '').replace(/^::ffff:/, '');
 }
+/* An address for a SECURITY decision, which is a different job from locating
+   someone. Anything derived from a raw X-Forwarded-For is only as honest as
+   whoever sent it — a caller can put any address they like at the front of that
+   header. Fine for "which country is this roughly", useless for "may this
+   address reach the dashboard".
+
+   So this trusts only what the platform itself set: its own edge header, or the
+   address Express derived from the proxy hops it is configured to trust. Never
+   the forwarded chain as sent. */
+function trustedIp(req) {
+  const h = (req && req.headers) || {};
+  const norm = (v) => String(v || '').trim().replace(/^::ffff:/, '');
+  for (const k of ['cf-connecting-ip', 'true-client-ip']) {
+    const v = norm(h[k]);
+    if (v && geoip.isPublicIp(v)) return v;
+  }
+  return norm(req && req.ip);
+}
 function adminIpAllowed(req) {
   if (!_adminIpAllow.enabled || !_adminIpAllow.entries.length) return true; // fail open
-  const ip = reqIp(req);
+  const ip = trustedIp(req);
   return _adminIpAllow.entries.some((e) => ipMatches(ip, e.cidr));
 }
 
@@ -1163,7 +1244,7 @@ app.use(express.json({ limit: '25mb' })); // large enough for base64 images + PD
 // on, so this can't become an accidental one-way door.
 app.use('/api/admin', (req, res, next) => {
   if (adminIpAllowed(req)) return next();
-  res.status(403).json({ error: 'The dashboard is restricted to approved networks. You are on ' + (reqIp(req) || 'an unknown address') + '.', ipBlocked: true });
+  res.status(403).json({ error: 'The dashboard is restricted to approved networks. You are on ' + (trustedIp(req) || 'an unknown address') + '.', ipBlocked: true });
 });
 
 /* API request log. MUST be mounted here, above every route — Express runs its
@@ -1213,12 +1294,76 @@ const _geoKnown = new Set();     // ips already in ip_geo this process (skip a D
 function visitorHash(ip, ua) {
   return require('crypto').createHash('sha256').update(String(ip || '') + '|' + String(ua || '')).digest('hex').slice(0, 32);
 }
-function logPageView(req) {
-  const ip = String(req.ip || '').replace(/^::ffff:/, '');
+function logPageView(req, opts) {
+  const ip = clientIp(req);                          // NOT req.ip — see clientIp
   const visitor = visitorHash(ip, req.headers['user-agent']);
-  const p = (req.path || '/').slice(0, 200);
-  db.query('INSERT INTO page_views (ip, visitor, path) VALUES ($1,$2,$3)', [ip || null, visitor, p]).catch(() => {});
-  ensureGeo(ip);
+  const p = ((opts && opts.path) || req.path || '/').slice(0, 200);
+  const platform = (opts && opts.platform) || clientPlatform(req);
+  // What this request told us, else what this same visitor told us earlier.
+  const place = requestPlace(req) || _zoneByVisitor.get(visitor) || null;
+  const uid = (req.user && Number.isInteger(req.user.id)) ? req.user.id : null;
+  db.query(
+    `INSERT INTO page_views (ip, visitor, path, platform, user_id, country, city, geo_source)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+    [ip || null, visitor, p, platform, uid,
+     place ? place.country : null, place ? place.city : null, place ? place.source : null]
+  ).catch(() => {});
+  // Only bother looking an address up when nothing better told us already.
+  if (!place) ensureGeo(ip);
+}
+
+/* ── Remembering where a browser said it was ─────────────────────────────────
+   A page LOAD carries no custom headers — only the app's own API calls can send
+   the time zone. So the first API call after boot is where a browser tells us
+   its country, and we hold on to that against the visitor's fingerprint. The
+   page view that came a second earlier is corrected in place, and every later
+   one uses it directly, so the whole visit is filed under the right country
+   instead of wherever the address happened to resolve to.
+
+   Bounded, in memory, and lost on restart — which is fine: the next request
+   re-establishes it. */
+const _zoneByVisitor = new Map();     // visitor -> { country, city, source }
+function rememberZone(req) {
+  try {
+    const place = requestPlace(req);
+    if (!place || place.source !== 'device') return;
+    const visitor = visitorHash(clientIp(req), req.headers['user-agent']);
+    if (_zoneByVisitor.has(visitor)) return;         // already known; nothing to do
+    if (_zoneByVisitor.size > 20000) _zoneByVisitor.clear();
+    _zoneByVisitor.set(visitor, { country: place.country, city: place.city, source: 'device' });
+    // Correct the page view(s) this same visitor made moments ago.
+    db.query(
+      `UPDATE page_views SET country = $2, city = $3, geo_source = 'device'
+        WHERE visitor = $1 AND geo_source IS NULL AND created_at >= now() - interval '10 minutes'`,
+      [visitor, place.country, place.city]).catch(() => {});
+  } catch (e) { /* never block a request */ }
+}
+
+/* ── The phone apps ──────────────────────────────────────────────────────────
+   A native app never requests an HTML page, so the page-view logger above has
+   never seen one: the Traffic screen could only ever show the website, however
+   heavily the apps were used. They call the API, so that is where they get
+   counted — throttled to one row a minute per device, because otherwise a
+   single scrolling session would write hundreds of rows and drown the numbers
+   it is supposed to report. */
+const _appSeen = new Map();          // visitor -> last logged (ms)
+const APP_LOG_EVERY_MS = 60_000;
+setInterval(() => {
+  const cut = Date.now() - 10 * 60_000;
+  for (const [k, t] of _appSeen) if (t < cut) _appSeen.delete(k);
+}, 5 * 60_000).unref();
+function logAppActivity(req) {
+  try {
+    const platform = clientPlatform(req);
+    if (platform === 'web') return;                  // browsers use logPageView
+    const ip = clientIp(req);
+    const visitor = visitorHash(ip, req.headers['user-agent']);
+    const now = Date.now();
+    const last = _appSeen.get(visitor) || 0;
+    if (now - last < APP_LOG_EVERY_MS) return;
+    _appSeen.set(visitor, now);
+    logPageView(req, { platform, path: '/app' });
+  } catch (e) { /* counting must never break a request */ }
 }
 async function ensureGeo(ip) {
   if (!ip || _geoKnown.has(ip) || _geoInflight.has(ip)) return;
@@ -1249,6 +1394,12 @@ app.use((req, res, next) => {
       && !/\.[a-z0-9]{1,6}$/i.test(req.path)   // skip asset paths that end in an extension
       && !isLinkCrawler(req.headers['user-agent'])) {   // don't count link-preview bots as visitors
       logPageView(req);
+    } else if (req.path.startsWith('/api/')) {
+      // The phone apps only ever talk to the API, so this is the one place they
+      // can be counted at all. Throttled inside logAppActivity.
+      rememberZone(req);          // a browser's only chance to say where it is
+      logAppActivity(req);
+      refreshSessionPlace(req);   // also throttled; keeps a travelling member's place current
     }
   } catch (_) { /* never block a request over analytics */ }
   next();
@@ -2211,20 +2362,83 @@ function publicUser(row) {
 async function createSession(userId, token, req) {
   try {
     const ua = String(req.headers['user-agent'] || '').slice(0, 300);
-    const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
-    const ip = (fwd || req.ip || '').slice(0, 60);
+    const ip = clientIp(req).slice(0, 60);
     const hash = auth.hashToken(token);
     await db.query(
-      `INSERT INTO auth_sessions (user_id, token_hash, user_agent, ip) VALUES ($1, $2, $3, $4)
+      `INSERT INTO auth_sessions (user_id, token_hash, user_agent, ip, platform) VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (token_hash) DO UPDATE SET last_seen = now()`,
-      [userId, hash, ua, ip]
+      [userId, hash, ua, ip, clientPlatform(req)]
     );
-    // Resolve the city/country off the request path — fill it in once it returns
-    // (best-effort; the Devices list falls back to the raw IP until/unless it does).
-    geoip.lookup(ip).then((loc) => {
-      if (loc) db.query('UPDATE auth_sessions SET location = $1 WHERE token_hash = $2', [loc.slice(0, 120), hash]).catch(() => {});
-    }).catch(() => {});
+    resolveSessionPlace(hash, ip, requestPlace(req));
   } catch (e) { console.error('session create failed:', e.message); }
+}
+
+/* Work out where a session is, and write it down with how we know.
+   `place` is what the device or the network edge already told us — believe that
+   and skip the lookup entirely. Only when neither said anything do we fall back
+   to geolocating the address, which is the least reliable of the three and is
+   labelled as such so the dashboard never states a guess as a fact. */
+async function resolveSessionPlace(hash, ip, place) {
+  try {
+    if (place) {
+      const label = [place.city, place.country].filter(Boolean).join(', ');
+      await db.query(
+        `UPDATE auth_sessions SET location = $1, country_code = $2, geo_source = $3, place_at = now() WHERE token_hash = $4`,
+        [label.slice(0, 120) || null, place.countryCode || null, place.source, hash]);
+      return;
+    }
+    if (!geoip.isConfigured()) return;
+    const loc = await geoip.lookup(ip);
+    if (!loc) return;
+    const code = await geoip.lookupCountry(ip).catch(() => null);
+    await db.query(
+      `UPDATE auth_sessions SET location = $1, country_code = $2, geo_source = 'lookup', place_at = now() WHERE token_hash = $3`,
+      [loc.slice(0, 120), code, hash]).catch(() => {});
+  } catch (e) { /* best-effort; the list falls back to the raw address */ }
+}
+
+/* ── Keeping a session's place current ──
+   It used to be resolved once, at sign-in, and never again. A session lasts
+   thirty days, so anyone who signed in in one country and then travelled kept
+   showing up in the old one for a month — which is precisely the sort of thing
+   that makes an admin stop trusting the whole screen.
+
+   Re-checked when the address changes, or every six hours regardless, and only
+   for real requests so it costs nothing on an idle account. */
+function bearerHash(req) {
+  const h = String(((req && req.headers) || {}).authorization || '');
+  const t = h.startsWith('Bearer ') ? h.slice(7).trim() : '';
+  return t ? auth.hashToken(t) : null;
+}
+const _placeSeen = new Map();        // token hash -> { ip, at }
+const PLACE_RECHECK_MS = 6 * 60 * 60 * 1000;
+setInterval(() => {
+  const cut = Date.now() - PLACE_RECHECK_MS;
+  for (const [k, v] of _placeSeen) if (v.at < cut) _placeSeen.delete(k);
+}, 30 * 60_000).unref();
+function refreshSessionPlace(req) {
+  try {
+    const hash = req.tokenHash || bearerHash(req);
+    if (!hash) return;
+    req.tokenHash = hash;
+    const ip = clientIp(req);
+    if (!ip) return;
+    const place = requestPlace(req);
+    const prev = _placeSeen.get(hash);
+    const now = Date.now();
+    // Normally once per address per six hours is plenty. But a page load and the
+    // first call or two carry no time zone, and whichever of those arrives first
+    // would otherwise claim the slot and lock out the request that DOES know
+    // where the device is — leaving the session on a guess for six hours. So an
+    // upgrade in what we know always gets through.
+    const better = place && prev && prev.source !== 'device' && prev.source !== 'edge';
+    if (prev && prev.ip === ip && (now - prev.at) < PLACE_RECHECK_MS && !better) return;
+    _placeSeen.set(hash, { ip, at: now, source: place ? place.source : (prev && prev.source) || null });
+    const platform = clientPlatform(req);
+    db.query('UPDATE auth_sessions SET ip = $1, platform = $2 WHERE token_hash = $3',
+      [ip.slice(0, 60), platform, hash]).catch(() => {});
+    resolveSessionPlace(hash, ip, place);
+  } catch (e) { /* never block a request */ }
 }
 // Sign a token for `user` and register its device session in one step.
 async function issueSession(user, req) {
@@ -24245,12 +24459,12 @@ app.post('/api/admin/approvals/:id/:action', auth.requireAdmin, async (req, res)
 
 // ── Admin IP allowlist ──
 app.get('/api/admin/ip-allowlist', auth.requireAdmin, (req, res) => {
-  res.json({ config: _adminIpAllow, myIp: reqIp(req), covered: _adminIpAllow.entries.some((e) => ipMatches(reqIp(req), e.cidr)) });
+  res.json({ config: _adminIpAllow, myIp: trustedIp(req), covered: _adminIpAllow.entries.some((e) => ipMatches(trustedIp(req), e.cidr)) });
 });
 app.put('/api/admin/ip-allowlist', auth.requireAdmin, async (req, res) => {
   try {
     const next = normalizeAdminIps(req.body && req.body.config);
-    const me = reqIp(req);
+    const me = trustedIp(req);
     // The anti-lockout guard: you cannot switch this on from an address the
     // list doesn't already cover.
     if (next.enabled && next.entries.length && !next.entries.some((e) => ipMatches(me, e.cidr)))
@@ -39010,7 +39224,16 @@ app.post('/api/handles/claim', auth.requireAuth, blockImpersonation, rateLimit(1
    stores the IP and browser it was created with, and hashing those the same way
    a page view is hashed gives the same visitor id. Anything left over after
    removing those is genuinely not signed in. */
-const ONLINE_WINDOW = "5 minutes";
+/* How far back "who is here" reaches. Three windows, because they answer three
+   different questions: who is on Atwe this second, who used it today, and who
+   used it this week. Fixed strings — nothing from a request is ever spliced
+   into the SQL below. */
+const ONLINE_WINDOWS = { live: '5 minutes', day: '24 hours', week: '7 days' };
+const ONLINE_WINDOW = ONLINE_WINDOWS.live;
+function onlineWindow(v) {
+  const k = String(v || 'live').toLowerCase();
+  return ONLINE_WINDOWS[k] ? { key: k, interval: ONLINE_WINDOWS[k] } : { key: 'live', interval: ONLINE_WINDOWS.live };
+}
 function uaLabel(ua) {
   const s = String(ua || '');
   if (!s) return null;
@@ -39023,15 +39246,17 @@ function uaLabel(ua) {
   return [dev, app].filter(Boolean).join(' · ') || null;
 }
 app.get('/api/admin/online', auth.requirePerm('growth'), async (req, res) => {
+  const win = onlineWindow(req.query.window);
   try {
     // ── Members: one row per person, their most recently active session ──
     const sess = await db.query(
       `SELECT DISTINCT ON (s.user_id)
               s.user_id, s.user_agent, s.ip, s.location, s.last_seen,
+              s.platform, s.country_code, s.geo_source, s.place_at,
               u.name, u.username, u.avatar, u.verified, u.account_type, u.plan, u.headline,
               u.status, u.is_admin, u.admin_role, u.created_at
          FROM auth_sessions s JOIN users u ON u.id = s.user_id
-        WHERE s.last_seen >= now() - interval '${ONLINE_WINDOW}'
+        WHERE s.last_seen >= now() - interval '${win.interval}'
         ORDER BY s.user_id, s.last_seen DESC`);
     const members = sess.rows.map((r) => ({
       id: r.user_id,
@@ -39046,7 +39271,14 @@ app.get('/api/admin/online', auth.requirePerm('growth'), async (req, res) => {
       role: r.admin_role || (r.is_admin ? 'superadmin' : null),
       joinedAt: r.created_at,
       location: r.location || null,
+      countryCode: r.country_code || null,
+      // Where the location came from, so the dashboard can be honest about it:
+      // 'device' = the phone's own time zone, 'edge' = the network told us,
+      // 'lookup' = guessed from the address (the least reliable).
+      geoSource: r.geo_source || null,
+      placeAt: r.place_at || null,
       ip: r.ip || null,
+      platform: r.platform || 'web',
       device: uaLabel(r.user_agent),
       lastSeen: r.last_seen,
       // An open live stream means the app is on screen this second, as opposed
@@ -39060,9 +39292,13 @@ app.get('/api/admin/online', auth.requirePerm('growth'), async (req, res) => {
     const seen = await db.query(
       `SELECT pv.visitor, max(pv.created_at) AS last_at, min(pv.created_at) AS first_at,
               count(*)::int AS views, max(pv.ip) AS ip,
-              (array_agg(pv.path ORDER BY pv.created_at DESC))[1] AS path
+              (array_agg(pv.path ORDER BY pv.created_at DESC))[1] AS path,
+              (array_agg(pv.platform ORDER BY pv.created_at DESC))[1] AS platform,
+              (array_agg(pv.country ORDER BY pv.created_at DESC) FILTER (WHERE pv.country IS NOT NULL))[1] AS country,
+              (array_agg(pv.city ORDER BY pv.created_at DESC) FILTER (WHERE pv.city IS NOT NULL))[1] AS city,
+              (array_agg(pv.geo_source ORDER BY pv.created_at DESC) FILTER (WHERE pv.geo_source IS NOT NULL))[1] AS geo_source
          FROM page_views pv
-        WHERE pv.created_at >= now() - interval '${ONLINE_WINDOW}'
+        WHERE pv.created_at >= now() - interval '${win.interval}'
         GROUP BY pv.visitor ORDER BY max(pv.created_at) DESC LIMIT 300`);
     const rest = seen.rows.filter((r) => !known.has(r.visitor));
     const ips = [...new Set(rest.map((r) => r.ip).filter(Boolean))];
@@ -39070,14 +39306,31 @@ app.get('/api/admin/online', auth.requirePerm('growth'), async (req, res) => {
       ? (await db.query('SELECT ip, city, country FROM ip_geo WHERE ip = ANY($1::text[])', [ips])).rows
       : [];
     const byIp = new Map(geo.map((g) => [g.ip, [g.city, g.country].filter(Boolean).join(', ') || null]));
-    const guests = rest.map((r) => ({
-      visitor: r.visitor.slice(0, 8),        // a short handle for the row, never the full hash
-      location: byIp.get(r.ip) || null,
-      views: r.views, path: r.path || null,
-      firstSeen: r.first_at, lastSeen: r.last_at,
-    }));
+    const guests = rest.map((r) => {
+      // What the device or the edge said beats anything looked up from the address.
+      const told = [r.city, r.country].filter(Boolean).join(', ');
+      return {
+        visitor: r.visitor.slice(0, 8),      // a short handle for the row, never the full hash
+        location: told || byIp.get(r.ip) || null,
+        geoSource: told ? (r.geo_source || 'device') : (byIp.get(r.ip) ? 'lookup' : null),
+        platform: r.platform || 'web',
+        views: r.views, path: r.path || null,
+        firstSeen: r.first_at, lastSeen: r.last_at,
+      };
+    });
 
-    res.json({ members, guests, counts: { members: members.length, guests: guests.length, total: members.length + guests.length } });
+    // How many were on each thing — the phone apps included, which is the whole
+    // point of counting API traffic as well as page views.
+    const byPlatform = { web: 0, ios: 0, android: 0 };
+    for (const m of members) byPlatform[m.platform] = (byPlatform[m.platform] || 0) + 1;
+    for (const g of guests) byPlatform[g.platform] = (byPlatform[g.platform] || 0) + 1;
+
+    res.json({
+      window: win.key,
+      windowLabel: { live: 'right now', day: 'the last 24 hours', week: 'the last 7 days' }[win.key],
+      members, guests, byPlatform,
+      counts: { members: members.length, guests: guests.length, total: members.length + guests.length },
+    });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load who is online.' }); }
 });
 
@@ -39123,19 +39376,40 @@ app.get('/api/admin/analytics', auth.requirePerm('growth'), async (req, res) => 
        ORDER BY s.b`
     )).rows;
     const countries = (await db.query(
-      `SELECT COALESCE(NULLIF(g.country, ''), 'Unknown') AS country,
+      `SELECT COALESCE(NULLIF(pv.country, ''), NULLIF(g.country, ''), 'Unknown') AS country,
               count(*)::int AS views, count(DISTINCT pv.visitor)::int AS visitors
        FROM page_views pv LEFT JOIN ip_geo g ON g.ip = pv.ip
        WHERE pv.created_at >= ${since}
        GROUP BY 1 ORDER BY views DESC LIMIT 12`
     )).rows;
+    // Split by what Atwe was actually being used ON. Before this, the phone apps
+    // were not counted at all, so the answer was always "100% website".
+    const platforms = (await db.query(
+      `SELECT COALESCE(NULLIF(platform, ''), 'web') AS platform,
+              count(*)::int AS views, count(DISTINCT visitor)::int AS visitors
+       FROM page_views WHERE created_at >= ${since}
+       GROUP BY 1 ORDER BY views DESC`
+    )).rows;
+    // How the locations above were arrived at, so the screen can say plainly how
+    // much of it is known and how much is a guess off an address.
+    const accuracy = (await db.query(
+      `SELECT COALESCE(NULLIF(geo_source, ''), CASE WHEN country IS NOT NULL THEN 'device' ELSE 'lookup' END) AS source,
+              count(*)::int AS views
+       FROM page_views WHERE created_at >= ${since}
+       GROUP BY 1 ORDER BY views DESC`
+    )).rows;
     const cities = (await db.query(
-      `SELECT g.city, COALESCE(NULLIF(g.country, ''), '') AS country, count(*)::int AS views
-       FROM page_views pv JOIN ip_geo g ON g.ip = pv.ip
-       WHERE pv.created_at >= ${since} AND g.city IS NOT NULL AND g.city <> ''
+      `SELECT COALESCE(NULLIF(pv.city, ''), g.city) AS city,
+              COALESCE(NULLIF(pv.country, ''), NULLIF(g.country, ''), '') AS country,
+              count(*)::int AS views
+       FROM page_views pv LEFT JOIN ip_geo g ON g.ip = pv.ip
+       WHERE pv.created_at >= ${since}
+         AND COALESCE(NULLIF(pv.city, ''), g.city) IS NOT NULL
+         AND COALESCE(NULLIF(pv.city, ''), g.city) <> ''
        GROUP BY 1, 2 ORDER BY views DESC LIMIT 12`
     )).rows;
-    res.json({ range, bucket: bk, totals, previous, live, allTime, trend, countries, cities, geoEnabled: geoip.isConfigured() });
+    res.json({ range, bucket: bk, totals, previous, live, allTime, trend, countries, cities,
+      platforms, accuracy, geoEnabled: geoip.isConfigured() });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not load analytics.' });

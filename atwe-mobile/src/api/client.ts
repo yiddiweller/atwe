@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { API_URL, REQUEST_TIMEOUT } from './config';
 
 /**
@@ -19,6 +20,40 @@ export class ApiError extends Error {
     this.status = status;
     this.body = body;
   }
+}
+
+/* ── Telling the server who and where we are ──────────────────────────────────
+ * Two problems this solves.
+ *
+ * The app never requests an HTML page, so the server's traffic counter — which
+ * only watched page loads — could not see the phone apps at all, however much
+ * they were used. `X-Atwe-Client` makes an app request identifiable.
+ *
+ * And locating someone by IP address is unreliable on a mobile network: a phone
+ * in Tel Aviv routed through its carrier can present an address registered in
+ * London, and no lookup can tell the difference. The device already knows the
+ * answer — its time zone is set by the OS from the network it is on — so we
+ * send that and let the server believe it over the address.
+ *
+ * The zone is a coarse, non-identifying signal (a whole country), not location
+ * permission, and it needs nothing from the person using the app.
+ */
+const CLIENT_PLATFORM = Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web';
+let _zone: string | null | undefined;
+function deviceZone(): string | null {
+  if (_zone !== undefined) return _zone;
+  try {
+    _zone = Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch (e) {
+    _zone = null;              // no ICU on this device — the server falls back
+  }
+  return _zone;
+}
+function clientHeaders(): Record<string, string> {
+  const h: Record<string, string> = { 'X-Atwe-Client': CLIENT_PLATFORM };
+  const z = deviceZone();
+  if (z) h['X-Atwe-TZ'] = z;
+  return h;
 }
 
 type TokenGetter = () => string | null;
@@ -56,6 +91,7 @@ export async function request<T = unknown>(path: string, opts: RequestOptions = 
   const token = noAuth ? null : getToken();
   const finalHeaders: Record<string, string> = {
     Accept: 'application/json',
+    ...clientHeaders(),
     ...(body != null ? { 'Content-Type': 'application/json' } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...headers,

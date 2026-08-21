@@ -481,6 +481,14 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS auth_sessions_user_idx ON auth_sessions(user_id, last_seen DESC);`);
   // Approximate "City, Country" resolved from the login IP (best-effort; may be null).
   await query(`ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS location TEXT;`);
+  // A session's location was resolved once, at sign-in, and then never again —
+  // so someone who logged in on one continent and flew to another kept showing
+  // up in the wrong place for the thirty days the session lasted. These let it
+  // be re-checked as the session is actually used, and record how sure we are.
+  await query(`ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS platform TEXT;`);
+  await query(`ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS country_code TEXT;`);
+  await query(`ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS geo_source TEXT;`);
+  await query(`ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS place_at TIMESTAMPTZ;`);
 
   // Single-use tokens for email verification and password reset.
   // We store only a SHA-256 hash of the token, never the raw value.
@@ -817,6 +825,17 @@ async function initSchema() {
       path       TEXT
     );
   `);
+  // Which app the visit came from, and who it was when they were signed in —
+  // without these the Traffic page can only ever see the website, and the phone
+  // apps are invisible no matter how much they are used.
+  await query(`ALTER TABLE page_views ADD COLUMN IF NOT EXISTS platform TEXT;`);
+  await query(`ALTER TABLE page_views ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
+  // A place the DEVICE or the network edge told us, which beats a lookup off the
+  // address. Null means "we only have the address" and ip_geo is used instead.
+  await query(`ALTER TABLE page_views ADD COLUMN IF NOT EXISTS country TEXT;`);
+  await query(`ALTER TABLE page_views ADD COLUMN IF NOT EXISTS city TEXT;`);
+  await query(`ALTER TABLE page_views ADD COLUMN IF NOT EXISTS geo_source TEXT;`);
+  await query(`CREATE INDEX IF NOT EXISTS page_views_visitor_idx ON page_views(visitor, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS page_views_created_idx ON page_views(created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS page_views_ip_idx ON page_views(ip);`);
   // Client crash telemetry: the app beacons a report when a previous session died
