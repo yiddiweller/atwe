@@ -168,6 +168,7 @@ a{text-decoration:none;color:inherit;}
   --purple:      #AA00FF;
   --purple-bg:   rgba(170,0,255,.14);
   --purple-line: rgba(170,0,255,.42);
+  --purple-ink:  #BB44FF;   /* purple TEXT on the purple tint — 5.1:1 here */
 
   /* Layout */
   --sidebar-w: 244px;
@@ -1231,6 +1232,7 @@ button.ac-poll-opt:hover{background:var(--accent-dim);border-color:var(--accent)
   --menu-maxh:min(66vh,432px);          /* ≈ first 8-9 options, then scroll inside (iOS-style) */
 }
 body.light{
+  --purple-ink:#7A00B8;                 /* the same role, readable on a pale tint — 6.7:1 */
   --menu-bg:rgba(250,250,250,.72);      /* Light — Apple light frosted material */
   --menu-border:rgba(0,0,0,.08);
   --menu-sep:rgba(0,0,0,.08);
@@ -7240,6 +7242,33 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .tc-chev{width:18px;height:18px;flex:0 0 auto;fill:none;stroke:var(--t3);stroke-width:2;
   stroke-linecap:round;stroke-linejoin:round;}
 .trust-card.high .tc-num,.trust-card.high .tc-tier{color:var(--green);}
+/* ── Atwe Certified ──
+   Purple is the one colour the ladder has always held in reserve, so it can
+   mean exactly one thing and be recognised instantly. The card keeps its shape
+   — same number, same tap — and puts the mark on. */
+.trust-card.cert{background:var(--purple-bg);}
+@media(hover:hover){.trust-card.cert:hover{background:rgba(170,0,255,.2);}}
+.tc-cert{display:inline-flex;align-items:center;gap:5px;margin-top:3px;font-size:12.5px;
+  font-weight:750;color:var(--purple-ink);}
+.tc-cert svg{width:13px;height:13px;flex:0 0 auto;}
+/* the seal, wherever it travels: next to a name, on a listing, in the sheet */
+.cert-seal{display:inline-flex;align-items:center;gap:5px;padding:3px 9px 3px 7px;
+  border-radius:var(--r-pill);background:var(--purple-bg);color:var(--purple-ink);
+  font-size:11.5px;font-weight:800;letter-spacing:.01em;white-space:nowrap;vertical-align:middle;}
+.cert-seal svg{width:12px;height:12px;flex:0 0 auto;}
+.cert-sys{background:linear-gradient(140deg,#7a00b8,#3d005c)!important;}
+/* the block that explains it */
+.tv-cert{display:flex;gap:12px;align-items:flex-start;margin:0 0 14px;padding:13px 14px;
+  border-radius:var(--r-lg);background:var(--purple-bg);}
+.tv-cert-ic{flex:0 0 auto;width:34px;height:34px;border-radius:50%;background:var(--purple);
+  display:flex;align-items:center;justify-content:center;}
+.tv-cert-ic svg{width:19px;height:19px;color:#fff;}
+.tv-cert-t{font-size:14.5px;font-weight:800;color:var(--purple-ink);}
+.tv-cert-s{font-size:13px;color:var(--t2);line-height:1.45;margin-top:2px;}
+/* how far off it is, for somebody who hasn't got there yet */
+.tv-goal{margin:0 0 14px;padding:12px 14px;border-radius:var(--r-lg);background:var(--s1);}
+.tv-goal-t{font-size:13.5px;font-weight:750;color:var(--t1);}
+.tv-goal-s{font-size:12.5px;color:var(--t3);margin-top:3px;line-height:1.45;}
 body.light .trust-card.high .tc-num,body.light .trust-card.high .tc-tier,
 body.light .tv-num.high{color:var(--on-green);}
 .trust-card.mid  .tc-num{color:var(--t1);}
@@ -7252,6 +7281,11 @@ body.light .tv-num.high{color:var(--on-green);}
 .tv-num.high{color:var(--green);}
 .tv-num.low{color:var(--red);}
 .tv-num.new,.tv-num.ok{color:var(--t2);}
+.tv-num.cert{color:var(--purple);}
+/* Last word on colour: a certified card is purple whatever its band or theme. */
+body .trust-card.cert .tc-num,body .trust-card.cert .tc-tier,
+body.light .trust-card.cert .tc-num,body.light .trust-card.cert .tc-tier,
+body .tv-num.cert,body.light .tv-num.cert{color:var(--purple-ink);}
 .tv-of{font-size:15px;font-weight:600;color:var(--t3);letter-spacing:0;margin-left:3px;}
 .tv-tier{font-size:15px;font-weight:700;color:var(--t2);}
 .tv-lede{font-size:13.5px;color:var(--t2);line-height:1.5;margin:0 0 14px;}
@@ -19124,7 +19158,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1660'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1661'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -30593,6 +30627,15 @@ function acCloseNotifDetail() {
   document.getElementById('notifCard')?.classList.remove('detail-open');
 }
 function acRenderNotifDetail(n) {
+  if (n.type === 'certified') {
+    return `<div class="nd-hero">
+        <div class="nd-ava cert-sys"><span class="notif-brand-mark"></span></div>
+        <div class="nd-title">You're Atwe Certified</div>
+        <div class="nd-time">${escHtml(acTime(n.created_at))}</div>
+      </div>
+      <div class="nd-card"><div class="nd-msg">This is the mark Atwe gives to people who deal well, over enough dealings for it to mean something. It shows on your profile from now on, and it stays as long as your reputation does.</div></div>
+      <button class="nd-action" onclick="closeOverlay('notifOverlay');acGoProfile()">See your profile</button>`;
+  }
   if (n.type === 'login') {
     let when = acTime(n.created_at);
     try {
@@ -30614,6 +30657,14 @@ function notifRow(n, i) {
   const a = n.actor;
   // A new sign-in is a system (security) alert — the Atwe mark, no actor link.
   // Tapping opens an in-place detail page (back arrow returns to the notifications list).
+  if (n.type === 'certified') {
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="acOpenNotifDetail(${Number(n.id)})">
+      <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava cert-sys"><span class="notif-brand-mark"></span></div></div>
+      <div class="ac-item-main"><div class="notif-text"><b>You're Atwe Certified</b> · <span class="notif-time">${acTime(n.created_at)}</span></div>
+        <div class="notif-snip">Your reputation earned it. It now shows on your profile.</div></div>
+      ${n.read ? '' : '<span class="notif-dot"></span>'}
+    </div>`;
+  }
   if (n.type === 'login') {
     return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="acOpenNotifDetail(${Number(n.id)})">
       <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
@@ -30691,7 +30742,9 @@ function notifRow(n, i) {
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
-  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', event_reminder: 'is hosting an event starting soon', event_comment: 'commented on your event', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', appt_rescheduled: 'proposed a new appointment time', appt_reminder: 'has an appointment with you soon', call_reminder: 'has a call with you soon', stock_low: 'is running low — only a few left', stock_out: 'has sold out', event_spot: 'a spot opened up — you’re in!', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', invoice_reminder: 'sent a reminder about an unpaid invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', strike: 'issued a warning on your account', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', referral_milestone: 'you hit a referral milestone — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', listing_hidden: 'a listing of yours was hidden — check your messages', waitlist_invite: 'you’re off the waiting list — it’s ready for you', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', auction_outbid: 'outbid you on an auction. Bid again to stay in it', auction_won: 'you won the auction. Pay to claim it', auction_ended: 'won your auction. They’re paying now', group_join_paid: 'paid your group’s join fee. They’re in', crm_followup: 'is due a follow-up — you set the reminder', rinv_paused: 'a recurring invoice was paused — check the schedule', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', split_reminder: 'sent a reminder about your share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', story_answer: 'responded to your question', story_mention: 'mentioned you in their Daily', remix: 'remixed your video', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', community_boost: 'boosted your community', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_adjustment: 'your wallet balance was adjusted by our team', cashout_released: 'your cash-out was approved and is on its way to your bank', cashout_returned: 'your cash-out wasn’t approved — the money is back in your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item', lead_active: 'posted something new — they\u2019re on one of your lead lists', lead_hiring: 'is hiring — they\u2019re on one of your lead lists', inbox_assigned: 'gave you a conversation to handle', dmca_removed: 'removed something of yours after a copyright claim. Tap to contest it', dmca_reinstated: 'put your content back after reviewing your counter-notice', imp_upheld: 'agreed — the account impersonating you has been actioned', imp_rejected: 'reviewed your impersonation report', experiment_done: 'your A/B test found its winner — it’s applied', auth_requested: 'asked for an item check on an order', auth_passed: 'your item passed its check', auth_failed: 'an item failed its check — the buyer is refunded', webinar_signup: 'signed up for your webinar', webinar_live: 'is live now — the webinar you signed up for has started', webinar_updated: 'changed a webinar you signed up for', webinar_cancelled: 'cancelled a webinar you signed up for', delivery_on_way: 'is on the way with your order' };
+  const verbs = { certified_granted: 'awarded you the Atwe Certified mark',
+    certified_removed: 'removed your Atwe Certified mark',
+    like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', event_reminder: 'is hosting an event starting soon', event_comment: 'commented on your event', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', appt_rescheduled: 'proposed a new appointment time', appt_reminder: 'has an appointment with you soon', call_reminder: 'has a call with you soon', stock_low: 'is running low — only a few left', stock_out: 'has sold out', event_spot: 'a spot opened up — you’re in!', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', invoice_reminder: 'sent a reminder about an unpaid invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', strike: 'issued a warning on your account', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', referral_milestone: 'you hit a referral milestone — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', listing_hidden: 'a listing of yours was hidden — check your messages', waitlist_invite: 'you’re off the waiting list — it’s ready for you', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', auction_outbid: 'outbid you on an auction. Bid again to stay in it', auction_won: 'you won the auction. Pay to claim it', auction_ended: 'won your auction. They’re paying now', group_join_paid: 'paid your group’s join fee. They’re in', crm_followup: 'is due a follow-up — you set the reminder', rinv_paused: 'a recurring invoice was paused — check the schedule', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', split_reminder: 'sent a reminder about your share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', story_answer: 'responded to your question', story_mention: 'mentioned you in their Daily', remix: 'remixed your video', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', community_boost: 'boosted your community', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_adjustment: 'your wallet balance was adjusted by our team', cashout_released: 'your cash-out was approved and is on its way to your bank', cashout_returned: 'your cash-out wasn’t approved — the money is back in your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item', lead_active: 'posted something new — they\u2019re on one of your lead lists', lead_hiring: 'is hiring — they\u2019re on one of your lead lists', inbox_assigned: 'gave you a conversation to handle', dmca_removed: 'removed something of yours after a copyright claim. Tap to contest it', dmca_reinstated: 'put your content back after reviewing your counter-notice', imp_upheld: 'agreed — the account impersonating you has been actioned', imp_rejected: 'reviewed your impersonation report', experiment_done: 'your A/B test found its winner — it’s applied', auth_requested: 'asked for an item check on an order', auth_passed: 'your item passed its check', auth_failed: 'an item failed its check — the buyer is refunded', webinar_signup: 'signed up for your webinar', webinar_live: 'is live now — the webinar you signed up for has started', webinar_updated: 'changed a webinar you signed up for', webinar_cancelled: 'cancelled a webinar you signed up for', delivery_on_way: 'is on the way with your order' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -37669,13 +37722,20 @@ function acProfMeta(u) {
    number is only meaningful next to what caused it — a bare score invites people
    to read 50 as a mark out of 100 rather than as "nothing has happened yet".
    Tapping it opens the reasons. */
+/* A rosette: a ribboned seal, the shape people already read as "awarded".
+   Deliberately not a shield (that is the old trust chip) and not a check (that
+   is verification) — three different claims must not look like one. */
+const CERT_MARK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.5" r="6"/><path d="M8.2 13.6 7 22l5-2.6L17 22l-1.2-8.4"/></svg>';
+function acCertSeal(label) {
+  return `<span class="cert-seal">${CERT_MARK}${escHtml(label || 'Certified')}</span>`;
+}
 function acTrustBand(ts) {
   return ts.isNew ? 'new' : ts.score >= 90 ? 'high' : ts.score >= 60 ? 'mid' : ts.score >= 45 ? 'ok' : 'low';
 }
 function acTrustChip(ts) {
   if (!ts || typeof ts.score !== 'number') return '';
   AC._trust = ts;
-  const band = acTrustBand(ts);
+  const band = (ts.certified ? 'cert ' : '') + acTrustBand(ts);
   const sub = ts.isNew
     ? 'No dealings yet'
     : [ts.completedOrders ? ts.completedOrders + ' order' + (ts.completedOrders === 1 ? '' : 's') : null,
@@ -37685,12 +37745,34 @@ function acTrustChip(ts) {
     <span class="tc-body">
       <span class="tc-tier">${escHtml(ts.tier)}</span>
       ${sub ? `<span class="tc-sub">${escHtml(sub)}</span>` : ''}
+      ${ts.certified ? `<span class="tc-cert">${CERT_MARK}${escHtml(ts.certLabel || 'Atwe Certified')}</span>` : ''}
     </span>
     <svg class="tc-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
   </button>`;
 }
 /* What moved it. Shown plainly, because a reputation somebody cannot see the
    workings of is one they cannot do anything about. */
+function acCertBlock(ts) {
+  const label = escHtml(ts.certLabel || 'Atwe Certified');
+  if (ts.certified) {
+    const how = ts.certifiedKind === 'granted'
+      ? 'Awarded by the Atwe team.'
+      : 'Earned by dealing well, over enough dealings for it to count.';
+    return `<div class="tv-cert"><div class="tv-cert-ic">${CERT_MARK}</div>
+      <div><div class="tv-cert-t">${label}</div><div class="tv-cert-s">${escHtml(how)}</div></div></div>`;
+  }
+  const n = ts.certNeeds;
+  if (!n) return '';
+  // Say the distance in plain terms rather than showing a locked badge.
+  const gaps = [
+    n.score ? `${n.score} more point${n.score === 1 ? '' : 's'}` : null,
+    n.dealings ? `${n.dealings} more completed order${n.dealings === 1 ? '' : 's'} or stay${n.dealings === 1 ? '' : 's'}` : null,
+  ].filter(Boolean);
+  return `<div class="tv-goal"><div class="tv-goal-t">${label}</div>
+    <div class="tv-goal-s">${gaps.length
+      ? escHtml('Needs ' + gaps.join(' and ') + '. The mark takes ' + n.minScore + '+ and at least ' + n.minDealings + ' completed dealings, so it means something to the person reading it.')
+      : escHtml('Ready — it will appear shortly.')}</div></div>`;
+}
 function acOpenTrust() {
   const ts = AC._trust; if (!ts) return;
   const rows = [
@@ -37705,8 +37787,9 @@ function acOpenTrust() {
     ['Reports upheld', 0, ts.down.reported],
   ].filter(([, u, d]) => u || d);
   document.getElementById('trustBody').innerHTML = `
-    <div class="tv-head"><div class="tv-num ${acTrustBand(ts)}">${ts.score}<span class="tv-of">/100</span></div>
+    <div class="tv-head"><div class="tv-num ${ts.certified ? 'cert' : acTrustBand(ts)}">${ts.score}<span class="tv-of">/100</span></div>
       <div class="tv-tier">${escHtml(ts.tier)}</div></div>
+    ${acCertBlock(ts)}
     <p class="tv-lede">Everyone starts at <b>50</b>. It goes up for good dealings and down for bad ones, and it is worked out fresh from what actually happened — never a running tally that can drift.</p>
     ${rows.length ? `<div class="tv-rows">${rows.map(([label, u, d]) => `
       <div class="tv-row"><span>${escHtml(label)}</span>
@@ -39219,7 +39302,7 @@ function acListingCard(l) {
   return `<div class="mkt-card"${l.sponsored ? ` data-adid="${l.adId}"` : ''}>
     <div class="mkt-head" onclick="${tap}closeOverlay('marketplaceView');acGoProfile(${jsAttr(l.seller.username || '')})">
       ${acAvatarHtml(l.seller.name, l.seller.avatar, 'user-avatar sm', biz)}
-      <div class="mkt-head-main"><span class="mkt-seller">${escHtml(l.seller.name)}${vbadge(acIsVerified(l.seller))}</span><span class="mkt-kind">${_PROD_KIND[l.kind] || 'Item'}${biz ? ' · Business' : ''}${l.sponsored ? '<span class="mkt-sponsored">Sponsored</span>' : ''}</span></div>
+      <div class="mkt-head-main"><span class="mkt-seller">${escHtml(l.seller.name)}${vbadge(acIsVerified(l.seller))}</span>${l.seller.certified ? acCertSeal('Certified') : ''}<span class="mkt-kind">${_PROD_KIND[l.kind] || 'Item'}${biz ? ' · Business' : ''}${l.sponsored ? '<span class="mkt-sponsored">Sponsored</span>' : ''}</span></div>
     </div>
     ${img}
     <div class="mkt-body" onclick="${tap}acOpenListing(${l.id})">
@@ -40097,6 +40180,7 @@ async function acOpenListing(id) {
         <div class="mkt-detail-head" onclick="closeOverlay('listingView');closeOverlay('marketplaceView');appTab('home');acGoProfile(${jsAttr(l.seller.username || '')})">
           ${acAvatarHtml(l.seller.name, l.seller.avatar, 'user-avatar sm', biz)}
           <span>${escHtml(l.seller.name)}${l.seller.username ? ` · @${escHtml(l.seller.username)}` : ''}</span>
+          ${l.seller.certified ? acCertSeal('Certified') : ''}
           <span id="mktSellerTier"></span>
         </div>
         <div class="jp-title" style="margin:8px 0 2px;">${escHtml(l.name)}</div>
