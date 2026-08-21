@@ -7245,6 +7245,23 @@ body.light .rev-sum-v{color:var(--on-green);}
 .rev-bar-fill{display:block;height:100%;border-radius:999px;background:var(--amber);}
 .rev-bar-c{font-size:12px;color:var(--t3);min-width:20px;text-align:right;
   font-variant-numeric:tabular-nums;}
+/* ── The owner's setup ── */
+.im-cat{padding:12px;border-radius:var(--r-lg);background:var(--s1);margin-bottom:10px;}
+.im-cat-top{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
+.im-emoji{flex:0 0 62px;text-align:center;}
+.im-cat-top .jp-in{margin:0;}
+.im-who{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;}
+.im-who-l{font-size:12px;color:var(--t3);margin-right:2px;}
+.im-anyone{font-size:12px;color:var(--t3);font-style:italic;}
+/* ── "What can we help with?" ── */
+.mc-menu-list{display:flex;flex-direction:column;gap:7px;margin:10px 0 8px;}
+.mc-menu-opt{display:flex;align-items:center;gap:8px;width:100%;padding:11px 14px;border:none;
+  border-radius:var(--r-pill);background:var(--s2);color:var(--t1);font-size:14px;font-weight:650;
+  font-family:inherit;cursor:pointer;text-align:left;transition:background var(--t-fast) var(--ease);}
+@media(hover:hover){.mc-menu-opt:hover{background:var(--s3);}}
+.mc-menu-opt:disabled{opacity:.6;cursor:default;}
+.mc-menu-em{flex:0 0 auto;font-size:15px;}
+.mc-menu-else{color:var(--t2);font-weight:600;}
 /* ── Peer delivery ── */
 .dlv-row{display:flex;align-items:center;gap:12px;width:100%;padding:13px 14px;border:none;
   border-radius:var(--r-lg);background:var(--s1);cursor:pointer;font-family:inherit;text-align:left;
@@ -17168,6 +17185,15 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 </div>
 
 <!-- Team / multi-seat business accounts -->
+<!-- Pick one of a few things. Small, promise-based, reusable. -->
+<div class="overlay hidden" id="chooseOneView" onclick="if(event.target===this)acChooseCancel()">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Choose">
+    <button class="sheet-close" onclick="acChooseCancel()" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="chooseOneTitle">Choose</div>
+    <div id="chooseOneBody"></div>
+  </div>
+</div>
+
 <!-- Peer delivery: somebody nearby brings it over -->
 <div class="overlay hidden" id="deliveriesView" onclick="if(event.target===this)closeOverlay('deliveriesView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Deliveries">
@@ -17242,6 +17268,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <div class="jp-title">Inbox</div>
     <div id="inboxBizBar" class="ac-job-views" style="margin:6px 0 10px;"></div>
     <div id="inboxTabs" class="ac-job-views" style="margin:0 0 10px;"></div>
+    <div id="inboxDesks" class="rev-filters hidden" style="margin:0 0 10px;"></div>
     <div id="inboxBody"></div>
   </div>
 </div>
@@ -17276,6 +17303,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <div class="ac-job-views" id="teamTabs" style="margin:6px 0 10px;">
       <button class="ac-jv on" data-s="team" onclick="acTeamTab('team')">My team</button>
       <button class="ac-jv" data-s="memberships" onclick="acTeamTab('memberships')">Memberships</button>
+      <button class="ac-jv" data-s="inbox" onclick="acTeamTab('inbox')">Customer inbox</button>
     </div>
     <div id="teamBody"></div>
   </div>
@@ -19520,7 +19548,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1668'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1669'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -38252,6 +38280,37 @@ function acOpenTrust() {
       : '<div class="tv-none">Nothing has happened yet — this is the starting number, not a judgement.</div>'}`;
   showOverlay('trustView');
 }
+/* One small chooser, used wherever a couple of options need picking. Resolves
+   with the chosen value, or undefined if they backed out — so a caller can
+   tell "they chose nothing" apart from "they changed their mind". */
+function acChooseOne(title, options) {
+  return new Promise((resolve) => {
+    AC._chooseResolve = resolve;
+    document.getElementById('chooseOneTitle').textContent = title;
+    document.getElementById('chooseOneBody').innerHTML = options.map((o) =>
+      `<button class="ac-pill-btn" style="width:100%;margin-bottom:8px;" onclick="acChoosePick(${jsAttr(String(o.value))})">${escHtml(o.label)}</button>`).join('');
+    showOverlay('chooseOneView');
+  });
+}
+function acChoosePick(v) {
+  closeOverlay('chooseOneView');
+  const r = AC._chooseResolve; AC._chooseResolve = null;
+  if (r) r(v);
+}
+function acChooseCancel() {
+  closeOverlay('chooseOneView');
+  const r = AC._chooseResolve; AC._chooseResolve = null;
+  if (r) r(undefined);
+}
+/* The customer picked one. Goes to that desk, and they are told who has it. */
+async function acPickInboxCat(categoryId) {
+  const biz = AC.peer && AC.peer.id; if (!biz) return;
+  try {
+    const r = await API.req('POST', '/api/atchat/inbox-category/' + biz, categoryId == null ? {} : { categoryId });
+    showNotif(r.category ? `Sent to the ${r.category.name.toLowerCase()} team.` : 'Passed to the team.');
+    acReloadOpenThread && acReloadOpenThread();
+  } catch (e) { showNotif(e.message || 'Could not pass that on.'); }
+}
 function acCatChips(cats, clickable) {
   if (!Array.isArray(cats) || !cats.length) return '';
   return '<div class="ac-prof-cats">' + cats.map(c => {
@@ -41267,7 +41326,9 @@ async function acInboxLoad() {
   const body = document.getElementById('inboxBody'); if (!body) return;
   body.innerHTML = acSkelRows(3);
   const tab = AC._inboxTab || 'active';
-  const q = tab === 'mine' ? '?mine=true' : (tab === 'active' ? '' : '?state=' + tab);
+  let q = tab === 'mine' ? '?mine=true' : (tab === 'active' ? '' : '?state=' + tab);
+  // The desk filter sits alongside the state tabs, not instead of them.
+  if (AC._inboxCat) q += (q ? '&' : '?') + 'category=' + encodeURIComponent(AC._inboxCat);
   try {
     const d = await API.req('GET', `/api/inbox/${AC._inboxBizId}${q}`);
     AC._inboxData = d;
@@ -41276,6 +41337,7 @@ async function acInboxLoad() {
       const n = t.k === 'active' ? (c.new + c.open + c.waiting) : t.k === 'mine' ? c.mine : c[t.k];
       return `<button class="ac-jv ${tab === t.k ? 'on' : ''}" onclick="acInboxTab('${t.k}')">${t.label}${n ? ` <span class="ibx-n">${n}</span>` : ''}</button>`;
     }).join('');
+    acRenderInboxDesks(d);
     const list = d.conversations || [];
     if (!list.length) {
       body.innerHTML = `<div class="ac-empty" style="padding:22px;">${tab === 'solved' ? 'Nothing finished yet.' : tab === 'mine' ? 'Nothing assigned to you.' : 'Nothing waiting. All caught up.'}</div>`;
@@ -41287,6 +41349,34 @@ async function acInboxLoad() {
   }
 }
 
+/* The desks, with what is waiting on each — so somebody can see at a glance
+   that Returns has three and Refunds has none, without clicking either. Only
+   shown when the business actually uses desks. */
+function acRenderInboxDesks(d) {
+  const box = document.getElementById('inboxDesks'); if (!box) return;
+  const cats = d.categories || [];
+  if (!cats.length) { box.innerHTML = ''; box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  const chip = (k, label, n, on) =>
+    `<button class="rev-chip ${on ? 'on' : ''}" onclick="acInboxDesk(${jsAttr(k)})">${escHtml(label)}${n ? ` <b>${n}</b>` : ''}</button>`;
+  box.innerHTML = chip('', 'All desks', 0, !AC._inboxCat)
+    + chip('mine', 'Mine', 0, AC._inboxCat === 'mine')
+    + cats.map((c) => chip(String(c.id), (c.emoji ? c.emoji + ' ' : '') + c.name, c.count, AC._inboxCat === String(c.id))).join('')
+    + (d.uncategorised ? chip('none', 'Not sorted', d.uncategorised, AC._inboxCat === 'none') : '');
+}
+function acInboxDesk(k) { AC._inboxCat = k || null; acInboxLoad(); }
+/* A customer who guessed wrong should not have to start again, so staff move it. */
+async function acInboxMove(convId) {
+  const cats = (AC._inboxData && AC._inboxData.categories) || [];
+  if (!cats.length) return;
+  const pick = await acChooseOne('Move to which desk?', cats.map((c) => ({
+    value: String(c.id), label: (c.emoji ? c.emoji + ' ' : '') + c.name })).concat([{ value: '', label: 'Not sorted' }]));
+  if (pick === undefined) return;
+  try {
+    await API.req('PATCH', `/api/inbox/${AC._inboxBizId}/${convId}/category`, { categoryId: pick === '' ? null : Number(pick) });
+    acInboxLoad();
+  } catch (e) { showNotif(e.message || 'Could not move that.'); }
+}
 function acInboxRow(c) {
   const who = c.assignedTo ? escHtml(String(c.assignedTo.name || '').split(/\s+/)[0]) : null;
   const stateCls = c.state === 'new' ? 'new' : c.state === 'waiting' ? 'waiting' : c.state === 'solved' ? 'done' : 'open';
@@ -41422,7 +41512,99 @@ function acOpenTeam(tab) { AC._teamTab = tab || 'team'; showOverlay('teamView');
 function acTeamTab(s) {
   AC._teamTab = s;
   document.querySelectorAll('#teamTabs .ac-jv').forEach(b => b.classList.toggle('on', b.dataset.s === s));
-  if (s === 'team') acLoadTeam(); else acLoadMemberships();
+  if (s === 'team') acLoadTeam();
+  else if (s === 'inbox') acLoadInboxMenu();
+  else acLoadMemberships();
+}
+/* ── "What can we help with?" — the owner's side ──
+   Deliberately plain: a switch, a line of their own words, and a short list of
+   options. Every option can name who handles it, and leaving that blank is a
+   real choice that means "anyone" — which is what stops a desk with nobody on
+   it swallowing somebody's message. */
+async function acLoadInboxMenu() {
+  const body = document.getElementById('teamBody'); body.innerHTML = acSkelRows(2);
+  if (!acIsBiz(S.user)) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">Only business accounts have a customer inbox.</div>'; return; }
+  try {
+    const d = await API.req('GET', '/api/inbox/categories/' + S.user.id);
+    const team = (await API.req('GET', '/api/business/team').catch(() => ({ members: [] }))).members || [];
+    AC._imTeam = [{ id: S.user.id, name: (S.user.name || 'You') + ' (you)' }]
+      .concat(team.filter((m) => m.status === 'active' && m.id !== S.user.id)
+        .map((m) => ({ id: m.id, name: m.name || ('@' + m.username) })));
+    AC._imCats = (d.categories || []).filter((c) => c.active).map((c) => ({ ...c, memberIds: (c.members || []).map((m) => m.id) }));
+    AC._imMax = d.max || 8;
+    acRenderInboxMenu(d);
+  } catch (e) {
+    console.error('acLoadInboxMenu', e);
+    body.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load that.')}</div>`;
+  }
+}
+function acRenderInboxMenu(d) {
+  const on = d.enabled;
+  document.getElementById('teamBody').innerHTML = `
+    <label class="iset-row" style="padding-left:0;padding-right:0;">
+      <span style="flex:1;">
+        <span style="display:block;font-weight:700;">Ask what they need</span>
+        <span class="ac-disc-sub" style="margin:2px 0 0;">A customer messaging you picks from your options, and it goes to whoever handles it.</span>
+      </span>
+      <span class="ios-switch"><input type="checkbox" id="imOn" ${on ? 'checked' : ''} onchange="acSaveInboxMenu()"><span class="ios-track"></span><span class="ios-knob"></span></span>
+    </label>
+    <div id="imRest" class="${on ? '' : 'hidden'}">
+      <label class="pf-flabel" for="imIntro" style="margin-top:10px;">What to say above the options</label>
+      <input class="jp-in" id="imIntro" maxlength="120" placeholder="What can we help with?" value="${escHtml(d.intro || '')}" onchange="acSaveInboxMenu()"/>
+      <div class="co-sec-h" style="margin-top:16px;">Your options</div>
+      <div class="ac-disc-sub" style="margin:-2px 2px 8px;">Leave "who handles it" blank and everyone on the inbox is told — which is safer than a desk nobody is watching.</div>
+      <div id="imCats"></div>
+      <button class="ac-pill-btn" id="imAdd" style="width:100%;margin-top:8px;" onclick="acAddInboxCat()">＋ Add an option</button>
+      <div class="ac-disc-sub" style="margin:8px 2px 0;">"Something else" is always offered, so nobody gets stuck.</div>
+    </div>`;
+  acRenderInboxCats();
+}
+function acRenderInboxCats() {
+  const box = document.getElementById('imCats'); if (!box) return;
+  box.innerHTML = (AC._imCats || []).map((c, i) => `
+    <div class="im-cat">
+      <div class="im-cat-top">
+        <input class="jp-in im-emoji" maxlength="4" placeholder="🙂" value="${escHtml(c.emoji || '')}" oninput="acImSet(${i},'emoji',this.value)" aria-label="Emoji"/>
+        <input class="jp-in" maxlength="40" placeholder="e.g. Returns" value="${escHtml(c.name || '')}" oninput="acImSet(${i},'name',this.value)" aria-label="Option name"/>
+        <button class="rec-x" onclick="acRemoveInboxCat(${i})" aria-label="Remove">×</button>
+      </div>
+      <textarea class="jp-in jp-ta" rows="2" maxlength="500" placeholder="Instant reply when they pick this (optional)" oninput="acImSet(${i},'autoReply',this.value)">${escHtml(c.autoReply || '')}</textarea>
+      <div class="im-who">
+        <span class="im-who-l">Who handles it</span>
+        ${(AC._imTeam || []).map((m) => `<button class="rev-chip ${(c.memberIds || []).includes(m.id) ? 'on' : ''}" onclick="acImToggleMember(${i},${m.id})">${escHtml(m.name)}</button>`).join('')}
+        ${(c.memberIds || []).length ? '' : '<span class="im-anyone">Anyone on the inbox</span>'}
+      </div>
+    </div>`).join('') || '<div class="ac-empty" style="padding:14px;">No options yet.</div>';
+  const add = document.getElementById('imAdd');
+  if (add) add.classList.toggle('hidden', (AC._imCats || []).length >= (AC._imMax || 8));
+}
+function acImSet(i, key, val) { AC._imCats[i][key] = val; acSaveInboxMenuSoon(); }
+function acImToggleMember(i, id) {
+  const c = AC._imCats[i]; c.memberIds = c.memberIds || [];
+  c.memberIds = c.memberIds.includes(id) ? c.memberIds.filter((x) => x !== id) : c.memberIds.concat(id);
+  acRenderInboxCats(); acSaveInboxMenuSoon();
+}
+function acAddInboxCat() {
+  if ((AC._imCats || []).length >= (AC._imMax || 8)) return;
+  AC._imCats.push({ name: '', emoji: '', autoReply: '', memberIds: [] });
+  acRenderInboxCats();
+}
+function acRemoveInboxCat(i) { AC._imCats.splice(i, 1); acRenderInboxCats(); acSaveInboxMenu(); }
+// Typing saves as you go, but not on every keystroke.
+let _imSaveT = null;
+function acSaveInboxMenuSoon() { clearTimeout(_imSaveT); _imSaveT = setTimeout(acSaveInboxMenu, 900); }
+async function acSaveInboxMenu() {
+  clearTimeout(_imSaveT);
+  const onEl = document.getElementById('imOn'), introEl = document.getElementById('imIntro');
+  const on = onEl ? onEl.checked : undefined;
+  const rest = document.getElementById('imRest');
+  if (rest && on !== undefined) rest.classList.toggle('hidden', !on);
+  try {
+    await API.req('PUT', '/api/inbox/categories/' + S.user.id, {
+      enabled: on, intro: introEl ? introEl.value.trim() : undefined,
+      categories: (AC._imCats || []).filter((c) => (c.name || '').trim()),
+    });
+  } catch (e) { showNotif(e.message || 'Could not save that.'); }
 }
 async function acLoadTeam() {
   const body = document.getElementById('teamBody'); body.innerHTML = acSkelRows(2);
@@ -56915,6 +57097,21 @@ function acMetaCard(m) {
     const opts = (meta.options || []).map(o =>
       `<button class="mc-btnrow"${(!m.mine && live) ? ` onclick="event.stopPropagation();acTapReplyButton(${jsAttr(o)})"` : ' disabled'}>${escHtml(o)}</button>`).join('');
     return `<div class="meta-card mc-buttons"><div class="mc-btn-text">${escHtml(meta.text || '')}</div><div class="mc-btn-list">${opts}</div></div>`;
+  }
+  if (meta.t === 'inboxmenu') {
+    /* "What can we help with?" — the business's own words and their own
+       options. An OFFER, never a gate: the composer stays open underneath and
+       somebody who would rather just type can ignore this entirely. */
+    if (m.mine) return `<div class="meta-card mc-human"><div class="mc-human-t">Asked what they need help with</div></div>`;
+    const opts = (meta.options || []).map((o) =>
+      `<button class="mc-menu-opt"${live ? ` onclick="event.stopPropagation();acPickInboxCat(${Number(o.id)})"` : ' disabled'}>${o.emoji ? `<span class="mc-menu-em">${escHtml(o.emoji)}</span>` : ''}${escHtml(o.name)}</button>`).join('');
+    return `<div class="meta-card mc-human mc-menu">
+      <div class="mc-human-t">${escHtml(meta.intro || 'What can we help with?')}</div>
+      <div class="mc-menu-list">${opts}
+        <button class="mc-menu-opt mc-menu-else"${live ? ' onclick="event.stopPropagation();acPickInboxCat(null)"' : ' disabled'}>Something else</button>
+      </div>
+      <div class="mc-human-s">${meta.open ? 'Someone from the team is around now.' : 'The team will pick it up when they open.'}</div>
+    </div>`;
   }
   if (meta.t === 'askhuman') {
     /* The way out of the automatic answers. Shown to the CUSTOMER only — the
