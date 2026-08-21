@@ -2035,8 +2035,27 @@ app.patch('/api/admin/site', auth.requireAdmin, async (req, res) => {
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
-    db: db.isConfigured() ? 'configured' : 'not-configured',
+    // "starting" is a real state, not a fault: on a brand-new database the
+    // schema takes a few seconds to build. Deliberately still a 200 so a
+    // platform healthcheck does not kill the deploy while it is setting up.
+    db: !db.isConfigured() ? 'not-configured' : db.isReady() ? 'configured' : 'starting',
     timestamp: new Date().toISOString(),
+  });
+});
+
+/* Until the schema is built, a data route asks for columns that do not exist
+   yet and fails with an error nobody can act on. Say what is actually happening
+   instead, once, in one place — a brief, honest "we are still setting up" that
+   a client can retry, rather than a scatter of 500s across the dashboard.
+   Health is exempt above so a platform healthcheck still passes. Nothing else
+   needs an exemption: the gate is released in a `finally`, so a failed schema
+   build can never leave it shut. */
+app.use('/api', (req, res, next) => {
+  if (db.isReady()) return next();
+  res.set('Retry-After', '5');
+  res.status(503).json({
+    error: 'Atwe is still setting up its database — this only happens on a brand-new install. Try again in a few seconds.',
+    starting: true,
   });
 });
 
@@ -34469,6 +34488,52 @@ const TRUST_TIERS = [[90, 'Excellent'], [75, 'Great'], [60, 'Good'], [45, 'Fair'
    Staff can override in both directions. A grant ignores the number, for the
    people we know deserve it before the numbers catch up. A block also ignores
    the number, and beats a grant, so a mark can always be taken away. */
+/* ── How every serious marketplace actually combines the two (researched) ──
+   There are two coherent models, and which one is right depends on one thing:
+   whether a listing belongs to exactly one seller.
+
+   AMAZON / eBAY keep them strictly apart. On Amazon the same product is sold by
+   many sellers off one shared listing, so a product review cannot be attributed
+   to any of them — seller feedback is only ever about fulfilment, and Amazon
+   will REMOVE a piece of seller feedback whose text is really a product review.
+   eBay does the same with its four detailed seller ratings (item as described,
+   communication, dispatch time, postage cost) — all about the transaction.
+
+   ETSY / AIRBNB combine them, because there the seller IS the maker and the
+   host IS the owner. Etsy's shop rating simply IS the recency-weighted average
+   of every item review the shop has received. Airbnb has no separate "rate the
+   host" star at all: the listing's rating is the average of overall stars, and
+   Superhost is judged on those same stays across the host's whole account.
+
+   On Atwe a listing belongs to exactly ONE seller — there is no shared
+   catalogue — so the Etsy/Airbnb model is the correct one, and it is what we do:
+   every listing keeps its own rating so two flats from the same host can be told
+   apart, AND every one of those stars rolls up into that person's single
+   reputation.
+
+   Recency is the other thing they all share, and the thing a flat lifetime
+   average gets wrong. Uber uses your last 500 trips, DoorDash your last 100,
+   Amazon and eBay a rolling 12 months. Those windows have a cliff: your best
+   review silently vanishes on trip 501. Etsy's newer approach has no cliff and
+   is the one worth copying — keep every review for ever, but halve its WEIGHT
+   each year, so a review from last month counts about sixteen times a review
+   from four years ago. Somebody who was poor and got better climbs out; somebody
+   coasting on old glory drifts back down. */
+const RATING_HALF_LIFE_YEARS = 1;
+/* Every star this person has received, from any direction, with its age.
+   Person reviews (verified dealings only), their listings, their services, and
+   their conduct as a buyer — one reputation for one person. */
+const COMBINED_RATINGS_SQL = `
+  SELECT rating, created_at FROM business_reviews WHERE business_id = $1 AND ref_id IS NOT NULL
+  UNION ALL
+  SELECT r.rating, r.created_at FROM product_reviews r
+    JOIN products p ON p.id = r.product_id WHERE p.business_id = $1
+  UNION ALL
+  SELECT r.rating, r.created_at FROM service_reviews r
+    JOIN business_services s ON s.id = r.service_id WHERE s.business_id = $1
+  UNION ALL
+  SELECT rating, created_at FROM buyer_reviews WHERE subject_id = $1`;
+
 const CERT_MIN_SCORE = 90;
 /* Volume means completed DEALINGS, not orders alone. A host with ten finished
    stays has exactly as much of a track record as a seller with ten shipped
@@ -34501,6 +34566,7 @@ async function announceCertificate(userId) {
 
 async function userTrustScore(userId) {
   try {
+    const COMBINED = COMBINED_RATINGS_SQL, HL = RATING_HALF_LIFE_YEARS;
     const { rows } = await db.query(`
       SELECT
         u.created_at, u.email_verified, u.verified,
@@ -34519,19 +34585,25 @@ async function userTrustScore(userId) {
         -- reports staff agreed with
         (SELECT COUNT(*) FROM reports rp WHERE rp.reported_id = $1 AND rp.status = 'resolved')::int AS reports_upheld,
         -- every rating they have received, from either side of a deal
-        (SELECT COUNT(*) FROM product_reviews r JOIN products p ON p.id = r.product_id WHERE p.business_id = $1)::int AS pr_c,
-        (SELECT COALESCE(AVG(r.rating),0) FROM product_reviews r JOIN products p ON p.id = r.product_id WHERE p.business_id = $1)::float AS pr_a,
-        (SELECT COUNT(*) FROM business_reviews WHERE business_id = $1 AND ref_id IS NOT NULL)::int AS br_c,
-        (SELECT COALESCE(AVG(rating),0) FROM business_reviews WHERE business_id = $1 AND ref_id IS NOT NULL)::float AS br_a,
-        (SELECT COUNT(*) FROM buyer_reviews WHERE subject_id = $1)::int AS byr_c,
-        (SELECT COALESCE(AVG(rating),0) FROM buyer_reviews WHERE subject_id = $1)::float AS byr_a
+        -- One rating, recency-weighted: half the weight per year of age, so a
+        -- review from last month counts ~16x one from four years ago. Nothing
+        -- is ever discarded, so there is no cliff where an old review silently
+        -- vanishes and the number jumps.
+        (SELECT COUNT(*) FROM (${COMBINED}) c)::int AS rat_n,
+        (SELECT COALESCE(SUM(power(0.5, EXTRACT(EPOCH FROM (now() - c.created_at)) / (${HL} * 365.25 * 86400))), 0)
+           FROM (${COMBINED}) c)::float AS rat_w,
+        (SELECT COALESCE(SUM(c.rating * power(0.5, EXTRACT(EPOCH FROM (now() - c.created_at)) / (${HL} * 365.25 * 86400))), 0)
+           FROM (${COMBINED}) c)::float AS rat_sum
       FROM users u WHERE u.id = $1`, [userId]);
     const r = rows[0];
     if (!r) return null;
 
-    const ratingCount = r.pr_c + r.br_c + r.byr_c;
-    const ratingAvg = ratingCount
-      ? (r.pr_a * r.pr_c + r.br_a * r.br_c + r.byr_a * r.byr_c) / ratingCount : 0;
+    // How many stars there are, and how much they still count for.
+    const ratingCount = r.rat_n;
+    const ratingAvg = r.rat_w > 0 ? r.rat_sum / r.rat_w : 0;
+    // Weight, not headcount, drives confidence: ten reviews from last month say
+    // far more about somebody today than ten from five years ago.
+    const ratingWeight = r.rat_w;
     const ageMonths = Math.max(0, (Date.now() - new Date(r.created_at).getTime()) / (30 * 864e5));
     // How much to believe a rate at all. Two orders tell you nothing.
     const confidence = (n, full) => Math.min(1, n / full);
@@ -34539,7 +34611,7 @@ async function userTrustScore(userId) {
     // ── earned ──────────────────────────────────────────────────────────────
     // Ratings cut both ways: 5★ → +25, 3★ → 0, 1★ → −25, ramped by how many.
     const ratings = ratingCount
-      ? ((ratingAvg - 3) / 2) * 25 * confidence(ratingCount, 5) : 0;
+      ? ((ratingAvg - 3) / 2) * 25 * confidence(ratingWeight, 5) : 0;
     const done     = Math.min(12, (r.completed / 30) * 12);
     const stays    = Math.min(6, (r.stays / 10) * 6);
     const tenure   = Math.min(5, (ageMonths / 12) * 5);
@@ -34590,6 +34662,10 @@ async function userTrustScore(userId) {
       stays: r.stays,
       ratingAvg: Math.round(ratingAvg * 10) / 10,
       ratingCount,
+      // Recency-weighted, and it counts every star they have received —
+      // their listings and services included, the way Etsy and Airbnb do it.
+      ratingIsCombined: true,
+      ratingHalfLifeYears: RATING_HALF_LIFE_YEARS,
       // What moved it, so a profile can show the reasons rather than a bare number.
       up: { ratings: Math.round(Math.max(0, ratings)), orders: Math.round(done), stays: Math.round(stays), tenure: Math.round(tenure), verified },
       down: { ratings: Math.round(Math.max(0, -ratings)), cancelled: Math.round(cancels), returns: Math.round(returns), disputes: Math.round(disputes), reported: Math.round(reported) },
