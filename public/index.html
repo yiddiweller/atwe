@@ -19253,7 +19253,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1664'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1665'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -37840,7 +37840,7 @@ function acTrustChip(ts) {
   const sub = ts.isNew
     ? 'No dealings yet'
     : [ts.completedOrders ? ts.completedOrders + ' order' + (ts.completedOrders === 1 ? '' : 's') : null,
-       ts.ratingCount ? ts.ratingAvg + ' stars from ' + ts.ratingCount : null].filter(Boolean).join(' · ');
+       ts.ratingCount ? ts.ratingAvg + ' stars from ' + ts.ratingCount + ' review' + (ts.ratingCount === 1 ? '' : 's') : null].filter(Boolean).join(' · ');
   return `<button class="trust-card ${band}" onclick="acOpenTrust()" aria-label="Reputation ${ts.score} out of 100">
     <span class="tc-num">${_REP_STAR}${ts.score}</span>
     <span class="tc-body">
@@ -37877,7 +37877,7 @@ function acCertBlock(ts) {
 function acOpenTrust() {
   const ts = AC._trust; if (!ts) return;
   const rows = [
-    ['Ratings received', ts.up.ratings, ts.down.ratings],
+    [ts.ratingIsCombined ? 'Ratings received, including on what you sell' : 'Ratings received', ts.up.ratings, ts.down.ratings],
     ['Orders completed', ts.up.orders, 0],
     ['Stays', ts.up.stays, 0],
     ['Time on Atwe', ts.up.tenure, 0],
@@ -37893,6 +37893,7 @@ function acOpenTrust() {
     <div class="tv-scale">Reputation runs from 0 to 100</div>
     ${acCertBlock(ts)}
     <p class="tv-lede">Everyone starts at <b>50</b> — nobody has done anything yet, so the number says nothing yet. It goes up for good dealings and down for bad ones, and it is worked out fresh from what actually happened, never a running tally that can drift.</p>
+    <p class="tv-lede">Every star counts, including the ones left on what you sell — a shop is only as good as its goods. Nothing is ever thrown away, but <b>a rating counts for half as much each year it ages</b>, so recent work speaks loudest and a bad patch can be grown out of.</p>
     ${rows.length ? `<div class="tv-rows">${rows.map(([label, u, d]) => `
       <div class="tv-row"><span>${escHtml(label)}</span>
         <span class="tv-delta ${u ? 'up' : 'down'}">${u ? '+' + u : '−' + d}</span></div>`).join('')}</div>`

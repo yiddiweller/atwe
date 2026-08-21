@@ -42,11 +42,21 @@ function getPool() {
 // replayed afterwards, instead of aborting the whole bootstrap. This makes a brand-new
 // database initialize regardless of the order of statements in init(). Outside
 // bootstrap, query behaves normally (errors propagate to the caller).
-let _bootstrapping = false;
+/* The tolerance is scoped to the async context init() runs in, NOT to the whole
+   process. It used to be a plain module-level flag, which meant that for the
+   whole time init() was seeding — circles, help articles, the official account,
+   several seconds on a fresh database — EVERY query in the process got the
+   error-swallowing treatment, live HTTP requests included. A route's query that
+   genuinely failed in that window came back as `{rows: []}` looking perfectly
+   successful, so the route either crashed reading rows[0] or, worse, quietly
+   served an empty answer as though it were the truth. Bootstrapping is init's
+   business; nobody else should inherit it. */
+const { AsyncLocalStorage } = require('node:async_hooks');
+const _bootCtx = new AsyncLocalStorage();
 const _deferredDDL = [];
 function query(text, params) {
   const p = getPool().query(text, params);
-  if (!_bootstrapping) return p;
+  if (!_bootCtx.getStore()) return p;
   return p.catch((e) => { _deferredDDL.push({ text, params, err: e.message }); return { rows: [], rowCount: 0 }; });
 }
 
@@ -271,19 +281,30 @@ async function init() {
     );
     return;
   }
-  _bootstrapping = true;
   _deferredDDL.length = 0;
-  try { await initSchema(); }
-  finally { _bootstrapping = false; }
-  let pending = _deferredDDL.splice(0);
-  for (let pass = 0; pass < 8 && pending.length; pass++) {
-    const next = [];
-    for (const s of pending) { try { await pool.query(s.text, s.params); } catch (e) { s.err = e.message; next.push(s); } }
-    if (next.length === pending.length) break; // no progress — stop retrying
-    pending = next;
-  }
-  if (pending.length) console.warn(`⚠️  ${pending.length} schema statement(s) could not be applied (e.g. "${pending[0].err}").`);
+  /* The gate is released in a `finally`, come what may. If the schema build
+     ever fails outright the app is in trouble either way — but a permanent
+     "still setting up" that nobody can get past would be worse than routes
+     failing with their own real errors, which is what happened before this
+     gate existed. Never trade a temporary problem for a permanent one. */
+  try {
+    await _bootCtx.run(true, () => initSchema());
+    let pending = _deferredDDL.splice(0);
+    for (let pass = 0; pass < 8 && pending.length; pass++) {
+      const next = [];
+      for (const s of pending) { try { await pool.query(s.text, s.params); } catch (e) { s.err = e.message; next.push(s); } }
+      if (next.length === pending.length) break; // no progress — stop retrying
+      pending = next;
+    }
+    if (pending.length) console.warn(`⚠️  ${pending.length} schema statement(s) could not be applied (e.g. "${pending[0].err}").`);
+  } finally { _ready = true; }
 }
+/* Is the schema actually built yet? On a brand-new database init() takes a few
+   seconds, and until it finishes a route asking for a column that does not
+   exist yet fails — correctly, but with an error nobody can act on. Knowing
+   the difference lets the server say "still setting up" instead. */
+let _ready = false;
+function isReady() { return !pool || _ready; }
 
 async function initSchema() {
   await query(`
@@ -5888,4 +5909,4 @@ async function setSetting(key, value) {
   );
 }
 
-module.exports = { init, query, getPool, isConfigured, getSetting, setSetting };
+module.exports = { init, query, getPool, isConfigured, getSetting, setSetting, isReady};
