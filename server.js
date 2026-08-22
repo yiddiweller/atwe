@@ -29676,6 +29676,10 @@ function mapProduct(p, opts) {
     auctionMinCents: p.auction_ends_at ? (p.auction_min_cents || 0) : null,
     auctionLive: !!(p.auction_ends_at && !p.auction_settled && new Date(p.auction_ends_at) > new Date()),
     auctionSettled: !!p.auction_settled,
+    // Whether there IS one — never the figure, except back to the seller who
+    // set it, who needs it returned into their own edit form.
+    auctionHasReserve: !!p.auction_reserve_cents,
+    auctionReserveCents: (opts && opts.owner) ? (p.auction_reserve_cents || null) : undefined,
     auctionWinnerId: p.auction_winner_id || null,
   };
 }
@@ -29696,7 +29700,7 @@ app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
   try {
     const owner = bid === req.user.id;
     const q = String(req.query.q || '').trim().slice(0, 80);
-    const COLS = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'}`;
+    const COLS = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'}`;
     let rows;
     if (q) {
       const like = '%' + q.replace(/[\\%_]/g, '\\$&') + '%';
@@ -29738,7 +29742,7 @@ function mapListing(r) {
   });
 }
 const LISTING_SELECT = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
-  p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS},
+  p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS},
   u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified, u.cert_active AS seller_certified, u.free_ship_over_cents AS seller_free_ship_over
   FROM products p JOIN users u ON u.id = p.business_id`;
 
@@ -29854,7 +29858,7 @@ async function getSponsoredListings(viewerId, { q, kind }) {
     }
     const { rows } = await db.query(
       `SELECT pa.id AS ad_id, pa.bid_cents, pa.keywords, p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
-        p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS},
+        p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS},
         u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified
        FROM product_ads pa JOIN products p ON p.id = pa.product_id JOIN users u ON u.id = pa.seller_id
        WHERE ${conds.join(' AND ')} LIMIT 40`, params);
@@ -30271,7 +30275,7 @@ app.post('/api/admin/product-ads/:id/:action', auth.requirePerm('ads'), async (r
 // My own listings (any account) — for the Sell / manage surface.
 app.get('/api/my-listings', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.pinned DESC, p.created_at DESC LIMIT 300`, [req.user.id]);
+    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.pinned DESC, p.created_at DESC LIMIT 300`, [req.user.id]);
     res.json({ products: rows.map((r) => mapProduct(r, { owner: true })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your listings.' }); }
 });
@@ -30463,10 +30467,20 @@ app.get('/api/listings/:id', auth.requireAuth, async (req, res) => {
     if (l.auction_ends_at) {
       const top = (await db.query('SELECT bidder_id, amount_cents FROM auction_bids WHERE product_id = $1 ORDER BY amount_cents DESC, id ASC LIMIT 1', [id])).rows[0];
       const cnt = (await db.query('SELECT COUNT(*)::int AS n FROM auction_bids WHERE product_id = $1', [id])).rows[0].n;
+      // Your own ceiling, so the page can remind you what it will go to for you.
+      const mine = (await db.query('SELECT MAX(COALESCE(max_cents, amount_cents)) AS m FROM auction_bids WHERE product_id = $1 AND bidder_id = $2', [id, req.user.id])).rows[0];
       listing.auction = {
         endsAt: l.auction_ends_at, minCents: l.auction_min_cents || 0, settled: !!l.auction_settled,
         live: auctionLive(l), topBidCents: top ? top.amount_cents : null, bidCount: cnt,
         iLead: !!(top && top.bidder_id === req.user.id), winnerId: l.auction_winner_id || null,
+        /* Whether there is a reserve, and whether the bidding has passed it —
+           never the figure itself, which is the seller's business. Somebody
+           bidding deserves to know they are still short of it. */
+        hasReserve: !!l.auction_reserve_cents,
+        reserveMet: l.auction_reserve_cents ? !!(top && top.amount_cents >= l.auction_reserve_cents) : null,
+        // What you would have to type next, so the app never has to guess.
+        nextMinCents: top ? top.amount_cents + auctionIncrement(top.amount_cents) : (l.auction_min_cents || 0),
+        myMaxCents: mine && mine.m ? Number(mine.m) : null,
         iWon: l.auction_winner_id === req.user.id,
       };
       if (listing.auction.iWon) {
@@ -30699,20 +30713,29 @@ app.post('/api/products', auth.requireAuth, blockLimited, rateLimit(40, 60000, '
   const video = cleanProductVideo(req.body.video);
   if (video === undefined) return res.status(400).json({ error: 'That video could not be used — keep it under ~3.5 MB.' });
   // Auction (physical items): a starting bid + a whitelisted duration.
-  let auctionEndsAt = null, auctionMinCents = null;
+  let auctionEndsAt = null, auctionMinCents = null, auctionReserveCents = null;
   if (req.body.auctionDays != null && kind === 'physical') {
     const days = parseInt(req.body.auctionDays, 10);
     if (!AUCTION_DAYS.includes(days)) return res.status(400).json({ error: 'Pick an auction length.' });
     auctionMinCents = Math.round(Number(req.body.auctionMinCents) || 0);
     if (!(auctionMinCents >= 100 && auctionMinCents <= 5000000)) return res.status(400).json({ error: 'Set a starting bid between $1 and $50,000.' });
     auctionEndsAt = new Date(Date.now() + days * 86400000).toISOString();
+    /* A reserve lets somebody start the bidding low without being made to sell
+       under what it is worth. Below the starting bid it would mean nothing, so
+       that is refused rather than quietly ignored. */
+    if (req.body.auctionReserveCents != null && req.body.auctionReserveCents !== '') {
+      auctionReserveCents = Math.round(Number(req.body.auctionReserveCents) || 0);
+      if (!(auctionReserveCents >= auctionMinCents && auctionReserveCents <= 5000000)) {
+        return res.status(400).json({ error: 'A reserve has to be at least the starting bid.' });
+      }
+    }
   }
   try {
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM products WHERE business_id = $1', [req.user.id]);
     if (cnt.rows[0].n >= 300) return res.status(400).json({ error: 'You’ve reached the maximum number of products.' });
     const { rows } = await db.query(
-      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, video, video_ver, auction_ends_at, auction_min_cents, wholesale_cents, wholesale_min_qty) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, (video IS NOT NULL) AS has_video, video_ver, auction_ends_at, auction_min_cents, auction_settled, auction_winner_id, wholesale_cents, wholesale_min_qty`,
-      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, pickup, pickupLocation, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct, amenities, JSON.stringify(specs), rentalPeriod, category, condition, compareAtCents, procDays.min, procDays.max, video, video ? 1 : 0, auctionEndsAt, auctionMinCents, wholesale.cents, wholesale.minQty]
+      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, video, video_ver, auction_ends_at, auction_min_cents, auction_reserve_cents, wholesale_cents, wholesale_min_qty) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$31,$29,$30) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, (video IS NOT NULL) AS has_video, video_ver, auction_ends_at, auction_min_cents, auction_reserve_cents, auction_settled, auction_winner_id, wholesale_cents, wholesale_min_qty`,
+      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, pickup, pickupLocation, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct, amenities, JSON.stringify(specs), rentalPeriod, category, condition, compareAtCents, procDays.min, procDays.max, video, video ? 1 : 0, auctionEndsAt, auctionMinCents, wholesale.cents, wholesale.minQty, auctionReserveCents]
     );
     if (rows[0].active !== false) notifyMarketMatch(rows[0]); // alert saved-search watchers
     emitWebhook(rows[0].business_id, 'product.created', { id: rows[0].id, name: rows[0].name, priceCents: rows[0].price_cents, kind: rows[0].kind });
@@ -30773,7 +30796,14 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
     const minC = Math.round(Number(req.body.auctionMinCents) || 0);
     if (!AUCTION_DAYS.includes(days)) return res.status(400).json({ error: 'Pick an auction length.' });
     if (!(minC >= 100 && minC <= 5000000)) return res.status(400).json({ error: 'Set a starting bid between $1 and $50,000.' });
-    auctionChange = { days, minC };
+    // A reserve below the starting bid would mean nothing — refuse it rather
+    // than take it and quietly ignore it. Left blank, there is no reserve.
+    let resC = null;
+    if (req.body.auctionReserveCents != null && req.body.auctionReserveCents !== '') {
+      resC = Math.round(Number(req.body.auctionReserveCents) || 0);
+      if (!(resC >= minC && resC <= 5000000)) return res.status(400).json({ error: 'A reserve has to be at least the starting bid.' });
+    }
+    auctionChange = { days, minC, resC };
   }
   if (!fields.length && !auctionChange) return res.json({ ok: true });
   try {
@@ -30787,10 +30817,12 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
       fields.push(`auction_ends_at = $${vals.length}`);
       vals.push(auctionChange.off ? null : auctionChange.minC);
       fields.push(`auction_min_cents = $${vals.length}`);
+      vals.push(auctionChange.off ? null : auctionChange.resC);
+      fields.push(`auction_reserve_cents = $${vals.length}`);
       fields.push('auction_settled = false', 'auction_winner_id = NULL');
     }
     vals.push(id, req.user.id);
-    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, (video IS NOT NULL) AS has_video, video_ver, auction_ends_at, auction_min_cents, auction_settled, auction_winner_id, wholesale_cents, wholesale_min_qty`, vals);
+    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, (video IS NOT NULL) AS has_video, video_ver, auction_ends_at, auction_min_cents, auction_reserve_cents, auction_settled, auction_winner_id, wholesale_cents, wholesale_min_qty`, vals);
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
     const after = r.rows[0];
     // Back-in-stock alert: was sold-out (or hidden), now active + in stock → notify watchers.
@@ -31108,23 +31140,75 @@ app.post('/api/products/:id/bid', auth.requireAuth, rateLimit(60, 60000, 'auctio
   const amount = Math.round(Number(req.body.amountCents) || 0);
   if (!(amount >= 100 && amount <= 5000000)) return res.status(400).json({ error: 'Bid between $1 and $50,000.' });
   const client = await db.getPool().connect();
-  let out, outbid = null;
+  let out, outbid = null, notifyBeaten = null;
   try {
     if (!(await requireHandle(req, res))) { client.release(); return; }
     await client.query('BEGIN');
-    const p = (await client.query('SELECT id, business_id, name, active, auction_ends_at, auction_min_cents, auction_settled FROM products WHERE id = $1 FOR UPDATE', [id])).rows[0];
+    const p = (await client.query('SELECT id, business_id, name, active, auction_ends_at, auction_min_cents, auction_reserve_cents, auction_settled FROM products WHERE id = $1 FOR UPDATE', [id])).rows[0];
     if (!p || p.active === false) { await client.query('ROLLBACK'); client.release(); return res.status(404).json({ error: 'Listing not found.' }); }
     if (!p.auction_ends_at) { await client.query('ROLLBACK'); client.release(); return res.status(400).json({ error: 'This listing isn’t an auction.' }); }
     if (p.business_id === req.user.id) { await client.query('ROLLBACK'); client.release(); return res.status(400).json({ error: 'You can’t bid on your own auction.' }); }
     if (!auctionLive(p)) { await client.query('ROLLBACK'); client.release(); return res.status(400).json({ error: 'This auction has ended.' }); }
     if (await blockedEither(req.user.id, p.business_id)) { await client.query('ROLLBACK'); client.release(); return res.status(403).json({ error: 'You can’t bid on this auction.' }); }
-    const top = (await client.query('SELECT bidder_id, amount_cents FROM auction_bids WHERE product_id = $1 ORDER BY amount_cents DESC, id ASC LIMIT 1', [id])).rows[0];
+    /* ── Proxy bidding, the way eBay does it ──
+       What you type is the MOST you are willing to pay, not what you pay. The
+       system bids only as much as it needs to on your behalf, so the price
+       rises to just enough to beat the runner-up and stops there. That is why
+       you can leave it alone instead of sitting on a clock re-bidding by hand.
+
+       Four outcomes, and the rules that decide between them are the same ones
+       eBay uses — including the tie, where the bid that got there first wins. */
+    const top = (await client.query(
+      `SELECT id, bidder_id, amount_cents, COALESCE(max_cents, amount_cents) AS max_cents
+         FROM auction_bids WHERE product_id = $1 ORDER BY amount_cents DESC, id ASC LIMIT 1`, [id])).rows[0];
     const minAllowed = top ? top.amount_cents + auctionIncrement(top.amount_cents) : p.auction_min_cents;
     if (amount < minAllowed) {
       await client.query('ROLLBACK'); client.release();
       return res.status(400).json({ error: 'Bid at least ' + (minAllowed / 100).toFixed(2).replace(/\.00$/, '') + ' dollars.', minCents: minAllowed });
     }
-    await client.query('INSERT INTO auction_bids (product_id, bidder_id, amount_cents) VALUES ($1,$2,$3)', [id, req.user.id, amount]);
+    let price, youLead, beatenBy = null;
+    if (!top) {
+      // Nobody yet: you lead at the starting price, however high your maximum.
+      price = p.auction_min_cents; youLead = true;
+    } else if (top.bidder_id === req.user.id) {
+      // Raising your own ceiling does not raise the price against yourself.
+      price = top.amount_cents; youLead = true;
+    } else if (amount > top.max_cents) {
+      // You beat their ceiling: pay just enough to clear it, never your max.
+      price = Math.min(amount, top.max_cents + auctionIncrement(top.max_cents));
+      youLead = true;
+    } else {
+      /* Their ceiling holds — including on a tie, where whoever got there
+         first keeps it. The price rises to just past you, capped at what they
+         were actually willing to pay. */
+      price = Math.min(top.max_cents, amount + auctionIncrement(amount));
+      youLead = false; beatenBy = top.bidder_id;
+    }
+    /* The reserve, handled the way eBay handles it: while every bid is under
+       the floor the seller set, the price climbs normally and the listing says
+       the reserve has not been met. The moment somebody is willing to go to it,
+       the price jumps straight to the reserve — they have met it, so that is
+       what it is worth, and the listing stops saying "reserve not met". */
+    if (youLead && p.auction_reserve_cents && amount >= p.auction_reserve_cents) {
+      price = Math.max(price, p.auction_reserve_cents);
+    }
+    if (youLead) {
+      await client.query(
+        'INSERT INTO auction_bids (product_id, bidder_id, amount_cents, max_cents) VALUES ($1,$2,$3,$4)',
+        [id, req.user.id, price, amount]);
+      // The person you passed no longer holds the price they held.
+      if (top && top.bidder_id !== req.user.id) {
+        await client.query('UPDATE auction_bids SET amount_cents = LEAST(amount_cents, $2) WHERE id = $1',
+          [top.id, Math.max(0, price - 1)]);
+      }
+    } else {
+      // A losing bid is still a bid: it is what pushed the price up, and it is
+      // recorded at what this person was actually prepared to pay.
+      await client.query(
+        'INSERT INTO auction_bids (product_id, bidder_id, amount_cents, max_cents) VALUES ($1,$2,$3,$4)',
+        [id, req.user.id, Math.min(amount, Math.max(0, price - 1)), amount]);
+      await client.query('UPDATE auction_bids SET amount_cents = $2 WHERE id = $1', [top.id, price]);
+    }
     // Anti-snipe: a bid landing in the final window pushes the close out so
     // others get a fair chance to respond (Yahoo/Whatnot style).
     let endsAt = p.auction_ends_at;
@@ -31133,9 +31217,22 @@ app.post('/api/products/:id/bid', auth.requireAuth, rateLimit(60, 60000, 'auctio
       endsAt = r2.rows[0].auction_ends_at;
     }
     await client.query('COMMIT');
-    if (top && top.bidder_id !== req.user.id) outbid = top.bidder_id;
+    // Only tell somebody they were outbid if they actually were.
+    if (youLead && top && top.bidder_id !== req.user.id) outbid = top.bidder_id;
     const count = (await db.query('SELECT COUNT(*)::int AS n FROM auction_bids WHERE product_id = $1', [id])).rows[0].n;
-    out = { ok: true, topBidCents: amount, bidCount: count, endsAt, youLead: true };
+    out = {
+      ok: true, topBidCents: price, bidCount: count, endsAt, youLead,
+      yourMaxCents: amount,
+      // Said plainly, because "you bid £50 and the price says £22" needs explaining.
+      reserveMet: p.auction_reserve_cents ? price >= p.auction_reserve_cents : null,
+      message: youLead
+        ? (amount > price
+          ? `You're the highest bidder at $${(price / 100).toFixed(2)}. We'll bid for you up to $${(amount / 100).toFixed(2)} if anyone goes higher.`
+          : `You're the highest bidder at $${(price / 100).toFixed(2)}.`)
+          + (p.auction_reserve_cents ? (price >= p.auction_reserve_cents ? ' The seller\u2019s reserve has been met.' : ' The reserve hasn\u2019t been met yet, so it won\u2019t sell at this price.') : '')
+        : `Someone else is willing to pay more. The price is now $${(price / 100).toFixed(2)} — bid again with a higher maximum if you want it.`,
+    };
+    if (beatenBy) notifyBeaten = beatenBy;
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
     client.release();
@@ -31144,6 +31241,9 @@ app.post('/api/products/:id/bid', auth.requireAuth, rateLimit(60, 60000, 'auctio
   }
   client.release();
   if (outbid) notify(outbid, req.user.id, 'auction_outbid', null, null, null, id);
+  // The person who just bid and did not take the lead is told too, rather than
+  // being left to work out why the number moved and their name is not on it.
+  if (notifyBeaten) notify(req.user.id, notifyBeaten, 'auction_outbid', null, null, null, id);
   res.json(out);
 });
 // Bid history (top bids, newest-leading first) — social proof on the detail.
@@ -31167,11 +31267,19 @@ async function flushAuctions() {
   const { rows } = await db.query(
     `UPDATE products SET auction_settled = true
       WHERE auction_ends_at IS NOT NULL AND NOT auction_settled AND auction_ends_at <= now()
-      RETURNING id, business_id, name`);
+      RETURNING id, business_id, name, auction_reserve_cents`);
   for (const p of rows) {
     try {
       const top = (await db.query('SELECT bidder_id, amount_cents FROM auction_bids WHERE product_id = $1 ORDER BY amount_cents DESC, id ASC LIMIT 1', [p.id])).rows[0];
       if (!top) { notifySelf(p.business_id, 'auction_no_bids', p.id); n++; continue; }
+      /* A reserve is a floor the seller set: below it, nothing sells. Both
+         sides are told rather than left wondering — the bidder especially,
+         who was the highest and still did not get it. */
+      if (p.auction_reserve_cents && top.amount_cents < p.auction_reserve_cents) {
+        notifySelf(p.business_id, 'auction_no_bids', p.id);
+        notify(top.bidder_id, p.business_id, 'auction_ended', null, null, null, p.id);
+        n++; continue;
+      }
       await db.query('UPDATE products SET auction_winner_id = $2 WHERE id = $1', [p.id, top.bidder_id]);
       const off = await db.query(
         `INSERT INTO offers (product_id, buyer_id, seller_id, amount_cents, status, turn) VALUES ($1,$2,$3,$4,'accepted','buyer') RETURNING id`,

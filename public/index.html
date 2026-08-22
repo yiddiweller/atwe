@@ -170,6 +170,13 @@ a{text-decoration:none;color:inherit;}
   --purple-line: rgba(170,0,255,.42);
   --purple-ink:  #BB44FF;   /* purple TEXT on the purple tint — 5.1:1 here */
 
+  /* Green and amber as TEXT on the page background. On black the bright hues
+     are perfectly legible (15:1 / 11:1); on white they are not (1.3:1 / 1.7:1),
+     so Light overrides them below. Use these — never raw --green/--amber — for
+     a coloured WORD. The raw hues stay right for a FILL with dark ink on it. */
+  --green-txt: var(--green);
+  --amber-txt: var(--amber);
+
   /* Layout */
   --sidebar-w: 244px;
   --topbar-h:  48px;
@@ -1233,6 +1240,8 @@ button.ac-poll-opt:hover{background:var(--accent-dim);border-color:var(--accent)
 }
 body.light{
   --purple-ink:#7A00B8;                 /* the same role, readable on a pale tint — 6.7:1 */
+  --green-txt:#2F7000;                  /* the same role in green — 6.1:1 on white */
+  --amber-txt:#805300;                  /* and in amber — 6.7:1 on white */
   --menu-bg:rgba(250,250,250,.72);      /* Light — Apple light frosted material */
   --menu-border:rgba(0,0,0,.08);
   --menu-sep:rgba(0,0,0,.08);
@@ -6368,13 +6377,22 @@ body.light .mc-btnrow{background:rgba(0,0,0,.07);}
 .auc-left.over{color:var(--t3);}
 .auc-lead{margin-top:8px;padding:8px 12px;border-radius:999px;background:var(--green);color:var(--green-ink);font-size:13px;font-weight:700;display:inline-block;}
 .auc-bid-row{display:flex;gap:8px;margin-top:10px;}
+/* Outbid is a heads-up, not a failure — amber, the information colour. */
+.auc-outbid{margin-top:8px;padding:8px 12px;border-radius:999px;background:var(--amber);color:#241a00;font-size:13px;font-weight:700;display:inline-block;}
+/* The reserve line is a running state, not an alert, so it stays quiet text —
+   only "met" earns the green, because that is the moment it will actually sell. */
+.auc-reserve{margin-top:8px;font-size:12.5px;font-weight:700;color:var(--amber-txt);}
+.auc-reserve.met{color:var(--green-txt);}
 .auc-won{margin-top:8px;padding:10px 14px;border-radius:14px;background:var(--green);color:var(--green-ink);font-size:14px;font-weight:700;}
 .auc-bidlist{margin-top:12px;}
 .auc-bid-row-h{display:flex;justify-content:space-between;padding:7px 2px;font-size:13.5px;}
-.auc-bid-row-h.top .auc-bid-amt{color:var(--green);font-weight:800;}
+.auc-bid-row-h.top .auc-bid-amt{color:var(--green-txt);font-weight:800;}
 .auc-bidder{color:var(--accent);cursor:pointer;font-weight:600;}
 .auc-bid-amt{font-weight:700;}
 .auc-tag{display:inline-block;padding:2px 9px;border-radius:999px;background:var(--amber);color:#231a00;font-size:11px;font-weight:800;}
+/* "There is a floor on this one" — quieter than the Auction tag itself, so a
+   list of auctions doesn't read as a wall of amber. */
+.auc-tag.res{background:var(--s3);color:var(--t2);margin-left:4px;}
 /* Coupon share-link landing */
 .cpl-hero{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 0 4px;}
 .cpl-save{font-size:26px;font-weight:800;letter-spacing:-.02em;margin-top:6px;}
@@ -16453,7 +16471,8 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
             <option value="1">1 day</option><option value="3" selected>3 days</option><option value="5">5 days</option><option value="7">7 days</option>
           </select>
         </div>
-        <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">Buyers bid against each other; the highest bid when time runs out wins and pays then. Once someone bids, the auction can’t be changed or cancelled.</div>
+        <input class="jp-in" id="prodAuctionReserve" type="number" min="0" max="50000" step="1" placeholder="Reserve price — optional ($)" style="margin:8px 0 0;width:100%;"/>
+        <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">Buyers bid against each other; the highest bid when time runs out wins and pays then. Once someone bids, the auction can’t be changed or cancelled.<br><br><b>Reserve</b> lets you start the bidding low without having to sell cheap: if nothing reaches it, nothing sells. Buyers are told there is one and whether they’ve passed it — never what it is. Leave it blank if you’ll take the highest bid whatever it is.</div>
       </div>
     </div>
     <!-- Universal details & amenities (any industry: rentals, cars, real estate…) -->
@@ -19548,7 +19567,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1669'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1670'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -40118,7 +40137,7 @@ function acListingCard(l) {
     </div>
     <div class="mkt-foot">
       ${l.auctionEndsAt && !l.auctionSettled
-        ? `<span class="mkt-price"><span class="auc-tag">Auction</span> from $${((l.auctionMinCents || 0) / 100).toFixed(2)}</span>
+        ? `<span class="mkt-price"><span class="auc-tag">Auction</span>${l.auctionHasReserve ? '<span class="auc-tag res">Reserve</span>' : ''} from $${((l.auctionMinCents || 0) / 100).toFixed(2)}</span>
       <span class="mkt-actions"><button class="mkt-buy" onclick="event.stopPropagation();${tap}acOpenListing(${l.id})">Bid</button></span>`
         : `<span class="mkt-price">${l.hasVariants ? 'from $' + (l.priceFromCents / 100).toFixed(2) : '$' + (l.priceCents / 100).toFixed(2)}${l.compareAtCents && !l.hasVariants ? ` <s class="mkt-was">$${(l.compareAtCents / 100).toFixed(2)}</s>` : ''}</span>
       <span class="mkt-actions">
@@ -40608,15 +40627,29 @@ function acAuctionBlock(l, own) {
   let body = '';
   if (a.live) {
     if (own) {
-      body = `<div class="ac-disc-sub" style="margin:8px 2px 0;">Your auction is live. Once someone bids it can’t be changed or cancelled — the highest bid at the end wins.</div>`;
+      // The seller's own view: whether it will actually sell matters most.
+      const ownRes = a.hasReserve
+        ? `<div class="auc-reserve${a.reserveMet ? ' met' : ''}">${a.reserveMet ? '✓ Your reserve has been met — this will sell' : 'Bidding is still under your reserve — it won’t sell unless it passes it'}</div>`
+        : '';
+      body = `${ownRes}<div class="ac-disc-sub" style="margin:8px 2px 0;">Your auction is live. Once someone bids it can’t be changed or cancelled — the highest bid at the end wins.${a.hasReserve ? ' Buyers can see that you set a reserve, but never what it is.' : ''}</div>`;
     } else {
-      const minNext = top != null ? top + acAucInc(top) : a.minCents;
-      const lead = a.iLead ? `<div class="auc-lead">You’re the highest bidder</div>` : '';
-      body = `${lead}<div class="auc-bid-row">
-        <input class="jp-in" id="aucBidIn" type="number" min="1" step="1" placeholder="${(minNext / 100).toFixed(2)} or more" style="margin:0;flex:1;" aria-label="Your bid in dollars"/>
+      const minNext = a.nextMinCents != null ? a.nextMinCents : (top != null ? top + acAucInc(top) : a.minCents);
+      /* Proxy bidding, said plainly. What you type is the MOST you'll pay, not
+         what you pay — so somebody who leads at $21 with a $50 ceiling needs
+         telling that, or the number on screen looks like a mistake. */
+      const lead = a.iLead
+        ? `<div class="auc-lead">You’re the highest bidder${a.myMaxCents > top ? ` · we’ll go to ${acMoney(a.myMaxCents)} for you` : ''}</div>`
+        : (a.myMaxCents ? `<div class="auc-outbid">You’ve been outbid — someone is willing to pay more than your ${acMoney(a.myMaxCents)}</div>` : '');
+      // A reserve is a floor the seller set. Bidders are told there is one, and
+      // whether they've passed it — never what it is.
+      const reserve = a.hasReserve
+        ? `<div class="auc-reserve${a.reserveMet ? ' met' : ''}">${a.reserveMet ? '✓ Reserve met — this will sell' : 'Reserve not met yet — the seller set a minimum price'}</div>`
+        : '';
+      body = `${lead}${reserve}<div class="auc-bid-row">
+        <input class="jp-in" id="aucBidIn" type="number" min="1" step="1" placeholder="Your max — ${(minNext / 100).toFixed(2)} or more" style="margin:0;flex:1;" aria-label="The most you’ll pay, in dollars"/>
         <button class="ac-pill-btn accent" id="aucBidBtn" style="flex:0 0 auto;" onclick="acPlaceBid(${l.id})">Place bid</button>
       </div>
-      <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">Bid ${acMoney(minNext)} or more. A bid is a commitment to buy — you’ll pay only if you win.</div>`;
+      <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">Enter the <b>most you’re willing to pay</b> — at least ${acMoney(minNext)}. We bid only as much as we need to keep you in front, so you pay what it reaches, not your maximum. Bidding is a commitment to buy.</div>`;
     }
   } else if (a.iWon) {
     body = `<div class="auc-won">🎉 You won this auction at ${acMoney(top || a.minCents)}</div>` +
@@ -40625,6 +40658,9 @@ function acAuctionBlock(l, own) {
         : (a.myOfferId ? `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acOpenOffer(${a.myOfferId})">Pay now · ${acMoney(top || a.minCents)}</button>` : ''));
   } else if (a.winnerId) {
     body = `<div class="ac-disc-sub" style="margin:8px 2px 0;">${own ? 'Sold — the winner is completing payment.' : 'This auction ended — won at ' + acMoney(top || a.minCents) + '.'}</div>`;
+  } else if (a.hasReserve && a.bidCount && !a.reserveMet) {
+    // Bids came in, they just never reached the floor the seller set.
+    body = `<div class="ac-disc-sub" style="margin:8px 2px 0;">${own ? 'This auction ended below your reserve, so it didn’t sell. Edit the listing to relist it at a lower reserve.' : 'This auction ended without reaching the seller’s reserve.'}</div>`;
   } else {
     body = `<div class="ac-disc-sub" style="margin:8px 2px 0;">${own ? 'This auction ended without bids. Edit the listing to relist it or turn the auction off.' : 'This auction ended without a winner.'}</div>`;
   }
@@ -40637,8 +40673,10 @@ async function acPlaceBid(id) {
   if (!(amt > 0)) { showNotif('Enter your bid.'); if (inp) inp.focus(); return; }
   const btn = document.getElementById('aucBidBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Bidding…'; }
   try {
-    await API.req('POST', '/api/products/' + id + '/bid', { amountCents: amt });
-    showNotif('Bid placed — you’re the highest bidder.');
+    const r = await API.req('POST', '/api/products/' + id + '/bid', { amountCents: amt });
+    // The server knows whether that took the lead and by how much; say that,
+    // rather than assuming a bid always wins.
+    showNotif((r && r.message) || 'Bid placed.');
     acOpenListing(id);
   } catch (e) {
     showNotif(e.message || 'Could not place the bid.');
@@ -43036,9 +43074,11 @@ function acProductFormOpen(productId) {
   const aucOn = !!(p && p.auctionEndsAt && !p.auctionSettled);
   document.getElementById('prodAuctionOn').checked = aucOn;
   document.getElementById('prodAuctionMin').value = (p && p.auctionMinCents) ? (p.auctionMinCents / 100) : '';
+  document.getElementById('prodAuctionReserve').value = (p && p.auctionReserveCents) ? (p.auctionReserveCents / 100) : '';
   acProdAuctionToggle();
   AC._prodWasAuction = aucOn;
   AC._prodAuctionMin0 = (p && p.auctionMinCents) || 0;
+  AC._prodAuctionRes0 = (p && p.auctionReserveCents) || 0;
   acRenderVariants();
   acProdKindChange();
   acRenderProdThumbs();
@@ -43153,11 +43193,13 @@ async function acSaveProduct() {
   // a previously-on auction off sends the explicit cancel flag.
   if (kind === 'physical' && document.getElementById('prodAuctionOn').checked) {
     const aucMin = Math.round((parseFloat(document.getElementById('prodAuctionMin').value) || 0) * 100);
+    const aucRes = Math.round((parseFloat(document.getElementById('prodAuctionReserve').value) || 0) * 100);
     // Only send terms when they actually changed — otherwise editing an
     // unrelated field on a bid-carrying auction would be rejected wholesale.
-    if (!AC._prodWasAuction || aucMin !== AC._prodAuctionMin0) {
+    if (!AC._prodWasAuction || aucMin !== AC._prodAuctionMin0 || aucRes !== (AC._prodAuctionRes0 || 0)) {
       payload.auctionDays = parseInt(document.getElementById('prodAuctionDays').value, 10);
       payload.auctionMinCents = aucMin;
+      payload.auctionReserveCents = aucRes || null;
     }
   } else if (AC._prodWasAuction) payload.auctionOff = true;
   acVarSync();

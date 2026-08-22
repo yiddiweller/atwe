@@ -5192,6 +5192,24 @@ async function initSchema() {
   // The switch, and the line above the buttons.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS inbox_menu BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS inbox_menu_intro TEXT;`);
+
+  /* ── Auctions, the way eBay actually works ──
+     Two things were missing.
+
+     PROXY BIDDING is the defining mechanic: you say the most you are willing
+     to pay, and the system bids only as much as it needs to on your behalf.
+     Without it somebody has to sit watching a clock and re-bidding by hand,
+     which is a fundamentally different — and worse — thing.
+       max_cents    the most this bidder will go to (private)
+       amount_cents stays what it always was: the price this bid actually made,
+                    so history and settlement read exactly as before.
+
+     A RESERVE lets a seller start the bidding low without being forced to sell
+     below what the thing is worth. Nothing sells under it. */
+  await query(`ALTER TABLE auction_bids ADD COLUMN IF NOT EXISTS max_cents INTEGER;`);
+  // Old rows bid exactly what they bid; that IS their maximum.
+  await query(`UPDATE auction_bids SET max_cents = amount_cents WHERE max_cents IS NULL;`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS auction_reserve_cents INTEGER;`);
   await query(`CREATE INDEX IF NOT EXISTS users_cert_active_idx ON users(cert_active) WHERE cert_active;`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_business_idx ON business_team(business_id);`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_member_idx ON business_team(member_id, status);`);
