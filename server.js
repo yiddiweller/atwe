@@ -4044,6 +4044,7 @@ const PUSH_VERBS = {
   aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge',
   aff_rejected: 'reviewed your affiliation badge',
   rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking — you can pay now',
+  rental_booked: 'booked your rental — Instant Book confirmed it',
   rental_declined: 'declined your booking request', rental_paid: 'paid for their booking',
   rental_cancelled: 'cancelled a booking',
 };
@@ -29739,6 +29740,10 @@ function mapProduct(p, opts) {
     auctionSettled: !!p.auction_settled,
     // Whether there IS one — never the figure, except back to the seller who
     // set it, who needs it returned into their own edit form.
+    // Long-stay discounts + Instant Book (rentals only — meaningless elsewhere).
+    rentalWeekPct: kind === 'rental' ? (p.rental_week_pct || 0) : undefined,
+    rentalMonthPct: kind === 'rental' ? (p.rental_month_pct || 0) : undefined,
+    rentalInstant: kind === 'rental' ? !!p.rental_instant : undefined,
     auctionHasReserve: !!p.auction_reserve_cents,
     auctionReserveCents: (opts && opts.owner) ? (p.auction_reserve_cents || null) : undefined,
     auctionWinnerId: p.auction_winner_id || null,
@@ -29761,7 +29766,7 @@ app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
   try {
     const owner = bid === req.user.id;
     const q = String(req.query.q || '').trim().slice(0, 80);
-    const COLS = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'}`;
+    const COLS = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.rental_week_pct, p.rental_month_pct, p.rental_instant, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'}`;
     let rows;
     if (q) {
       const like = '%' + q.replace(/[\\%_]/g, '\\$&') + '%';
@@ -29803,7 +29808,7 @@ function mapListing(r) {
   });
 }
 const LISTING_SELECT = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
-  p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS},
+  p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.rental_week_pct, p.rental_month_pct, p.rental_instant, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS},
   u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified, u.cert_active AS seller_certified, u.free_ship_over_cents AS seller_free_ship_over
   FROM products p JOIN users u ON u.id = p.business_id`;
 
@@ -29919,7 +29924,7 @@ async function getSponsoredListings(viewerId, { q, kind }) {
     }
     const { rows } = await db.query(
       `SELECT pa.id AS ad_id, pa.bid_cents, pa.keywords, p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
-        p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS},
+        p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.rental_week_pct, p.rental_month_pct, p.rental_instant, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS},
         u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified
        FROM product_ads pa JOIN products p ON p.id = pa.product_id JOIN users u ON u.id = pa.seller_id
        WHERE ${conds.join(' AND ')} LIMIT 40`, params);
@@ -30343,7 +30348,7 @@ app.post('/api/admin/product-ads/:id/:action', auth.requirePerm('ads'), async (r
 // My own listings (any account) — for the Sell / manage surface.
 app.get('/api/my-listings', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.pinned DESC, p.created_at DESC LIMIT 300`, [req.user.id]);
+    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.rental_week_pct, p.rental_month_pct, p.rental_instant, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.pinned DESC, p.created_at DESC LIMIT 300`, [req.user.id]);
     res.json({ products: rows.map((r) => mapProduct(r, { owner: true })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your listings.' }); }
 });
@@ -30359,9 +30364,9 @@ app.post('/api/products/:id/duplicate', auth.requireAuth, rateLimit(20, 60000, '
     if (p.business_id !== req.user.id) return res.status(403).json({ error: 'You can only duplicate your own listings.' });
     const name = (p.name + ' (copy)').slice(0, 120);
     const r = await db.query(
-      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, pinned)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,false,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,false) RETURNING id`,
-      [req.user.id, name, p.description, p.price_cents, p.image, p.images, p.kind, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants ? JSON.stringify(p.variants) : null, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs ? JSON.stringify(p.specs) : null, p.rental_period, p.category, p.condition]
+      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, rental_week_pct, rental_month_pct, rental_instant, category, condition, pinned)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,false,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,false) RETURNING id`,
+      [req.user.id, name, p.description, p.price_cents, p.image, p.images, p.kind, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants ? JSON.stringify(p.variants) : null, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs ? JSON.stringify(p.specs) : null, p.rental_period, p.rental_week_pct, p.rental_month_pct, p.rental_instant, p.category, p.condition]
     );
     res.status(201).json({ ok: true, id: r.rows[0].id, name });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not duplicate the listing.' }); }
@@ -30781,6 +30786,10 @@ app.post('/api/products', auth.requireAuth, blockLimited, rateLimit(40, 60000, '
   const video = cleanProductVideo(req.body.video);
   if (video === undefined) return res.status(400).json({ error: 'That video could not be used — keep it under ~3.5 MB.' });
   // Auction (physical items): a starting bid + a whitelisted duration.
+  // Rental terms: long-stay discounts (0–50%) + Instant Book.
+  const rentalWeekPct = kind === 'rental' ? Math.max(0, Math.min(50, parseInt(req.body.rentalWeekPct, 10) || 0)) || null : null;
+  const rentalMonthPct = kind === 'rental' ? Math.max(0, Math.min(50, parseInt(req.body.rentalMonthPct, 10) || 0)) || null : null;
+  const rentalInstant = kind === 'rental' && req.body.rentalInstant === true;
   let auctionEndsAt = null, auctionMinCents = null, auctionReserveCents = null;
   if (req.body.auctionDays != null && kind === 'physical') {
     const days = parseInt(req.body.auctionDays, 10);
@@ -30802,8 +30811,8 @@ app.post('/api/products', auth.requireAuth, blockLimited, rateLimit(40, 60000, '
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM products WHERE business_id = $1', [req.user.id]);
     if (cnt.rows[0].n >= 300) return res.status(400).json({ error: 'You’ve reached the maximum number of products.' });
     const { rows } = await db.query(
-      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, video, video_ver, auction_ends_at, auction_min_cents, auction_reserve_cents, wholesale_cents, wholesale_min_qty) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$31,$29,$30) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, (video IS NOT NULL) AS has_video, video_ver, auction_ends_at, auction_min_cents, auction_reserve_cents, auction_settled, auction_winner_id, wholesale_cents, wholesale_min_qty`,
-      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, pickup, pickupLocation, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct, amenities, JSON.stringify(specs), rentalPeriod, category, condition, compareAtCents, procDays.min, procDays.max, video, video ? 1 : 0, auctionEndsAt, auctionMinCents, wholesale.cents, wholesale.minQty, auctionReserveCents]
+      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, video, video_ver, auction_ends_at, auction_min_cents, auction_reserve_cents, wholesale_cents, wholesale_min_qty, rental_week_pct, rental_month_pct, rental_instant) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$31,$29,$30,$32,$33,$34) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, rental_week_pct, rental_month_pct, rental_instant, category, condition, compare_at_cents, processing_days_min, processing_days_max, (video IS NOT NULL) AS has_video, video_ver, auction_ends_at, auction_min_cents, auction_reserve_cents, auction_settled, auction_winner_id, wholesale_cents, wholesale_min_qty`,
+      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, pickup, pickupLocation, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct, amenities, JSON.stringify(specs), rentalPeriod, category, condition, compareAtCents, procDays.min, procDays.max, video, video ? 1 : 0, auctionEndsAt, auctionMinCents, wholesale.cents, wholesale.minQty, auctionReserveCents, rentalWeekPct, rentalMonthPct, rentalInstant]
     );
     if (rows[0].active !== false) notifyMarketMatch(rows[0]); // alert saved-search watchers
     emitWebhook(rows[0].business_id, 'product.created', { id: rows[0].id, name: rows[0].name, priceCents: rows[0].price_cents, kind: rows[0].kind });
@@ -30847,6 +30856,9 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
   if ('amenities' in req.body) { vals.push(cleanAmenities(req.body.amenities)); fields.push(`amenities = $${vals.length}`); }
   if ('specs' in req.body) { vals.push(JSON.stringify(cleanSpecs(req.body.specs))); fields.push(`specs = $${vals.length}`); }
   if ('rentalPeriod' in req.body) { vals.push(RENTAL_PERIODS.includes(req.body.rentalPeriod) ? req.body.rentalPeriod : null); fields.push(`rental_period = $${vals.length}`); }
+  if ('rentalWeekPct' in req.body) { const v = Math.max(0, Math.min(50, parseInt(req.body.rentalWeekPct, 10) || 0)); vals.push(v || null); fields.push(`rental_week_pct = $${vals.length}`); }
+  if ('rentalMonthPct' in req.body) { const v = Math.max(0, Math.min(50, parseInt(req.body.rentalMonthPct, 10) || 0)); vals.push(v || null); fields.push(`rental_month_pct = $${vals.length}`); }
+  if ('rentalInstant' in req.body) { vals.push(req.body.rentalInstant === true); fields.push(`rental_instant = $${vals.length}`); }
   if ('category' in req.body) { vals.push((req.body.category || '').toString().trim().slice(0, 60) || null); fields.push(`category = $${vals.length}`); }
   if ('condition' in req.body) { vals.push(PRODUCT_CONDITIONS.includes(req.body.condition) ? req.body.condition : null); fields.push(`condition = $${vals.length}`); }
   if ('video' in req.body) {
@@ -30890,7 +30902,7 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
       fields.push('auction_settled = false', 'auction_winner_id = NULL');
     }
     vals.push(id, req.user.id);
-    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, (video IS NOT NULL) AS has_video, video_ver, auction_ends_at, auction_min_cents, auction_reserve_cents, auction_settled, auction_winner_id, wholesale_cents, wholesale_min_qty`, vals);
+    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, rental_week_pct, rental_month_pct, rental_instant, (video IS NOT NULL) AS has_video, video_ver, auction_ends_at, auction_min_cents, auction_reserve_cents, auction_settled, auction_winner_id, wholesale_cents, wholesale_min_qty`, vals);
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
     const after = r.rows[0];
     // Back-in-stock alert: was sold-out (or hidden), now active + in stock → notify watchers.
@@ -31383,14 +31395,43 @@ function rentalUnits(period, start, end) {
 function mapBooking(r) {
   return {
     id: r.id, productId: r.product_id, status: r.status, startDate: r.start_date, endDate: r.end_date,
-    units: r.units, totalCents: r.total_cents, note: r.note || null, createdAt: r.created_at,
+    units: r.units, totalCents: r.total_cents, discountCents: r.discount_cents || 0, note: r.note || null, createdAt: r.created_at,
     product: { id: r.product_id, name: r.p_name, image: r.p_image || null, rentalPeriod: r.rental_period },
     guest: { id: r.guest_id, name: r.g_name, username: r.g_username, avatar: r.g_avatar || null },
     host: { id: r.host_id, name: r.h_name, username: r.h_username, avatar: r.h_avatar || null },
   };
 }
-const BOOKING_SELECT = `SELECT b.id, b.product_id, b.guest_id, b.host_id, b.start_date, b.end_date, b.units, b.total_cents, b.status, b.note, b.created_at,
-  p.name AS p_name, p.image AS p_image, p.rental_period,
+/* ── Rental availability: are these dates free? ──
+   A date range is TAKEN when it overlaps a confirmed / mid-payment / paid
+   booking, or a host block. Half-open on purpose — end_date is the checkout
+   day, so one guest's checkout morning is the next guest's check-in day,
+   exactly as Airbnb runs it. `exceptId` lets a booking be checked against
+   everyone but itself. Runs on whatever client it's given so the race-critical
+   paths can hold the product row lock around it. */
+async function rentalDatesTaken(q, productId, start, end, exceptId) {
+  const r = await q.query(
+    `SELECT EXISTS(
+        SELECT 1 FROM rental_bookings WHERE product_id = $1 AND id <> COALESCE($4, 0)
+          AND status IN ('confirmed','paying','paid') AND start_date < $3 AND end_date > $2)
+      OR EXISTS(
+        SELECT 1 FROM rental_blocks WHERE product_id = $1 AND start_date < $3 AND end_date > $2)
+      AS taken`, [productId, start, end, exceptId || null]);
+  return !!(r.rows[0] && r.rows[0].taken);
+}
+const DATES_TAKEN_MSG = 'Those dates are no longer available — pick different ones.';
+/* Long-stay discount (Airbnb weekly/monthly): a stay spanning 7+ days earns the
+   weekly percentage, 28+ days the monthly one (monthly wins when both apply).
+   Returns whole cents off the pre-discount total. */
+function rentalStayDiscount(p, start, end, totalCents) {
+  const days = Math.round((Date.parse(end) - Date.parse(start)) / 86400000);
+  let pct = 0;
+  if (days >= 28 && p.rental_month_pct > 0) pct = Math.min(50, p.rental_month_pct);
+  else if (days >= 7 && p.rental_week_pct > 0) pct = Math.min(50, p.rental_week_pct);
+  return pct ? Math.round(totalCents * pct / 100) : 0;
+}
+
+const BOOKING_SELECT = `SELECT b.id, b.product_id, b.guest_id, b.host_id, b.start_date, b.end_date, b.units, b.total_cents, b.discount_cents, b.status, b.note, b.created_at,
+  p.name AS p_name, p.image AS p_image, p.rental_period, p.rental_week_pct, p.rental_month_pct, p.rental_instant,
   g.name AS g_name, g.username AS g_username, g.avatar AS g_avatar,
   h.name AS h_name, h.username AS h_username, h.avatar AS h_avatar
   FROM rental_bookings b JOIN products p ON p.id = b.product_id JOIN users g ON g.id = b.guest_id JOIN users h ON h.id = b.host_id`;
@@ -31404,17 +31445,44 @@ app.post('/api/rentals/:productId/book', auth.requireAuth, rateLimit(30, 60000, 
   if (start < new Date().toISOString().slice(0, 10)) return res.status(400).json({ error: 'Pick a start date in the future.' });
   const note = String(req.body.note || '').trim().slice(0, 300) || null;
   try {
-    const p = (await db.query('SELECT id, business_id, kind, price_cents, rental_period, active FROM products WHERE id = $1', [pid])).rows[0];
+    const p = (await db.query('SELECT id, business_id, kind, price_cents, rental_period, rental_week_pct, rental_month_pct, rental_instant, active FROM products WHERE id = $1', [pid])).rows[0];
     if (!p || p.kind !== 'rental' || !p.active) return res.status(404).json({ error: 'Rental not found.' });
     if (p.business_id === req.user.id) return res.status(400).json({ error: 'You can’t book your own rental.' });
     if (await blockedEither(req.user.id, p.business_id)) return res.status(403).json({ error: 'This rental isn’t available to you.' });
+    // Taken dates are refused up front — a guest should never request a week
+    // that can't happen. (Overlapping REQUESTS are fine: several people may
+    // ask, the host picks one, and confirming is where the race is settled.)
+    if (await rentalDatesTaken(db, pid, start, end)) return res.status(409).json({ datesTaken: true, error: DATES_TAKEN_MSG });
     const units = rentalUnits(p.rental_period, start, end);
-    const total = units * p.price_cents;
+    const gross = units * p.price_cents;
+    const discount = rentalStayDiscount(p, start, end, gross);
+    const total = gross - discount;
+    if (p.rental_instant) {
+      /* Instant Book: the host published the calendar, so the calendar answers.
+         The product row lock makes "check, then confirm" one atomic step —
+         two guests racing for the same week get exactly one confirmation. */
+      const client = await db.getPool().connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('SELECT id FROM products WHERE id = $1 FOR UPDATE', [pid]);
+        if (await rentalDatesTaken(client, pid, start, end)) {
+          await client.query('ROLLBACK');
+          return res.status(409).json({ datesTaken: true, error: DATES_TAKEN_MSG });
+        }
+        const ri = await client.query(
+          `INSERT INTO rental_bookings (product_id, guest_id, host_id, start_date, end_date, units, total_cents, discount_cents, note, status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'confirmed') RETURNING id`,
+          [pid, req.user.id, p.business_id, start, end, units, total, discount, note]);
+        await client.query('COMMIT');
+        notify(p.business_id, req.user.id, 'rental_booked', null, null, null, pid);
+        return res.json({ ok: true, id: ri.rows[0].id, units, totalCents: total, discountCents: discount, instant: true });
+      } catch (e) { await client.query('ROLLBACK').catch(() => {}); throw e; }
+      finally { client.release(); }
+    }
     const r = await db.query(
-      `INSERT INTO rental_bookings (product_id, guest_id, host_id, start_date, end_date, units, total_cents, note, status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'requested') RETURNING id`,
-      [pid, req.user.id, p.business_id, start, end, units, total, note]);
+      `INSERT INTO rental_bookings (product_id, guest_id, host_id, start_date, end_date, units, total_cents, discount_cents, note, status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'requested') RETURNING id`,
+      [pid, req.user.id, p.business_id, start, end, units, total, discount, note]);
     notify(p.business_id, req.user.id, 'rental_request', null, null, null, pid);
-    res.json({ ok: true, id: r.rows[0].id, units, totalCents: total });
+    res.json({ ok: true, id: r.rows[0].id, units, totalCents: total, discountCents: discount });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Could not request the booking.' }); }
 });
 // Host confirms / declines.
@@ -31425,7 +31493,27 @@ app.post('/api/rentals/bookings/:id/respond', auth.requireAuth, async (req, res)
     const b = (await db.query('SELECT * FROM rental_bookings WHERE id = $1', [id])).rows[0];
     if (!b || b.host_id !== req.user.id) return res.status(404).json({ error: 'Booking not found.' });
     if (b.status !== 'requested') return res.status(400).json({ error: 'This request was already handled.' });
-    await db.query('UPDATE rental_bookings SET status = $2 WHERE id = $1', [id, accept ? 'confirmed' : 'declined']);
+    if (accept) {
+      /* Confirming is what makes dates TAKEN, so this is where two overlapping
+         requests must collapse to one winner. The product row lock serializes
+         concurrent confirms; the check runs inside it, against everything but
+         this booking itself. */
+      const client = await db.getPool().connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('SELECT id FROM products WHERE id = $1 FOR UPDATE', [b.product_id]);
+        if (await rentalDatesTaken(client, b.product_id, b.start_date, b.end_date, id)) {
+          await client.query('ROLLBACK');
+          return res.status(409).json({ datesTaken: true, error: 'Those dates are already taken by another confirmed booking or a blocked period.' });
+        }
+        const u = await client.query(`UPDATE rental_bookings SET status = 'confirmed' WHERE id = $1 AND status = 'requested' RETURNING id`, [id]);
+        await client.query('COMMIT');
+        if (!u.rowCount) return res.status(400).json({ error: 'This request was already handled.' });
+      } catch (e) { await client.query('ROLLBACK').catch(() => {}); throw e; }
+      finally { client.release(); }
+    } else {
+      await db.query(`UPDATE rental_bookings SET status = 'declined' WHERE id = $1 AND status = 'requested'`, [id]);
+    }
     notify(b.guest_id, req.user.id, accept ? 'rental_confirmed' : 'rental_declined', null, null, null, b.product_id);
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Could not update.' }); }
@@ -31446,6 +31534,19 @@ app.post('/api/rentals/bookings/:id/pay', auth.requireAuth, blockImpersonation, 
     // above and both transfer money.
     const claimed = await db.query(`UPDATE rental_bookings SET status = 'paying' WHERE id = $1 AND status = 'confirmed' RETURNING id`, [id]);
     if (!claimed.rowCount) { await walletReleaseIdem(req.user.id, clientId, 'rental'); return res.status(400).json({ error: 'This booking is already being paid.' }); }
+    /* Two overlapping CONFIRMED bookings can exist only from before the
+       availability fix — but if they do, the first to pay wins the dates and
+       the second is told plainly instead of paying for a clash. Only paying/
+       paid bookings block here; a mere confirmation can't outrank money. */
+    const clash = await db.query(
+      `SELECT 1 FROM rental_bookings WHERE product_id = $1 AND id <> $2
+         AND status IN ('paying','paid') AND start_date < $4 AND end_date > $3 LIMIT 1`,
+      [b.product_id, id, b.start_date, b.end_date]);
+    if (clash.rowCount) {
+      await walletReleaseIdem(req.user.id, clientId, 'rental');
+      await db.query(`UPDATE rental_bookings SET status = 'confirmed' WHERE id = $1 AND status = 'paying'`, [id]);
+      return res.status(409).json({ datesTaken: true, error: 'Someone else already paid for these dates — ask the host to rebook you.' });
+    }
     const t = await walletTransfer(req.user.id, b.host_id, amount, 'Rental booking');
     if (t.insufficient) { await walletReleaseIdem(req.user.id, clientId, 'rental'); await db.query(`UPDATE rental_bookings SET status = 'confirmed' WHERE id = $1 AND status = 'paying'`, [id]); return res.status(400).json({ insufficientBalance: true }); }
     if (t.error) { await walletReleaseIdem(req.user.id, clientId, 'rental'); await db.query(`UPDATE rental_bookings SET status = 'confirmed' WHERE id = $1 AND status = 'paying'`, [id]); return res.status(400).json({ error: 'Could not charge your balance.' }); }
@@ -31475,6 +31576,61 @@ app.get('/api/rentals/bookings', auth.requireAuth, async (req, res) => {
     const rows = (await db.query(`${BOOKING_SELECT} WHERE b.${host ? 'host_id' : 'guest_id'} = $1 ORDER BY b.created_at DESC LIMIT 100`, [req.user.id])).rows;
     res.json({ bookings: rows.map(mapBooking) });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Could not load bookings.' }); }
+});
+/* The availability calendar, readable by anyone who can see the listing:
+   which upcoming date ranges are taken (bookings + host blocks, merged and
+   anonymous — WHO booked is nobody else's business). The owner additionally
+   gets their own blocks with ids, so they can manage them. */
+app.get('/api/rentals/:productId/availability', auth.requireAuth, async (req, res) => {
+  const pid = routeId(req.params.productId);
+  if (!Number.isInteger(pid)) return res.status(400).json({ error: 'Invalid listing.' });
+  try {
+    const p = (await db.query('SELECT id, business_id, kind, active FROM products WHERE id = $1', [pid])).rows[0];
+    if (!p || p.kind !== 'rental') return res.status(404).json({ error: 'Rental not found.' });
+    const own = p.business_id === req.user.id;
+    if (!p.active && !own) return res.status(404).json({ error: 'Rental not found.' });
+    const taken = (await db.query(
+      `SELECT start_date AS s, end_date AS e FROM rental_bookings
+        WHERE product_id = $1 AND status IN ('confirmed','paying','paid') AND end_date >= CURRENT_DATE
+       UNION ALL
+       SELECT start_date, end_date FROM rental_blocks
+        WHERE product_id = $1 AND end_date >= CURRENT_DATE
+       ORDER BY 1 LIMIT 200`, [pid])).rows.map((r) => ({ start: r.s, end: r.e }));
+    const out = { taken };
+    if (own) out.blocks = (await db.query(
+      'SELECT id, start_date AS s, end_date AS e, note FROM rental_blocks WHERE product_id = $1 AND end_date >= CURRENT_DATE ORDER BY start_date LIMIT 200', [pid]
+    )).rows.map((r) => ({ id: r.id, start: r.s, end: r.e, note: r.note || null }));
+    res.json(out);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not load availability.' }); }
+});
+// Host blocks out dates (away, repairs, family staying). Confirmed bookings
+// aren't touched — a block only stops NEW dates being taken inside it.
+app.post('/api/rentals/:productId/blocks', auth.requireAuth, rateLimit(30, 60000, 'rental-block'), async (req, res) => {
+  const pid = routeId(req.params.productId);
+  if (!Number.isInteger(pid)) return res.status(400).json({ error: 'Invalid listing.' });
+  const start = String(req.body.startDate || '').slice(0, 10), end = String(req.body.endDate || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) return res.status(400).json({ error: 'Pick the dates.' });
+  if (Date.parse(end) <= Date.parse(start)) return res.status(400).json({ error: 'The end date must be after the start.' });
+  const note = String(req.body.note || '').trim().slice(0, 120) || null;
+  try {
+    const p = (await db.query('SELECT id, business_id, kind FROM products WHERE id = $1', [pid])).rows[0];
+    if (!p || p.kind !== 'rental' || p.business_id !== req.user.id) return res.status(404).json({ error: 'Rental not found.' });
+    const n = (await db.query('SELECT COUNT(*)::int AS n FROM rental_blocks WHERE product_id = $1', [pid])).rows[0].n;
+    if (n >= 200) return res.status(400).json({ error: 'That’s a lot of blocked periods — remove some old ones first.' });
+    const r = await db.query('INSERT INTO rental_blocks (product_id, start_date, end_date, note) VALUES ($1,$2,$3,$4) RETURNING id', [pid, start, end, note]);
+    res.json({ ok: true, id: r.rows[0].id });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not block those dates.' }); }
+});
+app.delete('/api/rentals/blocks/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid.' });
+  try {
+    const r = await db.query(
+      `DELETE FROM rental_blocks rb USING products p WHERE rb.id = $1 AND p.id = rb.product_id AND p.business_id = $2 RETURNING rb.id`,
+      [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not remove it.' }); }
 });
 
 /* ─── Cart (per-buyer; grouped by seller at checkout) ─── */
@@ -31575,7 +31731,9 @@ app.delete('/api/cart/:productId', auth.requireAuth, async (req, res) => {
 /* ─── Address book (saved shipping addresses) ─── */
 function mapAddress(a) {
   return { id: a.id, fullName: a.full_name, phone: a.phone || null, line1: a.line1, line2: a.line2 || null,
-    city: a.city, region: a.region || null, postal: a.postal || null, country: a.country || 'US', isDefault: !!a.is_default };
+    city: a.city, region: a.region || null, postal: a.postal || null, country: a.country || 'US', isDefault: !!a.is_default,
+    // "Gate code 4412, leave with the doorman" — rides along on every order.
+    instructions: a.instructions || null };
 }
 // Validate + normalize an address payload. Returns { ok, value } | { ok:false, error }.
 function readAddress(body) {
@@ -31585,7 +31743,8 @@ function readAddress(body) {
   if (!line1) return { ok: false, error: 'Enter a street address.' };
   if (!city) return { ok: false, error: 'Enter a city.' };
   return { ok: true, value: { fullName, phone: s(body.phone, 40) || null, line1, line2: s(body.line2, 200) || null,
-    city, region: s(body.region, 120) || null, postal: s(body.postal, 30) || null, country: s(body.country, 60) || 'US' } };
+    city, region: s(body.region, 120) || null, postal: s(body.postal, 30) || null, country: s(body.country, 60) || 'US',
+    instructions: s(body.instructions, 200) || null } };
 }
 app.get('/api/addresses', auth.requireAuth, async (req, res) => {
   try {
@@ -31609,9 +31768,9 @@ app.post('/api/addresses', auth.requireAuth, rateLimit(30, 60000, 'addr-add'), a
     const v = a.value;
     const lat = _addrCoord(req.body.lat, 90), lng = _addrCoord(req.body.lng, 180);
     const { rows } = await db.query(
-      `INSERT INTO addresses (user_id, full_name, phone, line1, line2, city, region, postal, country, is_default, lat, lng)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-      [req.user.id, v.fullName, v.phone, v.line1, v.line2, v.city, v.region, v.postal, v.country, makeDefault, lat, lng]
+      `INSERT INTO addresses (user_id, full_name, phone, line1, line2, city, region, postal, country, is_default, lat, lng, instructions)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+      [req.user.id, v.fullName, v.phone, v.line1, v.line2, v.city, v.region, v.postal, v.country, makeDefault, lat, lng, v.instructions]
     );
     res.status(201).json({ address: mapAddress(rows[0]) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the address.' }); }
@@ -31626,9 +31785,9 @@ app.patch('/api/addresses/:id', auth.requireAuth, async (req, res) => {
     const lat = _addrCoord(req.body.lat, 90), lng = _addrCoord(req.body.lng, 180);
     const r = await db.query(
       `UPDATE addresses SET full_name=$1, phone=$2, line1=$3, line2=$4, city=$5, region=$6, postal=$7, country=$8,
-              lat = COALESCE($11, lat), lng = COALESCE($12, lng)
+              lat = COALESCE($11, lat), lng = COALESCE($12, lng), instructions = $13
        WHERE id=$9 AND user_id=$10 RETURNING *`,
-      [v.fullName, v.phone, v.line1, v.line2, v.city, v.region, v.postal, v.country, id, req.user.id, lat, lng]
+      [v.fullName, v.phone, v.line1, v.line2, v.city, v.region, v.postal, v.country, id, req.user.id, lat, lng, v.instructions]
     );
     if (!r.rowCount) return res.status(404).json({ error: 'Address not found.' });
     if (req.body.isDefault === true) {
@@ -32487,10 +32646,10 @@ async function buyerIsBusiness(userId) {
 async function insertOrder({ buyerId, sellerId, total, note, shippingCents, taxCents, needsShipping, addr, discountCents, couponCode, pickup, pickupLocation, pickupLocationId, affiliateId, commissionCents, gift, giftNote, eta, localDelivery, deliveryZoneId }) {
   const a = addr || {};
   const { rows } = await db.query(
-    `INSERT INTO orders (buyer_id, seller_id, total_cents, note, shipping_cents, tax_cents, discount_cents, coupon_code, needs_shipping, pickup, pickup_location, affiliate_id, commission_cents, ship_name, ship_phone, ship_line1, ship_line2, ship_city, ship_region, ship_postal, ship_country, gift, gift_note, eta_min_at, eta_max_at, local_delivery, delivery_zone_id, pickup_location_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28) RETURNING id`,
+    `INSERT INTO orders (buyer_id, seller_id, total_cents, note, shipping_cents, tax_cents, discount_cents, coupon_code, needs_shipping, pickup, pickup_location, affiliate_id, commission_cents, ship_name, ship_phone, ship_line1, ship_line2, ship_city, ship_region, ship_postal, ship_country, gift, gift_note, eta_min_at, eta_max_at, local_delivery, delivery_zone_id, pickup_location_id, ship_instructions)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29) RETURNING id`,
     [buyerId, sellerId, total, note || null, shippingCents || 0, taxCents || 0, discountCents || 0, couponCode || null, !!needsShipping, !!pickup, pickupLocation || null, affiliateId || null, commissionCents || 0, a.full_name || null, a.phone || null, a.line1 || null, a.line2 || null, a.city || null, a.region || null, a.postal || null, a.country || null, gift === true, (giftNote || '').toString().trim().slice(0, 300) || null,
-      (eta && eta.minAt) || null, (eta && eta.maxAt) || null, localDelivery === true, deliveryZoneId || null, pickupLocationId || null]
+      (eta && eta.minAt) || null, (eta && eta.maxAt) || null, localDelivery === true, deliveryZoneId || null, pickupLocationId || null, a.instructions || null]
   );
   return rows[0].id;
 }
@@ -32545,7 +32704,7 @@ function mapOrder(o, items, me) {
     needsShipping: !!o.needs_shipping,
     gift: !!o.gift, giftNote: o.gift_note || null,
     pickup: !!o.pickup, pickupLocation: o.pickup_location || null,
-    shipTo: o.needs_shipping ? { name: o.ship_name, phone: o.ship_phone || null, line1: o.ship_line1, line2: o.ship_line2 || null, city: o.ship_city, region: o.ship_region || null, postal: o.ship_postal || null, country: o.ship_country || null } : null,
+    shipTo: o.needs_shipping ? { name: o.ship_name, phone: o.ship_phone || null, line1: o.ship_line1, line2: o.ship_line2 || null, city: o.ship_city, region: o.ship_region || null, postal: o.ship_postal || null, country: o.ship_country || null, instructions: o.ship_instructions || null } : null,
     carrier: o.carrier || null, tracking: o.tracking || null, shippedAt: o.shipped_at || null, deliveredAt: o.delivered_at || null,
     shipNote: o.ship_note || null, // seller's thank-you note, shown to both parties
     // A real, carrier-purchased label (Shippo) is an operational document for the
@@ -32559,7 +32718,7 @@ function mapOrder(o, items, me) {
 const ORDER_SELECT = `SELECT o.id, o.buyer_id, o.seller_id, o.total_cents, o.status, o.note, o.created_at, o.paid_at, o.eta_min_at, o.eta_max_at, o.cancel_reason, o.cancel_note, o.cancelled_by, o.buyer_archived, o.seller_archived,
   o.escrow, o.auto_release_at, o.released_at, o.dispute_reason, o.disputed_by,
   o.discount_cents, o.coupon_code, o.gift, o.gift_note,
-  o.shipping_cents, o.tax_cents, o.needs_shipping, o.pickup, o.pickup_location, o.ship_name, o.ship_phone, o.ship_line1, o.ship_line2, o.ship_city, o.ship_region, o.ship_postal, o.ship_country,
+  o.shipping_cents, o.tax_cents, o.needs_shipping, o.pickup, o.pickup_location, o.ship_name, o.ship_phone, o.ship_line1, o.ship_line2, o.ship_city, o.ship_region, o.ship_postal, o.ship_country, o.ship_instructions,
   o.carrier, o.tracking, o.shipped_at, o.delivered_at, o.label_url, o.label_cost_cents, o.ship_note, o.local_delivery,
   bu.name AS buyer_name, bu.username AS buyer_username, bu.avatar AS buyer_avatar,
   su.name AS seller_name, su.username AS seller_username, su.avatar AS seller_avatar
@@ -32636,14 +32795,14 @@ async function deliverDigitalGoods(orderId, buyerId, sellerId) {
 async function sendOrderEmails(orderId) {
   try {
     const o = (await db.query(
-      `SELECT o.total_cents, o.shipping_cents, o.needs_shipping, o.ship_name, o.ship_line1, o.ship_city, o.ship_region, o.ship_postal,
+      `SELECT o.total_cents, o.shipping_cents, o.needs_shipping, o.ship_name, o.ship_line1, o.ship_city, o.ship_region, o.ship_postal, o.ship_instructions,
               bu.email AS buyer_email, bu.name AS buyer_name, su.email AS seller_email, su.name AS seller_name
        FROM orders o JOIN users bu ON bu.id = o.buyer_id JOIN users su ON su.id = o.seller_id WHERE o.id = $1`, [orderId])).rows[0];
     if (!o) return;
     const its = (await db.query('SELECT name, qty, price_cents FROM order_items WHERE order_id = $1', [orderId])).rows;
     const lines = its.map((i) => `${i.qty}× ${escapeHtml(i.name)} — $${(i.price_cents * i.qty / 100).toFixed(2)}`).join('<br>');
     const total = '$' + (o.total_cents / 100).toFixed(2);
-    const ship = o.needs_shipping ? `<p>Ship to: ${escapeHtml(o.ship_name)}, ${escapeHtml([o.ship_line1, o.ship_city, o.ship_region, o.ship_postal].filter(Boolean).join(', '))}</p>` : '';
+    const ship = o.needs_shipping ? `<p>Ship to: ${escapeHtml(o.ship_name)}, ${escapeHtml([o.ship_line1, o.ship_city, o.ship_region, o.ship_postal].filter(Boolean).join(', '))}</p>${o.ship_instructions ? `<p>Delivery notes: ${escapeHtml(o.ship_instructions)}</p>` : ''}` : '';
     if (o.buyer_email) await mailer.sendMail({ to: o.buyer_email, subject: `Your Atwe order #${orderId}`,
       html: `<h2>Thanks for your order!</h2><p>Order #${orderId} from <b>${escapeHtml(o.seller_name)}</b></p><p>${lines}</p>${ship}<p><b>Total: ${total}</b></p>` });
     if (o.seller_email) await mailer.sendMail({ to: o.seller_email, subject: `New order #${orderId} on Atwe`,
@@ -33568,6 +33727,38 @@ app.get('/api/orders', auth.requireAuth, async (req, res) => {
     }
     res.json({ orders: out });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load orders.' }); }
+});
+/* ── Buy again (DoorDash's most-used button) ──
+   One tap on a past order refills the cart with the same items — honestly:
+   each line is re-checked against TODAY's product (still exists, still active,
+   the chosen option still offered), and anything gone is reported by name
+   rather than silently dropped. Prices are never copied from the old order —
+   the cart reads live prices, so nothing sells at a stale number. */
+app.post('/api/orders/:id/reorder', auth.requireAuth, rateLimit(20, 60000, 'reorder'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid order.' });
+  try {
+    const o = (await db.query('SELECT id, buyer_id, seller_id FROM orders WHERE id = $1', [id])).rows[0];
+    if (!o || o.buyer_id !== req.user.id) return res.status(404).json({ error: 'Order not found.' });
+    const items = (await db.query('SELECT product_id, variant_id, qty, name FROM order_items WHERE order_id = $1', [id])).rows;
+    if (!items.length) return res.status(400).json({ error: 'Nothing on that order to re-add.' });
+    let added = 0; const skipped = [];
+    for (const it of items) {
+      const p = it.product_id ? (await db.query('SELECT id, active, kind, variants, business_id FROM products WHERE id = $1', [it.product_id])).rows[0] : null;
+      if (!p || p.active === false) { skipped.push(it.name); continue; }
+      if (it.variant_id != null) {
+        const vs = Array.isArray(p.variants) ? p.variants : [];
+        if (!vs.some((v) => v && v.id === it.variant_id)) { skipped.push(it.name); continue; }
+      }
+      const qty = Math.max(1, Math.min(99, it.qty || 1));
+      await db.query(
+        `INSERT INTO cart_items (user_id, product_id, qty, variant_id) VALUES ($1,$2,$3,$4)
+         ON CONFLICT (user_id, product_id, COALESCE(variant_id, 0)) DO UPDATE SET qty = EXCLUDED.qty`,
+        [req.user.id, it.product_id, qty, it.variant_id]);
+      added++;
+    }
+    res.json({ ok: true, added, skipped, sellerId: o.seller_id });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not re-add those items.' }); }
 });
 app.get('/api/orders/:id', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
@@ -35196,12 +35387,18 @@ function mapDeliveryJob(j, viewerId) {
     seller: { id: j.seller_id, name: j.seller_name, username: j.seller_username },
     buyer: { id: j.buyer_id, name: j.buyer_name, username: j.buyer_username },
     mine, iAm: mine.seller ? 'seller' : mine.buyer ? 'buyer' : mine.courier ? 'courier' : null,
+    /* The code is the BUYER's secret. The courier earns it at the door; the
+       seller never needs it. */
+    handoffCode: (j.buyer_id === viewerId && j.handoff_code && ['agreed', 'picked_up', 'delivered'].includes(j.status)) ? j.handoff_code : undefined,
+    /* The buyer's "how to find me" line: theirs always; the courier's once the
+       job is actually theirs (never while merely browsing open jobs). */
+    dropInstructions: (j.buyer_id === viewerId || (j.courier_id === viewerId && ['agreed', 'picked_up', 'delivered', 'paid'].includes(j.status))) ? (j.drop_instructions || null) : undefined,
     agreedAt: j.agreed_at, pickedUpAt: j.picked_up_at, deliveredAt: j.delivered_at, paidAt: j.paid_at,
     autoReleaseAt: j.auto_release_at, createdAt: j.created_at,
     cancelledReason: j.cancelled_reason || null,
   };
 }
-const DELIVERY_SELECT = `SELECT j.*,
+const DELIVERY_SELECT = `SELECT j.*, (SELECT o2.ship_instructions FROM orders o2 WHERE o2.id = j.order_id) AS drop_instructions,
   s.name AS seller_name, s.username AS seller_username,
   b.name AS buyer_name, b.username AS buyer_username,
   c.name AS courier_name, c.username AS courier_username, c.avatar AS courier_avatar,
@@ -35421,10 +35618,14 @@ app.post('/api/deliveries/:id/approve', auth.requireAuth, blockImpersonation, as
         `INSERT INTO wallet_tx (user_id, peer_id, kind, delta_cents, balance_after, note)
          VALUES ($1,$2,'delivery_hold',$3,(SELECT balance_cents FROM users WHERE id = $1),$4)`,
         [payer, off.courier_id, -off.fee_cents, 'Delivery fee held']);
+      /* The handoff code (DoorDash PIN / Uber pickup PIN): four digits minted
+         here, shown ONLY to the buyer. The courier typing it at the door is
+         proof the right person received it. */
+      const handoff = String(require('crypto').randomInt(0, 10000)).padStart(4, '0');
       const upd = await client.query(
         `UPDATE delivery_jobs SET status = 'agreed', courier_id = $2, fee_cents = $3,
-                seller_ok = true, buyer_ok = true, held_cents = $3, agreed_at = now()
-          WHERE id = $1 AND status = 'open' RETURNING id`, [id, off.courier_id, off.fee_cents]);
+                seller_ok = true, buyer_ok = true, held_cents = $3, agreed_at = now(), handoff_code = $4
+          WHERE id = $1 AND status = 'open' RETURNING id`, [id, off.courier_id, off.fee_cents, handoff]);
       if (!upd.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'This delivery has already been arranged.' }); }
       await client.query(`UPDATE delivery_offers SET status = 'accepted' WHERE id = $1`, [offerId]);
       await client.query(`UPDATE delivery_offers SET status = 'declined' WHERE job_id = $1 AND id <> $2 AND status = 'offered'`, [id, offerId]);
@@ -35475,10 +35676,23 @@ app.post('/api/deliveries/:id/picked-up', auth.requireAuth, async (req, res) => 
    delivered something is not the same as it having arrived. It starts a clock:
    the buyer confirms, or after a few days it releases anyway, because a silent
    buyer must not be able to keep a courier's fee for ever. */
-app.post('/api/deliveries/:id/delivered', auth.requireAuth, async (req, res) => {
+app.post('/api/deliveries/:id/delivered', auth.requireAuth, rateLimit(12, 60000, 'deliv-done'), async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  /* Two ways to finish. WITH the buyer's 4-digit handoff code: the handoff is
+     proven, so the courier's money releases on the spot — no waiting clock.
+     WITHOUT it (buyer wasn't there, left at the door): marked delivered, and
+     the existing patient path runs — the buyer confirms, or it auto-releases
+     after a few days so a silent buyer can't keep a courier's fee for ever. */
+  const code = String(req.body.code || '').trim();
   try {
+    if (code) {
+      const j = (await db.query('SELECT handoff_code, courier_id, status FROM delivery_jobs WHERE id = $1', [id])).rows[0];
+      if (!j || j.courier_id !== req.user.id || !['agreed', 'picked_up'].includes(j.status))
+        return res.status(409).json({ error: 'That isn’t something you can do right now.' });
+      if (!j.handoff_code || code !== j.handoff_code)
+        return res.status(400).json({ badCode: true, error: 'That code isn’t right — ask for the 4 digits on their delivery screen.' });
+    }
     const { rows } = await db.query(
       `UPDATE delivery_jobs SET status = 'delivered', delivered_at = now(),
               auto_release_at = now() + make_interval(days => $3)
@@ -35487,6 +35701,12 @@ app.post('/api/deliveries/:id/delivered', auth.requireAuth, async (req, res) => 
     if (!rows[0]) return res.status(409).json({ error: 'That isn’t something you can do right now.' });
     notify(rows[0].buyer_id, req.user.id, 'delivery_delivered', null, null, null, null, null, id);
     notify(rows[0].seller_id, req.user.id, 'delivery_delivered', null, null, null, null, null, id);
+    if (code) {
+      // The code proved the handoff — settle immediately (same guarded settle
+      // the buyer's own confirm uses, so a race still pays exactly once).
+      await settleDelivery(id, req.user.id);
+      return res.json({ ok: true, settled: true });
+    }
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
 });
@@ -35699,6 +35919,38 @@ const REVIEW_TOPIC_RX = REVIEW_TOPICS.map((t) => ({
 const REVIEW_TOPIC_BY_KEY = REVIEW_TOPIC_RX.reduce((m, t) => (m[t.key] = t, m), {});
 /* One query, one pass over the reviews, a count per topic. Cheaper and far
    simpler than pulling every review body into Node to count there. */
+/* ── AI review highlights (what Airbnb shipped in 2026) ──
+   One or two honest sentences about what reviewers actually say — praise AND
+   complaints — so nobody has to read 40 reviews to get the picture. Cached on
+   the user row with the review count it was written at: it regenerates only
+   when the reviews changed (and at most the cache goes stale, never wrong-er
+   than the reviews it summarized). Needs 3+ written reviews and an API key;
+   with either missing it simply returns null and the page shows nothing. */
+async function aiReviewHighlight(businessId) {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  try {
+    const bodies = (await db.query(
+      `SELECT rating, body FROM business_reviews
+        WHERE business_id = $1 AND body IS NOT NULL AND length(trim(body)) >= 8
+        ORDER BY created_at DESC LIMIT 40`, [businessId])).rows;
+    if (bodies.length < 3) return null;
+    const cached = (await db.query('SELECT review_summary, review_summary_at, review_summary_n FROM users WHERE id = $1', [businessId])).rows[0];
+    if (cached && cached.review_summary && cached.review_summary_n === bodies.length
+      && cached.review_summary_at && (Date.now() - new Date(cached.review_summary_at)) < 30 * 86400000) {
+      return cached.review_summary;
+    }
+    const sample = bodies.map((b) => `${b.rating}★ ${String(b.body).slice(0, 220)}`).join('\n');
+    const msg = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 160,
+      system: 'You summarize customer reviews for a business profile. Write 1–2 plain sentences covering what reviewers consistently praise AND any recurring complaint — honestly, no hype, no advice. Never invent details that are not in the reviews. Never mention star numbers, the review count, or that you are an AI. Return only the sentences.',
+      messages: [{ role: 'user', content: 'Reviews:\n' + sample }],
+    });
+    const text = (msg.content && msg.content[0] && msg.content[0].text || '').trim().slice(0, 400);
+    if (!text) return null;
+    await db.query('UPDATE users SET review_summary = $2, review_summary_at = now(), review_summary_n = $3 WHERE id = $1', [businessId, text, bodies.length]);
+    return text;
+  } catch (e) { return null; } // the page must never wait on or break for this
+}
 async function reviewTopics(businessId) {
   try {
     const cols = REVIEW_TOPIC_RX.map((t, i) => `COUNT(*) FILTER (WHERE body ~* $${i + 2})::int AS t${i}`).join(', ');
@@ -36176,10 +36428,11 @@ app.get('/api/business/:id/reviews', auth.requireAuth, async (req, res) => {
     const topics = await reviewTopics(id);
     const total = breakdown.reduce((a, b) => a + b.count, 0);
     const summary = await businessReviewSummary(id);
+    const aiHighlight = await aiReviewHighlight(id);
     const mineRow = rows.find((r) => r.reviewer_id === req.user.id);
     res.json({
       reviews: rows.map((r) => mapReview(r, req.user.id)),
-      summary,
+      summary, aiHighlight,
       breakdown: breakdown.map((b) => ({ ...b, pct: total ? Math.round((b.count / total) * 100) : 0 })),
       subRatings, topics,
       verifiedCount: dist.rows.reduce((a, d) => a + d.verified, 0),
