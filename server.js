@@ -35462,6 +35462,9 @@ function mapDeliveryJob(j, viewerId) {
        job is actually theirs (never while merely browsing open jobs). */
     dropInstructions: (j.buyer_id === viewerId || (j.courier_id === viewerId && ['agreed', 'picked_up', 'delivered', 'paid'].includes(j.status))) ? (j.drop_instructions || null) : undefined,
     neededBy: j.needed_by || null,
+    /* The live trip — parties only, and only while the parcel is moving. */
+    trip: (j.trip_on && [j.buyer_id, j.seller_id, j.courier_id].includes(viewerId) && ['agreed', 'picked_up'].includes(j.status))
+      ? { lat: Number(j.trip_lat), lng: Number(j.trip_lng), at: j.trip_at } : null,
     agreedAt: j.agreed_at, pickedUpAt: j.picked_up_at, deliveredAt: j.delivered_at, paidAt: j.paid_at,
     autoReleaseAt: j.auto_release_at, createdAt: j.created_at,
     cancelledReason: j.cancelled_reason || null,
@@ -35772,7 +35775,7 @@ app.post('/api/deliveries/:id/delivered', auth.requireAuth, rateLimit(12, 60000,
         return res.status(400).json({ badCode: true, error: 'That code isn’t right — ask for the 4 digits on their delivery screen.' });
     }
     const { rows } = await db.query(
-      `UPDATE delivery_jobs SET status = 'delivered', delivered_at = now(),
+      `UPDATE delivery_jobs SET status = 'delivered', delivered_at = now(), trip_on = false,
               auto_release_at = now() + make_interval(days => $3)
         WHERE id = $1 AND courier_id = $2 AND status IN ('agreed','picked_up')
         RETURNING seller_id, buyer_id`, [id, req.user.id, DELIVERY_AUTO_RELEASE_DAYS]);
@@ -35787,6 +35790,37 @@ app.post('/api/deliveries/:id/delivered', auth.requireAuth, rateLimit(12, 60000,
     }
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+
+/* ── Live trip: the courier's position, streamed onto the job ──
+   Courier-only, and only while the parcel is actually moving (agreed /
+   picked_up). Buyer and seller get a `delivtrip` push per update; their
+   screens compute "2.1 km away" AGAINST THEIR OWN device position, which
+   never leaves their phone — the server relays only the courier's point.
+   The client throttles to one update every ~8s; the rate limit backstops it.
+   Sharing ends by the courier's own toggle, and automatically the moment the
+   job is delivered or cancelled. */
+app.post('/api/deliveries/:id/trip', auth.requireAuth, rateLimit(15, 60000, 'deliv-trip'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const stopping = req.body.on === false;
+  const lat = Number(req.body.lat), lng = Number(req.body.lng);
+  if (!stopping && !(Number.isFinite(lat) && Math.abs(lat) <= 90 && Number.isFinite(lng) && Math.abs(lng) <= 180))
+    return res.status(400).json({ error: 'That position doesn’t look right.' });
+  try {
+    const upd = await db.query(
+      stopping
+        ? `UPDATE delivery_jobs SET trip_on = false WHERE id = $1 AND courier_id = $2 RETURNING buyer_id, seller_id`
+        : `UPDATE delivery_jobs SET trip_on = true, trip_lat = $3, trip_lng = $4, trip_at = now()
+            WHERE id = $1 AND courier_id = $2 AND status IN ('agreed','picked_up') RETURNING buyer_id, seller_id`,
+      stopping ? [id, req.user.id] : [id, req.user.id, lat, lng]);
+    if (!upd.rowCount) return res.status(409).json({ error: 'That isn’t something you can do right now.' });
+    const j = upd.rows[0];
+    for (const who of [j.buyer_id, j.seller_id]) {
+      rtPush(who, 'delivtrip', stopping ? { id, on: false } : { id, on: true, lat, lng, at: new Date().toISOString() });
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the trip.' }); }
 });
 
 /* Pay the courier. Claim-first: the status flip and the credit happen in one
@@ -35846,7 +35880,7 @@ app.post('/api/deliveries/:id/cancel', auth.requireAuth, async (req, res) => {
     try {
       await client.query('BEGIN');
       const upd = await client.query(
-        `UPDATE delivery_jobs SET status = 'cancelled', cancelled_reason = $2
+        `UPDATE delivery_jobs SET status = 'cancelled', cancelled_reason = $2, trip_on = false
           WHERE id = $1 AND status IN ('open','agreed') RETURNING held_cents, posted_by`, [id, why]);
       if (!upd.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'This is already finished.' }); }
       const held = upd.rows[0].held_cents;

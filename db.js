@@ -5268,6 +5268,15 @@ async function initSchema() {
   // What a cancellation actually returned — honest history on the booking row.
   await query(`ALTER TABLE rental_bookings ADD COLUMN IF NOT EXISTS refund_cents INTEGER;`);
   await query(`ALTER TABLE delivery_jobs ADD COLUMN IF NOT EXISTS needed_by TIMESTAMPTZ;`);
+
+  /* ── Live trip tracking (the DoorDash "where's my order?" — without a map
+     company). The courier streams their position onto the JOB; buyer and
+     seller watch the distance count down and can open the spot in their
+     phone's own maps app. No tiles, no keys, no monthly bill. ── */
+  await query(`ALTER TABLE delivery_jobs ADD COLUMN IF NOT EXISTS trip_on BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE delivery_jobs ADD COLUMN IF NOT EXISTS trip_lat DOUBLE PRECISION;`);
+  await query(`ALTER TABLE delivery_jobs ADD COLUMN IF NOT EXISTS trip_lng DOUBLE PRECISION;`);
+  await query(`ALTER TABLE delivery_jobs ADD COLUMN IF NOT EXISTS trip_at TIMESTAMPTZ;`);
   await query(`CREATE INDEX IF NOT EXISTS users_cert_active_idx ON users(cert_active) WHERE cert_active;`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_business_idx ON business_team(business_id);`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_member_idx ON business_team(member_id, status);`);
