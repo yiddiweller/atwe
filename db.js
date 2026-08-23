@@ -5210,6 +5210,50 @@ async function initSchema() {
   // Old rows bid exactly what they bid; that IS their maximum.
   await query(`UPDATE auction_bids SET max_cents = amount_cents WHERE max_cents IS NULL;`);
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS auction_reserve_cents INTEGER;`);
+
+  /* ── The final sweep (Airbnb / Uber / DoorDash, feature-checked) ──
+
+     RENTAL AVAILABILITY is the fix that mattered most: nothing stopped two
+     guests being confirmed for the same dates. rental_blocks is the host's own
+     "not these dates" list (away, repairs); the overlap rule lives in the
+     routes — confirmed/paying/paid bookings and blocks make a date range
+     taken, half-open so a checkout day is free for the next check-in. */
+  await query(`
+    CREATE TABLE IF NOT EXISTS rental_blocks (
+      id         SERIAL PRIMARY KEY,
+      product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      start_date DATE NOT NULL,
+      end_date   DATE NOT NULL,
+      note       TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS rental_blocks_product_idx ON rental_blocks(product_id);`);
+  // Long-stay discounts (Airbnb's weekly/monthly) + Instant Book per listing.
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS rental_week_pct INTEGER;`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS rental_month_pct INTEGER;`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS rental_instant BOOLEAN NOT NULL DEFAULT false;`);
+  // What the long-stay discount took off, kept on the booking for honest display.
+  await query(`ALTER TABLE rental_bookings ADD COLUMN IF NOT EXISTS discount_cents INTEGER NOT NULL DEFAULT 0;`);
+
+  /* DELIVERY HANDOFF CODE (DoorDash PIN / Uber pickup PIN): minted when a
+     courier is agreed, shown ONLY to the buyer. The courier typing it at the
+     door is proof the right person received it — which is why entering it
+     releases the courier's money instantly instead of starting a waiting
+     clock. */
+  await query(`ALTER TABLE delivery_jobs ADD COLUMN IF NOT EXISTS handoff_code TEXT;`);
+
+  // "Gate code 4412, leave with the doorman" — saved once per address,
+  // snapshotted onto each order like the rest of the ship-to.
+  await query(`ALTER TABLE addresses ADD COLUMN IF NOT EXISTS instructions TEXT;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS ship_instructions TEXT;`);
+
+  /* AI review highlights (Airbnb 2026): one honest cached sentence about a
+     provider's reviews. Cached with the review count it was written at, so it
+     regenerates only when the reviews actually changed. */
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS review_summary TEXT;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS review_summary_at TIMESTAMPTZ;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS review_summary_n INTEGER;`);
   await query(`CREATE INDEX IF NOT EXISTS users_cert_active_idx ON users(cert_active) WHERE cert_active;`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_business_idx ON business_team(business_id);`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_member_idx ON business_team(member_id, status);`);
