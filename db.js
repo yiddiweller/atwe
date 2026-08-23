@@ -5355,6 +5355,9 @@ async function initSchema() {
 
   // Seller-issued refunds (Shopify's Refund button): cumulative, never past the total.
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS refunded_cents INTEGER NOT NULL DEFAULT 0;`);
+  // The returns window the order was SOLD under (effective days at purchase;
+  // NULL = a legacy order from before the snapshot — falls back to the live policy).
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS returns_days INTEGER;`);
   // A shop's stated returns window (days; NULL = the 30-day default, 0 = no returns).
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS returns_days INTEGER;`);
 

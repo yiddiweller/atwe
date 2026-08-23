@@ -4051,6 +4051,29 @@ const PUSH_VERBS = {
   rental_booked: 'booked your rental — Instant Book confirmed it',
   rental_declined: 'declined your booking request', rental_paid: 'paid for their booking',
   rental_cancelled: 'cancelled a booking',
+  // Money moments — the pushes a wallet app can't skip.
+  money_received: 'sent you money — it’s in your wallet',
+  money_request: 'requested money from you',
+  money_request_paid: 'paid your money request',
+  order: 'placed an order with you',
+  order_disputed: 'opened a dispute on an order',
+  escrow_released: 'your payment was released — it’s in your wallet',
+  escrow_refunded: 'your money is back — the held order was refunded',
+  invoice: 'sent you an invoice',
+  invoice_paid: 'paid your invoice',
+  gift_received: 'sent you a gift card',
+  split_request: 'asked you to split a bill',
+  split_paid: 'paid their share of a split',
+  offer: 'sent you an offer',
+  return_requested: 'requested a return',
+  return_request: 'asked you to return a payment sent by mistake',
+  quote_received: 'sent you a quote',
+  quote_accepted: 'accepted your quote',
+  refund_approved: 'approved your refund — the money is back in your wallet',
+  digital_ready: 'your purchase is ready — tap to get it',
+  team_invite: 'invited you to their team',
+  wallet_frozen: 'placed a temporary hold on your wallet',
+  appeal_granted: 'reviewed your appeal — your account is active again',
 };
 // Fan a web-push notification out to all of a user's subscribed devices,
 // pruning any that the push service reports as gone (404/410).
@@ -13242,7 +13265,7 @@ app.post('/api/pos/pay', auth.requireAuth, blockImpersonation, rateLimit(20, 600
     if (!sale) return res.status(404).json({ error: 'That code is not waiting for payment.' });
     const unclaim = async () => { await db.query(`UPDATE pos_sales SET status='open', buyer_id=NULL WHERE id=$1`, [sale.id]).catch(() => {}); };
     if (sale.seller_id === req.user.id) { await unclaim(); return res.status(400).json({ error: 'That is your own till.' }); }
-    if (cid) { const prev = await walletClaimIdem(req.user.id, cid, 'order'); if (prev && prev.replay) { await unclaim(); return res.json(prev.result); } }
+    if (cid) { const prev = await walletClaimIdem(req.user.id, cid, 'order'); if (prev && !prev.claimed) { await unclaim(); return res.json(prev.result || { ok: true, deduped: true }); } }
     const vel = await walletVelocityCheck(req.user.id, sale.total_cents);
     if (!vel.ok) { await unclaim(); if (cid) await walletReleaseIdem(req.user.id, cid, 'order'); return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel)); }
     const t = await walletTransfer(req.user.id, sale.seller_id, sale.total_cents, 'In person', false);
@@ -14026,7 +14049,7 @@ app.post('/api/phone/incoming-sms', express.urlencoded({ extended: false }), asy
         `INSERT INTO phone_calls (number_id, owner_id, direction, from_number, to_number, status, transcript)
          VALUES ($1,$2,'sms-in',$3,$4,'received',$5)`,
         [n.id, n.owner_id, from, called, body]).catch(() => {});
-      notify(n.owner_id, n.owner_id, 'sms_received');
+      notifySelf(n.owner_id, 'sms_received');
       rtPush(n.owner_id, 'phone', { kind: 'sms', from, body });
     }
   } catch (e) {}
@@ -14105,6 +14128,12 @@ app.post('/api/advances', auth.requireAuth, blockImpersonation, rateLimit(5, 360
     let id = null;
     try {
       await client.query('BEGIN');
+      // The one-open-advance rule must hold under concurrency: serialize this
+      // user's advance-taking on a transaction lock, then RE-check inside it —
+      // the plain pre-check above can't stop two simultaneous requests.
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext('atwe-advance-' || $1::text))`, [req.user.id]);
+      const open2 = (await client.query(`SELECT 1 FROM advances WHERE user_id = $1 AND status IN ('offered','active')`, [req.user.id])).rows[0];
+      if (open2) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'You already have one open. Finish repaying it first.' }); }
       const ins = await client.query(
         `INSERT INTO advances (user_id, amount_cents, fee_cents, repay_cents, share_pct, status, accepted_at)
          VALUES ($1,$2,$3,$4,$5,'active',now()) RETURNING id`,
@@ -14145,7 +14174,7 @@ async function repayAdvanceFromSale(sellerId, saleCents) {
       await client.query('COMMIT');
       if (actual > 0 && a.repaid_cents + actual >= a.repay_cents) {
         await db.query(`UPDATE advances SET status='repaid', repaid_at=now() WHERE id=$1`, [a.id]);
-        notify(sellerId, sellerId, 'advance_repaid');
+        notifySelf(sellerId, 'advance_repaid');
       }
     } catch (e) { await client.query('ROLLBACK').catch(() => {}); }
     finally { client.release(); }
@@ -14594,7 +14623,7 @@ app.get('/api/webinars/:id', auth.requireAuth, async (req, res) => {
         from: { id: q.user_id, name: q.name, username: q.username } })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load that.' }); }
 });
-app.patch('/api/webinars/:id', auth.requireAuth, async (req, res) => {
+app.patch('/api/webinars/:id', auth.requireAuth, blockImpersonation, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   const sets = [], vals = [];
@@ -14631,21 +14660,36 @@ app.patch('/api/webinars/:id', auth.requireAuth, async (req, res) => {
    is still made whole (standalone credit), same rule as the returns desk. */
 async function refundWebinarSignups(webinarId, hostId, priceCents) {
   // Never the host's own auto-signup row (paid=true, nothing ever paid) —
-  // refunding it would invent money out of the fallback credit.
-  const rows = (await db.query(
-    `UPDATE webinar_signups SET refunded = true
-      WHERE webinar_id = $1 AND paid = true AND refunded = false AND user_id <> $2 RETURNING user_id, paid_cents`, [webinarId, hostId])).rows;
+  // refunding it would invent money out of the fallback credit. Each row is
+  // claimed INDIVIDUALLY right before its payment (not in one batch up front):
+  // if one payment fails, that row is un-claimed so the next run pays it —
+  // a crash can neither pay twice nor strand anyone unpaid.
+  const cands = (await db.query(
+    `SELECT user_id, paid_cents FROM webinar_signups
+      WHERE webinar_id = $1 AND paid = true AND refunded = false AND user_id <> $2`, [webinarId, hostId])).rows;
+  const frozen = !!(((await db.query('SELECT wallet_frozen FROM users WHERE id = $1', [hostId])).rows[0]) || {}).wallet_frozen;
   let n = 0;
-  for (const r of rows) {
+  for (const r of cands) {
     const amt = r.paid_cents != null ? r.paid_cents : (priceCents || 0);
-    if (amt <= 0) continue;
+    const claim = await db.query(
+      `UPDATE webinar_signups SET refunded = true WHERE webinar_id = $1 AND user_id = $2 AND refunded = false RETURNING user_id`,
+      [webinarId, r.user_id]).catch(() => ({ rowCount: 0 }));
+    if (!claim.rowCount) continue; // another run already handled this row
+    if (amt <= 0) continue; // nothing was ever paid — settled with no money moved
     try {
       let t = null;
-      try { t = await walletTransfer(hostId, r.user_id, amt, 'Webinar cancelled — refund'); } catch (e) {}
+      // A frozen host wallet must not move — the attendee is made whole by a
+      // platform credit instead (same rule as the refunds desk's fallback).
+      if (!frozen) { try { t = await walletTransfer(hostId, r.user_id, amt, 'Webinar cancelled — refund'); } catch (e) {} }
       if (!t || !t.ok) await walletCreditStandalone(r.user_id, amt, 'webinar_refund', 'Webinar cancelled — refund');
       rtPush(r.user_id, 'wallet', { type: 'receive', amountCents: amt });
       n++;
-    } catch (e) { console.error('webinar refund', webinarId, r.user_id, e.message); }
+    } catch (e) {
+      // No money moved (both movers are atomic and threw) — release the claim
+      // so the next cancel/retry pays this attendee.
+      await db.query(`UPDATE webinar_signups SET refunded = false WHERE webinar_id = $1 AND user_id = $2`, [webinarId, r.user_id]).catch(() => {});
+      console.error('webinar refund', webinarId, r.user_id, e.message);
+    }
   }
   return n;
 }
@@ -14664,7 +14708,7 @@ app.post('/api/webinars/:id/signup', auth.requireAuth, blockImpersonation, rateL
       const vel = await walletVelocityCheck(req.user.id, price);
       if (!vel.ok) return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel));
       const cid = String(req.body.clientId || '').slice(0, 60) || null;
-      if (cid) { const prev = await walletClaimIdem(req.user.id, cid, 'webinar'); if (prev && prev.replay) return res.json(prev.result); }
+      if (cid) { const prev = await walletClaimIdem(req.user.id, cid, 'webinar'); if (prev && !prev.claimed) return res.json(prev.result || { ok: true, paid: true, deduped: true }); }
       const t = await walletTransfer(req.user.id, w.host_id, price, 'Webinar: ' + w.title, false);
       if (!t.ok) { if (cid) await walletReleaseIdem(req.user.id, cid, 'webinar');
         return res.status(400).json({ error: 'Not enough wallet balance — add money first.', insufficientBalance: true }); }
@@ -15958,7 +16002,7 @@ app.post('/api/admin/revenue-share/:period/pay', auth.requirePerm('revenue'), as
         'Creator share for ' + period).catch(() => false);
       if (ok !== false) {
         await db.query(`UPDATE creator_payouts SET status='paid', paid_at=now() WHERE id=$1`, [p.id]);
-        notify(p.user_id, p.user_id, 'revshare');
+        notifySelf(p.user_id, 'revshare');
         paid++; cents += p.amount_cents;
       } else {
         await db.query(`UPDATE creator_payouts SET status='pending' WHERE id=$1`, [p.id]);
@@ -16115,7 +16159,7 @@ app.post('/api/series/:id/buy', auth.requireAuth, blockImpersonation, rateLimit(
       await db.query('INSERT INTO series_access (series_id, user_id, paid_cents) VALUES ($1,$2,0) ON CONFLICT DO NOTHING', [id, req.user.id]);
       return res.json({ ok: true, free: true });
     }
-    if (cid) { const prev = await walletClaimIdem(req.user.id, cid, 'order'); if (prev && prev.replay) return res.json(prev.result); }
+    if (cid) { const prev = await walletClaimIdem(req.user.id, cid, 'order'); if (prev && !prev.claimed) return res.json(prev.result || { ok: true, deduped: true }); }
     const vel = await walletVelocityCheck(req.user.id, s.price_cents);
     if (!vel.ok) { if (cid) await walletReleaseIdem(req.user.id, cid, 'order'); return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel)); }
     const t = await walletTransfer(req.user.id, s.creator_id, s.price_cents, 'Series: ' + s.title, false);
@@ -16645,7 +16689,7 @@ async function runAiTask(t, opts) {
     await db.query(
       `INSERT INTO admin_messages (user_id, sender, body, read_by_user, read_by_admin) VALUES ($1,'admin',$2,false,true)`,
       [t.user_id, '✦ ' + t.name + '\n\n' + (result || 'No answer.')]);
-    notify(t.user_id, t.user_id, 'ai_task');
+    notifySelf(t.user_id, 'ai_task');
   } catch (e) { /* the run still happened */ }
   const next = reschedule ? aiTaskNext(t.cadence, t.hour, t.weekday) : t.next_at;
   await db.query(
@@ -16772,7 +16816,7 @@ async function runWorkflow(w, opts) {
     await db.query(
       `INSERT INTO admin_messages (user_id, sender, body, read_by_user, read_by_admin) VALUES ($1,'admin',$2,false,true)`,
       [w.user_id, '✦ ' + w.name + '\n\n' + result]);
-    notify(w.user_id, w.user_id, 'ai_task');
+    notifySelf(w.user_id, 'ai_task');
   } catch (e) { /* the run still happened */ }
   await db.query(
     `UPDATE agent_workflows SET last_run_at = now(), last_result = $2, runs = runs + 1, next_at = $3 WHERE id = $1`,
@@ -32680,16 +32724,23 @@ app.get('/api/money-drops/:id', auth.requireAuth, async (req, res) => {
 async function flushMoneyDrops() {
   let n = 0;
   const { rows } = await db.query(
-    `UPDATE money_drops SET status = 'expired'
-      WHERE status = 'active' AND expires_at <= now() RETURNING id, sender_id, remaining_cents`);
+    `SELECT id, sender_id, remaining_cents FROM money_drops WHERE status = 'active' AND expires_at <= now()`);
   for (const d of rows) {
+    // Claim each drop individually; a failed refund reverts the claim so the
+    // next tick retries it instead of stranding the sender's leftover money.
+    const claim = await db.query(
+      `UPDATE money_drops SET status = 'expired' WHERE id = $1 AND status = 'active' RETURNING id`, [d.id]).catch(() => ({ rowCount: 0 }));
+    if (!claim.rowCount) continue;
     try {
       if (d.remaining_cents > 0) {
         await walletCreditStandalone(d.sender_id, d.remaining_cents, 'money_drop_refund', 'Money drop expired');
       }
       notifySelf(d.sender_id, 'money_drop_expired');
       n++;
-    } catch (e) { console.error('drop refund', d.id, e.message); }
+    } catch (e) {
+      await db.query(`UPDATE money_drops SET status = 'active' WHERE id = $1`, [d.id]).catch(() => {});
+      console.error('drop refund', d.id, e.message);
+    }
   }
   return n;
 }
@@ -33082,8 +33133,8 @@ async function buyerIsBusiness(userId) {
 async function insertOrder({ buyerId, sellerId, total, note, shippingCents, taxCents, needsShipping, addr, discountCents, couponCode, pickup, pickupLocation, pickupLocationId, affiliateId, commissionCents, gift, giftNote, eta, localDelivery, deliveryZoneId }) {
   const a = addr || {};
   const { rows } = await db.query(
-    `INSERT INTO orders (buyer_id, seller_id, total_cents, note, shipping_cents, tax_cents, discount_cents, coupon_code, needs_shipping, pickup, pickup_location, affiliate_id, commission_cents, ship_name, ship_phone, ship_line1, ship_line2, ship_city, ship_region, ship_postal, ship_country, gift, gift_note, eta_min_at, eta_max_at, local_delivery, delivery_zone_id, pickup_location_id, ship_instructions)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29) RETURNING id`,
+    `INSERT INTO orders (buyer_id, seller_id, total_cents, note, shipping_cents, tax_cents, discount_cents, coupon_code, needs_shipping, pickup, pickup_location, affiliate_id, commission_cents, ship_name, ship_phone, ship_line1, ship_line2, ship_city, ship_region, ship_postal, ship_country, gift, gift_note, eta_min_at, eta_max_at, local_delivery, delivery_zone_id, pickup_location_id, ship_instructions, returns_days)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,(SELECT COALESCE(returns_days, 30) FROM users WHERE id = $2)) RETURNING id`,
     [buyerId, sellerId, total, note || null, shippingCents || 0, taxCents || 0, discountCents || 0, couponCode || null, !!needsShipping, !!pickup, pickupLocation || null, affiliateId || null, commissionCents || 0, a.full_name || null, a.phone || null, a.line1 || null, a.line2 || null, a.city || null, a.region || null, a.postal || null, a.country || null, gift === true, (giftNote || '').toString().trim().slice(0, 300) || null,
       (eta && eta.minAt) || null, (eta && eta.maxAt) || null, localDelivery === true, deliveryZoneId || null, pickupLocationId || null, a.instructions || null]
   );
@@ -33185,7 +33236,7 @@ async function recordOrderPaid(orderId, sellerCredited) {
       rtPush(o.buyer_id, 'msg', { kind: 'dm', peerId: o.seller_id, message: { ...msg, mine: true } });
     }
   } catch (e) { /* order still placed even if the card fails */ }
-  notify(o.seller_id, o.buyer_id, 'order');
+  notify(o.seller_id, o.buyer_id, 'order', null, null, null, null, null, orderId);
   rtPush(o.buyer_id, 'order', { id: orderId, status: 'paid' });
   applyCouponRedemption(orderId).catch(() => {}); // claim the coupon use
   deliverDigitalGoods(orderId, o.buyer_id, o.seller_id).catch(() => {}); // instant digital delivery
@@ -33216,7 +33267,7 @@ async function deliverDigitalGoods(orderId, buyerId, sellerId) {
     `SELECT p.name, p.digital_content FROM order_items oi JOIN products p ON p.id = oi.product_id
      WHERE oi.order_id = $1 AND p.kind = 'digital' AND p.digital_content IS NOT NULL`, [orderId])).rows;
   if (!dig.length) return;
-  notify(buyerId, sellerId, 'digital_ready');
+  notify(buyerId, sellerId, 'digital_ready', null, null, null, null, null, orderId);
   try {
     if (await dmAllowed(sellerId, buyerId)) {
       const meta = { t: 'digital', orderId, items: dig.map((d) => ({ name: d.name, content: d.digital_content })) };
@@ -33395,7 +33446,7 @@ async function fundEscrowOrder(buyerId, sellerId, orderId, totalCents) {
       rtPush(buyerId, 'msg', { kind: 'dm', peerId: sellerId, message: { ...msg, mine: true } });
     }
   } catch (e) { /* order still funded even if the card fails */ }
-  notify(sellerId, buyerId, 'order');
+  notify(sellerId, buyerId, 'order', null, null, null, null, null, orderId);
   applyCouponRedemption(orderId).catch(() => {});
   deliverDigitalGoods(orderId, buyerId, sellerId).catch(() => {}); // digital items are instant even under protection
   sendOrderEmails(orderId).catch(() => {});
@@ -33416,7 +33467,7 @@ async function settleEscrow(orderId, to) {
   let o;
   try {
     await client.query('BEGIN');
-    o = (await client.query("UPDATE orders SET status = $2, released_at = now() WHERE id = $1 AND status IN ('escrow','disputed') RETURNING buyer_id, seller_id, total_cents", [orderId, newStatus])).rows[0];
+    o = (await client.query("UPDATE orders SET status = $2, released_at = now(), refunded_cents = CASE WHEN $2 = 'refunded' THEN total_cents ELSE refunded_cents END WHERE id = $1 AND status IN ('escrow','disputed') RETURNING buyer_id, seller_id, total_cents", [orderId, newStatus])).rows[0];
     if (!o) { await client.query('ROLLBACK'); return false; }
     const payee = to === 'buyer' ? o.buyer_id : o.seller_id;
     await walletCredit(client, payee, o.total_cents, to === 'buyer' ? 'escrow_refund' : 'escrow_release', null, to === 'buyer' ? 'Escrow refunded' : 'Escrow released');
@@ -33428,10 +33479,10 @@ async function settleEscrow(orderId, to) {
     client.release();
   }
   if (to === 'buyer') {
-    notify(o.buyer_id, o.seller_id, 'escrow_refunded');
+    notify(o.buyer_id, o.seller_id, 'escrow_refunded', null, null, null, null, null, orderId);
     rtPush(o.buyer_id, 'wallet', { type: 'receive', amountCents: o.total_cents });
   } else {
-    notify(o.seller_id, o.buyer_id, 'escrow_released');
+    notify(o.seller_id, o.buyer_id, 'escrow_released', null, null, null, null, null, orderId);
     rtPush(o.seller_id, 'wallet', { type: 'receive', amountCents: o.total_cents });
     // Escrow is the other moment a seller actually receives the money.
     chargePlatformFee(o.seller_id, orderId, o.total_cents).catch(() => {});
@@ -34265,7 +34316,7 @@ app.post('/api/orders/:id/fulfill', auth.requireAuth, async (req, res) => {
     if (!(await canActAs(req.user.id, o.seller_id, 'orders'))) return res.status(403).json({ error: 'You don’t have permission to fulfill this order.' });
     const r = await db.query("UPDATE orders SET status = 'fulfilled' WHERE id = $1 AND status = 'paid' RETURNING buyer_id", [id]);
     if (!r.rowCount) return res.status(400).json({ error: 'That order can’t be marked fulfilled.' });
-    notify(r.rows[0].buyer_id, o.seller_id, 'order_fulfilled');
+    notify(r.rows[0].buyer_id, o.seller_id, 'order_fulfilled', null, null, null, null, null, id);
     rtPush(r.rows[0].buyer_id, 'order', { id, status: 'fulfilled' });
     res.json({ ok: true, status: 'fulfilled' });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the order.' }); }
@@ -34283,7 +34334,7 @@ async function markOrderShipped(id, buyerId, sellerId, carrier, tracking, extra)
     [id, carrier, tracking, (extra && extra.labelUrl) || null, (extra && extra.labelCostCents) || null, (extra && extra.labelTransactionId) || null, (extra && extra.shipNote) || null]
   );
   if (!r.rowCount) return false; // already shipped by a concurrent request — caller decides what to do
-  notify(buyerId, sellerId, 'order_shipped');
+  notify(buyerId, sellerId, 'order_shipped', null, null, null, null, null, id);
   rtPush(buyerId, 'order', { id, shipped: true, carrier, tracking });
   sendOrderShippedEmail(id).catch(() => {});
   emitWebhook(sellerId, 'order.shipped', { orderId: id, carrier, tracking });
@@ -34449,7 +34500,7 @@ function inviteReview(reviewerId, subjectId, kind, refId) {
 async function markOrderDelivered(id, o, notifyUserId, notifyActorId) {
   const setStatus = o.status === 'paid' ? ", status = 'fulfilled'" : '';
   await db.query(`UPDATE orders SET delivered_at = now()${setStatus} WHERE id = $1`, [id]);
-  notify(notifyUserId, notifyActorId, 'order_delivered');
+  notify(notifyUserId, notifyActorId, 'order_delivered', null, null, null, null, null, id);
   rtPush(o.buyer_id, 'order', { id, delivered: true });
   rtPush(o.seller_id, 'order', { id, delivered: true });
   sendOrderDeliveredEmail(id, notifyUserId).catch(() => {});
@@ -34964,6 +35015,13 @@ app.post('/api/orders/:id/refund', auth.requireAuth, blockImpersonation, rateLim
       if (o.status === 'escrow' || o.status === 'disputed') return res.status(400).json({ error: 'This is a protected order — its money releases or refunds through confirm and disputes.' });
       return res.status(400).json({ error: 'This order isn’t in a refundable state.' });
     }
+    /* A 'refunded' order whose counter is still 0 was refunded IN FULL through
+       another door before the counter existed (a return, a dispute, or the
+       refunds desk) — sending more would be a second full refund. The other
+       doors now stamp the counter, so this only guards legacy rows. */
+    if (o.status === 'refunded' && !(Number(o.refunded_cents) > 0)) {
+      return res.status(400).json({ error: 'This order was already refunded in full — through a return, a dispute, or the refunds desk.' });
+    }
     const remaining = o.total_cents - (o.refunded_cents || 0);
     if (remaining <= 0) return res.status(400).json({ error: 'This order is already fully refunded.' });
     /* Frozen-wallet check (the invariant is NOT inherited when a route moves
@@ -35003,14 +35061,17 @@ app.post('/api/orders/:id/return', auth.requireAuth, rateLimit(20, 60000, 'retur
   const reason = (req.body.reason || '').toString().trim().slice(0, 500);
   if (!reason) return res.status(400).json({ error: 'Tell the seller why you’re returning it.' });
   try {
-    const o = (await db.query('SELECT o.buyer_id, o.seller_id, o.status, o.created_at, o.delivered_at, o.shipped_at, u.returns_days FROM orders o JOIN users u ON u.id = o.seller_id WHERE o.id = $1', [id])).rows[0];
+    const o = (await db.query('SELECT o.buyer_id, o.seller_id, o.status, o.created_at, o.delivered_at, o.shipped_at, o.returns_days AS snap_days, u.returns_days FROM orders o JOIN users u ON u.id = o.seller_id WHERE o.id = $1', [id])).rows[0];
     if (!o || o.buyer_id !== req.user.id) return res.status(404).json({ error: 'Order not found.' });
     if (!RETURN_OK_STATES.includes(o.status)) return res.status(400).json({ error: 'This order can’t be returned.' });
     /* The shop's returns window (default 30 days, 0 = no returns), counted
        from delivery when known, else shipping, else the order itself. Escrow
        protection and the disputes desk are untouched — this only bounds the
        self-serve RETURN flow, which previously had no time bound at all. */
-    const windowDays = o.returns_days == null ? 30 : o.returns_days;
+    /* The window the order was SOLD under wins; the live shop policy only
+       covers legacy orders from before the snapshot — a seller can't shorten
+       returns retroactively on things already bought. */
+    const windowDays = o.snap_days != null ? o.snap_days : (o.returns_days == null ? 30 : o.returns_days);
     if (windowDays === 0) return res.status(400).json({ noReturns: true, error: 'This shop doesn’t accept returns. If something is wrong with the order, open a dispute instead.' });
     const basis = o.delivered_at || o.shipped_at || o.created_at;
     if (basis && Date.now() - new Date(basis).getTime() > windowDays * 86400000) {
@@ -35019,7 +35080,7 @@ app.post('/api/orders/:id/return', auth.requireAuth, rateLimit(20, 60000, 'retur
     const open = (await db.query("SELECT 1 FROM order_returns WHERE order_id = $1 AND status IN ('requested','approved')", [id])).rows[0];
     if (open) return res.status(400).json({ error: 'A return is already open on this order.' });
     await db.query('INSERT INTO order_returns (order_id, buyer_id, seller_id, reason) VALUES ($1,$2,$3,$4)', [id, o.buyer_id, o.seller_id, reason]);
-    notify(o.seller_id, req.user.id, 'return_requested');
+    notify(o.seller_id, req.user.id, 'return_requested', null, null, null, null, null, id);
     rtPush(o.seller_id, 'order', { id, returnRequested: true });
     res.status(201).json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not request the return.' }); }
@@ -35031,7 +35092,7 @@ app.patch('/api/orders/:id/return', auth.requireAuth, blockImpersonation, async 
   const approve = req.body.action === 'approve';
   if (!approve && req.body.action !== 'decline') return res.status(400).json({ error: 'Invalid action.' });
   try {
-    const o = (await db.query('SELECT buyer_id, seller_id, status, total_cents FROM orders WHERE id = $1', [id])).rows[0];
+    const o = (await db.query('SELECT buyer_id, seller_id, status, total_cents, refunded_cents FROM orders WHERE id = $1', [id])).rows[0];
     if (!o || o.seller_id !== req.user.id) return res.status(404).json({ error: 'Order not found.' });
     // Claim the open return (one-time guard).
     const claim = await db.query(
@@ -35039,20 +35100,37 @@ app.patch('/api/orders/:id/return', auth.requireAuth, blockImpersonation, async 
       [id, approve ? 'approved' : 'declined']);
     if (!claim.rowCount) return res.status(400).json({ error: 'No open return on this order.' });
     if (approve) {
-      // Refund the buyer: move the money back from the seller's balance; if the seller
-      // can't cover it (paid out / card-funded), still make the buyer whole.
-      const t = await walletTransfer(o.seller_id, o.buyer_id, o.total_cents, 'Refund: order #' + id, false).catch(() => ({ ok: false }));
-      if (!t.ok) await walletCreditStandalone(o.buyer_id, o.total_cents, 'refund', 'Refund: order #' + id).catch(() => {});
-      await db.query("UPDATE orders SET status = 'refunded' WHERE id = $1", [id]);
+      /* Refund WHAT'S STILL OWED — claimed on the same guarded refunded_cents
+         counter the seller's Refund button and the refunds desk use, so a
+         concurrent refund through another door can never make both pay. The
+         read-then-guarded-claim loop retries if the counter moved in between. */
+      let owed = 0;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const cur = (await db.query('SELECT total_cents, refunded_cents FROM orders WHERE id = $1', [id])).rows[0];
+        const want = Math.max(0, cur.total_cents - (cur.refunded_cents || 0));
+        if (want === 0) break;
+        const cc = await db.query(
+          `UPDATE orders SET refunded_cents = refunded_cents + $2 WHERE id = $1 AND refunded_cents + $2 <= total_cents RETURNING id`, [id, want]);
+        if (cc.rowCount) { owed = want; break; }
+      }
+      if (owed > 0) {
+        // A frozen seller wallet must not move — the buyer is made whole by a
+        // platform credit instead (the freeze holds the funds for review).
+        const fr = (await db.query('SELECT wallet_frozen FROM users WHERE id = $1', [o.seller_id])).rows[0];
+        let t = { ok: false };
+        if (!(fr && fr.wallet_frozen)) t = await walletTransfer(o.seller_id, o.buyer_id, owed, 'Refund: order #' + id, false).catch(() => ({ ok: false }));
+        if (!t.ok) await walletCreditStandalone(o.buyer_id, owed, 'refund', 'Refund: order #' + id).catch(() => {});
+      }
+      await db.query("UPDATE orders SET status = 'refunded', refunded_cents = total_cents WHERE id = $1", [id]);
       await db.query("UPDATE order_returns SET status = 'refunded' WHERE order_id = $1 AND status = 'approved'", [id]);
       // Restock the returned items.
       const its = (await db.query('SELECT product_id, qty, variant_id FROM order_items WHERE order_id = $1', [id])).rows;
       await restoreStock(its.map((it) => ({ product_id: it.product_id, qty: it.qty, variant_id: it.variant_id || null, stock: 0 }))).catch(() => {});
-      notify(o.buyer_id, req.user.id, 'return_approved');
+      notify(o.buyer_id, req.user.id, 'return_approved', null, null, null, null, null, id);
       rtPush(o.buyer_id, 'order', { id, status: 'refunded' });
-      rtPush(o.buyer_id, 'wallet', { type: 'receive', amountCents: o.total_cents });
+      rtPush(o.buyer_id, 'wallet', { type: 'receive', amountCents: owed });
     } else {
-      notify(o.buyer_id, req.user.id, 'return_declined');
+      notify(o.buyer_id, req.user.id, 'return_declined', null, null, null, null, null, id);
       rtPush(o.buyer_id, 'order', { id, returnDeclined: true });
     }
     res.json({ ok: true, action: approve ? 'approved' : 'declined' });
@@ -35153,7 +35231,7 @@ app.post('/api/orders/:id/return/label/buy', auth.requireAuth, blockImpersonatio
     } else {
       const debit = await walletDebit(o.seller_id, rate.amountCents, 'return_label', `Return label · ${carrier} ${rate.service || ''}`.trim());
       if (!debit.ok) console.error(`return label ${bought.transactionId} for order ${id} purchased but wallet debit failed (seller ${o.seller_id}, ${rate.amountCents}c) — reconcile manually`);
-      notify(o.buyer_id, o.seller_id, 'return_label_ready');
+      notify(o.buyer_id, o.seller_id, 'return_label_ready', null, null, null, null, null, id);
       rtPush(o.buyer_id, 'order', { id, returnLabelReady: true });
       sendReturnLabelEmail(id, bought.labelUrl).catch(() => {});
     }
@@ -35193,7 +35271,7 @@ app.post('/api/orders/:id/dispute', auth.requireAuth, rateLimit(10, 60000, 'orde
     const r = await db.query("UPDATE orders SET status = 'disputed', dispute_reason = $2, disputed_by = $3, disputed_at = now() WHERE id = $1 AND status = 'escrow' RETURNING id", [id, reason, req.user.id]);
     if (!r.rowCount) return res.status(400).json({ error: 'Could not open the dispute.' });
     const otherId = o.buyer_id === req.user.id ? o.seller_id : o.buyer_id;
-    notify(otherId, req.user.id, 'order_disputed');
+    notify(otherId, req.user.id, 'order_disputed', null, null, null, null, null, id);
     rtPush(otherId, 'order', { id, status: 'disputed' });
     rtPush(req.user.id, 'order', { id, status: 'disputed' });
     logEvent('money', 'dispute.opened', { req, subjectType: 'order', subjectId: id });
@@ -37869,22 +37947,30 @@ app.delete('/api/events/:id', auth.requireAuth, async (req, res) => {
    an older ticket with no snapshot refunds the event's price). Ticket money
    was collected by the platform's checkout, so refunds are platform credits —
    the same shape the refunds desk uses for platform charges. */
-app.post('/api/events/:id/cancel', auth.requireAuth, async (req, res) => {
+app.post('/api/events/:id/cancel', auth.requireAuth, blockImpersonation, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid event id.' });
   try {
     const ev = (await db.query(
       `UPDATE events SET cancelled = true WHERE id = $1 AND host_id = $2 AND cancelled = false RETURNING title, price_cents`, [id, req.user.id])).rows[0];
     if (!ev) return res.status(404).json({ error: 'Not found, not yours, or already cancelled.' });
-    const rows = (await db.query(
-      `UPDATE event_rsvps SET refunded = true
-        WHERE event_id = $1 AND paid = true AND refunded = false AND user_id <> $2 RETURNING user_id, paid_cents`, [id, req.user.id])).rows;
+    // Per-row claim right before each credit — a failed credit releases its
+    // claim so a retry pays that guest, and a crash can never pay twice.
+    const cands = (await db.query(
+      `SELECT user_id, paid_cents FROM event_rsvps
+        WHERE event_id = $1 AND paid = true AND refunded = false AND user_id <> $2`, [id, req.user.id])).rows;
     let refunds = 0;
-    for (const r of rows) {
+    for (const r of cands) {
       const amt = r.paid_cents != null ? r.paid_cents : (ev.price_cents || 0);
-      if (amt > 0) {
-        try { await walletCreditStandalone(r.user_id, amt, 'ticket_refund', 'Event cancelled — ticket refunded'); refunds++; }
-        catch (e) { console.error('ticket refund', id, r.user_id, e.message); }
+      const claim2 = await db.query(
+        `UPDATE event_rsvps SET refunded = true WHERE event_id = $1 AND user_id = $2 AND refunded = false RETURNING user_id`,
+        [id, r.user_id]).catch(() => ({ rowCount: 0 }));
+      if (!claim2.rowCount) continue;
+      if (amt <= 0) continue;
+      try { await walletCreditStandalone(r.user_id, amt, 'ticket_refund', 'Event cancelled — ticket refunded'); refunds++; }
+      catch (e) {
+        await db.query(`UPDATE event_rsvps SET refunded = false WHERE event_id = $1 AND user_id = $2`, [id, r.user_id]).catch(() => {});
+        console.error('ticket refund', id, r.user_id, e.message);
       }
     }
     const who = (await db.query(`SELECT user_id FROM event_rsvps WHERE event_id = $1 AND user_id <> $2`, [id, req.user.id])).rows;
@@ -39387,7 +39473,7 @@ app.patch('/api/courses/:id', auth.requireAuth, async (req, res) => {
     res.json({ course: mapCourse(rows[0], req.user.id, { enrolled: true }) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
 });
-app.delete('/api/courses/:id', auth.requireAuth, async (req, res) => {
+app.delete('/api/courses/:id', auth.requireAuth, blockImpersonation, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   try {
@@ -39398,24 +39484,39 @@ app.delete('/api/courses/:id', auth.requireAuth, async (req, res) => {
        loop resumes on retry rather than refunding twice), and only then does
        the course go. Creator's balance covers it; a shortfall still makes the
        student whole, same rule as the returns desk. */
-    const rows = (await db.query(
-      `UPDATE course_enrollments SET refunded = true
-        WHERE course_id = $1 AND refunded = false AND user_id <> $2 RETURNING user_id, paid_cents`, [id, req.user.id])).rows;
-    for (const r of rows) {
+    const cands = (await db.query(
+      `SELECT user_id, paid_cents FROM course_enrollments
+        WHERE course_id = $1 AND refunded = false AND user_id <> $2`, [id, req.user.id])).rows;
+    const frozen = !!(((await db.query('SELECT wallet_frozen FROM users WHERE id = $1', [req.user.id])).rows[0]) || {}).wallet_frozen;
+    let failed = 0, refunds = 0;
+    for (const r of cands) {
       const amt = r.paid_cents != null ? r.paid_cents : (c.price_cents || 0);
+      const claim = await db.query(
+        `UPDATE course_enrollments SET refunded = true WHERE course_id = $1 AND user_id = $2 AND refunded = false RETURNING user_id`,
+        [id, r.user_id]).catch(() => ({ rowCount: 0 }));
+      if (!claim.rowCount) continue;
       if (amt > 0) {
         try {
           let t = null;
-          try { t = await walletTransfer(req.user.id, r.user_id, amt, 'Course removed — refund'); } catch (e) {}
+          if (!frozen) { try { t = await walletTransfer(req.user.id, r.user_id, amt, 'Course removed — refund'); } catch (e) {} }
           if (!t || !t.ok) await walletCreditStandalone(r.user_id, amt, 'course_refund', 'Course removed — refund');
           rtPush(r.user_id, 'wallet', { type: 'receive', amountCents: amt });
-        } catch (e) { console.error('course refund', id, r.user_id, e.message); }
+          refunds++;
+        } catch (e) {
+          await db.query(`UPDATE course_enrollments SET refunded = false WHERE course_id = $1 AND user_id = $2`, [id, r.user_id]).catch(() => {});
+          failed++;
+          console.error('course refund', id, r.user_id, e.message);
+          continue;
+        }
       }
       notify(r.user_id, req.user.id, 'course_cancelled');
     }
+    // Deleting cascades the enrollment rows away — which would erase any unpaid
+    // refund forever. So the course only goes once every student is made whole.
+    if (failed > 0) return res.status(500).json({ error: `${failed} refund${failed === 1 ? '' : 's'} could not be sent — nothing was deleted. Try again.` });
     const r2 = await db.query('DELETE FROM courses WHERE id = $1 AND creator_id = $2', [id, req.user.id]);
     if (!r2.rowCount) return res.status(404).json({ error: 'Not found (or not yours).' });
-    res.json({ ok: true, refunds: rows.length });
+    res.json({ ok: true, refunds });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete.' }); }
 });
 // Add / edit / delete a lesson (creator).
@@ -40198,16 +40299,22 @@ async function executeRefund(reqRow, amountCents, adminId) {
     // rowCount 0 means a concurrent Return/RMA or dispute resolution already refunded this
     // exact order — so we must NOT pay again. This is what prevents a cross-mechanism
     // double-refund (an open refund request approved after the order was refunded elsewhere).
-    const claim = await db.query(`UPDATE orders SET status='refunded' WHERE id=$1 AND status NOT IN ('refunded','cancelled') RETURNING seller_id`, [oid]).catch(() => ({ rowCount: 0, rows: [] }));
+    const claim = await db.query(`UPDATE orders SET status='refunded' WHERE id=$1 AND status NOT IN ('refunded','cancelled') RETURNING seller_id, total_cents, refunded_cents`, [oid]).catch(() => ({ rowCount: 0, rows: [] }));
     if (!claim.rowCount) return { ok: false, alreadyRefunded: true };
     const sellerId = claim.rows[0].seller_id;
+    // The seller may have already sent part (or all) of it back through their
+    // own Refund button — the desk tops up to the total, never past it.
+    const remaining = Math.max(0, (claim.rows[0].total_cents || 0) - (claim.rows[0].refunded_cents || 0));
+    if (remaining <= 0) return { ok: false, alreadyRefunded: true };
+    if (amountCents > remaining) amountCents = remaining;
     if (sellerId) {
       const t = await walletTransfer(sellerId, uid, amountCents, note, false).catch(() => ({ ok: false }));
       if (!t.ok) await walletCreditStandalone(uid, amountCents, 'refund', note);
     } else {
       await walletCreditStandalone(uid, amountCents, 'refund', note);
     }
-    return { ok: true };
+    await db.query('UPDATE orders SET refunded_cents = LEAST(total_cents, refunded_cents + $2) WHERE id = $1', [oid, amountCents]).catch(() => {});
+    return { ok: true, refundedCents: amountCents };
   }
   if (reqRow.kind === 'tip') {
     const tp = (await db.query('SELECT to_id FROM tips WHERE id = $1', [parseInt(reqRow.ref_id, 10)])).rows[0];
@@ -42206,10 +42313,12 @@ app.post('/api/admin/refunds/:id/resolve', auth.requirePerm('refunds'), async (r
       await db.query(`UPDATE refund_requests SET status='declined', resolution_note=$2, resolved_by=$3, resolved_at=now() WHERE id=$1`, [id, 'This payment was already refunded.', req.user.id]).catch(() => {});
       return res.status(409).json({ error: 'That payment was already refunded.' });
     }
-    await db.query(`UPDATE refund_requests SET status='approved', refunded_cents=$2, resolution_note=$3, resolved_by=$4, resolved_at=now() WHERE id=$1`, [id, amount, note, req.user.id]);
-    adminAudit(req, 'refund.approve', 'refund', id, { kind: rr.kind, refId: rr.ref_id, amountCents: amount });
+    // executeRefund may have capped an order refund at what was still owed.
+    const paidCents = (execResult && execResult.refundedCents) || amount;
+    await db.query(`UPDATE refund_requests SET status='approved', refunded_cents=$2, resolution_note=$3, resolved_by=$4, resolved_at=now() WHERE id=$1`, [id, paidCents, note, req.user.id]);
+    adminAudit(req, 'refund.approve', 'refund', id, { kind: rr.kind, refId: rr.ref_id, amountCents: paidCents });
     notify(rr.user_id, req.user.id, 'refund_approved');
-    res.json({ ok: true, status: 'approved', refundedCents: amount });
+    res.json({ ok: true, status: 'approved', refundedCents: paidCents });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 
