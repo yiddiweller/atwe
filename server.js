@@ -1123,7 +1123,7 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
       const s = event.data.object, m = s.metadata || {};
       const uid = parseInt(m.user_id, 10), eid = parseInt(m.event_id, 10);
       if (Number.isInteger(uid) && Number.isInteger(eid)) {
-        await db.query(`INSERT INTO event_rsvps (event_id, user_id, status, paid) VALUES ($1,$2,'going',true) ON CONFLICT (event_id, user_id) DO UPDATE SET status = 'going', paid = true`, [eid, uid]);
+        await db.query(`INSERT INTO event_rsvps (event_id, user_id, status, paid, paid_cents) VALUES ($1,$2,'going',true,$3) ON CONFLICT (event_id, user_id) DO UPDATE SET status = 'going', paid = true, paid_cents = $3`, [eid, uid, Number(s.amount_total) || null]);
         notify((await db.query('SELECT host_id FROM events WHERE id = $1', [eid])).rows[0]?.host_id, uid, 'event_rsvp', null, null, null, null, eid);
       }
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'newsletter_sub') {
@@ -4044,6 +4044,8 @@ const PUSH_VERBS = {
   aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge',
   aff_rejected: 'reviewed your affiliation badge',
   rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking — you can pay now',
+  event_cancelled: 'cancelled an event you were going to — any ticket money is back in your wallet', course_cancelled: 'removed a course you bought — your money is back in your wallet',
+  order_refunded: 'sent you a refund on your order — it’s in your wallet',
   money_drop_done: 'opened the last share of your money drop', money_drop_expired: 'your money drop expired — the rest came back to your wallet',
   service_lead: 'needs a pro — a new request in your category',
   rental_booked: 'booked your rental — Instant Book confirmed it',
@@ -6740,6 +6742,22 @@ app.post('/api/account/pause', auth.requireAuth, rateLimit(20, 60000, 'acct-paus
 
 // Shop vacation mode (free for every seller — unlike account pause, this only
 // stops NEW orders; listings, chats and existing orders carry on as normal).
+// The shop's stated returns window: NULL = the 30-day default, 0 = none, up to 365.
+app.get('/api/shop/returns-policy', auth.requireAuth, async (req, res) => {
+  try {
+    const r = (await db.query('SELECT returns_days FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+    res.json({ returnsDays: r.returns_days == null ? null : r.returns_days, defaultDays: 30 });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not load it.' }); }
+});
+app.put('/api/shop/returns-policy', auth.requireAuth, rateLimit(20, 60000, 'returns-policy'), async (req, res) => {
+  let d = req.body.returnsDays;
+  if (d === null || d === '' || d === undefined) d = null;
+  else { d = parseInt(d, 10); if (!Number.isInteger(d) || d < 0 || d > 365) return res.status(400).json({ error: 'Pick 0 to 365 days (blank = the 30-day default).' }); }
+  try {
+    await db.query('UPDATE users SET returns_days = $2 WHERE id = $1', [req.user.id, d]);
+    res.json({ ok: true, returnsDays: d });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not save it.' }); }
+});
 app.get('/api/shop/vacation', auth.requireAuth, async (req, res) => {
   try {
     const r = (await db.query('SELECT shop_paused, shop_pause_message FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
@@ -14586,7 +14604,8 @@ app.patch('/api/webinars/:id', auth.requireAuth, async (req, res) => {
   if (req.body.startsAt && !isNaN(new Date(req.body.startsAt).getTime())) put('starts_at', new Date(req.body.startsAt));
   if (Number.isInteger(parseInt(req.body.minutes, 10))) put('minutes', Math.max(5, Math.min(WEBINAR_MAX_MINUTES, parseInt(req.body.minutes, 10))));
   if (typeof req.body.qaOpen === 'boolean') put('qa_open', req.body.qaOpen);
-  if (req.body.status === 'cancelled') put('status', 'cancelled');
+  const cancelling = req.body.status === 'cancelled';
+  if (cancelling) put('status', 'cancelled');
   if (!sets.length) return res.status(400).json({ error: 'Nothing to change.' });
   vals.push(id, req.user.id);
   try {
@@ -14596,10 +14615,40 @@ app.patch('/api/webinars/:id', auth.requireAuth, async (req, res) => {
     // People cleared their diary for this, so a change or a cancellation is
     // told to them rather than left to be discovered.
     const who = await db.query('SELECT user_id FROM webinar_signups WHERE webinar_id = $1 AND user_id <> $2', [id, req.user.id]);
-    for (const r of who.rows) notify(r.user_id, req.user.id, req.body.status === 'cancelled' ? 'webinar_cancelled' : 'webinar_updated');
+    for (const r of who.rows) notify(r.user_id, req.user.id, cancelling ? 'webinar_cancelled' : 'webinar_updated');
+    // Cancelling gives the money back — everyone who paid, automatically.
+    if (cancelling) {
+      const w2 = (await db.query('SELECT host_id, price_cents FROM webinars WHERE id = $1', [id])).rows[0];
+      if (w2) refundWebinarSignups(id, w2.host_id, w2.price_cents).catch((e) => console.error('webinar refunds', e.message));
+    }
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update that.' }); }
 });
+/* ── Money back when a webinar is cancelled ──
+   Whoever paid gets their signup price back, host → attendee, claimed per row
+   (refunded flag) so a crash mid-loop resumes instead of paying anyone twice.
+   The host's balance covers it first; if they already spent it, the attendee
+   is still made whole (standalone credit), same rule as the returns desk. */
+async function refundWebinarSignups(webinarId, hostId, priceCents) {
+  // Never the host's own auto-signup row (paid=true, nothing ever paid) —
+  // refunding it would invent money out of the fallback credit.
+  const rows = (await db.query(
+    `UPDATE webinar_signups SET refunded = true
+      WHERE webinar_id = $1 AND paid = true AND refunded = false AND user_id <> $2 RETURNING user_id, paid_cents`, [webinarId, hostId])).rows;
+  let n = 0;
+  for (const r of rows) {
+    const amt = r.paid_cents != null ? r.paid_cents : (priceCents || 0);
+    if (amt <= 0) continue;
+    try {
+      let t = null;
+      try { t = await walletTransfer(hostId, r.user_id, amt, 'Webinar cancelled — refund'); } catch (e) {}
+      if (!t || !t.ok) await walletCreditStandalone(r.user_id, amt, 'webinar_refund', 'Webinar cancelled — refund');
+      rtPush(r.user_id, 'wallet', { type: 'receive', amountCents: amt });
+      n++;
+    } catch (e) { console.error('webinar refund', webinarId, r.user_id, e.message); }
+  }
+  return n;
+}
 app.post('/api/webinars/:id/signup', auth.requireAuth, blockImpersonation, rateLimit(30, 60000, 'webinar-signup'), async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
@@ -14619,7 +14668,7 @@ app.post('/api/webinars/:id/signup', auth.requireAuth, blockImpersonation, rateL
       const t = await walletTransfer(req.user.id, w.host_id, price, 'Webinar: ' + w.title, false);
       if (!t.ok) { if (cid) await walletReleaseIdem(req.user.id, cid, 'webinar');
         return res.status(400).json({ error: 'Not enough wallet balance — add money first.', insufficientBalance: true }); }
-      await db.query('INSERT INTO webinar_signups (webinar_id, user_id, paid) VALUES ($1,$2,true) ON CONFLICT DO NOTHING', [id, req.user.id]);
+      await db.query('INSERT INTO webinar_signups (webinar_id, user_id, paid, paid_cents) VALUES ($1,$2,true,$3) ON CONFLICT DO NOTHING', [id, req.user.id, price]);
       const out = { ok: true, paid: true };
       if (cid) await walletStoreIdem(req.user.id, cid, 'webinar', out);
       notify(w.host_id, req.user.id, 'webinar_signup');
@@ -15338,7 +15387,7 @@ app.post('/api/admin/webinars/:id/cancel', auth.requirePerm('moderation'), async
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   try {
-    const w = (await db.query(`UPDATE webinars SET status='cancelled' WHERE id=$1 RETURNING host_id, stream_id, title`, [id])).rows[0];
+    const w = (await db.query(`UPDATE webinars SET status='cancelled' WHERE id=$1 AND status <> 'cancelled' RETURNING host_id, stream_id, title, price_cents`, [id])).rows[0];
     if (!w) return res.status(404).json({ error: 'Not found.' });
     // If it is on air right now, take it off air too — cancelling a live
     // broadcast has to actually stop it, not just change a word in a table.
@@ -15346,6 +15395,7 @@ app.post('/api/admin/webinars/:id/cancel', auth.requirePerm('moderation'), async
     if (st) await endLiveStream(st);
     const who = await db.query('SELECT user_id FROM webinar_signups WHERE webinar_id = $1', [id]);
     for (const r of who.rows) notify(r.user_id, req.user.id, 'webinar_cancelled');
+    refundWebinarSignups(id, w.host_id, w.price_cents).catch((e) => console.error('webinar refunds', e.message));
     adminAudit(req, 'webinar.cancel', 'webinar', id, { title: w.title });
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel it.' }); }
@@ -26789,7 +26839,7 @@ app.delete('/api/saved-searches/:id', auth.requireAuth, async (req, res) => {
    PROFESSIONAL EVENTS (LinkedIn-style)
 ═══════════════════════════════════════════════ */
 const EVENTS_SELECT = `
-  SELECT e.id, e.host_id, e.title, e.description, e.starts_at, e.ends_at, e.online, e.location, e.cover, e.created_at, e.price_cents, e.capacity,
+  SELECT e.id, e.host_id, e.title, e.description, e.starts_at, e.ends_at, e.online, e.location, e.cover, e.created_at, e.price_cents, e.capacity, e.cancelled,
          u.name AS host_name, u.username AS host_username, u.avatar AS host_avatar, u.verified AS host_verified, u.account_type AS host_type,
          (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id = e.id AND r.status = 'going')::int AS going,
          (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id = e.id AND r.status = 'interested')::int AS interested,
@@ -26800,6 +26850,7 @@ const EVENTS_SELECT = `
   FROM events e JOIN users u ON u.id = e.host_id `;
 function mapEvent(r) {
   return {
+    cancelled: !!r.cancelled,
     id: r.id, title: r.title, description: r.description || '',
     startsAt: r.starts_at, endsAt: r.ends_at || null,
     online: !!r.online, location: r.location || null, cover: r.cover || null, createdAt: r.created_at,
@@ -29944,11 +29995,13 @@ function mapListing(r) {
     createdAt: r.created_at,
     // Seller-wide free-shipping threshold, advertised on the listing.
     freeShipOverCents: Number(r.seller_free_ship_over) > 0 ? Number(r.seller_free_ship_over) : null,
+    // The shop's returns window, stated up front (null = 30-day default, 0 = none).
+    sellerReturnsDays: r.seller_returns_days === undefined ? undefined : (r.seller_returns_days == null ? 30 : r.seller_returns_days),
   });
 }
 const LISTING_SELECT = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
   p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.rental_week_pct, p.rental_month_pct, p.rental_instant, p.rental_clean_fee_cents, p.rental_max_guests, p.rental_cancel_policy, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS},
-  u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified, u.cert_active AS seller_certified, u.free_ship_over_cents AS seller_free_ship_over
+  u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified, u.cert_active AS seller_certified, u.free_ship_over_cents AS seller_free_ship_over, u.returns_days AS seller_returns_days
   FROM products p JOIN users u ON u.id = p.business_id`;
 
 /* ─── Sponsored product ads (Amazon Sponsored Products / Etsy Ads-style) ───
@@ -33087,6 +33140,7 @@ function mapOrder(o, items, me) {
     needsShipping: !!o.needs_shipping,
     gift: !!o.gift, giftNote: o.gift_note || null,
     pickup: !!o.pickup, pickupLocation: o.pickup_location || null,
+    refundedCents: o.refunded_cents || 0,
     shipTo: o.needs_shipping ? { name: o.ship_name, phone: o.ship_phone || null, line1: o.ship_line1, line2: o.ship_line2 || null, city: o.ship_city, region: o.ship_region || null, postal: o.ship_postal || null, country: o.ship_country || null, instructions: o.ship_instructions || null } : null,
     carrier: o.carrier || null, tracking: o.tracking || null, shippedAt: o.shipped_at || null, deliveredAt: o.delivered_at || null,
     shipNote: o.ship_note || null, // seller's thank-you note, shown to both parties
@@ -33101,7 +33155,7 @@ function mapOrder(o, items, me) {
 const ORDER_SELECT = `SELECT o.id, o.buyer_id, o.seller_id, o.total_cents, o.status, o.note, o.created_at, o.paid_at, o.eta_min_at, o.eta_max_at, o.cancel_reason, o.cancel_note, o.cancelled_by, o.buyer_archived, o.seller_archived,
   o.escrow, o.auto_release_at, o.released_at, o.dispute_reason, o.disputed_by,
   o.discount_cents, o.coupon_code, o.gift, o.gift_note,
-  o.shipping_cents, o.tax_cents, o.needs_shipping, o.pickup, o.pickup_location, o.ship_name, o.ship_phone, o.ship_line1, o.ship_line2, o.ship_city, o.ship_region, o.ship_postal, o.ship_country, o.ship_instructions,
+  o.shipping_cents, o.tax_cents, o.needs_shipping, o.pickup, o.pickup_location, o.ship_name, o.ship_phone, o.ship_line1, o.ship_line2, o.ship_city, o.ship_region, o.ship_postal, o.ship_country, o.ship_instructions, o.refunded_cents,
   o.carrier, o.tracking, o.shipped_at, o.delivered_at, o.label_url, o.label_cost_cents, o.ship_note, o.local_delivery,
   bu.name AS buyer_name, bu.username AS buyer_username, bu.avatar AS buyer_avatar,
   su.name AS seller_name, su.username AS seller_username, su.avatar AS seller_avatar
@@ -34099,10 +34153,29 @@ app.post('/api/orders/:id/archive', auth.requireAuth, async (req, res) => {
 app.get('/api/orders', auth.requireAuth, async (req, res) => {
   const scope = req.query.scope === 'seller' ? 'seller' : 'buyer';
   const archived = req.query.archived === 'true';
+  /* Search + paging (the final scan's find): a seller with 300 orders could
+     only ever reach the newest 200 and had no way to find "Bea's basket from
+     March". q matches an order number exactly, an item name, or the other
+     party's name/@username; offset pages past the window. */
+  const q = (req.query.q || '').toString().trim().slice(0, 80);
+  const offset = Math.max(0, Math.min(100000, parseInt(req.query.offset, 10) || 0));
   try {
-    const where = (scope === 'seller' ? 'WHERE o.seller_id = $1' : 'WHERE o.buyer_id = $1')
+    const params = [req.user.id];
+    let where = (scope === 'seller' ? 'WHERE o.seller_id = $1' : 'WHERE o.buyer_id = $1')
       + (scope === 'seller' ? ` AND o.seller_archived = ${archived}` : ` AND o.buyer_archived = ${archived}`);
-    const { rows } = await db.query(ORDER_SELECT + ' ' + where + ' ORDER BY o.created_at DESC LIMIT 200', [req.user.id]);
+    if (q) {
+      const like = '%' + q.replace(/[\\%_]/g, '\\$&') + '%';
+      params.push(like);
+      const num = /^#?(\d{1,10})$/.exec(q);
+      let numClause = '';
+      if (num) { params.push(parseInt(num[1], 10)); numClause = ` OR o.id = $${params.length}`; }
+      const other = scope === 'seller' ? 'o.buyer_id' : 'o.seller_id';
+      where += ` AND (
+        EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.name ILIKE $2)
+        OR EXISTS (SELECT 1 FROM users pu WHERE pu.id = ${other} AND (pu.name ILIKE $2 OR pu.username ILIKE $2))
+        OR o.tracking ILIKE $2${numClause})`;
+    }
+    const { rows } = await db.query(ORDER_SELECT + ' ' + where + ` ORDER BY o.created_at DESC LIMIT 200 OFFSET ${offset}`, params);
     const out = [];
     for (const o of rows) {
       const items = (await db.query('SELECT product_id, name, price_cents, qty, variant_label FROM order_items WHERE order_id = $1', [o.id])).rows;
@@ -34874,6 +34947,51 @@ registerJob('product_subs', 'Subscribe & Save', SUB_FLUSH_MS); setInterval(track
 registerJob('cart_recovery', 'Cart recovery nudges', CARTREC_FLUSH_MS); setInterval(trackJob('cart_recovery', flushCartRecovery), CARTREC_FLUSH_MS).unref?.();
 
 /* ─── Returns / RMA ─── */
+/* ── Seller-issued refunds (Shopify's Refund button) ──
+   Full or partial, cumulative, never past the order total, straight from the
+   seller's balance to the buyer's. The claim is the guarded counter bump:
+   two overlapping refunds can never together exceed the total, and a failed
+   transfer rolls the counter back. A VOLUNTARY refund needs the seller's
+   balance to cover it — no platform fallback for a choice freely made.
+   Protected (escrow) orders keep their own confirm/dispute money path. */
+app.post('/api/orders/:id/refund', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'seller-refund'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const o = (await db.query('SELECT buyer_id, seller_id, status, total_cents, refunded_cents FROM orders WHERE id = $1', [id])).rows[0];
+    if (!o || o.seller_id !== req.user.id) return res.status(404).json({ error: 'Order not found.' });
+    if (!RETURN_OK_STATES.includes(o.status) && o.status !== 'refunded') {
+      if (o.status === 'escrow' || o.status === 'disputed') return res.status(400).json({ error: 'This is a protected order — its money releases or refunds through confirm and disputes.' });
+      return res.status(400).json({ error: 'This order isn’t in a refundable state.' });
+    }
+    const remaining = o.total_cents - (o.refunded_cents || 0);
+    if (remaining <= 0) return res.status(400).json({ error: 'This order is already fully refunded.' });
+    /* Frozen-wallet check (the invariant is NOT inherited when a route moves
+       money without walletVelocityCheck): a held wallet can't send, even a
+       refund. No velocity CAP here though — capping would block a large,
+       perfectly legitimate refund of a large order. */
+    const fr = (await db.query('SELECT wallet_frozen FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (fr && fr.wallet_frozen) return res.status(403).json({ frozen: true, error: 'Your wallet is on hold — contact support before sending refunds.' });
+    let amt = req.body.amountCents == null || req.body.amountCents === '' ? remaining : Math.round(Number(req.body.amountCents) || 0);
+    if (!(amt >= 1 && amt <= remaining)) return res.status(400).json({ error: `Refund between $0.01 and $${(remaining / 100).toFixed(2)} (what’s left of the total).` });
+    const claim = await db.query(
+      `UPDATE orders SET refunded_cents = refunded_cents + $3
+        WHERE id = $1 AND seller_id = $2 AND refunded_cents + $3 <= total_cents RETURNING refunded_cents`, [id, req.user.id, amt]);
+    if (!claim.rowCount) return res.status(409).json({ error: 'Another refund just went through — check the order.' });
+    let t = null;
+    try { t = await walletTransfer(req.user.id, o.buyer_id, amt, 'Refund on order #' + id); } catch (e) {}
+    if (!t || !t.ok) {
+      await db.query('UPDATE orders SET refunded_cents = refunded_cents - $2 WHERE id = $1', [id, amt]);
+      return res.status(400).json({ error: 'Your balance doesn’t cover that refund — add money first.', insufficientBalance: true });
+    }
+    const nowRefunded = claim.rows[0].refunded_cents >= o.total_cents;
+    if (nowRefunded) await db.query(`UPDATE orders SET status = 'refunded' WHERE id = $1 AND status <> 'refunded'`, [id]);
+    notify(o.buyer_id, req.user.id, 'order_refunded', null, null, null, null, null, id);
+    rtPush(o.buyer_id, 'order', { id, refundedCents: claim.rows[0].refunded_cents });
+    rtPush(o.buyer_id, 'wallet', { type: 'receive', amountCents: amt });
+    res.json({ ok: true, refundedCents: claim.rows[0].refunded_cents, fullyRefunded: nowRefunded });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not send the refund.' }); }
+});
 const RETURN_OK_STATES = ['paid', 'fulfilled', 'delivered', 'released']; // refundable, non-escrow-pending
 async function loadOrderReturn(orderId) {
   return (await db.query("SELECT id, status, reason, created_at, resolved_at, label_url, label_cost_cents, label_carrier, label_tracking FROM order_returns WHERE order_id = $1 ORDER BY created_at DESC LIMIT 1", [orderId])).rows[0] || null;
@@ -34885,9 +35003,19 @@ app.post('/api/orders/:id/return', auth.requireAuth, rateLimit(20, 60000, 'retur
   const reason = (req.body.reason || '').toString().trim().slice(0, 500);
   if (!reason) return res.status(400).json({ error: 'Tell the seller why you’re returning it.' });
   try {
-    const o = (await db.query('SELECT buyer_id, seller_id, status FROM orders WHERE id = $1', [id])).rows[0];
+    const o = (await db.query('SELECT o.buyer_id, o.seller_id, o.status, o.created_at, o.delivered_at, o.shipped_at, u.returns_days FROM orders o JOIN users u ON u.id = o.seller_id WHERE o.id = $1', [id])).rows[0];
     if (!o || o.buyer_id !== req.user.id) return res.status(404).json({ error: 'Order not found.' });
     if (!RETURN_OK_STATES.includes(o.status)) return res.status(400).json({ error: 'This order can’t be returned.' });
+    /* The shop's returns window (default 30 days, 0 = no returns), counted
+       from delivery when known, else shipping, else the order itself. Escrow
+       protection and the disputes desk are untouched — this only bounds the
+       self-serve RETURN flow, which previously had no time bound at all. */
+    const windowDays = o.returns_days == null ? 30 : o.returns_days;
+    if (windowDays === 0) return res.status(400).json({ noReturns: true, error: 'This shop doesn’t accept returns. If something is wrong with the order, open a dispute instead.' });
+    const basis = o.delivered_at || o.shipped_at || o.created_at;
+    if (basis && Date.now() - new Date(basis).getTime() > windowDays * 86400000) {
+      return res.status(400).json({ pastWindow: true, error: `This is outside the shop’s ${windowDays}-day return window. If something is wrong, open a dispute instead.` });
+    }
     const open = (await db.query("SELECT 1 FROM order_returns WHERE order_id = $1 AND status IN ('requested','approved')", [id])).rows[0];
     if (open) return res.status(400).json({ error: 'A return is already open on this order.' });
     await db.query('INSERT INTO order_returns (order_id, buyer_id, seller_id, reason) VALUES ($1,$2,$3,$4)', [id, o.buyer_id, o.seller_id, reason]);
@@ -37721,10 +37849,48 @@ app.delete('/api/events/:id', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid event id.' });
   try {
+    /* An event with SOLD tickets can't simply vanish — the buyers' money and
+       their record of it would vanish too. Cancel it instead: everyone is
+       told, everyone who paid is refunded, and the row stays as the receipt. */
+    const paid = (await db.query(
+      `SELECT COUNT(*)::int AS n FROM event_rsvps WHERE event_id = $1 AND paid = true AND COALESCE(paid_cents, 1) > 0`, [id])).rows[0].n;
+    if (paid > 0) return res.status(400).json({ hasTickets: true, error: 'People bought tickets — cancel the event instead, and their money goes back automatically.' });
+    // No money at stake: deleting is fine, but the people who said "going"
+    // still deserve to hear it isn't happening.
+    const going = (await db.query(`SELECT user_id FROM event_rsvps WHERE event_id = $1 AND status = 'going' AND user_id <> $2`, [id, req.user.id])).rows;
     const r = await db.query('DELETE FROM events WHERE id = $1 AND host_id = $2', [id, req.user.id]);
     if (!r.rowCount) return res.status(404).json({ error: 'Not found (or not yours).' });
+    for (const g of going) notify(g.user_id, req.user.id, 'event_cancelled');
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the event.' }); }
+});
+/* Cancel an event: guarded to happen once; every paid ticket refunds what was
+   actually paid (snapshotted — a demo-granted ticket snapshotted 0 and owes 0;
+   an older ticket with no snapshot refunds the event's price). Ticket money
+   was collected by the platform's checkout, so refunds are platform credits —
+   the same shape the refunds desk uses for platform charges. */
+app.post('/api/events/:id/cancel', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid event id.' });
+  try {
+    const ev = (await db.query(
+      `UPDATE events SET cancelled = true WHERE id = $1 AND host_id = $2 AND cancelled = false RETURNING title, price_cents`, [id, req.user.id])).rows[0];
+    if (!ev) return res.status(404).json({ error: 'Not found, not yours, or already cancelled.' });
+    const rows = (await db.query(
+      `UPDATE event_rsvps SET refunded = true
+        WHERE event_id = $1 AND paid = true AND refunded = false AND user_id <> $2 RETURNING user_id, paid_cents`, [id, req.user.id])).rows;
+    let refunds = 0;
+    for (const r of rows) {
+      const amt = r.paid_cents != null ? r.paid_cents : (ev.price_cents || 0);
+      if (amt > 0) {
+        try { await walletCreditStandalone(r.user_id, amt, 'ticket_refund', 'Event cancelled — ticket refunded'); refunds++; }
+        catch (e) { console.error('ticket refund', id, r.user_id, e.message); }
+      }
+    }
+    const who = (await db.query(`SELECT user_id FROM event_rsvps WHERE event_id = $1 AND user_id <> $2`, [id, req.user.id])).rows;
+    for (const w of who) notify(w.user_id, req.user.id, 'event_cancelled', null, null, null, null, id);
+    res.json({ ok: true, refunds });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel the event.' }); }
 });
 // RSVP (going / interested). Upsert; host is notified.
 app.post('/api/events/:id/rsvp', auth.requireAuth, blockImpersonation, async (req, res) => {
@@ -37732,6 +37898,8 @@ app.post('/api/events/:id/rsvp', auth.requireAuth, blockImpersonation, async (re
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid event id.' });
   const status = ['going', 'interested', 'waitlist'].includes(req.body.status) ? req.body.status : 'going';
   try {
+    const evc = (await db.query('SELECT cancelled FROM events WHERE id = $1', [id])).rows[0];
+    if (evc && evc.cancelled) return res.status(400).json({ error: 'This event was cancelled.' });
     const e = await db.query('SELECT host_id, price_cents, title, capacity FROM events WHERE id = $1', [id]);
     if (!e.rows[0]) return res.status(404).json({ error: 'That event is no longer available.' });
     const price = e.rows[0].price_cents || 0;
@@ -37759,7 +37927,7 @@ app.post('/api/events/:id/rsvp', auth.requireAuth, blockImpersonation, async (re
           );
           return res.json({ url: session.url });
         }
-        await db.query(`INSERT INTO event_rsvps (event_id, user_id, status, paid) VALUES ($1,$2,'going',true) ON CONFLICT (event_id, user_id) DO UPDATE SET status='going', paid=true`, [id, req.user.id]); // demo: instant ticket
+        await db.query(`INSERT INTO event_rsvps (event_id, user_id, status, paid, paid_cents) VALUES ($1,$2,'going',true,0) ON CONFLICT (event_id, user_id) DO UPDATE SET status='going', paid=true, paid_cents=0`, [id, req.user.id]); // demo: instant ticket — 0 paid, 0 ever owed
         notify(e.rows[0].host_id, req.user.id, 'event_rsvp', null, null, null, null, id);
         return res.json({ ok: true, status: 'going' });
       }
@@ -37845,6 +38013,59 @@ async function promoteFromWaitlist(eventId) {
   } catch (_) { /* best-effort */ }
 }
 // Attendee list (going first, then interested).
+/* ── Ticket check-in (the door) ──
+   A "going" RSVP gets a signed QR (HMAC over event+user — nothing stored, so
+   nothing to leak or rotate); the host scans it at the door. Paid events
+   require a PAID rsvp for a ticket. The check-in itself is a guarded flip
+   (false→true RETURNING) so two door scans of one ticket give exactly one
+   green tick and one "already checked in". */
+function eventTicketSig(eventId, userId) {
+  return _vcrypto.createHmac('sha256', MEDIA_SECRET).update('evticket:' + eventId + ':' + userId).digest('hex').slice(0, 20);
+}
+app.get('/api/events/:id/ticket', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid event id.' });
+  try {
+    const ev = (await db.query('SELECT host_id, title, price_cents, cancelled FROM events WHERE id = $1', [id])).rows[0];
+    if (!ev) return res.status(404).json({ error: 'That event is no longer available.' });
+    if (ev.cancelled) return res.status(400).json({ error: 'This event was cancelled.' });
+    if (ev.host_id === req.user.id) return res.status(400).json({ error: 'You’re the host — you scan tickets, you don’t need one.' });
+    const r = (await db.query(`SELECT status, paid, checked_in FROM event_rsvps WHERE event_id = $1 AND user_id = $2`, [id, req.user.id])).rows[0];
+    if (!r || r.status !== 'going') return res.status(400).json({ error: 'RSVP “going” first — then your ticket appears here.' });
+    if ((ev.price_cents || 0) > 0 && !r.paid) return res.status(400).json({ error: 'This is a ticketed event — get your ticket first.' });
+    const code = 'atwe-ticket:' + id + ':' + req.user.id + ':' + eventTicketSig(id, req.user.id);
+    const qr = await QRCode.toDataURL(code, { width: 360, margin: 1, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } });
+    res.json({ qr, code, checkedIn: !!r.checked_in });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build your ticket.' }); }
+});
+app.post('/api/events/:id/checkin', auth.requireAuth, rateLimit(120, 60000, 'ticket-checkin'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid event id.' });
+  try {
+    const ev = (await db.query('SELECT host_id, price_cents FROM events WHERE id = $1', [id])).rows[0];
+    if (!ev) return res.status(404).json({ error: 'That event is no longer available.' });
+    if (ev.host_id !== req.user.id) return res.status(403).json({ error: 'Only the host checks tickets in.' });
+    const m = /^atwe-ticket:(\d+):(\d+):([a-f0-9]{20})$/.exec(String(req.body.code || ''));
+    if (!m || parseInt(m[1], 10) !== id) return res.status(400).json({ error: 'That isn’t a ticket for this event.' });
+    const uid = parseInt(m[2], 10);
+    const want = eventTicketSig(id, uid);
+    const got = m[3];
+    if (!(want.length === got.length && _vcrypto.timingSafeEqual(Buffer.from(want), Buffer.from(got))))
+      return res.status(400).json({ error: 'That ticket doesn’t verify — don’t let it in.' });
+    const r = (await db.query(`SELECT status, paid FROM event_rsvps WHERE event_id = $1 AND user_id = $2`, [id, uid])).rows[0];
+    if (!r || r.status !== 'going') return res.status(400).json({ error: 'No “going” RSVP behind this ticket.' });
+    if ((ev.price_cents || 0) > 0 && !r.paid) return res.status(400).json({ error: 'This ticket was never paid for.' });
+    const u = (await db.query('SELECT name, username, avatar FROM users WHERE id = $1', [uid])).rows[0] || {};
+    const claim = await db.query(
+      `UPDATE event_rsvps SET checked_in = true, checked_in_at = now()
+        WHERE event_id = $1 AND user_id = $2 AND checked_in = false RETURNING checked_in_at`, [id, uid]);
+    if (!claim.rowCount) {
+      const at = (await db.query('SELECT checked_in_at FROM event_rsvps WHERE event_id = $1 AND user_id = $2', [id, uid])).rows[0];
+      return res.json({ already: true, name: u.name || null, username: u.username || null, at: at ? at.checked_in_at : null });
+    }
+    res.json({ ok: true, name: u.name || null, username: u.username || null, avatar: u.avatar || null, paid: !!r.paid });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not check that ticket.' }); }
+});
 app.get('/api/events/:id/attendees', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid event id.' });
@@ -37852,12 +38073,12 @@ app.get('/api/events/:id/attendees', auth.requireAuth, async (req, res) => {
     const e = await db.query('SELECT 1 FROM events WHERE id = $1', [id]);
     if (!e.rows[0]) return res.status(404).json({ error: 'That event is no longer available.' });
     const { rows } = await db.query(
-      `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.headline, r.status
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.headline, r.status, r.checked_in
        FROM event_rsvps r JOIN users u ON u.id = r.user_id
        WHERE r.event_id = $1 ORDER BY (r.status = 'going') DESC, r.created_at ASC LIMIT 500`,
       [id]
     );
-    res.json({ attendees: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, headline: u.headline || null, status: u.status })) });
+    res.json({ attendees: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, headline: u.headline || null, status: u.status, checkedIn: !!u.checked_in })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load attendees.' }); }
 });
 
@@ -39170,9 +39391,31 @@ app.delete('/api/courses/:id', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   try {
-    const r = await db.query('DELETE FROM courses WHERE id = $1 AND creator_id = $2', [id, req.user.id]);
-    if (!r.rowCount) return res.status(404).json({ error: 'Not found (or not yours).' });
-    res.json({ ok: true });
+    const c = (await db.query('SELECT creator_id, price_cents, title FROM courses WHERE id = $1 AND creator_id = $2', [id, req.user.id])).rows[0];
+    if (!c) return res.status(404).json({ error: 'Not found (or not yours).' });
+    /* Deleting a course takes it away from everyone who bought it — so they
+       get their money back FIRST, each refund claimed per row (a crash mid-
+       loop resumes on retry rather than refunding twice), and only then does
+       the course go. Creator's balance covers it; a shortfall still makes the
+       student whole, same rule as the returns desk. */
+    const rows = (await db.query(
+      `UPDATE course_enrollments SET refunded = true
+        WHERE course_id = $1 AND refunded = false AND user_id <> $2 RETURNING user_id, paid_cents`, [id, req.user.id])).rows;
+    for (const r of rows) {
+      const amt = r.paid_cents != null ? r.paid_cents : (c.price_cents || 0);
+      if (amt > 0) {
+        try {
+          let t = null;
+          try { t = await walletTransfer(req.user.id, r.user_id, amt, 'Course removed — refund'); } catch (e) {}
+          if (!t || !t.ok) await walletCreditStandalone(r.user_id, amt, 'course_refund', 'Course removed — refund');
+          rtPush(r.user_id, 'wallet', { type: 'receive', amountCents: amt });
+        } catch (e) { console.error('course refund', id, r.user_id, e.message); }
+      }
+      notify(r.user_id, req.user.id, 'course_cancelled');
+    }
+    const r2 = await db.query('DELETE FROM courses WHERE id = $1 AND creator_id = $2', [id, req.user.id]);
+    if (!r2.rowCount) return res.status(404).json({ error: 'Not found (or not yours).' });
+    res.json({ ok: true, refunds: rows.length });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete.' }); }
 });
 // Add / edit / delete a lesson (creator).
@@ -39236,7 +39479,7 @@ app.post('/api/courses/:id/enroll', auth.requireAuth, blockImpersonation, async 
     // Claim the enrollment row BEFORE charging so a double-tap / retry can never charge twice.
     // course_enrollments is unique on (course_id,user_id), so the loser of a race is the SAME
     // user double-tapping — they get "already enrolled" and are charged exactly once.
-    const claim = await db.query('INSERT INTO course_enrollments (course_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING id', [id, req.user.id]);
+    const claim = await db.query('INSERT INTO course_enrollments (course_id, user_id, paid_cents) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING RETURNING id', [id, req.user.id, price]);
     if (!claim.rowCount) return res.json({ ok: true, enrolled: true }); // already enrolled — never re-charge
     if (price > 0) {
       const undo = async () => { await db.query('DELETE FROM course_enrollments WHERE course_id = $1 AND user_id = $2', [id, req.user.id]).catch(() => {}); };

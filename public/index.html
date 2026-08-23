@@ -16046,6 +16046,17 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 </div>
 
 <!-- Send a tip -->
+<!-- Shop returns policy: the stated window, enforced on return requests -->
+<div class="overlay hidden" id="returnsPolicyView" onclick="if(event.target===this)closeOverlay('returnsPolicyView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Returns policy">
+    <button class="sheet-close" onclick="closeOverlay('returnsPolicyView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Returns policy</div>
+    <div class="ac-disc-sub" style="margin:2px 0 10px;">How many days after delivery a buyer can ask to return something. It shows on every listing. Protected checkout and disputes always stay available regardless.</div>
+    <input class="jp-in" id="rpDays" type="number" min="0" max="365" step="1" placeholder="Days (blank = 30-day default, 0 = no returns)"/>
+    <button class="ac-pill-btn accent jp-submit" onclick="acSaveReturnsPolicy()">Save</button>
+  </div>
+</div>
+
 <!-- Money drop: a lump sum for the group, grabbed in random shares -->
 <div class="overlay hidden" id="moneyDropSheet" onclick="if(event.target===this)closeOverlay('moneyDropSheet')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Money drop">
@@ -16626,6 +16637,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
       <button class="ac-jv on" id="ordTabBuyer" onclick="acOrdersTab('buyer')">My orders</button>
       <button class="ac-jv" id="ordTabSeller" onclick="acOrdersTab('seller')">Sales</button>
     </div>
+    <input class="jp-in" id="ordSearch" type="text" maxlength="80" placeholder="Search orders — item, name, #number, tracking" aria-label="Search orders" oninput="acOrdSearchDebounced()" style="margin:0 0 10px;"/>
     <div id="ordersBody"></div>
   </div>
 </div>
@@ -17932,6 +17944,15 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <button class="sheet-close" onclick="closeOverlay('qrView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title" style="margin:0 0 12px;">Your QR code</div>
     <div id="myQrBody"></div>
+  </div>
+</div>
+
+<!-- Event ticket: the signed door QR -->
+<div class="overlay hidden" id="ticketView" onclick="if(event.target===this)closeOverlay('ticketView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Your ticket">
+    <button class="sheet-close" onclick="closeOverlay('ticketView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 12px;">Your ticket</div>
+    <div id="ticketBody"></div>
   </div>
 </div>
 
@@ -19738,7 +19759,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1675'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1676'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -29004,6 +29025,13 @@ async function acOpenEvent(id) {
   } catch (e) { body.innerHTML = '<div class="ac-empty">That event is no longer available.</div>'; }
 }
 function acRenderEvent(e) {
+  if (e.cancelled) {
+    const body0 = document.getElementById('eventViewBody');
+    body0.innerHTML = `<div class="jp-title" style="padding-right:34px;">${escHtml(e.title)}</div>
+      <div class="srq-closed" style="background:var(--red);color:#fff;">Cancelled</div>
+      <div class="ac-disc-sub" style="margin:10px 0;">This event was cancelled by the host. Anyone who bought a ticket has been refunded to their wallet.</div>`;
+    return;
+  }
   const body = document.getElementById('eventViewBody');
   const where = e.online
     ? (e.location ? `<a href="${escHtml(e.location)}" target="_blank" rel="noopener">${escHtml(e.location)}</a>` : 'Online event')
@@ -29015,7 +29043,7 @@ function acRenderEvent(e) {
   const soldOut = e.full && e.myRsvp !== 'going';
   const goingLabel = soldOut ? 'Full' : ((e.priceCents && !(e.myRsvp === 'going' && e.myPaid)) ? 'Get ticket · $' + (e.priceCents / 100).toFixed(2) : 'Going');
   const manage = e.mine
-    ? `<div class="ev-rsvp-row"><button onclick="acEventEdit()"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>Edit</button><button onclick="acEventDuplicate()"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Duplicate</button><button class="danger" onclick="acEventDelete()" style="color:var(--red);"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>Delete</button></div>`
+    ? `<div class="ev-rsvp-row"><button onclick="acEventScanTickets()"><svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="3" y1="12" x2="21" y2="12"/></svg>Scan tickets</button><button onclick="acEventEdit()"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>Edit</button><button onclick="acEventDuplicate()"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Duplicate</button><button class="danger" onclick="acEventDelete()" style="color:var(--red);"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>Delete</button></div>`
     : `<div class="ev-rsvp-row">
         ${(soldOut && !e.priceCents)
           ? `<button class="${e.myRsvp === 'waitlist' ? 'on' : ''}" onclick="acEvtRsvp('${e.myRsvp === 'waitlist' ? 'off' : 'waitlist'}')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>${e.myRsvp === 'waitlist' ? 'On the waitlist' : 'Join waitlist'}</button>`
@@ -29040,6 +29068,7 @@ function acRenderEvent(e) {
     ${manage}
     <div class="ev-count-link" onclick="acEventAttendees()">${e.going} going${e.interested ? ' · ' + e.interested + ' interested' : ''} →</div>
     ${e.description ? `<div class="ev-desc">${acLinkifyPost ? acLinkifyPost(e.description) : escHtml(e.description)}</div>` : ''}
+    ${(!e.mine && e.myRsvp === 'going' && (!e.priceCents || e.myPaid)) ? `<button class="ac-pill-btn" style="width:100%;margin-top:10px;" onclick="acEventTicket()"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-inline-end:6px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a3 3 0 0 0 0 6v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a3 3 0 0 0 0-6z"/><line x1="13" y1="6" x2="13" y2="18" stroke-dasharray="2 3"/></svg>My ticket</button>` : ''}
     <button class="ac-pill-btn" style="width:100%;margin-top:10px;" onclick="acEventIcs(${e.id})"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-inline-end:6px;fill:none;stroke:currentColor;stroke-width:2;"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="12" y1="12" x2="12" y2="17"/><line x1="9.5" y1="14.5" x2="14.5" y2="14.5"/></svg>Add to calendar</button>
     <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acShareEvent(${e.id})">↗ Share event</button>
     <div class="co-sec-h" style="margin-top:18px;">Discussion</div>
@@ -29147,7 +29176,23 @@ async function acEventDelete() {
     closeOverlay('eventView');
     showNotif('Event deleted.');
     if (!document.getElementById('eventsList').classList.contains('hidden')) acLoadEvents();
-  } catch (err) { showNotif(err.message || 'Could not delete the event.'); }
+  } catch (err) {
+    // Sold tickets: deleting would vanish people's money — cancelling refunds it.
+    if (err && err.body && err.body.hasTickets) {
+      if (await appConfirm({ title: 'People bought tickets', message: 'Cancel the event instead — everyone is told, and every ticket is refunded automatically.', confirmText: 'Cancel event', danger: true })) acEventCancel();
+      return;
+    }
+    showNotif(err.message || 'Could not delete the event.');
+  }
+}
+async function acEventCancel() {
+  const e = AC._evCur; if (!e) return;
+  try {
+    const r = await API.req('POST', '/api/events/' + e.id + '/cancel', {});
+    closeOverlay('eventView');
+    showNotif(r.refunds ? 'Cancelled — ' + r.refunds + ' ticket' + (r.refunds === 1 ? '' : 's') + ' refunded.' : 'Event cancelled. Everyone has been told.');
+    if (!document.getElementById('eventsList').classList.contains('hidden')) acLoadEvents();
+  } catch (err) { showNotif(err.message || 'Could not cancel the event.'); }
 }
 
 /* ─── Courses / LMS ─── */
@@ -29394,7 +29439,7 @@ async function acEventAttendees() {
       ? `<button class="ac-pill-btn" style="width:100%;margin-bottom:10px;" onclick="acEventAttendeesCsv()">⬇ Download guest list (CSV)</button>` : '';
     body.innerHTML = exportBtn + (attendees.length ? attendees.map(u => `<div class="ac-item" onclick="closeOverlay('eventAttendees');closeOverlay('eventView');appTab('home');acGoProfile(${jsAttr(u.username)})">
       ${acAvatarHtml(u.name, u.avatar)}
-      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</span>${u.status === 'interested' ? '<span class="ev-badge">interested</span>' : ''}</div><div class="ac-item-last">${u.headline ? escHtml(u.headline) : '@' + escHtml(u.username)}</div></div>
+      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</span>${u.status === 'interested' ? '<span class="ev-badge">interested</span>' : ''}${u.checkedIn ? '<span class="ev-badge" style="color:var(--green-txt);">checked in</span>' : ''}</div><div class="ac-item-last">${u.headline ? escHtml(u.headline) : '@' + escHtml(u.username)}</div></div>
     </div>`).join('') : '<div class="ac-empty">No attendees yet.</div>');
   } catch (e2) { body.innerHTML = '<div class="ac-empty">Could not load attendees.</div>'; }
 }
@@ -31364,7 +31409,7 @@ function notifRow(n, i) {
     delivery_cancelled: 'cancelled that delivery',
     certified_granted: 'awarded you the Atwe Certified mark',
     certified_removed: 'removed your Atwe Certified mark',
-    like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', event_reminder: 'is hosting an event starting soon', event_comment: 'commented on your event', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', appt_rescheduled: 'proposed a new appointment time', appt_reminder: 'has an appointment with you soon', call_reminder: 'has a call with you soon', stock_low: 'is running low — only a few left', stock_out: 'has sold out', event_spot: 'a spot opened up — you’re in!', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', invoice_reminder: 'sent a reminder about an unpaid invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', strike: 'issued a warning on your account', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', referral_milestone: 'you hit a referral milestone — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', listing_hidden: 'a listing of yours was hidden — check your messages', waitlist_invite: 'you’re off the waiting list — it’s ready for you', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', auction_outbid: 'outbid you on an auction. Bid again to stay in it', auction_won: 'you won the auction. Pay to claim it', auction_ended: 'won your auction. They’re paying now', group_join_paid: 'paid your group’s join fee. They’re in', crm_followup: 'is due a follow-up — you set the reminder', rinv_paused: 'a recurring invoice was paused — check the schedule', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', split_reminder: 'sent a reminder about your share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', story_answer: 'responded to your question', story_mention: 'mentioned you in their Daily', remix: 'remixed your video', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', community_boost: 'boosted your community', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_booked: 'booked your rental — Instant Book confirmed it', service_lead: 'needs a pro — a new request in your category', money_drop_done: 'opened the last share of your money drop', money_drop_expired: 'your money drop expired — the rest came back to your wallet', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_adjustment: 'your wallet balance was adjusted by our team', cashout_released: 'your cash-out was approved and is on its way to your bank', cashout_returned: 'your cash-out wasn’t approved — the money is back in your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item', lead_active: 'posted something new — they\u2019re on one of your lead lists', lead_hiring: 'is hiring — they\u2019re on one of your lead lists', inbox_assigned: 'gave you a conversation to handle', dmca_removed: 'removed something of yours after a copyright claim. Tap to contest it', dmca_reinstated: 'put your content back after reviewing your counter-notice', imp_upheld: 'agreed — the account impersonating you has been actioned', imp_rejected: 'reviewed your impersonation report', experiment_done: 'your A/B test found its winner — it’s applied', auth_requested: 'asked for an item check on an order', auth_passed: 'your item passed its check', auth_failed: 'an item failed its check — the buyer is refunded', webinar_signup: 'signed up for your webinar', webinar_live: 'is live now — the webinar you signed up for has started', webinar_updated: 'changed a webinar you signed up for', webinar_cancelled: 'cancelled a webinar you signed up for', delivery_on_way: 'is on the way with your order' };
+    like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', event_reminder: 'is hosting an event starting soon', event_comment: 'commented on your event', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', appt_rescheduled: 'proposed a new appointment time', appt_reminder: 'has an appointment with you soon', call_reminder: 'has a call with you soon', stock_low: 'is running low — only a few left', stock_out: 'has sold out', event_spot: 'a spot opened up — you’re in!', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', invoice_reminder: 'sent a reminder about an unpaid invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', strike: 'issued a warning on your account', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', referral_milestone: 'you hit a referral milestone — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', listing_hidden: 'a listing of yours was hidden — check your messages', waitlist_invite: 'you’re off the waiting list — it’s ready for you', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', auction_outbid: 'outbid you on an auction. Bid again to stay in it', auction_won: 'you won the auction. Pay to claim it', auction_ended: 'won your auction. They’re paying now', group_join_paid: 'paid your group’s join fee. They’re in', crm_followup: 'is due a follow-up — you set the reminder', rinv_paused: 'a recurring invoice was paused — check the schedule', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', split_reminder: 'sent a reminder about your share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', story_answer: 'responded to your question', story_mention: 'mentioned you in their Daily', remix: 'remixed your video', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', community_boost: 'boosted your community', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_booked: 'booked your rental — Instant Book confirmed it', event_cancelled: 'cancelled an event you were going to — any ticket money is back in your wallet', course_cancelled: 'removed a course you bought — your money is back in your wallet', service_lead: 'needs a pro — a new request in your category', money_drop_done: 'opened the last share of your money drop', money_drop_expired: 'your money drop expired — the rest came back to your wallet', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_adjustment: 'your wallet balance was adjusted by our team', cashout_released: 'your cash-out was approved and is on its way to your bank', cashout_returned: 'your cash-out wasn’t approved — the money is back in your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item', lead_active: 'posted something new — they\u2019re on one of your lead lists', lead_hiring: 'is hiring — they\u2019re on one of your lead lists', inbox_assigned: 'gave you a conversation to handle', dmca_removed: 'removed something of yours after a copyright claim. Tap to contest it', dmca_reinstated: 'put your content back after reviewing your counter-notice', imp_upheld: 'agreed — the account impersonating you has been actioned', imp_rejected: 'reviewed your impersonation report', experiment_done: 'your A/B test found its winner — it’s applied', auth_requested: 'asked for an item check on an order', auth_passed: 'your item passed its check', auth_failed: 'an item failed its check — the buyer is refunded', webinar_signup: 'signed up for your webinar', webinar_live: 'is live now — the webinar you signed up for has started', webinar_updated: 'changed a webinar you signed up for', webinar_cancelled: 'cancelled a webinar you signed up for', delivery_on_way: 'is on the way with your order' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -41374,7 +41419,11 @@ async function acOpenListing(id) {
     const ratingLine = l.reviewCount ? `<div class="mkt-rating" onclick="document.getElementById('prodReviews').scrollIntoView({behavior:'smooth'})">${acStars(l.rating)}<span>${l.rating} · ${l.reviewCount} review${l.reviewCount === 1 ? '' : 's'}</span></div>` : '';
     // Social proof: units sold (paid-state orders) — "N sold", eBay/Amazon-style.
     const condLbl = { new: 'New', like_new: 'Like new', good: 'Good', fair: 'Fair' }[l.condition];
-    const soldLine = (l.soldCount || condLbl || l.savedCount >= 3) ? `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${condLbl ? `<div class="mkt-sold">Condition: ${condLbl}</div>` : ''}${l.soldCount ? `<div class="mkt-sold">${l.soldCount >= 100 ? '100+' : l.soldCount} sold</div>` : ''}${l.savedCount >= 3 ? `<div class="mkt-sold mkt-watching">${l.savedCount} people have this saved</div>` : ''}</div>` : '';
+    // The shop's stated returns window — its own line so a brand-new listing
+    // (no sales, no saves) still states it.
+    const returnsLine = (l.sellerReturnsDays !== undefined && l.kind === 'physical')
+      ? `<div class="mkt-sold" style="margin-top:4px;">${l.sellerReturnsDays === 0 ? 'No returns — protected checkout still covers you' : 'Returns: ' + l.sellerReturnsDays + ' days'}</div>` : '';
+    const soldLine = ((l.soldCount || condLbl || l.savedCount >= 3) ? `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${condLbl ? `<div class="mkt-sold">Condition: ${condLbl}</div>` : ''}${l.soldCount ? `<div class="mkt-sold">${l.soldCount >= 100 ? '100+' : l.soldCount} sold</div>` : ''}${l.savedCount >= 3 ? `<div class="mkt-sold mkt-watching">${l.savedCount} people have this saved</div>` : ''}</div>` : '') + returnsLine;
     // Variant picker (when the product has options).
     const vpick = l.hasVariants ? `<div class="vpick-h">Options</div><div class="vpick" id="mktVpick">${l.variants.map(v => `<button class="vchip${v.soldOut ? ' out' : ''}" ${v.soldOut ? 'disabled' : `onclick="acPickVariant(${v.id})"`}>${escHtml(v.label)}${v.priceCents !== l.priceCents ? ` · $${(v.priceCents / 100).toFixed(2)}` : ''}</button>`).join('')}</div>` : '';
     const heart = own ? '' : `<button class="mkt-save ${l.saved ? 'on' : ''}" id="mktSaveBtn" onclick="acToggleSave(${l.id},this)" aria-label="Save"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg></button>`;
@@ -43414,16 +43463,16 @@ async function acLoadShop(bizId, isOwner) {
 function acGroupedProductGrid(products, owner) {
   const order = []; const groups = {};
   products.forEach(p => {
-    const key = (p.category || '').trim() || ' other';
+    const key = (p.category || '').trim() || '\u0000other';
     if (!groups[key]) { groups[key] = []; order.push(key); }
     groups[key].push(p);
   });
-  const realCats = order.filter(k => k !== ' other');
+  const realCats = order.filter(k => k !== '\u0000other');
   if (realCats.length === 0) return `<div class="shop-grid">${products.map(p => acProductCard(p, owner)).join('')}</div>`;
   // Named sections first (in first-seen order), then "Other" last.
-  const ordered = realCats.concat(order.includes(' other') ? [' other'] : []);
+  const ordered = realCats.concat(order.includes('\u0000other') ? ['\u0000other'] : []);
   return ordered.map(k => {
-    const label = k === ' other' ? 'Other' : k;
+    const label = k === '\u0000other' ? 'Other' : k;
     return `<div class="sf-section"><div class="sf-section-head">${escHtml(label)}</div>
       <div class="shop-grid">${groups[k].map(p => acProductCard(p, owner)).join('')}</div></div>`;
   }).join('');
@@ -43906,11 +43955,15 @@ function acOrdersTab(scope) {
   document.getElementById('ordTabSeller').classList.toggle('on', scope === 'seller');
   acLoadOrders();
 }
+// The live order-search term, URL-ready (empty when the box is empty).
+function acOrdQ() { const v = (document.getElementById('ordSearch') || {}).value || ''; return v.trim() ? '&q=' + encodeURIComponent(v.trim()) : ''; }
+let _ordQT = null;
+function acOrdSearchDebounced() { clearTimeout(_ordQT); _ordQT = setTimeout(acLoadOrders, 300); }
 async function acLoadOrders() {
   const body = document.getElementById('ordersBody'); body.innerHTML = acSkelRows(3);
   try {
     const arch = AC._ordFilter === 'archived';
-    const { orders } = await API.req('GET', '/api/orders?scope=' + AC._ordScope + (arch ? '&archived=true' : ''));
+    const { orders } = await API.req('GET', '/api/orders?scope=' + AC._ordScope + (arch ? '&archived=true' : '') + acOrdQ());
     AC._orders = orders || []; if (!arch) AC._ordFilter = 'all';
     acRenderOrders();
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
@@ -43997,6 +44050,11 @@ async function acOpenOrder(id) {
     } else if (o.mine && o.status === 'paid') {
       action += `<button class="ac-pill-btn accent" style="width:100%;" onclick="acFulfillOrder()">Mark fulfilled</button>`;
     }
+    // Seller-issued refund (Shopify's Refund button): full or partial, from
+    // the seller's balance, never past the total.
+    if (o.mine && ['paid', 'fulfilled', 'delivered', 'released'].includes(o.status) && (o.refundedCents || 0) < o.totalCents) {
+      action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acSellerRefund()">Issue a refund</button>`;
+    }
     // ── Review (buyer, once received) ──
     if (!o.mine && (o.status === 'fulfilled' || o.deliveredAt)) {
       action += reviewProd
@@ -44065,7 +44123,9 @@ async function acOpenOrder(id) {
         ? `<div class="ord-track">📦 Estimated to ship by <b>${new Date(o.shipByAt).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</b></div>` : '';
       shipBlock = timeline + shipBy + track + sellerNote + ship;
     }
-    const totals = `<div class="inv-items">${items}
+    const refundLine = (o.refundedCents || 0) > 0
+      ? `<div class="ord-track" style="color:var(--green-txt);">Refunded ${acMoneyFmt(o.refundedCents)}${o.refundedCents >= o.totalCents ? ' — in full' : ' of ' + acMoneyFmt(o.totalCents)}</div>` : '';
+    const totals = `<div class="inv-items">${refundLine}${items}
       ${o.needsShipping || o.shippingCents || o.discountCents ? `<div class="inv-item"><span>Subtotal</span><span>$${(o.subtotalCents / 100).toFixed(2)}</span></div>` : ''}
       ${o.discountCents ? `<div class="inv-item" style="color:var(--green);"><span>Discount${o.couponCode ? ' (' + escHtml(o.couponCode) + ')' : ''}</span><span>−$${(o.discountCents / 100).toFixed(2)}</span></div>` : ''}
       ${o.needsShipping || o.shippingCents ? `<div class="inv-item"><span>Shipping</span><span>${o.shippingCents ? '$' + (o.shippingCents / 100).toFixed(2) : 'Free'}</span></div>` : ''}
@@ -44100,6 +44160,32 @@ async function acOpenOrder(id) {
       ${retBlock}
       ${action}`;
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Order not available.') + '</div>'; }
+}
+/* Seller sends money back — all of it, or part. States the ceiling, sends the
+   server's answer, never a guess. */
+async function acOpenReturnsPolicy() {
+  showOverlay('returnsPolicyView');
+  try { const r = await API.req('GET', '/api/shop/returns-policy'); document.getElementById('rpDays').value = r.returnsDays == null ? '' : r.returnsDays; } catch (e) {}
+}
+async function acSaveReturnsPolicy() {
+  const v = document.getElementById('rpDays').value;
+  try {
+    await API.req('PUT', '/api/shop/returns-policy', { returnsDays: v === '' ? null : parseInt(v, 10) });
+    closeOverlay('returnsPolicyView'); showNotif('Saved.');
+  } catch (e) { showNotif(e.message || 'Could not save it.'); }
+}
+async function acSellerRefund() {
+  const o = AC._ordCur; if (!o) return;
+  const remaining = o.totalCents - (o.refundedCents || 0);
+  const v = await appPrompt({ title: 'Issue a refund', message: 'Up to ' + acMoneyFmt(remaining) + ' (what\u2019s left of the total). Leave blank to refund it all. It moves from your balance to the buyer instantly.', placeholder: 'Amount in $ (blank = full)', inputMode: 'decimal', confirmText: 'Refund' });
+  if (v === null) return;
+  const amt = v.trim() === '' ? undefined : Math.round((parseFloat(v) || 0) * 100);
+  try {
+    const r = await API.req('POST', '/api/orders/' + o.id + '/refund', { amountCents: amt });
+    acOrderSuccessPulse(null, r.fullyRefunded ? 'Fully refunded' : 'Refunded — ' + acMoneyFmt(r.refundedCents) + ' so far');
+    acRefreshBalance && acRefreshBalance();
+    acOpenOrder(o.id);
+  } catch (e) { showNotif(e.message || 'Could not send the refund.'); }
 }
 async function acFulfillOrder() {
   try { await API.req('POST', '/api/orders/' + AC._ordId + '/fulfill'); showNotif('Marked fulfilled.'); acOpenOrder(AC._ordId); }
@@ -46424,7 +46510,7 @@ async function acOpenQrScan(mode) {
   const warn = document.getElementById('qrScanWarn');
   // The "Link a device" scan transfers a login — show a clear security warning.
   if (warn) warn.classList.toggle('hidden', AC._qrScanMode !== 'link');
-  const title = document.getElementById('qrScanTitle'); if (title) title.textContent = AC._qrScanMode === 'link' ? 'Link a device' : 'Scan a code';
+  const title = document.getElementById('qrScanTitle'); if (title) title.textContent = AC._qrScanMode === 'link' ? 'Link a device' : (AC._qrScanMode === 'ticket' ? 'Scan tickets' : 'Scan a code');
   if (typeof jsQR !== 'function') { status.textContent = 'Scanner isn’t available here.'; return; }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { status.textContent = 'No camera available on this device.'; return; }
   status.textContent = 'Point your camera at a QR code…';
@@ -46439,7 +46525,11 @@ async function acOpenQrScan(mode) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         let img = null; try { img = ctx.getImageData(0, 0, canvas.width, canvas.height); } catch (e) {}
         const code = img && jsQR(img.data, img.width, img.height);
-        if (code && code.data) { acHandleScannedQr(code.data); return; }
+        if (code && code.data) {
+          // Ticket mode keeps the camera running — a door checks many people in.
+          if (AC._qrScanMode === 'ticket') acTicketScanned(code.data);
+          else { acHandleScannedQr(code.data); return; }
+        }
       }
       _qrScanRAF = requestAnimationFrame(tick);
     };
@@ -46471,6 +46561,45 @@ function acHandleScannedQr(data) {
   catch (e) { const m = s.match(/^@?([A-Za-z0-9._-]{1,40})$/); if (m) username = m[1]; }
   if (username) { showNotif('Opening @' + username.replace(/^@/, '') + '…'); acGoProfile(username.replace(/^@/, '')); }
   else showNotif('That isn’t an Atwe profile code.');
+}
+/* ── Event tickets: show mine / scan theirs ── */
+async function acEventTicket() {
+  const e = AC._evCur; if (!e) return;
+  showOverlay('ticketView');
+  const box = document.getElementById('ticketBody');
+  box.innerHTML = acQrSkel();
+  try {
+    const r = await API.req('GET', '/api/events/' + e.id + '/ticket');
+    box.innerHTML = `<div style="text-align:center;">
+      <img src="${r.qr}" alt="Your ticket QR code" style="width:min(260px,70vw);border-radius:14px;background:#fff;padding:8px;"/>
+      <div class="jp-title" style="margin:10px 0 2px;">${escHtml(e.title)}</div>
+      <div class="ac-disc-sub">${acEvWhen(e.startsAt)}</div>
+      <div class="ac-disc-sub" style="margin-top:8px;">Show this at the door.${r.checkedIn ? ' <b style="color:var(--green-txt);">Already checked in.</b>' : ''}</div>
+    </div>`;
+  } catch (err) { box.innerHTML = '<div class="ac-disc-sub">' + escHtml(err.message || 'Could not load your ticket.') + '</div>'; }
+}
+function acEventScanTickets() { const e = AC._evCur; if (!e) return; AC._ticketEventId = e.id; acOpenQrScan('ticket'); }
+let _tkBusy = false, _tkLast = '', _tkLastAt = 0;
+async function acTicketScanned(data) {
+  const s = String(data || '');
+  const now = Date.now();
+  // One POST at a time, and the same code held in frame doesn't re-fire.
+  if (_tkBusy || (s === _tkLast && now - _tkLastAt < 4000)) return;
+  _tkLast = s; _tkLastAt = now;
+  const status = document.getElementById('qrScanStatus');
+  const m = s.match(/^atwe-ticket:(\d+):(\d+):([a-f0-9]{16,})$/i);
+  if (!m) { if (status) status.textContent = 'That isn’t a ticket code.'; return; }
+  if (Number(m[1]) !== AC._ticketEventId) { if (status) status.textContent = 'That ticket is for a different event.'; return; }
+  _tkBusy = true;
+  try {
+    const r = await API.req('POST', '/api/events/' + AC._ticketEventId + '/checkin', { code: s });
+    if (status) {
+      if (r.already) status.innerHTML = '<b style="color:var(--amber);">Already checked in</b>' + (r.name ? ' — ' + escHtml(r.name) : '') + (r.at ? ' · ' + acTime(r.at) : '');
+      else status.innerHTML = '<b style="color:var(--green-txt);">✓ ' + escHtml(r.name || 'Checked in') + '</b>' + (r.paid ? ' · paid ticket' : '');
+    }
+    if (navigator.vibrate) try { navigator.vibrate(r.already ? [60, 60, 60] : 30); } catch (e2) {}
+  } catch (err) { if (status) status.textContent = err.message || 'Could not check that ticket.'; }
+  _tkBusy = false;
 }
 /* ── Device-link: approve a scanned login code (existing logged-in device) ── */
 function acOpenLinkScan() { acOpenQrScan('link'); }
@@ -46772,6 +46901,7 @@ async function acOpenStoreManage() {
     ${row(SI.box, 'Shipping zones', 'Ship abroad — set a rate per country group', 'acOpenShipZones()')}
     ${isBiz ? row(SI.megaphone, 'Featured placement', 'Appear at the top of the business directory', 'acOpenPlacement()') : ''}
     ${row(SI.store, 'Customers', 'Everyone who has bought from you', 'closeOverlay(\'storeManageView\');acOpenCustomers()')}
+    ${row(SI.box, 'Returns policy', 'How long buyers can return things', 'acOpenReturnsPolicy()')}
     ${row(SI.megaphone, 'Cart recovery', 'Win back abandoned carts via Beam', 'closeOverlay(\'storeManageView\');acOpenCartRecovery()')}
     ${row(SI.megaphone, 'Message your customers', 'One a day, only to people who bought from you', 'closeOverlay(\'storeManageView\');acOpenShopCampaigns()')}
     ${row(SI.box, 'Local delivery', 'Take it round yourself to people nearby', 'closeOverlay(\'storeManageView\');acOpenDelivery()')}

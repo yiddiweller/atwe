@@ -5335,6 +5335,29 @@ async function initSchema() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS money_drops_expiry_idx ON money_drops(status, expires_at);`);
 
+  /* ── The final scan's integrity fix: money back when the thing is taken away ──
+     A cancelled webinar, a cancelled event, a deleted course — the people who
+     paid get their money back, automatically. Each paid row snapshots what was
+     actually paid (a later price change must never change a refund), and each
+     refund is claimed per row (refunded flag) so a crash mid-loop resumes
+     instead of paying twice. Demo-granted tickets snapshot 0 — nobody paid,
+     so nothing is owed. */
+  await query(`ALTER TABLE webinar_signups ADD COLUMN IF NOT EXISTS paid_cents INTEGER;`);
+  await query(`ALTER TABLE webinar_signups ADD COLUMN IF NOT EXISTS refunded BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE event_rsvps ADD COLUMN IF NOT EXISTS paid_cents INTEGER;`);
+  await query(`ALTER TABLE event_rsvps ADD COLUMN IF NOT EXISTS refunded BOOLEAN NOT NULL DEFAULT false;`);
+  // Ticket check-in at the door (QR scanned by the host).
+  await query(`ALTER TABLE event_rsvps ADD COLUMN IF NOT EXISTS checked_in BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE event_rsvps ADD COLUMN IF NOT EXISTS checked_in_at TIMESTAMPTZ;`);
+  await query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS cancelled BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE course_enrollments ADD COLUMN IF NOT EXISTS paid_cents INTEGER;`);
+  await query(`ALTER TABLE course_enrollments ADD COLUMN IF NOT EXISTS refunded BOOLEAN NOT NULL DEFAULT false;`);
+
+  // Seller-issued refunds (Shopify's Refund button): cumulative, never past the total.
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS refunded_cents INTEGER NOT NULL DEFAULT 0;`);
+  // A shop's stated returns window (days; NULL = the 30-day default, 0 = no returns).
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS returns_days INTEGER;`);
+
   await query(`CREATE INDEX IF NOT EXISTS users_cert_active_idx ON users(cert_active) WHERE cert_active;`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_business_idx ON business_team(business_id);`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_member_idx ON business_team(member_id, status);`);
