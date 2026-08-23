@@ -3103,6 +3103,54 @@ async function isKnownCaller(calleeId, callerId) {
   } catch (e) { return true; }
 }
 
+/* ── "Do you know this person?" — the pause before money goes to a stranger ──
+   The classic scam is simple: a stranger asks for money — a direct plea, a
+   payment request, a split share, "buy me a gift card". Every serious money app
+   (Venmo, Zelle, Cash App) learned to put ONE screen in the way the first time,
+   because wrongly-sent money here, honestly, usually can't be brought back
+   (peer-to-peer sends are not auto-clawed — we can only ask nicely).
+
+   "Known" = the SENDER has some real prior relationship with the recipient:
+   they saved them as a contact, an accepted connection (mutual by definition),
+   the sender follows them, the sender has MESSAGED them (direction matters — a
+   scammer messaging YOU first, or their request's own DM card, proves nothing),
+   or money has already moved between them either way (each side of a transfer
+   gets a wallet_tx row with the other as peer, so one confirmed payment means
+   the pause never shows for that person again).
+
+   Returns null to let the payment through, or the 400 body to send instead —
+   carrying who the recipient actually is, so the pause can show them plainly.
+   Advisory, not a lock: knownOk=true (the user's explicit "I know them") skips
+   it, and a DB hiccup fails OPEN — this must never block a legitimate payment. */
+async function strangerPayCheck(senderId, recipientId, knownOk) {
+  if (knownOk === true || senderId === recipientId) return null;
+  try {
+    const q = await db.query(
+      `SELECT
+         EXISTS(SELECT 1 FROM contacts WHERE owner_id = $1 AND contact_id = $2) OR
+         EXISTS(SELECT 1 FROM connections WHERE status = 'accepted'
+                AND ((requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1))) OR
+         EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2) OR
+         EXISTS(SELECT 1 FROM at_messages WHERE sender_id = $1 AND recipient_id = $2) OR
+         EXISTS(SELECT 1 FROM wallet_tx WHERE user_id = $1 AND peer_id = $2) AS known`,
+      [senderId, recipientId]);
+    if (q.rows[0] && q.rows[0].known) return null;
+    const u = (await db.query('SELECT id, name, username, avatar, verified, account_type, created_at FROM users WHERE id = $1', [recipientId])).rows[0];
+    if (!u) return null; // the route's own not-found handling owns this case
+    return {
+      strangerCheck: true,
+      error: 'Confirm you know @' + (u.username || '') + ' before sending money.',
+      recipient: {
+        id: u.id, name: u.name, username: u.username,
+        avatar: mediaRef(u.avatar, 'avatar', u.id),
+        verified: !!u.verified,
+        accountType: u.account_type === 'business' ? 'business' : 'personal',
+        joinedAt: u.created_at,
+      },
+    };
+  } catch (e) { return null; }
+}
+
 // Can `meId` send a DM to `otherId`? True when contact privacy permits, OR an
 // established conversation already exists (so tightening privacy later doesn't
 // silently break ongoing chats) — but never when blocked.
@@ -27765,6 +27813,9 @@ app.post('/api/wallet/send', auth.requireAuth, blockImpersonation, blockLimited,
     if (!toRow || !toRow.username) return res.status(404).json({ error: 'No one found with that username.' });
     if (toRow.id === req.user.id) return res.status(400).json({ error: 'You can’t send money to yourself.' });
     if (await blockedEither(req.user.id, toRow.id)) return res.status(403).json({ error: 'You can’t send money to this person.' });
+    // First money toward a stranger: pause and ask, before anything is claimed.
+    const stranger = await strangerPayCheck(req.user.id, toRow.id, req.body.knownOk);
+    if (stranger) return res.status(400).json(stranger);
     const vel = await walletVelocityCheck(req.user.id, amountCents);
     if (!vel.ok) return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel));
     const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
@@ -27882,6 +27933,11 @@ app.post('/api/wallet/requests/:id/pay', auth.requireAuth, blockImpersonation, r
     const mr = (await db.query('SELECT requester_id, payer_id, status FROM money_requests WHERE id = $1', [id])).rows[0];
     if (!mr || mr.payer_id !== req.user.id) return res.status(404).json({ error: 'Request not found.' });
     if (mr.status !== 'pending') return res.json({ ok: true, already: true, status: mr.status });
+    /* A payment request from a stranger is THE textbook scam shape — and the
+       request's own DM card doesn't count as knowing them (direction matters).
+       Checked before the claim so a refused pause leaves the request pending. */
+    const stranger = await strangerPayCheck(req.user.id, mr.requester_id, req.body.knownOk);
+    if (stranger) return res.status(400).json(stranger);
     // Claim the pending request before any money moves.
     const claim = await db.query(
       "UPDATE money_requests SET status = 'paid', resolved_at = now() WHERE id = $1 AND payer_id = $2 AND status = 'pending' RETURNING requester_id, amount_cents, note",
@@ -28399,6 +28455,11 @@ app.post('/api/gift-cards', auth.requireAuth, blockImpersonation, rateLimit(20, 
       const u = (await db.query('SELECT id FROM users WHERE lower(username) = lower($1) AND NOT deactivated', [handle])).rows[0];
       if (!u) return res.status(404).json({ error: 'No one with that username.' });
       toId = u.id;
+      // "Buy me a gift card" is the most-used scam script there is. A card
+      // ADDRESSED to a stranger gets the pause; one bought for yourself (or to
+      // hand over in person) doesn't — there's no recipient to vouch for.
+      const stranger = await strangerPayCheck(req.user.id, toId, req.body.knownOk);
+      if (stranger) return res.status(400).json(stranger);
     }
     const v = await walletVelocityCheck(req.user.id, amount);
     if (!v.ok) return res.status(walletVelocityStatus(v)).json(walletVelocityError(v));
@@ -29932,6 +29993,11 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
     conds.push(`p.business_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1) AND p.business_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)`);
     if (q) { params.push('%' + q.replace(/[%_\\]/g, '\\$&') + '%'); conds.push(`(p.name ILIKE $${params.length} OR p.description ILIKE $${params.length})`); }
     if (kind) { params.push(kind); conds.push(`p.kind = $${params.length}`); }
+    /* Auctions browse (eBay's home view): only LIVE auctions, ordered by which
+       ends soonest — urgency is the whole point of the surface. A flat filter,
+       not a sort, so it composes with search/price/kind like any other. */
+    const auctionsOnly = req.query.auctions === 'true';
+    if (auctionsOnly) conds.push(`p.auction_ends_at IS NOT NULL AND NOT p.auction_settled AND p.auction_ends_at > now()`);
     // Filters: price range, min rating, in-stock only.
     const minP = Math.round(Number(req.query.minPrice) * 100); if (Number.isFinite(minP) && minP > 0) { params.push(minP); conds.push(`p.price_cents >= $${params.length}`); }
     const maxP = Math.round(Number(req.query.maxPrice) * 100); if (Number.isFinite(maxP) && maxP > 0) { params.push(maxP); conds.push(`p.price_cents <= $${params.length}`); }
@@ -29949,7 +30015,9 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
       rating: '(SELECT COALESCE(AVG(rating),0) FROM product_reviews pr WHERE pr.product_id = p.id) DESC, p.created_at DESC' };
     const sortKey = FLAT_SORTS[req.query.sort] ? req.query.sort : 'best';
     let orderBy;
-    if (sortKey === 'best') {
+    if (auctionsOnly) {
+      orderBy = 'p.auction_ends_at ASC'; // soonest to end leads, every time
+    } else if (sortKey === 'best') {
       let textTerm = '0';
       if (q) {
         params.push(q);
@@ -30010,7 +30078,7 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
     }
     // Sponsored slots: auction winners spliced to the front and de-duplicated
     // against the organic results (a product never appears twice on one page).
-    const sponsored = (await getSponsoredListings(req.user.id, { q, kind })).map((s) => Object.assign(s, { saved: saved.has(s.id) }));
+    const sponsored = auctionsOnly ? [] : (await getSponsoredListings(req.user.id, { q, kind })).map((s) => Object.assign(s, { saved: saved.has(s.id) }));
     if (sponsored.length) {
       const sponsoredIds = new Set(sponsored.map((s) => s.id));
       listings = sponsored.concat(listings.filter((l) => !sponsoredIds.has(l.id)));
@@ -32104,6 +32172,10 @@ app.post('/api/splits/:id/pay', auth.requireAuth, blockImpersonation, rateLimit(
   try {
     const sp = (await db.query('SELECT creator_id, title FROM splits WHERE id = $1', [id])).rows[0];
     if (!sp) return res.status(404).json({ error: 'Split not found.' });
+    // A split from someone you've never dealt with gets the same stranger pause
+    // as a direct send — its DM card alone doesn't make the creator "known".
+    const strangerSp = await strangerPayCheck(req.user.id, sp.creator_id, req.body.knownOk);
+    if (strangerSp) return res.status(400).json(strangerSp);
     // Claim my unpaid share first (one-time guard).
     const claim = await db.query('UPDATE split_shares SET paid = true, paid_at = now() WHERE split_id = $1 AND user_id = $2 AND paid = false RETURNING amount_cents', [id, req.user.id]);
     if (!claim.rowCount) {

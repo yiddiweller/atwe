@@ -62,11 +62,30 @@ test('demo top-up credits the wallet balance', opts, async () => {
   assert.equal(r.body.balanceCents, 1000);
 });
 
+test('first money to a stranger is paused until the sender confirms', opts, async () => {
+  const a = await H.seedUser({ balanceCents: 5000 });
+  const b = await H.seedUser();
+  const ta = await H.login(a);
+  // No relationship, no knownOk → the pause, with the recipient identified and no money moved.
+  const paused = await H.api('POST', '/api/wallet/send', { token: ta, body: { to: b.username, amount: 2, clientId: H.uniq('cid') } });
+  assert.equal(paused.status, 400, JSON.stringify(paused.body));
+  assert.equal(paused.body.strangerCheck, true);
+  assert.equal(paused.body.recipient.username, b.username, 'the pause identifies the recipient');
+  const pool = H.getPool();
+  const balA = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [a.id]);
+  assert.equal(balA.rows[0].balance_cents, 5000, 'no money moved on the pause');
+  // The confirmed resend goes through; after that, history makes them known.
+  const sent = await H.api('POST', '/api/wallet/send', { token: ta, body: { to: b.username, amount: 2, clientId: H.uniq('cid'), knownOk: true } });
+  assert.equal(sent.status, 200, JSON.stringify(sent.body));
+  const again = await H.api('POST', '/api/wallet/send', { token: ta, body: { to: b.username, amount: 1, clientId: H.uniq('cid') } });
+  assert.equal(again.status, 200, 'a person you have paid before is never paused again');
+});
+
 test('sending money debits sender, credits recipient, and is zero-sum', opts, async () => {
   const a = await H.seedUser({ balanceCents: 1000 });
   const b = await H.seedUser();
   const ta = await H.login(a);
-  const r = await H.api('POST', '/api/wallet/send', { token: ta, body: { to: b.username, amount: 4, clientId: H.uniq('cid') } });
+  const r = await H.api('POST', '/api/wallet/send', { token: ta, body: { to: b.username, amount: 4, clientId: H.uniq('cid'), knownOk: true } });
   assert.equal(r.status, 200, JSON.stringify(r.body));
   assert.equal(r.body.balanceCents, 600, 'sender left with $6');
   const pool = H.getPool();
@@ -80,7 +99,7 @@ test('sending money debits sender, credits recipient, and is zero-sum', opts, as
 test('you cannot send money to yourself', opts, async () => {
   const u = await H.seedUser({ balanceCents: 1000 });
   const token = await H.login(u);
-  const r = await H.api('POST', '/api/wallet/send', { token, body: { to: u.username, amount: 2, clientId: H.uniq('cid') } });
+  const r = await H.api('POST', '/api/wallet/send', { token, body: { to: u.username, amount: 2, clientId: H.uniq('cid'), knownOk: true } });
   assert.equal(r.status, 400);
 });
 
@@ -108,7 +127,7 @@ test('concurrent sends with the same clientId credit the recipient only once', o
   const b = await H.seedUser();
   const ta = await H.login(a);
   const cid = H.uniq('cid');
-  const send = () => H.api('POST', '/api/wallet/send', { token: ta, body: { to: b.username, amount: 5, clientId: cid } });
+  const send = () => H.api('POST', '/api/wallet/send', { token: ta, body: { to: b.username, amount: 5, clientId: cid, knownOk: true } });
   await Promise.all([send(), send()]);
   const pool = H.getPool();
   const rb = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [b.id]);
@@ -124,7 +143,7 @@ test('outgoing sends past the daily cap are rejected (429)', opts, async () => {
   const a = await H.seedUser({ balanceCents: 5000 });
   const b = await H.seedUser();
   const ta = await H.login(a);
-  const r = await H.api('POST', '/api/wallet/send', { token: ta, body: { to: b.username, amount: 6, clientId: H.uniq('cid') } });
+  const r = await H.api('POST', '/api/wallet/send', { token: ta, body: { to: b.username, amount: 6, clientId: H.uniq('cid'), knownOk: true } });
   assert.equal(r.status, 429);
   assert.ok(r.body.velocityLimited, 'velocity flag set');
 });
@@ -230,7 +249,7 @@ test('a split share is charged at most once, even under concurrent pays', opts, 
   const splitId = mk.body.id;
   // Two concurrent pays of the same share — the claim-first UPDATE ... WHERE
   // paid=false RETURNING must let only one move money.
-  const pay = () => H.api('POST', `/api/splits/${splitId}/pay`, { token: tp, body: {} });
+  const pay = () => H.api('POST', `/api/splits/${splitId}/pay`, { token: tp, body: { knownOk: true } });
   await Promise.all([pay(), pay()]);
   const pool = H.getPool();
   const cb = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [creator.id]);
@@ -238,7 +257,7 @@ test('a split share is charged at most once, even under concurrent pays', opts, 
   const pb = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [payer.id]);
   assert.equal(pb.rows[0].balance_cents, 4700, 'payer debited exactly once');
   // A later pay is a no-op that reports alreadyPaid (no extra charge).
-  const again = await H.api('POST', `/api/splits/${splitId}/pay`, { token: tp, body: {} });
+  const again = await H.api('POST', `/api/splits/${splitId}/pay`, { token: tp, body: { knownOk: true } });
   assert.equal(again.status, 200);
   assert.ok(again.body.alreadyPaid);
 });
@@ -412,7 +431,7 @@ test('a gift-card-funded order takes the fee too', opts, async () => {
   const giver = await H.seedUser({ balanceCents: 900 });
   const buyer = await H.seedUser();
   const [ts, tg, tb] = [await H.login(seller), await H.login(giver), await H.login(buyer)];
-  const g = await H.api('POST', '/api/gift-cards', { token: tg, body: { amountCents: 400, to: buyer.username, clientId: H.uniq('cid') } });
+  const g = await H.api('POST', '/api/gift-cards', { token: tg, body: { amountCents: 400, to: buyer.username, clientId: H.uniq('cid'), knownOk: true } });
   assert.ok(g.body.card, 'gift card issued');
   await H.api('POST', `/api/gift-cards/${g.body.card.id}/claim`, { token: tb });
   const p = await H.api('POST', '/api/products', { token: ts, body: { name: 'Gift item', priceCents: 300, kind: 'digital' } });

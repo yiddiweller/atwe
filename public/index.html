@@ -6393,6 +6393,15 @@ body.light .mc-btnrow{background:rgba(0,0,0,.07);}
 /* "There is a floor on this one" — quieter than the Auction tag itself, so a
    list of auctions doesn't read as a wall of amber. */
 .auc-tag.res{background:var(--s3);color:var(--t2);margin-left:4px;}
+.mkt-aucleft{display:inline-block;margin-left:8px;font-size:12px;font-weight:700;color:var(--amber-txt);}
+/* "Do you know this person?" money guard — amber = information, never alarm-red */
+.spg-ic{width:64px;height:64px;border-radius:50%;background:rgba(255,187,0,.14);display:grid;place-items:center;margin:4px auto 12px;}
+.spg-ic svg{width:30px;height:30px;fill:none;stroke:var(--amber-txt);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.spg-card{display:flex;align-items:center;gap:12px;background:var(--s1);border-radius:16px;padding:12px 14px;margin:12px 0 2px;}
+.spg-name{font-weight:800;font-size:15px;display:flex;align-items:center;min-width:0;}
+.spg-name>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.spg-sub{color:var(--t2);font-size:13px;margin-top:1px;}
+.spg-note{color:var(--t2);font-size:13.5px;line-height:1.45;margin:10px 2px 14px;}
 /* Coupon share-link landing */
 .cpl-hero{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 0 4px;}
 .cpl-save{font-size:26px;font-weight:800;letter-spacing:-.02em;margin-top:6px;}
@@ -16239,6 +16248,19 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
   </div>
 </div>
 
+<!-- "Do you know this person?" — one honest pause before money goes to a stranger -->
+<div class="overlay hidden" id="strangerPayView" onclick="if(event.target===this)acStrangerPayClose()">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Do you know this person?">
+    <button class="sheet-close" onclick="acStrangerPayClose()" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="spg-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10.3 3.8 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></div>
+    <div class="jp-title" style="text-align:center;">Do you know this person?</div>
+    <div id="spgCard"></div>
+    <div class="spg-note" id="spgNote"></div>
+    <button class="ac-pill-btn accent jp-submit" id="spgGo" onclick="acStrangerPayGo()">I know them</button>
+    <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acStrangerPayClose()">Cancel</button>
+  </div>
+</div>
+
 <!-- Request money — ask someone to pay you -->
 <div class="overlay hidden" id="requestMoneyView" onclick="if(event.target===this)closeOverlay('requestMoneyView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Request money">
@@ -17060,6 +17082,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
       <button class="ac-jv" data-kind="physical" onclick="acMktKind('physical')">Items</button>
       <button class="ac-jv" data-kind="service" onclick="acMktKind('service')">Services</button>
       <button class="ac-jv" data-kind="digital" onclick="acMktKind('digital')">Digital</button>
+      <button class="ac-jv" data-kind="auction" onclick="acMktKind('auction')">Auctions</button>
     </div>
     <div class="mkt-filters">
       <select class="mkt-fsel" id="mktSort" aria-label="Sort products" onchange="acLoadMarketplace()"><option value="best">Best Match</option><option value="new">Newest</option><option value="price_asc">Price: low to high</option><option value="price_desc">Price: high to low</option><option value="rating">Top rated</option></select>
@@ -19567,7 +19590,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1670'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1671'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -39513,11 +39536,42 @@ function acOpenSendMoneyByUsername() {
   showOverlay('sendMoneyView');
   setTimeout(() => uf.focus(), 120);
 }
-async function acSendMoney() {
+/* ── "Do you know this person?" — the money-to-a-stranger pause ──
+   The server refuses the FIRST payment toward someone you have no history with
+   (no contact, connection or follow, never messaged them, no money either way)
+   and sends back who they actually are. This sheet shows them plainly; "I know
+   them" re-runs the same payment with knownOk, which the server then accepts.
+   One pause, once per person — after one real payment they're history, and the
+   sheet never shows for them again. */
+function acStrangerGuard(e, label, resume) {
+  const d = e && e.body;
+  if (!d || !d.strangerCheck) return false;
+  const u = d.recipient || {};
+  AC._strangerGo = resume;
+  const card = document.getElementById('spgCard');
+  card.className = 'spg-card';
+  card.innerHTML = `${acAvatarHtml(u.name || '?', u.avatar, 'user-avatar', u.accountType === 'business')}
+    <div style="min-width:0;flex:1;">
+      <div class="spg-name"><span>${escHtml(u.name || 'Unknown')}</span>${vbadge(!!u.verified)}</div>
+      <div class="spg-sub">@${escHtml(u.username || '')}${u.joinedAt ? ' · joined ' + new Date(u.joinedAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : ''}</div>
+    </div>`;
+  document.getElementById('spgNote').textContent = 'You\u2019ve never chatted, connected or sent money with them before. Scammers often ask strangers for money \u2014 and money sent on Atwe usually can\u2019t be brought back. Only continue if you know who this is.';
+  document.getElementById('spgGo').textContent = label || 'I know them';
+  showOverlay('strangerPayView');
+  return true;
+}
+function acStrangerPayClose() { AC._strangerGo = null; closeOverlay('strangerPayView'); }
+function acStrangerPayGo() {
+  const go = AC._strangerGo; AC._strangerGo = null;
+  closeOverlay('strangerPayView');
+  if (go) go();
+}
+async function acSendMoney(knownOk) {
   const amount = parseFloat(document.getElementById('sendMoneyAmt').value);
   if (!(amount >= 1 && amount <= 2000)) { showNotif('Enter an amount between $1 and $2,000.'); return; }
   const note = document.getElementById('sendMoneyNote').value.trim();
   const body = { amount, note, clientId: AC._sendCid };
+  if (knownOk === true) body.knownOk = true;
   if (AC._sendTo) body.toId = AC._sendTo;
   else {
     const uname = document.getElementById('sendMoneyUser').value.trim().replace(/^@/, '');
@@ -39535,7 +39589,9 @@ async function acSendMoney() {
     const wv = document.getElementById('walletView'); if (wv && !wv.classList.contains('hidden')) acLoadWallet();
     acRefreshBalance && acRefreshBalance();
   } catch (e) {
-    showNotif(e.message || 'Could not send the money.');
+    if (!acStrangerGuard(e, 'I know them \u2014 send ' + acMoneyFmt(Math.round(amount * 100)), () => acSendMoney(true))) {
+      showNotif(e.message || 'Could not send the money.');
+    }
   } finally { if (btn) { btn.disabled = false; btn.textContent = 'Send'; } }
 }
 // ── Money requests (wallet "Request" action) ──
@@ -39623,14 +39679,20 @@ async function acRemindMoneyRequest(id, btn) {
     acLoadMoneyRequests('outgoing');
   } catch (e) { if (btn) btn.disabled = false; showNotif(e.message || 'Could not send the reminder.'); }
 }
-async function acPayMoneyRequest(id) {
-  if (!(await appConfirm({ title: 'Pay this request?', message: 'Paid from your wallet balance.', confirmText: 'Pay', danger: false }))) return;
+async function acPayMoneyRequest(id, knownOk) {
+  // The stranger pause replaces the generic confirm when it fires, so a scam
+  // request never gets a bland "Pay?" box — it gets the who-is-this screen.
+  if (knownOk !== true && !(await appConfirm({ title: 'Pay this request?', message: 'Paid from your wallet balance.', confirmText: 'Pay', danger: false }))) return;
   try {
-    const r = await API.req('POST', '/api/wallet/requests/' + id + '/pay', {});
+    const r = await API.req('POST', '/api/wallet/requests/' + id + '/pay', knownOk === true ? { knownOk: true } : {});
     if (r.already) { showNotif('That request is no longer pending.'); }
     else if (r.ok) { showNotif('Paid ' + acMoneyFmt(r.paidCents || 0) + '.'); acRefreshBalance && acRefreshBalance(); }
     acLoadMoneyRequests(AC._mrTab || 'incoming');
-  } catch (e) { showNotif(e.message || 'Could not pay the request.'); }
+  } catch (e) {
+    if (!acStrangerGuard(e, 'I know them \u2014 pay it', () => acPayMoneyRequest(id, true))) {
+      showNotif(e.message || 'Could not pay the request.');
+    }
+  }
 }
 async function acDeclineMoneyRequest(id) {
   try { await API.req('POST', '/api/wallet/requests/' + id + '/decline', {}); acLoadMoneyRequests('incoming'); }
@@ -40137,7 +40199,7 @@ function acListingCard(l) {
     </div>
     <div class="mkt-foot">
       ${l.auctionEndsAt && !l.auctionSettled
-        ? `<span class="mkt-price"><span class="auc-tag">Auction</span>${l.auctionHasReserve ? '<span class="auc-tag res">Reserve</span>' : ''} from $${((l.auctionMinCents || 0) / 100).toFixed(2)}</span>
+        ? `<span class="mkt-price"><span class="auc-tag">Auction</span>${l.auctionHasReserve ? '<span class="auc-tag res">Reserve</span>' : ''} from $${((l.auctionMinCents || 0) / 100).toFixed(2)}${l.auctionLive ? `<span class="mkt-aucleft">${acAuctionLeft(l.auctionEndsAt)} left</span>` : ''}</span>
       <span class="mkt-actions"><button class="mkt-buy" onclick="event.stopPropagation();${tap}acOpenListing(${l.id})">Bid</button></span>`
         : `<span class="mkt-price">${l.hasVariants ? 'from $' + (l.priceFromCents / 100).toFixed(2) : '$' + (l.priceCents / 100).toFixed(2)}${l.compareAtCents && !l.hasVariants ? ` <s class="mkt-was">$${(l.compareAtCents / 100).toFixed(2)}</s>` : ''}</span>
       <span class="mkt-actions">
@@ -41082,7 +41144,7 @@ async function acRunAiShop() {
 }
 
 // Marketplace browse surface.
-function acOpenMarketplace() { AC._mktKind = ''; AC._mktQ = ''; const s = document.getElementById('mktSearch'); if (s) s.value = ''; showOverlay('marketplaceView'); acLoadRecentlyViewed(); acLoadMarketplace(); }
+function acOpenMarketplace() { AC._mktKind = ''; AC._mktAuctions = false; AC._mktQ = ''; const s = document.getElementById('mktSearch'); if (s) s.value = ''; document.querySelectorAll('#mktKindTabs .ac-jv').forEach(b => b.classList.toggle('on', !b.dataset.kind)); showOverlay('marketplaceView'); acLoadRecentlyViewed(); acLoadMarketplace(); }
 // Recently viewed products — a horizontal jump-back row, shown only while browsing
 // (no active search). Amazon/eBay style; private to the viewer.
 async function acLoadRecentlyViewed() {
@@ -41103,7 +41165,10 @@ async function acClearRecentlyViewed() {
   catch (e) { showNotif(e.message || 'Could not clear.'); }
 }
 function acMktKind(kind) {
-  AC._mktKind = kind;
+  // "Auctions" is a view, not a product kind: live auctions of ANY kind,
+  // soonest-ending first (the server orders them; urgency is the point).
+  AC._mktAuctions = kind === 'auction';
+  AC._mktKind = AC._mktAuctions ? '' : kind;
   document.querySelectorAll('#mktKindTabs .ac-jv').forEach(b => b.classList.toggle('on', (b.dataset.kind || '') === kind));
   acLoadMarketplace();
 }
@@ -41118,6 +41183,7 @@ async function acLoadMarketplace() {
     const qs = [];
     if (AC._mktQ) qs.push('q=' + encodeURIComponent(AC._mktQ));
     if (AC._mktKind) qs.push('kind=' + AC._mktKind);
+    if (AC._mktAuctions) qs.push('auctions=true');
     const sort = (document.getElementById('mktSort') || {}).value; if (sort) qs.push('sort=' + sort);
     const minP = (document.getElementById('mktMinP') || {}).value; if (minP) qs.push('minPrice=' + encodeURIComponent(minP));
     const maxP = (document.getElementById('mktMaxP') || {}).value; if (maxP) qs.push('maxPrice=' + encodeURIComponent(maxP));
@@ -41132,7 +41198,7 @@ async function acLoadMarketplace() {
   // Offer to save the current query (≥2 chars) for new-listing alerts.
   const sb = document.getElementById('mktSaveSearch'); if (sb) sb.style.display = (AC._mktQ && AC._mktQ.length >= 2) ? '' : 'none';
   // Recently viewed only shows while browsing (no active search/kind filter).
-  const rv = document.getElementById('mktRecent'); if (rv) rv.style.display = (AC._mktQ || AC._mktKind) ? 'none' : '';
+  const rv = document.getElementById('mktRecent'); if (rv) rv.style.display = (AC._mktQ || AC._mktKind || AC._mktAuctions) ? 'none' : '';
 }
 // Save the current marketplace query (+ kind) as an alert.
 async function acSaveMktSearch() {
@@ -43545,19 +43611,22 @@ function acGiftDeliv(kind) {
     return; // physical never becomes the selected option yet
   }
 }
-async function acGiftBuy() {
+async function acGiftBuy(knownOk) {
   const amt = AC._gcAmount;
   if (!amt || amt < 100) { showNotif('Pick an amount.'); return; }
   const to = document.getElementById('gcTo').value.trim().replace(/^@/, '');
   const message = document.getElementById('gcMsg').value.trim();
   const btn = document.getElementById('gcBuyBtn'); if (btn) btn.disabled = true;
   try {
-    const r = await API.req('POST', '/api/gift-cards', { amountCents: amt, to: to || undefined, message: message || undefined });
+    const r = await API.req('POST', '/api/gift-cards', { amountCents: amt, to: to || undefined, message: message || undefined, knownOk: knownOk === true || undefined });
     acRefreshBalance();
     showNotif(to ? 'Gift card sent to @' + to : 'Gift card created.');
     if (!to && r.card) appConfirm({ title: 'Gift card created', message: 'Code: ' + r.card.code + '\n\nShare it with anyone. They redeem it for $' + (amt / 100) + ' of credit.', confirmText: 'Copy code', cancelText: 'Done' }).then(ok => { if (ok) acCopyText(r.card.code); });
     acLoadGiftCards();
-  } catch (e) { acHandlePayErr ? acHandlePayErr(e) : showNotif(e.message || 'Could not buy.'); }
+  } catch (e) {
+    if (acStrangerGuard(e, 'I know them \u2014 send the gift card', () => acGiftBuy(true))) { if (btn) btn.disabled = false; return; }
+    acHandlePayErr ? acHandlePayErr(e) : showNotif(e.message || 'Could not buy.');
+  }
   finally { if (btn) btn.disabled = false; }
 }
 async function acGiftRedeem() {
@@ -45461,13 +45530,16 @@ async function acSplitRemind(id) {
     acOpenSplit(id);                     // re-render → button shows the cooldown
   } catch (e) { showNotif(e.message || 'Could not send reminders.'); }
 }
-async function acPaySplit(id) {
+async function acPaySplit(id, knownOk) {
   try {
-    const r = await API.req('POST', '/api/splits/' + id + '/pay', {});
+    const r = await API.req('POST', '/api/splits/' + id + '/pay', knownOk === true ? { knownOk: true } : {});
     showNotif(r.alreadyPaid ? 'Already paid.' : 'Paid your share!');
     acRefreshBalance && acRefreshBalance();
     acOpenSplit(id);
-  } catch (e) { acHandlePayErr ? acHandlePayErr(e, 'Could not pay.') : showNotif(e.message || 'Could not pay.'); }
+  } catch (e) {
+    if (acStrangerGuard(e, 'I know them \u2014 pay my share', () => acPaySplit(id, true))) return;
+    acHandlePayErr ? acHandlePayErr(e, 'Could not pay.') : showNotif(e.message || 'Could not pay.');
+  }
 }
 
 /* ── Claim a premium @handle (self-serve, wallet-funded) ── */
