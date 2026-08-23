@@ -34285,6 +34285,11 @@ app.get('/api/orders/:id', auth.requireAuth, async (req, res) => {
       const byPid = new Map(dig.map((d) => [d.product_id, d.digital_content]));
       for (const it of order.items) if (it.productId && byPid.has(it.productId)) it.digitalContent = byPid.get(it.productId);
     }
+    // A live courier arrangement: both parties' order screens need a door to
+    // it (view/approve/track) instead of a dead-end "already arranged" error.
+    const dj = (await db.query(
+      `SELECT id, status FROM delivery_jobs WHERE order_id = $1 AND status <> 'cancelled' ORDER BY id DESC LIMIT 1`, [id])).rows[0];
+    if (dj) order.deliveryJob = { id: dj.id, status: dj.status };
     // Returns: attach the latest return (so both parties see its state + the seller's actions).
     const ret = await loadOrderReturn(id);
     if (ret) order.return = {

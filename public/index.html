@@ -19783,7 +19783,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1679'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1680'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -43100,6 +43100,10 @@ function acRateCourier() {
   acOpenReviews(j.courier.username, j.courier.id).then(() => acWriteReview('delivery', j.id));
 }
 /* Asking for one. Only asks how far when we genuinely cannot measure it. */
+// Human words for a delivery job's state on the order screen.
+function acDelivStatusLabel(s) {
+  return { open: 'finding someone', agreed: 'courier agreed', picked_up: 'on its way', delivered: 'delivered', paid: 'delivered' }[s] || s;
+}
 function acDeliveryPost(orderId) {
   AC._delivOrder = orderId; AC._delivBand = null;
   document.getElementById('delivBandRow').innerHTML = '';
@@ -43121,6 +43125,9 @@ async function acPostDelivery() {
     showNotif('Posted. People nearby can offer now.');
     acOpenPeerDelivery(r.job.id);
   } catch (e) {
+    // Already arranged (the other side got there first): open that delivery
+    // instead of dead-ending on an error message.
+    if (e.body && e.body.jobId) { closeOverlay('delivPostView'); acOpenPeerDelivery(e.body.jobId); return; }
     if (e.body && e.body.needBand) {
       // We could not measure it, so ask rather than invent a number.
       document.getElementById('delivBandRow').innerHTML =
@@ -44081,13 +44088,22 @@ async function acOpenOrder(id) {
         if (o.labelUrl) action += `<a class="ac-pill-btn" style="width:100%;margin-top:8px;display:block;box-sizing:border-box;text-align:center;" href="${escHtml(o.labelUrl)}" target="_blank" rel="noopener">📄 Shipping label${o.labelCostCents ? ' · $' + (o.labelCostCents / 100).toFixed(2) : ''}</a>`;
         if (o.shipTo) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acPackingSlip()">🖨 Packing slip</button>`;
         // Somebody nearby brings it over — both sides have to agree to them.
-        if (['paid', 'escrow', 'fulfilled'].includes(o.status) && !o.deliveredAt)
+        if (o.deliveryJob)
+          action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acOpenPeerDelivery(${Number(o.deliveryJob.id)})">🛵 Delivery — ${escHtml(acDelivStatusLabel(o.deliveryJob.status))}</button>`;
+        else if (['paid', 'escrow', 'fulfilled'].includes(o.status) && !o.deliveredAt)
           action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acDeliveryPost(${Number(o.id)})">🛵 Ask someone to bring it over</button>`;
         // Cross-border: the customs paperwork, generated instead of dreaded.
         if (o.shipTo && o.shipTo.country) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acCustomsForm()">🛃 Customs form (international)</button>`;
         if (o.localDelivery) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acOpenDelivery()">🚗 Local delivery runs</button>`;
       } else {
         if (o.shippedAt && !o.deliveredAt) action += `<button class="ac-pill-btn accent" style="width:100%;" onclick="acDeliverOrder()">I’ve received it</button>`;
+        // The BUYER can arrange a courier too — the server always allowed
+        // either party (whoever posts pays the fee); only the seller's screen
+        // ever drew the button. Not once it's already in the post (shippedAt).
+        if (o.deliveryJob)
+          action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acOpenPeerDelivery(${Number(o.deliveryJob.id)})">🛵 Delivery — ${escHtml(acDelivStatusLabel(o.deliveryJob.status))}</button>`;
+        else if (['paid', 'escrow', 'fulfilled'].includes(o.status) && !o.shippedAt && !o.deliveredAt)
+          action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acDeliveryPost(${Number(o.id)})">🛵 Ask someone to bring it over</button>`;
       }
     } else if (o.mine && o.status === 'paid') {
       action += `<button class="ac-pill-btn accent" style="width:100%;" onclick="acFulfillOrder()">Mark fulfilled</button>`;
