@@ -7342,6 +7342,17 @@ body.light .dlv-state.done{color:var(--on-green);}
 .dlv-code-num{font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:34px;font-weight:700;letter-spacing:.1em;margin:6px 0 4px;font-variant-numeric:tabular-nums;}
 .dlv-code-sub{font-size:12px;color:var(--t2);line-height:1.45;}
 .dlv-soon{color:var(--amber-txt);font-weight:700;}
+/* Live trip tracker — quiet card, one green pulse, the distance is the hero */
+.dlv-trip{margin-top:12px;}
+.dlv-trip-live{background:var(--s1);border-radius:16px;padding:14px;text-align:center;}
+.dlv-trip-top{display:flex;align-items:center;justify-content:center;gap:8px;font-size:14px;}
+.dlv-trip-dot{width:9px;height:9px;border-radius:50%;background:var(--green);animation:tripPulse 1.6s ease-in-out infinite;}
+@keyframes tripPulse{0%,100%{opacity:1}50%{opacity:.35}}
+body.reduce-motion .dlv-trip-dot{animation:none;}
+.dlv-trip-km{font-size:30px;font-weight:800;letter-spacing:-.02em;margin:8px 0 6px;font-variant-numeric:tabular-nums;}
+.dlv-trip-bar{height:6px;border-radius:999px;background:var(--s2);overflow:hidden;}
+.dlv-trip-bar span{display:block;height:100%;border-radius:999px;background:var(--green);transition:width .6s var(--ease,ease);}
+.dlv-trip-sub{margin-top:7px;font-size:12px;color:var(--t3);}
 .dlv-chatrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
 .dlv-chat-btn{flex:1 1 auto;min-width:0;padding:9px 12px;font-size:13.5px;}
 .dlv-gate b{color:var(--purple-ink);}
@@ -19633,7 +19644,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1673'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1674'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -42547,8 +42558,16 @@ async function acOpenPeerDelivery(id) {
   box.innerHTML = '<div class="ac-empty" style="padding:28px;">Loading…</div>';
   try {
     const { job } = await API.req('GET', '/api/deliveries/' + id);
+    if (AC._tripJobId !== id) { AC._tripMaxKm = null; AC._tripMe = null; AC._tripJobId = id; }
     AC._deliv = job;
     box.innerHTML = acDeliveryDetail(job);
+    // The live trip: seed the card, ask this device where IT is (stays on the
+    // device), and keep the "updated Xs ago" line honest between pushes.
+    clearInterval(AC._tripTicker);
+    if (job.trip) {
+      acTripRender(job.trip); acTripAskMyPosition();
+      AC._tripTicker = setInterval(() => { const j2 = AC._deliv; if (j2 && j2.trip && !document.getElementById('peerDelivView').classList.contains('hidden')) acTripRender(j2.trip); else { clearInterval(AC._tripTicker); } }, 5000);
+    }
   } catch (e) { box.innerHTML = '<div class="ac-empty">Could not load that delivery.</div>'; }
 }
 function acDeliveryDetail(j) {
@@ -42576,6 +42595,7 @@ function acDeliveryDetail(j) {
       <div class="dlv-code-num">${escHtml(String(j.handoffCode).split('').join(' '))}</div>
       <div class="dlv-code-sub">Give these 4 digits to the courier when it arrives — typing them in is their proof you received it, and it pays them on the spot.</div>
     </div>` : ''}
+    ${acDelivTripBlock(j, isCourier)}
     ${acDeliveryChatRow(j, isSeller, isBuyer, isCourier)}
     ${j.status === 'open' && party ? acDeliveryApproval(j) : ''}
     ${j.status === 'open' && party ? acDeliveryOffers(j) : ''}
@@ -42626,6 +42646,97 @@ function acDeliveryOffers(j) {
       </div>`;
     }).join('')}`;
 }
+/* ── Live trip tracking — the DoorDash "where's my order?", without a map company ──
+   The courier taps Share my trip; their position streams onto the job. The
+   watcher's screen shows the distance counting down — computed on the
+   watcher's OWN device against their own position, which never leaves their
+   phone — plus how fresh the last update is, a getting-closer bar measured
+   from where the sharing started, and one tap to see the exact spot in the
+   phone's real maps app. Honest limit: like all web live-location, it streams
+   while the courier's app is open on screen. */
+function acDelivTripBlock(j, isCourier) {
+  const moving = ['agreed', 'picked_up'].includes(j.status);
+  if (isCourier && moving) {
+    const on = !!(AC._delivTrip && AC._delivTrip.jobId === j.id);
+    return `<div class="dlv-trip"><button class="ac-pill-btn ${on ? '' : 'accent'}" style="width:100%;" onclick="${on ? 'acTripStop()' : 'acTripStart(' + j.id + ')'}">${on ? 'Stop sharing my trip' : 'Share my trip — let them watch you arrive'}</button></div>`;
+  }
+  if (!j.trip || !moving) return '';
+  return `<div class="dlv-trip dlv-trip-live" id="delivTripCard">
+    <div class="dlv-trip-top"><span class="dlv-trip-dot" aria-hidden="true"></span><b>${escHtml((j.courier && j.courier.name.split(' ')[0]) || 'Your courier')} is on the way</b></div>
+    <div class="dlv-trip-km" id="tripKm">…</div>
+    <div class="dlv-trip-bar"><span id="tripBarFill" style="width:0%"></span></div>
+    <div class="dlv-trip-sub" id="tripAgo"></div>
+    <button class="ac-pill-btn" style="width:100%;margin-top:10px;" onclick="acTripOpenMaps()">Open in Maps</button>
+  </div>`;
+}
+/* Courier side: stream, throttled to one send every ~8 seconds. */
+async function acTripStart(jobId) {
+  if (!navigator.geolocation) { showNotif('This device can’t share its location.'); return; }
+  acTripStop(true);
+  const send = async (pos) => {
+    const now = Date.now();
+    if (AC._delivTrip && now - AC._delivTrip.lastSent < 8000) return;
+    if (AC._delivTrip) AC._delivTrip.lastSent = now;
+    try { await API.req('POST', '/api/deliveries/' + jobId + '/trip', { lat: pos.coords.latitude, lng: pos.coords.longitude }); }
+    catch (e) { /* a blip never kills the stream; the next fix retries */ }
+  };
+  const watchId = navigator.geolocation.watchPosition(send,
+    (err) => {
+      /* Only a real permission denial ends the trip. A tunnel, a canyon, a
+         slow fix (TIMEOUT / POSITION_UNAVAILABLE) keeps the watch alive and
+         simply resumes on the next fix — the watcher's screen already says
+         how stale the last point is. */
+      if (err && err.code === 1) { showNotif('Location is blocked — allow it to share your trip.'); acTripStop(true); }
+    },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
+  AC._delivTrip = { jobId, watchId, lastSent: 0 };
+  showNotif('Sharing your trip. It stops on its own when you mark it dropped off.');
+  if (AC._delivId === jobId) acOpenPeerDelivery(jobId);
+}
+function acTripStop(silent) {
+  const t = AC._delivTrip; if (!t) return;
+  AC._delivTrip = null;
+  try { navigator.geolocation.clearWatch(t.watchId); } catch (e) {}
+  API.req('POST', '/api/deliveries/' + t.jobId + '/trip', { on: false }).catch(() => {});
+  if (!silent) { showNotif('Stopped sharing.'); if (AC._delivId === t.jobId) acOpenPeerDelivery(t.jobId); }
+}
+/* Watcher side: fed by the job payload + delivtrip pushes; the ticker keeps
+   "updated Xs ago" honest between updates. */
+function acTripRender(trip) {
+  const card = document.getElementById('delivTripCard'); if (!card || !trip) return;
+  const ago = Math.max(0, Math.round((Date.now() - Date.parse(trip.at)) / 1000));
+  const agoEl = document.getElementById('tripAgo');
+  if (agoEl) agoEl.textContent = ago < 8 ? 'updated just now' : 'updated ' + (ago < 120 ? ago + 's' : Math.round(ago / 60) + ' min') + ' ago' + (ago > 90 ? ' — they may have closed the app' : '');
+  AC._tripPoint = { lat: trip.lat, lng: trip.lng };
+  const my = AC._tripMe;
+  const kmEl = document.getElementById('tripKm'), bar = document.getElementById('tripBarFill');
+  if (my && kmEl) {
+    const km = _tripKm(my.lat, my.lng, trip.lat, trip.lng);
+    kmEl.textContent = km < 0.15 ? 'Right outside' : (km < 10 ? km.toFixed(1) : Math.round(km)) + ' km away';
+    // Getting closer, measured from the farthest we've seen this trip.
+    if (AC._tripMaxKm == null || km > AC._tripMaxKm) AC._tripMaxKm = km;
+    if (bar && AC._tripMaxKm > 0.05) bar.style.width = Math.max(4, Math.min(100, Math.round((1 - km / AC._tripMaxKm) * 100))) + '%';
+  } else if (kmEl) {
+    kmEl.textContent = 'On the way';
+  }
+}
+function _tripKm(a, b, c, d) {
+  const R = 6371, r = Math.PI / 180;
+  const x = Math.sin((c - a) * r / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin((d - b) * r / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+// Ask the watcher's device ONCE per open tracker; their position stays on-device.
+function acTripAskMyPosition() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    (pos) => { AC._tripMe = { lat: pos.coords.latitude, lng: pos.coords.longitude }; const j = AC._deliv; if (j && j.trip) acTripRender(j.trip); },
+    () => {}, { maximumAge: 60000, timeout: 12000 });
+}
+function acTripOpenMaps() {
+  const p = AC._tripPoint; if (!p) return;
+  window.open('https://maps.google.com/?q=' + p.lat + ',' + p.lng, '_blank');
+}
+
 /* Uber and DoorDash both learned this: the three people in a delivery need
    one tap to talk to each other. And once it's done, a thank-you tip — the
    tips sheet already exists, it just was never wired in here. */
@@ -42679,6 +42790,7 @@ async function acDelivDropOff() {
   const clean = String(code || '').trim();
   try {
     const r = await API.req('POST', '/api/deliveries/' + AC._delivId + '/delivered', clean ? { code: clean } : {});
+    acTripStop(true); // arriving ends the trip
     showNotif(r.settled ? 'Delivered — the fee is in your wallet.' : 'Marked as dropped off.');
     acOpenPeerDelivery(AC._delivId); acRefreshBalance && acRefreshBalance();
   } catch (e) {
@@ -42694,7 +42806,7 @@ async function acPeerDelivStep(step) {
 }
 async function acDelivCancel() {
   if (!(await appConfirm({ title: 'Cancel this delivery?', message: 'Anything held goes straight back.', confirmText: 'Cancel it' }))) return;
-  try { await API.req('POST', '/api/deliveries/' + AC._delivId + '/cancel', {}); acOpenPeerDelivery(AC._delivId); acRefreshBalance && acRefreshBalance(); }
+  try { await API.req('POST', '/api/deliveries/' + AC._delivId + '/cancel', {}); acTripStop(true); acOpenPeerDelivery(AC._delivId); acRefreshBalance && acRefreshBalance(); }
   catch (e) { showNotif(e.message || 'Could not cancel.'); }
 }
 function acRateCourier() {
@@ -51695,6 +51807,19 @@ async function rtConnect() {
   // Live-refresh an open order (shipped/delivered/status change) so a buyer
   // watching the detail sees tracking/status the instant the seller acts,
   // without a manual reload.
+  // The courier's live position: refresh the point in place; a start/stop
+  // re-renders the open detail so the tracker card appears or leaves.
+  rtSource.addEventListener('delivtrip', e => {
+    try {
+      const d = JSON.parse(e.data);
+      const open = AC._delivId === d.id && !document.getElementById('peerDelivView').classList.contains('hidden');
+      if (!open) return;
+      const j = AC._deliv;
+      if (d.on === false) { if (j) j.trip = null; acOpenPeerDelivery(d.id); return; }
+      if (j && j.trip) { j.trip = { lat: d.lat, lng: d.lng, at: d.at }; acTripRender(j.trip); }
+      else acOpenPeerDelivery(d.id); // sharing just began — build the card
+    } catch {}
+  });
   rtSource.addEventListener('order', e => {
     try {
       const d = JSON.parse(e.data);
