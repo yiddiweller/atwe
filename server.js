@@ -4044,6 +4044,8 @@ const PUSH_VERBS = {
   aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge',
   aff_rejected: 'reviewed your affiliation badge',
   rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking — you can pay now',
+  money_drop_done: 'opened the last share of your money drop', money_drop_expired: 'your money drop expired — the rest came back to your wallet',
+  service_lead: 'needs a pro — a new request in your category',
   rental_booked: 'booked your rental — Instant Book confirmed it',
   rental_declined: 'declined your booking request', rental_paid: 'paid for their booking',
   rental_cancelled: 'cancelled a booking',
@@ -26827,6 +26829,129 @@ const SERVICE_SELECT = `SELECT s.id, s.user_id, s.title, s.category, s.area, s.r
   u.name AS provider_name, u.username AS provider_username, u.avatar AS provider_avatar, u.account_type AS provider_type, u.verified AS provider_verified
   FROM services s JOIN users u ON u.id = s.user_id`;
 // Offer a service (anyone with a @username).
+/* ── Get quotes from pros (Thumbtack's model, minus the lead fees) ──
+   A customer posts what they need; every provider offering that CATEGORY gets
+   the lead, free, and answers with a real quote (the existing quotes system)
+   or a message. Competitors never see each other's quotes — only the customer
+   does, which is the whole negotiating advantage of the model. */
+const SVCREQ_FANOUT_CAP = 50;
+function mapServiceRequest(r, viewerId) {
+  return {
+    id: r.id, category: r.category, what: r.what, details: r.details || null,
+    whenText: r.when_text || null, area: r.area || null,
+    budgetCents: r.budget_cents == null ? null : r.budget_cents,
+    status: r.status, createdAt: r.created_at,
+    mine: r.customer_id === viewerId,
+    customer: r.c_name ? { id: r.customer_id, name: r.c_name, username: r.c_username, avatar: mediaRef(r.c_avatar, 'avatar', r.customer_id), verified: !!r.c_verified } : undefined,
+    quoteCount: r.quote_count == null ? undefined : Number(r.quote_count),
+    iQuoted: r.i_quoted == null ? undefined : !!Number(r.i_quoted),
+  };
+}
+const SVCREQ_SELECT = `SELECT r.*, u.name AS c_name, u.username AS c_username, u.avatar AS c_avatar, u.verified AS c_verified
+  FROM service_requests r JOIN users u ON u.id = r.customer_id`;
+app.post('/api/service-requests', auth.requireAuth, blockLimited, rateLimit(6, 3600000, 'svcreq'), async (req, res) => {
+  const category = (req.body.category || '').toString().trim().slice(0, 60);
+  const what = (req.body.what || '').toString().trim().slice(0, 140);
+  const details = (req.body.details || '').toString().trim().slice(0, 1000) || null;
+  const whenText = (req.body.whenText || '').toString().trim().slice(0, 80) || null;
+  const area = (req.body.area || '').toString().trim().slice(0, 120) || null;
+  let budget = req.body.budgetCents == null || req.body.budgetCents === '' ? null : Math.round(Number(req.body.budgetCents) || 0);
+  if (budget != null && !(budget > 0 && budget <= 5000000)) budget = null;
+  if (!category) return res.status(400).json({ error: 'Pick a category.' });
+  if (!what) return res.status(400).json({ error: 'Say what you need.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const r = await db.query(
+      `INSERT INTO service_requests (customer_id, category, what, details, when_text, area, budget_cents)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [req.user.id, category, what, details, whenText, area, budget]);
+    const requestId = r.rows[0].id;
+    /* The fanout: providers with an ACTIVE service in this category, certified
+       and established first, blocks-aware both ways, capped so one request
+       never carpet-bombs a whole industry. Fire-and-forget — the customer's
+       201 never waits on it. */
+    let notified = 0;
+    try {
+      const pros = await db.query(
+        `SELECT DISTINCT s.user_id, u.cert_active, u.created_at FROM services s JOIN users u ON u.id = s.user_id
+          WHERE lower(s.category) = lower($2) AND s.active = true AND s.user_id <> $1 AND NOT u.deactivated
+            AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = s.user_id AND b.blocked_id = $1)
+                                                     OR (b.blocker_id = $1 AND b.blocked_id = s.user_id))
+          ORDER BY u.cert_active DESC, u.created_at ASC LIMIT ${SVCREQ_FANOUT_CAP}`,
+        [req.user.id, category]);
+      for (const p of pros.rows) notify(p.user_id, req.user.id, 'service_lead', null, null, null, null, null, requestId);
+      notified = pros.rows.length;
+    } catch (e) { console.error('svcreq fanout', e.message); }
+    res.status(201).json({ ok: true, id: requestId, notified });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not post the request.' }); }
+});
+// mine = my requests, each with how many quotes came in.
+// leads = open requests matching MY active service categories — my pipeline.
+app.get('/api/service-requests', auth.requireAuth, async (req, res) => {
+  const leads = req.query.scope === 'leads';
+  try {
+    if (leads) {
+      const { rows } = await db.query(
+        SVCREQ_SELECT + ` WHERE r.status = 'open' AND r.customer_id <> $1
+            AND r.created_at > now() - interval '30 days'
+            AND lower(r.category) IN (SELECT lower(s.category) FROM services s WHERE s.user_id = $1 AND s.active = true)
+            AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = r.customer_id AND b.blocked_id = $1)
+                                                     OR (b.blocker_id = $1 AND b.blocked_id = r.customer_id))
+          ORDER BY r.created_at DESC LIMIT 50`, [req.user.id]);
+      const quoted = new Set((await db.query(
+        'SELECT request_id FROM quotes WHERE issuer_id = $1 AND request_id IS NOT NULL', [req.user.id])).rows.map((x) => x.request_id));
+      return res.json({ requests: rows.map((r) => ({ ...mapServiceRequest(r, req.user.id), iQuoted: quoted.has(r.id) })) });
+    }
+    const { rows } = await db.query(
+      `SELECT r.*, u.name AS c_name, u.username AS c_username, u.avatar AS c_avatar, u.verified AS c_verified,
+              (SELECT COUNT(*) FROM quotes q WHERE q.request_id = r.id) AS quote_count
+         FROM service_requests r JOIN users u ON u.id = r.customer_id
+        WHERE r.customer_id = $1 ORDER BY r.created_at DESC LIMIT 50`, [req.user.id]);
+    res.json({ requests: rows.map((r) => mapServiceRequest(r, req.user.id)) });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not load requests.' }); }
+});
+/* The detail. The customer sees everything including the quotes that came in.
+   A provider sees the request and the customer — never anyone else's quote. */
+app.get('/api/service-requests/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid.' });
+  try {
+    const r = (await db.query(SVCREQ_SELECT + ' WHERE r.id = $1', [id])).rows[0];
+    if (!r) return res.status(404).json({ error: 'Request not found.' });
+    const mine = r.customer_id === req.user.id;
+    if (!mine) {
+      if (await blockedEither(req.user.id, r.customer_id)) return res.status(404).json({ error: 'Request not found.' });
+      // A provider proves themselves with an active service in the category.
+      const pro = await db.query(
+        'SELECT 1 FROM services WHERE user_id = $1 AND active = true AND lower(category) = lower($2) LIMIT 1',
+        [req.user.id, r.category]);
+      if (!pro.rowCount) return res.status(404).json({ error: 'Request not found.' });
+    }
+    const out = mapServiceRequest(r, req.user.id);
+    if (mine) {
+      const qs = await db.query(
+        `SELECT q.id, q.amount_cents, q.status, q.created_at, u.id AS uid, u.name, u.username, u.avatar, u.verified, u.cert_active
+           FROM quotes q JOIN users u ON u.id = q.issuer_id WHERE q.request_id = $1 ORDER BY q.created_at ASC`, [id]);
+      out.quotes = qs.rows.map((q) => ({ id: q.id, amountCents: q.amount_cents, status: q.status, createdAt: q.created_at,
+        issuer: { id: q.uid, name: q.name, username: q.username, avatar: mediaRef(q.avatar, 'avatar', q.uid), verified: !!q.verified, certified: !!q.cert_active } }));
+    } else {
+      out.iQuoted = (await db.query('SELECT 1 FROM quotes WHERE request_id = $1 AND issuer_id = $2 LIMIT 1', [id, req.user.id])).rowCount > 0;
+    }
+    res.json({ request: out });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not load the request.' }); }
+});
+app.post('/api/service-requests/:id/close', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid.' });
+  try {
+    const r = await db.query(
+      `UPDATE service_requests SET status = 'closed', closed_at = now() WHERE id = $1 AND customer_id = $2 AND status = 'open' RETURNING id`,
+      [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Request not found.' });
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not close it.' }); }
+});
+
 app.post('/api/services', auth.requireAuth, rateLimit(30, 60000, 'service-post'), async (req, res) => {
   if (!(await requireHandle(req, res))) return;
   const title = (req.body.title || '').toString().trim().slice(0, 140);
@@ -29302,9 +29427,20 @@ app.post('/api/quotes', auth.requireAuth, rateLimit(30, 60000, 'quote-create'), 
     const cust = (await db.query('SELECT id, username FROM users WHERE id = $1', [customerId])).rows[0];
     if (!cust || !cust.username) return res.status(404).json({ error: 'Customer not found.' });
     if (await blockedEither(req.user.id, customerId)) return res.status(403).json({ error: 'You can’t quote this person.' });
+    /* Answering a lead: the quote ties back to the customer's request — but
+       only when the request is real, still open, and actually THEIRS. A bogus
+       requestId silently doesn't attach rather than failing the quote. */
+    let requestId = null;
+    if (req.body.requestId != null) {
+      const rid = parseInt(req.body.requestId, 10);
+      if (Number.isInteger(rid)) {
+        const sr = (await db.query(`SELECT id FROM service_requests WHERE id = $1 AND customer_id = $2 AND status = 'open'`, [rid, customerId])).rows[0];
+        if (sr) requestId = sr.id;
+      }
+    }
     const ins = await db.query(
-      `INSERT INTO quotes (issuer_id, customer_id, title, items, amount_cents, note, valid_until) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      [req.user.id, customerId, title, items ? JSON.stringify(items) : null, amountCents, note, validUntil]
+      `INSERT INTO quotes (issuer_id, customer_id, title, items, amount_cents, note, valid_until, request_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      [req.user.id, customerId, title, items ? JSON.stringify(items) : null, amountCents, note, validUntil, requestId]
     );
     const id = ins.rows[0].id;
     // Drop a quote card into the DM thread (server-built meta; not client-forgeable).
@@ -30538,6 +30674,10 @@ app.get('/api/listings/:id', auth.requireAuth, async (req, res) => {
       db.query(`UPDATE product_experiments SET views_${arm === 'b' ? 'b' : 'a'} = views_${arm === 'b' ? 'b' : 'a'} + 1 WHERE id = $1`, [exp.id]).catch(() => {});
     }
     listing.saved = (await db.query('SELECT 1 FROM saved_products WHERE user_id = $1 AND product_id = $2', [req.user.id, id])).rowCount > 0;
+    /* eBay's "23 people are watching this" — honest social proof. The REAL
+       wishlist count, shown by the client only once it clears a floor, so a
+       listing with one lonely save never advertises it. */
+    listing.savedCount = (await db.query('SELECT COUNT(*)::int AS n FROM saved_products WHERE product_id = $1', [id])).rows[0].n;
     // Auction detail: live top bid + count, whether I lead, and — once won — the
     // winner's pay path (their accepted offer id) so the detail can offer "Pay now".
     if (l.auction_ends_at) {
@@ -32329,6 +32469,181 @@ async function loadSplit(id, me) {
 }
 // Create a split: a title + a share per participant (equal split of totalCents, or
 // explicit per-person amounts). Each participant is asked to pay their share.
+/* ── Money drops (WeChat's red packets, on Atwe's wallet) ──
+   A lump sum dropped into a GROUP chat. Members tap to grab a share; the
+   split is random (the classic "double mean" draw — each grab averages what's
+   left, the last grab takes the remainder), one grab per member, and whatever
+   is unclaimed after 24 hours goes home to the sender. The drop row HOLDS the
+   value from send to claim — the same zero-sum discipline as escrow: money is
+   never minted, never destroyed, and a crash can never strand it half-way.
+   It is a GIFT mechanic, not a stake: nobody pays to play, nobody can lose. */
+const DROP_MIN_CENTS = 100, DROP_MAX_CENTS = 50000, DROP_MAX_CLAIMS = 100, DROP_TTL_MS = 24 * 3600000;
+app.post('/api/atchat/groups/:id/money-drop', auth.requireAuth, blockImpersonation, rateLimit(10, 60000, 'money-drop'), requireFeature('wallet'), async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group.' });
+  const amount = Math.round(Number(req.body.amountCents) || 0);
+  const count = parseInt(req.body.count, 10) || 0;
+  const message = (req.body.message || '').toString().trim().slice(0, 120) || null;
+  const clientId = (typeof req.body.clientId === 'string' && req.body.clientId.length <= 64) ? req.body.clientId : null;
+  if (!(amount >= DROP_MIN_CENTS && amount <= DROP_MAX_CENTS)) return res.status(400).json({ error: 'Drop between $1 and $500.' });
+  if (!(count >= 1 && count <= DROP_MAX_CLAIMS)) return res.status(400).json({ error: 'Pick 1 to 100 shares.' });
+  if (amount < count) return res.status(400).json({ error: 'At least a cent per share.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+    const g = (await db.query('SELECT broadcast, disappearing FROM at_groups WHERE id = $1', [gid])).rows[0];
+    if (g && g.broadcast && !(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only admins can post in this channel.' });
+    const vel = await walletVelocityCheck(req.user.id, amount);
+    if (!vel.ok) return res.status(walletVelocityStatus(vel)).json(walletVelocityError(vel));
+    const idem = await walletClaimIdem(req.user.id, clientId, 'drop');
+    if (!idem.claimed) return res.json(idem.result || { ok: true, deduped: true });
+    // Debit + mint the drop in ONE transaction, gift-card style: a failure can
+    // never leave the sender charged with no drop.
+    let dropId;
+    const client = await db.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const bal = await client.query('SELECT balance_cents FROM users WHERE id = $1 FOR UPDATE', [req.user.id]);
+      if (!bal.rows[0] || bal.rows[0].balance_cents < amount) {
+        await client.query('ROLLBACK'); client.release();
+        await walletReleaseIdem(req.user.id, clientId, 'drop');
+        return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true });
+      }
+      await walletCredit(client, req.user.id, -amount, 'money_drop', null, 'Money drop');
+      dropId = (await client.query(
+        `INSERT INTO money_drops (group_id, sender_id, total_cents, claim_count, remaining_cents, remaining_count, message, expires_at)
+         VALUES ($1,$2,$3,$4,$3,$4,$5, now() + interval '24 hours') RETURNING id`,
+        [gid, req.user.id, amount, count, message])).rows[0].id;
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      client.release();
+      await walletReleaseIdem(req.user.id, clientId, 'drop');
+      throw e;
+    }
+    client.release();
+    // The card in the chat — a server-built meta message, sticker-style.
+    const me = await chatIdentity(req.user.id);
+    const meta = { t: 'moneydrop', dropId, totalCents: amount, count, message };
+    const gsec = (g && g.disappearing) || 0;
+    const ins = await db.query(
+      `INSERT INTO at_group_messages (group_id, sender_id, body, meta, expires_at)
+       VALUES ($1,$2,'',$3,${gsec ? `now() + interval '${gsec} seconds'` : 'NULL'})
+       RETURNING id, created_at, meta`,
+      [gid, req.user.id, JSON.stringify(meta)]);
+    const r = ins.rows[0];
+    const base = {
+      id: r.id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null,
+      created_at: r.created_at, forwarded: false, meta: r.meta || null, reply_to: null, reactions: {}, edited: false,
+      sender: { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null },
+    };
+    const out = { kind: 'group', groupId: gid, message: { ...base, mine: false } };
+    for (const uid of await groupMemberIds(gid, req.user.id)) rtPush(uid, 'msg', out);
+    rtPush(req.user.id, 'wallet', { type: 'update', amountCents: amount });
+    const result = { ok: true, dropId, message: { ...base, mine: true } };
+    await walletStoreIdem(req.user.id, clientId, 'drop', result);
+    res.json(result);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the drop.' }); }
+});
+// One tap, one share. The row lock makes the random draw and the money move a
+// single atomic step, so a stampede of taps splits the pot exactly once.
+app.post('/api/money-drops/:id/claim', auth.requireAuth, blockImpersonation, rateLimit(30, 60000, 'drop-claim'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid.' });
+  const client = await db.getPool().connect();
+  try {
+    await client.query('BEGIN');
+    const d = (await client.query('SELECT * FROM money_drops WHERE id = $1 FOR UPDATE', [id])).rows[0];
+    if (!d) { await client.query('ROLLBACK'); client.release(); return res.status(404).json({ error: 'Drop not found.' }); }
+    if (!(await isGroupMember(d.group_id, req.user.id))) { await client.query('ROLLBACK'); client.release(); return res.status(404).json({ error: 'Drop not found.' }); }
+    const already = (await client.query('SELECT amount_cents FROM money_drop_claims WHERE drop_id = $1 AND user_id = $2', [id, req.user.id])).rows[0];
+    if (already) { await client.query('ROLLBACK'); client.release(); return res.json({ ok: true, already: true, amountCents: already.amount_cents }); }
+    if (d.status !== 'active' || new Date(d.expires_at) <= new Date()) { await client.query('ROLLBACK'); client.release(); return res.status(410).json({ gone: true, error: 'This drop has ended.' }); }
+    if (d.remaining_count <= 0) { await client.query('ROLLBACK'); client.release(); return res.status(410).json({ gone: true, error: 'All shares are taken.' }); }
+    // The draw. Last share takes the remainder; every earlier one draws from
+    // 1¢ up to twice the fair share of what's left, capped so at least a cent
+    // stays for everyone still to come — WeChat's own "double mean" rule.
+    let amount;
+    if (d.remaining_count === 1) amount = d.remaining_cents;
+    else {
+      const cap = Math.max(1, Math.min(
+        Math.floor(2 * d.remaining_cents / d.remaining_count),
+        d.remaining_cents - (d.remaining_count - 1)));
+      amount = 1 + require('crypto').randomInt(0, cap);
+      amount = Math.min(amount, d.remaining_cents - (d.remaining_count - 1));
+    }
+    await client.query('INSERT INTO money_drop_claims (drop_id, user_id, amount_cents) VALUES ($1,$2,$3)', [id, req.user.id, amount]);
+    const left = await client.query(
+      `UPDATE money_drops SET remaining_cents = remaining_cents - $2, remaining_count = remaining_count - 1,
+              status = CASE WHEN remaining_count - 1 <= 0 THEN 'done' ELSE status END
+        WHERE id = $1 RETURNING remaining_count, status, sender_id, group_id`, [id, amount]);
+    await walletCredit(client, req.user.id, amount, 'money_drop', d.sender_id, 'Money drop');
+    await client.query('COMMIT');
+    client.release();
+    const L = left.rows[0];
+    rtPush(req.user.id, 'wallet', { type: 'receive', amountCents: amount });
+    for (const uid of await groupMemberIds(d.group_id)) rtPush(uid, 'moneydrop', { id, remainingCount: L.remaining_count, status: L.status });
+    if (L.status === 'done') notify(d.sender_id, req.user.id, 'money_drop_done');
+    res.json({ ok: true, amountCents: amount, remainingCount: L.remaining_count, done: L.status === 'done' });
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    client.release();
+    // The PK makes a racing double-tap a clean replay, not a double credit.
+    if (e && e.code === '23505') {
+      const mine = (await db.query('SELECT amount_cents FROM money_drop_claims WHERE drop_id = $1 AND user_id = $2', [id, req.user.id])).rows[0];
+      if (mine) return res.json({ ok: true, already: true, amountCents: mine.amount_cents });
+    }
+    console.error(e); res.status(500).json({ error: 'Could not open the drop.' });
+  }
+});
+// The drop's state, for the card and the detail sheet. Group members only.
+app.get('/api/money-drops/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid.' });
+  try {
+    const d = (await db.query(
+      `SELECT d.*, u.name AS sender_name, u.username AS sender_username, u.avatar AS sender_avatar
+         FROM money_drops d JOIN users u ON u.id = d.sender_id WHERE d.id = $1`, [id])).rows[0];
+    if (!d || !(await isGroupMember(d.group_id, req.user.id))) return res.status(404).json({ error: 'Drop not found.' });
+    const claims = (await db.query(
+      `SELECT c.user_id, c.amount_cents, c.claimed_at, u.name, u.username, u.avatar
+         FROM money_drop_claims c JOIN users u ON u.id = c.user_id WHERE c.drop_id = $1 ORDER BY c.claimed_at ASC`, [id])).rows;
+    const luckiest = claims.length && (d.status === 'done')
+      ? claims.reduce((a, b) => (b.amount_cents > a.amount_cents ? b : a)).user_id : null;
+    const mine = claims.find((c) => c.user_id === req.user.id);
+    const expired = d.status === 'expired' || (d.status === 'active' && new Date(d.expires_at) <= new Date());
+    res.json({ drop: {
+      id: d.id, totalCents: d.total_cents, count: d.claim_count, remainingCount: d.remaining_count,
+      message: d.message, status: expired && d.status === 'active' ? 'expired' : d.status,
+      sender: { id: d.sender_id, name: d.sender_name, username: d.sender_username, avatar: mediaRef(d.sender_avatar, 'avatar', d.sender_id) },
+      mine: mine ? mine.amount_cents : null, iAmSender: d.sender_id === req.user.id,
+      claims: claims.map((c) => ({ id: c.user_id, name: c.name, username: c.username, avatar: mediaRef(c.avatar, 'avatar', c.user_id), amountCents: c.amount_cents, luckiest: c.user_id === luckiest })),
+      expiresAt: d.expires_at,
+    } });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not load the drop.' }); }
+});
+// Unclaimed money goes home. Claim-first (the status flip IS the claim), so a
+// grab racing the expiry either lands before it or is cleanly refused after.
+async function flushMoneyDrops() {
+  let n = 0;
+  const { rows } = await db.query(
+    `UPDATE money_drops SET status = 'expired'
+      WHERE status = 'active' AND expires_at <= now() RETURNING id, sender_id, remaining_cents`);
+  for (const d of rows) {
+    try {
+      if (d.remaining_cents > 0) {
+        await walletCreditStandalone(d.sender_id, d.remaining_cents, 'money_drop_refund', 'Money drop expired');
+      }
+      notifySelf(d.sender_id, 'money_drop_expired');
+      n++;
+    } catch (e) { console.error('drop refund', d.id, e.message); }
+  }
+  return n;
+}
+{ const _mdMs = Math.max(60000, parseInt(process.env.DROP_FLUSH_MS, 10) || 600000);
+  registerJob('money_drops', 'Money drops expiry refunds', _mdMs);
+  setInterval(trackJob('money_drops', flushMoneyDrops), _mdMs).unref?.(); }
+
 app.post('/api/splits', auth.requireAuth, rateLimit(20, 60000, 'split-new'), async (req, res) => {
   const title = (req.body.title || '').toString().trim().slice(0, 120);
   if (!title) return res.status(400).json({ error: 'Give the split a title (e.g. “Dinner”).' });
