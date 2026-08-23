@@ -5254,6 +5254,20 @@ async function initSchema() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS review_summary TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS review_summary_at TIMESTAMPTZ;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS review_summary_n INTEGER;`);
+
+  /* ── The second comb (the owner asked "really ALL of it?" — rightly) ──
+     Airbnb's BOOKING FLOW itself: how many guests, a one-off cleaning fee,
+     and a cancellation policy that decides what a paid guest gets back.
+     Plus DoorDash/Uber Eats' scheduled window, as a needed-by on deliveries. */
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS rental_clean_fee_cents INTEGER;`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS rental_max_guests INTEGER;`);
+  // flexible | moderate | strict — null reads as flexible (guest-friendliest).
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS rental_cancel_policy TEXT;`);
+  await query(`ALTER TABLE rental_bookings ADD COLUMN IF NOT EXISTS guests INTEGER;`);
+  await query(`ALTER TABLE rental_bookings ADD COLUMN IF NOT EXISTS clean_fee_cents INTEGER NOT NULL DEFAULT 0;`);
+  // What a cancellation actually returned — honest history on the booking row.
+  await query(`ALTER TABLE rental_bookings ADD COLUMN IF NOT EXISTS refund_cents INTEGER;`);
+  await query(`ALTER TABLE delivery_jobs ADD COLUMN IF NOT EXISTS needed_by TIMESTAMPTZ;`);
   await query(`CREATE INDEX IF NOT EXISTS users_cert_active_idx ON users(cert_active) WHERE cert_active;`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_business_idx ON business_team(business_id);`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_member_idx ON business_team(member_id, status);`);

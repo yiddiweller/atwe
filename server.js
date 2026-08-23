@@ -29744,6 +29744,9 @@ function mapProduct(p, opts) {
     rentalWeekPct: kind === 'rental' ? (p.rental_week_pct || 0) : undefined,
     rentalMonthPct: kind === 'rental' ? (p.rental_month_pct || 0) : undefined,
     rentalInstant: kind === 'rental' ? !!p.rental_instant : undefined,
+    rentalCleanFeeCents: kind === 'rental' ? (p.rental_clean_fee_cents || 0) : undefined,
+    rentalMaxGuests: kind === 'rental' ? (p.rental_max_guests || null) : undefined,
+    rentalCancelPolicy: kind === 'rental' ? (RENTAL_CANCEL_POLICIES[p.rental_cancel_policy] ? p.rental_cancel_policy : 'flexible') : undefined,
     auctionHasReserve: !!p.auction_reserve_cents,
     auctionReserveCents: (opts && opts.owner) ? (p.auction_reserve_cents || null) : undefined,
     auctionWinnerId: p.auction_winner_id || null,
@@ -29766,7 +29769,7 @@ app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
   try {
     const owner = bid === req.user.id;
     const q = String(req.query.q || '').trim().slice(0, 80);
-    const COLS = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.rental_week_pct, p.rental_month_pct, p.rental_instant, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'}`;
+    const COLS = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.rental_week_pct, p.rental_month_pct, p.rental_instant, p.rental_clean_fee_cents, p.rental_max_guests, p.rental_cancel_policy, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'}`;
     let rows;
     if (q) {
       const like = '%' + q.replace(/[\\%_]/g, '\\$&') + '%';
@@ -29808,7 +29811,7 @@ function mapListing(r) {
   });
 }
 const LISTING_SELECT = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
-  p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.rental_week_pct, p.rental_month_pct, p.rental_instant, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS},
+  p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.rental_week_pct, p.rental_month_pct, p.rental_instant, p.rental_clean_fee_cents, p.rental_max_guests, p.rental_cancel_policy, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS},
   u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified, u.cert_active AS seller_certified, u.free_ship_over_cents AS seller_free_ship_over
   FROM products p JOIN users u ON u.id = p.business_id`;
 
@@ -29924,7 +29927,7 @@ async function getSponsoredListings(viewerId, { q, kind }) {
     }
     const { rows } = await db.query(
       `SELECT pa.id AS ad_id, pa.bid_cents, pa.keywords, p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
-        p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.rental_week_pct, p.rental_month_pct, p.rental_instant, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS},
+        p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.rental_week_pct, p.rental_month_pct, p.rental_instant, p.rental_clean_fee_cents, p.rental_max_guests, p.rental_cancel_policy, p.category, p.condition, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS},
         u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified
        FROM product_ads pa JOIN products p ON p.id = pa.product_id JOIN users u ON u.id = pa.seller_id
        WHERE ${conds.join(' AND ')} LIMIT 40`, params);
@@ -30348,7 +30351,7 @@ app.post('/api/admin/product-ads/:id/:action', auth.requirePerm('ads'), async (r
 // My own listings (any account) — for the Sell / manage surface.
 app.get('/api/my-listings', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.rental_week_pct, p.rental_month_pct, p.rental_instant, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.pinned DESC, p.created_at DESC LIMIT 300`, [req.user.id]);
+    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.rental_week_pct, p.rental_month_pct, p.rental_instant, p.rental_clean_fee_cents, p.rental_max_guests, p.rental_cancel_policy, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.pinned DESC, p.created_at DESC LIMIT 300`, [req.user.id]);
     res.json({ products: rows.map((r) => mapProduct(r, { owner: true })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your listings.' }); }
 });
@@ -30364,9 +30367,9 @@ app.post('/api/products/:id/duplicate', auth.requireAuth, rateLimit(20, 60000, '
     if (p.business_id !== req.user.id) return res.status(403).json({ error: 'You can only duplicate your own listings.' });
     const name = (p.name + ' (copy)').slice(0, 120);
     const r = await db.query(
-      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, rental_week_pct, rental_month_pct, rental_instant, category, condition, pinned)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,false,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,false) RETURNING id`,
-      [req.user.id, name, p.description, p.price_cents, p.image, p.images, p.kind, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants ? JSON.stringify(p.variants) : null, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs ? JSON.stringify(p.specs) : null, p.rental_period, p.rental_week_pct, p.rental_month_pct, p.rental_instant, p.category, p.condition]
+      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, rental_week_pct, rental_month_pct, rental_instant, rental_clean_fee_cents, rental_max_guests, rental_cancel_policy, category, condition, pinned)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,false,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,false) RETURNING id`,
+      [req.user.id, name, p.description, p.price_cents, p.image, p.images, p.kind, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants ? JSON.stringify(p.variants) : null, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs ? JSON.stringify(p.specs) : null, p.rental_period, p.rental_week_pct, p.rental_month_pct, p.rental_instant, p.rental_clean_fee_cents, p.rental_max_guests, p.rental_cancel_policy, p.category, p.condition]
     );
     res.status(201).json({ ok: true, id: r.rows[0].id, name });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not duplicate the listing.' }); }
@@ -30790,6 +30793,9 @@ app.post('/api/products', auth.requireAuth, blockLimited, rateLimit(40, 60000, '
   const rentalWeekPct = kind === 'rental' ? Math.max(0, Math.min(50, parseInt(req.body.rentalWeekPct, 10) || 0)) || null : null;
   const rentalMonthPct = kind === 'rental' ? Math.max(0, Math.min(50, parseInt(req.body.rentalMonthPct, 10) || 0)) || null : null;
   const rentalInstant = kind === 'rental' && req.body.rentalInstant === true;
+  const rentalCleanFee = kind === 'rental' ? Math.max(0, Math.min(100000, Math.round(Number(req.body.rentalCleanFeeCents) || 0))) || null : null;
+  const rentalMaxGuests = kind === 'rental' ? Math.max(0, Math.min(50, parseInt(req.body.rentalMaxGuests, 10) || 0)) || null : null;
+  const rentalCancelPolicy = kind === 'rental' && ['flexible', 'moderate', 'strict'].includes(req.body.rentalCancelPolicy) ? req.body.rentalCancelPolicy : null;
   let auctionEndsAt = null, auctionMinCents = null, auctionReserveCents = null;
   if (req.body.auctionDays != null && kind === 'physical') {
     const days = parseInt(req.body.auctionDays, 10);
@@ -30811,8 +30817,8 @@ app.post('/api/products', auth.requireAuth, blockLimited, rateLimit(40, 60000, '
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM products WHERE business_id = $1', [req.user.id]);
     if (cnt.rows[0].n >= 300) return res.status(400).json({ error: 'You’ve reached the maximum number of products.' });
     const { rows } = await db.query(
-      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, video, video_ver, auction_ends_at, auction_min_cents, auction_reserve_cents, wholesale_cents, wholesale_min_qty, rental_week_pct, rental_month_pct, rental_instant) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$31,$29,$30,$32,$33,$34) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, rental_week_pct, rental_month_pct, rental_instant, category, condition, compare_at_cents, processing_days_min, processing_days_max, (video IS NOT NULL) AS has_video, video_ver, auction_ends_at, auction_min_cents, auction_reserve_cents, auction_settled, auction_winner_id, wholesale_cents, wholesale_min_qty`,
-      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, pickup, pickupLocation, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct, amenities, JSON.stringify(specs), rentalPeriod, category, condition, compareAtCents, procDays.min, procDays.max, video, video ? 1 : 0, auctionEndsAt, auctionMinCents, wholesale.cents, wholesale.minQty, auctionReserveCents, rentalWeekPct, rentalMonthPct, rentalInstant]
+      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, video, video_ver, auction_ends_at, auction_min_cents, auction_reserve_cents, wholesale_cents, wholesale_min_qty, rental_week_pct, rental_month_pct, rental_instant, rental_clean_fee_cents, rental_max_guests, rental_cancel_policy) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$31,$29,$30,$32,$33,$34,$35,$36,$37) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, rental_week_pct, rental_month_pct, rental_instant, rental_clean_fee_cents, rental_max_guests, rental_cancel_policy, category, condition, compare_at_cents, processing_days_min, processing_days_max, (video IS NOT NULL) AS has_video, video_ver, auction_ends_at, auction_min_cents, auction_reserve_cents, auction_settled, auction_winner_id, wholesale_cents, wholesale_min_qty`,
+      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, pickup, pickupLocation, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct, amenities, JSON.stringify(specs), rentalPeriod, category, condition, compareAtCents, procDays.min, procDays.max, video, video ? 1 : 0, auctionEndsAt, auctionMinCents, wholesale.cents, wholesale.minQty, auctionReserveCents, rentalWeekPct, rentalMonthPct, rentalInstant, rentalCleanFee, rentalMaxGuests, rentalCancelPolicy]
     );
     if (rows[0].active !== false) notifyMarketMatch(rows[0]); // alert saved-search watchers
     emitWebhook(rows[0].business_id, 'product.created', { id: rows[0].id, name: rows[0].name, priceCents: rows[0].price_cents, kind: rows[0].kind });
@@ -30859,6 +30865,9 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
   if ('rentalWeekPct' in req.body) { const v = Math.max(0, Math.min(50, parseInt(req.body.rentalWeekPct, 10) || 0)); vals.push(v || null); fields.push(`rental_week_pct = $${vals.length}`); }
   if ('rentalMonthPct' in req.body) { const v = Math.max(0, Math.min(50, parseInt(req.body.rentalMonthPct, 10) || 0)); vals.push(v || null); fields.push(`rental_month_pct = $${vals.length}`); }
   if ('rentalInstant' in req.body) { vals.push(req.body.rentalInstant === true); fields.push(`rental_instant = $${vals.length}`); }
+  if ('rentalCleanFeeCents' in req.body) { const v = Math.max(0, Math.min(100000, Math.round(Number(req.body.rentalCleanFeeCents) || 0))); vals.push(v || null); fields.push(`rental_clean_fee_cents = $${vals.length}`); }
+  if ('rentalMaxGuests' in req.body) { const v = Math.max(0, Math.min(50, parseInt(req.body.rentalMaxGuests, 10) || 0)); vals.push(v || null); fields.push(`rental_max_guests = $${vals.length}`); }
+  if ('rentalCancelPolicy' in req.body) { vals.push(['flexible', 'moderate', 'strict'].includes(req.body.rentalCancelPolicy) ? req.body.rentalCancelPolicy : null); fields.push(`rental_cancel_policy = $${vals.length}`); }
   if ('category' in req.body) { vals.push((req.body.category || '').toString().trim().slice(0, 60) || null); fields.push(`category = $${vals.length}`); }
   if ('condition' in req.body) { vals.push(PRODUCT_CONDITIONS.includes(req.body.condition) ? req.body.condition : null); fields.push(`condition = $${vals.length}`); }
   if ('video' in req.body) {
@@ -30902,7 +30911,7 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
       fields.push('auction_settled = false', 'auction_winner_id = NULL');
     }
     vals.push(id, req.user.id);
-    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, rental_week_pct, rental_month_pct, rental_instant, (video IS NOT NULL) AS has_video, video_ver, auction_ends_at, auction_min_cents, auction_reserve_cents, auction_settled, auction_winner_id, wholesale_cents, wholesale_min_qty`, vals);
+    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period, category, condition, compare_at_cents, processing_days_min, processing_days_max, rental_week_pct, rental_month_pct, rental_instant, rental_clean_fee_cents, rental_max_guests, rental_cancel_policy, (video IS NOT NULL) AS has_video, video_ver, auction_ends_at, auction_min_cents, auction_reserve_cents, auction_settled, auction_winner_id, wholesale_cents, wholesale_min_qty`, vals);
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
     const after = r.rows[0];
     // Back-in-stock alert: was sold-out (or hidden), now active + in stock → notify watchers.
@@ -31395,7 +31404,8 @@ function rentalUnits(period, start, end) {
 function mapBooking(r) {
   return {
     id: r.id, productId: r.product_id, status: r.status, startDate: r.start_date, endDate: r.end_date,
-    units: r.units, totalCents: r.total_cents, discountCents: r.discount_cents || 0, note: r.note || null, createdAt: r.created_at,
+    units: r.units, totalCents: r.total_cents, discountCents: r.discount_cents || 0, guests: r.guests || null,
+    cleanFeeCents: r.clean_fee_cents || 0, refundCents: r.refund_cents == null ? null : r.refund_cents, note: r.note || null, createdAt: r.created_at,
     product: { id: r.product_id, name: r.p_name, image: r.p_image || null, rentalPeriod: r.rental_period },
     guest: { id: r.guest_id, name: r.g_name, username: r.g_username, avatar: r.g_avatar || null },
     host: { id: r.host_id, name: r.h_name, username: r.h_username, avatar: r.h_avatar || null },
@@ -31430,8 +31440,25 @@ function rentalStayDiscount(p, start, end, totalCents) {
   return pct ? Math.round(totalCents * pct / 100) : 0;
 }
 
-const BOOKING_SELECT = `SELECT b.id, b.product_id, b.guest_id, b.host_id, b.start_date, b.end_date, b.units, b.total_cents, b.discount_cents, b.status, b.note, b.created_at,
-  p.name AS p_name, p.image AS p_image, p.rental_period, p.rental_week_pct, p.rental_month_pct, p.rental_instant,
+/* ── Cancellation policies (Airbnb's three tiers, simplified honestly) ──
+   Each tier is [days-before-check-in, % of the STAY refunded] rows, first
+   match wins, no match = 0. The cleaning fee always refunds in full when a
+   guest cancels before check-in — nobody cleaned anything yet. A HOST
+   cancelling a paid booking always refunds everything: the broken promise is
+   theirs. */
+const RENTAL_CANCEL_POLICIES = {
+  flexible: { label: 'Flexible', rows: [[1, 100]] },
+  moderate: { label: 'Moderate', rows: [[5, 100], [1, 50]] },
+  strict: { label: 'Strict', rows: [[14, 100], [7, 50]] },
+};
+function rentalRefundPct(policy, startDate) {
+  const p = RENTAL_CANCEL_POLICIES[policy] || RENTAL_CANCEL_POLICIES.flexible;
+  const daysOut = (Date.parse(startDate) - Date.now()) / 86400000;
+  for (const [minDays, pct] of p.rows) if (daysOut >= minDays) return pct;
+  return 0;
+}
+const BOOKING_SELECT = `SELECT b.id, b.product_id, b.guest_id, b.host_id, b.start_date, b.end_date, b.units, b.total_cents, b.discount_cents, b.guests, b.clean_fee_cents, b.refund_cents, b.status, b.note, b.created_at,
+  p.name AS p_name, p.image AS p_image, p.rental_period, p.rental_week_pct, p.rental_month_pct, p.rental_instant, p.rental_clean_fee_cents, p.rental_max_guests, p.rental_cancel_policy,
   g.name AS g_name, g.username AS g_username, g.avatar AS g_avatar,
   h.name AS h_name, h.username AS h_username, h.avatar AS h_avatar
   FROM rental_bookings b JOIN products p ON p.id = b.product_id JOIN users g ON g.id = b.guest_id JOIN users h ON h.id = b.host_id`;
@@ -31445,7 +31472,7 @@ app.post('/api/rentals/:productId/book', auth.requireAuth, rateLimit(30, 60000, 
   if (start < new Date().toISOString().slice(0, 10)) return res.status(400).json({ error: 'Pick a start date in the future.' });
   const note = String(req.body.note || '').trim().slice(0, 300) || null;
   try {
-    const p = (await db.query('SELECT id, business_id, kind, price_cents, rental_period, rental_week_pct, rental_month_pct, rental_instant, active FROM products WHERE id = $1', [pid])).rows[0];
+    const p = (await db.query('SELECT id, business_id, kind, price_cents, rental_period, rental_week_pct, rental_month_pct, rental_instant, rental_clean_fee_cents, rental_max_guests, active FROM products WHERE id = $1', [pid])).rows[0];
     if (!p || p.kind !== 'rental' || !p.active) return res.status(404).json({ error: 'Rental not found.' });
     if (p.business_id === req.user.id) return res.status(400).json({ error: 'You can’t book your own rental.' });
     if (await blockedEither(req.user.id, p.business_id)) return res.status(403).json({ error: 'This rental isn’t available to you.' });
@@ -31453,10 +31480,17 @@ app.post('/api/rentals/:productId/book', auth.requireAuth, rateLimit(30, 60000, 
     // that can't happen. (Overlapping REQUESTS are fine: several people may
     // ask, the host picks one, and confirming is where the race is settled.)
     if (await rentalDatesTaken(db, pid, start, end)) return res.status(409).json({ datesTaken: true, error: DATES_TAKEN_MSG });
+    // Party size — validated against the listing's cap, the way Airbnb asks first.
+    const guests = Math.max(1, Math.min(50, parseInt(req.body.guests, 10) || 1));
+    if (p.rental_max_guests && guests > p.rental_max_guests)
+      return res.status(400).json({ error: 'This place sleeps up to ' + p.rental_max_guests + '.' });
     const units = rentalUnits(p.rental_period, start, end);
     const gross = units * p.price_cents;
     const discount = rentalStayDiscount(p, start, end, gross);
-    const total = gross - discount;
+    // The cleaning fee is once per stay and never discounted — it costs the
+    // same to clean after a cheap week as after a full-price one.
+    const cleanFee = p.rental_clean_fee_cents || 0;
+    const total = gross - discount + cleanFee;
     if (p.rental_instant) {
       /* Instant Book: the host published the calendar, so the calendar answers.
          The product row lock makes "check, then confirm" one atomic step —
@@ -31470,19 +31504,19 @@ app.post('/api/rentals/:productId/book', auth.requireAuth, rateLimit(30, 60000, 
           return res.status(409).json({ datesTaken: true, error: DATES_TAKEN_MSG });
         }
         const ri = await client.query(
-          `INSERT INTO rental_bookings (product_id, guest_id, host_id, start_date, end_date, units, total_cents, discount_cents, note, status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'confirmed') RETURNING id`,
-          [pid, req.user.id, p.business_id, start, end, units, total, discount, note]);
+          `INSERT INTO rental_bookings (product_id, guest_id, host_id, start_date, end_date, units, total_cents, discount_cents, guests, clean_fee_cents, note, status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'confirmed') RETURNING id`,
+          [pid, req.user.id, p.business_id, start, end, units, total, discount, guests, cleanFee, note]);
         await client.query('COMMIT');
         notify(p.business_id, req.user.id, 'rental_booked', null, null, null, pid);
-        return res.json({ ok: true, id: ri.rows[0].id, units, totalCents: total, discountCents: discount, instant: true });
+        return res.json({ ok: true, id: ri.rows[0].id, units, totalCents: total, discountCents: discount, cleanFeeCents: cleanFee, instant: true });
       } catch (e) { await client.query('ROLLBACK').catch(() => {}); throw e; }
       finally { client.release(); }
     }
     const r = await db.query(
-      `INSERT INTO rental_bookings (product_id, guest_id, host_id, start_date, end_date, units, total_cents, discount_cents, note, status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'requested') RETURNING id`,
-      [pid, req.user.id, p.business_id, start, end, units, total, discount, note]);
+      `INSERT INTO rental_bookings (product_id, guest_id, host_id, start_date, end_date, units, total_cents, discount_cents, guests, clean_fee_cents, note, status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'requested') RETURNING id`,
+      [pid, req.user.id, p.business_id, start, end, units, total, discount, guests, cleanFee, note]);
     notify(p.business_id, req.user.id, 'rental_request', null, null, null, pid);
-    res.json({ ok: true, id: r.rows[0].id, units, totalCents: total, discountCents: discount });
+    res.json({ ok: true, id: r.rows[0].id, units, totalCents: total, discountCents: discount, cleanFeeCents: cleanFee });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Could not request the booking.' }); }
 });
 // Host confirms / declines.
@@ -31563,7 +31597,41 @@ app.post('/api/rentals/bookings/:id/cancel', auth.requireAuth, async (req, res) 
   try {
     const b = (await db.query('SELECT * FROM rental_bookings WHERE id = $1', [id])).rows[0];
     if (!b || (b.guest_id !== req.user.id && b.host_id !== req.user.id)) return res.status(404).json({ error: 'Not found.' });
-    if (b.status === 'paid') return res.status(400).json({ error: 'A paid booking can’t be cancelled here — message the host.' });
+    // Already done is already done — never a fresh "ok" that reads like a second refund.
+    if (b.status === 'cancelled') return res.status(409).json({ error: 'This booking was already cancelled.' });
+    if (b.status === 'paid') {
+      /* A PAID booking cancels under the listing's policy (Airbnb's model).
+         Guest cancelling: the cleaning fee always comes back in full — nobody
+         cleaned anything yet — and the stay refunds by the policy's schedule.
+         HOST cancelling: everything comes back; the broken promise is theirs.
+         Only before check-in — after the stay has started, it's the disputes
+         desk's job, not a self-serve button. */
+      if (Date.parse(b.start_date) <= Date.now()) return res.status(400).json({ error: 'The stay has already started — open a dispute instead.' });
+      const iAmGuest = b.guest_id === req.user.id;
+      const pol = (await db.query('SELECT rental_cancel_policy FROM products WHERE id = $1', [b.product_id])).rows[0];
+      const policy = RENTAL_CANCEL_POLICIES[pol && pol.rental_cancel_policy] ? pol.rental_cancel_policy : 'flexible';
+      const stay = b.total_cents - (b.clean_fee_cents || 0);
+      const refund = iAmGuest
+        ? (b.clean_fee_cents || 0) + Math.round(stay * rentalRefundPct(policy, b.start_date) / 100)
+        : b.total_cents;
+      // Claim-first: the flip and the refund figure land in one guarded write,
+      // so two taps — or guest and host cancelling at once — refund exactly once.
+      const claim = await db.query(
+        `UPDATE rental_bookings SET status = 'cancelled', refund_cents = $2 WHERE id = $1 AND status = 'paid' RETURNING id`,
+        [id, refund]);
+      if (!claim.rowCount) return res.status(409).json({ error: 'This booking was already cancelled.' });
+      if (refund > 0) {
+        // The host was paid at booking time, so the refund comes back out of
+        // their balance — falling back to a straight credit if they can't
+        // cover it, same as the returns desk: the guest is always made whole.
+        let t = null;
+        try { t = await walletTransfer(b.host_id, b.guest_id, refund, 'Booking cancelled — refund'); } catch (e) {}
+        if (!t || !t.ok) await walletCreditStandalone(b.guest_id, refund, 'rental_refund', 'Booking cancelled — refund');
+        rtPush(b.guest_id, 'wallet', { type: 'receive', amountCents: refund });
+      }
+      notify(iAmGuest ? b.host_id : b.guest_id, req.user.id, 'rental_cancelled', null, null, null, b.product_id);
+      return res.json({ ok: true, refundCents: refund, policy });
+    }
     const r = await db.query(`UPDATE rental_bookings SET status = 'cancelled' WHERE id = $1 AND status IN ('requested','confirmed','declined') RETURNING id`, [id]);
     if (r.rowCount) notify(b.guest_id === req.user.id ? b.host_id : b.guest_id, req.user.id, 'rental_cancelled', null, null, null, b.product_id);
     res.json({ ok: true });
@@ -35393,6 +35461,7 @@ function mapDeliveryJob(j, viewerId) {
     /* The buyer's "how to find me" line: theirs always; the courier's once the
        job is actually theirs (never while merely browsing open jobs). */
     dropInstructions: (j.buyer_id === viewerId || (j.courier_id === viewerId && ['agreed', 'picked_up', 'delivered', 'paid'].includes(j.status))) ? (j.drop_instructions || null) : undefined,
+    neededBy: j.needed_by || null,
     agreedAt: j.agreed_at, pickedUpAt: j.picked_up_at, deliveredAt: j.delivered_at, paidAt: j.paid_at,
     autoReleaseAt: j.auto_release_at, createdAt: j.created_at,
     cancelledReason: j.cancelled_reason || null,
@@ -35416,6 +35485,15 @@ app.post('/api/deliveries', auth.requireAuth, rateLimit(20, 60000, 'deliv-post')
   if (!Number.isInteger(orderId)) return res.status(400).json({ error: 'Which order is this for?' });
   const band = DELIVERY_BANDS[req.body.band] ? req.body.band : null;
   const note = (req.body.note || '').toString().trim().slice(0, 300) || null;
+  // "Needed by" (DoorDash/Uber Eats scheduled windows): optional, must be a
+  // real future moment within a month — couriers see the urgency before offering.
+  let neededBy = null;
+  if (req.body.neededBy) {
+    const t = Date.parse(req.body.neededBy);
+    if (!Number.isFinite(t) || t <= Date.now()) return res.status(400).json({ error: 'Pick a future time it’s needed by.' });
+    if (t > Date.now() + 31 * 86400000) return res.status(400).json({ error: 'That’s more than a month out — post it closer to the day.' });
+    neededBy = new Date(t).toISOString();
+  }
   try {
     const o = (await db.query(
       `SELECT o.id, o.buyer_id, o.seller_id, o.status, o.ship_line1, o.ship_city, o.ship_postal,
@@ -35443,10 +35521,10 @@ app.post('/api/deliveries', auth.requireAuth, rateLimit(20, 60000, 'deliv-post')
     const dropoff = [o.ship_line1, o.ship_city, o.ship_postal].filter(Boolean).join(', ') || null;
     const { rows } = await db.query(
       `INSERT INTO delivery_jobs (order_id, posted_by, seller_id, buyer_id, what, pickup_label, dropoff_label,
-                                  distance_km, distance_band, suggested_cents, note)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+                                  distance_km, distance_band, suggested_cents, note, needed_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
       [orderId, req.user.id, o.seller_id, o.buyer_id, (o.what || 'An order').slice(0, 200),
-       null, dropoff, km, band, suggested, note]);
+       null, dropoff, km, band, suggested, note, neededBy]);
     // Tell the other party, because it is their parcel or their address too.
     notify(o.seller_id === req.user.id ? o.buyer_id : o.seller_id, req.user.id, 'delivery_posted', null, null, null, null, null, rows[0].id);
     const j = (await db.query(`${DELIVERY_SELECT} WHERE j.id = $1`, [rows[0].id])).rows[0];
