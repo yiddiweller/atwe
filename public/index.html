@@ -7007,6 +7007,7 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 /* ── Shop v2: ratings, stock, shipping, addresses, checkout, reviews, order timeline ── */
 .mkt-rating{display:flex;align-items:center;gap:6px;color:var(--t3);font-size:13px;font-weight:600;margin:3px 0;cursor:pointer;}
 .mkt-sold{display:inline-block;font-size:12.5px;font-weight:700;color:var(--t2);background:var(--s2);border-radius:var(--r-pill);padding:3px 10px;margin:3px 0 2px;}
+.mkt-watching{color:var(--amber-txt);}
 .mkt-rating.sm{font-size:12px;}
 .ac-stars{display:inline-flex;gap:1px;}
 .ac-stars svg{width:14px;height:14px;fill:var(--b3);}
@@ -7341,6 +7342,32 @@ body.light .dlv-state.done{color:var(--on-green);}
 .dlv-code-cap{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);}
 .dlv-code-num{font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:34px;font-weight:700;letter-spacing:.1em;margin:6px 0 4px;font-variant-numeric:tabular-nums;}
 .dlv-code-sub{font-size:12px;color:var(--t2);line-height:1.45;}
+/* Money drops — the envelope card is GREEN (money), never red (destructive) */
+.mc-drop{display:flex;align-items:center;gap:10px;background:var(--green);color:var(--green-ink);border-radius:16px;padding:12px 14px;cursor:pointer;min-width:200px;}
+.mc-drop-env{font-size:26px;line-height:1;}
+.mc-drop-main{flex:1;min-width:0;display:flex;flex-direction:column;font-size:14px;}
+.mc-drop-sub{font-size:12.5px;opacity:.8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.mc-drop-open{background:rgba(255,255,255,.92);color:#111;border-radius:999px;padding:5px 14px;font-size:13px;font-weight:800;}
+.md-hero{text-align:center;padding:6px 0 2px;}
+.md-env{font-size:44px;line-height:1;margin-bottom:8px;}
+.md-from{font-size:15px;}
+.md-msg{color:var(--t2);font-size:13.5px;margin-top:4px;}
+.md-state{color:var(--t3);font-size:12.5px;margin-top:8px;}
+.md-mine{margin-top:10px;font-size:20px;color:var(--green-txt);font-weight:800;}
+.md-claim{display:flex;align-items:center;gap:10px;padding:8px 2px;}
+.md-claim + .md-claim{border-top:1px solid rgba(255,255,255,.07);}
+.md-claim-n{flex:1;min-width:0;font-size:14px;display:flex;align-items:center;gap:8px;}
+.md-lucky{background:var(--amber);color:#241a00;border-radius:999px;padding:2px 9px;font-size:10.5px;font-weight:800;}
+.md-claim-a{font-weight:800;font-variant-numeric:tabular-nums;}
+/* Get-quotes rows */
+.srq-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--s1);border:none;border-radius:14px;padding:12px 14px;margin-bottom:8px;cursor:pointer;color:inherit;}
+.srq-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.srq-what{font-size:14.5px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.srq-sub{font-size:12.5px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.srq-badge{flex:0 0 auto;background:var(--green);color:var(--green-ink);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:800;}
+.srq-badge.off{background:var(--s2);color:var(--t2);}
+.srq-closed{display:inline-block;background:var(--s2);color:var(--t2);border-radius:999px;padding:3px 11px;font-size:11.5px;font-weight:800;margin:4px 0 2px;}
+.srq-cust{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:14px;}
 .dlv-soon{color:var(--amber-txt);font-weight:700;}
 /* Live trip tracker — quiet card, one green pulse, the distance is the hero */
 .dlv-trip{margin-top:12px;}
@@ -14018,6 +14045,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <div class="live-top">
       <span class="live-badge">LIVE</span>
       <button class="live-count" id="liveCountBtn" onclick="liveShowViewers()" aria-label="Viewers"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg> <span id="liveCount">0</span></button>
+      <button class="live-count hidden" id="liveTipBtn" onclick="acLiveTip()" aria-label="Send a tip">$ Tip</button>
     </div>
     <div class="live-info" id="liveInfo"></div>
     <!-- Live shopping: a pinned product card (viewer = buy, host = manage) -->
@@ -16018,6 +16046,30 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 </div>
 
 <!-- Send a tip -->
+<!-- Money drop: a lump sum for the group, grabbed in random shares -->
+<div class="overlay hidden" id="moneyDropSheet" onclick="if(event.target===this)closeOverlay('moneyDropSheet')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Money drop">
+    <button class="sheet-close" onclick="closeOverlay('moneyDropSheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Money drop</div>
+    <div class="ac-disc-sub" style="margin:2px 0 10px;">Put money in the chat — the first to tap share it in random amounts. Whatever isn’t grabbed in 24 hours comes back to you.</div>
+    <div style="display:flex;gap:8px;">
+      <input class="jp-in" id="mdAmount" type="number" min="1" max="500" step="1" placeholder="Total ($)" inputmode="decimal" style="margin:0;flex:1;"/>
+      <input class="jp-in" id="mdCount" type="number" min="1" max="100" step="1" placeholder="Shares" inputmode="numeric" style="margin:0;flex:1;"/>
+    </div>
+    <input class="jp-in" id="mdMessage" type="text" maxlength="120" placeholder="Good luck!" style="margin-top:8px;"/>
+    <button class="ac-pill-btn accent jp-submit" id="mdSendBtn" onclick="acMoneyDropSend()">Drop it in</button>
+    <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">Paid from your Atwe balance. One grab per person.</div>
+  </div>
+</div>
+
+<!-- Money drop detail: open your share, see who got what -->
+<div class="overlay hidden" id="moneyDropView" onclick="if(event.target===this)closeOverlay('moneyDropView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Money drop">
+    <button class="sheet-close" onclick="closeOverlay('moneyDropView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="moneyDropBody"><div class="ac-empty" style="padding:24px;">Loading…</div></div>
+  </div>
+</div>
+
 <div class="overlay hidden" id="tipSheet" onclick="if(event.target===this)closeOverlay('tipSheet')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Send a tip">
     <button class="sheet-close" onclick="closeOverlay('tipSheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -18370,10 +18422,51 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <button class="sheet-close" onclick="closeOverlay('servicesView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="ac-section-row"><span class="jp-title" style="margin:0;">Services & local</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 14px;" onclick="acOpenServiceForm()">＋ Offer a service</button></div>
     <div class="ac-disc-sub" style="margin:2px 0 10px;">Find a pro. A magician, a plumber, a tutor, or list your own. Browse local businesses, jobs and events too.</div>
+    <button class="ac-pill-btn accent" style="width:100%;margin:2px 0 8px;" onclick="acSvcReqCreateOpen()">Get quotes from pros</button>
     <input class="jp-in" id="svcSearch" type="text" placeholder="Find a service, “magician”, “plumber”…" maxlength="80" oninput="acSvcSearchDebounced()" style="margin-bottom:8px;"/>
     <div class="svc-cats" id="svcCats"></div>
-    <div class="ac-section-row" style="margin-top:6px;"><span></span><button class="ac-link-btn" onclick="acOpenMyServices()">My services</button></div>
+    <div class="ac-section-row" style="margin-top:6px;"><span style="display:flex;gap:14px;"><button class="ac-link-btn" onclick="acOpenSvcReqs('mine')">My requests</button><button class="ac-link-btn" onclick="acOpenSvcReqs('leads')">Leads for you</button></span><button class="ac-link-btn" onclick="acOpenMyServices()">My services</button></div>
     <div id="servicesBody"></div>
+  </div>
+</div>
+
+<!-- Get quotes from pros: post what you need -->
+<div class="overlay hidden" id="svcReqCreate" onclick="if(event.target===this)closeOverlay('svcReqCreate')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Get quotes from pros">
+    <button class="sheet-close" onclick="closeOverlay('svcReqCreate')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Get quotes from pros</div>
+    <div class="ac-disc-sub" style="margin:2px 0 10px;">Say what you need once — every pro offering it gets your request and answers with a real quote. You compare and pick.</div>
+    <select class="jp-in" id="srqCat" aria-label="Category"></select>
+    <input class="jp-in" id="srqWhat" type="text" maxlength="140" placeholder="What do you need? “Fix a leaking kitchen tap”" style="margin-top:8px;"/>
+    <textarea class="jp-in jp-ta" id="srqDetails" rows="3" maxlength="1000" placeholder="Details that help a pro quote accurately (optional)" style="margin-top:8px;"></textarea>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <input class="jp-in" id="srqWhen" type="text" maxlength="80" placeholder="When? “This week”" style="margin:0;flex:1;"/>
+      <input class="jp-in" id="srqArea" type="text" maxlength="120" placeholder="Where? Area or address" style="margin:0;flex:1;"/>
+    </div>
+    <input class="jp-in" id="srqBudget" type="number" min="1" max="50000" step="1" placeholder="Budget ($, optional)" inputmode="decimal" style="margin-top:8px;"/>
+    <button class="ac-pill-btn accent jp-submit" id="srqSendBtn" onclick="acSvcReqSubmit()">Send to matching pros</button>
+    <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">Free. Pros never see each other’s quotes — only you do.</div>
+  </div>
+</div>
+
+<!-- My requests / leads list -->
+<div class="overlay hidden" id="svcReqList" onclick="if(event.target===this)closeOverlay('svcReqList')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Quote requests">
+    <button class="sheet-close" onclick="closeOverlay('svcReqList')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="srqListTitle">Requests</div>
+    <div class="ac-job-views" id="srqTabs" style="margin:4px 0 10px;">
+      <button class="ac-jv" data-s="mine" onclick="acOpenSvcReqs('mine')">My requests</button>
+      <button class="ac-jv" data-s="leads" onclick="acOpenSvcReqs('leads')">Leads for you</button>
+    </div>
+    <div id="srqListBody"></div>
+  </div>
+</div>
+
+<!-- One request: the customer's quote inbox, or a pro's lead -->
+<div class="overlay hidden" id="svcReqView" onclick="if(event.target===this)closeOverlay('svcReqView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Quote request">
+    <button class="sheet-close" onclick="closeOverlay('svcReqView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="svcReqBody"><div class="ac-empty" style="padding:24px;">Loading…</div></div>
   </div>
 </div>
 
@@ -19157,6 +19250,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
           <button class="aatile" onclick="acAttachPick('poll')"><span class="aat-ic ic-poll"><svg viewBox="0 0 24 24"><line x1="6" y1="20" x2="6" y2="12"/><line x1="12" y1="20" x2="12" y2="6"/><line x1="18" y1="20" x2="18" y2="15"/></svg></span><span class="aat-l">Poll</span></button>
           <button class="aatile" onclick="acAttachPick('event')"><span class="aat-ic ic-event"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="3"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2.5" x2="8" y2="6"/><line x1="16" y1="2.5" x2="16" y2="6"/></svg></span><span class="aat-l">Event</span></button>
           <button class="aatile" onclick="acShareProductOpen()"><span class="aat-ic ic-prod"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span><span class="aat-l">Product</span></button>
+          <button class="aatile" id="acAtileDrop" onclick="acMoneyDropOpen()"><span class="aat-ic ic-drop"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="15" rx="3"/><path d="M3 10h18"/><path d="M12 5v15"/><path d="M12 10c2.5 0 4-1.4 4-2.9C16 5.9 14.6 5 13.4 5c-.9 0-1.4.6-1.4 1.4 0-.8-.5-1.4-1.4-1.4C9.4 5 8 5.9 8 7.1 8 8.6 9.5 10 12 10z"/></svg></span><span class="aat-l">Money drop</span></button>
           <button class="aatile" onclick="acScheduleMsgOpen()"><span class="aat-ic ic-sched"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></span><span class="aat-l">Schedule</span></button>
           <button class="aatile" onclick="acStickerOpen()"><span class="aat-ic ic-sticker"><svg viewBox="0 0 24 24"><path d="M15.5 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9l5-5V5a2 2 0 0 0-2-2z"/><path d="M15 21v-4a2 2 0 0 1 2-2h4"/><circle cx="9" cy="10" r="1"/><circle cx="14" cy="10" r="1"/><path d="M9 14s1 1.5 3 1.5S15 14 15 14"/></svg></span><span class="aat-l">Sticker / GIF</span></button>
           <button class="aatile" id="acAtileSecret" onclick="acToggleSecret()"><span class="aat-ic ic-secret"><svg viewBox="0 0 24 24"><path d="M12 2c1 4 4 5 4 9a4 4 0 0 1-8 0c0-1.5 .7-2.5 .7-2.5S9 11 10 11s1-3 2-9z"/></svg></span><span class="aat-l">Secret</span></button>
@@ -19644,7 +19738,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1674'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1675'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25894,7 +25988,7 @@ function acJumpToPinned(id) {
 /* ─── Starred messages (aggregate view across every DM + group) ─── */
 function _starredPreview(m) {
   if (m.body) return escHtml(m.body);
-  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'quote' ? '📋 Quote' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'product' ? '🛍️ Product' : m.meta.t === 'deal' ? '🏷️ Deal' : m.meta.t === 'callschedule' ? '📅 Call invite' : m.meta.t === 'split' ? '🧮 Split request' : m.meta.t === 'pool' ? '🫙 Money pool' : m.meta.t === 'offer' ? '🏷️ Offer' : m.meta.t === 'storyreply' ? (m.meta.emoji ? '↩ Daily reaction' : '↩ Daily reply') : m.meta.t === 'gift' ? '🎁 Gift card' : m.meta.t === 'digital' ? '⚡ Download' : m.meta.t === 'money' ? '💸 Money' : m.meta.t === 'moneyrequest' ? '💰 Money request' : m.meta.t === 'cartrecovery' ? '🛍️ Your cart is waiting' : m.meta.t === 'shopcampaign' ? '📣 News from a shop' : 'Message';
+  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'quote' ? '📋 Quote' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'product' ? '🛍️ Product' : m.meta.t === 'deal' ? '🏷️ Deal' : m.meta.t === 'callschedule' ? '📅 Call invite' : m.meta.t === 'split' ? '🧮 Split request' : m.meta.t === 'pool' ? '🫙 Money pool' : m.meta.t === 'offer' ? '🏷️ Offer' : m.meta.t === 'storyreply' ? (m.meta.emoji ? '↩ Daily reaction' : '↩ Daily reply') : m.meta.t === 'gift' ? '🎁 Gift card' : m.meta.t === 'digital' ? '⚡ Download' : m.meta.t === 'money' ? '💸 Money' : m.meta.t === 'moneydrop' ? '🧧 Money drop' : m.meta.t === 'moneydrop' ? '🧧 Money drop' : t === 'moneyrequest' ? '💰 Money request' : m.meta.t === 'cartrecovery' ? '🛍️ Your cart is waiting' : m.meta.t === 'shopcampaign' ? '📣 News from a shop' : 'Message';
   if (m.image || m.mediaKind === 'image') return '📷 Photo';
   if (m.mediaKind === 'video') return '🎬 Video';
   if (m.mediaKind === 'audio') return '🎤 Voice message';
@@ -31270,7 +31364,7 @@ function notifRow(n, i) {
     delivery_cancelled: 'cancelled that delivery',
     certified_granted: 'awarded you the Atwe Certified mark',
     certified_removed: 'removed your Atwe Certified mark',
-    like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', event_reminder: 'is hosting an event starting soon', event_comment: 'commented on your event', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', appt_rescheduled: 'proposed a new appointment time', appt_reminder: 'has an appointment with you soon', call_reminder: 'has a call with you soon', stock_low: 'is running low — only a few left', stock_out: 'has sold out', event_spot: 'a spot opened up — you’re in!', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', invoice_reminder: 'sent a reminder about an unpaid invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', strike: 'issued a warning on your account', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', referral_milestone: 'you hit a referral milestone — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', listing_hidden: 'a listing of yours was hidden — check your messages', waitlist_invite: 'you’re off the waiting list — it’s ready for you', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', auction_outbid: 'outbid you on an auction. Bid again to stay in it', auction_won: 'you won the auction. Pay to claim it', auction_ended: 'won your auction. They’re paying now', group_join_paid: 'paid your group’s join fee. They’re in', crm_followup: 'is due a follow-up — you set the reminder', rinv_paused: 'a recurring invoice was paused — check the schedule', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', split_reminder: 'sent a reminder about your share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', story_answer: 'responded to your question', story_mention: 'mentioned you in their Daily', remix: 'remixed your video', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', community_boost: 'boosted your community', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_booked: 'booked your rental — Instant Book confirmed it', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_adjustment: 'your wallet balance was adjusted by our team', cashout_released: 'your cash-out was approved and is on its way to your bank', cashout_returned: 'your cash-out wasn’t approved — the money is back in your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item', lead_active: 'posted something new — they\u2019re on one of your lead lists', lead_hiring: 'is hiring — they\u2019re on one of your lead lists', inbox_assigned: 'gave you a conversation to handle', dmca_removed: 'removed something of yours after a copyright claim. Tap to contest it', dmca_reinstated: 'put your content back after reviewing your counter-notice', imp_upheld: 'agreed — the account impersonating you has been actioned', imp_rejected: 'reviewed your impersonation report', experiment_done: 'your A/B test found its winner — it’s applied', auth_requested: 'asked for an item check on an order', auth_passed: 'your item passed its check', auth_failed: 'an item failed its check — the buyer is refunded', webinar_signup: 'signed up for your webinar', webinar_live: 'is live now — the webinar you signed up for has started', webinar_updated: 'changed a webinar you signed up for', webinar_cancelled: 'cancelled a webinar you signed up for', delivery_on_way: 'is on the way with your order' };
+    like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', mention: 'mentioned you', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', event_reminder: 'is hosting an event starting soon', event_comment: 'commented on your event', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', appt_rescheduled: 'proposed a new appointment time', appt_reminder: 'has an appointment with you soon', call_reminder: 'has a call with you soon', stock_low: 'is running low — only a few left', stock_out: 'has sold out', event_spot: 'a spot opened up — you’re in!', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', invoice_reminder: 'sent a reminder about an unpaid invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', strike: 'issued a warning on your account', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite. Bonus added!', referral_milestone: 'you hit a referral milestone — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', listing_hidden: 'a listing of yours was hidden — check your messages', waitlist_invite: 'you’re off the waiting list — it’s ready for you', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription. Add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment. Add funds', auction_outbid: 'outbid you on an auction. Bid again to stay in it', auction_won: 'you won the auction. Pay to claim it', auction_ended: 'won your auction. They’re paying now', group_join_paid: 'paid your group’s join fee. They’re in', crm_followup: 'is due a follow-up — you set the reminder', rinv_paused: 'a recurring invoice was paused — check the schedule', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', split_reminder: 'sent a reminder about your share of a split', story_reply: 'replied to your Daily', story_react: 'reacted to your Daily', story_answer: 'responded to your question', story_mention: 'mentioned you in their Daily', remix: 'remixed your video', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return. Refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', deal: 'sent you a private deal on an item you saved', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', community_boost: 'boosted your community', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad. Pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge. It’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_booked: 'booked your rental — Instant Book confirmed it', service_lead: 'needs a pro — a new request in your category', money_drop_done: 'opened the last share of your money drop', money_drop_expired: 'your money drop expired — the rest came back to your wallet', rental_confirmed: 'confirmed your booking. Pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund. Money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_adjustment: 'your wallet balance was adjusted by our team', cashout_released: 'your cash-out was approved and is on its way to your bank', cashout_returned: 'your cash-out wasn’t approved — the money is back in your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal. Your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing. Add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', inquiry: 'sent you a message from your profile', call_scheduled: 'wants to schedule a call', call_confirmed: 'accepted your call invite', call_declined: 'declined your call invite', call_cancelled: 'cancelled a scheduled call', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item', lead_active: 'posted something new — they\u2019re on one of your lead lists', lead_hiring: 'is hiring — they\u2019re on one of your lead lists', inbox_assigned: 'gave you a conversation to handle', dmca_removed: 'removed something of yours after a copyright claim. Tap to contest it', dmca_reinstated: 'put your content back after reviewing your counter-notice', imp_upheld: 'agreed — the account impersonating you has been actioned', imp_rejected: 'reviewed your impersonation report', experiment_done: 'your A/B test found its winner — it’s applied', auth_requested: 'asked for an item check on an order', auth_passed: 'your item passed its check', auth_failed: 'an item failed its check — the buyer is refunded', webinar_signup: 'signed up for your webinar', webinar_live: 'is live now — the webinar you signed up for has started', webinar_updated: 'changed a webinar you signed up for', webinar_cancelled: 'cancelled a webinar you signed up for', delivery_on_way: 'is on the way with your order' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -31294,7 +31388,9 @@ function notifRow(n, i) {
   const isReviewAsk = n.type === 'review_invite';
   // Anything about a delivery lands on that delivery, never on a profile.
   const isDelivery = /^delivery_/.test(n.type) && n.metaNum;
-  const go = isDelivery ? `acOpenPeerDelivery(${Number(n.metaNum)})`
+  const isSvcLead = n.type === 'service_lead' && n.metaNum;
+  const go = isSvcLead ? `acOpenServiceRequest(${Number(n.metaNum)})`
+    : isDelivery ? `acOpenPeerDelivery(${Number(n.metaNum)})`
     : isReviewAsk ? `acOpenPendingReviews()`
     : isEvent ? `acOpenEvent(${n.eventId})`
     : isAppt ? `acOpenAppointments()`
@@ -40054,6 +40150,7 @@ async function acInvoiceMarkPaid() {
 function paQuote() { const a = AC._paAuthor; closeOverlay('postActions'); if (a) acQuoteCreateOpen(a.id, a.name); }
 // Open the quote form, optionally pre-targeting a customer (id+name).
 function acQuoteCreateOpen(customerId, customerName) {
+  AC._quoteReqId = null; // set AFTER open by the leads flow only
   AC._qCustomer = customerId || (AC.peer && AC.peer.id) || null;
   if (!AC._qCustomer) { showNotif('Open a chat or profile to choose who to quote.'); return; }
   const name = customerName || (AC.peer && AC.peer.name) || '';
@@ -40090,7 +40187,7 @@ async function acSubmitQuote() {
   if (!items.length) { showNotif('Add at least one line item with a description and amount.'); return; }
   const valid = document.getElementById('qValid').value;
   try {
-    await API.req('POST', '/api/quotes', { customerId: AC._qCustomer, title, items, note: document.getElementById('qNote').value.trim(), validUntil: valid || undefined });
+    await API.req('POST', '/api/quotes', { customerId: AC._qCustomer, title, items, note: document.getElementById('qNote').value.trim(), validUntil: valid || undefined, requestId: AC._quoteReqId || undefined });
     closeOverlay('quoteCreate'); showNotif('Quote sent.');
     if (AC.peer && AC.peer.id === AC._qCustomer && typeof acReloadOpenThread === 'function') acReloadOpenThread();
   } catch (e) { showNotif(e.message || 'Could not send the quote.'); }
@@ -41277,7 +41374,7 @@ async function acOpenListing(id) {
     const ratingLine = l.reviewCount ? `<div class="mkt-rating" onclick="document.getElementById('prodReviews').scrollIntoView({behavior:'smooth'})">${acStars(l.rating)}<span>${l.rating} · ${l.reviewCount} review${l.reviewCount === 1 ? '' : 's'}</span></div>` : '';
     // Social proof: units sold (paid-state orders) — "N sold", eBay/Amazon-style.
     const condLbl = { new: 'New', like_new: 'Like new', good: 'Good', fair: 'Fair' }[l.condition];
-    const soldLine = (l.soldCount || condLbl) ? `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${condLbl ? `<div class="mkt-sold">Condition: ${condLbl}</div>` : ''}${l.soldCount ? `<div class="mkt-sold">${l.soldCount >= 100 ? '100+' : l.soldCount} sold</div>` : ''}</div>` : '';
+    const soldLine = (l.soldCount || condLbl || l.savedCount >= 3) ? `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${condLbl ? `<div class="mkt-sold">Condition: ${condLbl}</div>` : ''}${l.soldCount ? `<div class="mkt-sold">${l.soldCount >= 100 ? '100+' : l.soldCount} sold</div>` : ''}${l.savedCount >= 3 ? `<div class="mkt-sold mkt-watching">${l.savedCount} people have this saved</div>` : ''}</div>` : '';
     // Variant picker (when the product has options).
     const vpick = l.hasVariants ? `<div class="vpick-h">Options</div><div class="vpick" id="mktVpick">${l.variants.map(v => `<button class="vchip${v.soldOut ? ' out' : ''}" ${v.soldOut ? 'disabled' : `onclick="acPickVariant(${v.id})"`}>${escHtml(v.label)}${v.priceCents !== l.priceCents ? ` · $${(v.priceCents / 100).toFixed(2)}` : ''}</button>`).join('')}</div>` : '';
     const heart = own ? '' : `<button class="mkt-save ${l.saved ? 'on' : ''}" id="mktSaveBtn" onclick="acToggleSave(${l.id},this)" aria-label="Save"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg></button>`;
@@ -42481,6 +42578,103 @@ function acRenderSellGrid() {
 /* ═══════════════════════════════════════════════
    SERVICES & LOCAL DIRECTORY — the "find anything" hub
 ═══════════════════════════════════════════════ */
+/* ── Get quotes from pros (Thumbtack-style, free leads) ── */
+function acSvcReqCreateOpen() {
+  const sel = document.getElementById('srqCat');
+  sel.innerHTML = _SERVICE_CATS.map((x) => `<option>${escHtml(x)}</option>`).join('');
+  for (const id of ['srqWhat', 'srqDetails', 'srqWhen', 'srqArea', 'srqBudget']) document.getElementById(id).value = '';
+  showOverlay('svcReqCreate');
+}
+async function acSvcReqSubmit() {
+  const what = document.getElementById('srqWhat').value.trim();
+  if (!what) { showNotif('Say what you need.'); return; }
+  const btn = document.getElementById('srqSendBtn'); if (btn) btn.disabled = true;
+  try {
+    const budget = parseFloat(document.getElementById('srqBudget').value);
+    const r = await API.req('POST', '/api/service-requests', {
+      category: document.getElementById('srqCat').value,
+      what, details: document.getElementById('srqDetails').value.trim(),
+      whenText: document.getElementById('srqWhen').value.trim(),
+      area: document.getElementById('srqArea').value.trim(),
+      budgetCents: budget > 0 ? Math.round(budget * 100) : undefined,
+    });
+    closeOverlay('svcReqCreate');
+    showNotif(r.notified ? `Sent to ${r.notified} pro${r.notified === 1 ? '' : 's'} — quotes land in your notifications.` : 'Posted. Pros who join this category will see it.');
+    acOpenServiceRequest(r.id);
+  } catch (e) { showNotif(e.message || 'Could not post the request.'); }
+  finally { if (btn) btn.disabled = false; }
+}
+async function acOpenSvcReqs(scope) {
+  AC._srqScope = scope || 'mine';
+  showOverlay('svcReqList');
+  document.querySelectorAll('#srqTabs .ac-jv').forEach((b) => b.classList.toggle('on', b.dataset.s === AC._srqScope));
+  document.getElementById('srqListTitle').textContent = AC._srqScope === 'leads' ? 'Leads for you' : 'My requests';
+  const box = document.getElementById('srqListBody');
+  box.innerHTML = acSkelRows(2);
+  try {
+    const { requests } = await API.req('GET', '/api/service-requests?scope=' + AC._srqScope);
+    box.innerHTML = requests.length ? requests.map((r) => `
+      <button class="srq-row" onclick="acOpenServiceRequest(${r.id})">
+        <span class="srq-main">
+          <span class="srq-what">${escHtml(r.what)}</span>
+          <span class="srq-sub">${escHtml(r.category)}${r.area ? ' · ' + escHtml(r.area) : ''}${r.whenText ? ' · ' + escHtml(r.whenText) : ''}</span>
+        </span>
+        ${AC._srqScope === 'mine'
+          ? `<span class="srq-badge ${r.status === 'open' ? '' : 'off'}">${r.status === 'open' ? (r.quoteCount || 0) + ' quote' + (r.quoteCount === 1 ? '' : 's') : 'Closed'}</span>`
+          : `<span class="srq-badge ${r.iQuoted ? 'off' : ''}">${r.iQuoted ? 'You quoted' : 'New'}</span>`}
+      </button>`).join('')
+      : `<div class="ac-empty" style="padding:22px;">${AC._srqScope === 'leads' ? 'No leads right now. Leads match the categories of your active services — offer a service to start receiving them.' : 'Nothing yet. Tap “Get quotes from pros” to post your first request.'}</div>`;
+  } catch (e) { box.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+async function acOpenServiceRequest(id) {
+  showOverlay('svcReqView');
+  const box = document.getElementById('svcReqBody');
+  box.innerHTML = '<div class="ac-empty" style="padding:24px;">Loading…</div>';
+  try {
+    const { request: r } = await API.req('GET', '/api/service-requests/' + id);
+    const facts = [
+      ['Category', r.category], ['When', r.whenText], ['Where', r.area],
+      ['Budget', r.budgetCents ? acMoneyFmt(r.budgetCents) : null],
+    ].filter((x) => x[1]);
+    const head = `
+      <div class="jp-title" style="padding-right:34px;">${escHtml(r.what)}</div>
+      ${r.status !== 'open' ? '<div class="srq-closed">Closed</div>' : ''}
+      ${r.details ? `<div class="ac-disc-sub" style="margin:4px 0 8px;white-space:pre-wrap;">${escHtml(r.details)}</div>` : ''}
+      <div class="dlv-facts">${facts.map(([k, v]) => `<div class="dlv-fact"><b>${k}</b><span>${escHtml(v)}</span></div>`).join('')}</div>`;
+    if (r.mine) {
+      const quotes = (r.quotes || []).map((q) => `
+        <button class="srq-row" onclick="closeOverlay('svcReqView');acOpenQuote(${q.id})">
+          <span class="srq-main" style="flex-direction:row;align-items:center;gap:10px;">
+            ${acAvatarHtml(q.issuer.name, q.issuer.avatar, 'user-avatar sm')}
+            <span class="srq-what">${escHtml(q.issuer.name)}${q.issuer.certified ? acCertSeal('Certified') : ''}</span>
+          </span>
+          <span class="srq-badge">${acMoneyFmt(q.amountCents)}</span>
+        </button>`).join('');
+      box.innerHTML = head
+        + `<div class="co-sec-h" style="margin-top:14px;">Quotes (${(r.quotes || []).length})</div>`
+        + (quotes || '<div class="ac-empty" style="padding:18px;">No quotes yet — pros have been told. They usually answer within a day.</div>')
+        + (r.status === 'open' ? `<button class="ac-pill-btn" style="width:100%;margin-top:12px;color:var(--red);" onclick="acSvcReqClose(${r.id})">Close this request</button>` : '');
+    } else {
+      box.innerHTML = head
+        + `<div class="srq-cust">${acAvatarHtml(r.customer.name, r.customer.avatar, 'user-avatar sm')}<span>${escHtml(r.customer.name)} is asking</span></div>`
+        + (r.status !== 'open' ? '' : r.iQuoted
+          ? '<div class="ac-empty" style="padding:14px;">You already sent a quote. They’ll see it next to the others.</div>'
+          : `<button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="acSvcReqQuote(${r.id}, ${Number(r.customer.id)}, ${jsAttr(r.customer.name)})">Send a quote</button>`)
+        + `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="closeOverlay('svcReqView');appTab('chat');acOpenChat(${Number(r.customer.id)})">Message ${escHtml(r.customer.name.split(' ')[0])}</button>`;
+    }
+  } catch (e) { box.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Could not load the request.') + '</div>'; }
+}
+function acSvcReqQuote(requestId, customerId, customerName) {
+  closeOverlay('svcReqView');
+  acQuoteCreateOpen(customerId, customerName);
+  AC._quoteReqId = requestId; // ties the quote back to the lead
+}
+async function acSvcReqClose(id) {
+  if (!(await appConfirm({ title: 'Close this request?', message: 'Pros will stop seeing it. Quotes you already got stay yours.', confirmText: 'Close it', danger: false }))) return;
+  try { await API.req('POST', '/api/service-requests/' + id + '/close', {}); acOpenServiceRequest(id); }
+  catch (e) { showNotif(e.message || 'Could not close it.'); }
+}
+
 const _SERVICE_CATS = ['Home & Repair', 'Cleaning', 'Plumbing', 'Electrical', 'Moving', 'Beauty', 'Wellness', 'Entertainment', 'Photography', 'Events', 'Tutoring', 'Tech & IT', 'Design', 'Marketing', 'Legal', 'Accounting', 'Auto', 'Pets', 'Fitness', 'Childcare'];
 // Open the Services & local hub.
 /* ── Browse ──
@@ -45905,6 +46099,74 @@ async function acSplitRemind(id) {
     acOpenSplit(id);                     // re-render → button shows the cooldown
   } catch (e) { showNotif(e.message || 'Could not send reminders.'); }
 }
+/* ── Money drops (red packets) ── */
+function acMoneyDropOpen() {
+  if (AC.mode !== 'group' || !AC.groupId) { showNotif('Money drops live in group chats.'); return; }
+  acCloseAttachMenu();
+  document.getElementById('mdAmount').value = '';
+  document.getElementById('mdCount').value = '';
+  document.getElementById('mdMessage').value = '';
+  AC._mdCid = acPayCid();
+  showOverlay('moneyDropSheet');
+}
+async function acMoneyDropSend() {
+  const amt = Math.round((parseFloat(document.getElementById('mdAmount').value) || 0) * 100);
+  const count = parseInt(document.getElementById('mdCount').value, 10) || 0;
+  if (!(amt >= 100)) { showNotif('At least $1.'); return; }
+  if (!(count >= 1)) { showNotif('How many shares?'); return; }
+  const btn = document.getElementById('mdSendBtn'); if (btn) btn.disabled = true;
+  try {
+    await API.req('POST', '/api/atchat/groups/' + AC.groupId + '/money-drop',
+      { amountCents: amt, count, message: document.getElementById('mdMessage').value.trim(), clientId: AC._mdCid });
+    AC._mdCid = acPayCid();
+    closeOverlay('moneyDropSheet');
+    acOrderSuccessPulse(null, 'Dropped ' + acMoneyFmt(amt) + ' in the chat');
+    acReloadOpenThread && acReloadOpenThread();
+    acRefreshBalance && acRefreshBalance();
+  } catch (e) { showNotif(e.message || 'Could not send the drop.'); }
+  finally { if (btn) btn.disabled = false; }
+}
+async function acOpenMoneyDrop(id) {
+  AC._mdOpenId = id;
+  showOverlay('moneyDropView');
+  const box = document.getElementById('moneyDropBody');
+  box.innerHTML = '<div class="ac-empty" style="padding:24px;">Loading…</div>';
+  try {
+    const { drop } = await API.req('GET', '/api/money-drops/' + id);
+    const opened = drop.count - drop.remainingCount;
+    const canGrab = drop.status === 'active' && drop.mine == null && !drop.iAmSender;
+    const state = drop.status === 'expired' ? 'Expired — the rest went back to ' + escHtml(drop.sender.name.split(' ')[0])
+      : drop.status === 'done' ? 'All ' + drop.count + ' shares opened'
+      : opened + ' of ' + drop.count + ' opened';
+    box.innerHTML = `
+      <div class="md-hero">
+        <div class="md-env" aria-hidden="true">🧧</div>
+        <div class="md-from">${escHtml(drop.sender.name)} dropped <b>${acMoneyFmt(drop.totalCents)}</b></div>
+        ${drop.message ? `<div class="md-msg">“${escHtml(drop.message)}”</div>` : ''}
+        <div class="md-state">${state}</div>
+        ${drop.mine != null ? `<div class="md-mine">You got <b>${acMoneyFmt(drop.mine)}</b></div>` : ''}
+        ${canGrab ? `<button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" id="mdGrabBtn" onclick="acClaimDrop(${drop.id})">Open your share</button>` : ''}
+      </div>
+      ${drop.claims.length ? `<div class="co-sec-h" style="margin-top:14px;">Who got what</div>` + drop.claims.map((cl) => `
+        <div class="md-claim">${acAvatarHtml(cl.name, cl.avatar, 'user-avatar sm')}
+          <span class="md-claim-n">${escHtml(cl.name)}${cl.luckiest ? '<span class="md-lucky">Luckiest</span>' : ''}</span>
+          <span class="md-claim-a">${acMoneyFmt(cl.amountCents)}</span>
+        </div>`).join('') : ''}`;
+  } catch (e) { box.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Could not load the drop.') + '</div>'; }
+}
+async function acClaimDrop(id) {
+  const btn = document.getElementById('mdGrabBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Opening…'; }
+  try {
+    const r = await API.req('POST', '/api/money-drops/' + id + '/claim', {});
+    acOrderSuccessPulse(null, 'You got ' + acMoneyFmt(r.amountCents) + '!');
+    acRefreshBalance && acRefreshBalance();
+    acOpenMoneyDrop(id);
+  } catch (e) {
+    showNotif(e.message || 'Could not open the drop.');
+    acOpenMoneyDrop(id);
+  }
+}
+
 async function acPaySplit(id, knownOk) {
   try {
     const r = await API.req('POST', '/api/splits/' + id + '/pay', knownOk === true ? { knownOk: true } : {});
@@ -51809,6 +52071,13 @@ async function rtConnect() {
   // without a manual reload.
   // The courier's live position: refresh the point in place; a start/stop
   // re-renders the open detail so the tracker card appears or leaves.
+  // A share was grabbed somewhere in the group — keep an open drop sheet live.
+  rtSource.addEventListener('moneydrop', e => {
+    try {
+      const d = JSON.parse(e.data);
+      if (AC._mdOpenId === d.id && !document.getElementById('moneyDropView').classList.contains('hidden')) acOpenMoneyDrop(d.id);
+    } catch {}
+  });
   rtSource.addEventListener('delivtrip', e => {
     try {
       const d = JSON.parse(e.data);
@@ -55232,6 +55501,7 @@ async function acGoLive(groupId, title) {
   try {
     const r = await API.req('POST', '/api/live/start', { title: title || '', mode: 'video', ...(groupId ? { groupId } : {}) });
     LIVE = { role: 'broadcaster', streamId: r.streamId, groupId: groupId || null, localStream: stream, pcs: new Map(), viewers: new Map() };
+    { const tb = document.getElementById('liveTipBtn'); if (tb) tb.classList.add('hidden'); }
     acLiveChatShow(true);
     liveShow('broadcaster');
     document.getElementById('liveCount').textContent = '0';
@@ -55254,6 +55524,7 @@ async function acWatchLive(s) {
   if (LIVE || CALL) { showNotif('Finish your current call/stream first.'); return; }
   LIVE = { role: 'viewer', streamId: s.id, broadcaster: s.user, pendingIce: [] };
   liveShow('viewer');
+  const tipBtn = document.getElementById('liveTipBtn'); if (tipBtn) tipBtn.classList.remove('hidden');
   document.getElementById('liveInfo').textContent = s.user.name + (s.title ? ' · ' + s.title : '');
   document.getElementById('liveCount').textContent = s.viewers || 0;
   liveRenderShop(s.pinnedProduct || null); // live shopping: any product the host already pinned
@@ -55261,6 +55532,15 @@ async function acWatchLive(s) {
   // Arriving late should not mean missing the thing the host pinned for everyone.
   acLiveRenderPinned(s.pinnedComment || null);
   liveSignal(s.user.id, 'watch', {});
+}
+/* Tipping the host mid-stream — TikTok's LIVE gifts, minus the fake-coin
+   economy: the normal tip sheet, honest dollars straight to their wallet.
+   The sheet is lifted above the live overlay (z 2000) while it's open. */
+function acLiveTip() {
+  const host = LIVE && LIVE.broadcaster; if (!host) return;
+  const sheet = document.getElementById('tipSheet');
+  if (sheet) sheet.style.zIndex = '2100';
+  acOpenTip(host.id, host.name);
 }
 /* ── Live shopping: pinned product card ── */
 function liveRenderShop(product) {
@@ -57100,6 +57380,9 @@ function acToggleAttachMenu(e) {
   // Quick buttons: a business-account DM tool (WhatsApp Business interactive messages).
   const qb = document.getElementById('acAtileQButtons');
   if (qb) qb.style.display = (AC.mode !== 'group' && typeof acIsBiz === 'function' && acIsBiz(S.user)) ? '' : 'none';
+  // Money drops live in GROUPS — a 1:1 drop is just "send money".
+  const md = document.getElementById('acAtileDrop');
+  if (md) md.style.display = (AC.mode === 'group') ? '' : 'none';
   document.getElementById('acAttachMenu').classList.toggle('hidden');
 }
 function acCloseAttachMenu() { document.getElementById('acAttachMenu')?.classList.add('hidden'); }
@@ -57590,7 +57873,7 @@ function acSketchSend() {
 
 /* ── Render a rich message card + handle voting / RSVPs ── */
 function acMetaLabel(t) {
-  return t === 'form' ? '📋 Form' : t === 'formreply' ? '📋 Form answers' : t === 'buttons' ? '💬 Quick question' : t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'livelocation' ? '📍 Live location' : t === 'sticker' ? '🌟 Sticker' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'quote' ? '📋 Quote' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'pool' ? '🫙 Money pool' : t === 'offer' ? '🏷️ Offer' : t === 'storyreply' ? '↩ Daily reply' : t === 'gift' ? '🎁 Gift card' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'moneyrequest' ? '💰 Money request' : t === 'cartrecovery' ? '🛍️ Your cart is waiting' : t === 'shopcampaign' ? '📣 News from a shop' : t === 'doc' ? '📄 Document' : t === 'call' ? '📞 Call' : 'Message';
+  return t === 'form' ? '📋 Form' : t === 'formreply' ? '📋 Form answers' : t === 'buttons' ? '💬 Quick question' : t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'livelocation' ? '📍 Live location' : t === 'sticker' ? '🌟 Sticker' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'quote' ? '📋 Quote' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'pool' ? '🫙 Money pool' : t === 'offer' ? '🏷️ Offer' : t === 'storyreply' ? '↩ Daily reply' : t === 'gift' ? '🎁 Gift card' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'moneydrop' ? '🧧 Money drop' : t === 'moneyrequest' ? '💰 Money request' : t === 'cartrecovery' ? '🛍️ Your cart is waiting' : t === 'shopcampaign' ? '📣 News from a shop' : t === 'doc' ? '📄 Document' : t === 'call' ? '📞 Call' : 'Message';
 }
 function acMetaCard(m) {
   const meta = m.meta; if (!meta) return '';
@@ -57857,6 +58140,14 @@ function acMetaCard(m) {
     return `<div class="meta-card mc-invoice"${meta.orderId ? ` onclick="event.stopPropagation();acOpenOrder(${meta.orderId})"` : ''}>
       <div class="mc-inv-top"><span class="mc-inv-ic" style="background:linear-gradient(135deg,var(--accent),var(--accent));"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
         <div class="mc-inv-main"><div class="mc-inv-title">⚡ Digital delivery</div><div class="mc-inv-sub">${mine ? 'Sent · buyer can access it' : (items.length ? items.map(i => escHtml(i.name)).join(', ') : 'Your download is ready') + ' · tap to open'}</div></div></div>
+    </div>`;
+  }
+  if (meta.t === 'moneydrop') {
+    return `<div class="mc-drop" onclick="event.stopPropagation();acOpenMoneyDrop(${Number(meta.dropId)})" role="button" tabindex="0"
+        onkeydown="if(event.key==='Enter')acOpenMoneyDrop(${Number(meta.dropId)})">
+      <span class="mc-drop-env" aria-hidden="true">🧧</span>
+      <span class="mc-drop-main"><b>Money drop</b><span class="mc-drop-sub">${meta.message ? escHtml(meta.message) : acMoneyFmt(meta.totalCents || 0) + ' · ' + (meta.count || 1) + ' share' + ((meta.count || 1) === 1 ? '' : 's')}</span></span>
+      <span class="mc-drop-open">Open</span>
     </div>`;
   }
   if (meta.t === 'moneyrequest') {

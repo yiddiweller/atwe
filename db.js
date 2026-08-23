@@ -5277,6 +5277,64 @@ async function initSchema() {
   await query(`ALTER TABLE delivery_jobs ADD COLUMN IF NOT EXISTS trip_lat DOUBLE PRECISION;`);
   await query(`ALTER TABLE delivery_jobs ADD COLUMN IF NOT EXISTS trip_lng DOUBLE PRECISION;`);
   await query(`ALTER TABLE delivery_jobs ADD COLUMN IF NOT EXISTS trip_at TIMESTAMPTZ;`);
+
+  /* ── The all-platforms sweep (the truly final five) ──
+
+     GET QUOTES FROM PROS (Thumbtack's model, minus the lead fees): a customer
+     posts what they need; providers offering that category get the lead and
+     answer with a real quote. Competitors never see each other's quotes —
+     only the customer does. */
+  await query(`
+    CREATE TABLE IF NOT EXISTS service_requests (
+      id           SERIAL PRIMARY KEY,
+      customer_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      category     TEXT NOT NULL,
+      what         TEXT NOT NULL,
+      details      TEXT,
+      when_text    TEXT,
+      area         TEXT,
+      budget_cents INTEGER,
+      status       TEXT NOT NULL DEFAULT 'open',
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      closed_at    TIMESTAMPTZ
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS service_requests_cat_idx ON service_requests(category, status);`);
+  await query(`CREATE INDEX IF NOT EXISTS service_requests_customer_idx ON service_requests(customer_id);`);
+  // A quote can answer a request — that is how the customer's inbox fills.
+  await query(`ALTER TABLE quotes ADD COLUMN IF NOT EXISTS request_id INTEGER REFERENCES service_requests(id) ON DELETE SET NULL;`);
+  await query(`CREATE INDEX IF NOT EXISTS quotes_request_idx ON quotes(request_id);`);
+
+  /* MONEY DROPS (WeChat's red packets): a lump sum dropped into a group chat,
+     grabbed in random shares, one grab per member, unclaimed money home to the
+     sender after 24h. The drop row HOLDS the value between send and claims —
+     zero-sum like escrow, never minted or destroyed. */
+  await query(`
+    CREATE TABLE IF NOT EXISTS money_drops (
+      id              SERIAL PRIMARY KEY,
+      group_id        INTEGER NOT NULL REFERENCES at_groups(id) ON DELETE CASCADE,
+      sender_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      total_cents     INTEGER NOT NULL,
+      claim_count     INTEGER NOT NULL,
+      remaining_cents INTEGER NOT NULL,
+      remaining_count INTEGER NOT NULL,
+      message         TEXT,
+      status          TEXT NOT NULL DEFAULT 'active',
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+      expires_at      TIMESTAMPTZ NOT NULL
+    );
+  `);
+  await query(`
+    CREATE TABLE IF NOT EXISTS money_drop_claims (
+      drop_id      INTEGER NOT NULL REFERENCES money_drops(id) ON DELETE CASCADE,
+      user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      amount_cents INTEGER NOT NULL,
+      claimed_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (drop_id, user_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS money_drops_expiry_idx ON money_drops(status, expires_at);`);
+
   await query(`CREATE INDEX IF NOT EXISTS users_cert_active_idx ON users(cert_active) WHERE cert_active;`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_business_idx ON business_team(business_id);`);
   await query(`CREATE INDEX IF NOT EXISTS business_team_member_idx ON business_team(member_id, status);`);
