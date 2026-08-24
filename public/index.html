@@ -16094,6 +16094,34 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 </div>
 
 <!-- Send a tip -->
+<!-- Webinar edit: fix a typo or move the time without cancelling on everyone -->
+<div class="overlay hidden" id="webinarEditView" onclick="if(event.target===this)closeOverlay('webinarEditView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Edit webinar">
+    <button class="sheet-close" onclick="closeOverlay('webinarEditView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Edit webinar</div>
+    <div class="ac-disc-sub" style="margin:2px 0 12px;">Everyone signed up is told when something real changes.</div>
+    <input class="jp-in" id="webEdTitle" type="text" maxlength="140" placeholder="Title"/>
+    <textarea class="jp-in" id="webEdDesc" rows="3" maxlength="4000" placeholder="What it covers (optional)"></textarea>
+    <div style="display:flex;gap:8px;">
+      <input class="jp-in" id="webEdWhen" type="datetime-local" style="flex:1.4;" aria-label="When it starts"/>
+      <input class="jp-in" id="webEdMins" type="number" min="5" max="480" step="5" style="flex:1;" placeholder="Minutes" aria-label="Length in minutes"/>
+    </div>
+    <label style="display:flex;align-items:center;gap:10px;margin:10px 2px 2px;font-size:14.5px;color:var(--t2);cursor:pointer;">
+      <input type="checkbox" id="webEdQa"/> Let attendees ask questions (Q&amp;A)
+    </label>
+    <button class="ac-pill-btn accent jp-submit" style="margin-top:12px;" onclick="acWebinarEditSave()">Save changes</button>
+  </div>
+</div>
+
+<!-- My offers: every negotiation, made and received -->
+<div class="overlay hidden" id="offersListView" onclick="if(event.target===this)closeOverlay('offersListView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="My offers">
+    <button class="sheet-close" onclick="closeOverlay('offersListView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 10px;">My offers</div>
+    <div id="offersListBody"></div>
+  </div>
+</div>
+
 <!-- Store look & theme: the seller dresses their storefront -->
 <div class="overlay hidden" id="storeThemeView" onclick="if(event.target===this)closeOverlay('storeThemeView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Store look and theme">
@@ -16215,6 +16243,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <div class="ac-prof-head" style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;">Pots &amp; goals<button class="ac-link-btn" onclick="acPotCreateOpen()">＋ New pot</button></div>
     <div id="walletPots"></div>
     <div class="ac-prof-head" style="margin-top:14px;">Activity</div>
+    <div class="ac-disc-sub hidden" id="walletTipsLine" style="margin:2px 0 8px;"></div>
     <div id="walletHistory"></div>
   </div>
 </div>
@@ -19830,7 +19859,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1681'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1682'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -31519,10 +31548,14 @@ function notifRow(n, i) {
   const isReviewAsk = n.type === 'review_invite';
   // Anything about a delivery lands on that delivery, never on a profile.
   const isDelivery = /^delivery_/.test(n.type) && n.metaNum;
+  // An offer tap lands on the OFFER (newer notifs carry its id; older ones
+  // keep the chat fallback below).
+  const isOfferN = n.type === 'offer' && n.metaNum;
   // Anything about an order lands on that order (newer notifs carry its id).
   const isOrderN = ['order', 'order_fulfilled', 'order_shipped', 'order_delivered', 'order_disputed', 'order_refunded', 'escrow_released', 'escrow_refunded', 'return_requested', 'return_approved', 'return_declined', 'return_label_ready', 'digital_ready'].includes(n.type) && n.metaNum;
   const isSvcLead = n.type === 'service_lead' && n.metaNum;
   const go = isSvcLead ? `acOpenServiceRequest(${Number(n.metaNum)})`
+    : isOfferN ? `acOpenOffer(${Number(n.metaNum)})`
     : isOrderN ? `acOpenOrder(${Number(n.metaNum)})`
     : isDelivery ? `acOpenPeerDelivery(${Number(n.metaNum)})`
     : isReviewAsk ? `acOpenPendingReviews()`
@@ -31551,7 +31584,7 @@ function notifRow(n, i) {
     : isProduct ? (n.productName ? `<div class="notif-snip">${escHtml(n.productName)}</div>` : '')
     : isEvent ? (n.eventTitle ? `<div class="notif-snip">${escHtml(n.eventTitle)}</div>` : '')
     : (!isFeed && !isGroup && !isChat && n.postBody) ? `<div class="notif-snip">${escHtml(n.postBody.slice(0, 80))}</div>` : '';
-  return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');${(isChat || isGroup || isJob || isConn || isEndorse || isRec || isProduct || isTeam || isMoneyReq || isInvoice || isSplit || isInquiry || isCallSched || isAppt || isEvent || isOrderN || (isMention && n.groupId)) ? '' : "appTab('home');"}${go}">
+  return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');${(isChat || isGroup || isJob || isConn || isEndorse || isRec || isProduct || isTeam || isMoneyReq || isInvoice || isSplit || isInquiry || isCallSched || isAppt || isEvent || isOrderN || isOfferN || (isMention && n.groupId)) ? '' : "appTab('home');"}${go}">
     <div class="notif-ava-wrap">${acAvatarHtml(a.name, a.avatar, 'user-avatar', acIsBiz(a))}</div>
     <div class="ac-item-main"><div class="notif-text"><b>${escHtml(a.name)}</b>${acIsVerified(a) ? vbadge(true) : ''}${acAffBadge(a)} ${verb} · <span class="notif-time">${acTime(n.created_at)}</span></div>${snip}</div>
     ${n.read ? '' : '<span class="notif-dot"></span>'}
@@ -33597,6 +33630,7 @@ function acGoProfileHub() {
     html += item('Daily archive', _ME_IC.clock || _ME_IC.bmk, "acOpenStoryArchive()", null);
     html += item('Lists', _ME_IC.list, "acOpenLists()", null);
     html += item('Orders', _ME_IC.orders, "acOpenOrders('buyer')", null);
+    html += item('Offers', _ME_IC.tag || _ME_IC.orders, "acOpenOffers()", null);
     html += item('Reviews to write', _ME_IC.star || _ME_IC.saved, "acOpenPendingReviews()", null);
     html += item('Deliveries', _ME_IC.orders, "acOpenDeliveries('mine')", null);
     html += item('Deliver for others', _ME_IC.orders, "acOpenDeliveries('open')", null);
@@ -39619,6 +39653,11 @@ function acOpenWallet() {
     document.getElementById('walletHistory').innerHTML = acSkelRows(3);
     await acLoadWallet();
     acLoadWalletGiftCards();
+    // Tips received (the sender side always had a sheet; the recipient now has a number).
+    API.req('GET', '/api/tips/summary').then((t) => {
+      const el = document.getElementById('walletTipsLine'); if (!el) return;
+      if (t && t.count > 0) { el.textContent = 'Tips received · ' + t.count + ' tip' + (t.count === 1 ? '' : 's') + ' · $' + ((t.totalCents || 0) / 100).toFixed(2); el.classList.remove('hidden'); }
+    }).catch(() => {});
     _introSoon('wallet');   // first-visit Wallet welcome
   });
 }
@@ -40413,6 +40452,23 @@ async function acMakeOfferSubmit() {
     showNotif('Offer sent.'); acOpenOffer(offer.id);
   } catch (e) { showNotif(e.message || 'Could not send your offer.'); }
   finally { if (btn) { btn.disabled = false; btn.textContent = 'Send offer'; } }
+}
+/* Every negotiation in one list — made and received — so an offer is never
+   only reachable through a chat card. */
+async function acOpenOffers() {
+  showOverlay('offersListView');
+  const box = document.getElementById('offersListBody');
+  box.innerHTML = acSkelRows(3);
+  try {
+    const { offers } = await API.req('GET', '/api/offers');
+    if (!offers.length) { box.innerHTML = '<div class="ac-empty" style="padding:26px;">No offers yet. Find a listing and make one.</div>'; return; }
+    const st = { pending: 'Waiting', countered: 'Countered', accepted: 'Accepted — pay to close', declined: 'Declined', paid: 'Paid', cancelled: 'Withdrawn' };
+    box.innerHTML = offers.map((o) => `<button class="dlv-row" onclick="closeOverlay('offersListView');acOpenOffer(${Number(o.id)})">
+      <div class="bk-main" style="text-align:start;">
+        <div class="bk-name">${escHtml(o.product.name)} · $${(o.amountCents / 100).toFixed(2)}</div>
+        <div class="bk-sub">${o.iAmBuyer ? 'You offered ' + escHtml(o.seller.name) : escHtml(o.buyer.name) + ' offered you'} · ${escHtml(st[o.status] || o.status)}${o.myTurn ? ' · your move' : ''}</div>
+      </div>${o.myTurn || o.canPay ? '<span class="notif-dot" style="position:static;flex:0 0 auto;"></span>' : ''}</button>`).join('');
+  } catch (e) { box.innerHTML = '<div class="ac-empty" style="padding:22px;">' + escHtml(e.message || 'Could not load offers.') + '</div>'; }
 }
 async function acOpenOffer(id) {
   AC._offerId = id; showOverlay('offerView');
@@ -41295,6 +41351,7 @@ function acBookingCard(bk, host) {
   const per = { month: 'mo', week: 'wk', day: 'day', night: 'night' }[_rentPer(bk.product.rentalPeriod)];
   let actions = '';
   if (host && bk.status === 'requested') actions = `<div class="bk-acts"><button class="ac-pill-btn accent" onclick="acBookingRespond(${bk.id},true)">Confirm</button><button class="ac-pill-btn" onclick="acBookingRespond(${bk.id},false)">Decline</button></div>`;
+  else if (host && bk.status === 'confirmed') actions = `<div class="bk-acts"><button class="ac-pill-btn" style="color:var(--red);" onclick="acBookingCancel(${bk.id})">Cancel booking</button></div>`;
   else if (!host && bk.status === 'confirmed') actions = `<div class="bk-acts"><button class="ac-pill-btn accent" onclick="acRentalPay(${bk.id},${bk.totalCents})">Pay · $${(bk.totalCents / 100).toFixed(2)}</button><button class="ac-pill-btn" onclick="acBookingCancel(${bk.id})">Cancel</button></div>`;
   else if (!host && bk.status === 'requested') actions = `<div class="bk-acts"><button class="ac-pill-btn" onclick="acBookingCancel(${bk.id})">Cancel request</button></div>`;
   else if (bk.status === 'paid' && new Date(bk.startDate) > new Date()) actions = `<div class="bk-acts"><button class="ac-pill-btn" onclick="acBookingCancelPaid(${bk.id}, ${host ? 'true' : 'false'})">Cancel booking</button></div>`;
@@ -44121,6 +44178,12 @@ async function acOpenOrder(id) {
   try {
     const { order: o } = await API.req('GET', '/api/orders/' + id);
     AC._ordCur = o;
+    if (o.localDelivery && !o.mine) {
+      API.req('GET', '/api/orders/' + id + '/delivery').then((r) => {
+        const el = document.getElementById('ordDelivTrack');
+        if (el && r && r.run) el.innerHTML = acDeliveryTrackHtml(r.run);
+      }).catch(() => {});
+    }
     const other = o.mine ? o.buyer : o.seller;
     const items = o.items.map(it => `<div class="inv-item"><span>${it.qty}× ${escHtml(it.name)}${it.variantLabel ? ' — ' + escHtml(it.variantLabel) : ''}</span><span>$${(it.priceCents * it.qty / 100).toFixed(2)}</span></div>`).join('');
     const reviewProd = (o.items.find(it => it.productId) || {}).productId || null;
@@ -44155,6 +44218,9 @@ async function acOpenOrder(id) {
     } else if (o.mine && o.status === 'paid') {
       action += `<button class="ac-pill-btn accent" style="width:100%;" onclick="acFulfillOrder()">Mark fulfilled</button>`;
     }
+    // The shop's own delivery run, watched live by the buyer ("Picked up",
+    // "On the way to you", the ETA). The renderer existed; now it's wired.
+    if (o.localDelivery && !o.mine) action += `<div id="ordDelivTrack"></div>`;
     // Seller-issued refund (Shopify's Refund button): full or partial, from
     // the seller's balance, never past the total.
     if (o.mine && ['paid', 'fulfilled', 'delivered', 'released'].includes(o.status) && (o.refundedCents || 0) < o.totalCents) {
@@ -44177,7 +44243,9 @@ async function acOpenOrder(id) {
     // ── Escrow / protection actions ──
     if (o.status === 'escrow' && !o.mine) action += `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acConfirmOrder()">Confirm received · release payment</button><button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acRequestAuth(${o.id})">Have it checked before I confirm</button><button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDisputeOrder()">Something's wrong. Open a dispute</button>`;
     else if (o.status === 'escrow' && o.mine) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDisputeOrder()">Open a dispute</button>`;
-    if ((o.status === 'pending') || (o.mine && o.status === 'paid' && !o.needsShipping)) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acCancelOrder()">Cancel order</button>`;
+    // Only a pending order can cancel (the server's rule). A paid order is
+    // money already moved — that door is "Issue a refund", never Cancel.
+    if (o.status === 'pending') action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acCancelOrder()">Cancel order</button>`;
     // A protection banner that explains the current state.
     let banner = '';
     if (o.escrow) {
@@ -62407,6 +62475,7 @@ function acRenderWebinar() {
             ? `<button class="ac-pill-btn accent" onclick="acWebinarEnd(${w.id})">End it</button>`
             : (w.status === 'ended' || w.status === 'cancelled' ? ''
                : `<button class="ac-pill-btn accent" onclick="acWebinarStart(${w.id})">Go live</button>
+                  <button class="ac-pill-btn" onclick="acWebinarEditOpen()">Edit</button>
                   <button class="ac-pill-btn" onclick="acWebinarCancel(${w.id})">Call it off</button>`))
         : (w.status === 'live' && w.signedUp
             ? `<button class="ac-pill-btn accent" onclick="acWebinarWatch()">Watch now</button>`
@@ -62452,6 +62521,33 @@ async function acWebinarStart(id) {
     if (typeof goLive === 'function') goLive();
     else showNotif('You are live. Open Go Live to start your camera.');
   } catch (e) { showNotif((e && e.message) || 'Could not start it.'); }
+}
+/* Edit the webinar in place — a typo or a new time should never force a
+   cancel-and-refund-everyone. Attendees are told about real changes. */
+function acWebinarEditOpen() {
+  const w = WEB.now && WEB.now.webinar; if (!w) return;
+  showOverlay('webinarEditView');
+  document.getElementById('webEdTitle').value = w.title || '';
+  document.getElementById('webEdDesc').value = w.description || '';
+  const d = w.startsAt ? new Date(w.startsAt) : null;
+  document.getElementById('webEdWhen').value = d ? new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
+  document.getElementById('webEdMins').value = w.minutes || 60;
+  document.getElementById('webEdQa').checked = w.qaOpen !== false;
+}
+async function acWebinarEditSave() {
+  const w = WEB.now && WEB.now.webinar; if (!w) return;
+  const when = document.getElementById('webEdWhen').value;
+  try {
+    await API.req('PATCH', '/api/webinars/' + w.id, {
+      title: document.getElementById('webEdTitle').value.trim(),
+      description: document.getElementById('webEdDesc').value.trim(),
+      startsAt: when ? new Date(when).toISOString() : undefined,
+      minutes: parseInt(document.getElementById('webEdMins').value, 10) || undefined,
+      qaOpen: document.getElementById('webEdQa').checked,
+    });
+    closeOverlay('webinarEditView'); showNotif('Updated. Everyone signed up has been told.');
+    acOpenWebinar(w.id);
+  } catch (e) { showNotif(e.message || 'Could not save the changes.'); }
 }
 async function acWebinarCancel(id) {
   const ok = await appConfirm({ title: 'Call it off?',

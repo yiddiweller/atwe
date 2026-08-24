@@ -29684,7 +29684,7 @@ app.post('/api/offers', auth.requireAuth, rateLimit(30, 60000, 'offer'), async (
     const id = ins.rows[0].id;
     const row = (await db.query(OFFER_SELECT + ' WHERE o.id = $1', [id])).rows[0];
     await pushMetaCard(req.user.id, p.business_id, offerMeta(row, 'made'));
-    notify(p.business_id, req.user.id, 'offer', null, null, null, productId);
+    notify(p.business_id, req.user.id, 'offer', null, null, null, productId, null, id);
     res.status(201).json({ offer: mapOffer(row, req.user.id) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send your offer.' }); }
 });
@@ -29730,7 +29730,7 @@ app.post('/api/offers/:id/respond', auth.requireAuth, rateLimit(40, 60000, 'offe
     await db.query('UPDATE offers SET amount_cents = $2, status = $3, turn = $4, updated_at = now() WHERE id = $1', [id, amount, status, turn]);
     const row = (await db.query(OFFER_SELECT + ' WHERE o.id = $1', [id])).rows[0];
     await pushMetaCard(req.user.id, other, offerMeta(row, action === 'accept' ? 'accepted' : action === 'decline' ? 'declined' : 'countered'));
-    notify(other, req.user.id, 'offer', null, null, null, o.product_id);
+    notify(other, req.user.id, 'offer', null, null, null, o.product_id, null, id);
     res.json({ offer: mapOffer(row, req.user.id) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the offer.' }); }
 });
