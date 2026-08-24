@@ -2005,6 +2005,19 @@ functions, organized by banner comments.
   outgoing arrow, tap → `startCall(kind, AC.peer)` to call back); chat-list preview
   `acMetaLabel('call')` = "📞 Call". So calling someone you've never messaged also
   creates the conversation thread with the call log in it.
+  **The in-call bar (FaceTime-style).** `.call-controls` is ONE never-wrapping,
+  fully-round pill holding at most five controls — mute · camera · flip · **＋** ·
+  end (a voice call drops camera + flip, so it's three). Everything else — share
+  screen, live captions, breakout rooms, record, minimise — lives in the **＋ sheet**
+  (`#callMore` + `#callMoreScrim`, `callMoreToggle`/`callMoreOpen`/`callMoreClose`/
+  `callMoreAct`), a frosted card that rises above the bar and closes on pick, on
+  scrim tap, on `callShowUI` and on `callCleanup`. Rows keep the **same element ids**
+  as the old buttons (`callScreenBtn`/`callCapBtn`/`callBrkBtn`/`callRecBtn`/
+  `callMinBtn`) so `setVis(...)` and the `.sharing`/`.on` state toggles still work —
+  an active tool lights its `.cm-ic` disc, not the whole row. The group-call bar
+  mirrors it exactly (`gcMore*`). **When adding a call control, put it in the ＋
+  sheet** — a sixth button on the bar squashes every circle into an oval.
+
   **Call links (WhatsApp-style shareable call links):** a host mints a link
   (`call_links` row: unique `code`, `host_id`, `title`, `media`, `active`) that
   **anyone signed-in can tap to join an ad-hoc group call — no prior connection or

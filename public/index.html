@@ -2181,9 +2181,20 @@ body.feeds-immersive #statusScrim{display:none;} /* immersive shorts manage thei
   display:flex;flex-direction:column;align-items:stretch;
   padding:calc(env(safe-area-inset-top, 0px) + 2px) 0 0;
   flex-shrink:0;
-  backdrop-filter:blur(24px) saturate(1.5);
-  -webkit-backdrop-filter:blur(24px) saturate(1.5);
-  background:rgba(0,0,0,.5);
+  /* The bar MUST be a positioned layer. The feed's cards are position:relative, and a
+     positioned element always paints above a static one no matter the DOM order — so a
+     static bar gets covered by every photo that scrolls past it. Mobile already forced
+     relative/fixed here (that's why the smear only ever showed on desktop + tablet);
+     this makes the invariant hold at every width. */
+  position:relative;z-index:6;
+  /* SOLID, never frosted — the same call mobile already made, now at every width.
+     A backdrop-filter over a compositor-scrolled list is a known Chromium hazard: the
+     bar samples a backdrop that the compositor scrolls independently, so during a real
+     mouse-wheel scroll the raw feed content paints straight through the bar (photos and
+     text smeared over the tabs). A programmatic scroll never shows it, which is why it
+     only ever turned up on a desktop mouse. An opaque bar has no backdrop to sample and
+     the content clips cleanly beneath it. Don't reintroduce the blur here. */
+  background:var(--bg);
 }
 /* Row 1: ≡ + page label + the single compose "+" action. Collapses on scroll
    (home/chat) so only the tabs row (row 2) stays stuck at the top. */
@@ -4180,7 +4191,7 @@ body.light{
   --violet:#007AFF;--violet-bg:rgba(0,122,255,.12);--violet-line:rgba(0,122,255,.38);
 }
 body.light .sidebar{background:rgba(248,248,250,.97);border-inline-end-color:var(--b2);}
-body.light .topbar{background:rgba(255,255,255,.80);}
+body.light .topbar{background:var(--bg);}
 body.light .bottom-nav{background:rgba(255,255,255,.82);border-color:var(--b3);box-shadow:0 10px 34px rgba(0,0,0,.14),0 2px 8px rgba(0,0,0,.08);}
 body.light .bn-tab{color:var(--t2);}
 body.light .bn-tab.active{color:var(--t1);}
@@ -5639,7 +5650,7 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.08);}
 .apt-more{background:none;border:none;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;padding:5px 0 0;font-family:inherit;}
 .apt-more:active{opacity:.6;}
 /* Media: wide fills the width; narrow is constrained + indented under the name. */
-.ac-post-img{display:block;margin-top:10px;max-width:100%;max-height:560px;object-fit:cover;border-radius:16px;border:none;}
+.ac-post-img{display:block;margin-top:10px;max-width:100%;max-height:560px;object-fit:cover;border-radius:16px;border:none;cursor:pointer;}
 .ac-post-img.ac-img-wide{width:100%;}
 /* X-style multi-image mosaic — 2/3/4 photos in one rounded, centred box. */
 .ac-imggrid{display:grid;gap:2px;margin-top:10px;width:100%;aspect-ratio:16/10;border-radius:16px;overflow:hidden;border:none;background:var(--s2);}
@@ -5648,7 +5659,7 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.08);}
 .ac-imggrid.n3,.ac-imggrid.n4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;}
 .ac-imggrid.n3 img:first-child{grid-row:1 / span 2;}
 .ac-post-img.ac-img-narrow{width:auto;max-width:calc(100% - var(--post-indent));max-height:540px;margin-inline-start:var(--post-indent);object-fit:contain;background:var(--s2);}
-.ac-post-vid{width:100%;max-height:600px;object-fit:contain;background:#000;}
+.ac-post-vid{width:100%;max-height:600px;object-fit:contain;background:#000;cursor:default;}
 /* Video duration chip (blueprint §Home). */
 .ac-vid-wrap{position:relative;display:block;margin-top:10px;}
 .ac-vid-wrap .ac-post-vid{margin-top:0;display:block;border-radius:16px;}
@@ -6005,8 +6016,6 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
 .ac-post-del:hover{color:var(--red);}
 .ac-post-del svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
 .ac-post-text{font-size:15px;line-height:1.5;color:var(--t1);margin-top:2px;white-space:pre-wrap;word-break:break-word;}
-.ac-post-img{display:block;margin-top:10px;max-width:100%;max-height:380px;border-radius:16px;border:none;cursor:pointer;}
-.ac-post-vid{width:100%;background:#000;cursor:default;}
 /* Multi-image post carousel (swipe right-to-left) */
 .ac-imgcar{margin-top:10px;border-radius:16px;border:none;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
 .ac-imgcar::-webkit-scrollbar{display:none;}
@@ -11353,18 +11362,39 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 .call-name{font-size:26px;font-weight:800;letter-spacing:-.02em;color:#fff;margin-bottom:5px;}
 .call-status{font-size:15px;color:rgba(255,255,255,.72);font-variant-numeric:tabular-nums;}
 /* In-call controls live in one Liquid-Glass pill (like the home nav). */
-/* The controls WRAP. A video call shows nine of them, and in one nowrap row on a
-   390px phone they were being crushed from 52px wide to 33px — squeezed ovals
-   jammed together rather than round buttons. Wrapping keeps every control its
-   proper size and lets the bar grow to a second row instead. */
+/* FaceTime-style: ONE row, fully round on both ends, hugging just a few controls.
+   Nine buttons in a row got crushed into squeezed ovals, and wrapping them onto a
+   second row read as a slab, not a bar — so only the essentials live here (mute ·
+   camera · flip · ＋ · end) and everything else moved behind the ＋. Never let this
+   wrap or grow past five buttons; add to the ＋ sheet instead. */
 .call-controls{position:absolute;left:50%;transform:translateX(-50%);bottom:max(34px,calc(env(safe-area-inset-bottom) + 26px));
-  display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px 7px;z-index:4;padding:10px;border-radius:34px;
-  width:min(calc(100vw - 20px),370px);box-sizing:border-box;
+  display:flex;align-items:center;justify-content:center;flex-wrap:nowrap;gap:10px;z-index:4;padding:8px;
+  border-radius:var(--r-pill);width:max-content;max-width:calc(100vw - 24px);box-sizing:border-box;
   background:rgba(28,28,32,.5);-webkit-backdrop-filter:blur(30px) saturate(1.6);backdrop-filter:blur(30px) saturate(1.6);
   border:1px solid rgba(255,255,255,.12);box-shadow:0 14px 44px rgba(0,0,0,.55);}
+/* ── The ＋ sheet: the controls that don't earn a permanent slot ── */
+.call-more-scrim{position:absolute;inset:0;z-index:4;display:none;}
+.call-more-scrim.show{display:block;}
+.call-more{position:absolute;left:50%;bottom:calc(max(34px,calc(env(safe-area-inset-bottom) + 26px)) + 78px);
+  transform:translateX(-50%) scale(.96);transform-origin:50% 100%;opacity:0;pointer-events:none;
+  display:flex;flex-direction:column;gap:1px;z-index:5;width:246px;max-width:calc(100vw - 32px);padding:7px;border-radius:20px;
+  background:rgba(28,28,32,.72);-webkit-backdrop-filter:blur(30px) saturate(1.6);backdrop-filter:blur(30px) saturate(1.6);
+  border:1px solid rgba(255,255,255,.12);box-shadow:0 18px 50px rgba(0,0,0,.6);
+  transition:opacity var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
+.call-more.show{opacity:1;pointer-events:auto;transform:translateX(-50%) scale(1);}
+.cm-item{display:flex;align-items:center;gap:13px;width:100%;padding:8px 9px;border:none;background:none;border-radius:13px;
+  color:#fff;font-family:inherit;font-size:15px;font-weight:500;text-align:start;cursor:pointer;
+  transition:background var(--t-fast) var(--ease);}
+.cm-item:active{background:rgba(255,255,255,.13);}
+.cm-ic{width:34px;height:34px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  background:rgba(255,255,255,.14);color:#fff;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
+.cm-ic svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.8;fill:none;}
+/* An active tool lights its disc, not the whole row. */
+#callScreenBtn.sharing .cm-ic,#callCapBtn.on .cm-ic{background:var(--accent);color:#fff;}
+#callRecBtn.on .cm-ic{background:var(--red);color:#fff;}
 .call-incoming{position:absolute;left:0;right:0;bottom:max(40px,calc(env(safe-area-inset-bottom) + 30px));
   display:flex;justify-content:center;gap:64px;z-index:4;}
-.call-card.incoming .call-controls{display:none;}
+.call-card.incoming .call-controls,.call-card.incoming .call-more,.call-card.incoming .call-more-scrim{display:none;}
 .call-card.calling .call-incoming,.call-card.connected .call-incoming{display:none;}
 .call-btn{width:62px;height:62px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
   background:rgba(255,255,255,.16);color:#fff;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);transition:all var(--t-fast) var(--ease);}
@@ -11384,8 +11414,7 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 .call-controls .call-btn.off{background:#fff;color:#000;}
 .call-controls .call-btn svg{width:23px;height:23px;}
 /* Screen-share active: the button highlights like an "on" toggle */
-#callScreenBtn.sharing{background:var(--accent)!important;color:var(--accent-tint);}
-#gcScreenBtn.sharing{background:var(--accent)!important;color:var(--accent-tint);}
+#gcScreenBtn.sharing .cm-ic{background:var(--accent);color:#fff;}
 /* ── Group calls: full-mesh grid overlay (reuses .call-card / .call-controls / .call-btn) ── */
 .gc-card{background:#000;}
 .gc-grid{position:absolute;inset:0;display:grid;gap:4px;padding:4px;
@@ -11416,7 +11445,8 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 #groupCallOverlay.gc-min{background:none;-webkit-backdrop-filter:none;backdrop-filter:none;pointer-events:none;padding:0;}
 #groupCallOverlay.gc-min .gc-card{pointer-events:auto;position:fixed;top:max(74px,calc(env(safe-area-inset-top) + 60px));right:12px;
   width:132px;height:188px;border-radius:18px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.14);}
-#groupCallOverlay.gc-min .gc-controls,#groupCallOverlay.gc-min .gc-top{display:none;}
+#groupCallOverlay.gc-min .gc-controls,#groupCallOverlay.gc-min .gc-top,
+#groupCallOverlay.gc-min .call-more,#groupCallOverlay.gc-min .call-more-scrim{display:none;}
 #groupCallOverlay.gc-min .gc-grid{padding:0;gap:2px;}
 #groupCallOverlay.gc-min .gc-name{display:none;}
 /* "Call in progress" banner inside a group thread */
@@ -11468,7 +11498,8 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 #callOverlay.call-min .call-card{pointer-events:auto;position:fixed;top:max(74px,calc(env(safe-area-inset-top) + 60px));right:12px;
   width:118px;height:176px;min-width:0;border-radius:18px;overflow:hidden;cursor:pointer;
   box-shadow:0 12px 34px rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.12);animation:none;}
-#callOverlay.call-min .call-controls,#callOverlay.call-min .call-incoming,#callOverlay.call-min .call-local{display:none;}
+#callOverlay.call-min .call-controls,#callOverlay.call-min .call-incoming,#callOverlay.call-min .call-local,
+#callOverlay.call-min .call-more,#callOverlay.call-min .call-more-scrim{display:none;}
 #callOverlay.call-min .call-card.video .call-info{display:none;}
 #callOverlay.call-min .call-card.audio .call-ava{width:46px;height:46px;font-size:17px;}
 #callOverlay.call-min .call-card.audio .call-name{font-size:12.5px;}
@@ -11876,7 +11907,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   background:var(--red);color:#fff;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:800;letter-spacing:.04em;}
 .call-recnotice{position:absolute;top:calc(env(safe-area-inset-top,0px) + 14px);left:14px;right:14px;z-index:8;
   background:var(--red);color:#fff;border-radius:14px;padding:8px 13px;font-size:13px;font-weight:700;text-align:center;}
-#callRecBtn.on{background:var(--red);color:#fff;}
+
 
 /* ═══ Batch 40 ═══ */
 .wf-row{display:flex;gap:10px;margin-top:8px;}
@@ -11924,7 +11955,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
 .cap-bar{position:absolute;left:14px;right:14px;bottom:120px;z-index:7;text-align:center;pointer-events:none;}
 .cap-line{display:inline-block;background:rgba(0,0,0,.72);color:#fff;border-radius:12px;padding:7px 13px;font-size:15px;line-height:1.4;max-width:100%;}
 .cap-line.live{opacity:.75;}
-#callCapBtn.on{background:var(--accent);color:#fff;}
+
 .brk-room{background:var(--s1);border-radius:14px;padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;gap:10px;}
 .brk-room b{flex:1;font-size:14.5px;}
 
@@ -14409,6 +14440,8 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
       <div class="call-status" id="callStatus">Calling…</div>
     </div>
     <video id="callLocalVid" class="call-local" autoplay playsinline muted></video>
+    <!-- FaceTime-style bar: the essentials only. Anything else goes in the ＋ sheet. -->
+    <div class="call-more-scrim" id="callMoreScrim" onclick="callMoreClose()"></div>
     <div class="call-controls" id="callControls">
       <button class="call-btn" id="callMuteBtn" onclick="callToggleMute()" aria-label="Mute">
         <svg class="ic-on" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
@@ -14421,24 +14454,19 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
       <button class="call-btn" id="callFlipBtn" onclick="callFlipCamera()" aria-label="Flip camera" style="display:none;">
         <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><polyline points="9.2 11 9.2 9.2 11 9.2"/><polyline points="14.8 15 14.8 16.8 13 16.8"/><path d="M9.4 14.6a3 3 0 0 0 5-1.1M14.6 11.4a3 3 0 0 0-5 1.1"/></svg>
       </button>
-      <button class="call-btn" id="callScreenBtn" onclick="callToggleScreen()" aria-label="Share screen" style="display:none;">
-        <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><polyline points="9 8.5 12 5.5 15 8.5"/><line x1="12" y1="5.5" x2="12" y2="12"/></svg>
-      </button>
-      <button class="call-btn" id="callCapBtn" onclick="acCaptionsToggle()" aria-label="Live captions">
-        <svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M9 10.5a2.2 2.2 0 1 0 0 3M16 10.5a2.2 2.2 0 1 0 0 3"/></svg>
-      </button>
-      <button class="call-btn" id="callBrkBtn" onclick="acOpenBreakouts()" aria-label="Breakout rooms">
-        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>
-      </button>
-      <button class="call-btn" id="callRecBtn" onclick="acCallRecToggle()" aria-label="Record this call">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.2" fill="currentColor" stroke="none"/></svg>
-      </button>
-      <button class="call-btn" id="callMinBtn" onclick="callMinimize()" aria-label="Minimize">
-        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><rect x="12.5" y="12.5" width="6" height="5" rx="1" fill="currentColor" stroke="none"/></svg>
+      <button class="call-btn" id="callMoreBtn" onclick="callMoreToggle()" aria-label="More options" aria-haspopup="true" aria-expanded="false">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
       <button class="call-btn end" onclick="callHangup()" aria-label="End call">
         <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
       </button>
+    </div>
+    <div class="call-more" id="callMore" role="menu" aria-label="More call options">
+      <button class="cm-item" id="callScreenBtn" onclick="callMoreAct(callToggleScreen)" role="menuitem" style="display:none;"><span class="cm-ic"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><polyline points="9 8.5 12 5.5 15 8.5"/><line x1="12" y1="5.5" x2="12" y2="12"/></svg></span><span>Share screen</span></button>
+      <button class="cm-item" id="callCapBtn" onclick="callMoreAct(acCaptionsToggle)" role="menuitem"><span class="cm-ic"><svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M9 10.5a2.2 2.2 0 1 0 0 3M16 10.5a2.2 2.2 0 1 0 0 3"/></svg></span><span>Live captions</span></button>
+      <button class="cm-item" id="callBrkBtn" onclick="callMoreAct(acOpenBreakouts)" role="menuitem"><span class="cm-ic"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg></span><span>Breakout rooms</span></button>
+      <button class="cm-item" id="callRecBtn" onclick="callMoreAct(acCallRecToggle)" role="menuitem"><span class="cm-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.2" fill="currentColor" stroke="none"/></svg></span><span>Record call</span></button>
+      <button class="cm-item" id="callMinBtn" onclick="callMoreAct(callMinimize)" role="menuitem"><span class="cm-ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><rect x="12.5" y="12.5" width="6" height="5" rx="1" fill="currentColor" stroke="none"/></svg></span><span>Minimise</span></button>
     </div>
     <div class="call-incoming" id="callIncoming">
       <button class="call-btn decline" onclick="callDecline()" aria-label="Decline">
@@ -14456,6 +14484,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
   <div class="call-card gc-card" onclick="gcCardTap()">
     <div class="gc-top"><span class="gc-title" id="gcTitle">Group call</span></div>
     <div class="gc-grid" id="gcGrid"></div>
+    <div class="call-more-scrim" id="gcMoreScrim" onclick="event.stopPropagation();gcMoreClose()"></div>
     <div class="call-controls gc-controls" id="gcControls">
       <button class="call-btn" id="gcMuteBtn" onclick="event.stopPropagation();gcToggleMute()" aria-label="Mute">
         <svg class="ic-on" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
@@ -14468,17 +14497,17 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
       <button class="call-btn" id="gcFlipBtn" onclick="event.stopPropagation();gcFlipCamera()" aria-label="Flip camera" style="display:none;">
         <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><polyline points="9.2 11 9.2 9.2 11 9.2"/><polyline points="14.8 15 14.8 16.8 13 16.8"/><path d="M9.4 14.6a3 3 0 0 0 5-1.1M14.6 11.4a3 3 0 0 0-5 1.1"/></svg>
       </button>
-      <button class="call-btn" id="gcScreenBtn" onclick="event.stopPropagation();gcToggleScreen()" aria-label="Share screen" style="display:none;">
-        <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><polyline points="9 8.5 12 5.5 15 8.5"/><line x1="12" y1="5.5" x2="12" y2="12"/></svg>
-      </button>
-      <button class="call-btn" id="gcMinBtn" onclick="event.stopPropagation();gcMinimize()" aria-label="Minimize">
-        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><rect x="12.5" y="12.5" width="6" height="5" rx="1" fill="currentColor" stroke="none"/></svg>
+      <button class="call-btn" id="gcMoreBtn" onclick="event.stopPropagation();gcMoreToggle()" aria-label="More options" aria-haspopup="true" aria-expanded="false">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
       <button class="call-btn end" onclick="event.stopPropagation();gcLeave()" aria-label="Leave call">
         <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
       </button>
     </div>
-  </div>
+    <div class="call-more" id="gcMore" role="menu" aria-label="More call options">
+      <button class="cm-item" id="gcScreenBtn" onclick="event.stopPropagation();gcMoreAct(gcToggleScreen)" role="menuitem" style="display:none;"><span class="cm-ic"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><polyline points="9 8.5 12 5.5 15 8.5"/><line x1="12" y1="5.5" x2="12" y2="12"/></svg></span><span>Share screen</span></button>
+      <button class="cm-item" id="gcMinBtn" onclick="event.stopPropagation();gcMoreAct(gcMinimize)" role="menuitem"><span class="cm-ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><rect x="12.5" y="12.5" width="6" height="5" rx="1" fill="currentColor" stroke="none"/></svg></span><span>Minimise</span></button>
+    </div>
 </div>
 
 
@@ -19957,7 +19986,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1693'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1694'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -54538,6 +54567,7 @@ function playEndTone() {
 function callCleanup() {
   callStopTimer();
   stopRing();
+  callMoreClose();
   if (CALL) {
     clearTimeout(CALL._connTimeout);
     if (CALL.signaled || CALL.connectedAt || !CALL.caller) playEndTone(); // a real call ended
@@ -54566,6 +54596,7 @@ function callShowUI(state) {
   clearTimeout(ov._dt); // clear any leftover dismiss-shrink styles before reopening
   ov.style.transition = ''; ov.style.transform = ''; ov.style.opacity = ''; ov.style.transformOrigin = '';
   showOverlay('callOverlay');
+  callMoreClose();
   const card = document.querySelector('#callOverlay .call-card');
   card.classList.remove('calling', 'incoming', 'connected', 'video', 'audio');
   ov.classList.remove('call-min'); // never reopen straight into mini mode
@@ -54691,6 +54722,26 @@ async function callStopScreen() {
 }
 // Minimize the call to a floating window (stays connected) and back.
 function callMinimize() { if (CALL) document.getElementById('callOverlay').classList.add('call-min'); }
+/* The ＋ sheet on the call bar. The bar keeps only mute · camera · flip · ＋ · end;
+   screen-share, captions, breakouts, record and minimise live in here, so the bar
+   stays one round row instead of squashing or wrapping onto a second line. */
+function callMoreToggle() {
+  const sheet = document.getElementById('callMore');
+  if (!sheet) return;
+  sheet.classList.contains('show') ? callMoreClose() : callMoreOpen();
+}
+function callMoreOpen() {
+  document.getElementById('callMore')?.classList.add('show');
+  document.getElementById('callMoreScrim')?.classList.add('show');
+  document.getElementById('callMoreBtn')?.setAttribute('aria-expanded', 'true');
+}
+function callMoreClose() {
+  document.getElementById('callMore')?.classList.remove('show');
+  document.getElementById('callMoreScrim')?.classList.remove('show');
+  document.getElementById('callMoreBtn')?.setAttribute('aria-expanded', 'false');
+}
+// Pick a row: run it, then get out of the way.
+function callMoreAct(fn) { callMoreClose(); try { fn(); } catch (e) { console.error(e); } }
 function callRestore() { document.getElementById('callOverlay').classList.remove('call-min'); }
 function callCardTap() { if (document.getElementById('callOverlay').classList.contains('call-min')) callRestore(); }
 
@@ -56005,9 +56056,23 @@ async function gcStopScreen() {
   }
 }
 function gcMinimize() { if (GROUPCALL) document.getElementById('groupCallOverlay').classList.add('gc-min'); }
+// Same ＋ sheet as the 1:1 bar, so a group call's row never squashes either.
+function gcMoreToggle() { const sh = document.getElementById('gcMore'); if (!sh) return; sh.classList.contains('show') ? gcMoreClose() : gcMoreOpen(); }
+function gcMoreOpen() {
+  document.getElementById('gcMore')?.classList.add('show');
+  document.getElementById('gcMoreScrim')?.classList.add('show');
+  document.getElementById('gcMoreBtn')?.setAttribute('aria-expanded', 'true');
+}
+function gcMoreClose() {
+  document.getElementById('gcMore')?.classList.remove('show');
+  document.getElementById('gcMoreScrim')?.classList.remove('show');
+  document.getElementById('gcMoreBtn')?.setAttribute('aria-expanded', 'false');
+}
+function gcMoreAct(fn) { gcMoreClose(); try { fn(); } catch (e) { console.error(e); } }
 function gcRestore() { document.getElementById('groupCallOverlay').classList.remove('gc-min'); }
 function gcCardTap() { if (document.getElementById('groupCallOverlay').classList.contains('gc-min')) gcRestore(); }
 function gcLeave() {
+  gcMoreClose();
   if (GROUPCALL) {
     if (GROUPCALL.link) API.req('POST', '/api/rt/call-link/leave', { code: GROUPCALL.link }).catch(() => {});
     else API.req('POST', '/api/rt/group-call/leave', { groupId: GROUPCALL.groupId }).catch(() => {});
