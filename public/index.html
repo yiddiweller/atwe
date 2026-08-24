@@ -116,6 +116,13 @@ a{text-decoration:none;color:inherit;}
   --accent-hover: #0071E3;
   --accent-light: #409CFF;
   --accent-tint:  #DBE9FF;   /* text on a solid blue fill — never pure white */
+  /* The outgoing message bubble is its own case. On the brand blue the soft
+     tint measures 2.87:1 and even pure white only 3.52:1 — both under the
+     4.5:1 that small text needs, on the text people re-read most. The bubble
+     (and only the bubble) uses a deeper blue with white: 4.73:1. Light theme
+     already paired white with this exact blue, so both themes now read alike. */
+  --bubble-out:      #0071E0;
+  --bubble-out-ink:  #FFFFFF;
 
   /* Primary action fill — the design blueprint's "white acts, blue identifies":
      the ONE primary CTA per screen is WHITE on the black stage (dark label),
@@ -138,7 +145,14 @@ a{text-decoration:none;color:inherit;}
   /* Text */
   --t1: #FFFFFF;
   --t2: #8E8E93;
-  --t3: #6E6E73;
+  /* Measured, not guessed: #6E6E73 on black is 4.14:1 — under the 4.5:1 the
+     readability standard asks for at small sizes, and this token carries every
+     message preview, timestamp, subtitle and caption in the app. #78787D is
+     4.78:1 — over the line, and only ten shades brighter. (Light theme keeps
+     #6E6E73: on white it already measures 5.07:1.) #7E7E83 clears 4.5:1 on the
+     page AND on the elevated surfaces sheets and cards use (4.56:1 on #141416,
+     where the old value was 3.9:1). */
+  --t3: #7E7E83;
   --t4: #48484A;
   --text-black: #1D1D1F;   /* text on a light or yellow surface only */
 
@@ -4150,11 +4164,15 @@ body.light{
   --s1:#F5F5F7;--s2:#F5F5F7;--s3:#e6ecf0;--s4:#d9e1e8;
   --b1:rgba(0,0,0,.04);--b2:#eff3f4;--b3:#e1e8ed;--b4:#cfd9de;
   --divider:#D1D1D6;
-  --accent:#0088FF;--accent-rgb:0,136,255;--accent-hover:#0066D6;--accent-light:#3395FF;
+  /* The brand blue #0088FF measures 3.52:1 on white — as TEXT (links, labels,
+     unread times) and as white-on-blue in an outgoing bubble, both under 4.5:1.
+     Light theme deepens it to #0071E0 (4.73:1 both ways); Black theme keeps the
+     exact brand blue, which is already 6.6:1 there. Same hue, same character. */
+  --accent:#0071E0;--accent-rgb:0,113,224;--accent-hover:#005CC4;--accent-light:#2E8AE8;
   --accent-dim:rgba(0,122,255,.10);--accent-mid:rgba(0,122,255,.20);--accent-glow:rgba(0,122,255,.30);
   --accent-tint:#FFFFFF;   /* Apple's own light-mode blue buttons use white text */
   --primary:#111114;--on-primary:#FFFFFF;   /* Light-theme primary: near-black fill, white label */
-  --t1:#1D1D1F;--t2:#6E6E73;--t3:#6E6E73;--t4:#aab8c2;
+  --t1:#1D1D1F;--t2:#65656A;--t3:#6E6E73;--t4:#aab8c2;
   --verify:#5b7083;   /* light theme: slate silver — the seal is never blue */
   --rose:#007AFF;--rose-bg:rgba(0,122,255,.1);--rose-bg-2:rgba(0,122,255,.18);--rose-line:rgba(0,122,255,.4);
   --violet:#007AFF;--violet-bg:rgba(0,122,255,.12);--violet-line:rgba(0,122,255,.38);
@@ -4457,7 +4475,7 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
   -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
   transition:background-color var(--t-slow) ease;}
 .msg-row.team .msg-bubble{background:var(--s3);color:var(--t1);}
-.msg-row.me .msg-bubble{background:var(--accent);color:var(--accent-tint);}
+.msg-row.me .msg-bubble{background:var(--bubble-out);color:var(--bubble-out-ink);}
 /* Two-state sent bubble (WhatsApp/iMessage read semantics): until the recipient
    has actually SEEN it (read_at), the bubble stays the light blue tint with dark
    text. The moment they read it, it smoothly fades to the solid accent blue with
@@ -4817,7 +4835,7 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .mc-call-main{flex:1;min-width:0;}
 .mc-call-title{font-size:14.5px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .mc-call.missed .mc-call-title{color:var(--red);}
-.mc-call-sub{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--t3);margin-top:1px;}
+.mc-call-sub{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--t2);margin-top:1px;/* --t2, not --t3: this sits on a card inside a bubble, where the tertiary grey measures 4.2:1 — just under the bar */}
 .mc-call-sub svg{width:13px;height:13px;stroke:currentColor;stroke-width:2.2;fill:none;flex:0 0 auto;}
 .mc-call-back{flex:0 0 auto;width:32px;height:32px;color:var(--accent);display:grid;place-items:center;}
 .mc-call-back svg{width:19px;height:19px;fill:currentColor;stroke:none;}
@@ -12016,7 +12034,7 @@ body.light{--card-hair:var(--bg);--card-fill:var(--s3);}
 .mc-call-ic svg{fill:currentColor;stroke:none;}
 .mc-call.missed .mc-call-ic{background:var(--red-soft);color:var(--red);}
 .mc-call.missed .mc-call-title{color:var(--red);}
-.mc-call-sub{display:flex;align-items:center;gap:4px;font-size:12.5px;color:var(--t3);margin-top:1px;}
+.mc-call-sub{display:flex;align-items:center;gap:4px;font-size:12.5px;color:var(--t2);margin-top:1px;/* NB: this is the SECOND .mc-call-sub in the file and the one that wins — the earlier copy is dead. --t2 because the line sits on a card inside a bubble, where --t3 measures 4.2:1. */}
 .mc-call-back{flex:0 0 auto;width:30px;height:30px;color:var(--accent);display:grid;place-items:center;}
 
 /* ── Poll · event · location · contact · product · deal · cart ────────────── */
@@ -19890,7 +19908,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1684'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1685'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -22909,6 +22927,14 @@ function applyThemeClasses(mode) {
   document.body.classList.toggle('light', mode === 'light');
   const m = document.querySelector('meta[name="theme-color"]');
   if (m) m.setAttribute('content', THEME_META[mode] || '#000000');
+  /* <html> ships with an inline black background so the very first frame is
+     never a white flash. An inline style beats the stylesheet forever, so the
+     handover has to happen HERE, once the real theme is known — otherwise Light
+     theme keeps a black page behind everything and every gap shows through as
+     black (a short chat list, a half-filled screen, the area under any list). */
+  const paint = (mode === 'light') ? '#ffffff' : '#000000';
+  document.documentElement.style.background = paint;
+  document.body.style.background = paint;   // <body> carries the same inline black
 }
 function setTheme(pref) {
   pref = normThemePref(pref);
