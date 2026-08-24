@@ -6848,6 +6848,30 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .q-actions .ac-pill-btn{flex:1;}
 /* Shop */
 .shop-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+/* ── Storefront: in-store search + the seller's chosen theme ── */
+.sf-search{display:flex;align-items:center;gap:9px;background:var(--s2);border-radius:999px;padding:10px 16px;margin:10px 0 6px;}
+.sf-search svg{width:16px;height:16px;fill:none;stroke:var(--t3);stroke-width:2;stroke-linecap:round;flex:0 0 auto;}
+.sf-search input{flex:1;background:none;border:none;outline:none;color:var(--t1);font-size:15px;font-family:inherit;min-width:0;}
+.sf-cover{height:118px;border-radius:16px;background-size:cover;background-position:center;margin:0 0 12px;background-color:var(--s2);}
+.sf-tagline{font-size:13.5px;color:var(--sf-accent,var(--accent));font-weight:650;margin-top:2px;}
+/* Looks: bold amplifies the name, quiet mutes the chrome, warm tints surfaces. */
+.sf-look-bold .sf-name{font-size:24px;font-weight:800;letter-spacing:-.02em;}
+.sf-look-quiet .sf-name{font-weight:600;}
+.sf-look-quiet .sf-headline,.sf-look-quiet .sf-tagline{color:var(--t3);}
+.sf-look-warm{--s1:#171310;--s2:#201812;}
+body.light .sf-look-warm{--s1:#faf4ec;--s2:#f3e9dc;}
+/* Layouts: grid (default 2-up), list (one per row), showcase (big singles). */
+.sf-lay-list .shop-grid{grid-template-columns:1fr;}
+.sf-lay-showcase .shop-grid{grid-template-columns:1fr;gap:14px;}
+.sf-lay-showcase .shop-grid .shop-img{height:210px;}
+/* Theme picker chips + swatches */
+.stt-chips{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 14px;}
+.stt-chip{background:var(--s2);border:none;border-radius:999px;padding:8px 15px;font-size:13.5px;font-weight:650;color:var(--t2);cursor:pointer;}
+.stt-chip.on{background:var(--primary);color:var(--on-primary);}
+.stt-swatches{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 14px;}
+.stt-sw{width:30px;height:30px;border-radius:50%;border:none;cursor:pointer;}
+.stt-sw.on{box-shadow:0 0 0 2.5px var(--bg),0 0 0 4.5px var(--t1);}
+.stt-cover{height:90px;border-radius:14px;background:var(--s2) center/cover no-repeat;margin:6px 0 10px;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:13.5px;}
 /* Storefront category / menu sections */
 .sf-section{margin-bottom:16px;}
 .sf-section-head{font-size:15px;font-weight:800;letter-spacing:-.01em;color:var(--t1);margin:14px 2px 9px;padding-bottom:6px;border-bottom:1px solid var(--b1);}
@@ -16070,6 +16094,29 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 </div>
 
 <!-- Send a tip -->
+<!-- Store look & theme: the seller dresses their storefront -->
+<div class="overlay hidden" id="storeThemeView" onclick="if(event.target===this)closeOverlay('storeThemeView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Store look and theme">
+    <button class="sheet-close" onclick="closeOverlay('storeThemeView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Store look &amp; theme</div>
+    <div class="ac-disc-sub" style="margin:2px 0 12px;">How your storefront feels to shoppers. Changes apply the next time anyone opens it.</div>
+    <div class="co-sec-h">Look</div><div class="stt-chips" id="sttLooks"></div>
+    <div class="co-sec-h">Layout</div><div class="stt-chips" id="sttLayouts"></div>
+    <div class="co-sec-h">Brand colour</div><div class="stt-swatches" id="sttSwatches"></div>
+    <div class="co-sec-h">Tagline</div>
+    <input class="jp-in" id="sttTagline" type="text" maxlength="120" placeholder="One line above your products (optional)"/>
+    <div class="co-sec-h" style="margin-top:10px;">Cover photo</div>
+    <div class="stt-cover" id="sttCover"></div>
+    <div style="display:flex;gap:8px;">
+      <button class="ac-pill-btn" style="flex:1;" onclick="document.getElementById('sttCoverFile').click()">Choose photo</button>
+      <button class="ac-pill-btn" style="flex:1;" onclick="acStThemeCoverClear()">Remove</button>
+    </div>
+    <input type="file" id="sttCoverFile" accept="image/*" class="hidden" onchange="acStThemeCoverPick(this)"/>
+    <button class="ac-pill-btn accent jp-submit" style="margin-top:14px;" onclick="acStThemeSave()">Save theme</button>
+    <button class="ac-link-btn" style="display:block;margin:10px auto 0;" onclick="acStThemeReset()">Reset to classic</button>
+  </div>
+</div>
+
 <!-- Shop returns policy: the stated window, enforced on return requests -->
 <div class="overlay hidden" id="returnsPolicyView" onclick="if(event.target===this)closeOverlay('returnsPolicyView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Returns policy">
@@ -19783,7 +19830,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1680'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1681'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -46947,6 +46994,7 @@ async function acOpenStoreManage() {
     </div>` : '';
   b.innerHTML = setup + `<div class="iset-group">
     ${isBiz ? row(SI.store, 'View storefront', 'See your store the way buyers do', "closeOverlay('storeManageView');acOpenMyStorefront()") : ''}
+    ${isBiz ? row(SI.tag, 'Store look & theme', 'Colours, layout, tagline and a cover photo', "acOpenStoreTheme()") : ''}
     ${isBiz ? row(SI.people, 'Team inbox', 'Let your staff answer customer messages with you', "closeOverlay('storeManageView');acOpenInboxSetup()") : ''}
     ${row(SI.box, 'Products', count ? count + ' listing' + (count === 1 ? '' : 's') : 'Add items or services to sell', 'closeOverlay(\'storeManageView\');acOpenSell()')}
     ${row(SI.gift, 'Bundles', 'Group products into a saver price', 'closeOverlay(\'storeManageView\');acOpenBundles()')}
@@ -47540,16 +47588,37 @@ async function acOpenStorefront(biz) {
   AC._sf = biz; showOverlay('storefrontView');
   const b = document.getElementById('storefrontBody'); if (!b) return;
   b.innerHTML = acSkelRows(3);
+  b.className = ''; b.style.removeProperty('--sf-accent'); b.style.removeProperty('--accent');
   try {
-    const { products, owner } = await API.req('GET', '/api/businesses/' + biz.id + '/products');
+    // Products and the seller's chosen theme, side by side (the theme is
+    // optional — a store with none simply renders classic).
+    const [{ products, owner }, themeRes] = await Promise.all([
+      API.req('GET', '/api/businesses/' + biz.id + '/products'),
+      API.req('GET', '/api/store-theme/' + biz.id).catch(() => ({ theme: null })),
+    ]);
+    const theme = themeRes && themeRes.theme;
+    AC._sfTheme = theme;
     const isOwner = !!owner;
     const visible = isOwner ? products : products.filter(p => p.active);
+    // The seller's featured categories lead; grouping keeps first-seen order,
+    // so a stable sort by featured-rank reorders the sections.
+    if (theme && Array.isArray(theme.featured) && theme.featured.length) {
+      const fi = new Map(theme.featured.map((x, i) => [String(x).toLowerCase(), i]));
+      const rank = (p) => (fi.has((p.category || '').toLowerCase()) ? fi.get((p.category || '').toLowerCase()) : 99);
+      visible.sort((a, z) => rank(a) - rank(z));
+    }
+    const cover = theme && theme.cover ? `<div class="sf-cover" style="background-image:url('${theme.cover}')"></div>` : '';
     const head = `<div class="sf-head">
       ${acAvatarHtml(biz.name, biz.avatar, 'user-avatar lg', true)}
       <div class="sf-head-main"><div class="sf-name">${escHtml(biz.name)}</div>
+        ${theme && theme.tagline ? `<div class="sf-tagline">${escHtml(theme.tagline)}</div>` : ''}
         ${biz.headline ? `<div class="sf-headline">${escHtml(biz.headline)}</div>` : ''}
         ${biz.username ? `<button class="ac-link-btn" onclick="closeOverlay('storefrontView');acGoProfile(${jsAttr(biz.username)})">View full profile ›</button>` : ''}</div>
       ${isOwner ? `<button class="ac-pill-btn accent sm" style="flex:0 0 auto;" onclick="acProductFormOpen()">＋ Add</button>` : ''}</div>`;
+    // In-store search (typo-tolerant on the server) — once there's enough to search.
+    const searchRow = visible.length > 6
+      ? `<div class="sf-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg><input id="sfSearchIn" type="text" maxlength="80" placeholder="Search this store" aria-label="Search this store" oninput="acSfSearchDebounced()"/></div>`
+      : '';
     // Escrow reassurance for shoppers (design blueprint); owners don't need it.
     const escLine = isOwner ? '' : `<div class="esc-note sf-esc"><span class="esc-dot"></span>Every order is protected. Your money is held in escrow and released when you confirm delivery.</div>`;
     // Vacation mode: an amber heads-up so shoppers know before they try to buy.
@@ -47560,9 +47629,72 @@ async function acOpenStorefront(biz) {
       : `<div class="ac-empty" style="padding:26px;">${isOwner ? 'No products yet. Add your first item.' : 'This store has no items yet.'}</div>`;
     // Seller announcement (one pinned line, e.g. "20% off this week").
     const ann = acStoreBannerHtml(isOwner ? (S.user && S.user.storeBanner) : biz.storeBanner);
-    b.innerHTML = `${head}${searchRow}${ann}${vac}${escLine}<div id="sfBundles"></div>${grid}`;
+    b.innerHTML = `${cover}${head}${searchRow}${ann}${vac}${escLine}<div id="sfBundles"></div><div id="sfGrid">${grid}</div>`;
+    // The seller's look, layout and brand colour, scoped to this store only.
+    if (theme) {
+      b.className = 'sf-look-' + (theme.look || 'classic') + ' sf-lay-' + (theme.layout || 'grid');
+      if (theme.accent) { b.style.setProperty('--sf-accent', theme.accent); b.style.setProperty('--accent', theme.accent); }
+    }
+    AC._sfOwner = isOwner;
     acLoadStorefrontBundles(biz.id, isOwner);
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:22px;">' + escHtml(e.message || 'Could not load the store.') + '</div>'; }
+}
+// In-store search: re-fetch with q (the server falls back to typo-tolerant
+// matching) and swap ONLY the grid, so the head/banner/bundles stay put.
+let _sfQT = null;
+function acSfSearchDebounced() { clearTimeout(_sfQT); _sfQT = setTimeout(acSfSearch, 300); }
+async function acSfSearch() {
+  const biz = AC._sf; if (!biz) return;
+  const box = document.getElementById('sfGrid'); if (!box) return;
+  const q = ((document.getElementById('sfSearchIn') || {}).value || '').trim();
+  try {
+    const { products } = await API.req('GET', '/api/businesses/' + biz.id + '/products' + (q ? '?q=' + encodeURIComponent(q) : ''));
+    const visible = AC._sfOwner ? products : products.filter(p => p.active);
+    box.innerHTML = visible.length ? acGroupedProductGrid(visible, AC._sfOwner)
+      : `<div class="ac-empty" style="padding:26px;">Nothing here matches “${escHtml(q)}”.</div>`;
+  } catch (e) { box.innerHTML = '<div class="ac-empty" style="padding:22px;">Could not search right now.</div>'; }
+}
+/* ── Store look & theme: the seller's picker for the storefront ── */
+function acOpenStoreTheme() {
+  if (!S.user) return;
+  showOverlay('storeThemeView');
+  AC._stTheme = { look: 'classic', layout: 'grid', accent: null, tagline: '', cover: null };
+  acStThemeRender();
+  API.req('GET', '/api/store-theme/' + S.user.id).then((r) => {
+    if (r.theme) AC._stTheme = { look: r.theme.look || 'classic', layout: r.theme.layout || 'grid', accent: r.theme.accent || null, tagline: r.theme.tagline || '', cover: r.theme.cover || null };
+    acStThemeRender();
+  }).catch(() => {});
+}
+function acStThemeRender() {
+  const t = AC._stTheme;
+  const chip = (kind, val, label) => `<button class="stt-chip ${t[kind] === val ? 'on' : ''}" onclick="acStThemePick(${jsAttr(kind)},${jsAttr(val)})">${escHtml(label)}</button>`;
+  document.getElementById('sttLooks').innerHTML = [['classic', 'Classic'], ['bold', 'Bold'], ['quiet', 'Quiet'], ['warm', 'Warm']].map(([v, l]) => chip('look', v, l)).join('');
+  document.getElementById('sttLayouts').innerHTML = [['grid', 'Grid'], ['list', 'List'], ['showcase', 'Showcase']].map(([v, l]) => chip('layout', v, l)).join('');
+  document.getElementById('sttSwatches').innerHTML = ACCENT_PRESETS.slice(0, 8).map((hex) =>
+    `<button class="stt-sw ${t.accent === hex ? 'on' : ''}" style="background:${hex};" aria-label="Accent ${hex}" onclick="acStThemeAccent(${jsAttr(hex)})"></button>`).join('')
+    + `<button class="stt-chip ${!t.accent ? 'on' : ''}" onclick="acStThemeAccent(null)">None</button>`;
+  const tg = document.getElementById('sttTagline'); if (document.activeElement !== tg) tg.value = t.tagline || '';
+  document.getElementById('sttCover').style.backgroundImage = t.cover ? `url('${t.cover}')` : '';
+  document.getElementById('sttCover').textContent = t.cover ? '' : 'No cover photo yet';
+}
+function acStThemePick(kind, val) { AC._stTheme[kind] = val; acStThemeRender(); }
+function acStThemeAccent(hex) { AC._stTheme.accent = hex; acStThemeRender(); }
+function acStThemeCoverPick(input) {
+  const f = input.files && input.files[0]; input.value = ''; if (!f) return;
+  downscaleImage(f, (dataUrl) => { AC._stTheme.cover = dataUrl; acStThemeRender(); }, 1400);
+}
+function acStThemeCoverClear() { AC._stTheme.cover = null; acStThemeRender(); }
+async function acStThemeSave() {
+  AC._stTheme.tagline = (document.getElementById('sttTagline').value || '').trim();
+  try {
+    await API.req('PUT', '/api/store-theme', { theme: AC._stTheme });
+    closeOverlay('storeThemeView'); showNotif('Store theme saved.');
+    acOpenMyStorefront(); // show them their store, dressed.
+  } catch (e) { showNotif(e.message || 'Could not save the theme.'); }
+}
+async function acStThemeReset() {
+  try { await API.req('DELETE', '/api/store-theme'); closeOverlay('storeThemeView'); showNotif('Back to the classic look.'); }
+  catch (e) { showNotif(e.message || 'Could not reset it.'); }
 }
 // Bundles row on a storefront (own store shows an "＋ Bundle" action + hidden ones).
 async function acLoadStorefrontBundles(sellerId, isOwner) {

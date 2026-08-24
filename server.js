@@ -30007,7 +30007,9 @@ app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
       ({ rows } = await db.query(`${COLS} AND (p.name ILIKE $2 OR p.description ILIKE $2 OR p.category ILIKE $2) ORDER BY p.pinned DESC, p.created_at DESC LIMIT 200`, [bid, like]));
       // Nothing? The same typo-tolerant fallback the marketplace search uses.
       if (!rows.length && await trgmAvailable()) {
-        ({ rows } = await db.query(`${COLS} AND similarity(p.name, $2) > 0.25 ORDER BY similarity(p.name, $2) DESC LIMIT 200`, [bid, q]));
+        // word_similarity: 'walnot' should find 'Walnut Chair' — whole-name
+        // similarity dilutes a one-typo query below the bar on multi-word names.
+        ({ rows } = await db.query(`${COLS} AND word_similarity($2, p.name) > 0.4 ORDER BY word_similarity($2, p.name) DESC LIMIT 200`, [bid, q]));
       }
     } else {
       ({ rows } = await db.query(`${COLS} ORDER BY p.pinned DESC, p.created_at DESC LIMIT 200`, [bid]));
@@ -30311,9 +30313,9 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
       let fCond = `p.active = true AND p.business_id NOT IN (SELECT id FROM users WHERE deactivated)
         AND p.business_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
         AND p.business_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)
-        AND similarity(p.name, $2) > 0.25`;
+        AND word_similarity($2, p.name) > 0.4`;
       if (kind) { fParams.push(kind); fCond += ` AND p.kind = $${fParams.length}`; }
-      const fz = await db.query(`${LISTING_SELECT} WHERE ${fCond} ORDER BY similarity(p.name, $2) DESC, p.created_at DESC LIMIT 24`, fParams);
+      const fz = await db.query(`${LISTING_SELECT} WHERE ${fCond} ORDER BY word_similarity($2, p.name) DESC, p.created_at DESC LIMIT 24`, fParams);
       listings = fz.rows.map((r) => Object.assign(mapListing(r), { saved: saved.has(r.id) }));
       fuzzy = listings.length > 0;
     }
