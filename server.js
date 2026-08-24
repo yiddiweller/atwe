@@ -30590,7 +30590,11 @@ app.post('/api/admin/product-ads/:id/:action', auth.requirePerm('ads'), async (r
 // My own listings (any account) — for the Sell / manage surface.
 app.get('/api/my-listings', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.rental_week_pct, p.rental_month_pct, p.rental_instant, p.rental_clean_fee_cents, p.rental_max_guests, p.rental_cancel_policy, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.pinned DESC, p.created_at DESC LIMIT 300`, [req.user.id]);
+    /* pickup + pickup_location MUST be here: this is the seller's own edit surface,
+       so anything missing reads back as "off" in the form and is then wiped by the
+       next save. They were absent, which silently dropped local pickup from a
+       listing the moment its owner edited anything else. */
+    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.wholesale_cents, p.wholesale_min_qty, p.amenities, p.specs, p.rental_period, p.rental_week_pct, p.rental_month_pct, p.rental_instant, p.rental_clean_fee_cents, p.rental_max_guests, p.rental_cancel_policy, p.category, p.condition, p.pinned, p.compare_at_cents, p.processing_days_min, p.processing_days_max, (p.video IS NOT NULL) AS has_video, p.video_ver, p.auction_ends_at, p.auction_min_cents, p.auction_reserve_cents, p.auction_settled, p.auction_winner_id, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.pinned DESC, p.created_at DESC LIMIT 300`, [req.user.id]);
     res.json({ products: rows.map((r) => mapProduct(r, { owner: true })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your listings.' }); }
 });
