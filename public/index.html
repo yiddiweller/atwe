@@ -4801,25 +4801,40 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 
 /* Attachment grid (frosted sheet above the + button) — Photo/Video/Camera/
    Document/Location/Contact/Poll/Event, iOS-style. */
+/* The attach sheet is a LIST, not a box of tiles: one option per row, rising from
+   the composer and scrolling inside itself — the same shape as every other menu in
+   the app, which already caps at --menu-maxh (~8-9 rows) and scrolls, iPhone-style.
+   It used to be a 4-wide grid of 18 tiles, which is a lot of wall to read at once. */
 .ac-attach-sheet{position:absolute;left:10px;bottom:64px;z-index:9;
-  width:min(372px,calc(100vw - 22px));
-  display:grid;grid-template-columns:repeat(4,1fr);gap:4px 0;
-  padding:18px 10px 16px;border-radius:26px;
+  width:min(304px,calc(100vw - 22px));
+  display:flex;flex-direction:column;
+  max-height:var(--menu-maxh);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+  padding:7px;border-radius:20px;
   background:var(--menu-bg);
   backdrop-filter:var(--menu-blur);-webkit-backdrop-filter:var(--menu-blur);
   border:1px solid var(--menu-border);box-shadow:var(--menu-shadow);
   transform-origin:bottom left;animation:aaSheetIn .22s cubic-bezier(.2,.85,.3,1.2);}
 .ac-attach-sheet.hidden{display:none;}
-@keyframes aaSheetIn{from{opacity:0;transform:scale(.9) translateY(10px);}to{opacity:1;transform:none;}}
-.aatile{display:flex;flex-direction:column;align-items:center;gap:8px;background:none;border:none;cursor:pointer;
-  padding:8px 2px;border-radius:16px;-webkit-tap-highlight-color:transparent;
-  transition:transform var(--t-fast) var(--ease);}
-.aatile:active{transform:scale(.88);}
-.aat-ic{width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  background:var(--menu-hl);transition:background var(--t-fast) var(--ease);}
-@media(hover:hover){.aatile:hover .aat-ic{background:var(--s4);}}
-.aat-ic svg{width:25px;height:25px;stroke-width:1.85;fill:none;stroke:currentColor;}
-.aat-l{font-size:12px;font-weight:500;color:var(--t2);letter-spacing:-.01em;}
+@keyframes aaSheetIn{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:none;}}
+.aatile{display:flex;flex-direction:row;align-items:center;gap:13px;width:100%;
+  background:none;border:none;cursor:pointer;text-align:start;
+  padding:8px 9px;border-radius:13px;-webkit-tap-highlight-color:transparent;
+  transition:background var(--t-fast) var(--ease);}
+.aatile:active{background:var(--menu-hl);}
+@media(hover:hover){.aatile:hover{background:var(--menu-hl);}}
+/* ONE icon treatment for every row. Several of the per-icon colour classes
+   (.ic-prod, .ic-drop, .ic-sched, .ic-sticker, .ic-aireply, .ic-doc2, .ic-sketch)
+   were never actually defined, so those rows fell through to a different default
+   while others were grey and two carried their own tinted backgrounds — which is
+   why the menu read as a mix of grey, blue and yellow. */
+.aat-ic{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:var(--menu-hl);color:var(--t1);flex-shrink:0;}
+.aat-ic svg{width:19px;height:19px;stroke-width:1.8;fill:none;stroke:currentColor;
+  stroke-linecap:round;stroke-linejoin:round;}
+.aat-ic img{width:19px;height:19px;border-radius:5px;}
+.ac-attach-sheet .aat-ic{color:var(--t1);background:var(--menu-hl);}
+.aat-l{font-size:15px;font-weight:500;color:var(--t1);letter-spacing:-.01em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ic-photo{color:var(--t2);}.ic-video{color:var(--t2);}.ic-cam{color:var(--t2);}.ic-doc{color:var(--t2);}
 .ic-loc{color:var(--t2);}.ic-contact{color:var(--t2);}.ic-poll{color:var(--t2);}.ic-event{color:var(--t2);}
 
@@ -6651,7 +6666,7 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .ac-secret-bar .asb-ic{display:inline-flex;color:var(--amber);}
 .ac-secret-bar .asb-ic svg{width:18px;height:18px;fill:currentColor;stroke:none;}
 .ac-secret-bar .asb-txt{flex:1;min-width:0;font-size:13px;font-weight:600;color:var(--t1);}
-.aat-ic.ic-secret{background:rgba(255,204,0,.16);}
+.aat-ic.ic-secret{background:var(--menu-hl);}
 .aat-ic.ic-secret svg{fill:var(--amber);stroke:none;}
 /* Selection → "Fix with Atwe AI" toolbar */
 .ac-seltool{display:flex;align-items:center;gap:8px;padding:7px 10px;overflow-x:auto;scrollbar-width:none;border-top:1px solid var(--b1);background:var(--s1);animation:selToolIn .16s var(--ease);}
@@ -6830,7 +6845,7 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .qr-body{font-size:13px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .qr-edit{background:none;border:none;color:var(--t3);cursor:pointer;padding:0 6px;flex:0 0 auto;}
 .qr-edit svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;}
-.aat-ic.ic-qr{background:rgba(255,255,255,.08);}
+.aat-ic.ic-qr{background:var(--menu-hl);}
 /* Reply + quick-react bar (others' stories). */
 .story-reply{width:100%;display:flex;flex-direction:column;gap:10px;}
 .story-reacts{display:flex;justify-content:space-between;gap:4px;padding:0 4px;}
@@ -19920,7 +19935,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1691'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1692'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
