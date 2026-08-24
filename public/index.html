@@ -19908,7 +19908,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1685'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1686'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -44553,7 +44553,13 @@ async function acGiftRedeem() {
   if (!code) { showNotif('Enter a code.'); return; }
   try {
     const r = await API.req('POST', '/api/gift-cards/redeem', { code });
-    showNotif('Redeemed $' + (r.amountCents / 100) + ' to your balance!');
+    // A card you ALREADY hold comes back with no amount — saying "Redeemed $NaN"
+    // there is worse than saying nothing. And a redeemed card lands on the CARD,
+    // not the wallet balance: calling it "your balance" is the exact confusion
+    // that makes issued money look like it went missing.
+    showNotif(r.alreadyYours
+      ? 'That card is already yours — it’s in your gift cards below.'
+      : 'Added $' + ((r.amountCents || 0) / 100) + ' to your gift cards. Tap ⋯ to move it into your wallet balance.');
     document.getElementById('gcCode').value = ''; acRefreshBalance(); acLoadGiftCards();
   } catch (e) { showNotif(e.message || 'Could not redeem.'); }
 }

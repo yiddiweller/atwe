@@ -5384,7 +5384,13 @@ async function issueGiftCard(){
   const note = document.getElementById('gcNote').value.trim() || null;
   try {
     const r = await api('POST', '/api/admin/gift-cards/issue', { amountCents, toUsername, note });
-    notify('Gift card issued · ' + r.code);
+    // Say WHERE the money is and what happens next — "issued · CODE" alone left
+    // people hunting their account for money they could not see.
+    if (r.toHandle) {
+      notify('$' + dollars.toFixed(2) + ' is now in @' + r.toHandle + '\u2019s Gift cards, ready to spend \u2014 or to move into their wallet balance.');
+    } else {
+      notify('Issued with NO recipient. Hand out this code \u2014 they add it under Gift cards \u2192 Redeem: ' + r.code);
+    }
     loadCards();
   } catch (e){ notify(e.message); }
 }

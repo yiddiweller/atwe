@@ -28884,16 +28884,20 @@ app.post('/api/admin/gift-cards/issue', auth.requirePerm('revenue'), async (req,
   if (!Number.isInteger(amount) || amount < GIFT_MIN || amount > GIFT_MAX) return res.status(400).json({ error: `Amount must be $${GIFT_MIN / 100}–$${GIFT_MAX / 100}.` });
   const note = (req.body.note || '').toString().trim().slice(0, 200) || null;
   try {
-    let toId = null;
+    let toId = null, toName = null, toHandle = null;
     if (req.body.toUsername) {
-      const u = (await db.query('SELECT id FROM users WHERE lower(username) = lower($1)', [String(req.body.toUsername).replace(/^@/, '')])).rows[0];
+      const u = (await db.query('SELECT id, name, username FROM users WHERE lower(username) = lower($1)', [String(req.body.toUsername).replace(/^@/, '')])).rows[0];
       if (!u) return res.status(404).json({ error: 'No one with that username.' });
-      toId = u.id;
+      toId = u.id; toName = u.name; toHandle = u.username;
     }
     let code, row;
     for (let i = 0; i < 5; i++) {
       code = 'GIFT-' + require('crypto').randomBytes(5).toString('hex').toUpperCase();
-      try { row = (await db.query("INSERT INTO gift_cards (code, buyer_id, amount_cents, balance_cents, message, recipient_id, company_issued) VALUES ($1,$2,$3,$3,$4,$5,true) RETURNING *", [code, req.user.id, amount, note, toId])).rows[0]; break; }
+      /* Named recipient → the card is theirs OUTRIGHT (owner_id), not sitting in
+         a "received, tap to accept" limbo. The claim step exists so a gift from
+         another PERSON can be accepted; a company grant is not that, and the
+         extra step made issued money look like it had vanished. */
+      try { row = (await db.query("INSERT INTO gift_cards (code, buyer_id, amount_cents, balance_cents, message, recipient_id, owner_id, company_issued) VALUES ($1,$2,$3,$3,$4,$5,$5,true) RETURNING *", [code, req.user.id, amount, note, toId])).rows[0]; break; }
       catch (e) { if (i === 4) throw e; }
     }
     if (toId) {
@@ -28903,7 +28907,7 @@ app.post('/api/admin/gift-cards/issue', auth.requirePerm('revenue'), async (req,
       notify(toId, req.user.id, 'gift_received');
     }
     adminAudit(req, 'giftcard.issue', 'gift_card', String(row.id), { amountCents: amount, toId, note });
-    res.status(201).json({ ok: true, code, id: row.id });
+    res.status(201).json({ ok: true, code, id: row.id, toName, toHandle });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not issue the gift card.' }); }
 });
 // Freeze/unfreeze a gift card (fraud/scam hold) — the state change, notify + audit live in
