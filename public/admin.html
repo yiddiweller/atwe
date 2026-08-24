@@ -21,7 +21,7 @@
     --s1:#0B0B0D; --s2:#141416; --s3:#1C1C1E; --s4:#242426;
     --b1:rgba(255,255,255,.05); --b2:rgba(255,255,255,.08); --b3:rgba(255,255,255,.14);
     --divider:#3A3A3C;
-    --t1:#ffffff; --t2:#8E8E93; --t3:#6E6E73; --t4:#48484A;
+    --t1:#ffffff; --t2:#8E8E93; --t3:#7E7E83; --t4:#48484A;
     --text-black:#1D1D1F;
     --accent:#0088FF; --accent-dim:rgba(0,136,255,.12); --accent-mid:rgba(0,136,255,.22);
     --accent-tint:#CCE8FF;
@@ -152,7 +152,7 @@
 
   .pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:var(--r-pill);font-size:11px;font-weight:700;letter-spacing:.02em;text-transform:capitalize;}
   .pill.pro{background:var(--accent-dim);color:var(--accent);}
-  .pill.free{background:var(--s3);color:var(--t3);}
+  .pill.free{background:var(--s3);color:var(--t2);}
   .pill.admin{background:var(--accent-dim);color:var(--accent);}
   .pill.sale{background:var(--accent-dim);color:var(--accent);text-transform:none;}
 
@@ -571,14 +571,14 @@
 .tl-ic{width:26px;flex:0 0 auto;text-align:center;font-size:15px;line-height:1.5;}
 /* Bulk user actions: the selection bar that appears once anything is ticked. */
 .bulk-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:var(--panel2,#1c1c1e);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:13px;}
-.u-card .usel{margin-inline-end:10px;flex:0 0 auto;width:16px;height:16px;cursor:pointer;}
+.u-card .usel{margin-inline-end:10px;flex:0 0 auto;width:20px;height:20px;cursor:pointer;}
 .pill.tag{background:rgba(0,136,255,.16);color:var(--accent);}
 /* Broadcast audiences: pick a slice, with a live member count on each chip. */
 .bc-auds{display:flex;flex-wrap:wrap;gap:6px;}
-.bc-aud{background:var(--panel2,#1c1c1e);border:none;border-radius:999px;color:var(--muted);font-family:inherit;font-size:12.5px;font-weight:600;padding:6px 12px;cursor:pointer;}
+.bc-aud{background:var(--panel2,#1c1c1e);border:1px solid transparent;border-radius:999px;color:var(--muted);font-family:inherit;font-size:12.5px;font-weight:600;padding:6px 12px;cursor:pointer;}
 .bc-aud b{font-weight:800;color:var(--fg,#fff);margin-left:4px;}
-.bc-aud.on{background:var(--accent);color:#fff;}
-.bc-aud.on b{color:#fff;}
+.bc-aud.on{background:var(--accent-dim);border:1px solid var(--accent);color:var(--t1);}
+.bc-aud.on b{color:var(--t1);}
 .bc-chans{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:13px;color:var(--muted);}
 .bc-chans label{display:flex;align-items:center;gap:6px;cursor:pointer;}
 /* Funnel + adoption bars: label, bar, number — the same shape for both, so one
@@ -617,7 +617,7 @@
   .dm-track{height:6px;border-radius:999px;background:var(--b1);overflow:hidden;margin-top:7px;max-width:420px;}
   .dm-track > div{height:100%;background:var(--accent);border-radius:999px;}
 .bc-row{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:10px;}
-  .bc-row .ct{color:var(--t4);font-size:12px;margin-right:auto;}
+  .bc-row .ct{color:var(--t3);font-size:12px;margin-right:auto;}
   .send-btn{background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);padding:10px 20px;font-size:13.5px;font-weight:700;transition:all .15s var(--ease);}
   .send-btn:hover{background:var(--accent);}
   .send-btn:disabled{opacity:.5;}
@@ -5521,7 +5521,7 @@ function renderAdsAdminView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
     <div class="tf-head"><div class="tf-ranges" id="adFilters"></div>
-      <button class="tf-r" style="background:var(--accent,var(--accent));color:#fff;border-color:transparent;" onclick="openAdCreate()">+ New ad</button></div>
+      <button class="tf-r" style="background:#fff;color:#1D1D1F;border-color:transparent;font-weight:700;" onclick="openAdCreate()">+ New ad</button></div>
     <div id="adsBody"><div class="ld"><span class="ab-mark"></span></div></div>
     <div class="panel" style="margin-top:22px;">
       <h3>Sponsored listings</h3>
