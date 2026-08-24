@@ -191,6 +191,7 @@ a{text-decoration:none;color:inherit;}
      a coloured WORD. The raw hues stay right for a FILL with dark ink on it. */
   --green-txt: var(--green);
   --amber-txt: var(--amber);
+  --red-txt:   var(--red);
 
   /* Layout */
   --sidebar-w: 244px;
@@ -543,7 +544,7 @@ body.light .splash-mark{background-color:#d2d2d8;animation:splashPulseLight 2s e
 .dev-ic svg{width:22px;height:22px;}
 .dev-main{flex:1;min-width:0;}
 .dev-name{font-size:15px;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;}
-.dev-badge{font-size:10px;font-weight:800;letter-spacing:.05em;color:var(--green);background:rgba(48,209,88,.16);padding:2px 7px;border-radius:6px;flex:0 0 auto;}
+.dev-badge{font-size:10px;font-weight:800;letter-spacing:.05em;color:var(--green-txt);background:rgba(48,209,88,.16);padding:2px 7px;border-radius:6px;flex:0 0 auto;}
 .dev-sub{font-size:12.5px;color:var(--t3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .dev-x{flex:0 0 auto;width:34px;height:34px;border:none;background:none;color:var(--t3);cursor:pointer;border-radius:50%;
   display:flex;align-items:center;justify-content:center;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
@@ -1257,6 +1258,7 @@ body.light{
   --purple-ink:#7A00B8;                 /* the same role, readable on a pale tint — 6.7:1 */
   --green-txt:#2F7000;                  /* the same role in green — 6.1:1 on white */
   --amber-txt:#805300;                  /* and in amber — 6.7:1 on white */
+  --red-txt:#C00020;                    /* and in red — 6.4:1 on white, 4.9:1 on its own tint */
   --menu-bg:rgba(250,250,250,.72);      /* Light — Apple light frosted material */
   --menu-border:rgba(0,0,0,.08);
   --menu-sep:rgba(0,0,0,.08);
@@ -1566,7 +1568,7 @@ body.light #aiMenuPop,body.light #chatMenuPop,body.light #notifMenuPop,body.ligh
 /* Circle deletion "danger zone" in the edit form. */
 .ac-danger-zone{padding:18px 18px 4px;}
 .ac-danger-btn{width:100%;padding:13px;border:1px solid rgba(255,0,51,.4);background:rgba(255,0,51,.08);
-  color:var(--red);font-family:inherit;font-size:15px;font-weight:650;border-radius:14px;cursor:pointer;
+  color:var(--red-txt);font-family:inherit;font-size:15px;font-weight:650;border-radius:14px;cursor:pointer;
   transition:background var(--t-fast) var(--ease);}
 .ac-danger-btn:active{background:rgba(255,0,51,.16);}
 @media(hover:hover){.ac-danger-btn:hover{background:rgba(255,0,51,.14);}}
@@ -1626,7 +1628,7 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .ac-select-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;}
 .ac-selall{display:flex;align-items:center;gap:7px;font-size:14px;color:var(--t2);cursor:pointer;}
 .ac-selall input{width:17px;height:17px;accent-color:var(--accent);}
-.ac-del-sel{background:var(--red-soft);color:var(--red);border:none;border-radius:var(--r-pill);padding:7px 15px;font-size:14px;font-weight:700;cursor:pointer;}
+.ac-del-sel{background:var(--red-soft);color:var(--red-txt);border:none;border-radius:var(--r-pill);padding:7px 15px;font-size:14px;font-weight:700;cursor:pointer;}
 .ac-check{width:22px;height:22px;border-radius:50%;border:2px solid var(--b3);flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all var(--t-fast) var(--ease);}
 .ac-check svg{width:13px;height:13px;stroke:#fff;stroke-width:3;fill:none;opacity:0;}
 .ac-check.on{background:var(--accent);border-color:var(--accent);}
@@ -1693,8 +1695,8 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .bk-sub{font-size:12.5px;color:var(--t3);margin-top:2px;}
 .bk-badge{flex:0 0 auto;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--s2);color:var(--t2);align-self:flex-start;}
 .bk-badge.st-confirmed{background:rgba(var(--accent-rgb),.16);color:var(--accent);}
-.bk-badge.st-paid{background:rgba(48,209,88,.16);color:var(--green);}
-.bk-badge.st-requested{background:rgba(255,204,0,.16);color:var(--amber);}
+.bk-badge.st-paid{background:rgba(48,209,88,.16);color:var(--green-txt);}
+.bk-badge.st-requested{background:rgba(255,204,0,.16);color:var(--amber-txt);}
 .bk-badge.st-declined,.bk-badge.st-cancelled{background:var(--s2);color:var(--t3);}
 .bk-acts{display:flex;gap:8px;margin-top:10px;}
 .bk-acts .ac-pill-btn{flex:1;}
@@ -1705,7 +1707,7 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .ac-cd-actbtn{width:100%;margin-top:22px;padding:13px;border-radius:999px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;
   background:transparent;border:none;color:var(--t1);-webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
 .ac-cd-actbtn:active{transform:scale(.98);background:var(--s2);}
-.ac-cd-actbtn.danger{background:var(--red-soft);color:var(--red);border-color:transparent;}
+.ac-cd-actbtn.danger{background:var(--red-soft);color:var(--red-txt);border-color:transparent;}
 .ac-cd-actbtn + .ac-cd-actbtn{margin-top:12px;}
 /* Contact page: three round icon buttons (Message / Call / Video), iOS-style. */
 .ac-cd-iconrow{display:flex;justify-content:center;gap:34px;padding:6px 0 0;}
@@ -1735,7 +1737,7 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
   color:var(--t1);font-size:14.5px;font-family:inherit;line-height:1.5;outline:none;resize:none;transition:border-color var(--t-fast) var(--ease);}
 .ac-field input:focus,.ac-field textarea:focus{border-color:var(--accent);}
 .ac-field input::placeholder,.ac-field textarea::placeholder{color:var(--t3);}
-.ac-cd-remove{margin:4px 16px 24px;padding:11px;width:calc(100% - 32px);background:var(--red-soft);color:var(--red);
+.ac-cd-remove{margin:4px 16px 24px;padding:11px;width:calc(100% - 32px);background:var(--red-soft);color:var(--red-txt);
   border:none;border-radius:var(--r-md);font-size:14.5px;font-weight:700;cursor:pointer;}
 .sb-btn.accent{
   background:transparent;
@@ -1851,7 +1853,7 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .del-btns button{flex:1;padding:12px;border-radius:var(--r-pill);font-size:14.5px;font-weight:600;cursor:pointer;transition:all var(--t-fast) var(--ease);}
 .del-cancel{border:none;background:var(--s3);color:var(--t1);}
 .del-cancel:hover{background:var(--s4);}
-.del-confirm{border:none;background:var(--red-soft);color:var(--red);}
+.del-confirm{border:none;background:var(--red-soft);color:var(--red-txt);}
 .del-confirm:hover{background:rgba(255,0,51,.26);}
 .del-confirm.accent{background:var(--accent);color:var(--accent-tint);}
 .del-confirm.accent:hover{background:var(--accent-hover);}
@@ -1972,7 +1974,7 @@ body.light .cloud-overlay{background:rgba(0,0,0,.42);}
 @media(hover:hover){.cl-signbtn:hover{background:var(--s3);color:var(--t1);}}
 .cl-signbtn svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.2;fill:none;}
 .cl-signed{display:flex;align-items:center;gap:9px;background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.3);
-  border-radius:12px;padding:10px 13px;color:var(--green);font-size:13px;font-weight:600;}
+  border-radius:12px;padding:10px 13px;color:var(--green-txt);font-size:13px;font-weight:600;}
 .cl-signed svg{width:17px;height:17px;stroke:var(--green);stroke-width:2.4;fill:none;flex-shrink:0;}
 .cl-signed .who{color:var(--t1);}
 .cl-signed .undo{margin-inline-start:auto;color:var(--t3);font-weight:600;cursor:pointer;font-size:12px;}
@@ -2055,7 +2057,7 @@ body.light .cloud-overlay{background:rgba(0,0,0,.42);}
 .rost-main{flex:1;min-width:0;}
 .rost-name{font-size:14.5px;font-weight:600;color:var(--t1);}
 .rost-sub{font-size:12px;color:var(--t3);margin-top:1px;}
-.rost-call{flex-shrink:0;width:34px;height:34px;border-radius:50%;background:rgba(48,209,88,.14);color:var(--green);display:flex;align-items:center;justify-content:center;text-decoration:none;}
+.rost-call{flex-shrink:0;width:34px;height:34px;border-radius:50%;background:rgba(48,209,88,.14);color:var(--green-txt);display:flex;align-items:center;justify-content:center;text-decoration:none;}
 .rost-call svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
 .rost-info .rost-name{font-weight:700;}
 .rost-info .rost-val{font-size:14px;color:var(--t2);margin-top:1px;word-break:break-word;}
@@ -2960,8 +2962,8 @@ body.reduce-motion .brand-menu{animation-duration:.01s;}
 .dev-acts{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
 .dev-pill{font-size:11px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;
   padding:3px 9px;border-radius:999px;background:var(--s2);color:var(--t3);}
-.dev-pill.ok{background:rgba(136,255,0,.14);color:var(--green);}
-.dev-pill.off{background:rgba(255,0,51,.14);color:var(--red);}
+.dev-pill.ok{background:rgba(136,255,0,.14);color:var(--green-txt);}
+.dev-pill.off{background:rgba(255,0,51,.14);color:var(--red-txt);}
 .dev-check{display:flex;align-items:flex-start;gap:9px;padding:9px 0;font-size:14px;color:var(--t1);cursor:pointer;}
 .dev-check input{margin-top:2px;width:17px;height:17px;flex:none;accent-color:var(--accent);}
 .dev-check span small{display:block;color:var(--t3);font-size:12.5px;margin-top:1px;}
@@ -2982,7 +2984,7 @@ body.reduce-motion .brand-menu{animation-duration:.01s;}
 /* The arrival promise at checkout. */
 .eta-line{display:flex;gap:8px;align-items:center;background:rgba(136,255,0,.08);border-radius:12px;
   padding:10px 12px;margin:10px 0;font-size:13.5px;color:var(--t1);}
-.eta-line b{color:var(--green);}
+.eta-line b{color:var(--green-txt);}
 /* Store look picker. */
 .st-looks{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
 .st-look{border:none;background:var(--s1);color:var(--t2);font-family:inherit;font-size:13px;font-weight:600;
@@ -2992,7 +2994,7 @@ body.reduce-motion .brand-menu{animation-duration:.01s;}
 .pro-perk{display:flex;gap:11px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--b1);}
 .pro-perk:last-child{border-bottom:none;}
 .pro-tick{width:20px;height:20px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  background:rgba(136,255,0,.16);color:var(--green);font-size:12px;font-weight:800;margin-top:1px;}
+  background:rgba(136,255,0,.16);color:var(--green-txt);font-size:12px;font-weight:800;margin-top:1px;}
 .pro-perk.off .pro-tick{background:var(--s2);color:var(--t3);}
 .pro-perk-t{font-weight:650;font-size:14.5px;}
 .pro-perk-h{color:var(--t3);font-size:13px;margin-top:2px;line-height:1.45;}
@@ -3162,7 +3164,7 @@ textarea#inp::placeholder{color:var(--t3);}
 .inp-doc-preview.hidden{display:none;}
 .doc-ic{
   width:32px;height:32px;border-radius:8px;flex-shrink:0;
-  background:var(--red-soft);color:var(--red);
+  background:var(--red-soft);color:var(--red-txt);
   display:flex;align-items:center;justify-content:center;
 }
 .doc-ic svg{width:17px;height:17px;}
@@ -3258,7 +3260,7 @@ textarea#inp::placeholder{color:var(--t3);}
 .mic-btn.recording{
   background:rgba(255,0,51,.12);
   border-color:rgba(255,0,51,.3);
-  color:var(--red);
+  color:var(--red-txt);
   animation:micPulse 1.4s ease-in-out infinite;
 }
 .mic-btn svg{width:15px;height:15px;stroke:currentColor;stroke-width:1.8;fill:none;}
@@ -3574,7 +3576,7 @@ body.light .settings-card{background:none;}
 .settings-action.danger{
   border:1px solid rgba(255,0,51,.3);
   background:rgba(255,0,51,.08);
-  color:var(--red);
+  color:var(--red-txt);
 }
 .settings-action.danger:hover{background:rgba(255,0,51,.16);border-color:rgba(255,0,51,.5);}
 .settings-action.accent{
@@ -4168,7 +4170,7 @@ body.light{
      unread times) and as white-on-blue in an outgoing bubble, both under 4.5:1.
      Light theme deepens it to #0071E0 (4.73:1 both ways); Black theme keeps the
      exact brand blue, which is already 6.6:1 there. Same hue, same character. */
-  --accent:#0071E0;--accent-rgb:0,113,224;--accent-hover:#005CC4;--accent-light:#2E8AE8;
+  --accent:#006ACF;--accent-rgb:0,106,207;--accent-hover:#00559F;--accent-light:#2B84DB;
   --accent-dim:rgba(0,122,255,.10);--accent-mid:rgba(0,122,255,.20);--accent-glow:rgba(0,122,255,.30);
   --accent-tint:#FFFFFF;   /* Apple's own light-mode blue buttons use white text */
   --primary:#111114;--on-primary:#FFFFFF;   /* Light-theme primary: near-black fill, white label */
@@ -4320,7 +4322,7 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .mc-human-s{font-size:12.5px;color:var(--t3);margin:3px 0 10px;}
 .mc-human-btn{width:100%;}
 .ibx-human{font-size:10px;font-weight:800;letter-spacing:.02em;padding:2px 7px;border-radius:999px;
-  background:rgba(255,0,51,.14);color:var(--red);}
+  background:rgba(255,0,51,.14);color:var(--red-txt);}
 /* ── The shared team inbox ── */
 .ibx-n{display:inline-block;min-width:17px;padding:0 5px;margin-left:5px;border-radius:999px;
   background:var(--accent);color:#fff;font-size:10.5px;font-weight:800;line-height:17px;text-align:center;}
@@ -4334,8 +4336,8 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .ibx-state{font-size:10px;font-weight:800;letter-spacing:.02em;padding:2px 7px;border-radius:999px;
   background:var(--s2);color:var(--t2);}
 .ibx-state.new{background:var(--accent-dim);color:var(--accent);}
-.ibx-state.waiting{background:rgba(255,187,0,.16);color:var(--amber);}
-.ibx-state.done{background:rgba(136,255,0,.14);color:var(--green);}
+.ibx-state.waiting{background:rgba(255,187,0,.16);color:var(--amber-txt);}
+.ibx-state.done{background:rgba(136,255,0,.14);color:var(--green-txt);}
 .ibx-unread{min-width:18px;padding:0 5px;border-radius:999px;background:var(--accent);color:#fff;
   font-size:10.5px;font-weight:800;line-height:18px;text-align:center;}
 .ibx-last{font-size:13px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -4831,7 +4833,7 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .mc-call{display:flex;align-items:center;gap:11px;cursor:pointer;padding:8px 10px 8px 9px;min-width:158px;}
 .mc-call-ic{flex:0 0 auto;width:36px;height:36px;border-radius:50%;background:var(--accent-dim);color:var(--accent);display:grid;place-items:center;}
 .mc-call-ic svg{width:18px;height:18px;fill:currentColor;stroke:none;}
-.mc-call.missed .mc-call-ic{background:var(--red-soft);color:var(--red);}
+.mc-call.missed .mc-call-ic{background:var(--red-soft);color:var(--red-txt);}
 .mc-call-main{flex:1;min-width:0;}
 .mc-call-title{font-size:14.5px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .mc-call.missed .mc-call-title{color:var(--red);}
@@ -4916,7 +4918,7 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 body.reduce-motion .mc-loc-pin.pulse{animation:none;}
 .mc-live-acts{display:flex;gap:8px;margin-top:8px;}
 .mc-live-btn{flex:1;text-align:center;text-decoration:none;font-size:12.5px;font-weight:600;padding:7px 10px;border-radius:var(--r-pill,999px);border:1px solid var(--b3);color:var(--t1);background:var(--s2);cursor:pointer;}
-.mc-live-btn.danger{color:var(--red);border-color:transparent;background:rgba(255,0,51,.12);}
+.mc-live-btn.danger{color:var(--red-txt);border-color:transparent;background:rgba(255,0,51,.12);}
 /* Sticker — a borderless image, WhatsApp-style (no bubble chrome) */
 .msg-bubble.meta-sticker{background:none!important;padding:0!important;box-shadow:none!important;border:none!important;}
 .msg-sticker{display:block;width:132px;height:132px;object-fit:contain;cursor:pointer;filter:drop-shadow(0 2px 6px rgba(0,0,0,.25));}
@@ -4949,7 +4951,7 @@ body.reduce-motion .mc-loc-pin.pulse{animation:none;}
 .mk-opt-row .mk-input{margin:0;}
 .mk-opt-del{flex-shrink:0;width:34px;height:34px;border-radius:50%;border:none;background:var(--s2);
   color:var(--t3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all var(--t-fast) var(--ease);}
-.mk-opt-del:hover{background:var(--red-soft);color:var(--red);}
+.mk-opt-del:hover{background:var(--red-soft);color:var(--red-txt);}
 .mk-opt-del svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.4;fill:none;}
 .mk-add{display:flex;align-items:center;gap:8px;background:none;border:none;color:var(--accent);font-size:14px;font-weight:700;
   cursor:pointer;padding:8px 4px;font-family:inherit;}
@@ -5536,7 +5538,7 @@ body.reduce-motion .ac-newposts{animation:none;}
 .ac-x svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.2;fill:none;}
 .ac-thread-del{margin-inline-start:auto;width:38px;height:38px;border-radius:50%;background:none;border:none;color:var(--t3);
   display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all var(--t-fast) var(--ease);}
-.ac-thread-del:hover{background:var(--red-soft);color:var(--red);}
+.ac-thread-del:hover{background:var(--red-soft);color:var(--red-txt);}
 .ac-thread-del svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.9;fill:none;}
 
 /* Bottom tab bar */
@@ -6107,7 +6109,7 @@ body.reduce-motion .ac-react-bar,body.reduce-motion .ac-rb-btn{animation:none;}
 /* Two-factor */
 .tfa-key-label{font-size:12.5px;color:var(--t3);margin-bottom:6px;}
 .tfa-key{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:18px;font-weight:700;letter-spacing:2px;text-align:center;background:var(--s2);border:1px solid var(--b2);border-radius:12px;padding:12px;color:var(--t1);}
-.tfa-on-chip{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;font-weight:700;color:var(--green);background:rgba(48,209,88,.14);border-radius:var(--r-pill);padding:7px 13px;}
+.tfa-on-chip{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;font-weight:700;color:var(--green-txt);background:rgba(48,209,88,.14);border-radius:var(--r-pill);padding:7px 13px;}
 .tfa-on-chip svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
 .tfa-codes{display:grid;grid-template-columns:1fr 1fr;gap:8px;background:var(--s2);border:none;border-radius:12px;padding:12px;}
 .tfa-codes span{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;letter-spacing:1px;color:var(--t1);text-align:center;}
@@ -6164,7 +6166,7 @@ body.reduce-motion .ac-react-bar,body.reduce-motion .ac-rb-btn{animation:none;}
 .mc-inv-ic svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.8;fill:none;}
 .mc-inv-main{flex:1;min-width:0;}
 .mc-inv-title{font-size:14.5px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.mc-inv-sub{font-size:12px;color:var(--t3);}
+.mc-inv-sub{font-size:12px;color:var(--t2);}
 .mc-inv-amt{font-size:16px;font-weight:800;color:var(--t1);}
 .mc-money{display:block;cursor:pointer;padding:12px 14px;}
 .mc-money-ic{background:var(--money-bg) !important;color:var(--money) !important;}
@@ -6186,7 +6188,7 @@ body.reduce-motion .ac-react-bar,body.reduce-motion .ac-rb-btn{animation:none;}
 .mr-note{font-size:13px;color:var(--t3);margin-top:2px;word-break:break-word;}
 .mr-amt{flex:0 0 auto;font-size:15px;font-weight:800;color:var(--t1);text-align:end;display:flex;flex-direction:column;align-items:flex-end;gap:3px;}
 .mr-badge{font-size:11px;font-weight:700;color:var(--t3);background:var(--s2);border-radius:999px;padding:1px 8px;}
-.mr-badge.paid{color:var(--green);background:var(--money-bg);}
+.mr-badge.paid{color:var(--green-txt);background:var(--money-bg);}
 .mr-acts{display:flex;gap:8px;margin-top:10px;}
 .mr-acts .ac-pill-btn{flex:0 0 auto;padding:7px 16px;}
 /* ── Premium Atwe card (gift card + Atwe Card) — compact, solid, vertical flip ── */
@@ -6253,7 +6255,7 @@ body.reduce-motion .ac-react-bar,body.reduce-motion .ac-rb-btn{animation:none;}
 .gc-move-row{display:flex;align-items:center;gap:10px;}
 .gc-status{display:inline-block;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:2px 7px;border-radius:6px;background:rgba(255,255,255,.12);color:rgba(255,255,255,.75);margin-inline-start:8px;vertical-align:middle;}
 .gc-status.used{background:rgba(255,255,255,.07);color:rgba(255,255,255,.44);}
-.gc-status.frozen{background:rgba(255,204,0,.18);color:var(--amber);}
+.gc-status.frozen{background:rgba(255,204,0,.18);color:var(--amber-txt);}
 /* Card header row: ⋯ options button (left) + label; the knot stays top-right */
 .gc-head{display:flex;align-items:center;gap:9px;padding-inline-end:34px;}
 .gc-dots{flex:0 0 auto;display:flex;align-items:center;justify-content:center;width:30px;height:24px;margin:-3px 0 -3px -4px;padding:0;border:none;background:none;border-radius:8px;cursor:pointer;transition:background var(--t-fast) var(--ease);}
@@ -6483,7 +6485,7 @@ body.light .mc-btnrow{background:rgba(0,0,0,.07);}
 .wtx{display:flex;align-items:center;gap:11px;padding:11px 2px;border-bottom:1px solid var(--b1);}
 /* Transaction detail sheet (tap a ledger row) — Cash-App-style record */
 .wtxd-amt{font-size:34px;font-weight:800;letter-spacing:-.5px;text-align:center;margin:14px 0 2px;}
-.wtxd-amt.cr{color:var(--green);}
+.wtxd-amt.cr{color:var(--green-txt);}
 .wtxd-label{text-align:center;color:var(--t2);font-size:14.5px;margin-bottom:14px;}
 .wtxd-peer{display:flex;align-items:center;gap:10px;background:var(--s1);border-radius:16px;padding:11px 13px;margin-bottom:10px;cursor:pointer;}
 .wtxd-peer-name{font-weight:700;font-size:14.5px;}
@@ -6862,8 +6864,8 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .story-bg.on{border-color:var(--t1);}
 .inv-chip{display:inline-block;font-size:11.5px;font-weight:700;border-radius:var(--r-pill);padding:2px 9px;margin-top:3px;}
 .inv-chip.st-sent{background:var(--s2);color:var(--t2);}
-.inv-chip.st-paid{background:rgba(48,209,88,.16);color:var(--green);}
-.inv-chip.st-overdue{background:rgba(255,0,51,.14);color:var(--red);}
+.inv-chip.st-paid{background:rgba(48,209,88,.16);color:var(--green-txt);}
+.inv-chip.st-overdue{background:rgba(255,0,51,.14);color:var(--red-txt);}
 .inv-chip.st-cancelled{background:var(--s2);color:var(--t3);text-decoration:line-through;}
 .inv-head{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
 .inv-amount{font-size:32px;font-weight:800;color:var(--t1);text-align:center;margin:6px 0;}
@@ -6872,7 +6874,7 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .inv-item{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--b1);font-size:14px;color:var(--t1);}
 .inv-item:last-child{border-bottom:none;}
 .inv-meta-row{font-size:13px;color:var(--t3);text-align:center;margin-bottom:10px;}
-.inv-paid-note{text-align:center;color:var(--green);font-weight:700;padding:10px;}
+.inv-paid-note{text-align:center;color:var(--green-txt);font-weight:700;padding:10px;}
 .inv-outside-note{color:var(--t3);font-weight:500;font-size:12.5px;margin-top:4px;}
 /* Cancellation reason on a cancelled order */
 .ord-cancel-box{background:var(--s1);border-radius:14px;padding:12px 14px;margin-top:10px;font-size:13.5px;color:var(--t2);}
@@ -6934,7 +6936,7 @@ body.light .sf-look-warm{--s1:#faf4ec;--s2:#f3e9dc;}
 .shop-price{font-size:14px;font-weight:800;color:var(--t1);}
 .shop-kind{font-size:11px;color:var(--t3);background:var(--s2);border-radius:var(--r-pill);padding:1px 7px;}
 .shop-off{font-size:11px;color:var(--red);}
-.shop-buy{margin:8px 11px 11px;padding:7px;border-radius:10px;border:none;background:var(--s2);color:var(--t1);font-weight:600;font-size:13px;cursor:pointer;}
+.shop-buy{margin:8px 11px 11px;padding:7px;border-radius:var(--r-pill);border:none;background:var(--s2);color:var(--t1);font-weight:600;font-size:13px;cursor:pointer;}
 .shop-buy.accent{background:var(--accent);border-color:var(--accent);color:var(--accent-tint);}
 .ac-cart-badge{position:absolute;top:4px;right:10px;min-width:16px;height:16px;border-radius:8px;background:var(--accent);color:var(--accent-tint);font-size:10px;font-weight:800;display:grid;place-items:center;padding:0 4px;}
 /* Product bundles */
@@ -7014,7 +7016,7 @@ body.light .sf-look-warm{--s1:#faf4ec;--s2:#f3e9dc;}
 .wm-sbar span{display:block;height:100%;border-radius:99px;background:var(--accent);}
 .wm-sv{flex:0 0 auto;font-weight:700;color:var(--t1);}
 .wm-lbl{color:var(--t3);font-weight:600;margin-inline-end:auto;}
-.wm-in{color:var(--green);font-weight:700;}
+.wm-in{color:var(--green-txt);font-weight:700;}
 .wm-out{color:var(--t1);font-weight:700;}
 /* Sell-view sort chips (reuse the wallet-filter chip look) */
 .sell-sortbar{display:flex;gap:7px;overflow-x:auto;padding:2px 0 12px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
@@ -7079,7 +7081,7 @@ body.light .sf-look-warm{--s1:#faf4ec;--s2:#f3e9dc;}
 .mkt-seller{font-size:14px;font-weight:700;color:var(--t1);display:flex;align-items:center;gap:4px;}
 .mkt-kind{font-size:11.5px;color:var(--t3);}
 .mkt-sponsored{font-size:11.5px;color:var(--t3);margin-inline-start:6px;padding-inline-start:6px;border-inline-start:1px solid var(--b2);}
-.mkt-img{height:200px;background-size:cover;background-position:center;background-color:var(--s2);cursor:pointer;}
+.mkt-img{position:relative;height:200px;background-size:cover;background-position:center;background-color:var(--s2);cursor:pointer;}
 .mkt-body{padding:9px 12px 4px;cursor:pointer;}
 .mkt-name{font-size:15px;font-weight:700;color:var(--t1);line-height:1.3;}
 .mkt-desc{font-size:13.5px;color:var(--t2);margin-top:3px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
@@ -7087,7 +7089,7 @@ body.light .sf-look-warm{--s1:#faf4ec;--s2:#f3e9dc;}
 .mkt-price{font-size:17px;font-weight:800;color:var(--t1);}
 /* Sale display: muted struck-through "was" price + a green %-off chip (green = money). */
 .mkt-was{font-size:13px;font-weight:600;color:var(--t3);text-decoration-thickness:1.5px;margin-inline-start:2px;}
-.mkt-off{display:inline-block;background:rgba(48,209,88,.16);color:var(--green);border-radius:var(--r-pill);font-size:11.5px;font-weight:800;padding:2px 8px;vertical-align:2px;margin-inline-start:4px;}
+.mkt-off{display:inline-block;background:rgba(48,209,88,.16);color:var(--green-txt);border-radius:var(--r-pill);font-size:11.5px;font-weight:800;padding:2px 8px;vertical-align:2px;margin-inline-start:4px;}
 /* ── Shop v2: ratings, stock, shipping, addresses, checkout, reviews, order timeline ── */
 .mkt-rating{display:flex;align-items:center;gap:6px;color:var(--t3);font-size:13px;font-weight:600;margin:3px 0;cursor:pointer;}
 .mkt-sold{display:inline-block;font-size:12.5px;font-weight:700;color:var(--t2);background:var(--s2);border-radius:var(--r-pill);padding:3px 10px;margin:3px 0 2px;}
@@ -7098,9 +7100,9 @@ body.light .sf-look-warm{--s1:#faf4ec;--s2:#f3e9dc;}
 .ac-stars svg.on{fill:var(--amber);}
 .mkt-ship{font-size:13px;color:var(--t2);margin:6px 0;font-weight:600;}
 .stock-badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:8px;}
-.stock-badge.ok{background:rgba(48,209,88,.15);color:var(--green);}
-.stock-badge.low{background:rgba(255,204,0,.16);color:var(--amber);}
-.stock-badge.out{background:rgba(255,0,51,.15);color:var(--red);}
+.stock-badge.ok{background:rgba(48,209,88,.15);color:var(--green-txt);}
+.stock-badge.low{background:rgba(255,204,0,.16);color:var(--amber-txt);}
+.stock-badge.out{background:rgba(255,0,51,.15);color:var(--red-txt);}
 .addr-card{display:flex;gap:10px;align-items:flex-start;background:var(--s1);border:1.5px solid var(--b1);border-radius:13px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:border-color var(--t-fast);}
 .addr-card.sel{border-color:var(--accent);background:var(--s2);}
 .addr-card-main{flex:1;min-width:0;}
@@ -7115,7 +7117,7 @@ body.light .sf-look-warm{--s1:#faf4ec;--s2:#f3e9dc;}
 .co-summary{margin:12px 0 2px;border-top:1px solid var(--b1);padding-top:10px;}
 .co-line{display:flex;justify-content:space-between;font-size:14px;color:var(--t2);padding:3px 0;}
 .co-line.total{font-weight:800;color:var(--t1);font-size:16px;border-top:1px solid var(--b1);margin-top:6px;padding-top:8px;}
-.co-line.disc{color:var(--green);font-weight:600;}
+.co-line.disc{color:var(--green-txt);font-weight:600;}
 /* Carrier-rate shipping options */
 .co-rates{display:flex;flex-direction:column;gap:8px;margin:4px 0 6px;}
 .co-rate{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px;border:none;border-radius:12px;background:var(--s1);cursor:pointer;text-align:start;}
@@ -7130,7 +7132,7 @@ body.light .sf-look-warm{--s1:#faf4ec;--s2:#f3e9dc;}
 .co-promo-in:focus{outline:none;border-color:var(--accent);}
 .co-promo-row .ac-pill-btn{flex:0 0 auto;padding:0 18px;}
 .co-promo-err{color:var(--red);font-size:12.5px;margin:6px 2px 0;min-height:0;}
-.co-promo-on{display:flex;align-items:center;justify-content:space-between;background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.3);border-radius:12px;padding:9px 13px;font-size:13.5px;color:var(--green);font-weight:600;}
+.co-promo-on{display:flex;align-items:center;justify-content:space-between;background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.3);border-radius:12px;padding:9px 13px;font-size:13.5px;color:var(--green-txt);font-weight:600;}
 /* Coupon manager */
 .cp-row{display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--b1);}
 .cp-row.off{opacity:.55;}
@@ -7151,7 +7153,7 @@ body.light .sf-look-warm{--s1:#faf4ec;--s2:#f3e9dc;}
 .sm-count.attn{background:var(--red);}
 .dash-head{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);margin:16px 2px 8px;}
 .dash-head:first-child{margin-top:2px;}
-.dash-allclear{background:rgba(48,209,88,.1);border:1px solid rgba(48,209,88,.25);color:var(--green);font-size:13.5px;font-weight:600;border-radius:12px;padding:12px 14px;margin-top:2px;}
+.dash-allclear{background:rgba(48,209,88,.1);border:1px solid rgba(48,209,88,.25);color:var(--green-txt);font-size:13.5px;font-weight:600;border-radius:12px;padding:12px 14px;margin-top:2px;}
 /* Invite friends / referrals */
 /* QR connect */
 .qr-card{display:flex;flex-direction:column;align-items:center;}
@@ -7229,7 +7231,7 @@ body.light .sf-look-warm{--s1:#faf4ec;--s2:#f3e9dc;}
 .loy-tx-reason{font-size:14px;color:var(--t1);}
 .loy-tx-date{font-size:12px;color:var(--t3);}
 .loy-tx-delta{font-size:15px;font-weight:800;}
-.loy-tx-delta.pos{color:var(--green);}
+.loy-tx-delta.pos{color:var(--green-txt);}
 .loy-tx-delta.neg{color:var(--t3);}
 .ref-hero{text-align:center;padding:18px 0 6px;}
 .ref-hero-amt{font-size:34px;font-weight:800;color:var(--t1);letter-spacing:-.5px;}
@@ -7245,7 +7247,7 @@ body.light .sf-look-warm{--s1:#faf4ec;--s2:#f3e9dc;}
 .ref-row-main{flex:1;min-width:0;}
 .ref-row-name{font-size:14px;font-weight:600;color:var(--t1);}
 .ref-row-sub{font-size:12px;color:var(--t3);}
-.ref-row-amt{font-size:14px;font-weight:700;color:var(--green);flex:0 0 auto;}
+.ref-row-amt{font-size:14px;font-weight:700;color:var(--green-txt);flex:0 0 auto;}
 /* Tag people / co-authors on a post */
 .ac-tagchips{display:none;flex-wrap:wrap;gap:6px;padding:6px 2px 0;}
 .ac-tagchips.show{display:flex;}
@@ -7267,7 +7269,7 @@ body.light .sf-look-warm{--s1:#faf4ec;--s2:#f3e9dc;}
 .gc-row-mid{flex:1;min-width:0;display:flex;flex-direction:column;}
 .gc-row-code{font-size:13px;font-weight:700;color:var(--t1);font-family:monospace;}
 .gc-row-sub{font-size:12px;color:var(--t3);}
-.gc-row-done{color:var(--green);font-size:18px;}
+.gc-row-done{color:var(--green-txt);font-size:18px;}
 /* Split a bill */
 .split-row{display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--b1);cursor:pointer;}
 .split-row:first-of-type{border-top:none;}
@@ -7278,7 +7280,7 @@ body.light .sf-look-warm{--s1:#faf4ec;--s2:#f3e9dc;}
 .split-bar.lg{width:100%;height:8px;margin-top:6px;}
 .split-bar>span{display:block;height:100%;background:var(--accent);border-radius:3px;}
 .split-owe{font-size:13px;font-weight:700;color:var(--amber);flex:0 0 auto;}
-.split-paid{font-size:13px;font-weight:700;color:var(--green);flex:0 0 auto;}
+.split-paid{font-size:13px;font-weight:700;color:var(--green-txt);flex:0 0 auto;}
 .split-collected{font-size:13px;font-weight:600;color:var(--t2);flex:0 0 auto;}
 .split-chips{display:flex;flex-wrap:wrap;gap:7px;margin:8px 0 2px;}
 .split-chip{display:inline-flex;align-items:center;gap:6px;background:var(--s2);border:none;border-radius:var(--r-pill);padding:3px 8px 3px 4px;font-size:13px;color:var(--t1);}
@@ -7296,7 +7298,7 @@ body.light .sf-look-warm{--s1:#faf4ec;--s2:#f3e9dc;}
 .split-share-who{display:flex;align-items:center;gap:9px;font-size:14px;color:var(--t1);}
 .split-share-who .user-avatar.sm{width:30px;height:30px;}
 .split-share-amt{font-size:14px;font-weight:700;color:var(--t2);}
-.split-share-amt.paid{color:var(--green);}
+.split-share-amt.paid{color:var(--green-txt);}
 /* Ads Manager */
 .ads-stats{display:flex;gap:8px;margin-bottom:14px;}
 .ads-stat{flex:1;background:var(--s2);border:none;border-radius:14px;padding:13px 8px;text-align:center;}
@@ -7756,7 +7758,7 @@ body .tv-num.cert,body.light .tv-num.cert{color:var(--purple-ink);}
 .rev-top{display:flex;align-items:center;gap:7px;}
 .rev-top .user-avatar.sm{width:26px;height:26px;}
 .rev-name{font-weight:600;font-size:13px;color:var(--t1);}
-.rev-vp{font-size:10px;font-weight:700;color:var(--green);background:rgba(48,209,88,.13);padding:1px 7px;border-radius:7px;margin-inline-start:auto;}
+.rev-vp{font-size:10px;font-weight:700;color:var(--green-txt);background:rgba(48,209,88,.13);padding:1px 7px;border-radius:7px;margin-inline-start:auto;}
 .rev-stars{margin:5px 0 3px;}
 .rev-body{font-size:14px;color:var(--t2);line-height:1.45;}
 .rev-actions{margin-top:9px;}
@@ -7874,8 +7876,8 @@ body .tv-num.cert,body.light .tv-num.cert{color:var(--purple-ink);}
 .sc-comment-body{font-size:14px;color:var(--t2);line-height:1.4;margin-top:2px;}
 /* Business hours */
 .biz-hours-badge{font-size:11px;font-weight:700;padding:2px 9px;border-radius:8px;margin-inline-start:8px;vertical-align:middle;}
-.biz-hours-badge.open{background:rgba(48,209,88,.16);color:var(--green);}
-.biz-hours-badge.closed{background:rgba(255,0,51,.14);color:var(--red);}
+.biz-hours-badge.open{background:rgba(48,209,88,.16);color:var(--green-txt);}
+.biz-hours-badge.closed{background:rgba(255,0,51,.14);color:var(--red-txt);}
 .biz-hours{margin:2px 0 14px;}
 .biz-hours-row{display:flex;justify-content:space-between;font-size:14px;color:var(--t2);padding:5px 2px;border-bottom:1px solid var(--b1);}
 .biz-hours-row.today{font-weight:700;color:var(--t1);}
@@ -7898,9 +7900,9 @@ body .tv-num.cert,body.light .tv-num.cert{color:var(--purple-ink);}
 .qa-answer-box{display:flex;gap:8px;align-items:center;margin:8px 0 0 28px;}
 .qa-answer-box .jp-in{flex:1;}
 .mkt-actions{display:flex;align-items:center;gap:8px;}
-.mkt-cart{width:40px;height:40px;border-radius:10px;border:none;background:var(--s2);display:grid;place-items:center;cursor:pointer;}
+.mkt-cart{width:40px;height:40px;border-radius:var(--r-pill);border:none;background:var(--s2);display:grid;place-items:center;cursor:pointer;}
 .mkt-cart svg{width:18px;height:18px;stroke:var(--t1);stroke-width:1.8;fill:none;}
-.mkt-buy{height:40px;padding:0 18px;border-radius:10px;border:none;background:var(--accent);color:var(--accent-tint);font-weight:700;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;}
+.mkt-buy{height:40px;padding:0 18px;border-radius:var(--r-pill);border:none;background:var(--primary);color:var(--on-primary);font-weight:700;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;}
 .mkt-img.noimg,.mkt-detail-img.noimg{display:grid;place-items:center;}
 .mkt-img.noimg svg,.mkt-detail-img.noimg svg{width:40px;height:40px;stroke:var(--t3);stroke-width:1.5;fill:none;}
 .cart-thumb.noimg{display:grid;place-items:center;}
@@ -7947,7 +7949,7 @@ body .tv-num.cert,body.light .tv-num.cert{color:var(--purple-ink);}
 .cart-thumb{width:46px;height:46px;border-radius:10px;background-size:cover;background-position:center;background-color:var(--s2);flex:0 0 auto;}
 .cart-item-main{flex:1;min-width:0;}
 .cart-item-name{font-size:14px;color:var(--t1);}
-.cart-var{font-size:11.5px;color:var(--t3);background:var(--s3);padding:1px 7px;border-radius:7px;margin-inline-start:4px;}
+.cart-var{font-size:11.5px;color:var(--t2);background:var(--s3);padding:1px 7px;border-radius:7px;margin-inline-start:4px;}
 /* In-chat product card + share picker */
 .mc-prod{display:flex;gap:11px;align-items:center;cursor:pointer;}
 .mc-prod-img{width:54px;height:54px;border-radius:11px;background-size:cover;background-position:center;flex:0 0 auto;background-color:var(--s3);}
@@ -8012,7 +8014,7 @@ body .tv-num.cert,body.light .tv-num.cert{color:var(--purple-ink);}
 .ref-mile.done .ref-mile-n{color:var(--green);}
 .ref-mile-c{font-size:12px;font-weight:700;color:var(--t3);}
 .ref-tag{font-size:10.5px;font-weight:800;color:var(--t3);background:var(--s2);border-radius:999px;padding:2px 7px;margin-inline-start:4px;}
-.ref-tag.active{color:var(--green);background:rgba(48,209,88,.14);}
+.ref-tag.active{color:var(--green-txt);background:rgba(48,209,88,.14);}
 /* Premium placement: the always-visible paid-slot label (never a silent boost). */
 .dir-featured{font-size:11px;font-weight:800;color:var(--t2);background:var(--s2);padding:1px 7px;border-radius:8px;margin-inline-start:6px;flex:0 0 auto;}
 /* Listing A/B tests: the two-arm comparison card. */
@@ -8020,7 +8022,7 @@ body .tv-num.cert,body.light .tv-num.cert{color:var(--purple-ink);}
 .exp-head{display:flex;align-items:center;gap:8px;margin-bottom:9px;}
 .exp-title{font-size:14.5px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .exp-status{font-size:11px;font-weight:800;color:var(--t3);background:var(--s2);border-radius:999px;padding:3px 9px;flex:0 0 auto;}
-.exp-status.live{color:var(--green);background:rgba(48,209,88,.14);}
+.exp-status.live{color:var(--green-txt);background:rgba(48,209,88,.14);}
 .exp-arms{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .exp-arm{display:flex;flex-direction:column;gap:2px;background:var(--s2);border-radius:12px;padding:9px 11px;}
 .exp-arm.won{background:rgba(48,209,88,.13);}
@@ -8050,7 +8052,7 @@ body .tv-num.cert,body.light .tv-num.cert{color:var(--purple-ink);}
 .ed-meta{font-size:12px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .ed-ava{width:132px !important;height:132px !important;border-radius:14px !important;}
 /* Seller performance tier — earned from real orders, so it means something. */
-.seller-tier{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:800;border-radius:999px;padding:4px 11px;background:rgba(48,209,88,.13);color:var(--green);}
+.seller-tier{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:800;border-radius:999px;padding:4px 11px;background:rgba(48,209,88,.13);color:var(--green-txt);}
 .seller-tier.great{background:var(--accent-dim);color:var(--accent);}
 .seller-tier.good{background:var(--s2);color:var(--t2);}
 /* Verified-organization tiers: an honest label for the LEVEL of proof. The seal
@@ -8059,12 +8061,12 @@ body .tv-num.cert,body.light .tv-num.cert{color:var(--purple-ink);}
    one place the reserve purple earns its keep. */
 .biz-tier-row{display:flex;justify-content:center;margin:6px 0 2px;}
 .biz-tier{font-size:12px;font-weight:700;border-radius:999px;padding:4px 11px;background:var(--s2);color:var(--t2);}
-.biz-tier-verified{color:var(--green);background:rgba(48,209,88,.13);}
+.biz-tier-verified{color:var(--green-txt);background:rgba(48,209,88,.13);}
 .biz-tier-premium{color:var(--purple);background:rgba(170,0,255,.14);}
 /* Workplace verification: verified-employer chips + the inline ✓ Verified tag. */
 .wv-row{display:flex;flex-wrap:wrap;gap:6px;padding:2px 0 8px;}
-.wv-chip{font-size:12px;font-weight:700;color:var(--green);background:rgba(48,209,88,.13);border-radius:999px;padding:4px 11px;}
-.wv-tag{font-size:10.5px;font-weight:800;color:var(--green);background:rgba(48,209,88,.14);border-radius:999px;padding:2px 7px;margin-inline-start:4px;vertical-align:1px;}
+.wv-chip{font-size:12px;font-weight:700;color:var(--green-txt);background:rgba(48,209,88,.13);border-radius:999px;padding:4px 11px;}
+.wv-tag{font-size:10.5px;font-weight:800;color:var(--green-txt);background:rgba(48,209,88,.14);border-radius:999px;padding:2px 7px;margin-inline-start:4px;vertical-align:1px;}
 .wv-code{background:var(--s1);border-radius:16px;padding:13px 14px;}
 /* AI action log: rows of confirmed "Do it for me" actions. */
 .ailog-row{display:flex;align-items:flex-start;gap:11px;padding:10px 0;border-bottom:1px solid var(--bg);}
@@ -8083,7 +8085,7 @@ body .tv-num.cert,body.light .tv-num.cert{color:var(--purple-ink);}
 .lg-cell:disabled{opacity:.4;cursor:default;}
 .lg-emoji{font-size:30px;line-height:1;}
 .lg-label{font-size:12.5px;font-weight:700;}
-.lg-price{font-size:11.5px;font-weight:800;color:var(--green);}
+.lg-price{font-size:11.5px;font-weight:800;color:var(--green-txt);}
 .live-gift-float{position:absolute;bottom:120px;font-size:44px;pointer-events:none;z-index:6;animation:liveGiftUp 2.5s ease-out forwards;}
 @keyframes liveGiftUp{0%{transform:translateY(0) scale(.6);opacity:0;}12%{opacity:1;transform:translateY(-30px) scale(1.15);}100%{transform:translateY(-46vh) scale(1);opacity:0;}}
 .live-gift-banner{position:absolute;bottom:96px;inset-inline-start:14px;max-width:78%;background:rgba(0,0,0,.62);color:#fff;font-size:13px;font-weight:700;border-radius:999px;padding:7px 14px;pointer-events:none;z-index:6;animation:fadeIn .25s ease;}
@@ -8108,7 +8110,7 @@ body.reduce-motion .live-gift-float{animation:none;opacity:0;}
 /* Wholesale / B2B pricing: an info line on the listing (green once applied — money). */
 .ws-note{font-size:12.5px;font-weight:600;color:var(--t2);margin:2px 0 6px;}
 .ws-note.on{color:var(--green);font-weight:700;}
-.ws-tag{font-size:10.5px;font-weight:800;color:var(--green);background:rgba(48,209,88,.14);border-radius:999px;padding:2px 7px;margin-inline-start:4px;}
+.ws-tag{font-size:10.5px;font-weight:800;color:var(--green-txt);background:rgba(48,209,88,.14);border-radius:999px;padding:2px 7px;margin-inline-start:4px;}
 /* Restock suggestions: product row + amber low-stock chip (amber = heads-up). */
 .rsk-row{display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--bg);}
 .rsk-row:last-of-type{border-bottom:none;}
@@ -8120,9 +8122,9 @@ body.reduce-motion .live-gift-float{animation:none;opacity:0;}
 .rsk-suggest{font-size:13px;font-weight:800;color:var(--t1);background:var(--s2);border-radius:999px;padding:5px 11px;flex:0 0 auto;white-space:nowrap;}
 /* Free-shipping nudge per seller group (green when earned — money colour). */
 .cart-freeship{font-size:12.5px;font-weight:600;color:var(--t2);margin:2px 0 6px;}
-.cart-freeship.met{color:var(--green);font-weight:700;}
+.cart-freeship.met{color:var(--green-txt);font-weight:700;}
 .cart-qty{display:flex;align-items:center;gap:10px;}
-.cart-qty button{width:26px;height:26px;border-radius:8px;border:none;background:var(--s2);color:var(--t1);font-size:16px;cursor:pointer;}
+.cart-qty button{width:38px;height:36px;border-radius:10px;border:none;background:var(--s2);color:var(--t1);font-size:18px;cursor:pointer;}
 .prod-img-pick{height:120px;border-radius:14px;border:1.5px dashed var(--b2);background:var(--s2);background-size:cover;background-position:center;display:grid;place-items:center;cursor:pointer;color:var(--t3);font-size:13px;}
 .prod-img-pick.has{border-style:solid;}
 .prod-img-pick.has span{display:none;}
@@ -8390,9 +8392,9 @@ body.light .ac-adcard{box-shadow:0 4px 16px rgba(15,20,25,.07);}
 .ac-camp-title{font-size:14.5px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ac-camp-sub{font-size:12.5px;color:var(--t3);margin-top:2px;}
 .ac-camp-badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;}
-.ac-cb-requested{background:rgba(255,204,0,.16);color:var(--amber);}
+.ac-cb-requested{background:rgba(255,204,0,.16);color:var(--amber-txt);}
 .ac-cb-approved{background:rgba(var(--accent-rgb),.16);color:var(--accent);}
-.ac-cb-active{background:rgba(48,209,88,.16);color:var(--green);}
+.ac-cb-active{background:rgba(48,209,88,.16);color:var(--green-txt);}
 .ac-cb-rejected,.ac-cb-completed,.ac-cb-paused{background:var(--s2);color:var(--t3);}
 .ac-ad-daypick{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 4px;}
 .ac-ad-day{flex:1;min-width:56px;padding:10px 0;border:1px solid var(--divider);background:none;border-radius:12px;color:var(--t2);font:inherit;font-weight:700;cursor:pointer;}
@@ -9489,8 +9491,8 @@ body.light .undo-toast{background:rgba(28,28,30,.98);color:#fff;}
 .rf-req-t{font-weight:600;font-size:14px;}
 .rf-req-s{font-size:12px;color:var(--t3);margin-top:1px;}
 .rf-badge{flex:0 0 auto;font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:999px;}
-.rf-badge.rf-ok{background:rgba(48,209,88,.16);color:var(--green);}
-.rf-badge.rf-no{background:var(--red-soft);color:var(--red);}
+.rf-badge.rf-ok{background:rgba(48,209,88,.16);color:var(--green-txt);}
+.rf-badge.rf-no{background:var(--red-soft);color:var(--red-txt);}
 .rf-badge.rf-pending{background:rgba(127,127,127,.16);color:var(--t2);}
 .ac-ind-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:9px;padding:4px 12px;}
 .ac-ind-card{display:flex;flex-direction:column;gap:3px;align-items:flex-start;text-align:start;padding:13px 14px;
@@ -9546,9 +9548,9 @@ body.light .undo-toast{background:rgba(28,28,30,.98);color:#fff;}
 .ac-job-tag.applied{color:var(--green);background:var(--s2);} /* Applied = grey pill, green text (design blueprint) */
 .ac-job-tag.closed{color:var(--red);} /* deadline passed — grey pill, red text */
 .ac-job-tag.applied.st-reviewed{color:var(--accent);background:rgba(var(--accent-rgb),.16);}
-.ac-job-tag.applied.st-shortlisted{color:var(--green);background:rgba(48,209,88,.16);}
+.ac-job-tag.applied.st-shortlisted{color:var(--green-txt);background:rgba(48,209,88,.16);}
 .ac-job-tag.applied.st-hired{color:var(--accent-tint);background:var(--accent);}
-.ac-job-tag.applied.st-rejected{color:var(--red);background:rgba(255,0,51,.14);}
+.ac-job-tag.applied.st-rejected{color:var(--red-txt);background:rgba(255,0,51,.14);}
 .ac-job-tag.featured{color:var(--accent);background:var(--accent-dim);}
 body.light .ac-job-tag.featured{color:var(--accent);}
 .ac-job-card.featured{background:linear-gradient(180deg,rgba(var(--accent-rgb),.05),transparent);border-inline-start:3px solid var(--accent);}
@@ -9611,7 +9613,7 @@ body.light .ac-job-tag.featured{color:var(--accent);}
 .ac-appl-status{display:inline-block;font-size:10.5px;font-weight:700;line-height:1;padding:3px 7px;border-radius:6px;margin-inline-start:7px;background:var(--s2);color:var(--t2);text-transform:uppercase;letter-spacing:.03em;vertical-align:middle;}
 .ac-appl-status.st-applied{display:none;}
 .ac-appl-status.st-reviewed{background:rgba(var(--accent-rgb),.16);color:var(--accent);}
-.ac-appl-status.st-shortlisted{background:rgba(48,209,88,.16);color:var(--green);}
+.ac-appl-status.st-shortlisted{background:rgba(48,209,88,.16);color:var(--green-txt);}
 .ac-appl-status.st-hired{background:var(--accent);color:var(--accent-tint);}
 .ac-appl-status.st-rejected{background:var(--rose-bg,rgba(255,0,51,.14));color:var(--red);}
 .ac-appl-acts{display:flex;align-items:center;gap:8px;margin:9px 0 2px 53px;flex-wrap:wrap;}
@@ -9642,7 +9644,7 @@ body.light .ac-job-tag.featured{color:var(--accent);}
 .ajt-bar.on{background:var(--green);}
 .ajt-bar.on.rej{background:var(--red);}
 .ac-job-appstatus{margin-top:14px;font-size:14px;color:var(--t2);background:var(--s1);border-radius:12px;padding:11px 14px;text-align:center;}
-.ac-job-appstatus.st-shortlisted{background:rgba(48,209,88,.14);color:var(--green);}
+.ac-job-appstatus.st-shortlisted{background:rgba(48,209,88,.14);color:var(--green-txt);}
 .ac-job-appstatus.st-hired{background:var(--accent-dim);color:var(--accent);}
 .ac-job-appstatus.st-rejected{background:var(--rose-bg,rgba(255,0,51,.12));color:var(--red);}
 /* Profile headline + work-experience timeline */
@@ -9748,7 +9750,7 @@ body.light .ac-job-tag.featured{color:var(--accent);}
 .ac-ss-bell:active,.ac-ss-del:active{background:rgba(255,255,255,.08);}
 /* "Open to work" / availability chip (from the profile note) */
 .ac-otw-chip{display:inline-block;font-size:11px;font-weight:650;line-height:1;padding:4px 8px;border-radius:999px;
-  background:rgba(48,209,88,.16);color:var(--green);margin-inline-start:7px;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
+  background:rgba(48,209,88,.16);color:var(--green-txt);margin-inline-start:7px;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
 /* "Business" tag shown next to a business account's name in lists */
 .ac-biz-tag{display:inline-block;font-size:10.5px;font-weight:700;line-height:1;padding:3px 7px;border-radius:6px;
   background:var(--accent-dim);color:var(--accent);margin-inline-start:7px;vertical-align:middle;text-transform:uppercase;letter-spacing:.03em;}
@@ -9933,8 +9935,8 @@ body.reduce-motion .xp-ai::after{animation:none;}
 .crs-prog-txt{font-size:11.5px;color:var(--t3);margin-top:4px;}
 .crs-card-foot{margin-top:6px;}
 .crs-tag{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:var(--r-pill);background:var(--s3);color:var(--t2);}
-.crs-tag.on{background:rgba(48,209,88,.15);color:var(--green);}
-.crs-tag.draft{background:rgba(255,204,0,.15);color:var(--amber);}
+.crs-tag.on{background:rgba(48,209,88,.15);color:var(--green-txt);}
+.crs-tag.draft{background:rgba(255,204,0,.15);color:var(--amber-txt);}
 .crs-hero{width:100%;height:150px;border-radius:14px;background-size:cover;background-position:center;background-color:var(--s3);}
 .crs-meta{font-size:13px;color:var(--t3);margin:4px 0 12px;}
 .crs-curric-h{font-size:15px;font-weight:800;margin:18px 2px 8px;}
@@ -10006,9 +10008,9 @@ body.reduce-motion .xp-ai::after{animation:none;}
 .prof-mynote div{color:var(--t1);font-size:13.5px;margin-top:3px;white-space:pre-wrap;}
 /* Appointment status chip */
 .appt-status{margin-inline-start:auto;flex:0 0 auto;font-size:11px;font-weight:700;padding:3px 9px;border-radius:var(--r-pill);background:var(--s3);color:var(--t2);}
-.appt-status.confirmed{background:rgba(48,209,88,.16);color:var(--green);}
-.appt-status.declined,.appt-status.cancelled{background:rgba(255,0,51,.14);color:var(--red);}
-.appt-status.requested{background:rgba(255,204,0,.16);color:var(--amber);}
+.appt-status.confirmed{background:rgba(48,209,88,.16);color:var(--green-txt);}
+.appt-status.declined,.appt-status.cancelled{background:rgba(255,0,51,.14);color:var(--red-txt);}
+.appt-status.requested{background:rgba(255,204,0,.16);color:var(--amber-txt);}
 /* Tips */
 .tip-amts{display:flex;gap:8px;margin:6px 0 10px;}
 .tip-amt{flex:1;background:var(--s2);border:1.5px solid var(--b2);color:var(--t1);border-radius:12px;font-family:inherit;font-size:17px;font-weight:700;padding:12px 0;cursor:pointer;}
@@ -10119,7 +10121,7 @@ button.ac-skill.endorse.on .ac-skill-c{background:rgba(255,255,255,.15);color:va
   .ci-note{margin-top:10px;font-size:11.5px;color:var(--t4);}
 /* The morning briefing: the sentence, then the money, then the list. */
 .bf-line{font-size:15px;line-height:1.45;color:var(--t1);}
-.bf-money{margin-top:10px;font-size:14px;font-weight:700;color:var(--green);}
+.bf-money{margin-top:10px;font-size:14px;font-weight:700;color:var(--green-txt);}
 /* Skill suggestions — tap one to use the shared name everyone else uses. */
 .skill-sugg{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px;}
   .skill-chip{background:var(--s2);border:none;border-radius:999px;padding:7px 13px;font-size:12.5px;
@@ -10249,7 +10251,7 @@ button.ac-skill.endorse.on .ac-skill-c{background:rgba(255,255,255,.15);color:va
 .jm-sec{font-size:11.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);margin:13px 0 7px;}
 .jm-chips{display:flex;flex-wrap:wrap;gap:6px;}
 .jm-chip{font-size:12px;font-weight:600;border-radius:7px;padding:4px 9px;}
-.jm-chip.have{background:rgba(48,209,88,.15);color:var(--green);}
+.jm-chip.have{background:rgba(48,209,88,.15);color:var(--green-txt);}
 .jm-chip.miss{background:var(--s3);color:var(--t2);}
 .jm-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:none;border-radius:13px;
   background:var(--s2);color:var(--t1);font-size:14px;font-weight:700;font-family:inherit;padding:12px;cursor:pointer;margin:6px 0 14px;}
@@ -10288,8 +10290,8 @@ body.light .ac-job-early{color:var(--accent);background:var(--accent-dim);}
 .ja-sq-yn button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-tint);}
 /* Meets-requirements badge (applicant view) */
 .ac-appl-meets{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;border-radius:6px;padding:3px 8px;margin-top:6px;}
-.ac-appl-meets.yes{background:rgba(48,209,88,.15);color:var(--green);}
-.ac-appl-meets.no{background:rgba(255,0,51,.15);color:var(--red);}
+.ac-appl-meets.yes{background:rgba(48,209,88,.15);color:var(--green-txt);}
+.ac-appl-meets.no{background:rgba(255,0,51,.15);color:var(--red-txt);}
 .ac-appl-ans{font-size:12px;color:var(--t2);margin-top:5px;}
 .ac-appl-ans b{color:var(--t1);font-weight:600;}
 /* Applicant toolbar: filter chips + bulk select */
@@ -10343,9 +10345,9 @@ body.light .ac-job-early{color:var(--accent);background:var(--accent-dim);}
 .ac-sal-insight{border:none;border-radius:13px;padding:12px 14px;margin:4px 0 12px;background:var(--s2);}
 .ac-sal-top{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700;color:var(--t1);}
 .ac-sal-badge{font-size:11px;font-weight:800;border-radius:6px;padding:2px 8px;}
-.ac-sal-badge.above{background:rgba(48,209,88,.16);color:var(--green);}
+.ac-sal-badge.above{background:rgba(48,209,88,.16);color:var(--green-txt);}
 .ac-sal-badge.in-range{background:rgba(var(--accent-rgb),.16);color:var(--accent);}
-.ac-sal-badge.below{background:rgba(255,0,51,.16);color:var(--red);}
+.ac-sal-badge.below{background:rgba(255,0,51,.16);color:var(--red-txt);}
 .ac-sal-range{font-size:12.5px;color:var(--t3);margin-top:5px;}
 .ac-sal-bar{height:6px;border-radius:99px;background:var(--s3);margin:8px 0 4px;position:relative;overflow:hidden;}
 .ac-sal-bar i{position:absolute;top:0;bottom:0;background:linear-gradient(90deg,var(--accent),var(--green));border-radius:99px;}
@@ -11538,7 +11540,7 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 .sp-ctrl.grey{background:rgba(255,255,255,.14);color:#fff;}
 .sp-ctrl.grey.off{background:rgba(255,255,255,.06);color:rgba(255,255,255,.5);}
 .sp-ctrl.accent{background:var(--accent);color:var(--accent-tint);}
-.sp-ctrl.danger{background:rgba(255,0,51,.16);color:var(--red);}
+.sp-ctrl.danger{background:rgba(255,0,51,.16);color:var(--red-txt);}
 /* Live-now strip */
 .ac-live-strip{display:flex;gap:14px;overflow-x:auto;flex-shrink:0;padding:11px 14px;border-bottom:1px solid var(--b1);scrollbar-width:none;}
 .ac-live-strip::-webkit-scrollbar{display:none;}
@@ -11768,8 +11770,8 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
 .b39-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
 .b39-acts .ac-pill-btn{font-size:13px;padding:7px 14px;}
 .b39-tag{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:3px 9px;border-radius:999px;background:var(--s2);color:var(--t2);}
-.b39-tag.ok{background:rgba(136,255,0,.16);color:var(--green);}
-.b39-tag.warn{background:rgba(255,187,0,.16);color:var(--amber);}
+.b39-tag.ok{background:rgba(136,255,0,.16);color:var(--green-txt);}
+.b39-tag.warn{background:rgba(255,187,0,.16);color:var(--amber-txt);}
 
 /* The till. Big numbers, thumb-sized targets — it is used standing up. */
 .till-total{background:var(--s1);border-radius:20px;padding:18px;margin-bottom:12px;text-align:center;}
@@ -11901,7 +11903,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
 /* ═══ Batch 41 ═══ */
 /* The bar that says a chat is a secret one. Green = the good, verifiable kind. */
 .secret-bar{display:flex;align-items:center;gap:10px;padding:8px 14px;background:rgba(136,255,0,.1);
-  color:var(--green);font-size:13px;font-weight:600;}
+  color:var(--green-txt);font-size:13px;font-weight:600;}
 .secret-bar button{margin-left:auto;border:none;background:none;color:var(--green);font-size:13px;
   font-weight:700;text-decoration:underline;cursor:pointer;padding:0;}
 body.light .secret-bar{background:rgba(26,127,55,.1);}
@@ -11999,7 +12001,7 @@ body.light{--card-hair:var(--bg);--card-fill:var(--s3);}
 .mc-inv-main,.mc-call-main,.mc-prod-main,.mc-story-main{flex:1;min-width:0;}
 .mc-inv-title,.mc-call-title,.mc-prod-name{font-size:14.5px;font-weight:650;color:var(--t1);
   line-height:1.25;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.mc-inv-sub,.mc-prod-cta{font-size:12.5px;color:var(--t3);line-height:1.3;margin-top:1px;
+.mc-inv-sub,.mc-prod-cta{font-size:12.5px;color:var(--t2);line-height:1.3;margin-top:1px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .mc-inv-amt{flex:0 0 auto;font-size:15.5px;font-weight:800;color:var(--t1);letter-spacing:-.02em;}
 
@@ -12036,7 +12038,7 @@ body.light{--card-hair:var(--bg);--card-fill:var(--s3);}
 .mc-call{cursor:pointer;min-width:0;}
 .mc-call-ic{border-radius:50%;background:var(--accent-dim);color:var(--accent);}
 .mc-call-ic svg{fill:currentColor;stroke:none;}
-.mc-call.missed .mc-call-ic{background:var(--red-soft);color:var(--red);}
+.mc-call.missed .mc-call-ic{background:var(--red-soft);color:var(--red-txt);}
 .mc-call.missed .mc-call-title{color:var(--red);}
 .mc-call-sub{display:flex;align-items:center;gap:4px;font-size:12.5px;color:var(--t2);margin-top:1px;/* NB: this is the SECOND .mc-call-sub in the file and the one that wins — the earlier copy is dead. --t2 because the line sits on a card inside a bubble, where --t3 measures 4.2:1. */}
 .mc-call-back{flex:0 0 auto;width:30px;height:30px;color:var(--accent);display:grid;place-items:center;}
@@ -15146,7 +15148,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <textarea class="jp-in" id="crsDesc" maxlength="4000" placeholder="What will students learn?" style="margin-top:8px;min-height:70px;"></textarea>
     <input class="jp-in" id="crsPrice" type="number" min="0" max="5000" step="0.01" placeholder="Price ($, 0 = free)" style="margin-top:8px;"/>
     <button class="ac-pill-btn accent jp-submit" id="crsSaveBtn" onclick="acSaveCourse()">Create course</button>
-    <button class="ac-pill-btn hidden" id="crsDeleteBtn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDeleteCourse()">Delete course</button>
+    <button class="ac-pill-btn hidden" id="crsDeleteBtn" style="width:100%;margin-top:8px;color:var(--red-txt);" onclick="acDeleteCourse()">Delete course</button>
   </div>
 </div>
 
@@ -15161,7 +15163,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <input class="jp-in" id="lsnVideo" type="url" maxlength="500" placeholder="Video URL (optional)" style="margin-top:8px;"/>
     <textarea class="jp-in" id="lsnContent" maxlength="20000" placeholder="Lesson content / notes" style="margin-top:8px;min-height:120px;"></textarea>
     <button class="ac-pill-btn accent jp-submit" id="lsnSaveBtn" onclick="acSaveLesson()">Add lesson</button>
-    <button class="ac-pill-btn hidden" id="lsnDeleteBtn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDeleteLesson()">Delete lesson</button>
+    <button class="ac-pill-btn hidden" id="lsnDeleteBtn" style="width:100%;margin-top:8px;color:var(--red-txt);" onclick="acDeleteLesson()">Delete lesson</button>
   </div>
 </div>
 
@@ -16771,7 +16773,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <!-- Universal details & amenities (any industry: rentals, cars, real estate…) -->
     <div id="prodDetailsSec" style="margin-top:12px;"></div>
     <button class="ac-pill-btn accent jp-submit" id="prodSaveBtn" onclick="acSaveProduct()">Add product</button>
-    <button class="ac-pill-btn hidden" id="prodDeleteBtn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDeleteProductPrompt()">Remove product</button>
+    <button class="ac-pill-btn hidden" id="prodDeleteBtn" style="width:100%;margin-top:8px;color:var(--red-txt);" onclick="acDeleteProductPrompt()">Remove product</button>
   </div>
 </div>
 
@@ -17911,7 +17913,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <div id="bdProducts"></div>
     <div id="bdPreview" class="bd-preview"></div>
     <button class="ac-pill-btn accent jp-submit" id="bdSaveBtn" onclick="acSaveBundle()">Create bundle</button>
-    <button class="ac-pill-btn hidden" id="bdDeleteBtn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDeleteBundlePrompt()">Delete bundle</button>
+    <button class="ac-pill-btn hidden" id="bdDeleteBtn" style="width:100%;margin-top:8px;color:var(--red-txt);" onclick="acDeleteBundlePrompt()">Delete bundle</button>
   </div>
 </div>
 
@@ -18264,7 +18266,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <input class="jp-in" id="crmFollowUp" type="datetime-local" style="margin:4px 0 0;"/>
     <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">You’ll get one reminder at that time — it clears itself after firing.</div>
     <button class="ac-pill-btn accent jp-submit" onclick="acCrmSave()">Save</button>
-    <button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acCrmRemove()">Remove from pipeline</button>
+    <button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red-txt);" onclick="acCrmRemove()">Remove from pipeline</button>
   </div>
 </div>
 
@@ -18456,7 +18458,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <div class="ac-disc-sub" style="margin:2px 0 10px;">Your answer shows publicly under the review, as the seller.</div>
     <textarea class="jp-in" id="revRespondIn" maxlength="2000" rows="4" placeholder="Thank them, or set the record straight…"></textarea>
     <button class="ac-pill-btn accent jp-submit" onclick="acRevRespondSave()">Save response</button>
-    <button class="ac-pill-btn hidden" id="revRespondRemove" style="width:100%;margin-top:8px;color:var(--red);" onclick="acRevRespondSave(true)">Remove response</button>
+    <button class="ac-pill-btn hidden" id="revRespondRemove" style="width:100%;margin-top:8px;color:var(--red-txt);" onclick="acRevRespondSave(true)">Remove response</button>
   </div>
 </div>
 
@@ -19915,7 +19917,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1687'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1688'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -40349,7 +40351,7 @@ async function acOpenInvoice(id) {
       const remindLbl = cooling ? 'Reminder sent · you can nudge again tomorrow' : '🔔 Send a payment reminder';
       action = `<button class="ac-pill-btn accent" style="width:100%;" onclick="acInvoiceMarkPaid()">Mark as paid — received outside Atwe</button>
         <button class="ac-pill-btn" style="width:100%;margin-top:8px;${cooling ? 'opacity:.55;' : ''}" ${cooling ? 'disabled' : ''} onclick="acInvoiceRemind()">${remindLbl}</button>
-        <button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acCancelInvoice()">Cancel invoice</button>`;
+        <button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red-txt);" onclick="acCancelInvoice()">Cancel invoice</button>`;
     }
     else if (inv.status === 'paid') action = `<div class="inv-paid-note">Paid${inv.paidAt ? ' on ' + new Date(inv.paidAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''} ✓${inv.paidOutside ? '<div class="inv-outside-note">Recorded as paid outside Atwe (cash or bank)</div>' : ''}</div>`;
     body.innerHTML = `
@@ -40580,12 +40582,12 @@ async function acOpenOffer(id) {
           <button class="ac-pill-btn accent" onclick="acOfferRespond('accept')">Accept $${(o.amountCents / 100).toFixed(2)}</button>
           <button class="ac-pill-btn" onclick="acOfferCounterPrompt()">Counter</button>
         </div>
-        <button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acOfferRespond('decline')">Decline</button>`;
+        <button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red-txt);" onclick="acOfferRespond('decline')">Decline</button>`;
     } else if (o.canPay) {
       actions = `<button class="ac-pill-btn accent" style="width:100%;margin-top:4px;" onclick="acOfferPay()">Pay $${(o.amountCents / 100).toFixed(2)}</button>`;
     } else if (o.status === 'pending' || o.status === 'countered') {
       actions = `<div class="inv-meta-row" style="text-align:center;">Waiting for ${escHtml(other.name.split(' ')[0] || other.name)}…</div>
-        <button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acOfferCancel()">Withdraw offer</button>`;
+        <button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red-txt);" onclick="acOfferCancel()">Withdraw offer</button>`;
     } else if (o.status === 'paid') {
       actions = `<button class="ac-pill-btn" style="width:100%;margin-top:4px;" onclick="closeOverlay('offerView');acOpenOrder(${o.orderId})">View order</button>`;
     }
@@ -40662,8 +40664,8 @@ function acListingCard(l) {
   // how Amazon/Etsy only bill an advertiser when a shopper actually clicks through.
   const tap = l.sponsored ? `acPadClick(${l.adId});` : '';
   const img = thumb
-    ? `<div class="mkt-img" style="background-image:url('${thumb}')" onclick="${tap}acOpenListing(${l.id})">${heart}</div>`
-    : `<div class="mkt-img noimg" onclick="${tap}acOpenListing(${l.id})">${_MKT_BOX_SVG}${heart}</div>`;
+    ? `<div class="mkt-img" role="button" tabindex="0" aria-label="${jsAttr(l.name)}" style="background-image:url('${thumb}')" onclick="${tap}acOpenListing(${l.id})">${heart}</div>`
+    : `<div class="mkt-img noimg" role="button" tabindex="0" aria-label="${jsAttr(l.name)}" onclick="${tap}acOpenListing(${l.id})">${_MKT_BOX_SVG}${heart}</div>`;
   return `<div class="mkt-card"${l.sponsored ? ` data-adid="${l.adId}"` : ''}>
     <div class="mkt-head" onclick="${tap}closeOverlay('marketplaceView');acGoProfile(${jsAttr(l.seller.username || '')})">
       ${acAvatarHtml(l.seller.name, l.seller.avatar, 'user-avatar sm', biz)}
@@ -41907,7 +41909,7 @@ async function acOpenPool(id) {
       : '<div class="ac-disc-sub" style="padding:6px 2px;">No contributions yet. Be the first.</div>';
     let action = '';
     if (p.iAmCreator) {
-      action = `<button class="ac-pill-btn" style="width:100%;margin-top:4px;" onclick="acPoolShare(${p.id})">Share pool</button>${p.closed ? '' : `<button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acPoolClose(${p.id})">Close pool</button>`}`;
+      action = `<button class="ac-pill-btn" style="width:100%;margin-top:4px;" onclick="acPoolShare(${p.id})">Share pool</button>${p.closed ? '' : `<button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red-txt);" onclick="acPoolClose(${p.id})">Close pool</button>`}`;
     } else if (!p.closed) {
       action = `<button class="ac-pill-btn accent" style="width:100%;margin-top:4px;" onclick="acPoolContributeOpen()">Chip in</button>`;
     } else {
@@ -43812,7 +43814,12 @@ async function acOpenCart() {
       if (c.freeShipMet) return `<div class="cart-freeship met">🚚 Free shipping applied</div>`;
       return `<div class="cart-freeship">Add $${((c.freeShipOverCents - c.totalCents) / 100).toFixed(2)} more for free shipping (over $${(c.freeShipOverCents / 100).toFixed(0)})</div>`;
     };
-    const cartHtml = !carts.length ? '<div class="ac-empty" style="padding:26px;">Your cart is empty.</div>' : carts.map(c => `
+    const cartHtml = !carts.length ? `<div class="ac-feed-empty">
+        <div class="ac-feed-empty-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2.5 3h2.2l2.3 11.2a1.6 1.6 0 0 0 1.6 1.3h8.7a1.6 1.6 0 0 0 1.6-1.25L21.5 7H6"/></svg></div>
+        <div class="ac-feed-empty-line">Your cart is empty</div>
+        <div class="ac-feed-empty-sub">Anything you add is grouped by seller, so you check out with each shop separately.</div>
+        <button class="ac-pill-btn accent ac-feed-empty-cta" onclick="closeOverlay('cartView');acOpenMarketplace()">Browse the marketplace</button>
+      </div>` : carts.map(c => `
       <div class="cart-seller">${acAvatarHtml(c.seller.name, c.seller.avatar, 'user-avatar', c.seller.accountType === 'business')}<span>${escHtml(c.seller.name)}</span></div>
       ${freeShipLine(c)}
       ${c.items.map(it => `<div class="cart-item">
@@ -44341,11 +44348,11 @@ async function acOpenOrder(id) {
       action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acRateBuyerOpen(${o.id}, ${jsAttr(o.buyer.name)})">★ Rate the buyer</button>`;
     }
     // ── Escrow / protection actions ──
-    if (o.status === 'escrow' && !o.mine) action += `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acConfirmOrder()">Confirm received · release payment</button><button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acRequestAuth(${o.id})">Have it checked before I confirm</button><button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDisputeOrder()">Something's wrong. Open a dispute</button>`;
-    else if (o.status === 'escrow' && o.mine) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDisputeOrder()">Open a dispute</button>`;
+    if (o.status === 'escrow' && !o.mine) action += `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acConfirmOrder()">Confirm received · release payment</button><button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acRequestAuth(${o.id})">Have it checked before I confirm</button><button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red-txt);" onclick="acDisputeOrder()">Something's wrong. Open a dispute</button>`;
+    else if (o.status === 'escrow' && o.mine) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red-txt);" onclick="acDisputeOrder()">Open a dispute</button>`;
     // Only a pending order can cancel (the server's rule). A paid order is
     // money already moved — that door is "Issue a refund", never Cancel.
-    if (o.status === 'pending') action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acCancelOrder()">Cancel order</button>`;
+    if (o.status === 'pending') action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red-txt);" onclick="acCancelOrder()">Cancel order</button>`;
     // A protection banner that explains the current state.
     let banner = '';
     if (o.escrow) {
@@ -44364,7 +44371,7 @@ async function acOpenOrder(id) {
       const label = rs === 'requested' ? (o.mine ? 'Return requested by the buyer' : 'Return requested')
         : rs === 'approved' ? 'Return approved. Refunding' : rs === 'refunded' ? 'Returned & refunded' : 'Return declined';
       retBlock = `<div class="escrow-banner ${rs === 'refunded' ? 'ok' : rs === 'declined' ? 'warn' : ''}"><b>${label}.</b>${o.return.reason ? ' “' + escHtml(o.return.reason) + '”' : ''}</div>`;
-      if (o.mine && rs === 'requested') retBlock += `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acReturnResolve('approve')">Approve return · refund</button><button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acReturnResolve('decline')">Decline return</button>`;
+      if (o.mine && rs === 'requested') retBlock += `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acReturnResolve('approve')">Approve return · refund</button><button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red-txt);" onclick="acReturnResolve('decline')">Decline return</button>`;
       if (o.needsShipping && ['approved', 'refunded'].includes(rs)) {
         if (o.return.labelUrl) retBlock += `<a class="ac-pill-btn" style="width:100%;margin-top:8px;display:block;box-sizing:border-box;text-align:center;" href="${escHtml(o.return.labelUrl)}" target="_blank" rel="noopener">📄 Prepaid return label${o.return.labelCarrier ? ' · ' + escHtml(o.return.labelCarrier) : ''}</a>`;
         else if (o.mine && S.config && S.config.shippingLabelsEnabled) retBlock += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acLabelOpen('return')">📦 Buy a return label</button>`;
