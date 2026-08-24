@@ -41445,20 +41445,30 @@ app.get('/api/admin/wallet-adjustments', auth.requirePerm('revenue'), async (req
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the adjustments.' }); }
 });
 app.post('/api/admin/wallet-adjustments', auth.requirePerm('revenue'), async (req, res) => {
-  const userId = parseInt(req.body.userId, 10);
+  let userId = parseInt(req.body.userId, 10);
   const amountCents = Math.round(Number(req.body.amountCents) || 0);
   const reason = (req.body.reason || '').toString().trim().slice(0, 500);
-  if (!Number.isInteger(userId)) return res.status(400).json({ error: 'Pick an account.' });
   if (!amountCents || Math.abs(amountCents) > ADJ_MAX_CENTS) return res.status(400).json({ error: `Enter an amount up to $${(ADJ_MAX_CENTS / 100).toLocaleString()} (negative to debit).` });
   if (!reason) return res.status(400).json({ error: 'A reason is required — this is a money movement.' });
   try {
-    const u = (await db.query('SELECT id FROM users WHERE id = $1', [userId])).rows[0];
-    if (!u) return res.status(404).json({ error: 'Account not found.' });
+    /* A @username is accepted as well as a raw id. Asking someone to type a
+       bare account NUMBER into a money field is exactly how the wrong person
+       gets paid — and the number is nowhere near as checkable as a handle. */
+    const typed = String(req.body.username || req.body.userId || '').trim().replace(/^@/, '');
+    let u = Number.isInteger(userId)
+      ? (await db.query('SELECT id, name, username FROM users WHERE id = $1', [userId])).rows[0]
+      : null;
+    if (!u && typed) {
+      u = (await db.query('SELECT id, name, username FROM users WHERE lower(username) = lower($1)', [typed])).rows[0];
+      if (u) userId = u.id;
+    }
+    if (!u) return res.status(404).json({ error: 'No account with that @username or id.' });
     const { rows } = await db.query(
       'INSERT INTO wallet_adjustments (user_id, amount_cents, reason, requested_by) VALUES ($1,$2,$3,$4) RETURNING id',
       [userId, amountCents, reason, req.user.id]);
     adminAudit(req, 'wallet.adjust_request', 'user', userId, { amountCents, reason, adjustmentId: rows[0].id });
-    res.status(201).json({ ok: true, id: rows[0].id, needsSecondApproval: true });
+    res.status(201).json({ ok: true, id: rows[0].id, needsSecondApproval: true,
+      user: { id: u.id, name: u.name, username: u.username || null } });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not request the adjustment.' }); }
 });
 app.post('/api/admin/wallet-adjustments/:id/:action', auth.requirePerm('revenue'), async (req, res) => {
