@@ -11353,8 +11353,13 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 .call-name{font-size:26px;font-weight:800;letter-spacing:-.02em;color:#fff;margin-bottom:5px;}
 .call-status{font-size:15px;color:rgba(255,255,255,.72);font-variant-numeric:tabular-nums;}
 /* In-call controls live in one Liquid-Glass pill (like the home nav). */
+/* The controls WRAP. A video call shows nine of them, and in one nowrap row on a
+   390px phone they were being crushed from 52px wide to 33px — squeezed ovals
+   jammed together rather than round buttons. Wrapping keeps every control its
+   proper size and lets the bar grow to a second row instead. */
 .call-controls{position:absolute;left:50%;transform:translateX(-50%);bottom:max(34px,calc(env(safe-area-inset-bottom) + 26px));
-  display:flex;align-items:center;gap:7px;z-index:4;padding:8px;border-radius:46px;max-width:calc(100vw - 20px);
+  display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px 7px;z-index:4;padding:10px;border-radius:34px;
+  width:min(calc(100vw - 20px),370px);box-sizing:border-box;
   background:rgba(28,28,32,.5);-webkit-backdrop-filter:blur(30px) saturate(1.6);backdrop-filter:blur(30px) saturate(1.6);
   border:1px solid rgba(255,255,255,.12);box-shadow:0 14px 44px rgba(0,0,0,.55);}
 .call-incoming{position:absolute;left:0;right:0;bottom:max(40px,calc(env(safe-area-inset-bottom) + 30px));
@@ -11371,7 +11376,12 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 .call-btn.accept{background:var(--green);}
 .call-btn.off{background:#fff;color:#000;}
 /* Inside the pill the toggle buttons are transparent; off = white, end = red. */
-.call-controls .call-btn{width:52px;height:52px;background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none;}
+.call-controls .call-btn{flex:0 0 auto;width:52px;height:52px;background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none;}
+/* End call keeps its fill inside the bar (the transparent rule above would strip
+   it) and is the one control that must never be mistaken for a toggle. */
+.call-controls .call-btn.end,.call-controls .call-btn.decline{background:var(--red);}
+.call-controls .call-btn.accept{background:var(--green);}
+.call-controls .call-btn.off{background:#fff;color:#000;}
 .call-controls .call-btn svg{width:23px;height:23px;}
 /* Screen-share active: the button highlights like an "on" toggle */
 #callScreenBtn.sharing{background:var(--accent)!important;color:var(--accent-tint);}
@@ -11997,6 +12007,18 @@ body.light{--card-hair:var(--bg);--card-fill:var(--s3);}
 .msg-row.me .msg-bubble.msg-meta.meta-call{
   background:none;padding:0;border-radius:var(--card-r);max-width:286px;
   white-space:normal;color:var(--t1);box-shadow:none;}
+/* A call log follows the same blue/grey rule as every other message (owner
+   request): one YOU placed rides in your own outgoing bubble colour, one you
+   RECEIVED stays the neutral incoming card. It used to be forced grey on both
+   sides. "Missed" is only ever set on the incoming side, so the red treatment
+   below never has to sit on the blue. */
+.msg-row.me .msg-bubble.msg-meta.meta-call .meta-card{background:var(--bubble-out);}
+.msg-row.me .msg-bubble.msg-meta.meta-call .mc-call-title{color:var(--bubble-out-ink);}
+.msg-row.me .msg-bubble.msg-meta.meta-call .mc-call-sub{color:rgba(255,255,255,.82);}
+.msg-row.me .msg-bubble.msg-meta.meta-call .mc-call-sub svg{stroke:currentColor;}
+.msg-row.me .msg-bubble.msg-meta.meta-call .mc-call-ic{background:rgba(255,255,255,.22);color:var(--bubble-out-ink);}
+.msg-row.me .msg-bubble.msg-meta.meta-call .mc-call-back{background:rgba(255,255,255,.22);color:var(--bubble-out-ink);border-radius:50%;}
+
 /* A sticker is a sticker: no card, no chrome at all. */
 .msg-bubble.msg-meta.meta-sticker{background:none;border:none;}
 .msg-bubble.msg-meta.meta-sticker .meta-card{background:none;border:none;}
@@ -19935,7 +19957,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1692'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1693'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
