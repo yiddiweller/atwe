@@ -7147,7 +7147,7 @@ function renderAdjustView(){
       <h3>Adjust a wallet <span class="muted">· needs two admins</span></h3>
       <div class="sub">You request it with a reason; a <b>different</b> admin approves before any money moves. Use a negative amount to debit. Every step is audit-logged.</div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
-        <input class="in" id="adjUser" placeholder="Account id" style="width:120px;margin:0;"/>
+        <input class="in" id="adjUser" placeholder="@username or id" style="width:170px;margin:0;"/>
         <input class="in" id="adjAmt" placeholder="Amount ($, negative to debit)" style="width:220px;margin:0;"/>
         <input class="in" id="adjReason" maxlength="500" placeholder="Reason (required)" style="flex:1;min-width:200px;margin:0;"/>
         <button class="act accent" onclick="requestAdjust()">Request</button>
@@ -7172,14 +7172,17 @@ async function loadAdjust(){
   } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
 }
 async function requestAdjust(){
-  const userId = parseInt(document.getElementById('adjUser').value, 10);
+  // Either a @username or a raw id — the server resolves whichever was typed.
+  const who = document.getElementById('adjUser').value.trim();
   const amountCents = Math.round(parseFloat(document.getElementById('adjAmt').value) * 100);
   const reason = document.getElementById('adjReason').value.trim();
-  if (!Number.isInteger(userId) || !Number.isFinite(amountCents) || !reason) { notify('Account id, amount and reason are all required.'); return; }
+  if (!who || !Number.isFinite(amountCents) || !amountCents || !reason) { notify('Account, amount and reason are all required.'); return; }
   try {
-    await api('POST', '/api/admin/wallet-adjustments', { userId, amountCents, reason });
+    const r = await api('POST', '/api/admin/wallet-adjustments', { userId: who, amountCents, reason });
     document.getElementById('adjAmt').value = ''; document.getElementById('adjReason').value = '';
-    notify('Requested — another admin has to approve it.'); ADJ_STATUS = 'pending'; renderAdjustView();
+    // Say WHO, so a mistyped account is caught before the second admin approves.
+    const nm = r && r.user ? (r.user.name + (r.user.username ? ' (@' + r.user.username + ')' : '')) : 'that account';
+    notify('Requested for ' + nm + ' — another admin has to approve it.'); ADJ_STATUS = 'pending'; renderAdjustView();
   } catch (e){ notify(e.message); }
 }
 async function resolveAdjust(id, action){
