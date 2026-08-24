@@ -2430,6 +2430,26 @@ body.light .tb-home-dot{border-color:#fff;}
   overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
   touch-action:pan-x;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
 .tb-feedtabs::-webkit-scrollbar{display:none;}
+/* Overflow should dissolve, never be guillotined. The fade appears ONLY on a
+   side that genuinely has more to scroll (acTabFades toggles the classes), so
+   at rest nothing is masked and no letter is ever softened needlessly. */
+.tb-feedtabs.fade-l,.ac-post-toolbar.fade-l{
+  -webkit-mask-image:linear-gradient(to right,transparent 0,#000 22px,#000 100%);
+          mask-image:linear-gradient(to right,transparent 0,#000 22px,#000 100%);}
+.tb-feedtabs.fade-r,.ac-post-toolbar.fade-r{
+  -webkit-mask-image:linear-gradient(to right,#000 calc(100% - 22px),transparent 100%);
+          mask-image:linear-gradient(to right,#000 calc(100% - 22px),transparent 100%);}
+.tb-feedtabs.fade-l.fade-r,.ac-post-toolbar.fade-l.fade-r{
+  -webkit-mask-image:linear-gradient(to right,transparent 0,#000 22px,#000 calc(100% - 22px),transparent 100%);
+          mask-image:linear-gradient(to right,transparent 0,#000 22px,#000 calc(100% - 22px),transparent 100%);}
+/* The tool row's items are 42px discs, so its fade is wider than the tab
+   strips' — a sliced circle needs room to dissolve, a sliced word does not. */
+.ac-post-toolbar.fade-l{-webkit-mask-image:linear-gradient(to right,transparent 0,#000 44px,#000 100%);
+          mask-image:linear-gradient(to right,transparent 0,#000 44px,#000 100%);}
+.ac-post-toolbar.fade-r{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 44px),transparent 100%);
+          mask-image:linear-gradient(to right,#000 calc(100% - 44px),transparent 100%);}
+.ac-post-toolbar.fade-l.fade-r{-webkit-mask-image:linear-gradient(to right,transparent 0,#000 44px,#000 calc(100% - 44px),transparent 100%);
+          mask-image:linear-gradient(to right,transparent 0,#000 44px,#000 calc(100% - 44px),transparent 100%);}
 .tb-feedtab{position:relative;background:none;border:none;cursor:pointer;color:var(--t3);font-size:15px;font-weight:600;
   padding:6px 11px;white-space:nowrap;transition:color var(--t-fast) var(--ease);}
 .tb-feedtab:hover{color:var(--t1);}
@@ -2523,9 +2543,9 @@ body.light .tb-feedtab.active{color:var(--t1);}
   .topbar.tb-home .tb-homeava{width:32px;height:32px;}
   .topbar.tb-home .tb-homeava .user-avatar{width:32px;height:32px;font-size:13px;}
   .topbar.tb-home .tb-pagelabel{display:block;font-size:21px;font-weight:800;letter-spacing:-.02em;}
-  /* Feed tabs become their own full-width row (no left mask/fade now). */
-  .topbar.tb-home .tb-feedtabs{grid-area:tabs;flex:0 0 auto;margin:0;gap:36px;padding:0;/* owner: more space between Home tabs, matched to Beam */
-    -webkit-mask-image:none;mask-image:none;}
+  /* Feed tabs are their own full-width row. No mask at rest — the .fade-l /
+     .fade-r classes add one only on a side that really has more to show. */
+  .topbar.tb-home .tb-feedtabs{grid-area:tabs;flex:0 0 auto;margin:0;gap:36px;padding:0;/* owner: more space between Home tabs, matched to Beam */}
   .topbar.tb-home .tb-feedtab{padding:7px 0 12px;font-size:15px;}
   .topbar.tb-home .tb-feedtab.active::after{content:"";position:absolute;left:50%;transform:translateX(-50%);
     bottom:0;width:22px;height:3px;border-radius:3px;background:var(--accent);}
@@ -6685,7 +6705,10 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .spc-body{font-size:14.5px;line-height:1.5;color:var(--t1);white-space:pre-wrap;overflow:hidden;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;}
 .spc-img{width:100%;border-radius:14px;margin-top:10px;max-height:260px;object-fit:cover;display:block;}
 .spc-tap{margin-top:11px;font-size:12.5px;color:var(--accent);font-weight:700;}
-.story-cap{position:absolute;left:0;right:0;bottom:64px;z-index:3;padding:0 16px;pointer-events:none;}
+/* The caption clears whatever the footer actually is — a reply bar (emoji row
+   + input) is far taller than the own-story button row, so a fixed offset put
+   the words underneath the emojis. acStoryFitCap measures it. */
+.story-cap{position:absolute;left:0;right:0;bottom:calc(var(--story-foot-h, 64px) + 12px);z-index:3;padding:0 16px;pointer-events:none;}
 .story-cap-in{background:rgba(0,0,0,.55);color:#fff;font-size:15px;padding:8px 12px;border-radius:12px;display:inline-block;text-shadow:0 1px 2px rgba(0,0,0,.5);}
 /* Daily link sticker — composer box + the tappable viewer chip */
 .st-link-box{margin-top:2px;}
@@ -8223,6 +8246,9 @@ body.light .ac-pdot{background:var(--accent);}
 .ac-replyscope:active{background:var(--s3);}
 .ac-replyscope svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;flex-shrink:0;}
 .ac-replyscope>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* The currency sign belongs to the number, not the label — it must never be the
+   thing that gets ellipsized away, leaving a bare figure with no unit. */
+.ppv-row>.ppv-cur{flex:0 0 auto;overflow:visible;}
 /* "Who can reply?" bottom sheet (X-style) */
 #replyScopeSheet{align-items:flex-end;justify-content:center;padding:0;}
 .rs-sheet{width:100%;max-width:600px;background:var(--bg);border-top-left-radius:20px;border-top-right-radius:20px;
@@ -8478,6 +8504,7 @@ body.reduce-motion .ac-compose-card{animation:none;}
   flex-shrink:0;overflow-x:auto;overflow-y:hidden;
   -webkit-overflow-scrolling:touch;scrollbar-width:none;touch-action:pan-x;}
 .ac-post-toolbar::-webkit-scrollbar{display:none;}
+
 /* Each tool is a round LIGHT-GREY disc with a white glyph (same size/colour as the Atwe
    mark at the end); scoped to the composer so the chat composer's icons are untouched. */
 .ac-post-toolbar .msg-attach{width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.09);color:var(--t1);}
@@ -8762,7 +8789,9 @@ body.light .ac-follow-btn.following{background:transparent;color:var(--t1);}
 .ac-reply-bar textarea:focus{border-color:var(--b3);}
 .ac-reply-bar textarea::placeholder{color:var(--t3);}
 .ac-reply-send{position:absolute;right:7px;bottom:7px;height:32px;display:inline-flex;align-items:center;
-  background:var(--accent);color:var(--accent-tint);border:none;border-radius:var(--r-pill);padding:0 16px;font-size:14px;
+  /* White acts. Every other send in the app was flipped to the primary token;
+     this one was missed, leaving the post-detail Reply the odd blue one out. */
+  background:var(--primary);color:var(--on-primary);border:none;border-radius:var(--r-pill);padding:0 16px;font-size:14px;
   font-weight:700;cursor:pointer;transition:opacity var(--t-fast) var(--ease);}
 .ac-reply-send:disabled{opacity:.4;cursor:default;}
 /* Centered Atwe logo + AtChat brand at the top */
@@ -19117,7 +19146,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
           <select id="acMinTier" style="background:none;border:none;color:inherit;font:inherit;outline:none;border-bottom:1px solid var(--b2);flex:1;"></select>
         </div>
         <div class="ac-replyscope ppv-row hidden" id="acPpvRow">
-          <span>Pay to unlock $</span><input id="acPpvPrice" type="number" min="1" max="1000" step="1" placeholder="0" inputmode="decimal" oninput="acPostInput && acPostInput()" style="width:44px;background:none;border:none;color:inherit;font:inherit;outline:none;border-bottom:1px solid var(--b2);"/>
+          <span>Charge</span><span class="ppv-cur">$</span><input id="acPpvPrice" type="number" min="1" max="1000" step="1" placeholder="0" inputmode="decimal" oninput="acPostInput && acPostInput()" style="width:44px;background:none;border:none;color:inherit;font:inherit;outline:none;border-bottom:1px solid var(--b2);"/>
         </div>
       </div>
       <div class="ac-tagchips" id="acTagChips"></div>
@@ -19861,7 +19890,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1683'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1684'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -21539,6 +21568,7 @@ function closeOverlay(id) {
 function showOverlay(id) {
   const el = document.getElementById(id);
   if (!el) return;
+  requestAnimationFrame(acBindTabFades);   // strips inside this overlay: which side is cut off?
   clearTimeout(el._ct);
   if (el._closeDone) { el.removeEventListener('animationend', el._closeDone); el._closeDone = null; } // cancel any pending close-hide so a quick reopen can't vanish
   // Bring the overlay to the front: all overlays share a z-index tier, so paint
@@ -22512,12 +22542,40 @@ function maybeIntro(id) {
     'resetOverlay', 'plansOverlay', 'suSplash', 'suPremium', 'suProfileSetup', 'confirmOverlay'];
   if (BLOCKERS.some(b => { const el = document.getElementById(b); return el && !el.classList.contains('hidden'); })) return;
   if (_introLocalSeen().has(id)) return;            // already shown to this account
+  const stillHere = _INTRO_STILL_HERE[id];
+  if (stillHere && !stillHere()) return;            // they moved on — greet them next visit
   showIntro(id);
 }
 // Fire an intro shortly after a world's navigation/animation settles (so a
 // closing section-unlock pad or tab-slide can't block it). Safe to call from an
 // internal back-nav too — the seen registry keeps it strictly once-per-account.
+/* A horizontally scrolling strip (feed/Beam/Engine tabs, the composer's tool
+   row) should fade on whichever side still has content past the edge — never
+   guillotine a word or an icon in half, and never dim anything at rest. */
+function acTabFades(el) {
+  if (!el) return;
+  const max = el.scrollWidth - el.clientWidth;
+  el.classList.toggle('fade-l', el.scrollLeft > 4);
+  el.classList.toggle('fade-r', max > 4 && el.scrollLeft < max - 4);
+}
+function acBindTabFades() {
+  document.querySelectorAll('.tb-feedtabs, .ac-post-toolbar').forEach((el) => {
+    if (!el._fadeBound) { el._fadeBound = true; el.addEventListener('scroll', () => acTabFades(el), { passive: true }); }
+    acTabFades(el);
+  });
+}
 function _introSoon(id) { setTimeout(() => maybeIntro(id), 420); }
+/* Are they STILL in the world this welcome is about? The sheet is queued with a
+   short delay, so a quick tap onward (Circles → Collections, or straight to the
+   bell) used to land the welcome on top of an unrelated screen. If they've
+   moved on we simply don't show it — nothing is marked seen, so it greets them
+   properly the next time they're actually there. */
+const _INTRO_STILL_HERE = {
+  ai: () => { try { return localStorage.getItem('atwe_last_tab') === 'ai'; } catch (e) { return true; } },
+  circles: () => _acFeedScope === 'circles',
+  beam: () => { const el = document.getElementById('acListScreen'); return !!el && !el.classList.contains('hidden'); },
+  wallet: () => { const el = document.getElementById('walletView'); return !!el && !el.classList.contains('hidden'); },
+};
 function showIntro(id) {
   const cfg = INTRO_SHEETS[id]; if (!cfg) return;
   _introCurrent = id;
@@ -31141,6 +31199,7 @@ function acSearchGroupRow(g) {
 }
 // Top bar identity per page: just the page label (or the search box).
 function syncTopbar(tab) {
+  requestAnimationFrame(acBindTabFades);   // which side of a scrolling tab strip is cut off?
   const label = document.getElementById('tbPageLabel');
   const search = document.getElementById('tbSearch');
   const feedTabs = document.getElementById('tbFeedTabs');
@@ -31319,7 +31378,7 @@ const _NOTIF_TABS = [
 function acRenderNotifList() {
   const el = document.getElementById('notifList'); if (!el) return;
   const all = AC._notifs || [];
-  if (!all.length) { el.innerHTML = '<div class="ac-empty">No notifications yet.</div>'; return; }
+  if (!all.length) { el.innerHTML = '<div class="ac-empty">Nothing yet.<br/>Likes, replies, follows, messages and money all land here.</div>'; return; }
   const tab = AC._notifTab || 'all';
   const def = _NOTIF_TABS.find(([k]) => k === tab) || _NOTIF_TABS[0];
   const list = def[2] ? all.filter((n) => def[2].includes(n.type)) : all;
@@ -31668,6 +31727,7 @@ function navStackPop() {
   return false;
 }
 function acShow(screenId, tab) {
+  requestAnimationFrame(acBindTabFades);   // strips on this screen: which side is cut off?
   // Record the outgoing screen (with its scroll state) so browser Back can return to it.
   const _navCur = AC_SCREENS.find(id => { const s = document.getElementById(id); return s && !s.classList.contains('hidden'); });
   if (_navCur && _navCur !== screenId) navStackPush(_navCur);
@@ -35080,7 +35140,7 @@ function acPostCard(p) {
           <span class="ac-rp-n ac-act-n">${p.reposts || ''}</span>
         </button>
         ${acLikeBtn(p, true)}
-        <span class="ac-views" aria-label="${p.views || 0} views"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg><span class="ac-act-n">${acCompact(p.views || 0)}</span></span>
+        <span class="ac-views" aria-label="${p.views || 0} views"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg><span class="ac-act-n">${p.views ? acCompact(p.views) : ''}</span></span>
         <button class="ac-bookmark ${p.bookmarked ? 'on' : ''}" onclick="event.stopPropagation();acToggleBookmark(this,${p.id})" aria-pressed="${p.bookmarked ? 'true' : 'false'}" aria-label="${p.bookmarked ? 'Remove from Collections' : 'Save to Collections'}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
         </button>
@@ -51166,12 +51226,15 @@ function acStoryShow(si) {
   else if (it.kind === 'post') bodyEl.innerHTML = `<div class="story-post" style="background:${_storyBgCss(it.bg)}">${acSharedPostCardHtml(it.sharedPost, true)}</div>`;
   else if (it.kind === 'video') bodyEl.innerHTML = `<video class="story-vid" id="storyVid" src="${it.media}" autoplay playsinline></video><button class="story-sound" id="storySoundBtn" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()" onclick="event.stopPropagation();acStoryToggleSound()" aria-label="Toggle sound">${_storyMuted ? FEED_SND_OFF : FEED_SND_ON}</button>`;
   else bodyEl.innerHTML = `<img class="story-img" src="${it.media}" alt=""/>`;
+  acStoryFitCap();
   // Caption (for media) + any tagged products (shoppable story).
   const capEl = document.getElementById('storyCap');
   const capTxt = (it.kind !== 'text' && it.caption) ? `<div class="story-cap-in">${escHtml(it.caption)}</div>` : '';
   capEl.innerHTML = capTxt + acStoryMentionChips(it) + acStoryProdTag(it) + acStoryLinkChip(it) + acStoryPollHtml(it) + acStoryQHtml(it);
   // Footer: own → viewers + delete; others → empty.
   const foot = document.getElementById('storyFoot');
+  // Whatever we put in the footer below, the caption must sit above it.
+  requestAnimationFrame(() => acStoryFitCap());
   if (sv.archive) {
     // Archive playback (your own expired Daily): add it to a highlight to bring
     // it back to your profile, or save the file. No seen/reply — it's history.
@@ -51233,6 +51296,15 @@ function acStoryShow(si) {
 }
 function nowMs() { try { return performance.now(); } catch { return new Date().getTime(); } }
 // Press-and-hold pauses the story (freezes the progress bar); release resumes.
+/* Publish the story footer's real height so the caption can sit above it —
+   a reply bar (emoji row + input) is roughly twice the own-story button row. */
+function acStoryFitCap() {
+  const foot = document.getElementById('storyFoot');
+  const wrap = foot && foot.parentElement;
+  if (!foot || !wrap) return;
+  const h = Math.round(foot.getBoundingClientRect().height) || 64;
+  wrap.style.setProperty('--story-foot-h', h + 'px');
+}
 function acStoryPause() {
   const sv = AC._sv; if (!sv || sv._paused) return;
   sv._paused = true; sv._pressT = nowMs();
