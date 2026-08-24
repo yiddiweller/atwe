@@ -6854,6 +6854,8 @@ body.light .ac-home-stories .story-div{background:rgba(0,0,0,.18);}
 .sf-search input{flex:1;background:none;border:none;outline:none;color:var(--t1);font-size:15px;font-family:inherit;min-width:0;}
 .sf-cover{height:118px;border-radius:16px;background-size:cover;background-position:center;margin:0 0 12px;background-color:var(--s2);}
 .sf-tagline{font-size:13.5px;color:var(--sf-accent,var(--accent));font-weight:650;margin-top:2px;}
+.sf-meta{font-size:13px;color:var(--t3);margin:2px 0 4px;font-weight:600;}
+.sf-meta .sf-stars{color:var(--amber);font-weight:750;}
 /* Looks: bold amplifies the name, quiet mutes the chrome, warm tints surfaces. */
 .sf-look-bold .sf-name{font-size:24px;font-weight:800;letter-spacing:-.02em;}
 .sf-look-quiet .sf-name{font-weight:600;}
@@ -19859,7 +19861,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1682'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1683'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -43613,7 +43615,7 @@ async function acLoadShop(bizId, isOwner) {
 // categories. Uncategorized items fall into an "Other" group at the end. When nothing
 // is categorized it's a single flat grid (unchanged) — so it only adds sections when
 // the seller opted in (restaurant menus, retail collections, …).
-function acGroupedProductGrid(products, owner) {
+function acGroupedProductGrid(products, owner, preview) {
   const order = []; const groups = {};
   products.forEach(p => {
     const key = (p.category || '').trim() || '\u0000other';
@@ -43621,19 +43623,24 @@ function acGroupedProductGrid(products, owner) {
     groups[key].push(p);
   });
   const realCats = order.filter(k => k !== '\u0000other');
-  if (realCats.length === 0) return `<div class="shop-grid">${products.map(p => acProductCard(p, owner)).join('')}</div>`;
+  if (realCats.length === 0) return `<div class="shop-grid">${products.map(p => acProductCard(p, owner, preview)).join('')}</div>`;
   // Named sections first (in first-seen order), then "Other" last.
   const ordered = realCats.concat(order.includes('\u0000other') ? ['\u0000other'] : []);
   return ordered.map(k => {
     const label = k === '\u0000other' ? 'Other' : k;
     return `<div class="sf-section"><div class="sf-section-head">${escHtml(label)}</div>
-      <div class="shop-grid">${groups[k].map(p => acProductCard(p, owner)).join('')}</div></div>`;
+      <div class="shop-grid">${groups[k].map(p => acProductCard(p, owner, preview)).join('')}</div></div>`;
   }).join('');
 }
-function acProductCard(p, owner) {
+function acProductCard(p, owner, preview) {
   const img = p.image ? `<div class="shop-img" style="background-image:url('${p.image}')"></div>` : `<div class="shop-img noimg"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>`;
-  const action = owner
-    ? `<span style="display:flex;gap:6px;flex-wrap:wrap;"><button class="shop-buy" onclick="event.stopPropagation();acProductFormOpen(${p.id})">Edit</button>${!p.hasVariants ? `<button class="shop-buy" onclick="event.stopPropagation();acMarkSold(${p.id},${p.soldOut ? 'false' : 'true'})">${p.soldOut ? 'Mark available' : 'Mark sold'}</button>` : ''}<button class="shop-buy ${p.pinned ? 'pin-on' : ''}" onclick="event.stopPropagation();acPinProduct(${p.id},${p.pinned ? 'false' : 'true'})">${p.pinned ? '📌 Unpin' : '📌 Pin'}</button><button class="shop-buy" onclick="event.stopPropagation();acDuplicateProduct(${p.id})">Duplicate</button>${p.active ? `<button class="shop-buy" onclick="event.stopPropagation();acAdCreateFor(${p.id})">Advertise</button>` : ''}</span>`
+  const action = (owner && preview)
+    /* The storefront PREVIEW is "your store the way buyers see it" — clean
+       buyer cards, one quiet Edit chip. The full management chips live in
+       Manage store → Products, where managing is the whole point. */
+    ? `<button class="shop-buy" onclick="event.stopPropagation();acProductFormOpen(${p.id})">Edit</button>`
+    : owner
+    ? `<span style="display:flex;gap:6px;flex-wrap:wrap;"><button class="shop-buy" onclick="event.stopPropagation();acProductFormOpen(${p.id})">Edit</button>${!p.hasVariants ? `<button class="shop-buy" onclick="event.stopPropagation();acMarkSold(${p.id},${p.soldOut ? 'false' : 'true'})">${p.soldOut ? 'Mark available' : 'Mark sold'}</button>` : ''}<button class="shop-buy ${p.pinned ? 'pin-on' : ''}" onclick="event.stopPropagation();acPinProduct(${p.id},${p.pinned ? 'false' : 'true'})">${p.pinned ? 'Unpin' : 'Pin'}</button><button class="shop-buy" onclick="event.stopPropagation();acDuplicateProduct(${p.id})">Duplicate</button>${p.active ? `<button class="shop-buy" onclick="event.stopPropagation();acAdCreateFor(${p.id})">Advertise</button>` : ''}</span>`
     : (p.hasVariants
       ? `<button class="shop-buy accent" onclick="event.stopPropagation();acOpenListing(${p.id})">Choose options</button>`
       : `<button class="shop-buy accent" onclick="event.stopPropagation();acAddToCart(${p.id})">Add to cart</button>`);
@@ -47693,11 +47700,18 @@ async function acOpenStorefront(biz) {
     const vac = biz.shopPaused
       ? `<div class="sf-vac">🌴 ${escHtml(biz.shopPauseMessage || (isOwner ? 'Your shop is paused — no new orders while vacation mode is on.' : 'This shop is on a break and isn’t taking orders right now.'))}</div>`
       : '';
-    const grid = visible.length ? acGroupedProductGrid(visible, isOwner)
+    const grid = visible.length ? acGroupedProductGrid(visible, isOwner, true)
       : `<div class="ac-empty" style="padding:26px;">${isOwner ? 'No products yet. Add your first item.' : 'This store has no items yet.'}</div>`;
+    // A real store says what it is: item count + earned stars.
+    const rated = visible.filter((x) => x.reviewCount > 0);
+    const avg = rated.length ? (rated.reduce((s2, x) => s2 + x.rating * x.reviewCount, 0) / rated.reduce((s2, x) => s2 + x.reviewCount, 0)) : 0;
+    const meta = visible.length
+      ? `<div class="sf-meta">${visible.length} item${visible.length === 1 ? '' : 's'}${avg ? ` · <span class="sf-stars">★ ${avg.toFixed(1)}</span> · ${rated.reduce((s2, x) => s2 + x.reviewCount, 0)} review${rated.reduce((s2, x) => s2 + x.reviewCount, 0) === 1 ? '' : 's'}` : ''}</div>`
+      : '';
     // Seller announcement (one pinned line, e.g. "20% off this week").
     const ann = acStoreBannerHtml(isOwner ? (S.user && S.user.storeBanner) : biz.storeBanner);
-    b.innerHTML = `${cover}${head}${searchRow}${ann}${vac}${escLine}<div id="sfBundles"></div><div id="sfGrid">${grid}</div>`;
+    // Products lead; bundles follow them (never an empty box before the goods).
+    b.innerHTML = `${cover}${head}${meta}${searchRow}${ann}${vac}${escLine}<div id="sfGrid">${grid}</div><div id="sfBundles"></div>`;
     // The seller's look, layout and brand colour, scoped to this store only.
     if (theme) {
       b.className = 'sf-look-' + (theme.look || 'classic') + ' sf-lay-' + (theme.layout || 'grid');
@@ -47718,7 +47732,7 @@ async function acSfSearch() {
   try {
     const { products } = await API.req('GET', '/api/businesses/' + biz.id + '/products' + (q ? '?q=' + encodeURIComponent(q) : ''));
     const visible = AC._sfOwner ? products : products.filter(p => p.active);
-    box.innerHTML = visible.length ? acGroupedProductGrid(visible, AC._sfOwner)
+    box.innerHTML = visible.length ? acGroupedProductGrid(visible, AC._sfOwner, true)
       : `<div class="ac-empty" style="padding:26px;">Nothing here matches “${escHtml(q)}”.</div>`;
   } catch (e) { box.innerHTML = '<div class="ac-empty" style="padding:22px;">Could not search right now.</div>'; }
 }
@@ -47771,8 +47785,7 @@ async function acLoadStorefrontBundles(sellerId, isOwner) {
     const { bundles } = await API.req('GET', '/api/bundles?seller=' + sellerId);
     if (!bundles.length && !isOwner) { box.innerHTML = ''; return; }
     const add = isOwner ? `<button class="ac-link-btn" onclick="acBundleFormOpen()">＋ Bundle</button>` : '';
-    const cards = bundles.length ? `<div class="shop-grid">${bundles.map(bd => acBundleCard(bd, isOwner)).join('')}</div>`
-      : `<div class="ac-empty" style="padding:18px;">No bundles yet. Group a few items at a saver price.</div>`;
+    const cards = bundles.length ? `<div class="shop-grid">${bundles.map(bd => acBundleCard(bd, isOwner)).join('')}</div>` : '';
     box.innerHTML = `<div class="ac-section-row" style="margin:8px 0 6px;"><span class="ac-prof-head" style="margin:0;">Bundles &amp; deals</span>${add}</div>${cards}`;
   } catch { box.innerHTML = ''; }
 }
