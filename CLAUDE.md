@@ -333,7 +333,8 @@ references a table created *later* in the file is recorded and **replayed afterw
 | GET | `/api/health` | — | Liveness (Railway healthcheck). Returns `{ status, db, timestamp }`. |
 | GET | `/api/config` | — | Feature flags: `{ billingEnabled, emailEnabled }`. |
 | GET | `/api/test` | — | Smoke-tests the Anthropic key with a tiny Haiku call. |
-| POST | `/api/auth/signup` | — | Create account (sends verification email). Returns `{ token, user }`. |
+| POST | `/api/auth/signup` | — | **Step 1 of 2.** Validates (name/email/password/**`dob`** — a date of birth is REQUIRED), stores a `pending_signups` row and emails a **6-digit code**. Returns `{ pending: true, email }` — **no token yet**. |
+| POST | `/api/auth/signup/verify` | — | **Step 2 of 2.** `{ email, code }` → creates the (already email-verified) account. Returns `{ token, user }`. `POST /api/auth/resend-verification` re-sends the code. |
 | POST | `/api/auth/login` | — | Returns `{ token, user }`. |
 | GET | `/api/auth/me` | user | Refresh the client's view of the account. |
 | POST | `/api/auth/verify` | — | Confirm email from the emailed token. |
@@ -5096,6 +5097,18 @@ The committed `data/`, `dist/`, `.next/` ignores are defensive — none are prod
 today.
 
 ## Gotchas for AI assistants
+
+- **A class may be declared TWICE at the same level, and the LATER copy wins.**
+  Editing the first one changes nothing and the failure is silent. This has bitten
+  real work three times (`.mc-call-sub`, `.mc-inv-sub`, `.msg-act`). A sweep counts
+  **66 such conflicts in `index.html`** (48 of them the `.mc-*` meta-card family, from
+  a restyle that appended rules instead of editing them) and **29 in `admin.html`**
+  (mostly a half-finished token migration: `10px` → `var(--r-pill)`, hardcoded →
+  token). Nothing renders wrong today — the later value wins consistently — but
+  ALWAYS `grep -n` for every definition of a class before editing one, and prefer
+  fixing the winning copy. `python3 tools/find-duplicate-css.py` lists them (it
+  separates `@media` blocks, so a deliberate responsive override is never reported
+  as a clash).
 
 - There is **no lint**, and only a **small opt-in money/auth test suite**
   (`npm test`, skips without a database) — for anything it doesn't cover, verify
