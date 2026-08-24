@@ -2421,6 +2421,23 @@ functions, organized by banner comments.
 
 ### Client conventions (important patterns)
 
+- **Composer cards live INSIDE the input pill** (owner's ask, modelled on the Claude
+  app). The reply-you're-answering (`#acReplyCtx`), the pending photo/video/file
+  (`#acAttPrev`) and the secret-mode notice (`#acSecretBar`) used to sit ABOVE
+  `.msg-inbox` as loose strips. They now sit inside it, in one `.msg-incards` wrapper
+  stacked over the text row. Every gap is **8px** and the numbers are load-bearing:
+  the pill's own `padding:5px` + the wrapper's `margin:3px` gives 8 at the top and
+  sides, the wrapper's `margin-bottom:4px` + the pill's `row-gap:4px` gives 8 below,
+  and the wrapper's own `gap:8px` gives 8 between two cards. Card radius is **15px** —
+  the pill's 24px minus the 9px from its outer edge (1px border + 5px padding + 3px
+  margin) — so the corners hug it (the "matching corners" rule). The wrapper is
+  `display:none` until a `:has()` rule finds a visible card, so the resting pill is
+  byte-identical to before. Two flex gotchas are baked in and must stay: `flex:0 0
+  calc(100% - 6px)` (a `100%` basis plus side margins overflows by exactly the
+  margins, and whether an item shrinks back depends on its own content — one card
+  ended up 6px off-centre) and `min-width:0` (a flex item's automatic min-content
+  size otherwise overrides the basis; the reply card's nowrap preview line blew it
+  out to 514px). Adding a new card here means the same three values.
 - **Optimistic send + idempotency.** A send shows a temp bubble immediately; its temp
   id is sent as `clientId`. `at_messages`/`at_group_messages` have a `client_id` with a
   unique index (DM: `(sender_id, client_id)`; group: `(group_id, sender_id, client_id)`)
