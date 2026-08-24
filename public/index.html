@@ -1236,7 +1236,7 @@ button.ac-poll-opt:hover{background:var(--accent-dim);border-color:var(--accent)
 .ac-poll-total{font-size:12.5px;color:var(--t3);padding:1px 2px;}
 
 /* Post "more" button + author action sheet */
-.ac-post-more{margin-inline-start:auto;background:none;border:none;color:var(--t3);cursor:pointer;padding:2px 4px;display:flex;align-items:center;border-radius:6px;}
+.ac-post-more{margin-inline-start:auto;background:none;border:none;color:var(--t3);cursor:pointer;padding:2px 4px;display:flex;align-items:center;justify-content:center;border-radius:6px;min-width:32px;min-height:32px;margin-top:-6px;margin-bottom:-6px;}
 .ac-post-more svg{width:18px;height:18px;stroke:none;fill:currentColor;}
 .ac-post-more:hover{color:var(--t1);background:var(--s1);}
 /* ── Unified menu material (Apple iOS context-menu look, per theme) ──
@@ -1757,9 +1757,9 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 
 /* Section label */
 .sb-label{
-  font-size:10px;font-weight:700;
+  font-size:11.5px;font-weight:700;
   letter-spacing:.09em;text-transform:uppercase;
-  color:var(--t4);
+  color:var(--t3);
   padding:10px 11px 4px;
 }
 
@@ -1793,7 +1793,7 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
   .hist-acts,.proj-acts{opacity:1;}
 }
 .hist-act{
-  width:24px;height:24px;border-radius:50%;border:none;background:none;
+  width:32px;height:32px;border-radius:50%;border:none;background:none;
   color:var(--t3);display:flex;align-items:center;justify-content:center;
   transition:color var(--t-fast) var(--ease);flex-shrink:0;
 }
@@ -5154,7 +5154,7 @@ body.light .msg-inbox{background:rgba(255,255,255,.6);}
 /* Action row under an incoming message: copy · read-aloud · Atwe AI */
 .msg-acts{display:none;align-items:center;gap:5px;padding:6px 11px 2px;}
 .msg-col.show-time .msg-acts{display:flex;} /* only after the message is tapped */
-.msg-act{background:none;border:none;outline:none;cursor:pointer;padding:0;width:16px;height:16px;display:flex;align-items:center;justify-content:center;color:var(--t3);-webkit-tap-highlight-color:transparent;transition:color var(--t-fast) var(--ease);}
+.msg-act{background:none;border:none;outline:none;cursor:pointer;padding:0;width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:var(--t3);-webkit-tap-highlight-color:transparent;transition:color var(--t-fast) var(--ease);}
 .msg-act:focus,.msg-act:focus-visible{background:none;outline:none;}
 @media(hover:hover){.msg-act:hover{color:var(--t1);}}
 .msg-act:active{color:#fff;background:none;} /* just lightens — no grey box */
@@ -6577,6 +6577,7 @@ body.light .order-success{background:rgba(255,255,255,.82);}
 .story-cell.muted{opacity:.5;}
 .story-ring.add{background:var(--s2);}
 .story-add{position:absolute;right:-1px;bottom:-1px;width:20px;height:20px;border-radius:50%;background:var(--accent);color:var(--accent-tint);display:grid;place-items:center;font-size:15px;font-weight:700;border:2px solid var(--bg);}
+.story-add::after{content:"";position:absolute;inset:-7px;border-radius:50%;}
 .story-name{font-size:11.5px;color:var(--t2);max-width:66px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 /* Home stories rail (blueprint §Home): a 72px row, 56px avatars, a 2px BLUE ring on
    unseen/active + no ring once viewed, the own slot with a plus badge. Rides on top of
@@ -8161,7 +8162,7 @@ body.reduce-motion .live-gift-float{animation:none;opacity:0;}
 .gif-cell img{width:100%;display:block;}
 /* Inline "Who to follow" feed module — X-style vertical rows */
 .ac-sg{padding:8px 0 6px;margin:0;}
-.ac-wtf-x{background:none;border:none;color:var(--t3);cursor:pointer;width:28px;height:28px;display:flex;align-items:center;justify-content:center;}
+.ac-wtf-x{background:none;border:none;color:var(--t3);cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;}
 .ac-wtf-x svg{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none;}
 .ac-sg-head{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 6px;font-size:19px;font-weight:800;color:var(--t1);}
 .ac-sg-row{display:flex;align-items:center;gap:12px;padding:11px 16px;cursor:pointer;transition:background var(--t-fast) var(--ease);}
@@ -8183,7 +8184,7 @@ body.reduce-motion .live-gift-float{animation:none;opacity:0;}
 @media(hover:hover){.ac-sgc:hover{background:var(--s3);}}
 .ac-sgc-cover{height:72px;background:var(--s2);background-size:cover;background-position:center;}
 /* Per-card "not interested" ✕ (top-right of a who-to-follow card) */
-.ac-sgc-x{position:absolute;top:7px;right:7px;z-index:2;width:24px;height:24px;border:none;border-radius:50%;background:rgba(0,0,0,.5);display:grid;place-items:center;cursor:pointer;padding:0;}
+.ac-sgc-x{position:absolute;top:5px;right:5px;z-index:2;width:32px;height:32px;border:none;border-radius:50%;background:rgba(0,0,0,.5);display:grid;place-items:center;cursor:pointer;padding:0;}
 .ac-sgc-x svg{width:13px;height:13px;fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round;}
 .ac-sgc-x:active{transform:scale(.9);}
 .ac-sgc-cover[data-grad="0"]{background-image:linear-gradient(135deg,var(--accent),var(--s4));}
@@ -19917,7 +19918,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1688'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1689'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -23572,7 +23573,15 @@ async function sendMessage() {
       signal: controller.signal,
     }).finally(() => clearTimeout(timeout));
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      // Keep the server's own words — it says WHY (e.g. the assistant is not
+      // configured); a bare status leaves the mapping below guessing.
+      let serverMsg = '';
+      try { serverMsg = (await res.json()).error || ''; } catch (e2) {}
+      const httpErr = new Error(serverMsg || `HTTP ${res.status}`);
+      httpErr.status = res.status;
+      throw httpErr;
+    }
 
     const data = await res.json();
     if (data.error) throw new Error(data.error);
@@ -23592,7 +23601,11 @@ async function sendMessage() {
       errMsg = 'Authentication error. The API key on the server may need to be updated. Please contact the site admin.';
     } else if (err.message.includes('429')) {
       errMsg = 'Too many requests. Please wait a moment and try again.';
-    } else if (err.message.includes('500') || err.message.includes('502') || err.message.includes('503')) {
+    } else if (err.status === 503 || err.message.includes('503')) {
+      // The assistant is off or unconfigured — a standing state, so telling
+      // someone to "try again in a moment" would simply be untrue.
+      errMsg = 'Atwe AI is not available right now.';
+    } else if (err.status >= 500 || err.message.includes('500') || err.message.includes('502')) {
       errMsg = 'The server encountered an error. Please try again in a moment.';
     }
     renderStream(aiNode, errMsg);
@@ -23613,12 +23626,17 @@ function showMessages() {
 }
 
 function appendBubble(role, content, streaming, imageUrl) {
+  /* A live reply calls this with 'ai', but history is SAVED in the Anthropic shape
+     ('assistant') and replayed by loadChat. Without this, reopening any past chat
+     rendered the assistant's answer as the USER's: their name on it, raw **markdown**,
+     none of the .bubble.ai styling, and no copy/regenerate/feedback row. */
+  if (role === 'assistant') role = 'ai';
   const wrap = document.getElementById('messages');
 
   const msgEl = document.createElement('div');
   msgEl.className = `msg ${role}`;
 
-  const senderLabel = role === 'ai' ? 'Atwe' : (S.user?.name || 'You');
+  const senderLabel = role === 'ai' ? 'Atwe AI' : (S.user?.name || 'You');
 
   let bubbleContent;
   if (streaming) {
@@ -23679,15 +23697,37 @@ function renderMarkdown(text) {
   html = html.replace(/^## (.+)$/gm,  '<h3>$1</h3>');
   /* horizontal rule -> thin wide line */
   html = html.replace(/^[ \t]*-{3,}[ \t]*$/gm, '<hr>');
-  /* unordered lists */
-  html = html.replace(/^[*\-] (.+)$/gm, '<li>$1</li>');
-  html = html.replace(/(<li>[\s\S]+?<\/li>)(?!\s*<li>)/g, '<ul>$1</ul>');
-  /* numbered lists */
-  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+  /* Lists — built line by line into ONE block per run, because the old pair of
+     regexes had two real faults: a numbered list never got an <ol> wrapper at all
+     (so "1. 2. 3." rendered as unnumbered items), and the newline BETWEEN items
+     survived to the \n -> <br> pass below, dropping a stray <br> between every
+     bullet. Grouping here means a finished list contains no newlines of its own. */
+  {
+    const lines = html.split('\n');
+    const out = [];
+    let items = null, mode = null;
+    const flush = () => { if (items) { out.push('<' + mode + '>' + items.join('') + '</' + mode + '>'); items = null; mode = null; } };
+    for (const line of lines) {
+      const u = line.match(/^[*\-] (.+)$/);
+      const o = u ? null : line.match(/^\d+\. (.+)$/);
+      const want = u ? 'ul' : (o ? 'ol' : null);
+      if (!want) { flush(); out.push(line); continue; }
+      if (mode && mode !== want) flush();
+      mode = want; items = items || [];
+      items.push('<li>' + (u ? u[1] : o[1]) + '</li>');
+    }
+    flush();
+    html = out.join('\n');
+  }
   /* paragraphs */
   html = html.replace(/\n\n/g, '</p><p>');
   html = html.replace(/\n/g, '<br>');
   if (!html.startsWith('<')) html = `<p>${html}</p>`;
+  /* A block element inside <p> is invalid — the browser auto-closes the paragraph
+     and the stray empty <p> shows up as unexplained vertical space. Unwrap them. */
+  html = html.replace(/<p>\s*(<(?:ul|ol|pre|h3|hr)\b)/g, '$1');
+  html = html.replace(/(<\/(?:ul|ol|pre|h3)>|<hr>)\s*<\/p>/g, '$1');
+  html = html.replace(/<p>\s*<\/p>/g, '');
   return html;
 }
 
@@ -23829,7 +23869,15 @@ async function sendMessageFromHistory(chat) {
       method:'POST', headers, signal: ctrl.signal,
       body: JSON.stringify({ messages: chat.messages, plan: S.plan }),
     }).finally(() => clearTimeout(timeout));
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      // Keep the server's own words — it says WHY (e.g. the assistant is not
+      // configured); a bare status leaves the mapping below guessing.
+      let serverMsg = '';
+      try { serverMsg = (await res.json()).error || ''; } catch (e2) {}
+      const httpErr = new Error(serverMsg || `HTTP ${res.status}`);
+      httpErr.status = res.status;
+      throw httpErr;
+    }
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     await typewriterEffect(aiNode, data.content);
@@ -23842,6 +23890,8 @@ async function sendMessageFromHistory(chat) {
       errMsg = 'Unable to reach the Atwe server. Please check your internet connection and try again.';
     } else if (e.message.includes('429')) {
       errMsg = 'Too many requests. Please wait a moment and try again.';
+    } else if (e.status === 503 || e.message.includes('503')) {
+      errMsg = 'Atwe AI is not available right now.';
     }
     renderStream(aiNode, errMsg);
   }
@@ -35138,7 +35188,7 @@ function acPostCard(p) {
     ${promoted}${rb}
     ${p.pinned ? '<div class="ac-pinned-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6M10 4l-.7 6.5-2.3 2v1.5h10V12.5l-2.3-2L14 4"/><path d="M12 16v4.5"/></svg>Pinned by author</div>' : ''}
     <div class="ac-post-top">
-      <div class="ac-post-av" onclick="event.stopPropagation();acGoProfile('${h}')">${acAvatarHtml(p.author.name, p.author.avatar, 'user-avatar', acIsBiz(p.author))}</div>
+      <div class="ac-post-av" role="button" tabindex="0" aria-label="${jsAttr(p.author.name || 'Profile')}" onclick="event.stopPropagation();acGoProfile('${h}')">${acAvatarHtml(p.author.name, p.author.avatar, 'user-avatar', acIsBiz(p.author))}</div>
       <div class="ac-post-idcol">
         <div class="ac-post-head">
           <span class="ac-post-nameline"><span class="ac-post-name" onclick="event.stopPropagation();acGoProfile('${h}')">${escHtml(p.author.name)}${vbadge(acIsVerified(p.author))}</span>${(p.coAuthors && p.coAuthors.length) ? `<span class="ac-coauthor"> & ${p.coAuthors.map(c => `<b onclick="event.stopPropagation();acGoProfile(${jsAttr(c.username || '')})">${escHtml(c.name.split(' ')[0])}</b>`).join(', ')}</span>` : ''}${acAffBadge(p.author)}</span>
