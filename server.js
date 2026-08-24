@@ -43309,6 +43309,10 @@ app.post('/api/chat', auth.requireAuth, rateLimit(30, 60000, 'chat'), requireFea
     }
   }
 
+  /* Every other AI route says plainly when the assistant isn't configured; this
+     one — the flagship — fell through to a generic 500 ("try again in a moment"),
+     which is untrue: it is a standing state, not a blip. */
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not available right now.' });
   try {
     const maxTokens = plan === 'pro' ? 4096 : 1500;
     const msg = await anthropic.messages.create({
