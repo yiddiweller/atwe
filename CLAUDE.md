@@ -4973,6 +4973,21 @@ at signup AND at username-change. **There is no build step, so the two copies
 cannot literally share a module; `test/routes.test.js` fails if they ever drift.**
 Add a route → add the word in BOTH places, or the test tells you.
 
+**The address bar is DERIVED, not written by hand.** Rather than 45 openers each
+remembering to set a URL, **`acSyncPath()`** works out what the address should be
+from what is actually on screen and writes that. It runs from the three
+chokepoints — `showOverlay`, `closeOverlay` and `appTab` — so opening a panel,
+closing it and switching worlds all keep the URL honest without any of them
+knowing about routing. Order of precedence: the top-most open `.overlay` that owns
+a route (via `ROUTE_BY_VIEW`, the reverse of each route's `view:` key) → a
+self-routed screen (`SELF_ROUTED_SCREENS`: profile / post / circle / thread, which
+write a richer path of their own and must not be stamped on) → the two tab+scope
+destinations derived from live state (`/jobs` when the search scope is jobs,
+`/collections` when the feed scope is bookmarks) → the world's own path
+(`WORLD_PATH`). It is rAF-debounced and self-correcting: if a surface opens by a
+path nobody anticipated, the next sync still lands on the right address. **A new
+destination needs one line in `APP_ROUTES` with its `view:` id — nothing else.**
+
 **The router itself:** `parseDeepLink()` reads `location.pathname` into a route
 object; `openDeepLink()` turns that into the surface, auth-gating anything marked
 `auth:true`. A path we don't own returns null and the app falls through to its
