@@ -53,6 +53,22 @@
     display:flex;flex-direction:column;
     padding:calc(18px + env(safe-area-inset-top)) 14px 14px;
   }
+  /* Palette rows carry their own colour. They are <button>s, and .srt sets no
+     color of its own — so inside a button it inherited the browser's default
+     dark button text and the results were all but invisible on black. */
+  .pal-row{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;
+    background:none;border:none;text-align:start;cursor:pointer;font-family:inherit;color:var(--t1);
+    padding:9px 10px;border-radius:10px;transition:background .12s ease;}
+  .pal-row:hover,.pal-row:focus-visible{background:var(--s2);}
+  .pal-row .srt{color:var(--t1);}
+  .pal-row .srs{color:var(--t3);}
+  .pal-sec{font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    color:var(--t3);margin:10px 0 4px;padding:0 10px;}
+  /* Flash the panel the palette sent you to, so you can see where you landed. */
+  .pal-flash{animation:palFlash 1.5s ease-out;}
+  @keyframes palFlash{0%,100%{background:transparent;}
+    15%{background:rgba(var(--accent-rgb,0,136,255),.22);}
+    60%{background:rgba(var(--accent-rgb,0,136,255),.10);}}
   nav#tabs::-webkit-scrollbar{width:7px;}
   nav#tabs::-webkit-scrollbar-thumb{background:var(--s3);border-radius:9px;}
   nav#tabs::-webkit-scrollbar-track{background:transparent;}
@@ -6239,34 +6255,343 @@ function openAttention(){
 /* ═══ Search everything (Ctrl/Cmd + K) ═══
    One box that finds a person, a post or a listing without knowing which tab
    they live in. */
+/* Where each section lives in the sidebar — used as the subtitle in search. */
+const ADMIN_GROUP = {"overview":"Overview","revenue":"Money","finance":"Money","ads":"Money","affiliations":"Money","refunds":"Money","cards":"Money","fraud":"Money","chargebacks":"Money","revshare":"Money","users":"People","staff":"People","approvals":"People","usernames":"People","moderate":"Trust & safety","reports":"Trust & safety","investigate":"Trust & safety","orders":"Trust & safety","adjust":"Trust & safety","payouts":"Trust & safety","risk":"Trust & safety","retention":"Trust & safety","curate":"Trust & safety","catalog":"Trust & safety","disputes":"Trust & safety","appeals":"Trust & safety","support":"Trust & safety","safety":"Trust & safety","copyright":"Trust & safety","impersonation":"Trust & safety","modqa":"Trust & safety","authenticate":"Trust & safety","datareq":"Trust & safety","posts":"Content","announcements":"Content","broadcasts":"Content","circles":"Content","feed":"Content","activity":"Insights","traffic":"Insights","growth":"Insights","demand":"Insights","reports2":"Insights","churn":"Insights","campaigns":"Insights","experiments":"Insights","numbers":"Insights","groups":"Insights","audit":"Insights","features":"Product","featurecontrols":"Product","vault":"Private","alerts":"System","developers":"System","apilog":"System","incidents":"System","wording":"System","places":"System","emailbrand":"System","aistudio":"System","ops":"System","setup":"System","site":"System","storage":"System","webinars":"System","appreviews":"System","advances":"System","cluster":"System"};
+/* The words a person would actually type for each section. Without these the
+   palette only matched a section when your words appeared literally in its
+   NAME — so "gift card" found nothing, because the tab is called "Cards". */
+const ADMIN_TAB_KW = {"overview":"dashboard home summary today at a glance",
+  "revenue":"money income earnings what we made payments sales",
+  "finance":"float ledger custodial balances reconcile cash held",
+  "ads":"advertising sponsored promoted campaigns",
+  "affiliations":"badges organisation organization org logo affiliation",
+  "refunds":"refund money back reimburse give back",
+  "cards":"gift card giftcard voucher atwe card debit issue freeze liability",
+  "fraud":"fraud rules suspicious scam rule engine",
+  "chargebacks":"chargeback bank reversal took the money back",
+  "revshare":"creator share revenue split paying creators",
+  "users":"members accounts people suspend ban delete lookup find someone",
+  "staff":"team admins permissions access roles who can see",
+  "approvals":"approve verification pending queue requests",
+  "usernames":"handles reserved names premium lock claim assign",
+  "moderate":"ai scan content scan sweep inappropriate",
+  "reports":"flags reported abuse complaints queue",
+  "investigate":"search content lookup find posts listings people",
+  "orders":"purchases transactions buyer seller",
+  "adjust":"wallet adjustment credit debit correct a balance",
+  "payouts":"cash out bank withdrawal payout review",
+  "risk":"suspicious risky velocity flags",
+  "retention":"keep users returning",
+  "curate":"featured shelves trending picks editorial",
+  "catalog":"listings products shop items moderation",
+  "disputes":"escrow dispute buyer seller conflict resolve",
+  "appeals":"contest a suspension ban appeal",
+  "support":"help tickets customer support email everyone broadcast",
+  "safety":"blocked words networks ban evasion enforcement",
+  "copyright":"dmca takedown infringement claim ip",
+  "impersonation":"fake account pretending identity",
+  "modqa":"moderator quality second look reviewing the reviewers",
+  "authenticate":"item authentication genuine real verify",
+  "datareq":"gdpr ccpa data request export delete legal",
+  "posts":"content feed posts remove a post",
+  "announcements":"announcement notice post as atwe banner",
+  "broadcasts":"scheduled send later broadcast message",
+  "circles":"industries sectors",
+  "feed":"ranking algorithm weights signals for you tuning",
+  "activity":"everything that happened firehose events live",
+  "traffic":"visitors analytics page views countries cities",
+  "growth":"signups dau wau mau active users stickiness",
+  "demand":"searches with no results waiting list what people want",
+  "reports2":"report builder custom report csv export",
+  "churn":"leaving drifting away lapsed",
+  "campaigns":"win back re-engagement marketing",
+  "experiments":"ab test split test variant",
+  "numbers":"metrics stats kpi period",
+  "groups":"channels group chats",
+  "audit":"audit log who did what history accountability",
+  "features":"feature list what is built roadmap catalogue",
+  "featurecontrols":"feature controls toggles",
+  "vault":"secrets private keys",
+  "alerts":"alerts watch surprises notify me",
+  "developers":"api keys developer platform apps",
+  "apilog":"api log endpoints slow requests",
+  "incidents":"status page incident outage downtime",
+  "wording":"copy text change a word labels wording",
+  "places":"countries regions where available geography",
+  "emailbrand":"email design template branding",
+  "aistudio":"ai studio prompts model",
+  "ops":"operations errors crashes deploys identity checks backups",
+  "setup":"setup getting started configure",
+  "site":"site settings maintenance closed feature switches demo mode kill switch access code",
+  "storage":"media storage files images",
+  "webinars":"webinars live sessions",
+  "appreviews":"app store reviews ratings",
+  "advances":"cash advance funding merchant advance",
+  "cluster":"servers machines infrastructure"};
+/* Panels inside the sections, read out of the dashboard's own headings. */
+const ADMIN_PANELS = [
+{ tab: "adjust", l: "Adjust a wallet", kw: "credit debit correct balance money adjustment" },
+  { tab: "ads", l: "Sponsored listings", kw: "seller ads product ads campaigns" },
+  { tab: "alerts", l: "Watching for surprises" },
+  { tab: "announcements", l: "All announcements" },
+  { tab: "announcements", l: "New announcement" },
+  { tab: "announcements", l: "Post to the feed as Atwe" },
+  { tab: "apilog", l: "Most recent" },
+  { tab: "apilog", l: "Slowest endpoints" },
+  { tab: "apilog", l: "What the API did" },
+  { tab: "audit", l: "Admin audit log", kw: "who did what history" },
+  { tab: "broadcasts", l: "Write it now, send it when you mean to" },
+  { tab: "campaigns", l: "Win people back" },
+  { tab: "cards", l: "Atwe Card — coming soon", kw: "debit card waiting list" },
+  { tab: "cards", l: "Issue a gift card", kw: "gift card voucher comp promo give credit" },
+  { tab: "catalog", l: "Categories" },
+  { tab: "chargebacks", l: "When a bank takes the money back" },
+  { tab: "churn", l: "Who is drifting away" },
+  { tab: "circles", l: "Industry circles" },
+  { tab: "curate", l: "Curated shelves", kw: "featured picks editorial" },
+  { tab: "curate", l: "Trending topics", kw: "hashtags trending curate" },
+  { tab: "datareq", l: "Log a request", kw: "gdpr data request" },
+  { tab: "demand", l: "Searches that found nothing" },
+  { tab: "demand", l: "Waiting lists" },
+  { tab: "developers", l: "Keys", kw: "api keys tokens" },
+  { tab: "developers", l: "The developer platform" },
+  { tab: "emailbrand", l: "How your emails look" },
+  { tab: "experiments", l: "Show two versions, keep the winner" },
+  { tab: "finance", l: "Largest balances", kw: "biggest wallets whales" },
+  { tab: "finance", l: "Recent ledger activity", kw: "wallet transactions ledger" },
+  { tab: "fraud", l: "Add a rule" },
+  { tab: "fraud", l: "Live rules" },
+  { tab: "fraud", l: "Recently fired" },
+  { tab: "fraud", l: "Try it against a real account", kw: "test a fraud rule" },
+  { tab: "fraud", l: "Your own fraud rules" },
+  { tab: "groups", l: "Groups & channels" },
+  { tab: "growth", l: "New signups · last 30 days" },
+  { tab: "incidents", l: "Open an incident", kw: "outage status downtime post" },
+  { tab: "incidents", l: "Your public status page" },
+  { tab: "investigate", l: "Blocked words & links", kw: "banned words filter spam links" },
+  { tab: "investigate", l: "Investigate" },
+  { tab: "moderate", l: "AI content scan" },
+  { tab: "modqa", l: "Already second-reviewed" },
+  { tab: "modqa", l: "How the team is deciding" },
+  { tab: "modqa", l: "Second look" },
+  { tab: "numbers", l: "Atwe AI" },
+  { tab: "numbers", l: "From signing up to selling" },
+  { tab: "numbers", l: "Getting started" },
+  { tab: "numbers", l: "Invites" },
+  { tab: "numbers", l: "Money that has stopped moving" },
+  { tab: "numbers", l: "Money" },
+  { tab: "numbers", l: "Over what period?" },
+  { tab: "numbers", l: "Take it with you" },
+  { tab: "numbers", l: "What each seller earned" },
+  { tab: "numbers", l: "What people use" },
+  { tab: "ops", l: "Audit trail" },
+  { tab: "ops", l: "Identity checks", kw: "kyc id verification passport" },
+  { tab: "ops", l: "Is the data safe?", kw: "backups restore disaster recovery" },
+  { tab: "ops", l: "Recent errors", kw: "crashes exceptions logs" },
+  { tab: "ops", l: "Staff signed in", kw: "sessions who is logged in" },
+  { tab: "ops", l: "What shipped, and when" },
+  { tab: "payouts", l: "Payout review" },
+  { tab: "places", l: "Where Atwe is available" },
+  { tab: "places", l: "Where your visitors come from" },
+  { tab: "posts", l: "Posts" },
+  { tab: "retention", l: "Retention" },
+  { tab: "revenue", l: "By source" },
+  { tab: "revenue", l: "Recent payments", kw: "money in transactions" },
+  { tab: "revshare", l: "Paying the people who bring the audience" },
+  { tab: "revshare", l: "Who would be paid", kw: "creator payouts share" },
+  { tab: "risk", l: "Suspicious activity" },
+  { tab: "safety", l: "Blocked networks", kw: "ip ban vpn block" },
+  { tab: "safety", l: "Enforcement report", kw: "actions taken moderation stats" },
+  { tab: "safety", l: "Possible ban evasion", kw: "alt accounts evading" },
+  { tab: "safety", l: "Send a notification", kw: "message users notify" },
+  { tab: "safety", l: "Terms & privacy" },
+  { tab: "setup", l: "Setup" },
+  { tab: "site", l: "Access code", kw: "password to get in" },
+  { tab: "site", l: "Background jobs", kw: "flushers cron scheduled health stuck" },
+  { tab: "site", l: "Blocked links" },
+  { tab: "site", l: "Crash reports", kw: "errors exceptions stack traces" },
+  { tab: "site", l: "Demo mode", kw: "sample content fake data showcase" },
+  { tab: "site", l: "Feature switches", kw: "kill switch turn off feature flag disable signups posting" },
+  { tab: "site", l: "Legal details" },
+  { tab: "site", l: "Let certain people in" },
+  { tab: "site", l: "Platform fee" },
+  { tab: "site", l: "Promo codes" },
+  { tab: "site", l: "Re-enter the code" },
+  { tab: "site", l: "Roll out gradually" },
+  { tab: "site", l: "Site access", kw: "maintenance closed lock the site" },
+  { tab: "site", l: "What the closed sign says" },
+  { tab: "site", l: "What's new" },
+  { tab: "site", l: "Who can open this dashboard" },
+  { tab: "staff", l: "Add a staff member", kw: "grant access permission invite admin" },
+  { tab: "staff", l: "Atwe system accounts" },
+  { tab: "staff", l: "Current staff", kw: "who has access team list" },
+  { tab: "support", l: "Broadcast" },
+  { tab: "support", l: "Help centre" },
+  { tab: "traffic", l: "How the locations were worked out" },
+  { tab: "traffic", l: "Top cities" },
+  { tab: "traffic", l: "Top countries", kw: "geography visitors where" },
+  { tab: "usernames", l: "Lock names by hand", kw: "reserve a name block a username" },
+  { tab: "usernames", l: "Reserve premium names", kw: "seed lock usernames handles bulk" },
+  { tab: "usernames", l: "Reserved names", kw: "locked handles inventory price sell" },
+  { tab: "wording", l: "Change a word, anywhere in Atwe", kw: "copy wording rename label text" },
+  { tab: "wording", l: "Change one" },
+];
+/* Things staff DO that are not a heading anywhere. */
+const ADMIN_ACTIONS = [
+  { tab: "users", l: "Suspend an account", kw: "suspend temporary block punish" },
+  { tab: "users", l: "Ban an account", kw: "ban permanent remove kick out" },
+  { tab: "users", l: "Reinstate an account", kw: "unban restore lift undo suspension" },
+  { tab: "users", l: "Freeze a wallet", kw: "fraud hold stop payments block money" },
+  { tab: "users", l: "View as a user", kw: "impersonate see what they see support" },
+  { tab: "users", l: "Delete an account", kw: "remove erase wipe" },
+  { tab: "refunds", l: "Approve a refund", kw: "give money back approve" },
+  { tab: "disputes", l: "Resolve a dispute", kw: "escrow release refund decide" },
+  { tab: "staff", l: "Give someone staff access", kw: "permission grant admin role" },
+  { tab: "usernames", l: "Give a handle to someone", kw: "assign premium username grant" },
+  { tab: "site", l: "Turn a feature off", kw: "kill switch disable stop signups posting" },
+  { tab: "site", l: "Close the site", kw: "maintenance lock down offline" },
+  { tab: "support", l: "Email everyone", kw: "broadcast announcement mass email" },
+  { tab: "cards", l: "Freeze a gift card", kw: "void stop scam card" },
+  { tab: "feed", l: "Tune the feed ranking", kw: "weights algorithm signals boost" },
+  { tab: "ads", l: "Review an ad", kw: "approve reject sponsored" },
+  { tab: "affiliations", l: "Review a badge", kw: "approve reject affiliation upload" },
+];
+
+/* ── Searching the dashboard itself ─────────────────────────────────────────
+   The palette could already find PEOPLE and posts, but it only matched a
+   SECTION when your words appeared literally in its name — so "gift card"
+   found nothing (the tab is called Cards), "freeze a wallet" found nothing at
+   all, and staff had to already know where a tool lived to reach it. It now
+   knows all 68 sections, the 105 panels inside them (read out of the
+   dashboard's own headings), and the things people do that are not a heading
+   anywhere. Held in the page, so it answers instantly and needs no server. */
+let _adminIdx = null;
+function adminIndex() {
+  if (_adminIdx) return _adminIdx;
+  const out = [], seen = new Set();
+  const add = (label, sub, kw, tab, find, isSection) => {
+    const key = (label + '|' + tab).toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ label, sub, tab, find: find || null, section: !!isSection,
+      hay: (label + ' ' + sub + ' ' + (kw || '')).toLowerCase(),
+      // A section's keywords are a deliberate statement of what it is FOR. A
+      // panel's title is just prose that happens to contain words. Kept apart so
+      // the two can be weighed differently below.
+      kws: String(kw || '').split(/[^a-z0-9]+/).filter(Boolean) });
+  };
+  Object.entries(NAV_TITLES || {}).forEach(([tab, title]) => {
+    if (!ADMIN_GROUP[tab]) return;                       // not in the sidebar
+    add(title, ADMIN_GROUP[tab], ADMIN_TAB_KW[tab], tab, null, true);
+  });
+  ADMIN_PANELS.forEach((p) => {
+    if (!NAV_TITLES[p.tab]) return;
+    add(p.l, NAV_TITLES[p.tab], p.kw, p.tab, p.l);
+  });
+  ADMIN_ACTIONS.forEach((a) => add(a.l, NAV_TITLES[a.tab] || '', a.kw, a.tab));
+  _adminIdx = out;
+  return out;
+}
+/* Same ranking as the main app: an exact name beats a name that starts with
+   what you typed, beats a word inside it, beats a keyword. Two-letter queries
+   only match whole words, or "ad" finds every word containing those letters. */
+const ADMIN_FILLER = ['a', 'an', 'the', 'my', 'this', 'that', 'someone', 'somebody',
+  'people', 'for', 'to', 'of', 'on', 'in', 'and', 'how', 'do', 'i', 'can', 'where', 'is'];
+function adminFind(q, limit) {
+  q = String(q || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (q.length < 2) return [];
+  // People type sentences, not keywords: "ban someone", "how do I close the
+  // site". Drop the filler so the words that carry meaning are the ones matched
+  // — otherwise a single stray word fails the whole query.
+  let words = q.split(' ').filter(Boolean);
+  const carried = words.filter((w) => ADMIN_FILLER.indexOf(w) < 0);
+  if (carried.length) { words = carried; q = carried.join(' '); }   // …the NAME match uses them too
+  const short = q.length <= 2;
+  const hits = [];
+  for (const p of adminIndex()) {
+    // Never offer what they cannot open. Guarded: canSee reads ME, which does
+    // not exist until a staffer is signed in, and a throw here would take the
+    // whole palette down rather than simply showing nothing.
+    let allowed = false;
+    try { allowed = canSee(p.tab); } catch (e) { allowed = false; }
+    if (!allowed) continue;
+    const label = p.label.toLowerCase();
+    const toks = p.hay.split(/[^a-z0-9]+/).filter(Boolean);
+    let score = 0;
+    if (label === q) score = 100;
+    else if (label.startsWith(q)) score = 82;
+    else if (new RegExp('\\b' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(label)) score = 64;
+    // A section whose OWN keywords cover every word beats a panel that merely has
+    // the word somewhere in its title: typing "visitors" should open Traffic, not
+    // a countries panel that happens to say the word.
+    else if (p.section && words.every((w) => p.kws.indexOf(w) >= 0)) score = 66;
+    else if (words.every((w) => toks.indexOf(w) >= 0)) score = 50;
+    else if (!short && label.indexOf(q) >= 0) score = 48;
+    else if (!short && words.every((w) => p.hay.indexOf(w) >= 0)) score = 30;
+    else continue;
+    hits.push({ p, score: score - Math.min(9, label.length / 6) });
+  }
+  hits.sort((a, b) => b.score - a.score || a.p.label.length - b.p.label.length);
+  return hits.slice(0, limit || 8).map((h) => h.p);
+}
+/* Open a section and, when the result was a panel inside it, scroll to that
+   panel and flash it — otherwise you land on a long page none the wiser. */
+function palGo(tab, find) {
+  closeModal();
+  switchTab(tab);
+  if (!find) return;
+  setTimeout(() => {
+    const want = String(find).replace(/\s+/g, ' ').trim().toLowerCase();
+    const el = [...document.querySelectorAll('h3')]
+      .find((h) => (h.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase().indexOf(want) === 0);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('pal-flash');
+    setTimeout(() => el.classList.remove('pal-flash'), 1600);
+  }, 260);
+}
+
 function openPalette(){
   const c = document.getElementById('modalCard'); if (!c) return;
   c.innerHTML = `<h3 style="margin:0 0 6px;">Search everything</h3>
-    <div class="sub" style="margin-bottom:10px;">People, posts and listings — anywhere on Atwe.</div>
-    <input class="in" id="palQ" placeholder="Type a name, @handle, email or a few words…" oninput="palSearch(this.value)" style="width:100%;margin:0;"/>
-    <div id="palBox" style="margin-top:10px;max-height:50vh;overflow-y:auto;"></div>
+    <div class="sub" style="margin-bottom:10px;">Any tool in this dashboard, and any person, post or listing on Atwe.</div>
+    <input class="in" id="palQ" placeholder="A tool, a section, a name, a @handle, an email…" oninput="palSearch(this.value)" style="width:100%;margin:0;"/>
+    <div id="palPlaces" style="margin-top:10px;"></div>
+    <div id="palBox" style="margin-top:4px;max-height:44vh;overflow-y:auto;"></div>
     <div class="dur-row" style="margin-top:12px;"><button class="act" onclick="closeModal()">Close</button></div>`;
   document.getElementById('modal').classList.add('show');
   setTimeout(() => document.getElementById('palQ')?.focus(), 60);
 }
 let _palT = null;
-function palSearch(v){ clearTimeout(_palT); _palT = setTimeout(() => palRun(v.trim()), 250); }
+function palSearch(v){
+  // The dashboard's own tools are held in the page, so they answer on the
+  // keystroke — no waiting, no request. Content still needs the server, so that
+  // half stays debounced and arrives underneath.
+  palPlaces(v.trim());
+  clearTimeout(_palT); _palT = setTimeout(() => palRun(v.trim()), 250);
+}
+function palPlaces(q){
+  const box = document.getElementById('palPlaces'); if (!box) return;
+  const hits = adminFind(q, 7);
+  box.innerHTML = hits.length
+    ? '<div class="pal-sec">In this dashboard</div>' + hits.map(h => `
+      <button class="pal-row" onclick="palGo(${jstr(h.tab)}, ${jstr(h.find || '')})">
+        <div style="min-width:0;"><div class="srt">${esc(h.label)}</div><div class="srs">${esc(h.sub)}</div></div>
+        <span class="pill">${esc(h.section ? 'section' : h.find ? 'panel' : 'action')}</span>
+      </button>`).join('')
+    : '';
+}
 async function palRun(q){
   const box = document.getElementById('palBox'); if (!box) return;
   if (q.length < 2) { box.innerHTML = ''; return; }
   try {
     const { results } = await api('GET', '/api/admin/search-content?type=all&q=' + encodeURIComponent(q));
-    // Dashboard sections match by NAME too — "audit", "site", "growth"…
-    const ql = q.toLowerCase();
-    Object.entries(NAV_TITLES || {}).forEach(([v, title]) => {
-      if (title.toLowerCase().includes(ql) && canSee(v)) results.unshift({ kind: 'section', id: v, label: title, sub: 'Open this section' });
-    });
-    box.innerHTML = results.length ? results.map(r => `
-      <button class="site-row" style="width:100%;background:none;border:none;text-align:start;cursor:pointer;"
-              onclick="palOpen(${jstr(r.kind)}, ${jstr(r.id)}, ${jstr(r.username || '')})">
+    box.innerHTML = results.length ? '<div class="pal-sec">On Atwe</div>' + results.map(r => `
+      <button class="pal-row" onclick="palOpen(${jstr(r.kind)}, ${jstr(r.id)}, ${jstr(r.username || '')})">
         <div style="min-width:0;"><div class="srt">${esc(r.label)}</div><div class="srs">${esc(r.sub || r.kind)}</div></div>
         <span class="pill">${esc(r.kind)}</span>
-      </button>`).join('') : '<div class="empty">Nothing found.</div>';
+      </button>`).join('')
+      : (document.getElementById('palPlaces')?.innerHTML ? '' : '<div class="empty">Nothing found.</div>');
   } catch (e){ box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
 }
 function palOpen(kind, id){
