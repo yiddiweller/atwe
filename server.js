@@ -18550,9 +18550,15 @@ function muteExpirySql(days) { const d = MUTE_DAYS.includes(Number(days)) ? Numb
 // (they still appear as locked teasers on the creator's own profile).
 // A reach-limited account's posts still reach the people who follow it — they
 // just stop being pushed at strangers through For You.
-const REACH_FILTER = ` AND (p.user_id = $1 OR NOT EXISTS (
-  SELECT 1 FROM users ru WHERE ru.id = p.user_id AND ru.reach_limited = true
-) OR EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $1 AND f.following_id = p.user_id))`;
+/* Reduced-reach authors are hidden from For You unless you follow them.
+   Written as NOT IN over a whole set rather than a correlated NOT EXISTS: the
+   correlated form asks the database about EVERY candidate post's author one at
+   a time (8,695 index probes on a single feed load, ~26ms), while this form is
+   evaluated once into a hash — and almost nobody is reach-limited, so the set is
+   tiny and the partial index on users covers it. Same rule, same answer. */
+const REACH_FILTER = ` AND (p.user_id = $1
+  OR p.user_id NOT IN (SELECT id FROM users WHERE reach_limited)
+  OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))`;
 const SUBONLY_FEED_FILTER = ` AND (p.subscribers_only = false OR p.user_id = $1
   OR EXISTS(SELECT 1 FROM creator_subs cs LEFT JOIN creator_tiers ct ON ct.id = cs.tier_id WHERE cs.creator_id = p.user_id AND cs.subscriber_id = $1 AND cs.status = 'active' AND (cs.period_end IS NULL OR cs.period_end > now()) AND COALESCE(ct.level, 0) >= p.min_tier_level))`;
 // Pull #hashtags out of post text (lowercased, deduped, capped).
@@ -20099,10 +20105,23 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     // must not carry a parameter its SQL never mentions, or Postgres rejects the
     // whole statement. (It did, on the first run of this: Following 500'd for any
     // account whose network is quiet enough to fall through to the last attempt.)
+    // Two stages, on purpose. Ranking has to consider thousands of candidates;
+    // everything a post CARRIES — its counts, its reactions, whether you liked it,
+    // its note, its tagged products — is only wanted for the two dozen that win.
+    // Asked as one query the database ends up doing that per-post work far more
+    // often than twenty-four times, and the feed cost ~300ms. Choosing the ids
+    // first and then fetching just those rows costs the sum of the two, which is
+    // less than half. array_position keeps the ranked order through stage two.
+    const pickIds = (w) => `SELECT p.id FROM posts p JOIN users u ON u.id = p.user_id ${w}${orderBy}`;
     let rows = [];
     for (const win of feedWindows) {
       const windowed = win ? `${where} AND p.created_at > now() - interval '${win}'` : where;
-      ({ rows } = await db.query((following ? followCte : '') + POSTS_SELECT + windowed + orderBy, params));
+      const picked = await db.query((following ? followCte : '') + pickIds(windowed), params);
+      const ids = picked.rows.map((r) => r.id);
+      rows = ids.length
+        ? (await db.query(`${POSTS_SELECT} WHERE p.id = ANY($2::int[]) ORDER BY array_position($2::int[], p.id)`,
+            [req.user.id, ids])).rows
+        : [];
       if (rows.length >= 24 || !win) break;             // full page, or already unbounded
     }
     // Refresh fallback (For You, first page): when the ranked + already-seen-
