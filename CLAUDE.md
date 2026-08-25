@@ -4988,6 +4988,30 @@ destinations derived from live state (`/jobs` when the search scope is jobs,
 path nobody anticipated, the next sync still lands on the right address. **A new
 destination needs one line in `APP_ROUTES` with its `view:` id — nothing else.**
 
+**Back and Forward are real.** `acSetPath(path, {push})` writes the address;
+`push:true` mints an actual history entry. Only a genuine move forward pushes —
+opening a route-owning panel (`showOverlay`) or changing world (`appTab`). A path
+that is merely being TIDIED (an old link canonicalising, a post upgrading to
+`/username/post/id`) replaces, so it never leaves a junk entry between two real
+destinations. **Closing a panel walks BACK** rather than pushing again, so four
+open/close rounds add one entry instead of eight and Forward re-opens the panel —
+the way a modal behaves on any real site. `_histDepth` counts the entries we
+pushed: at 0 (you arrived on a deep link) closing rewrites the address in place
+instead of walking you out of Atwe entirely.
+
+`popstate` keeps the careful behaviour first: **`_navDismissModal()`** mirrors steps
+1–3 and 5 of `appGoBack` (open menu → confirm dialog → live call → mobile drawer) and
+returns true if Back should CANCEL that rather than move the page — the address bar
+stays put and the entry is pushed back. Only when nothing modal is open does it
+become a real page move: **`_navApplyUrl()`** honours the URL the browser restored,
+closing any route-owning panel that belongs to a *different* route first, so walking
+back out of `/wallet` actually leaves the wallet. `_histRestoring` is set across the
+restore so nothing it triggers pushes a fresh entry (that would make Back mint
+history forever and never let you out) — **deliberately NOT named `_navRestoring`,
+which is the screen-stack restore flag; shadowing it would be a trap.** The
+standalone-PWA press-again-to-exit guard is preserved, now gated on there being
+nothing left in history rather than on a sentinel.
+
 **Nothing that used to work breaks.** Every old address still resolves and then
 quietly rewrites itself to the canonical one, so there is never a second URL for
 one page: `/beam`→`/messages`, `/engine`→`/search`, `/home`→`/`, `/profile`→`/me`,
