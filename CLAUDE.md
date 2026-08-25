@@ -5233,6 +5233,26 @@ today.
 
 ## Gotchas for AI assistants
 
+- **A photo must reserve its box BEFORE it loads, and `width:auto` reserves nothing.**
+  Feed photos had no width, height or aspect-ratio, so the browser could not know how
+  tall a picture would be until the picture arrived — and they load lazily as you
+  scroll, so each one arrived mid-scroll and snapped the page open. Posts now carry
+  `image_w`/`image_h`, measured once from the image header by `ensurePostImageSize` in
+  `mapPost` (which sees the stored bytes BEFORE `mediaRef` swaps in a signed URL) and
+  remembered — the same `imageSizeFromDataUrl` machinery chat messages have always
+  used. `_postImgDims` emits them, and `_postImgClass` decides wide-vs-narrow at RENDER
+  time rather than on load, so the box is never rebuilt. **Portraits need an explicit
+  width too**: they lay out `width:auto`, and an automatic width cannot resolve a size
+  from an aspect-ratio alone — those boxes measured 0×0 until the image arrived. The
+  proof is `boxstable.js`, which watches each photo from render to loaded and asserts
+  the box never changes; a CLS score is NOT a usable check here, because a synthetic
+  wheel does not mark shifts as user-initiated and the scroll itself gets counted.
+- **`animation-fill-mode: both` pins an element to its own compositor layer forever.**
+  `.ac-post,.ac-item,.ac-postfocus` had `animation:fadeIn .26s var(--ease) both`, and
+  `fadeIn`'s keyframes carry a transform — so every post card and every list row in the
+  app stayed promoted for the whole session, hundreds of them, and scrolling felt like
+  the content was dragging a beat behind. `backwards` still applies the opening frame
+  before the animation starts (no flash) but lets go when it ends. Don't put it back.
 - **A hover-opened `position:fixed` popover MUST close on mouseout AND on scroll.**
   The post reaction bar (`acReactBarOpen`, `.ac-react-bar`, `position:fixed;
   z-index:4000`) opened on desktop hover and had nothing that closed it: `mouseout`

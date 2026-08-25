@@ -4664,8 +4664,11 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
    while it downloads — a quiet panel rather than a hole in the conversation. The
    picture covers it exactly once it arrives, because the box was computed from
    its own proportions. */
-.msg-photo{display:block;max-width:280px;max-height:360px;width:auto;height:auto;
-  object-fit:contain;border-radius:20px;cursor:pointer;background:var(--s2);}
+/* Chat photos reserve their box too — a thread full of pictures jumped exactly
+   the same way the feed did as each one decoded. */
+.msg-photo{display:block;max-width:min(280px,100%);max-height:360px;width:280px;height:auto;
+  aspect-ratio:4 / 3;object-fit:contain;border-radius:20px;cursor:pointer;background:var(--s2);}
+.msg-photo.ac-img-sized{width:auto;aspect-ratio:auto;}
 /* Multi-image message carousel */
 .msg-imgcar{width:280px;max-width:74vw;border-radius:20px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;background:#000;}
 .msg-imgcar::-webkit-scrollbar{display:none;}
@@ -5697,15 +5700,26 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.08);}
 .apt-more{background:none;border:none;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;padding:5px 0 0;font-family:inherit;}
 .apt-more:active{opacity:.6;}
 /* Media: wide fills the width; narrow is constrained + indented under the name. */
-.ac-post-img{display:block;margin-top:10px;max-width:100%;max-height:560px;object-fit:cover;border-radius:16px;border:none;cursor:pointer;}
-.ac-post-img.ac-img-wide{width:100%;}
+/* A feed photo reserves its box BEFORE it loads.
+   Without this the browser has no idea how tall the picture will be until the
+   picture itself arrives — and because they load lazily as you scroll, each one
+   arrived mid-scroll and snapped the page open to make room. Every image was one
+   jolt; measured, that was a layout-shift score of 0.70 where 0.10 already counts
+   as poor, and it is what "it shakes / vibrates / jumps when I scroll" was.
+   The default 16/10 is a plain landscape box, replaced with the picture's REAL
+   ratio by acFitPostImg the moment its true size is known. */
+.ac-post-img{display:block;margin-top:10px;max-width:100%;max-height:560px;object-fit:cover;border-radius:16px;border:none;cursor:pointer;
+  width:100%;aspect-ratio:16 / 10;background:var(--s2);}
+/* Once loaded we know the real shape, so honour it instead of the placeholder. */
+.ac-post-img.ac-img-sized{aspect-ratio:auto;}
+.ac-post-img.ac-img-wide{width:100%;height:auto;}
 /* X-style multi-image mosaic — 2/3/4 photos in one rounded, centred box. */
 .ac-imggrid{display:grid;gap:2px;margin-top:10px;width:100%;aspect-ratio:16/10;border-radius:16px;overflow:hidden;border:none;background:var(--s2);}
 .ac-imggrid img{width:100%;height:100%;min-width:0;min-height:0;object-fit:cover;display:block;cursor:pointer;}
 .ac-imggrid.n2{grid-template-columns:1fr 1fr;grid-template-rows:1fr;}
 .ac-imggrid.n3,.ac-imggrid.n4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;}
 .ac-imggrid.n3 img:first-child{grid-row:1 / span 2;}
-.ac-post-img.ac-img-narrow{width:auto;max-width:calc(100% - var(--post-indent));max-height:540px;margin-inline-start:var(--post-indent);object-fit:contain;background:var(--s2);}
+.ac-post-img.ac-img-narrow{width:auto;height:auto;max-width:calc(100% - var(--post-indent));max-height:540px;margin-inline-start:var(--post-indent);object-fit:contain;background:var(--s2);}
 .ac-post-vid{width:100%;max-height:600px;object-fit:contain;background:#000;cursor:default;}
 /* Video duration chip (blueprint §Home). */
 .ac-vid-wrap{position:relative;display:block;margin-top:10px;}
@@ -10664,8 +10678,16 @@ button:focus-visible,a:focus-visible,
 body.light .ac-item:hover{background:rgba(0,0,0,.045);}
 body.light .ac-item:active{background:rgba(0,0,0,.06);}
 
-/* Gentle entrance for freshly rendered rows */
-.ac-post,.ac-item,.ac-postfocus{animation:fadeIn .26s var(--ease) both;}
+/* Gentle entrance for freshly rendered rows.
+   fill-mode is BACKWARDS, not both. "both" keeps the animation's final keyframe
+   applied forever, and fadeIn's keyframes carry a transform — so every post card
+   and every list row in the app stayed pinned to its own compositor layer for the
+   whole session. Hundreds of them. That is what made scrolling feel like the
+   content was dragging along a beat behind the rest of the page. "backwards"
+   still applies the opening frame before the animation starts (no flash), then
+   lets go completely when it ends, so the row de-promotes and scrolls with
+   everything else. Don't put this back to "both". */
+.ac-post,.ac-item,.ac-postfocus{animation:fadeIn .26s var(--ease) backwards;}
 
 /* Skeleton loaders (replace bare loading text) */
 .skel{position:relative;overflow:hidden;background:var(--s2);border-radius:8px;}
@@ -20038,7 +20060,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1702'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1703'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -35249,7 +35271,7 @@ function acPostMedia(p, inFeed) {
   // X-style ALT chip: images that carry a description get a small badge — tap to
   // read it (useful for everyone, not just screen readers).
   if (imgs.length === 1) {
-    const img = `<img class="ac-post-img" src="${imgs[0]}" alt="${alt}" loading="lazy" decoding="async" onload="acFitPostImg(this)" onclick="${stop}openImageViewer(this.src, this, ${p.id})"/>`;
+    const img = `<img class="ac-post-img${_postImgClass(p)}" src="${imgs[0]}"${_postImgDims(p)} alt="${alt}" loading="lazy" decoding="async" onload="acFitPostImg(this)" onclick="${stop}openImageViewer(this.src, this, ${p.id})"/>`;
     return alt ? `<div class="ac-img-wrap">${img}<button class="ac-alt-badge" onclick="${stop}acShowAltText(${jsAttr(p.imageAlt)})" aria-label="Image description">ALT</button></div>` : img;
   }
   // A video in the feed is a preview: tap it and it opens full-screen, where you
@@ -35283,11 +35305,55 @@ function acVidDur(v) { try { if (!isFinite(v.duration)) return; const chip = v.p
 // Hybrid media sizing: a wide/landscape photo fills the content width (starts under
 // the avatar); a narrow/portrait one is constrained + indented under the name so it
 // never looks stranded at the far-left edge.
+/* The photo's true shape, straight from the post — so the browser lays out the
+   right-sized box BEFORE a single byte of the picture arrives and nothing moves
+   when it does. Mirrors _imgDims, which has done this for chat photos all along;
+   the feed simply never had the numbers. Posts whose shape isn't known yet fall
+   back to the CSS placeholder ratio and are corrected by acFitPostImg on load. */
+/* The reserved box for a feed photo.
+   A landscape picture fills the column, so width:100% plus the true ratio already
+   resolves to a definite height. A PORTRAIT one is laid out narrow and indented
+   with an automatic width — and an automatic width cannot resolve a size from a
+   ratio alone, so its box measured 0×0 until the picture arrived and then snapped
+   open to full height. Measured: nine of eleven photos already held still; the
+   two that jumped were both portrait, both 0×0 → 540px tall.
+   So give portraits a definite width too, worked out from the same 540px height
+   cap the CSS applies. max-width still guards a narrow column. This is exactly
+   what _imgDims has always done for chat photos. */
+const POST_IMG_MAX_H = 540;
+function _postImgDims(p) {
+  const w = p && p.imageW, h = p && p.imageH;
+  if (!(w > 0 && h > 0)) return '';
+  const narrow = (w / h) < 0.9;
+  const style = narrow
+    ? `width:${Math.round(POST_IMG_MAX_H * (w / h))}px;max-width:calc(100% - var(--post-indent));height:auto;aspect-ratio:${w}/${h}`
+    : `aspect-ratio:${w}/${h}`;
+  return ` width="${w}" height="${h}" style="${style}"`;
+}
+/* Wide or narrow — decided HERE, at render, not on load.
+   A portrait photo is laid out differently from a landscape one (narrower, and
+   indented under the name). Deciding that only once the picture had loaded meant
+   the box it had already been given was thrown away and rebuilt a moment later,
+   which is a second jolt on top of the first. With the shape known up front the
+   right layout is used from the very first frame and nothing moves at all. */
+function _postImgClass(p) {
+  const w = p && p.imageW, h = p && p.imageH;
+  if (!(w > 0 && h > 0)) return '';
+  return (w / h) < 0.9 ? ' ac-img-sized ac-img-narrow' : ' ac-img-sized ac-img-wide';
+}
 function acFitPostImg(img) {
   try {
+    // Already sized from the post's stored shape — touching it now would move a
+    // box that is already correct, which is the very thing we are removing.
+    if (img.classList.contains('ac-img-sized')) return;
     const w = img.naturalWidth, h = img.naturalHeight;
     if (!w || !h) return;
-    img.classList.add((w / h) < 0.9 ? 'ac-img-narrow' : 'ac-img-wide');
+    // Swap the reserved 16/10 placeholder for the picture's true shape. Setting
+    // the ratio (rather than letting height go auto) means the box the browser
+    // already laid out only ever ADJUSTS — it never collapses to nothing and
+    // springs back open, which is what made the page jump mid-scroll.
+    img.style.aspectRatio = w + ' / ' + h;
+    img.classList.add('ac-img-sized', (w / h) < 0.9 ? 'ac-img-narrow' : 'ac-img-wide');
   } catch (_) {}
 }
 /* Feed post tap handling. A single tap on the card body opens the post; a quick

@@ -2810,6 +2810,22 @@ function pickImageSize(body, dataUrl) {
    and remember it — so a given picture is measured exactly once in its life
    rather than on every open. Best-effort throughout: a file we cannot read just
    stays unmeasured and behaves as it did before. */
+/* A post's photo, measured once and remembered — the same idea as
+   backfillImageSizes for chat, but per-row, because mapPost is the ONE place
+   every surface that shows a post passes through (feed, profile, detail, replies,
+   likes). Measured from the stored image BEFORE mapPost swaps it for a signed
+   URL, so it still has the bytes to read the header from. Best-effort: an image
+   we cannot read just stays unmeasured and behaves exactly as it did before. */
+function ensurePostImageSize(r, rawImage) {
+  try {
+    if (!r || (r.image_w && r.image_h)) return;
+    if (!rawImage || typeof rawImage !== 'string') return;
+    const sz = imageSizeFromDataUrl(rawImage);
+    if (!sz) return;
+    r.image_w = sz.w; r.image_h = sz.h;
+    db.query('UPDATE posts SET image_w = $2, image_h = $3 WHERE id = $1', [r.id, sz.w, sz.h]).catch(() => {});
+  } catch (e) {}
+}
 function backfillImageSizes(rows, table) {
   const todo = [];
   for (const r of rows) {
@@ -18211,7 +18227,7 @@ async function recomputeNoteStatus(noteId) {
   } catch (e) { /* best-effort */ }
 }
 const POSTS_SELECT = `
-  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.media_name, p.doc_url, p.doc_name, p.doc_size, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only, p.min_tier_level, p.image_alt, p.ppv_cents, p.occasion, p.article_title, p.pinned_reply_id, p.poll_ends_at, p.ai_assisted,
+  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.media_name, p.doc_url, p.doc_name, p.doc_size, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only, p.min_tier_level, p.image_alt, p.ppv_cents, p.occasion, p.article_title, p.pinned_reply_id, p.poll_ends_at, p.ai_assisted, p.image_w, p.image_h,
          (p.promoted_until IS NOT NULL AND p.promoted_until > now()) AS promoted,
          (p.subscribers_only = false OR p.user_id = $1 OR EXISTS(SELECT 1 FROM creator_subs cs LEFT JOIN creator_tiers ct ON ct.id = cs.tier_id WHERE cs.creator_id = p.user_id AND cs.subscriber_id = $1 AND cs.status = 'active' AND (cs.period_end IS NULL OR cs.period_end > now()) AND COALESCE(ct.level, 0) >= p.min_tier_level)) AS sub_ok,
          (COALESCE(p.ppv_cents,0) = 0 OR p.user_id = $1 OR EXISTS(SELECT 1 FROM post_unlocks pu WHERE pu.post_id = p.id AND pu.user_id = $1)) AS ppv_ok,
@@ -18361,6 +18377,7 @@ function mapPost(r) {
   // inline multi-MB base64 (see the /api/media block). Single-image posts store
   // only `image`, so the images[] fallback entry maps via 'post-img' idx 0.
   const rawImage = r.image || null;
+  ensurePostImageSize(r, rawImage);   // measure once, remember, so the feed can reserve its box
   const imgsRaw = (Array.isArray(r.images) && r.images.length) ? r.images : (rawImage ? [rawImage] : []);
   const quote = r.quote && typeof r.quote === 'object' && typeof r.quote.image === 'string' && r.quote.image.startsWith('data:') && r.quote.id
     ? { ...r.quote, image: mediaRef(r.quote.image, 'post-img', r.quote.id) } : (r.quote || null);
@@ -18372,6 +18389,7 @@ function mapPost(r) {
     // URL like every other stored file, never inlined into the feed payload.
     doc: r.doc_url ? { url: mediaRef(r.doc_url, 'post-doc', r.id), name: r.doc_name || 'Document', size: r.doc_size || null } : null,
     subscribersOnly: !!r.subscribers_only, locked: false, minTierLevel: r.min_tier_level || 0, imageAlt: r.image_alt || null,
+    imageW: r.image_w || null, imageH: r.image_h || null,   // lets the feed reserve the photo's box before it loads
     ppvCents: r.ppv_cents > 0 ? r.ppv_cents : undefined,
     tagged: Array.isArray(r.tags) ? r.tags.filter((t) => t.kind === 'tag').map(({ kind, ...u }) => u) : [],
     coAuthors: Array.isArray(r.tags) ? r.tags.filter((t) => t.kind === 'author').map(({ kind, ...u }) => u) : [],

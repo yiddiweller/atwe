@@ -3773,6 +3773,11 @@ async function initSchema() {
   // injected at the top of others' For You feed with a "Promoted" label.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS promoted_until TIMESTAMPTZ;`);
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;`);
+  // The shape of a post's photo, so the feed can reserve its exact box before the
+  // picture loads. Measured once from the image itself (backfillImageSizes) and
+  // remembered — the same machinery chat messages already use.
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS image_w INTEGER;`);
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS image_h INTEGER;`);
 
   // Product tags (multi) — a piece of content (a post, a reel/short feed_post, or a
   // 24h story) can tag up to 5 of the poster's OWN active products. Each tag renders
