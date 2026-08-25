@@ -5244,6 +5244,51 @@ so it cannot nag, a **newer** build after that still gets through, and a failed 
 offline check says nothing at all. It is deliberately not pinned to the top — a
 floating notice across the feed tabs is the very thing the build above exists to fix.
 
+### The admin dashboard's ⌘K palette knows the dashboard
+
+The palette could already find PEOPLE, posts and listings, but it matched a
+SECTION only when your words appeared **literally in its name** — so "gift card"
+found nothing (the tab is called Cards), "freeze a wallet" found nothing at all,
+and staff had to already know where a tool lived in order to reach it.
+
+It now indexes **183 destinations**, assembled the same way the main app's does —
+from the tables that already describe the dashboard, so it cannot drift:
+
+| source | what it contributes |
+|---|---|
+| `NAV_TITLES` + `ADMIN_GROUP` | all 68 sections, with their sidebar group as the subtitle |
+| `ADMIN_PANELS` | 105 panels, **generated from the dashboard's own `<h3>` headings** |
+| `ADMIN_ACTIONS` | 17 things staff DO that are not a heading anywhere (suspend, ban, freeze a wallet, view as a user, close the site…) |
+| `ADMIN_TAB_KW` | what a person would actually type for each section |
+
+`adminFind(q, limit)` ranks with the same ladder as `acFindPlaces`, plus two rules
+the dashboard needed:
+- **Filler words are dropped** (`ADMIN_FILLER`) before matching, and `q` is rebuilt
+  from what is left — people type "ban someone", not "ban". Rebuilding `q` matters:
+  without it the NAME match still used the whole phrase and "Ban an account" came
+  fourth behind three sections that merely mention banning.
+- **A section's own keywords outrank a word that merely appears in a panel's
+  title** (66 vs 64). `ADMIN_TAB_KW` is a deliberate statement of what a section is
+  for; a panel heading is prose. Without this, "visitors" opened a countries panel
+  instead of Traffic.
+
+Results are held in the page, so they appear on the keystroke with no request
+(`palPlaces`); the server content search still runs debounced underneath
+(`palRun`). Everything is filtered through **`canSee`**, so a scoped staffer never
+sees a tool they cannot open — and that call is wrapped in a try, because `ME`
+does not exist until sign-in and a throw there would take the whole palette down.
+Choosing a panel switches section and then scrolls to it and flashes it
+(`palGo`/`.pal-flash`) — otherwise you land on a long page none the wiser.
+
+Palette rows use **`.pal-row`, not `.site-row`**: they are `<button>`s and `.srt`
+sets no colour of its own, so inside a button it inherited the browser's default
+dark button text and every result was near-invisible on black. Any new row inside
+a `<button>` needs its own colour.
+
+**To add a destination:** a new section is picked up from `NAV_TITLES`
+automatically (give it keywords in `ADMIN_TAB_KW`); a new panel is picked up by
+adding it to `ADMIN_PANELS`; a new verb goes in `ADMIN_ACTIONS`.
+
 ## Conventions
 
 - **One-file-per-surface frontend.** `index.html` is the app; `admin.html` is the
