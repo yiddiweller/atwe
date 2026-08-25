@@ -5128,6 +5128,20 @@ today.
 
 ## Gotchas for AI assistants
 
+- **A missing `</div>` in `index.html` breaks the app SILENTLY — always run
+  `node tools/check-overlays.js` after touching markup.** Every `.overlay` must be a
+  direct child of `<body>`. Drop one closing tag and the HTML parser nests every
+  overlay defined after it inside whatever container was left open; if that container
+  is hidden (a call overlay, a sheet), those surfaces can never appear again. There is
+  **no console error, no failing screenshot, and no visual clue** — the buttons just
+  stop doing anything, which reads as "you broke the whole app". It has happened once
+  for real: a scripted edit to `#gcControls` consumed one `</div>` too many and
+  trapped **353 overlays** (notifications, settings, wallet, orders, marketplace, …)
+  inside `#groupCallOverlay` for two builds. Everything else stayed green, because the
+  regression suites called functions directly and measured *screens*, not overlays.
+  The checker loads the file with a real HTML parser (no server, no login) and takes
+  a couple of seconds. **A regression suite that only calls functions cannot see this
+  class of bug — a check that asserts a surface actually became VISIBLE can.**
 - **A class may be declared TWICE at the same level, and the LATER copy wins.**
   Editing the first one changes nothing and the failure is silent. This has bitten
   real work three times (`.mc-call-sub`, `.mc-inv-sub`, `.msg-act`). A sweep counts
