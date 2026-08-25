@@ -22,6 +22,7 @@ const finance = require('./finance');
 const apple = require('./apple');
 const demo = require('./demo');
 const reservedSeed = require('./reserved-seed');
+const { SYSTEM_ROUTES } = require('./routes');   // words that are real URLs — never usernames
 const FEATURE_CONTROLS = require('./feature-controls-data');
 const { HELP_ARTICLES } = require('./help-content');
 const tz = require('./timezones');
@@ -5401,6 +5402,18 @@ function parseHandlePrice(v) {
   if (v == null || v === '') return null;
   const n = Math.round(Number(v));
   return (Number.isInteger(n) && n > 0 && n <= 100000000) ? n : null;
+}
+/* Every system route is also a locked username. Re-seeded on each boot so adding
+   a route to routes.js is all it takes — nobody can then register a handle that
+   would shadow that page. ON CONFLICT DO NOTHING, so it is cheap and idempotent,
+   and it never touches a name someone already holds (usernameReserved only gates
+   NEW registrations and changes). */
+async function lockSystemRoutes() {
+  const names = SYSTEM_ROUTES.filter((n) => /^[a-z0-9._-]{1,40}$/.test(n));
+  if (!names.length) return 0;
+  const added = await bulkLockUsernames(names, 'System route', null, null);
+  if (added) console.log(`🔒  Reserved ${added} new system route name(s)`);
+  return added;
 }
 async function bulkLockUsernames(names, note, createdBy, priceCents) {
   if (!names || !names.length) return 0;
@@ -44281,6 +44294,7 @@ db.init()
   .then(() => { if (db.isConfigured()) return db.getSetting(LEGAL_KEY).then((v) => { _legal = normalizeLegal(v); _legalCache = {}; }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return seedHelpArticles().catch(() => {}); })
   .then(() => { if (db.isConfigured()) return ensureOfficialAccount().catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return lockSystemRoutes().catch(() => {}); })
   .then(() => { if (db.isConfigured()) return migrateOldAssignments().catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(TAXONOMY_KEY).then((v) => { _taxonomy = normalizeTaxonomy(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return backfillSkillCanonicals().catch(() => {}); })

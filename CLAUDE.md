@@ -4940,6 +4940,44 @@ the existing `--r-xl`/`--r-pill` tokens). The motion-token audit is DONE (July 2
 ≤270ms → `--t-base`, else `--t-slow`); keyframe `animation` timings were left
 untouched (functional). New transitions must use the tokens.
 
+## URL & routing architecture
+
+**One domain, clean paths.** Everything is `atwe.com/<clean-route>` — no subdomains
+for features (the only subdomain is `admin.atwe.com`). `atwe.ai` 301s to `atwe.com`
+keeping the path, and `www.atwe.com` 301s to the apex.
+
+**`APP_ROUTES` in `public/index.html` is the single map of URL → surface.** Adding a
+line there gives a destination a URL, makes it reload-safe and shareable, and
+reserves its name so no member can register a username that shadows it. The shape:
+
+| pattern | what it is |
+|---|---|
+| `atwe.com/` | the home feed |
+| `atwe.com/<route>` | a feature — `/messages` `/jobs` `/wallet` `/notifications` |
+| `atwe.com/settings/<page>` | a settings page — kept ONE level deep, never `/account/settings/user/x` |
+| `atwe.com/<username>` | a person **or a business** — in Atwe a business IS an account, so both share the clean address; `/company/<username>` is an alias that canonicalises here |
+| `atwe.com/<username>/post/<id>` | one of their posts (X-shaped: identity first, id because posts need a unique key) |
+| `atwe.com/<username>/<section>` | a public part of a profile — `posts` `replies` `media` `likes` `about` `connections`. **Private things never nest under a name** — `/settings`, not `/john/settings` |
+| `atwe.com/login` `/signup` `/forgot-password` `/reset-password` `/verify-email` | signed-out pages — plain, never `/auth/login` |
+| `atwe.com/group/<slug>` `/circle/<slug>` `/job/<id>` `/listing/<id>` `/event/<id>` | entities |
+
+**Route names are lowercase, hyphenated, ≤24 chars** (`/gift-cards`, never
+`gift_cards` or `giftCards`). `test/routes.test.js` enforces that mechanically.
+
+**Reserved usernames are derived, not hand-maintained.** `RESERVED_PATHS` in
+`index.html` is built FROM `APP_ROUTES` plus the auth/entity prefixes plus a
+defensive set (impersonation-bait like `official`, `staff`, `atwe`). `routes.js`
+holds the server's matching `SYSTEM_ROUTES`, which `lockSystemRoutes()` seeds into
+the `reserved_usernames` table on every boot — so `usernameReserved()` blocks them
+at signup AND at username-change. **There is no build step, so the two copies
+cannot literally share a module; `test/routes.test.js` fails if they ever drift.**
+Add a route → add the word in BOTH places, or the test tells you.
+
+**The router itself:** `parseDeepLink()` reads `location.pathname` into a route
+object; `openDeepLink()` turns that into the surface, auth-gating anything marked
+`auth:true`. A path we don't own returns null and the app falls through to its
+default surface — an unknown URL never errors.
+
 ## Conventions
 
 - **One-file-per-surface frontend.** `index.html` is the app; `admin.html` is the

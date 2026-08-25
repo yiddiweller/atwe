@@ -20037,7 +20037,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1697'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1698'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -21032,32 +21032,216 @@ async function handleUrlParams() {
 
 // A shareable entity to open after boot/auth.
 let _pendingRoute = null;
+/* ═══════════════════════════════════════════════════════════════════
+   ROUTES — the ONE map of URL → surface for the whole platform
+   ═══════════════════════════════════════════════════════════════════
+   Everything about Atwe's addresses is decided here and nowhere else:
+   which paths exist, what each one opens, whether it needs an account,
+   and — because a person's profile lives at atwe.com/<username> — which
+   words can never be taken as a username.
+
+   The shape is deliberately flat and human-readable (the brief's rule):
+       atwe.com/<clean-route>          a feature        /messages /jobs
+       atwe.com/settings/<page>        a settings page  /settings/security
+       atwe.com/<username>             a person OR a business — in Atwe a
+                                       business IS an account, so both live
+                                       at the same clean address
+       atwe.com/<username>/post/<id>   one of their posts
+       atwe.com/<username>/<section>   a public part of their profile
+
+   Adding a destination = one line in APP_ROUTES. That automatically gives
+   it a URL, makes it reload-safe and shareable, and reserves its name so
+   nobody can register a username that would shadow it.
+
+   NOTE (no build step, so this cannot be imported): server.js keeps a
+   matching SYSTEM_ROUTES list, which is what seeds the reserved_usernames
+   table. test/routes.test.js asserts the two never drift apart. */
+
+const APP_ROUTES = {
+  /* ── The five worlds ── */
+  '':               { open: () => appTab('home'),                  canonical: '/' },
+  'feed':           { open: () => appTab('home'),                  alias: '/' },
+  'home':           { open: () => appTab('home'),                  alias: '/' },
+  'messages':       { open: () => appTab('chat'),                  auth: true },
+  'search':         { open: () => appTab('search') },
+  'ai':             { open: () => appTab('ai'),                    auth: true },
+  'me':             { open: () => appTab('profile'),               auth: true },
+
+  /* ── Account & settings (private — never under a username) ── */
+  'notifications':  { open: () => openNotifications(),             auth: true },
+  'settings':       { open: () => openSettings(),                  auth: true },
+  'devices':        { open: () => openDevices(),                   auth: true },
+  'help':           { open: () => openHelp() },
+
+  /* ── Network & work ── */
+  'network':        { open: () => acOpenConnections(),             auth: true },
+  'jobs':           { open: () => acOpenJobsView(),                auth: true },
+  'job-alerts':     { open: () => acOpenSavedSearches(),           auth: true },
+  'resumes':        { open: () => acOpenResumes(),                 auth: true },
+  'businesses':     { open: () => acOpenDirectory() },
+  'services':       { open: () => acOpenServices() },
+  'events':         { open: () => acOpenEvents() },
+  'courses':        { open: () => acOpenCourses() },
+  'newsletters':    { open: () => acOpenNewsletters() },
+  'communities':    { open: () => acOpenCommunities() },
+  'showcase':       { open: () => acOpenShowcaseDiscover() },
+
+  /* ── Shopping ── */
+  'marketplace':    { open: () => acOpenMarketplace() },
+  'cart':           { open: () => acOpenCart(),                    auth: true },
+  'orders':         { open: () => acOpenOrders('buyer'),           auth: true },
+  'saved':          { open: () => acOpenSaved(),                   auth: true },
+  'collections':    { open: () => acOpenCollections(),             auth: true },
+  'subscriptions':  { open: () => acOpenSubs(),                    auth: true },
+  'addresses':      { open: () => acOpenAddresses(),               auth: true },
+  'bookings':       { open: () => acOpenBookings('guest'),         auth: true },
+
+  /* ── Money ── */
+  'wallet':         { open: () => acOpenWallet(),                  auth: true },
+  'money-requests': { open: () => acOpenMoneyRequests(),           auth: true },
+  'invoices':       { open: () => acOpenInvoices('received'),      auth: true },
+  'quotes':         { open: () => acOpenQuotes('received'),        auth: true },
+  'payment-links':  { open: () => acOpenPayLinks(),                auth: true },
+  'gift-cards':     { open: () => acOpenGiftCards(),               auth: true },
+  'rewards':        { open: () => acOpenLoyalty(),                 auth: true },
+  'referrals':      { open: () => acOpenReferrals(),               auth: true },
+
+  /* ── Selling & business ── */
+  'dashboard':      { open: () => acOpenDashboard(),               auth: true },
+  'store':          { open: () => acOpenStoreManage(),             auth: true },
+  'listings':       { open: () => acOpenSell(),                    auth: true },
+  'analytics':      { open: () => acOpenShopAnalytics(),           auth: true },
+  'ads':            { open: () => acOpenAds(),                     auth: true },
+  'affiliate':      { open: () => acOpenAffiliate(),               auth: true },
+  'team':           { open: () => acOpenTeam(),                    auth: true },
+
+  /* ── Planning ── */
+  'calendar':       { open: () => acOpenAgenda(),                  auth: true },
+  'appointments':   { open: () => acOpenAppointments('mine'),      auth: true },
+};
+
+/* Settings sub-pages: atwe.com/settings/<page>. Kept shallow on purpose —
+   /settings/security, never /account/settings/user/security. */
+const SETTINGS_ROUTES = ['account', 'privacy', 'security', 'notifications',
+  'premium', 'display', 'assistant', 'data', 'about'];
+
+/* Public sections of a profile: atwe.com/<username>/<section>. Only genuinely
+   public parts belong here — private things live at the top level (/settings,
+   /notifications), never nested under someone's name. */
+const PROFILE_SECTIONS = ['posts', 'replies', 'media', 'likes', 'about', 'connections'];
+
+/* Signed-out pages. Plain and human-readable — /login, not /auth/login. */
+const AUTH_ROUTES = ['login', 'signup', 'forgot-password', 'reset-password', 'verify-email'];
+
+/* Entity prefixes that take an id or a slug after them. */
+const ENTITY_ROUTES = ['post', 'job', 'listing', 'event', 'group', 'circle', 'company'];
+
+/* Words a username can NEVER be, because they are real addresses on atwe.com.
+   Derived from the tables above so it can never fall out of step with them,
+   plus the file names and a defensive set of words that would invite
+   impersonation or confusion if someone registered them. */
+const RESERVED_PATHS = (() => {
+  const set = new Set([
+    ...Object.keys(APP_ROUTES).filter(Boolean),
+    ...AUTH_ROUTES, ...ENTITY_ROUTES,
+    // real files served from /public
+    'index.html', 'admin.html', 'locked.html', 'sw.js', 'manifest.json',
+    'manifest.webmanifest', 'favicon.png', 'favicon.ico', 'robots.txt', 'sitemap.xml',
+    // infrastructure + reserved-for-later
+    'api', 'admin', 'static', 'assets', 'public', 'cdn', 'media', 'files', 'download',
+    'beam', 'engine', 'profile', 'account', 'register', 'logout', 'signin', 'signout',
+    'password', 'auth', 'oauth', 'sso', 'verify', 'confirm', 'invite', 'welcome',
+    'about', 'contact', 'support', 'legal', 'privacy', 'privacy-policy', 'terms',
+    'terms-of-service', 'cookies', 'security', 'status', 'blog', 'press', 'careers',
+    'pricing', 'plans', 'upgrade', 'pro', 'premium', 'billing', 'checkout', 'pay',
+    'company', 'companies', 'business', 'organization', 'org', 'page', 'pages',
+    'atwe', 'atweai', 'atwe-ai', 'official', 'staff', 'team', 'root', 'system',
+    'null', 'undefined', 'true', 'false', 'me', 'you', 'new', 'edit', 'delete',
+  ]);
+  return set;
+})();
+
+/* Read the address bar into a route. Returns null when the path is not one we
+   own (the caller then falls through to the app's default surface). */
 function parseDeepLink() {
   let path;
   try { path = decodeURIComponent(location.pathname || '/'); } catch { path = location.pathname || '/'; }
-  const segs = path.split('/').filter(Boolean);
+  const segs = path.split('/').filter(Boolean).map((x) => x.trim()).filter(Boolean);
   if (!segs.length) return null;
   const s0 = segs[0].toLowerCase();
-  if ((s0 === 'group' || s0 === 'circle') && segs[1]) return { type: s0, username: segs[1].replace(/^@/, '') };
-  // Entity deep links: /post/:id, /job/:id, /listing/:id (numeric ids only —
-  // usernames can't contain "/", so these two-segment paths were never profiles).
-  if ((s0 === 'post' || s0 === 'job' || s0 === 'listing' || s0 === 'event') && /^\d+$/.test(segs[1] || '')) return { type: s0, id: parseInt(segs[1], 10) };
-  if (segs.length === 1) {
-    const u = s0.replace(/^@/, '');
-    const RESERVED = ['index.html', 'admin.html', 'locked.html', 'api', 'sw.js', 'manifest.json', 'manifest.webmanifest', 'favicon.png', 'robots.txt', 'ai', 'beam', 'engine', 'home', 'profile'];
-    if (!RESERVED.includes(u) && /^[a-z0-9._-]{1,40}$/.test(u)) return { type: 'profile', username: u };
+
+  // /settings/<page>
+  if (s0 === 'settings' && segs[1]) {
+    const page = segs[1].toLowerCase();
+    if (SETTINGS_ROUTES.includes(page)) return { type: 'settings', page };
+    return { type: 'route', key: 'settings' };
   }
-  return null;
+  // /group/<slug>, /circle/<slug>
+  if ((s0 === 'group' || s0 === 'circle') && segs[1]) return { type: s0, username: segs[1].replace(/^@/, '') };
+  // /company/<username> — a business IS an account, so this is an alias that
+  // canonicalises to /<username>. Kept so the LinkedIn-shaped URL still works.
+  if (s0 === 'company' && segs[1]) return { type: 'profile', username: segs[1].replace(/^@/, ''), canonicalFrom: 'company' };
+  // /post/:id, /job/:id, /listing/:id, /event/:id — the old flat entity links.
+  if ((s0 === 'post' || s0 === 'job' || s0 === 'listing' || s0 === 'event') && /^\d+$/.test(segs[1] || '')) {
+    return { type: s0, id: parseInt(segs[1], 10), legacy: s0 === 'post' };
+  }
+  // Signed-out pages.
+  if (AUTH_ROUTES.includes(s0) && segs.length === 1) return { type: 'auth', page: s0 };
+  // A plain feature route.
+  if (Object.prototype.hasOwnProperty.call(APP_ROUTES, s0) && segs.length === 1) return { type: 'route', key: s0 };
+
+  // Anything else that looks like a handle is a person or a business.
+  const u = s0.replace(/^@/, '');
+  if (RESERVED_PATHS.has(u) || !/^[a-z0-9._-]{1,40}$/.test(u)) return null;
+  if (segs.length === 1) return { type: 'profile', username: u };
+  const s1 = segs[1].toLowerCase();
+  // /<username>/post/<id> — the canonical shape for a post.
+  if (s1 === 'post' && /^\d+$/.test(segs[2] || '')) return { type: 'post', id: parseInt(segs[2], 10), username: u };
+  // /<username>/<public-section>
+  if (PROFILE_SECTIONS.includes(s1)) return { type: 'profile', username: u, section: s1 };
+  return { type: 'profile', username: u };
 }
+/* Turn a parsed route into the surface it names. Every branch is wrapped so a
+   bad or stale link can never take the whole app down — the worst case is that
+   you land on the default surface instead. */
 function openDeepLink(r) {
   if (!r) return;
-  if (r.type === 'profile') acGoProfile(r.username);
-  else if (r.type === 'circle') acOpenCircleByUsername(r.username);
-  else if (r.type === 'group') acOpenGroupByUsername(r.username);
-  else if (r.type === 'post') acOpenPostView(r.id);
-  else if (r.type === 'job') acOpenJob(r.id);
-  else if (r.type === 'listing') acOpenListing(r.id);
-  else if (r.type === 'event') acOpenEvent(r.id);
+  try {
+    if (r.type === 'route') {
+      const def = APP_ROUTES[r.key];
+      if (!def) return;
+      if (def.auth && !isAccount()) { openLogin(); return; }
+      def.open();
+      return;
+    }
+    if (r.type === 'settings') {
+      if (!isAccount()) { openLogin(); return; }
+      openSettings();
+      setTimeout(() => { try { setNav(r.page); } catch (e) {} }, 60);
+      return;
+    }
+    if (r.type === 'auth') {
+      // Already signed in? These pages have nothing to offer — go home instead of
+      // showing a login screen to someone who is logged in.
+      if (isAccount() && r.page !== 'verify-email' && r.page !== 'reset-password') { appTab('home'); return; }
+      openLogin();
+      if (r.page === 'signup') setTimeout(() => { try { suStartWizard('email', ''); } catch (e) {} }, 80);
+      else if (r.page === 'forgot-password') setTimeout(() => { try { forgotPassword(); } catch (e) {} }, 80);
+      return;
+    }
+    if (r.type === 'profile') {
+      acGoProfile(r.username);
+      // /<username>/media and friends open the profile on that tab.
+      if (r.section) setTimeout(() => { try { acProfTab(r.section); } catch (e) {} }, 420);
+      return;
+    }
+    if (r.type === 'circle') acOpenCircleByUsername(r.username);
+    else if (r.type === 'group') acOpenGroupByUsername(r.username);
+    else if (r.type === 'post') acOpenPostView(r.id);
+    else if (r.type === 'job') acOpenJob(r.id);
+    else if (r.type === 'listing') acOpenListing(r.id);
+    else if (r.type === 'event') acOpenEvent(r.id);
+  } catch (e) { console.error('openDeepLink', e); }
 }
 // Keep the address bar in sync with the open profile/circle/group so links are
 // shareable + reloadable. Uses replaceState (no new history entry) so it never
