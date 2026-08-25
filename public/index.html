@@ -4236,6 +4236,10 @@ body.light .tb-login,body.light .btn-white{background:var(--primary);color:var(-
 }
 .msg-top{display:flex;align-items:center;gap:12px;padding:max(13px,env(safe-area-inset-top)) 16px 13px;
   border-bottom:1px solid var(--b2);flex-shrink:0;}
+/* The open-chat header paints its own ground rather than borrowing the pane's, so
+   nothing scrolling in the thread can ever show through it. (The FOOTER is
+   deliberately see-through — that is the iMessage look — but the header is not.) */
+#acThreadScreen .msg-top{background:var(--bg);position:relative;z-index:6;}
 .msg-back{background:none;border:none;color:var(--t1);display:flex;align-items:center;padding:4px;margin:-4px;cursor:pointer;flex-shrink:0;}
 .msg-back svg{width:24px;height:24px;stroke:currentColor;stroke-width:2.2;fill:none;}
 /* Unified drill-in header: back (left) · centered title (flex) · action or spacer (right).
@@ -20033,7 +20037,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1696'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1697'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -36307,6 +36311,7 @@ function acReactSyncCache(pid, r) {
 // The floating reaction bar (frosted, above the button).
 function acReactBarOpen(btn, pid) {
   acReactBarClose();
+  clearTimeout(_reactHideT);
   const bar = document.createElement('div');
   bar.className = 'ac-react-bar'; bar.id = 'acReactBar';
   bar.innerHTML = POST_REACTS.map((r, i) => `<button class="ac-rb-btn" style="animation-delay:${i * 26}ms" title="${r.label}" aria-label="${r.label}" onclick="event.stopPropagation();acReact(${pid},'${r.id}')"><span class="ac-rb-em">${r.emoji}</span></button>`).join('');
@@ -36319,7 +36324,19 @@ function acReactBarOpen(btn, pid) {
   setTimeout(() => document.addEventListener('pointerdown', _acReactOutside, true), 0);
 }
 function _acReactOutside(e) { if (!(e.target.closest && e.target.closest('#acReactBar'))) acReactBarClose(); }
-function acReactBarClose() { const b = document.getElementById('acReactBar'); if (b) b.remove(); document.removeEventListener('pointerdown', _acReactOutside, true); clearTimeout(_hoverT); }
+function acReactBarClose() { const b = document.getElementById('acReactBar'); if (b) b.remove(); document.removeEventListener('pointerdown', _acReactOutside, true); clearTimeout(_hoverT); clearTimeout(_reactHideT); }
+/* Closing the hover bar. On desktop the bar opens on hover, and it is position:fixed
+   at z-index 4000 — so if it is ever left open it sits glued to the screen ON TOP of
+   everything while the page scrolls underneath it. That is exactly what it did: the
+   only thing that could dismiss it was a pointerdown somewhere else, which a mouse
+   user scrolling with the wheel never does. It read as "a thing stuck on top of my
+   photos that follows me down the page".
+   Now: leaving the button (or the bar) closes it after a short grace period, so you
+   can still travel from the button onto the bar to pick an emoji — and ANY scroll or
+   resize closes it at once, because the button it is anchored to has moved. */
+let _reactHideT = null;
+function acReactBarHideSoon() { clearTimeout(_reactHideT); _reactHideT = setTimeout(acReactBarClose, 260); }
+function acReactBarKeep() { clearTimeout(_reactHideT); }
 // Bind long-press (touch) + hover (desktop) on any like button to open the bar.
 function acBindReactions() {
   if (window._acReactBound) return; window._acReactBound = true;
@@ -36342,7 +36359,17 @@ function acBindReactions() {
     const to = e.relatedTarget;
     if (to && to.closest && (to.closest('#acReactBar') || to.closest('.ac-like[data-pid]'))) return;
     clearTimeout(_hoverT);
+    acReactBarHideSoon();          // ← was missing: nothing ever closed an OPEN bar
   });
+  // Moving onto the bar itself cancels the pending close, so you can pick an emoji.
+  document.addEventListener('mouseover', (e) => {
+    if (e.target.closest && e.target.closest('#acReactBar')) acReactBarKeep();
+  });
+  // Any scroll (or a resize) strands the bar away from its button — drop it at once.
+  // Capture phase + passive so it fires for the inner feed/thread scrollers too.
+  document.addEventListener('scroll', () => { if (document.getElementById('acReactBar')) acReactBarClose(); }, { capture: true, passive: true });
+  addEventListener('wheel', () => { if (document.getElementById('acReactBar')) acReactBarClose(); }, { passive: true });
+  addEventListener('resize', acReactBarClose);
 }
 // A little emoji burst floats up from the button when you react (delight).
 function acReactBurst(btn, emoji) {
