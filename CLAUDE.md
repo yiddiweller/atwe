@@ -5128,6 +5128,20 @@ today.
 
 ## Gotchas for AI assistants
 
+- **A hover-opened `position:fixed` popover MUST close on mouseout AND on scroll.**
+  The post reaction bar (`acReactBarOpen`, `.ac-react-bar`, `position:fixed;
+  z-index:4000`) opened on desktop hover and had nothing that closed it: `mouseout`
+  only cleared the *pending* open timer, and the only dismissal was a `pointerdown`
+  elsewhere — which a mouse user scrolling with the wheel never performs. So it stayed
+  welded to the screen at `z-index:4000` while the page scrolled underneath, sitting on
+  top of photos, text and buttons. It read to the owner as "every picture on the app is
+  on top of everything and stays there when I scroll — only on desktop" (desktop-only
+  because the hover path is gated on `hover:hover`; the touch long-press path always
+  closed correctly). Three separate screenshots of "the image bug" were actually this
+  one floating pill. `acReactBarHideSoon`/`acReactBarKeep` now close it ~260ms after the
+  pointer leaves both the button and the bar (the grace period lets you travel onto it),
+  and any `scroll` (capture + passive, so inner scrollers count), `wheel` or `resize`
+  closes it at once. Reach for the same three handlers for any new hover popover.
 - **A missing `</div>` in `index.html` breaks the app SILENTLY — always run
   `node tools/check-overlays.js` after touching markup.** Every `.overlay` must be a
   direct child of `<body>`. Drop one closing tag and the HTML parser nests every
