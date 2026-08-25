@@ -5132,7 +5132,7 @@ product reviews) because a missing index on a fifty-row table shows nothing.
 
 | screen | before | after |
 |---|---|---|
-| Home · For You | 5,894ms | 404ms |
+| Home · For You | 5,894ms | 118ms |
 | Home · Following | 3,508ms | 155ms |
 | Engine · Marketplace | 1,407ms | 408ms |
 | the marketplace's units-sold lookup | 80,739ms | 449ms |
@@ -5197,10 +5197,30 @@ noise); when Google is slow it is the difference between 3.4s and 0.6s.
   bytes. It is only re-downloaded when the build actually changes.
 - **Parsing the one big file is not the bottleneck** — 80ms of script and 32ms of
   style recalculation. The single-file architecture is not costing boot time.
-- For You still spends ~190ms building the 24 rows it returns (`POSTS_SELECT` runs
-  ~20 correlated sub-queries per row). That is the next thing worth attacking if
-  Home ever feels slow again; it was left alone because 5,894ms → 404ms was the
-  win that mattered and this one needs a wider change.
+**A second pass took Home the rest of the way: 404ms → 118ms.**
+
+**Choose, then build.** The feed used to ask one query to rank thousands of
+candidates AND carry everything a post needs — counts, reactions, whether you
+liked it, its note, its tagged products. Asked together, the database does that
+per-post work far more often than the two dozen times it is wanted: the plan
+showed the ranking finishing in 113ms and the whole query taking 346ms. The
+route now runs `pickIds(...)` (ranking only, returns 24 ids) and then
+`POSTS_SELECT ... WHERE p.id = ANY($2) ORDER BY array_position($2, p.id)`.
+Building 24 rows that way costs ~2ms. Keep the two stages: putting them back
+together is what made it slow.
+
+**`REACH_FILTER` is a set, not a per-row question.** It was a correlated
+`NOT EXISTS (SELECT 1 FROM users ru WHERE ru.id = p.user_id AND ru.reach_limited)`
+— one index probe per candidate, 8,695 of them per load. Rewritten as
+`p.user_id NOT IN (SELECT id FROM users WHERE reach_limited)` it is hashed once
+(and almost nobody is reach-limited, so the set is tiny): 198ms → 127ms. Any
+filter of the shape "is this row's author in some small set" belongs in this
+form, not the correlated one.
+
+What is left is the ranking scan itself (~80ms to score ~8,700 candidates with
+three counting sub-queries each). The only further step is denormalised
+like/repost/reply counters on `posts`, maintained on every write — a real change
+with a real cost, and not worth it at this size.
 
 ## Telling people a new build is out
 
