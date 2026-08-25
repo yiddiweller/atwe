@@ -5173,7 +5173,9 @@ async function sendChatRequestEmail(recipient, requester, body) {
 }
 
 async function sendVerifyEmail(user, rawToken) {
-  const link = `${mailer.appUrl()}/?verify=${rawToken}`;
+  // Clean, human-readable action link. The old /?verify= form is still accepted
+  // by the client, so mails already sitting in inboxes keep working.
+  const link = `${mailer.appUrl()}/verify-email?token=${rawToken}`;
   await mailer.sendMail({
     from: ALERTS_FROM,
     to: user.email,
@@ -5209,7 +5211,8 @@ async function sendSignupCode(email, name, code) {
 }
 
 async function sendResetEmail(user, rawToken) {
-  const link = `${mailer.appUrl()}/?reset=${rawToken}`;
+  // Clean, human-readable action link (old /?reset= form still accepted).
+  const link = `${mailer.appUrl()}/reset-password?token=${rawToken}`;
   await mailer.sendMail({
     from: ALERTS_FROM,
     to: user.email,
@@ -44158,7 +44161,10 @@ async function ogForPath(req) {
   const httpImg = (v) => (typeof v === 'string' && /^https?:\/\//i.test(v)) ? v : null;
   let segs;
   try { segs = decodeURIComponent(req.path).split('/').filter(Boolean); } catch { return null; }
-  const RESERVED = ['index.html', 'admin.html', 'locked.html', 'status.html', 'status', 'security.html', 'security', 'api', 'sw.js', 'manifest.json', 'manifest.webmanifest', 'favicon.png', 'robots.txt', 'ai', 'og'];
+  // One reserved list for the whole platform (routes.js) — this used to keep a
+  // third private copy of its own, which could silently disagree with the router
+  // and the signup gate.
+  const RESERVED = SYSTEM_ROUTES;
   try {
     if ((segs[0] === 'group' || segs[0] === 'circle') && segs[1] && /^@?[a-z0-9._-]{1,40}$/i.test(segs[1])) {
       const uname = segs[1].replace(/^@/, '');
@@ -44171,6 +44177,29 @@ async function ogForPath(req) {
       if (!c) return null;
       return { title: `${c.name} · Atwe`, description: (c.bio && c.bio.trim()) || `The ${c.name} industry circle on Atwe.`, image: httpImg(c.avatar) || defImg, url: `${origin}/circle/${c.username}`, type: 'website' };
     }
+    // /company/<username> is an alias for a business account — preview it as the
+    // profile, and point the canonical URL at the real address.
+    if (segs[0] === 'company' && segs[1] && /^@?[a-z0-9._-]{1,40}$/i.test(segs[1])) segs = [segs[1]];
+    // /<username>/post/<id> — the canonical post address. Preview the POST, so a
+    // shared link unfurls with what was actually written, not just who wrote it.
+    if (segs.length === 3 && segs[1] === 'post' && /^\d+$/.test(segs[2])) {
+      const pr = (await db.query(
+        `SELECT p.body, p.image, u.name, u.username, u.avatar
+           FROM posts p JOIN users u ON u.id = p.user_id
+          WHERE p.id = $1 AND lower(u.username) = lower($2) AND u.deactivated IS NOT TRUE LIMIT 1`,
+        [parseInt(segs[2], 10), segs[0].replace(/^@/, '')])).rows[0];
+      if (!pr) return null;
+      const body = (pr.body || '').replace(/\s+/g, ' ').trim();
+      return {
+        title: `${pr.name} (@${pr.username}) on Atwe`,
+        description: body ? body.slice(0, 180) : `A post from ${pr.name} on Atwe.`,
+        image: httpImg(pr.image) || httpImg(pr.avatar) || defImg,
+        url: `${origin}/${pr.username}/post/${segs[2]}`,
+        type: 'article',
+      };
+    }
+    // /<username>/<public-section> previews as the profile itself.
+    if (segs.length === 2 && ['posts', 'replies', 'media', 'likes', 'about', 'connections'].includes(segs[1])) segs = [segs[0]];
     if (segs.length === 1 && /^@?[a-z0-9._-]{1,40}$/i.test(segs[0])) {
       const uname = segs[0].replace(/^@/, '');
       if (RESERVED.includes(uname.toLowerCase())) return null;

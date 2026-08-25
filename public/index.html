@@ -20037,7 +20037,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1699'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1700'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -20965,14 +20965,25 @@ async function handleUrlParams() {
   else if (go === 'engine') go = 'search';
   if (go && ['home', 'search', 'chat', 'profile', 'call', 'ai'].includes(go)) { _pendingGo = go; stripParam(); }
   else {
-    // Pretty world-root paths: /ai, /beam (→chat), /engine (→search), /home, /profile.
-    const WORLD_PATH = { '/ai': 'ai', '/beam': 'chat', '/engine': 'search', '/home': 'home', '/profile': 'profile' };
-    const wp = WORLD_PATH[location.pathname.toLowerCase().replace(/\/$/, '')];
-    if (wp) _pendingGo = wp;
+    // Older world paths still work, and quietly become the canonical address so we
+    // never end up with two URLs for one page (the brief's duplicate-indexing rule).
+    // NOTE: deliberately NOT called WORLD_PATH — that name is the canonical
+    // tab → path map at the top of the router, and shadowing it here would be a
+    // trap for the next person editing either one.
+    const LEGACY_WORLD_PATH = { '/beam': 'chat', '/engine': 'search', '/home': 'home', '/profile': 'profile', '/ai': 'ai' };
+    const wp = LEGACY_WORLD_PATH[location.pathname.toLowerCase().replace(/\/$/, '')];
+    if (wp) { _pendingGo = wp; acSetPath(WORLD_PATH[wp] || '/'); }
   }
-  if (p.get('verify')) {
-    try { await API.req('POST', '/api/auth/verify', { token: p.get('verify') }); showNotif('Email verified. Thank you!'); }
+  // Email links: /verify-email?token=… and /reset-password?token=… are the clean
+  // shapes we send now; the old /?verify= and /?reset= forms are still honoured so
+  // a mail sitting in someone's inbox from last month keeps working.
+  const _pathTok = (name) => (location.pathname.toLowerCase().replace(/\/$/, '') === name ? (p.get('token') || '') : '');
+  const _verifyTok = p.get('verify') || _pathTok('/verify-email');
+  const _resetTok = p.get('reset') || _pathTok('/reset-password');
+  if (_verifyTok) {
+    try { await API.req('POST', '/api/auth/verify', { token: _verifyTok }); showNotif('Email verified. Thank you!'); }
     catch (e) { showNotif(e.message || 'Verification link invalid or expired.'); }
+    finally { acSetPath('/'); }   // don't leave the token sitting in the address bar
     stripParam();
   }
   if (p.get('checkout') === 'success') { showNotif('Welcome to Atwe Pro!'); stripParam(); }
@@ -21021,11 +21032,17 @@ async function handleUrlParams() {
     if (code.length >= 3 && Number.isInteger(sid)) { try { localStorage.setItem('atwe_coupon_pending', JSON.stringify({ code, sellerId: sid })); } catch (e) {} }
     stripParam();
   }
-  if (p.get('reset')) { _resetToken = p.get('reset'); stripParam(); return true; }
+  if (_resetTok) { _resetToken = _resetTok; stripParam(); return true; }
   // Shareable deep links: ?u=<username> (legacy) or a pretty path
   // (/<username>, /circle/<username>, /group/<username>). Stash it; it opens
   // once we're signed in (see boot + onAuthSuccess).
-  if (p.get('u')) { _pendingRoute = { type: 'profile', username: p.get('u').replace(/^@/, '') }; stripParam(); }
+  if (p.get('u')) {
+    // Legacy share link: ?u=john → the canonical atwe.com/john.
+    const _u = p.get('u').replace(/^@/, '');
+    _pendingRoute = { type: 'profile', username: _u };
+    stripParam();
+    if (/^[a-z0-9._-]{1,40}$/i.test(_u)) acSetPath('/' + _u.toLowerCase());
+  }
   else { const dl = parseDeepLink(); if (dl) _pendingRoute = dl; }
   return false;
 }
@@ -21281,6 +21298,10 @@ function openDeepLink(r) {
     }
     if (r.type === 'profile') {
       acGoProfile(r.username);
+      // /company/john is an alias — a business IS an account, so there is only ever
+      // ONE address for it. Rewrite to the canonical /john so the two never both
+      // get indexed (the brief's duplicate-content rule).
+      if (r.canonicalFrom === 'company') acSetPath('/' + r.username);
       // /<username>/media and friends open the profile on that tab.
       if (r.section) setTimeout(() => { try { acProfTab(r.section); } catch (e) {} }, 420);
       return;
@@ -21890,6 +21911,9 @@ function openLogin() {
   authLandingBack();
   document.getElementById('signupOverlay').classList.add('hidden');
   showOverlay('loginOverlay');
+  // Signed-out pages get a real address. Never overwrite a path that already
+  // carries meaning (a shared profile the visitor came in on, or a reset token).
+  if (location.pathname === '/' ) acSetPath('/login');
 }
 // Guest AI access has been removed — everyone must sign in. Signed-in users can
 // dismiss the gate; a signed-out visitor keeps it up (no guest fallthrough).
@@ -38662,7 +38686,11 @@ function _acRenderPostView(id) {
   AC._postId = id; AC._postData = null;
   acStopMic();
   acShow('acPostViewScreen', null);
-  acSetPath('/post/' + id); // shareable + reload-safe post URL
+  // Canonical post address is /<username>/post/<id> — identity first. The author
+  // isn't known until the post loads, so write the flat form now and upgrade it in
+  // acLoadPostView. An old /post/<id> link therefore still works and quietly
+  // becomes the canonical URL a moment later.
+  acSetPath('/post/' + id);
   _acReplyImg = null;
   document.getElementById('acReplyInput').value = '';
   document.getElementById('acReplyImgPrev').classList.remove('show');
@@ -38676,6 +38704,9 @@ async function acLoadPostView(id) {
     const d = await API.req('GET', '/api/social/posts/' + id);
     if (AC._postId !== id) return; // navigated away mid-load
     AC._postData = d;
+    // Upgrade the address to the canonical /<username>/post/<id> now the author is known.
+    const _au = d.post && d.post.author && d.post.author.username;
+    if (_au) acSetPath('/' + _au + '/post/' + id);
     // Count a view (once per session per post; the server ignores the author + dedups).
     // Called for YOUR posts too — the server still won't count a view on your
     // own post, but it does record it in your reading history, and "where was

@@ -4988,6 +4988,22 @@ destinations derived from live state (`/jobs` when the search scope is jobs,
 path nobody anticipated, the next sync still lands on the right address. **A new
 destination needs one line in `APP_ROUTES` with its `view:` id — nothing else.**
 
+**Nothing that used to work breaks.** Every old address still resolves and then
+quietly rewrites itself to the canonical one, so there is never a second URL for
+one page: `/beam`→`/messages`, `/engine`→`/search`, `/home`→`/`, `/profile`→`/me`,
+`?u=john`→`/john`, `/post/123`→`/john/post/123` (upgraded once the author loads),
+`/company/john`→`/john`. Emailed action links are now `/verify-email?token=…` and
+`/reset-password?token=…`; the old `/?verify=` and `/?reset=` forms are still
+accepted so mail already sitting in an inbox keeps working, and the token is
+stripped from the address bar after use.
+
+**Link previews follow the same table.** `ogForPath` in `server.js` handles
+`/username`, `/username/post/:id` (previews the POST — its text and photo, not just
+the author), `/username/<section>`, `/company/username` (canonical URL points at
+`/username`), `/group/:slug` and `/circle/:slug`. It uses `SYSTEM_ROUTES` — it used
+to keep a *third* private reserved list that could disagree with the router and the
+signup gate.
+
 **The router itself:** `parseDeepLink()` reads `location.pathname` into a route
 object; `openDeepLink()` turns that into the surface, auth-gating anything marked
 `auth:true`. A path we don't own returns null and the app falls through to its
