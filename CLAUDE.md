@@ -138,7 +138,7 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
    edge. Motion is quiet feedback, never a light show. (The old `.rim-ring`/light-engine glow is removed.)
 8. **Brand & voice.** Product = **Atwe**; assistant = **Atwe AI** (the swirl). Never surface Claude/
    Anthropic. Plain, calm copy (Apple/X restraint). No emojis in the app chrome.
-9. **Five worlds** (bottom nav, in order): **Home · Beam · Engine · Alerts · Account**.
+9. **Five worlds** (bottom nav, in order): **Home · Beam · Engine · Notifications · Account**.
    Internal tab ids stay `home/chat/search/profile`; only the *labels* changed.
    **Atwe AI is no longer a nav world** — it opens from a circular brand-mark button
    beside the Engine search bar (`#engAiBtn`, the way the big platforms put their
@@ -146,19 +146,28 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
    (notifications). `appTab('ai')` is untouched and still opens the same page from
    everywhere else (the Me hub, deep links, the message ⋯ menu, forward-to-AI), so
    nothing about the AI surface itself changed — only the way in.
-   **Nav icons are OUTLINE when inactive and SOLID when active** — each tab ships
-   both states inline (`.bn-ico` wraps `.nv-off` + `.nv-on`) and CSS picks one, so
-   the swap is instant with nothing to fetch. All five share one circle geometry
-   (r 9.4, stroke 1.7 in a 24 viewBox) so they read as one family; Home is the same
-   arch it always was, drawn as a stroke when inactive. Knockouts use
-   `fill-rule="evenodd"`, never `<mask>`/`<clipPath>` — each icon renders twice
-   (bottom nav + desktop sidebar) and ids would collide.
-   **Two traps live here.** (1) Put `fill="none"` on a `<path>`, never on the
-   `<svg>`: the app ships `.bn-tab svg{fill:currentColor}`, and a CSS rule on an
-   element beats a presentation attribute on that same element, so an outline with
-   `fill="none"` on its `<svg>` silently fills in solid. On a child it is safe —
-   children only INHERIT the svg's fill, and inheritance loses to their own
-   attribute. (2) `#bottomNav` is a **direct `<body>` child**, not inside `#app`:
+   **Nav icons are OUTLINE when inactive and SOLID when active.** Each tab ships
+   both states as `--nv-<tab>-off` / `--nv-<tab>-on` — PNG **masks** painted in
+   `currentColor` (`.bn-ico`/`.sb-ico` wrap `.nv-off` + `.nv-on`, CSS picks one), so
+   one artwork serves the bottom bar, the sidebar, both themes and the blue
+   "something new" cue, and the swap is instant with nothing to fetch.
+   **The artwork is the founder's own, not a redraw.** `scratchpad/icons/build.js`
+   is the generator: it traces their supplied files for Beam / Engine / Account,
+   NORMALISES them so all three rings land on the same radius (they drew the compass
+   smaller in its frame — used raw it sat visibly smaller in the bar), and derives
+   the active state as the disc with their glyph punched out. Home is their existing
+   arch, with the outline derived by subtracting an eroded copy of itself so the
+   stroke follows their exact shape, doorway included. **Notifications is a bell with
+   NO ring around it** — deliberate, at the founder's request: its own form is what
+   is rounded. Regenerate with `node build.js` and re-embed; never hand-redraw.
+   An earlier pass DID hand-redraw them as SVG and it was rejected — close in idea,
+   wrong in every detail.
+   **Two traps live here.** (1) When an icon IS an inline `<svg>`, put `fill="none"`
+   on a `<path>`, never on the `<svg>`: the app ships `.bn-tab svg{fill:currentColor}`,
+   and a CSS rule on an element beats a presentation attribute on that same element,
+   so an outline with `fill="none"` on its `<svg>` silently fills in solid. On a child
+   it is safe — children only INHERIT the svg's fill, and inheritance loses to their
+   own attribute. (2) `#bottomNav` is a **direct `<body>` child**, not inside `#app`:
    `#app` is `position:relative;z-index:1`, a stacking context, so anything inside
    it can never paint above a body-level panel however high its own z-index goes
    (the same trap `#statusScrim` had). It keeps `z-index:120` so it still sits
@@ -4546,6 +4555,30 @@ authenticated route — `create_event`→`/api/events`, `schedule_post`→`/api/
 `draft_invoice`→ resolve `@username`→id then `/api/invoices`; `draft_reply` is text-only
 (copy). So every action is user-confirmed and reuses existing per-row authz. Degrades
 to `503` without `ANTHROPIC_API_KEY`. Brand-safe (never exposes the AI vendor).
+
+### A search that finds nothing offers Atwe AI
+
+Somebody who searches for something that isn't there — or who describes it in their
+own words rather than ours — used to hit a dead end. Every search in the app now ends
+that dead end the same way, through one shared helper: **`acAskAiEmpty(q, msg)`** keeps
+the plain "nothing matched" line and adds the Atwe mark, a sentence, and a single white
+**Ask Atwe AI** pill; **`acAskAiFromSearch(q)`** opens the assistant and asks the
+question for them, phrased as a person would say it so the transcript reads naturally.
+With no query there is nothing to hand over, so it falls back to the plain empty state.
+
+Wired into all nine searches that take a query: Engine (everything), Marketplace,
+Businesses, Services, Jobs, Collections, Beam chats, Orders and **Settings** — the last
+being the most apt of all ("where do I change my password"). Deliberately NOT wired into
+the pickers, where the assistant cannot help: emoji, GIFs, sounds, social platforms, and
+the who-do-you-mean person pickers. `scratchpad/searchsweep.js` walks every one of them,
+asserts the nine show it and the pickers do not, and only counts blocks that are actually
+ON SCREEN — a surface keeps its markup after you leave it, so a raw `querySelectorAll`
+counts stale ones and reports a false failure (it did, first time).
+
+**Two of the wire points were missed on the first pass** and only turned up by driving
+the real UI: the business directory's empty is "No businesses found." and the services
+hub's is "Nothing matches … yet." — neither matched the "No X match" wording the others
+use. When adding a search, grep for its ACTUAL empty string rather than assuming.
 
 ### Atwe AI knows the app itself
 
