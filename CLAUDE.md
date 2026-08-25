@@ -36,7 +36,15 @@ from them; "go" is the whole instruction.
 - The owner sees this as the **Features** tab in the admin dashboard.
 - `git log` — every batch is one commit whose message says what was built, what
   was found already built, and what bugs were caught.
-- Progress as of batch 33: **405 built · 18 skipped · 96 to build.**
+- **Never quote a progress number from this file — count it from `features-data.js`,
+  which is the only place that is current.** A hardcoded tally here went stale by
+  ~90 items and was repeated to the owner as fact. To get the real state:
+  `node -e "const l=require('./features-data.js');const c={};for(const f of l)c[f.phase]=(c[f.phase]||0)+1;console.log(c)"`
+- As of the last count: **555 built · 4 deliberately skipped · 7 to build** — and 6
+  of those 7 are the native iOS/Android app (`atwe-mobile/`, its own track with its
+  own resume protocol above), the 7th being the Atwe Card launch, which is blocked on
+  a card-issuing partner and KYC rather than on code. **The web platform's feature
+  list is finished.**
 
 **The working agreement (follow it exactly):**
 1. **Existence-check FIRST, always.** Grep the codebase for each candidate before
