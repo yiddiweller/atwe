@@ -910,6 +910,9 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS blocks_blocker_idx ON blocks(blocker_id);`);
+  // The reverse lookup ("who blocked ME?") is what every feed now also filters on,
+  // and it had no index — the primary key leads with blocker_id, so it cannot serve it.
+  await query(`CREATE INDEX IF NOT EXISTS blocks_blocked_idx ON blocks(blocked_id);`);
 
   // Reports — a user flags another for the admin dashboard to review.
   await query(`

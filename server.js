@@ -787,6 +787,56 @@ async function chargePlatformFee(sellerId, orderId, grossCents) {
     return fee;
   } catch (_) { return 0; }
 }
+// Give back the Atwe fee on a sale that is being refunded. The fee was revenue on a
+// transaction being undone, so keeping it was wrong twice over: the seller ended a
+// cancelled sale 1% down, and — because the fee had already left their balance — a
+// FULL refund could no longer be funded from what they were paid, so refundToBuyer's
+// old all-or-nothing fallback quietly minted the difference out of nothing. Reverses
+// by summing this order's fee rows, so the negative row it writes makes it naturally
+// idempotent: once given back the sum is 0 and a second call does nothing.
+async function refundPlatformFee(sellerId, orderId) {
+  try {
+    if (!sellerId || !orderId) return 0;
+    const { rows } = await db.query(
+      `SELECT COALESCE(SUM(amount_cents),0)::int AS n FROM company_revenue
+        WHERE source = 'fee' AND ref_id = $1 AND payer_id = $2`, [String(orderId), sellerId]);
+    const fee = rows[0] && rows[0].n;
+    if (!(fee > 0)) return 0;
+    await walletCreditStandalone(sellerId, fee, 'platform_fee', `Atwe fee returned on order #${orderId}`);
+    await db.query(
+      `INSERT INTO company_revenue (source, ref_id, payer_id, payer_name, amount_cents, note)
+       VALUES ('fee', $1, $2, (SELECT name FROM users WHERE id = $2), $3, 'Fee returned on refund')`,
+      [String(orderId), sellerId, -fee]).catch(() => {});
+    rtPush(sellerId, 'wallet', { type: 'update' });
+    return fee;
+  } catch (_) { return 0; }
+}
+// Send a refund back from whoever received the money. walletTransfer is all-or-
+// nothing: a payer even ONE cent short moves nothing at all. The old code then
+// credited the payee the WHOLE amount with walletCreditStandalone — a credit with no
+// matching debit anywhere, i.e. money that was never deposited. With the 1% fee that
+// fired on essentially every full refund, and the invented balance was real enough to
+// cash out. Now: take everything the payer actually has, and let the platform cover
+// only the genuine shortfall (a seller who really did spend the money) — the payee is
+// still always made whole, but the platform can never mint more than it has to.
+async function refundToPayee(payerId, payeeId, amountCents, note, kind) {
+  let moved = 0;
+  if (payerId && amountCents > 0) {
+    const t = await walletTransfer(payerId, payeeId, amountCents, note, false).catch(() => ({ ok: false }));
+    if (t && t.ok) return { moved: amountCents, covered: 0 };
+    const have = Math.max(0, Math.min(amountCents, Number(t && t.balance) || 0));
+    if (have > 0) {
+      const part = await walletTransfer(payerId, payeeId, have, note, false).catch(() => ({ ok: false }));
+      if (part && part.ok) moved = have;
+    }
+  }
+  const covered = Math.max(0, amountCents - moved);
+  if (covered > 0) {
+    await walletCreditStandalone(payeeId, covered, kind || 'refund', note).catch(() => {});
+    console.error(`[refund] Atwe covered ${covered}c of ${amountCents}c to user ${payeeId} — payer ${payerId} could not fund it.`);
+  }
+  return { moved, covered };
+}
 // A card-paid marketplace order: the buyer's money landed in Atwe's Stripe
 // account, not in any member's balance, so nothing has reached the SELLER yet.
 // Credit their Atwe balance with the sale (the same custodial arrangement as a
@@ -9146,6 +9196,7 @@ app.get('/api/social/history', auth.requireAuth, async (req, res) => {
     const { rows } = await db.query(
       POSTS_SELECT + ` JOIN post_history h ON h.post_id = p.id AND h.user_id = $1
         WHERE p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+          AND p.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)
         ORDER BY h.viewed_at DESC LIMIT 100`, [req.user.id]);
     res.json({ posts: rows.map((r) => mapPost(r, req.user.id)) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your history.' }); }
@@ -18538,10 +18589,28 @@ async function requireHandle(req, res) {
   if (!me || !me.username) { res.status(403).json(NEED_USERNAME); return null; }
   return me;
 }
+// Feed BLOCK filter ($1 = viewer). A block is enforced in BOTH directions: a post
+// drops out whether the viewer blocked the author OR the author blocked the viewer.
+// Only the first half used to be written at each feed, so someone who blocked you
+// still reached your For You, hashtag pages, trending, lists and the AI picks — the
+// Following feed only escaped by accident, because blocking also deletes the follow
+// (a repost by a mutual would still have carried it through). Build every feed of
+// other people's posts from this, rather than writing the clause out by hand.
+function blockFilterOn(col) {
+  return ` AND ${col} NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+  AND ${col} NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)`;
+}
+const BLOCK_FILTER = blockFilterOn('p.user_id');
 // Feed mute filter ($1 = viewer): drops muted authors + keyword-matching posts,
 // but never the viewer's own posts. Append to a feed WHERE clause.
 const MUTE_FILTER = ` AND p.user_id NOT IN (SELECT muted_id FROM post_mutes WHERE muter_id = $1 AND (expires_at IS NULL OR expires_at > now()))
-  AND (p.user_id = $1 OR NOT EXISTS(SELECT 1 FROM muted_keywords mk WHERE mk.user_id = $1 AND (mk.expires_at IS NULL OR mk.expires_at > now()) AND p.body ILIKE '%' || mk.word || '%'))`;
+  AND (p.user_id = $1 OR NOT EXISTS(SELECT 1 FROM muted_keywords mk WHERE mk.user_id = $1 AND (mk.expires_at IS NULL OR mk.expires_at > now())
+    AND mk.word <> '' AND strpos(lower(p.body), lower(mk.word)) > 0))`;
+// NB the keyword test above is strpos(), NOT `body ILIKE '%' || word || '%'`. A muted
+// word goes straight into the pattern, so muting a bare "%" (or "_") made it match
+// EVERY post: the whole feed went blank and then told the member Atwe was empty.
+// strpos has no pattern language at all, so a wildcard is just a character. The
+// `word <> ''` guard matters for the same reason — strpos(x, '') returns 1, i.e. a hit.
 // Snooze durations for a temporary mute (X-style): 1 day / 1 week / 30 days.
 // 0 or anything else = forever (NULL expiry). Returns a safe SQL literal.
 const MUTE_DAYS = [1, 7, 30];
@@ -19972,7 +20041,7 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     const following = req.query.scope === 'following';
     const debug = req.query.debug === '1' && req.user.is_admin; // admin score breakdown
     let attrCtx = null; // For You signal sets, captured for impression attribution
-    const notBlocked = ` AND p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)`;
+    const notBlocked = BLOCK_FILTER;
     // "Not interested" posts are hidden from your feeds (both scopes).
     const notHidden = ` AND p.id NOT IN (SELECT post_id FROM post_hides WHERE user_id = $1)`;
     // Hibernated (deactivated) authors drop out of everyone's feed.
@@ -19988,7 +20057,7 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
       fr AS (SELECT rp.post_id, MAX(rp.created_at) AS at FROM post_reposts rp
               WHERE rp.user_id IN (SELECT id FROM fa) GROUP BY rp.post_id ORDER BY 2 DESC LIMIT 200) `;
     let where = (following
-      ? `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() AND (p.user_id IN (SELECT id FROM fa) OR p.id IN (SELECT post_id FROM fr))`
+      ? `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()`
       : `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()`) + notBlocked + notHidden + notDeact + MUTE_FILTER + SUBONLY_FEED_FILTER
       + (following ? '' : REACH_FILTER);   // reduced reach applies to For You, not to people you chose to follow
     // Infinite scroll: the client sends the ids it already has this session (`seen`,
@@ -20009,7 +20078,7 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
       // the client's seen-set drops the boundary post so it never duplicates.
       if (before && !isNaN(before.getTime())) { params.push(before.toISOString()); where += ` AND p.created_at <= $${params.length}`; }
       if (seenIds.length) { params.push(seenIds); where += ` AND p.id <> ALL($${params.length}::int[])`; }
-      orderBy = ` ORDER BY GREATEST(p.created_at, COALESCE((SELECT at FROM fr WHERE fr.post_id = p.id), p.created_at)) DESC LIMIT 24`;
+      orderBy = ''; // Following builds its own two-half query below (followingPick)
     } else {
       // For You = engagement + recency, now PERSONALIZED to the viewer: a post is
       // boosted when it carries a hashtag they follow ($3), its author shares one of
@@ -20113,10 +20182,34 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     // first and then fetching just those rows costs the sum of the two, which is
     // less than half. array_position keeps the ranked order through stage two.
     const pickIds = (w) => `SELECT p.id FROM posts p JOIN users u ON u.id = p.user_id ${w}${orderBy}`;
+    /* Following, in TWO index-backed halves rather than one query.
+       The OR ("written by someone I follow" OR "reposted by someone I follow") and
+       the sort key GREATEST(p.created_at, (SELECT at FROM fr WHERE fr.post_id = p.id))
+       were fighting each other: a correlated sub-select inside ORDER BY cannot be
+       answered from an index, so Postgres read ALL 250k posts and top-N sorted them
+       — measured at ~900ms, and just as slow for an account following NOBODY, which
+       is the giveaway that it was fixed overhead rather than data. (It is NOT query
+       planning: pg_stat_statements puts planning at 1ms and execution at 902ms.)
+       Split, each half is a plain indexed scan — posts_user_idx for the authors,
+       the ≤200-row fr CTE for the reposts — and the outer sort is a real column.
+       GROUP BY id folds a post that is both written and reposted into one row. */
+    const followingPick = (w) => `SELECT id FROM (
+        SELECT id, MAX(at) AS at FROM (
+          (SELECT p.id, p.created_at AS at FROM posts p JOIN users u ON u.id = p.user_id
+             ${w} AND p.user_id IN (SELECT id FROM fa)
+           ORDER BY p.created_at DESC LIMIT 24)
+          UNION ALL
+          (SELECT p.id, GREATEST(p.created_at, fr.at) AS at FROM posts p JOIN users u ON u.id = p.user_id
+             JOIN fr ON fr.post_id = p.id
+             ${w}
+           ORDER BY 2 DESC LIMIT 24)
+        ) halves GROUP BY id
+      ) merged ORDER BY at DESC LIMIT 24`;
     let rows = [];
     for (const win of feedWindows) {
       const windowed = win ? `${where} AND p.created_at > now() - interval '${win}'` : where;
-      const picked = await db.query((following ? followCte : '') + pickIds(windowed), params);
+      const picked = await db.query(
+        (following ? followCte + followingPick(windowed) : pickIds(windowed)), params);
       const ids = picked.rows.map((r) => r.id);
       rows = ids.length
         ? (await db.query(`${POSTS_SELECT} WHERE p.id = ANY($2::int[]) ORDER BY array_position($2::int[], p.id)`,
@@ -20162,7 +20255,7 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
         const haveIds = new Set(posts.map((p) => p.id));
         const exploreRes = await db.query(
           POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at > now() - interval '48 hours'
-             AND p.user_id <> $1${notBlocked}${notHidden}${notDeact}${MUTE_FILTER}${SUBONLY_FEED_FILTER}
+             AND p.user_id <> $1${notBlocked}${notHidden}${notDeact}${MUTE_FILTER}${SUBONLY_FEED_FILTER}${REACH_FILTER}
              AND (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) + (SELECT COUNT(*) FROM post_reposts rp WHERE rp.post_id = p.id) < 3
              AND p.id NOT IN (SELECT post_id FROM feed_impressions WHERE user_id = $1 AND served_at > now() - interval '3 hours')
            ORDER BY p.created_at DESC LIMIT 8`,
@@ -20177,7 +20270,7 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
       if (firstPage) {
         const promo = await db.query(
           POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()
-             AND p.promoted_until > now() AND p.user_id <> $1${notBlocked}${notHidden}${notDeact}${MUTE_FILTER}${SUBONLY_FEED_FILTER}
+             AND p.promoted_until > now() AND p.user_id <> $1${notBlocked}${notHidden}${notDeact}${MUTE_FILTER}${SUBONLY_FEED_FILTER}${REACH_FILTER}
            ORDER BY p.promoted_until DESC LIMIT 2`,
           [req.user.id]
         );
@@ -20322,6 +20415,7 @@ app.get('/api/feedposts/timeline', auth.requireAuth, async (req, res) => {
       ` WHERE (fp.expires_at IS NULL OR fp.expires_at > now())
           AND (fp.user_id = $1 OR fp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))
           AND fp.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+            AND fp.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)
         ORDER BY fp.created_at DESC LIMIT 100`,
       [req.user.id]
     );
@@ -21349,7 +21443,8 @@ app.get('/api/social/bookmarks', auth.requireAuth, async (req, res) => {
     }
     const { rows } = await db.query(
       POSTS_SELECT + `JOIN post_bookmarks bk ON bk.post_id = p.id AND bk.user_id = $1
-       WHERE p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)${folderClause}${qClause}
+       WHERE p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+         AND p.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)${folderClause}${qClause}
        ORDER BY bk.created_at DESC LIMIT 100`,
       params
     );
@@ -21929,6 +22024,7 @@ app.get('/api/social/trending', auth.requireAuth, async (req, res) => {
        FROM post_hashtags h JOIN posts p ON p.id = h.post_id
        WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at > now() - interval '7 days'
          AND p.created_at <= now() AND p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+           AND p.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)
        GROUP BY h.tag ORDER BY count DESC, h.tag LIMIT 12`,
       [req.user.id]
     );
@@ -22154,6 +22250,7 @@ app.get('/api/social/hashtag/:tag', auth.requireAuth, async (req, res) => {
       POSTS_SELECT + `JOIN post_hashtags h ON h.post_id = p.id AND h.tag = $2
        WHERE p.to_main = true AND p.created_at <= now()
          AND p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+           AND p.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)
        ORDER BY p.created_at DESC LIMIT 60`,
       [req.user.id, tag]
     );
@@ -22175,6 +22272,7 @@ app.get('/api/cashtag/:sym', auth.requireAuth, async (req, res) => {
       POSTS_SELECT + `WHERE p.to_main = true AND p.created_at <= now()
          AND p.body ILIKE ('%$' || $2 || '%')
          AND p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+           AND p.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)
        ORDER BY p.created_at DESC LIMIT 60`,
       [req.user.id, sym]
     );
@@ -22317,6 +22415,7 @@ app.get('/api/social/lists/:id/timeline', auth.requireAuth, async (req, res) => 
       POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()
          AND p.user_id IN (SELECT user_id FROM list_members WHERE list_id = $2)
          AND p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+           AND p.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)
        ORDER BY p.created_at DESC LIMIT 60`,
       [req.user.id, id]
     );
@@ -28817,6 +28916,10 @@ app.post('/api/gift-cards', auth.requireAuth, blockImpersonation, rateLimit(20, 
   if (!Number.isInteger(amount) || amount < GIFT_MIN || amount > GIFT_MAX) return res.status(400).json({ error: `Pick an amount between $${GIFT_MIN / 100} and $${GIFT_MAX / 100}.` });
   const message = (req.body.message || '').toString().trim().slice(0, 200) || null;
   let toId = null;
+  // Declared OUTSIDE the try: a const inside a try block is invisible to its catch,
+  // so releasing the claim from the error path would itself throw a ReferenceError.
+  const cid = req.body.clientId;
+  const releaseGift = () => walletReleaseIdem(req.user.id, cid, 'giftcard').catch(() => {});
   try {
     if (req.body.to) {
       const handle = String(req.body.to).replace(/^@/, '');
@@ -28831,6 +28934,11 @@ app.post('/api/gift-cards', auth.requireAuth, blockImpersonation, rateLimit(20, 
     }
     const v = await walletVelocityCheck(req.user.id, amount);
     if (!v.ok) return res.status(walletVelocityStatus(v)).json(walletVelocityError(v));
+    /* Claim the buy before any money moves — this was the ONE wallet-spending route
+       that didn't, so a double-tap or a retry after a flaky network minted a SECOND
+       card and charged for it again. Same shape as send / top-up / orders / tips. */
+    const idem = await walletClaimIdem(req.user.id, cid, 'giftcard');
+    if (!idem.claimed) return res.json(idem.result || { ok: true, deduped: true });
     // Debit the wallet AND mint the card in ONE transaction, so a mint failure can never
     // leave the buyer charged with no card (money-destruction). The card HOLDS the value
     // (balance_cents = amount) and starts UNCLAIMED (owner_id NULL): whoever redeems the
@@ -28841,8 +28949,8 @@ app.post('/api/gift-cards', auth.requireAuth, blockImpersonation, rateLimit(20, 
     try {
       await client.query('BEGIN');
       const bal = await client.query('SELECT balance_cents FROM users WHERE id = $1 FOR UPDATE', [req.user.id]);
-      if (!bal.rows[0]) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Could not buy the gift card.' }); }
-      if (bal.rows[0].balance_cents < amount) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true }); }
+      if (!bal.rows[0]) { await client.query('ROLLBACK'); await releaseGift(); return res.status(400).json({ error: 'Could not buy the gift card.' }); }
+      if (bal.rows[0].balance_cents < amount) { await client.query('ROLLBACK'); await releaseGift(); return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true }); }
       await walletCredit(client, req.user.id, -amount, 'gift_card', null, 'Gift card');
       for (let i = 0; i < 5; i++) {
         code = 'GIFT-' + require('crypto').randomBytes(5).toString('hex').toUpperCase();
@@ -28864,8 +28972,10 @@ app.post('/api/gift-cards', auth.requireAuth, blockImpersonation, rateLimit(20, 
       rtPush(req.user.id, 'msg', { kind: 'dm', peerId: toId, message: { ...msg, mine: true } });
       notify(toId, req.user.id, 'gift_received');
     }
-    res.status(201).json({ ok: true, card: mapGiftCard(row, req.user.id) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not buy the gift card.' }); }
+    const payload = { ok: true, card: mapGiftCard(row, req.user.id) };
+    await walletStoreIdem(req.user.id, cid, 'giftcard', payload).catch(() => {});
+    res.status(201).json(payload);
+  } catch (err) { console.error(err); await releaseGift(); res.status(500).json({ error: 'Could not buy the gift card.' }); }
 });
 // Add a gift card to YOUR wallet by code (out-of-band redeem). This claims OWNERSHIP —
 // the card becomes yours as a separate spendable card (its own balance). It does NOT dump
@@ -35200,9 +35310,19 @@ app.post('/api/orders/:id/refund', auth.requireAuth, blockImpersonation, rateLim
       `UPDATE orders SET refunded_cents = refunded_cents + $3
         WHERE id = $1 AND seller_id = $2 AND refunded_cents + $3 <= total_cents RETURNING refunded_cents`, [id, req.user.id, amt]);
     if (!claim.rowCount) return res.status(409).json({ error: 'Another refund just went through — check the order.' });
+    /* A FULL refund gets the Atwe fee back first. Without this the seller was
+       short by exactly the fee on every sale they were paid for, so refunding a
+       sale in full was refused unless they topped up out of their own pocket —
+       and through the OTHER refund doors the platform silently minted the gap.
+       Partial refunds keep the fee: part of the sale still stood. If the transfer
+       then fails for any other reason the fee is re-charged, so a failed refund
+       never quietly hands back money on a sale that is still standing. */
+    const fullRefund = amt >= remaining;
+    const feeBack = fullRefund ? await refundPlatformFee(req.user.id, id) : 0;
     let t = null;
     try { t = await walletTransfer(req.user.id, o.buyer_id, amt, 'Refund on order #' + id); } catch (e) {}
     if (!t || !t.ok) {
+      if (feeBack > 0) await chargePlatformFee(req.user.id, id, o.total_cents).catch(() => {});
       await db.query('UPDATE orders SET refunded_cents = refunded_cents - $2 WHERE id = $1', [id, amt]);
       return res.status(400).json({ error: 'Your balance doesn’t cover that refund — add money first.', insufficientBalance: true });
     }
@@ -35281,9 +35401,11 @@ app.patch('/api/orders/:id/return', auth.requireAuth, blockImpersonation, async 
         // A frozen seller wallet must not move — the buyer is made whole by a
         // platform credit instead (the freeze holds the funds for review).
         const fr = (await db.query('SELECT wallet_frozen FROM users WHERE id = $1', [o.seller_id])).rows[0];
-        let t = { ok: false };
-        if (!(fr && fr.wallet_frozen)) t = await walletTransfer(o.seller_id, o.buyer_id, owed, 'Refund: order #' + id, false).catch(() => ({ ok: false }));
-        if (!t.ok) await walletCreditStandalone(o.buyer_id, owed, 'refund', 'Refund: order #' + id).catch(() => {});
+        // Give the Atwe fee back first: it came out of the seller's balance on a sale
+        // that is being undone, so without this the seller is short by exactly the fee
+        // and the refund can never be funded from the money they were actually paid.
+        if (!(fr && fr.wallet_frozen)) await refundPlatformFee(o.seller_id, id);
+        await refundToPayee(fr && fr.wallet_frozen ? null : o.seller_id, o.buyer_id, owed, 'Refund: order #' + id, 'refund');
       }
       await db.query("UPDATE orders SET status = 'refunded', refunded_cents = total_cents WHERE id = $1", [id]);
       await db.query("UPDATE order_returns SET status = 'refunded' WHERE order_id = $1 AND status = 'approved'", [id]);
@@ -40471,23 +40593,16 @@ async function executeRefund(reqRow, amountCents, adminId) {
     const remaining = Math.max(0, (claim.rows[0].total_cents || 0) - (claim.rows[0].refunded_cents || 0));
     if (remaining <= 0) return { ok: false, alreadyRefunded: true };
     if (amountCents > remaining) amountCents = remaining;
-    if (sellerId) {
-      const t = await walletTransfer(sellerId, uid, amountCents, note, false).catch(() => ({ ok: false }));
-      if (!t.ok) await walletCreditStandalone(uid, amountCents, 'refund', note);
-    } else {
-      await walletCreditStandalone(uid, amountCents, 'refund', note);
-    }
+    // Same rule as the seller-approved return: hand back the Atwe fee before pulling
+    // the refund, or the seller is short by the fee and the platform ends up minting it.
+    if (sellerId) await refundPlatformFee(sellerId, oid);
+    await refundToPayee(sellerId || null, uid, amountCents, note, 'refund');
     await db.query('UPDATE orders SET refunded_cents = LEAST(total_cents, refunded_cents + $2) WHERE id = $1', [oid, amountCents]).catch(() => {});
     return { ok: true, refundedCents: amountCents };
   }
   if (reqRow.kind === 'tip') {
     const tp = (await db.query('SELECT to_id FROM tips WHERE id = $1', [parseInt(reqRow.ref_id, 10)])).rows[0];
-    if (tp && tp.to_id) {
-      const t = await walletTransfer(tp.to_id, uid, amountCents, note, false).catch(() => ({ ok: false }));
-      if (!t.ok) await walletCreditStandalone(uid, amountCents, 'refund', note);
-    } else {
-      await walletCreditStandalone(uid, amountCents, 'refund', note);
-    }
+    await refundToPayee(tp && tp.to_id ? tp.to_id : null, uid, amountCents, note, 'refund');
     // Peer-to-peer money reversed — NOT company revenue (per the money model), so no
     // company_revenue row here (an earlier version wrongly logged one for tip refunds).
     return { ok: true };
@@ -44171,7 +44286,8 @@ app.post('/api/ai/for-you', auth.requireAuth, rateLimit(12, 60000, 'ai-foryou'),
     const [postsR, peopleR, jobsR] = await Promise.all([
       db.query(
         POSTS_SELECT + ` WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() AND p.created_at > now() - interval '10 days' AND p.body <> ''
-            AND p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)` + MUTE_FILTER + SUBONLY_FEED_FILTER + `
+            AND p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+              AND p.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)` + MUTE_FILTER + SUBONLY_FEED_FILTER + `
             AND ( p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1)
                OR (array_length($2::text[], 1) IS NOT NULL AND u.categories ?| $2::text[])
                OR (array_length($3::text[], 1) IS NOT NULL AND EXISTS(SELECT 1 FROM post_hashtags ph WHERE ph.post_id = p.id AND ph.tag = ANY($3::text[]))) )
