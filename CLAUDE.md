@@ -5053,6 +5053,76 @@ object; `openDeepLink()` turns that into the surface, auth-gating anything marke
 `auth:true`. A path we don't own returns null and the app falls through to its
 default surface — an unknown URL never errors.
 
+## Search & typeahead
+
+**Two separate things, one rule each.**
+
+### The person picker — every "who?" field
+
+`acPersonPicker(inputId, onPick, opts)` is the ONE typeahead for "which person?".
+Send money, request money, gift-card recipient, team invite, creator sample,
+affiliation invite and the "who can contact you" allow-list all use it; before
+this each was a bare text box where you typed a handle from memory and found out
+whether it was right only after pressing the button. It searches the existing
+`GET /api/social/mention-search?q=` (prefix-ranked, blocks-excluded), shows photo
++ name + `@handle`, and supports tap, arrow keys, Enter and Escape.
+
+- **Binding is LAZY and delegated** — one `focusin` listener on `document` checks
+  the id against **`PERSON_FIELDS`** (or a `data-person-picker` attribute) and binds
+  on first focus. Several of these panels are built on demand and the field does
+  not exist in the document until the panel opens, so binding at boot would
+  silently miss them. **A new "who?" field is one word in `PERSON_FIELDS`** — do not
+  hand-roll another picker; there were five near-copies before this.
+- Two invariants that are easy to reintroduce: (1) filling the field fires an
+  `input` event on purpose (other things listen for it), which would re-search for
+  the handle just chosen and pop the list back up under the finger — `input._ppJust`
+  swallows that one echo; (2) the box is `position:fixed`, so a **wheel** closes it,
+  not just an actual `scroll` (a wheel that scrolls nothing still means the finger
+  moved on — the same lesson `.ac-react-bar` had to learn), while a wheel *on* the
+  list still scrolls the list.
+- Styling reuses the shared frosted menu material (`--menu-bg`/`--menu-blur`/…) as
+  `.ac-pp` / `.ac-pp-row`, so it matches every other popover in the app.
+
+### The search bar knows the app itself
+
+The Engine search box used to know about people, posts, listings, jobs — real
+CONTENT — but nothing about the app around it. Someone looking for gift cards, a
+refund, or where dark mode lives got "No results". `acAppIndex()` now assembles
+**~143 destinations** from the tables that already describe the app, so a feature
+is findable the day it ships and the two can never drift:
+
+| source | what it contributes |
+|---|---|
+| **`PLACES_EXTRA`** | the five worlds, the public browse surfaces, and the common *actions* people type ("write a post", "go live", "new chat") |
+| **`ME_HUB`** | every row of the Profile hub — ~98 destinations |
+| **`SET_SEARCH_INDEX`** | every setting, down to individual rows |
+
+**`ME_HUB` is the Profile hub's own source of truth** — `acGoProfileHub()` renders
+from it (`meLabel(it)` resolves a label that is a function, e.g. Upgrade-vs-Manage
+plan, which must NOT be evaluated at file-load time). Every entry carries a `kw`
+string of synonyms, which is what makes "cv" find Resumes, "basket" find Cart,
+"incognito" find Private profile views and "dark mode" find Appearance.
+
+`acFindPlaces(q, limit)` ranks: exact name (100) → name starts with (82) → word
+inside the name (64) → **every query word is a whole word** in name+keywords (50) →
+substring in name (48) → substring anywhere (30); minus a small length penalty,
+plus **+10 for `TOP_PLACES`** (the handful people actually reach for) and **−6 for a
+single settings row** (a smaller destination than a section of the app, so it
+should lose a close race rather than win it on a coincidence). Two-character
+queries only match whole words — otherwise "ai" finds the "ai" buried in "Email".
+
+Results render as a **"Pages & features"** group at the top of the *Everything*
+scope only (`#acPlaces`, `.ac-place` rows). They are held on the device, so
+`acDoSearch` paints them with **no debounce and no request** — and swaps only that
+block (`acRenderPlaces`), leaving server results underneath in place, so the list
+you are reading does not blink on every keystroke. Best 5, then "Show N more".
+
+**Adding a destination:** put it in `ME_HUB` (if it belongs in the Profile hub) or
+`PLACES_EXTRA`, with a `kw` string of the words a non-technical person would
+actually type. `test/`-style coverage lives in the scratchpad probes; the index
+test asserts every entry's opener is a real function — a search result that does
+nothing is worse than no result.
+
 ## Conventions
 
 - **One-file-per-surface frontend.** `index.html` is the app; `admin.html` is the
