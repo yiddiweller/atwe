@@ -4943,8 +4943,20 @@ untouched (functional). New transitions must use the tokens.
 ## URL & routing architecture
 
 **One domain, clean paths.** Everything is `atwe.com/<clean-route>` — no subdomains
-for features (the only subdomain is `admin.atwe.com`). `atwe.ai` 301s to `atwe.com`
-keeping the path, and `www.atwe.com` 301s to the apex.
+for features (the only subdomain is `admin.atwe.com`). Every other domain we own is
+an alternative spelling of the same address, not a separate product:
+`SECONDARY_DOMAINS` in `server.js` 301s `atwe.app` and `atwe.co` (and their `www`)
+to `atwe.com` **keeping the path**, so `atwe.app/john` lands on the real profile
+rather than the homepage; `atwe.ai` does the same except a bare visit still lands on
+`/ai` (it historically WAS the AI product); `www.atwe.com` 301s to the apex; and
+`admin.atwe.{ai,app,co}` map to `admin.atwe.com`.
+
+**One page, one canonical address.** `renderShellWithOg` emits a
+`<link rel="canonical">` alongside the OG tags, so `/company/john` and `/john/media`
+both declare `/john` as the real URL and never get indexed as duplicates. The client
+keeps the tag and `og:url` in step as the SPA moves (`acSetCanonical`, called from
+`acSetPath`) for crawlers that run JS; `CANONICAL_ORIGIN` keeps a dev machine from
+ever claiming to be atwe.com.
 
 **`APP_ROUTES` in `public/index.html` is the single map of URL → surface.** Adding a
 line there gives a destination a URL, makes it reload-safe and shareable, and
