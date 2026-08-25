@@ -20037,7 +20037,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1700'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1701'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -21202,7 +21202,20 @@ const SELF_ROUTED_SCREENS = ['acProfileScreen', 'acPostViewScreen', 'acCircleScr
    Self-correcting: if a surface opens by some path nobody thought of, the next
    sync still lands on the right address. */
 let _pathSyncQueued = false;
-function acSyncPath() {
+/* How many history entries WE have pushed. Closing a panel walks one back instead
+   of pushing another, so the history stays clean and Forward works — but only
+   while we have an entry of our own to walk back to. Arriving straight on a deep
+   link leaves this at 0, and closing then simply rewrites the address rather than
+   walking out of the app entirely. */
+let _histDepth = 0;
+/* Set while the browser is restoring a history entry (Back/Forward). Everything
+   that restore triggers must REPLACE rather than push, or walking backwards would
+   keep minting new entries and you could never actually leave.
+   NB deliberately not _navRestoring — that name belongs to the screen-stack
+   restore a few thousand lines down, and shadowing it would be a nasty trap. */
+let _histRestoring = false;
+function acSyncPath(opts) {
+  const wantPush = !!(opts && opts.push) && !_histRestoring;
   if (_pathSyncQueued) return;
   _pathSyncQueued = true;
   requestAnimationFrame(() => {
@@ -21212,7 +21225,7 @@ function acSyncPath() {
       const open = document.querySelectorAll('.overlay:not(.hidden):not(.closing)');
       for (let i = open.length - 1; i >= 0; i--) {
         const key = ROUTE_BY_VIEW[open[i].id];
-        if (key) { acSetPath('/' + key); return; }
+        if (key) { acSetPath('/' + key, { push: wantPush }); return; }
       }
       // A profile / post / circle / thread writes a richer path of its own — don't stamp on it.
       for (const id of SELF_ROUTED_SCREENS) {
@@ -21221,9 +21234,10 @@ function acSyncPath() {
       }
       // Two destinations are a tab PLUS a scope rather than a panel — derive them
       // the same way, from the live state, so they stay right without a hint.
-      if (_appTab === 'search' && _searchScope === 'jobs') { acSetPath('/jobs'); return; }
-      if (_appTab === 'home' && _acFeedScope === 'bookmarks') { acSetPath('/collections'); return; }
-      acSetPath(WORLD_PATH[_appTab] || '/');
+      const _push = { push: wantPush };
+      if (_appTab === 'search' && _searchScope === 'jobs') { acSetPath('/jobs', _push); return; }
+      if (_appTab === 'home' && _acFeedScope === 'bookmarks') { acSetPath('/collections', _push); return; }
+      acSetPath(WORLD_PATH[_appTab] || '/', _push);
     } catch (e) {}
   });
 }
@@ -21317,8 +21331,18 @@ function openDeepLink(r) {
 // Keep the address bar in sync with the open profile/circle/group so links are
 // shareable + reloadable. Uses replaceState (no new history entry) so it never
 // interferes with the in-app Back button / PWA back-trap.
-function acSetPath(path) {
-  try { if (location.pathname !== path) history.replaceState(history.state, '', path); } catch (e) {}
+/* Write the address bar.
+   push:true adds a real entry to the browser's history, so Back and Forward walk
+   through Atwe the way they walk through any website. Default stays replace —
+   used when a path is only being TIDIED (an old link canonicalising, a post
+   upgrading to its /<username>/post/<id> form), which must not leave a junk
+   entry between two real destinations. */
+function acSetPath(path, opts) {
+  try {
+    if (location.pathname === path) return;
+    if (opts && opts.push) { history.pushState({ atwe: 1, path }, '', path); _histDepth++; }
+    else history.replaceState(history.state || { atwe: 1, path }, '', path);
+  } catch (e) {}
 }
 let _pendingJoinGroup = null; // a ?joingroup=<code> invite to open after auth
 let _pendingPayLink = null;   // a ?paylink=<code> to open the pay sheet after auth
@@ -21969,7 +21993,15 @@ function closeOverlay(id) {
   el._ct = setTimeout(done, 220);
   el.addEventListener('animationend', done);
   // The overlay already carries .closing at this point, and the sync's selector
-  // excludes that — so it correctly falls back to whatever this was covering.
+  // excludes it — so the address falls back to whatever this was covering.
+  // If WE pushed the entry that opened it, walk back instead of pushing another:
+  // that keeps the history clean and makes Forward re-open it, the way a modal
+  // behaves on any real site. Landed here on a deep link (nothing of ours to walk
+  // back to)? Just rewrite the address in place and stay put.
+  if (!_histRestoring && _histDepth > 0 && ROUTE_BY_VIEW[id] && location.pathname === '/' + ROUTE_BY_VIEW[id]) {
+    _histDepth--;
+    try { history.back(); return; } catch (e) {}
+  }
   acSyncPath();
 }
 // Always strip a stale 'closing' state when (re)showing an overlay.
@@ -21987,7 +22019,7 @@ function showOverlay(id) {
   // via their own z-index, so this only reorders within the base tier.
   if (el.parentNode === document.body && document.body.lastElementChild !== el) document.body.appendChild(el);
   el.classList.remove('closing', 'hidden');
-  acSyncPath();   // the address bar follows whatever is now on top
+  acSyncPath({ push: true });   // opening a panel is a real move forward
   // A standalone .action-sheet popover (Go Live, Schedule…) starts at opacity:0 and
   // is only revealed by .ctx-open. Anchored menus (postActions) set their own
   // position + ctx-open after showOverlay; for the rest, center + reveal here.
@@ -28505,7 +28537,7 @@ function appTab(tab, opts) {
   if (_appTab && _appTab !== tab && !_silent && typeof acDismissNavNotif === 'function') acDismissNavNotif(_appTab);
   _appTab = tab;
   if (tab !== 'call') { try { localStorage.setItem('atwe_last_tab', tab); } catch {} }
-  acSyncPath();   // /messages, /search, /ai, /me — home stays the bare domain
+  acSyncPath({ push: true });   // /messages, /search, /ai, /me — home stays the bare domain
   const social = tab !== 'ai';
   document.querySelector('.main').classList.toggle('social', social);
   document.getElementById('socialWrap').classList.toggle('hidden', !social);
@@ -61757,22 +61789,65 @@ function _isStandaloneApp() {
   try { return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true; }
   catch (e) { return false; }
 }
+/* Things Back must CANCEL rather than navigate away from: an open menu, a confirm
+   dialog, a live call, the mobile drawer. Cancelling one of these is not a page
+   move, so the address bar must not change and the history entry is put back.
+   Mirrors steps 1-3 and 5 of appGoBack, which stays the authority for everything
+   that isn't a URL. */
+function _navDismissModal() {
+  const menus = document.querySelectorAll('#profileMenu:not(.hidden), .brand-menu:not(.hidden), .attach-menu:not(.hidden), .chat-menu:not(.hidden)');
+  if (menus.length) { menus.forEach((m) => m.classList.add('hidden')); return true; }
+  if (_ovOpen('confirmOverlay')) { document.getElementById('cfCancel')?.click(); return true; }
+  if (_ovOpen('deleteModal')) { document.getElementById('deleteModal').classList.add('hidden'); return true; }
+  if (_ovOpen('liveViewersOverlay')) { closeOverlay('liveViewersOverlay'); return true; }
+  if (_ovOpen('liveOverlay')) { liveEnd(); return true; }
+  if (_ovOpen('callOverlay')) {
+    const cov = document.getElementById('callOverlay');
+    if (cov && cov.classList.contains('call-min')) { callRestore(); return true; }
+    if (CALL && CALL.state === 'incoming') callDecline(); else callHangup();
+    return true;
+  }
+  const sb = document.getElementById('sidebar');
+  if (sb && sb.classList.contains('open')) { closeSidebar(); return true; }
+  return false;
+}
+
+/* Land on the address the browser just restored. Panels belonging to some OTHER
+   route are closed first, so walking back out of /wallet actually leaves the
+   wallet rather than leaving it sitting open over the page behind it. */
+function _navApplyUrl() {
+  const r = parseDeepLink();
+  const wantView = r && r.type === 'route' && APP_ROUTES[r.key] && APP_ROUTES[r.key].view;
+  document.querySelectorAll('.overlay:not(.hidden)').forEach((o) => {
+    if (ROUTE_BY_VIEW[o.id] && o.id !== wantView) { try { closeOverlay(o.id); } catch (e) {} }
+  });
+  if (r) openDeepLink(r);
+  else if (location.pathname === '/' || location.pathname === '') { try { appTab('home'); } catch (e) {} }
+}
+
 function navInit() {
   if (_navReady) return; _navReady = true;
-  try { history.replaceState({ atwe: 0 }, ''); history.pushState({ atwe: 1 }, ''); } catch (e) {}
+  try { history.replaceState({ atwe: 1, path: location.pathname }, ''); } catch (e) {}
   window.addEventListener('popstate', () => {
-    const r = appGoBack();
-    // Handled in-app (closed an overlay, popped a sub-screen, restored a tab): re-arm
-    // the sentinel so the NEXT Back is intercepted too.
-    if (r !== 'exit') { try { history.pushState({ atwe: 1 }, ''); } catch (e) {} return; }
-    // Nothing left to close. Regular browser → leave the app the normal way, returning
-    // to wherever the visitor came from (e.g. the Google search), like any website.
-    if (!_isStandaloneApp()) { try { history.back(); } catch (e) {} return; }
-    // Installed standalone app → keep the double-tap-to-exit affordance.
-    if (_exitArmed) { _exitArmed = false; try { history.go(-1); } catch (e) {} return; }
-    _exitArmed = true; showNotif('Press back again to exit');
-    clearTimeout(_exitTimer); _exitTimer = setTimeout(() => { _exitArmed = false; }, 2000);
-    try { history.pushState({ atwe: 1 }, ''); } catch (e) {}
+    // A menu / dialog / call is open → Back cancels THAT, and the page stays put.
+    if (_navDismissModal()) { try { history.pushState({ atwe: 1, path: location.pathname }, ''); } catch (e) {} return; }
+    // Otherwise this is a genuine page move. The browser has already restored the
+    // URL; honour it, and suppress the pushes that landing there would normally
+    // make — or Back would mint a fresh entry each time and never let you out.
+    _histRestoring = true;
+    try { _navApplyUrl(); } catch (e) { console.error('popstate', e); }
+    setTimeout(() => { _histRestoring = false; }, 260);
+
+    // Nothing left in Atwe to go back to. In a regular browser tab the visitor came
+    // from somewhere real (a search result, a link) — let the next Back take them
+    // there like any website. The installed standalone app has no such place, so it
+    // keeps the Android-style press-again-to-exit guard.
+    if (_isStandaloneApp() && history.length <= 2) {
+      if (_exitArmed) { _exitArmed = false; return; }
+      _exitArmed = true; showNotif('Press back again to exit');
+      clearTimeout(_exitTimer); _exitTimer = setTimeout(() => { _exitArmed = false; }, 2000);
+      try { history.pushState({ atwe: 1, path: location.pathname }, ''); } catch (e) {}
+    }
   });
 }
 
