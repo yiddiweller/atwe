@@ -42,16 +42,31 @@ app.set('trust proxy', 1);
 const REQLOG_SLOW_MS = 800;
 const REQLOG_CAP_DAYS = 30;
 
+/* Every domain we own resolves to ONE canonical home: atwe.com. These are not
+   separate versions of the product — they are alternative spellings of the same
+   address, and each keeps its path on the way through so a deep link survives. */
+const SECONDARY_DOMAINS = new Set([
+  'atwe.app', 'www.atwe.app',
+  'atwe.co', 'www.atwe.co',
+]);
 // Permanently move the old atwe.ai domain to atwe.com. A bare visit lands on the
 // Atwe AI page (?go=ai); deep links (verify/reset, etc.) keep their path + query,
 // and the old admin subdomain maps to the new one.
 app.use((req, res, next) => {
   const host = (req.hostname || '').toLowerCase();
   if (host === 'atwe.ai' || host === 'www.atwe.ai') {
+    // atwe.ai historically WAS the AI product, so a bare visit still lands on /ai.
     const url = (!req.originalUrl || req.originalUrl === '/') ? '/ai' : req.originalUrl;
     return res.redirect(301, 'https://atwe.com' + url);
   }
-  if (host === 'admin.atwe.ai') {
+  // The other domains we own are not separate products — they are the same
+  // platform under a different name. Send them to the canonical domain and KEEP
+  // the path, so atwe.app/john lands on the real atwe.com/john rather than
+  // dumping the visitor on the homepage.
+  if (SECONDARY_DOMAINS.has(host)) {
+    return res.redirect(301, 'https://atwe.com' + (req.originalUrl || '/'));
+  }
+  if (host === 'admin.atwe.ai' || host === 'admin.atwe.app' || host === 'admin.atwe.co') {
     return res.redirect(301, 'https://admin.atwe.com' + (req.originalUrl || '/'));
   }
   // Canonicalise www → apex on the primary domain (keeps path + query).
@@ -44150,6 +44165,15 @@ function renderShellWithOg(og) {
   h = _setMeta(h, 'name', 'twitter:description', og.description);
   h = _setMeta(h, 'name', 'twitter:image', og.image);
   h = _setMeta(h, 'name', 'twitter:card', og.largeImage ? 'summary_large_image' : 'summary');
+  // One page, one canonical address. /company/john and /john are the same
+  // business; /john/media is the same profile — each says so here, so search
+  // engines index the real URL instead of treating the alias as a duplicate.
+  if (og.url) {
+    const cv = ogEscape(og.url);
+    h = /<link[^>]+rel="canonical"/i.test(h)
+      ? h.replace(/<link[^>]+rel="canonical"[^>]*>/i, `<link rel="canonical" href="${cv}"/>`)
+      : h.replace(/<\/head>/i, `<link rel="canonical" href="${cv}"/>\n</head>`);
+  }
   return h;
 }
 // Resolve a request path to entity OG data, or null (unknown path / not found).

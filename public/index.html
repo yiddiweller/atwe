@@ -17,6 +17,7 @@
 <meta property="og:title" content="Atwe"/>
 <meta property="og:description" content="The network built for business. Connect, message, hire, sell and grow, all in one place."/>
 <meta property="og:url" content="https://atwe.com/"/>
+<link rel="canonical" href="https://atwe.com/"/>
 <meta property="og:image" content="https://atwe.com/icon-384.png"/>
 <meta name="twitter:card" content="summary"/>
 <meta name="twitter:title" content="Atwe"/>
@@ -20037,7 +20038,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1701'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1702'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -21337,11 +21338,30 @@ function openDeepLink(r) {
    used when a path is only being TIDIED (an old link canonicalising, a post
    upgrading to its /<username>/post/<id> form), which must not leave a junk
    entry between two real destinations. */
+/* Canonical domain for every public address we advertise. Local/staging hosts keep
+   their own origin so a dev machine never claims to be atwe.com. */
+const CANONICAL_ORIGIN = /(^|\.)atwe\.(com|ai|app|co)$/i.test(location.hostname)
+  ? 'https://atwe.com' : location.origin;
+/* Keep <link rel=canonical> and og:url in step with the address as the app moves.
+   The server already rewrites both for link-preview crawlers, which don't run JS;
+   this covers the ones that do, and means "view source" never disagrees with the
+   address bar. */
+function acSetCanonical(path) {
+  try {
+    const href = CANONICAL_ORIGIN + (path || '/');
+    let l = document.querySelector('link[rel="canonical"]');
+    if (!l) { l = document.createElement('link'); l.rel = 'canonical'; document.head.appendChild(l); }
+    l.href = href;
+    const og = document.querySelector('meta[property="og:url"]');
+    if (og) og.setAttribute('content', href);
+  } catch (e) {}
+}
 function acSetPath(path, opts) {
   try {
     if (location.pathname === path) return;
     if (opts && opts.push) { history.pushState({ atwe: 1, path }, '', path); _histDepth++; }
     else history.replaceState(history.state || { atwe: 1, path }, '', path);
+    acSetCanonical(path);
   } catch (e) {}
 }
 let _pendingJoinGroup = null; // a ?joingroup=<code> invite to open after auth
