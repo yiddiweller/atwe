@@ -5438,6 +5438,38 @@ today.
   The checker loads the file with a real HTML parser (no server, no login) and takes
   a couple of seconds. **A regression suite that only calls functions cannot see this
   class of bug — a check that asserts a surface actually became VISIBLE can.**
+- **A switched-off effect can leave live JS behind, and it will paint over your app.**
+  The cursor "pool glow" was removed for good per the design rule above — but only in
+  CSS (`#page-glow{display:none!important}`), with a comment claiming "the JS that
+  injects them stays inert". It was not inert. The **media shield** (`makeShield`/
+  `syncShields` inside `lightEngine()`) exists so photos don't get tinted by that
+  glow: it clones every `<img>`/`<video>` within 360px of the cursor into a
+  `position:fixed; z-index:1101; pointer-events:none` copy appended to `<body>`, and
+  re-glues each copy to its original every animation frame. It gated on the
+  **`pool-on` class**, which `pointermove` still adds — never on whether the glow
+  actually renders. So on every desktop, pictures were being copied on top of the
+  entire app to protect them from a light that had not existed for months.
+  Because the copy is `position:fixed` it is **not clipped by the feed's scroller**:
+  as a photo scrolled up under the top bar the real one was clipped and the copy kept
+  painting, straight over the tabs. And because it is `pointer-events:none`, clicks
+  still landed correctly and **`document.elementFromPoint` insisted the bar was on
+  top** — which is why two earlier passes, both hit-test-driven, diagnosed the wrong
+  thing (a hover reaction bar, then image sizing) and the founder twice reported
+  "nothing changed". `syncShields` now asks `glowRenders()` (a real computed-style
+  check on `#page-glow`, cached ~1s) and `positionShield` clips each copy with
+  `clip-path: inset(...)` to the intersection of every scrolling ancestor, so it can
+  never paint outside where the original is genuinely visible even if the glow comes
+  back. Two lessons worth keeping: **turning an effect off in CSS does not turn off
+  the JS that serves it**, and **an overlay with `pointer-events:none` is invisible to
+  every hit-test probe — to find one you must compare PIXELS, or enumerate elements
+  geometrically, not ask `elementFromPoint` what is on top.**
+- **A repro that depends on the seeded database will drift under you.** Hunting the
+  above, the same probe reported 4/14 bad frames, then 0/42, then 3/3 — for identical
+  code. Cause: every run reused one test account, and `feed_impressions` (the
+  already-seen filter) quietly changed which posts the feed served until there were
+  no photos in it at all. A "fix" measured that way proves nothing. The probes now
+  create a **fresh account per run**, and the fixture posts are given enough likes to
+  rank deterministically. Before trusting any before/after, run the "before" twice.
 - **A class may be declared TWICE at the same level, and the LATER copy wins.**
   Editing the first one changes nothing and the failure is silent. This has bitten
   real work three times (`.mc-call-sub`, `.mc-inv-sub`, `.msg-act`). A sweep counts
