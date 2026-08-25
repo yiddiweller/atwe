@@ -23,6 +23,15 @@ const pool = connectionString
   ? new Pool({ connectionString, ssl: resolveSsl() })
   : null;
 
+// An idle pooled connection dying — the database restarting, a failover, a
+// provider timing one out — makes `pg` emit 'error' on the pool. With nothing
+// listening, Node treats that as an uncaught exception; it only survived because
+// of the catch-all handler in server.js, which is luck rather than a design.
+// Log it and let the pool discard the connection, which is what it does anyway.
+if (pool) pool.on('error', (err) => {
+  console.error('Postgres dropped an idle connection (it will be replaced):', err && err.message);
+});
+
 function isConfigured() {
   return !!pool;
 }
@@ -1642,6 +1651,61 @@ async function initSchema() {
   // (product, reviewer). VERIFIED-PURCHASE only — enforced server-side (the reviewer
   // must have a paid/fulfilled/delivered order containing the product).
   await query(`
+    -- Ranking stats, precomputed. Best Match used to recompute a listing's average
+    -- rating, review count and 90-day units sold FOR EVERY PRODUCT on every browse
+    -- — 40k listings x several aggregates, ~1.3s a page. A background job refreshes
+    -- this table every half hour instead. Ranking is a heuristic, so half an hour of
+    -- staleness is invisible; the star rating a shopper actually SEES is still read
+    -- live from product_reviews and is always exact.
+    CREATE TABLE IF NOT EXISTS product_rank_stats (
+      product_id INTEGER PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
+      rating_avg REAL DEFAULT 0,
+      rating_count INTEGER DEFAULT 0,
+      sold_90d INTEGER DEFAULT 0,
+      seller_sales INTEGER DEFAULT 0,
+      updated_at TIMESTAMPTZ DEFAULT now()
+    );
+
+    -- An unindexed foreign key that every marketplace browse had to walk: the
+    -- "units sold" term looks up order_items BY PRODUCT, and without this it read
+    -- the whole table once per listing (80s a page at 60k orders).
+    CREATE INDEX IF NOT EXISTS order_items_product_idx ON order_items (product_id);
+    -- "Which authors do I engage with" runs on every For You load and looks up
+    -- post_likes BY USER.
+    CREATE INDEX IF NOT EXISTS post_likes_user_idx ON post_likes (user_id, created_at DESC);
+    -- Deactivated accounts are filtered out of nearly every listing query. Almost
+    -- nobody is deactivated, so a partial index is a few pages instead of a scan of
+    -- the whole users table each time.
+    CREATE INDEX IF NOT EXISTS users_deactivated_idx ON users (id) WHERE deactivated;
+    -- Same trick for the reduced-reach check, which the For You ranking asks about
+    -- every candidate post.
+    CREATE INDEX IF NOT EXISTS users_reach_limited_idx ON users (id) WHERE reach_limited;
+    -- Finding the one or two promoted "Ad" posts meant reading every post ever
+    -- written; almost none are promoted, so this index is a few kilobytes.
+    CREATE INDEX IF NOT EXISTS posts_promoted_idx ON posts (promoted_until) WHERE promoted_until IS NOT NULL;
+    -- Foreign keys with nothing to look them up by: every one of these had to be
+    -- scanned in full whenever the row it points at was deleted. Deleting a single
+    -- account went from 638ms to 65ms with these in place.
+    CREATE INDEX IF NOT EXISTS at_messages_sentby_idx ON at_messages (sent_by) WHERE sent_by IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS posts_product_idx ON posts (product_id) WHERE product_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS posts_quote_idx ON posts (quote_id) WHERE quote_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS notifications_actor_idx ON notifications (actor_id) WHERE actor_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS notifications_post_idx ON notifications (post_id) WHERE post_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS notifications_group_idx ON notifications (group_id) WHERE group_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS notifications_event_idx ON notifications (event_id) WHERE event_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS notifications_feed_idx ON notifications (feed_id) WHERE feed_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS notifications_product_idx ON notifications (product_id) WHERE product_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS notifications_job_idx ON notifications (job_id) WHERE job_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS users_referred_by_idx ON users (referred_by) WHERE referred_by IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS users_pinned_post_idx ON users (pinned_post_id) WHERE pinned_post_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS users_cert_by_idx ON users (cert_by) WHERE cert_by IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS products_auction_winner_idx ON products (auction_winner_id) WHERE auction_winner_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS orders_pickup_loc_idx ON orders (pickup_location_id) WHERE pickup_location_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS feed_impressions_post_idx ON feed_impressions (post_id);
+    CREATE INDEX IF NOT EXISTS wallet_tx_peer_idx ON wallet_tx (peer_id) WHERE peer_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS page_views_user_idx ON page_views (user_id) WHERE user_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS post_views_viewer_idx ON post_views (viewer_id);
+
     CREATE TABLE IF NOT EXISTS product_reviews (
       id          SERIAL PRIMARY KEY,
       product_id  INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,

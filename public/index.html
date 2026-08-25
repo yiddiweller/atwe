@@ -40,7 +40,9 @@
      affects the iOS installed app — Chrome/desktop/web ignore this tag. -->
 <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
 <!-- Google Identity Services (Sign in with Google) -->
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+<!-- Google's sign-in script is fetched when the login screen opens (see gsiLoad),
+     not on every boot: someone already signed in never needs it, and it should
+     never be on the critical path to seeing your feed. -->
 <!-- QR scanning (vendored jsQR, ~no-build). Loaded lazily-ish via defer; only used when scanning. -->
 <script src="/jsqr.js" defer></script>
 <meta name="apple-mobile-web-app-title" content="Atwe"/>
@@ -64,7 +66,14 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<!-- Loaded WITHOUT blocking the page. A plain stylesheet link stops the browser
+     rendering anything until it comes back, so a slow or unreachable Google — a
+     corporate network, a bad mobile moment, a country that blocks it — meant a
+     blank Atwe until the request gave up. The font stack already falls back to
+     the phone's own system face, and display=swap swaps Inter in when it lands,
+     so nobody sees a gap. -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" onload="this.onload=null;this.rel='stylesheet'"/>
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"/></noscript>
 <style>
 /* ─────────────────────────────────────────────
    RESET
@@ -20093,7 +20102,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1704'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1705'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -22007,6 +22016,7 @@ function switchToLogin() {
   showOverlay('loginOverlay');
 }
 function openLogin() {
+  try { gsiLoad().catch(() => {}); } catch (e) {}   // warm Google sign-in while they read the screen
   authLandingBack();
   document.getElementById('signupOverlay').classList.add('hidden');
   showOverlay('loginOverlay');
@@ -23310,10 +23320,27 @@ function startSuCountdown(secs) {
   if (secs > 0) _suTimer = setInterval(() => { left--; render(); }, 1000);
   else render();
 }
-let _gTokenClient = null;
-function googleLogin() {
+let _gTokenClient = null, _gsiPromise = null;
+/* Fetch Google's sign-in script on demand. Called when the login or signup screen
+   opens, so it is almost always ready by the time anyone taps the button — and a
+   signed-in person never fetches it at all. */
+function gsiLoad() {
+  if (_gsiPromise) return _gsiPromise;
+  if (window.google && google.accounts && google.accounts.oauth2) return (_gsiPromise = Promise.resolve());
+  _gsiPromise = new Promise((resolve, reject) => {
+    const el = document.createElement('script');
+    el.src = 'https://accounts.google.com/gsi/client';
+    el.async = true;
+    el.onload = resolve;
+    el.onerror = () => { _gsiPromise = null; reject(new Error('gsi')); };
+    document.head.appendChild(el);
+  });
+  return _gsiPromise;
+}
+async function googleLogin() {
   const cid = S.config?.googleClientId;
   if (!cid) { showNotif('Google sign-in is coming soon. Use a username or email for now.'); return; }
+  try { await gsiLoad(); } catch (e) {}
   if (!(window.google && google.accounts && google.accounts.oauth2)) {
     showNotif('Google sign-in is still loading. Try again in a moment.'); return;
   }
@@ -60504,7 +60531,21 @@ function acBeamNavNotif(unread) {
   if (!unread) _beamDismissedAt = -1;                       // inbox clear → reset the dismissal
   acSetNavNotif('chat', unread > 0 && unread > _beamDismissedAt);
 }
-async function acRefreshUnread() {
+/* Entering Beam legitimately reaches this from three directions at once (the tab
+   switch, the screen opening, the chat list loading), so it used to ask the server
+   for the same unread counts three times in a row. Coalesced: a call while one is
+   already in flight rides along with it, and a repeat within a moment of the last
+   answer reuses that answer. No call site had to change. */
+let _unreadInFlight = null, _unreadAt = 0;
+async function acRefreshUnread(force) {
+  if (!force) {
+    if (_unreadInFlight) return _unreadInFlight;
+    if (Date.now() - _unreadAt < 400) return;
+  }
+  _unreadInFlight = _acRefreshUnread().finally(() => { _unreadInFlight = null; _unreadAt = Date.now(); });
+  return _unreadInFlight;
+}
+async function _acRefreshUnread() {
   const b = document.getElementById('acBadge');
   const nav = document.getElementById('acBadgeNav');
   const dot = document.getElementById('bnavDot');

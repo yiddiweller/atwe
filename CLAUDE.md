@@ -5123,6 +5123,85 @@ actually type. `test/`-style coverage lives in the scratchpad probes; the index
 test asserts every entry's opener is a real function — a search result that does
 nothing is worse than no result.
 
+## Performance — what was measured, and what it cost
+
+Measured against a deliberately realistic database (28k accounts, 250k posts,
+300k messages, 250k likes, 210k notifications, 60k orders, 40k listings, 120k
+product reviews) because a missing index on a fifty-row table shows nothing.
+`pg_stat_statements` was on; every fix below has a before/after number.
+
+| screen | before | after |
+|---|---|---|
+| Home · For You | 5,894ms | 404ms |
+| Home · Following | 3,508ms | 155ms |
+| Engine · Marketplace | 1,407ms | 408ms |
+| the marketplace's units-sold lookup | 80,739ms | 449ms |
+| deleting one account | 638ms | 65ms |
+| opening the app when Google is unreachable | 12,864ms | 338ms |
+
+**Feeds score a window, not the archive.** For You ran three counting sub-queries
+per candidate *in the ORDER BY*, over every post ever written — 250k posts meant
+~750k sub-queries to return 24 rows. The score already decays with age (~8h of age
+cancels a full log-engagement point), so a post more than a few weeks old cannot
+out-score a fresh one; it was only ever read to be thrown away. `feedWindows`
+scores the last 30 days and **widens** (180 days, then unbounded) if a page comes
+back thin, so a quiet network is never emptier than before.
+
+**Following splits its OR.** `author = me OR author IN (…) OR EXISTS(a repost of
+this post)` cannot use an index — an OR spanning two tables never can — so every
+load read all 250k posts to find the ~30 it wanted. The two halves are resolved in
+CTEs (`fa` authors, `fr` reposts), each an index lookup. Windowing Following was
+tried first and made it **worse** (a quiet account ran all three widening attempts);
+the measurement is why it doesn't. Don't reintroduce the OR.
+
+**Marketplace ranking reads precomputed stats.** Best Match worked out each
+listing's rating average, review count, 90-day units sold and seller track record
+*while sorting*, for the whole catalogue, on every browse. Those four numbers live
+in **`product_rank_stats`**, refreshed by **`flushProductRankStats`** every 30 min
+(`RANK_STATS_FLUSH_MS`, ~480ms for 40k listings, registered like every other
+background job). Ranking is a heuristic so half an hour of staleness is invisible —
+and the star rating a shopper actually *sees* is still read live from
+`product_reviews`, so it is never stale. `sort=rating`, `minRating` and the
+"similar listings" row read the same columns.
+
+**Indexes.** All in `db.js`, all idempotent. The one that mattered most was
+`order_items(product_id)` — an unindexed foreign key the units-sold term walked
+per listing (80s a marketplace page at 60k orders). Then `post_likes(user_id)` (the
+author-affinity query on every For You load), partial indexes on
+`users WHERE deactivated` / `WHERE reach_limited` and `posts WHERE promoted_until
+IS NOT NULL` (finding two "Ad" posts used to read all 250k), and 19 foreign keys
+that had nothing to look them up by, so deleting a row meant scanning each child
+table in full. 24 indexes, 11MB total.
+
+To find the next one: `SELECT relname, seq_scan, idx_scan FROM pg_stat_user_tables
+ORDER BY seq_tup_read DESC` shows what is being scanned; the unindexed-foreign-key
+query is in the scratchpad probes.
+
+**Boot was hostage to two Google requests.** The Inter stylesheet was a plain
+`<link rel=stylesheet>`, which blocks rendering — so a slow or blocked
+fonts.googleapis.com meant a blank Atwe until it timed out. It is a
+`rel="preload" as="style"` that promotes itself on load, with a `<noscript>`
+fallback; `display=swap` and the existing system-font stack mean nobody sees a gap.
+Google's sign-in script no longer loads on every boot either — `gsiLoad()` fetches
+it when the login screen opens, so anyone already signed in never asks Google for
+anything. On a good connection this changes nothing (570ms vs 600ms, inside the
+noise); when Google is slow it is the difference between 3.4s and 0.6s.
+
+**What was measured and left alone**, so it isn't re-investigated:
+- **API chattiness is fine.** Opening the app is 17 requests and 28kB; every other
+  screen is under 13. The one genuine duplicate (`/api/atchat/unread` three times
+  on entering Beam, reached legitimately from three directions) is coalesced inside
+  `acRefreshUnread` rather than by editing 30 call sites.
+- **Download size is fine.** The shell is 4.5MB but 1.16MB over the wire, and it
+  ships `no-cache, must-revalidate` + an ETag, so a repeat visit is a 304 with zero
+  bytes. It is only re-downloaded when the build actually changes.
+- **Parsing the one big file is not the bottleneck** — 80ms of script and 32ms of
+  style recalculation. The single-file architecture is not costing boot time.
+- For You still spends ~190ms building the 24 rows it returns (`POSTS_SELECT` runs
+  ~20 correlated sub-queries per row). That is the next thing worth attacking if
+  Home ever feels slow again; it was left alone because 5,894ms → 404ms was the
+  win that mattered and this one needs a wider change.
+
 ## Conventions
 
 - **One-file-per-surface frontend.** `index.html` is the app; `admin.html` is the

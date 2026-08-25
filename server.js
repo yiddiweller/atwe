@@ -7385,6 +7385,41 @@ async function flushCrmFollowUps() {
   for (const r of rows) notify(r.owner_id, r.contact_id, 'crm_followup');
   return rows.length;
 }
+/* Marketplace ranking stats, recomputed in one pass.
+   Best Match used to work out each listing's average rating, review count and
+   90-day units sold WHILE sorting — which meant several aggregate lookups for
+   every product in the catalogue on every browse, and a page took ~1.3s at 40k
+   listings. Those three numbers now live in product_rank_stats and the ranking
+   just reads them (~83ms). Ranking is a heuristic, so half an hour of staleness
+   changes nothing anyone can see, and the star rating shoppers actually LOOK at
+   is still read live from product_reviews on the listing itself.
+   One statement for the whole catalogue — ~480ms at 40k listings. */
+async function flushProductRankStats() {
+  const { rowCount } = await db.query(`
+    INSERT INTO product_rank_stats (product_id, rating_avg, rating_count, sold_90d, seller_sales, updated_at)
+    SELECT p.id, COALESCE(r.avg_rating, 0), COALESCE(r.n, 0), COALESCE(s.sold, 0), COALESCE(ss.n, 0), now()
+      FROM products p
+      LEFT JOIN (SELECT product_id, AVG(rating)::real AS avg_rating, COUNT(*)::int AS n
+                   FROM product_reviews GROUP BY product_id) r ON r.product_id = p.id
+      LEFT JOIN (SELECT oi.product_id, SUM(oi.qty)::int AS sold
+                   FROM order_items oi JOIN orders o ON o.id = oi.order_id
+                  WHERE o.status IN ('paid','fulfilled','delivered','released','escrow')
+                    AND o.created_at > now() - interval '90 days'
+                  GROUP BY oi.product_id) s ON s.product_id = p.id
+      LEFT JOIN (SELECT seller_id, COUNT(*)::int AS n FROM orders
+                  WHERE status IN ('fulfilled','delivered','released') GROUP BY seller_id) ss ON ss.seller_id = p.business_id
+     WHERE p.active
+    ON CONFLICT (product_id) DO UPDATE SET rating_avg = EXCLUDED.rating_avg,
+      rating_count = EXCLUDED.rating_count, sold_90d = EXCLUDED.sold_90d,
+      seller_sales = EXCLUDED.seller_sales, updated_at = now()`);
+  return rowCount;
+}
+{ const _prsMs = Math.max(60000, parseInt(process.env.RANK_STATS_FLUSH_MS, 10) || 30 * 60000);
+  registerJob('product_rank_stats', 'Marketplace ranking stats', _prsMs);
+  setInterval(trackJob('product_rank_stats', flushProductRankStats), _prsMs).unref?.();
+  // A fresh deploy would otherwise rank everything at zero until the first tick.
+  setTimeout(() => { trackJob('product_rank_stats', flushProductRankStats)(); }, 20000).unref?.(); }
+
 const CRM_FLUSH_MS = Math.max(5000, parseInt(process.env.CRM_FLUSH_MS, 10) || 5 * 60000);
 registerJob('crm_followups', 'CRM follow-up reminders', CRM_FLUSH_MS); setInterval(trackJob('crm_followups', flushCrmFollowUps), CRM_FLUSH_MS).unref?.();
 { const _dvMs = Math.max(60000, parseInt(process.env.DELIVERY_FLUSH_MS, 10) || 600000);
@@ -19923,11 +19958,18 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     const notHidden = ` AND p.id NOT IN (SELECT post_id FROM post_hides WHERE user_id = $1)`;
     // Hibernated (deactivated) authors drop out of everyone's feed.
     const notDeact = ` AND p.user_id NOT IN (SELECT id FROM users WHERE deactivated)`;
-    // Following scope also surfaces posts reposted by you or people you follow,
-    // ordered by the more recent of the post time and that repost time.
-    const repostBy = `EXISTS(SELECT 1 FROM post_reposts rp WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1)))`;
+    // Following also surfaces posts reposted by you or people you follow, ordered by
+    // the more recent of the post time and that repost time. The two halves are
+    // resolved SEPARATELY, in CTEs, rather than as one `author = me OR ... OR EXISTS
+    // (a repost of this post)`: an OR spanning two tables cannot use an index, so
+    // that one clause made every Following load read all 250k posts to find the ~30
+    // it wanted. Split like this, each half is an index lookup — posts_user_idx for
+    // the authors, post_reposts_user_idx for the reposts.
+    const followCte = `WITH fa AS (SELECT $1::int AS id UNION SELECT following_id FROM follows WHERE follower_id = $1),
+      fr AS (SELECT rp.post_id, MAX(rp.created_at) AS at FROM post_reposts rp
+              WHERE rp.user_id IN (SELECT id FROM fa) GROUP BY rp.post_id ORDER BY 2 DESC LIMIT 200) `;
     let where = (following
-      ? `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() AND (p.user_id = $1 OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1) OR ${repostBy})`
+      ? `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() AND (p.user_id IN (SELECT id FROM fa) OR p.id IN (SELECT post_id FROM fr))`
       : `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()`) + notBlocked + notHidden + notDeact + MUTE_FILTER + SUBONLY_FEED_FILTER
       + (following ? '' : REACH_FILTER);   // reduced reach applies to For You, not to people you chose to follow
     // Infinite scroll: the client sends the ids it already has this session (`seen`,
@@ -19948,7 +19990,7 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
       // the client's seen-set drops the boundary post so it never duplicates.
       if (before && !isNaN(before.getTime())) { params.push(before.toISOString()); where += ` AND p.created_at <= $${params.length}`; }
       if (seenIds.length) { params.push(seenIds); where += ` AND p.id <> ALL($${params.length}::int[])`; }
-      orderBy = ` ORDER BY GREATEST(p.created_at, COALESCE((SELECT MAX(rp.created_at) FROM post_reposts rp WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))), p.created_at)) DESC LIMIT 24`;
+      orderBy = ` ORDER BY GREATEST(p.created_at, COALESCE((SELECT at FROM fr WHERE fr.post_id = p.id), p.created_at)) DESC LIMIT 24`;
     } else {
       // For You = engagement + recency, now PERSONALIZED to the viewer: a post is
       // boosted when it carries a hashtag they follow ($3), its author shares one of
@@ -20022,10 +20064,34 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
            - (CASE WHEN p.user_id IN (SELECT author_id FROM post_hides WHERE user_id = $1) THEN $14::float ELSE 0 END)
          ) DESC, p.created_at DESC LIMIT 24`;
     }
-    let { rows } = await db.query(
-      POSTS_SELECT + where + orderBy,
-      params
-    );
+    // ── Score a recent window, not the whole archive ─────────────────────────
+    // Both feeds used to consider EVERY post ever written on every load. For You
+    // then ran three counting sub-queries per candidate just to sort them: with
+    // 250k posts that is ~750k sub-queries to return 24 rows, and Home took ~5.9s.
+    // It does not change what anyone sees, because the score already decays with
+    // age (~8h of age cancels a full log-engagement point), so a post more than a
+    // few weeks old cannot out-score a fresh one — it was only ever being read to
+    // be thrown away. Following is chronological, so its window hangs off the
+    // pagination cursor rather than off now(), and deep scrolling still works.
+    // The window WIDENS when a page comes back thin (a quiet network, an account
+    // that follows five people), so a sparse feed is never emptier than before.
+    // Only For You needs a window: its cost is scoring the pool, and the score decays
+    // with age. Following's pool is already small once the OR above is split, so it
+    // runs unbounded in one query — windowing it made a quiet account SLOWER (three
+    // widening attempts instead of one), which is exactly what the measurement showed.
+    // For You always starts from now(), because that is the only place its ranking
+    // can put anything: the recency term buries a post long before 30 days are up.
+    const feedWindows = following ? [null] : ['30 days', '180 days', null];
+    // The anchor is only bound on the windowed attempts — the final unbounded one
+    // must not carry a parameter its SQL never mentions, or Postgres rejects the
+    // whole statement. (It did, on the first run of this: Following 500'd for any
+    // account whose network is quiet enough to fall through to the last attempt.)
+    let rows = [];
+    for (const win of feedWindows) {
+      const windowed = win ? `${where} AND p.created_at > now() - interval '${win}'` : where;
+      ({ rows } = await db.query((following ? followCte : '') + POSTS_SELECT + windowed + orderBy, params));
+      if (rows.length >= 24 || !win) break;             // full page, or already unbounded
+    }
     // Refresh fallback (For You, first page): when the ranked + already-seen-
     // suppressed query comes back sparse because the viewer recently saw everything,
     // fill the screen from the RECENT pool (bypassing the seen-filter) so it's never
@@ -30297,7 +30363,7 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
     // Filters: price range, min rating, in-stock only.
     const minP = Math.round(Number(req.query.minPrice) * 100); if (Number.isFinite(minP) && minP > 0) { params.push(minP); conds.push(`p.price_cents >= $${params.length}`); }
     const maxP = Math.round(Number(req.query.maxPrice) * 100); if (Number.isFinite(maxP) && maxP > 0) { params.push(maxP); conds.push(`p.price_cents <= $${params.length}`); }
-    const minR = Number(req.query.minRating); if (Number.isFinite(minR) && minR > 0) { params.push(minR); conds.push(`(SELECT COALESCE(AVG(rating),0) FROM product_reviews pr WHERE pr.product_id = p.id) >= $${params.length}`); }
+    const minR = Number(req.query.minRating); if (Number.isFinite(minR) && minR > 0) { params.push(minR); conds.push(`COALESCE(ps.rating_avg,0) >= $${params.length}`); }
     if (req.query.inStock === 'true') conds.push(`(p.stock IS NULL OR p.stock > 0)`);
     // "On sale" — a genuine markdown only: compare-at above the live price, and
     // no variants (their compare-at is never shown, so it can't count as a sale).
@@ -30308,7 +30374,7 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
     // Sort: Best Match (default, blends relevance/quality/velocity/recency) or a
     // single flat column. Only 'best' needs an extra query param (text relevance).
     const FLAT_SORTS = { new: 'p.created_at DESC', price_asc: 'p.price_cents ASC', price_desc: 'p.price_cents DESC',
-      rating: '(SELECT COALESCE(AVG(rating),0) FROM product_reviews pr WHERE pr.product_id = p.id) DESC, p.created_at DESC' };
+      rating: 'COALESCE(ps.rating_avg,0) DESC, p.created_at DESC' };
     const sortKey = FLAT_SORTS[req.query.sort] ? req.query.sort : 'best';
     let orderBy;
     if (auctionsOnly) {
@@ -30335,25 +30401,26 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
         );
       }
       const personalTerm = personalClauses.join('\n');
+      // Quality, velocity and seller track record come from product_rank_stats,
+      // refreshed every half hour by flushProductRankStats — working them out here
+      // meant several aggregate lookups per listing across the whole catalogue on
+      // every single browse (~1.3s a page at 40k listings, and growing with orders).
       orderBy = `(
         ${textTerm}
-        + COALESCE((SELECT AVG(rating) FROM product_reviews pr WHERE pr.product_id = p.id), 0)
-          * LN(1 + COALESCE((SELECT COUNT(*) FROM product_reviews pr2 WHERE pr2.product_id = p.id), 0)) * 0.6
-        + LN(1 + COALESCE((SELECT SUM(oi.qty) FROM order_items oi JOIN orders o ON o.id = oi.order_id
-            WHERE oi.product_id = p.id AND o.status IN ('paid','fulfilled','delivered','released','escrow')
-              AND o.created_at > now() - interval '90 days'), 0)) * 1.4
+        + COALESCE(ps.rating_avg, 0) * LN(1 + COALESCE(ps.rating_count, 0)) * 0.6
+        + LN(1 + COALESCE(ps.sold_90d, 0)) * 1.4
         + GREATEST(0, 14 - EXTRACT(EPOCH FROM (now() - p.created_at)) / 86400) / 14 * 1.2
         + (CASE WHEN u.verified THEN 0.4 ELSE 0 END)
         + LEAST(1.0, EXTRACT(EPOCH FROM (now() - u.created_at)) / 31536000)
-        + LEAST(1.5, COALESCE((SELECT COUNT(*) FROM orders so WHERE so.seller_id = u.id
-            AND so.status IN ('fulfilled','delivered','released')), 0) / 20.0)
+        + LEAST(1.5, COALESCE(ps.seller_sales, 0) / 20.0)
         - (CASE WHEN p.stock IS NOT NULL AND p.stock <= 0 THEN 6 ELSE 0 END)
         ${personalTerm}
       ) DESC, p.created_at DESC`;
     } else {
       orderBy = FLAT_SORTS[sortKey];
     }
-    const { rows } = await db.query(`${LISTING_SELECT} WHERE ${conds.join(' AND ')} ORDER BY ${orderBy} LIMIT 60`, params);
+    const RANK_JOIN = ' LEFT JOIN product_rank_stats ps ON ps.product_id = p.id ';
+    const { rows } = await db.query(`${LISTING_SELECT}${RANK_JOIN} WHERE ${conds.join(' AND ')} ORDER BY ${orderBy} LIMIT 60`, params);
     // Mark which the viewer has saved (wishlist heart on cards).
     const saved = new Set((await db.query('SELECT product_id FROM saved_products WHERE user_id = $1', [req.user.id])).rows.map((r) => r.product_id));
     let listings = rows.map((r) => Object.assign(mapListing(r), { saved: saved.has(r.id) }));
@@ -30880,10 +30947,11 @@ app.get('/api/listings/:id', auth.requireAuth, async (req, res) => {
       if ((l.category || '').trim()) { params.push(l.category.trim()); match = `lower(p.category) = lower($${params.length})`; }
       else { params.push(l.kind || 'physical'); match = `p.kind = $${params.length}`; }
       const sim = await db.query(
-        `${LISTING_SELECT} WHERE p.active = true AND p.id <> $1 AND p.business_id <> $2 AND p.business_id <> $3
+        `${LISTING_SELECT} LEFT JOIN product_rank_stats ps ON ps.product_id = p.id
+         WHERE p.active = true AND p.id <> $1 AND p.business_id <> $2 AND p.business_id <> $3
            AND NOT u.deactivated AND NOT u.is_demo AND ${match}
            AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $3 AND b.blocked_id = p.business_id) OR (b.blocker_id = p.business_id AND b.blocked_id = $3))
-         ORDER BY (SELECT COALESCE(AVG(rating), 0) FROM product_reviews pr WHERE pr.product_id = p.id) DESC, p.created_at DESC LIMIT 8`,
+         ORDER BY COALESCE(ps.rating_avg, 0) DESC, p.created_at DESC LIMIT 8`,
         params
       );
       listing.similar = sim.rows.map(mapListing);
