@@ -20,8 +20,23 @@ const auth = require('../auth');
 
 const DB_URL = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL || '';
 const SKIP = !DB_URL;
-const PORT = Number(process.env.TEST_PORT || 3987);
-const BASE = `http://127.0.0.1:${PORT}`;
+// `node --test test/*.test.js` runs each FILE in its own process, CONCURRENTLY — so a
+// hard-coded port means the second and third files cannot bind, and every one of their
+// tests fails for a reason that has nothing to do with the code under test. Ask the OS
+// for a free port per process instead, resolved in startServer (binding is async, so
+// address() is null if you read it straight after listen()). TEST_PORT still pins it.
+let PORT = Number(process.env.TEST_PORT || 0);
+const base = () => `http://127.0.0.1:${PORT}`;
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const srv = require('net').createServer();
+    srv.on('error', reject);
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = srv.address();
+      srv.close(() => resolve(port));
+    });
+  });
+}
 
 let child = null;
 let pool = null;
@@ -31,7 +46,7 @@ function uniq(p) { return `${p}_${crypto.randomUUID().slice(0, 8)}`; }
 async function api(method, p, { token, body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(BASE + p, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(base() + p, { method, headers, body: body ? JSON.stringify(body) : undefined });
   let json = null;
   try { json = await res.json(); } catch { /* no body */ }
   return { status: res.status, body: json || {} };
@@ -77,7 +92,7 @@ function waitForHealth(timeoutMs = 60000) {
   return new Promise((resolve, reject) => {
     (async function poll() {
       try {
-        const res = await fetch(BASE + '/api/health');
+        const res = await fetch(base() + '/api/health');
         if (res.ok) {
           const body = await res.json().catch(() => ({}));
           if (body.db !== 'starting') return resolve(true);
@@ -91,6 +106,7 @@ function waitForHealth(timeoutMs = 60000) {
 
 async function startServer(extraEnv = {}) {
   if (SKIP) return;
+  if (!PORT) PORT = await freePort();
   pool = new Pool({ connectionString: DB_URL, ssl: false });
   const env = {
     ...process.env,

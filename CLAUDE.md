@@ -40,7 +40,7 @@ from them; "go" is the whole instruction.
   which is the only place that is current.** A hardcoded tally here went stale by
   ~90 items and was repeated to the owner as fact. To get the real state:
   `node -e "const l=require('./features-data.js');const c={};for(const f of l)c[f.phase]=(c[f.phase]||0)+1;console.log(c)"`
-- As of the last count: **555 built · 4 deliberately skipped · 7 to build** — and 6
+- As of the last count: **561 built · 4 deliberately skipped · 7 to build** — and 6
   of those 7 are the native iOS/Android app (`atwe-mobile/`, its own track with its
   own resume protocol above), the 7th being the Atwe Card launch, which is blocked on
   a card-issuing partner and KYC rather than on code. **The web platform's feature
@@ -251,7 +251,24 @@ claim-before-charge race** (concurrent unlocks charge once), the **offer-checkou
 claim race** (two concurrent checkouts create exactly one order), the **escrow
 lifecycle** (protected buy holds funds → confirm releases to the seller), the
 **split-share claim** (concurrent pays charge a share once), **gift-card
-single-use** (a code redeems once), and the **negative-balance DB constraint**. With no database configured the whole suite
+single-use** (a code redeems once), and the **negative-balance DB constraint**.
+**`test/money-refunds.test.js`** asserts the one rule that matters most — money is
+never CREATED: for every refund door (seller-approved return, the seller's own
+Refund button in full and in part, the admin refunds desk, and five buy-and-refund
+rounds in a row) it checks that balances + pots + escrow + Atwe's own take still
+add up to what was ever deposited. It also covers the gift-card purchase claim
+(a retry charges once and replays the first card). **`test/feed-visibility.test.js`**
+covers what the feeds must never show: a block in BOTH directions, muted words as
+plain substrings (a bare `%` must not blank the feed), a staff reach limit that
+stops strangers but not the account's own followers, and that Following still
+serves follows + your own posts + reposts, once each, newest first.
+`test/routes.test.js` keeps the client and server reserved-word lists in step.
+**Each test FILE runs in its own process, concurrently**, so `helpers.js` asks the
+OS for a free port per process — a hard-coded port meant the second and third files
+could not bind and every one of their tests failed for a reason unrelated to the
+code. A file needing different limits passes them to `startServer({...})`
+(money-refunds raises the deliberately tiny $5 velocity cap that makes the cap
+itself testable in money-auth). With no database configured the whole suite
 **skips cleanly** (never fails), so `npm test` is a no-op in an env without
 Postgres. The frontend still has no automated tests — verify UI changes in the
 browser.
@@ -5477,6 +5494,55 @@ today.
 
 ## Gotchas for AI assistants
 
+- **A refund is a TRANSFER, not a credit — never "make the payee whole" with a bare
+  `walletCreditStandalone`.** `walletTransfer` is all-or-nothing: a payer one cent
+  short moves NOTHING. Three refund doors (return-approve, the admin refunds desk,
+  tip refunds) then fell through to crediting the payee the WHOLE amount from thin
+  air — a credit with no matching debit anywhere, i.e. money that was never
+  deposited. It was not a rare edge case: `chargePlatformFee` takes 1% off the
+  seller the moment a sale lands, so the seller was ALWAYS short by exactly the fee
+  and essentially every full refund minted the difference. Measured: $200 deposited,
+  $299 spendable afterwards, repeatable without limit, and the invented balance
+  cashes out to a real bank. Two shared helpers now own this — **`refundPlatformFee`**
+  (hands the Atwe fee back on a refunded sale, so the money the seller was actually
+  paid can fund the refund; naturally idempotent because it sums the order's fee rows
+  and writes a negative one) and **`refundToPayee`** (takes everything the payer
+  really has and lets the platform cover only the genuine shortfall). Every refund
+  path must go through them. A conservation test (`test/money-refunds.test.js`)
+  asserts the only rule that matters: balances + pots + escrow + Atwe's revenue must
+  equal what was ever deposited.
+- **A block is enforced in BOTH directions, and the second half is easy to forget.**
+  Nine feed queries filtered `blocked_id ... WHERE blocker_id = $1` ("people I
+  blocked") without the mirror `blocker_id ... WHERE blocked_id = $1` ("people who
+  blocked me"), so someone who blocked you still reached your For You, hashtag pages,
+  cashtag pages, trending, lists, saved posts and the AI picks. Following only
+  escaped by accident — blocking also deletes the follow — but a repost by a mutual
+  would still have carried it through. Build every feed of other people's posts from
+  the shared **`BLOCK_FILTER`** (or `blockFilterOn(col)` for a non-`p.` alias), never
+  by writing the clause out by hand. `blocks` is indexed both ways now
+  (`blocks_blocker_idx` + `blocks_blocked_idx`) — the primary key leads with
+  `blocker_id` and cannot serve the reverse lookup.
+- **A user-supplied word must never go straight into a LIKE pattern.** `MUTE_FILTER`
+  built `p.body ILIKE '%' || mk.word || '%'`, so muting a bare `%` (or `_`) matched
+  EVERY post: the member's whole feed went blank and then told them Atwe was empty.
+  It now uses `strpos(lower(p.body), lower(mk.word)) > 0`, which has no pattern
+  language at all, plus a `word <> ''` guard — `strpos(x, '')` returns 1, i.e. a hit
+  on everything, the same failure by a different door.
+- **A correlated sub-select inside `ORDER BY` cannot be answered from an index.**
+  Following sorted by `GREATEST(p.created_at, (SELECT at FROM fr WHERE fr.post_id =
+  p.id))` while its WHERE ORed two subqueries — so Postgres read all 250k posts and
+  top-N sorted them, ~900ms, and *just as slow for an account following nobody*,
+  which is the giveaway that it is fixed overhead rather than data. (It was NOT query
+  planning, which one report claimed: `pg_stat_statements` with `track_planning=on`
+  put planning at 1ms and execution at 902ms. Measure before believing.) Split into
+  two index-backed halves UNIONed and merged on a plain column, it is **20ms** — and
+  8ms for an account following nobody.
+- **A staff reach limit has to be applied wherever posts are INJECTED, not just where
+  they are ranked.** The For You exploration weave (fresh, low-engagement posts from
+  the last 48h) and the promoted "Ad" slots both skipped `REACH_FILTER`, so a
+  throttled account still landed in strangers' feeds — at the same fixed positions
+  every time, which is what made it look deliberate. Any new injection into a feed
+  needs the same filter list as the main query.
 - **A photo must reserve its box BEFORE it loads, and `width:auto` reserves nothing.**
   Feed photos had no width, height or aspect-ratio, so the browser could not know how
   tall a picture would be until the picture arrived — and they load lazily as you
