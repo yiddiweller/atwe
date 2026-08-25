@@ -2110,8 +2110,21 @@ app.get('/api/admin/client-crashes', auth.requireAdmin, async (_req, res) => {
 });
 
 // Public feature flags so the frontend can adapt its UI.
+/* The running build, read out of the shipped index.html once. It is exposed on
+   /api/config so a tab that has been open since before a deploy can notice and
+   offer a refresh — until now nothing ever told anyone a new version existed,
+   which is a slow way to be looked at while looking at week-old code. */
+const APP_BUILD = (() => {
+  try {
+    const m = require('fs').readFileSync(require('path').join(__dirname, 'public', 'index.html'), 'utf8')
+      .match(/const ATWE_BUILD = '([^']+)'/);
+    return m ? m[1] : null;
+  } catch (e) { return null; }
+})();
+
 app.get('/api/config', auth.optionalAuth, (req, res) => {
   res.json({
+    build: APP_BUILD,                         // so a long-open tab can notice a new one
     billingEnabled: billing.isConfigured(),
     emailEnabled: mailer.isConfigured(),
     pushEnabled: push.isConfigured(),         // PWA push available?
