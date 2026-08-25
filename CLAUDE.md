@@ -194,6 +194,18 @@ public/
   icon-maskable.png    app icon (purpose: maskable)
 ```
 
+### Boot says what is missing (`reportSetupGaps`)
+
+On every boot the server prints the optional integrations that are **not** configured
+and, in plain language, what each one costs — driven by the **same `SETUP_GROUPS`
+registry the admin Setup page reads**, so a new integration gets its boot warning for
+free and the two can never disagree. It exists because **TURN was the one thing with
+no warning anywhere**: without it, voice and video calls fall back to a free public
+relay and often fail to connect on 4G/5G — the most common "calls don't work" cause —
+and nothing in the logs ever said so, while SMTP, Stripe, push and storage all
+announced themselves. Purely informational; nothing is blocked, and the banner is
+wrapped so it can never take the server down.
+
 ### Graceful degradation (important pattern)
 
 Every external dependency is **optional and degrades cleanly** — the server

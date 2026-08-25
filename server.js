@@ -44565,7 +44565,36 @@ app.get('*', async (req, res, next) => {
 // clear error until init finishes (seconds), which is far better than a failed deploy.
 app.listen(PORT, () => {
   console.log(`\n🚀  Atwe server → http://localhost:${PORT}\n`);
+  reportSetupGaps();
 });
+/* Say plainly, at boot, which optional integrations are missing and what that costs.
+   Driven by the SAME SETUP_GROUPS registry the admin Setup page reads, so a new
+   integration gets its boot warning for free and the two can never disagree. This
+   exists because TURN was the one thing with no warning anywhere: without it, voice
+   and video calls fall back to a free public relay and simply fail to connect on most
+   mobile networks — the single most common "calls don't work" cause — and nothing in
+   the logs ever said so. Every other integration (SMTP, Stripe, push, storage) already
+   announced itself. Purely informational: nothing is blocked, matching the app's
+   graceful-degradation ethos. */
+function reportSetupGaps() {
+  try {
+    const missing = [];
+    for (const g of SETUP_GROUPS) {
+      for (const it of (g.items || [])) {
+        let on = false;
+        try { on = !!it.on(); } catch (_) { on = false; }
+        if (!on) missing.push(it);
+      }
+    }
+    if (!missing.length) { console.log('✅  Every optional integration is configured.'); return; }
+    console.log(`⚙️   ${missing.length} optional integration(s) not configured — the app runs without them:`);
+    for (const it of missing) {
+      console.log(`   • ${it.label} — ${it.without}`);
+      if (it.env && it.env.length) console.log(`     set: ${it.env.join(' / ')}`);
+    }
+    console.log('');
+  } catch (e) { /* a boot banner must never take the server down */ }
+}
 db.init()
   .catch((err) => console.error('Database init failed:', err.message))
   .then(() => loadSiteLock().catch(() => {}))
