@@ -5202,6 +5202,28 @@ noise); when Google is slow it is the difference between 3.4s and 0.6s.
   Home ever feels slow again; it was left alone because 5,894ms → 404ms was the
   win that mattered and this one needs a wider change.
 
+## Telling people a new build is out
+
+Nothing used to. A tab left open for days kept running old code, the service worker
+is network-first so a *reload* always got the new build — but nobody reloads without
+a reason, and the only way to see which build you were on was Settings → About. That
+is how an owner ends up being told something is fixed while looking at a version that
+predates the fix (it happened, twice).
+
+`server.js` reads `ATWE_BUILD` out of the shipped `public/index.html` once at boot
+(`APP_BUILD`) and returns it on **`GET /api/config` as `build`**. The client compares
+it with its own `ATWE_BUILD` in **`checkForUpdate()`** — 60s after boot, then every
+20 minutes, and whenever the tab comes back to the front (throttled to once per 5
+minutes). A difference shows **`.upd-banner`**: a slim pill at the BOTTOM centre, same
+material and position as the undo toast, with a white **Refresh** and a muted
+**Later**.
+
+Rules it follows, all covered by `updtest.js`: it **never reloads on its own** (someone
+may be mid-message), **Later** snoozes that exact build in `localStorage.atwe_update_snooze`
+so it cannot nag, a **newer** build after that still gets through, and a failed or
+offline check says nothing at all. It is deliberately not pinned to the top — a
+floating notice across the feed tabs is the very thing the build above exists to fix.
+
 ## Conventions
 
 - **One-file-per-surface frontend.** `index.html` is the app; `admin.html` is the
@@ -5463,6 +5485,16 @@ today.
   the JS that serves it**, and **an overlay with `pointer-events:none` is invisible to
   every hit-test probe — to find one you must compare PIXELS, or enumerate elements
   geometrically, not ask `elementFromPoint` what is on top.**
+  **Both are now DELETED outright** (owner's call), not left dormant: the `#page-glow`
+  stage, the `.pool-orb`, the whole media shield, and Layer B's `.rim-ring` — markup,
+  CSS and JS. What remains of `lightEngine()` is live and must stay: the `.spin` rim
+  (driven by `--rim`/`--gx`/`--gy`/`--gr`, used by the intro sheets and the Atwe AI
+  tab), the `--mx`/`--my` press-glow on auth buttons, `aiComets`, and the auth-button
+  press-and-hold zoom. Proof the deletion changed nothing: 20 surfaces across both
+  themes captured before and after — and a **control run of identical code twice
+  differed on the same 10 surfaces by the same amounts** (the boot swirl caught
+  mid-spin, and feed content). When judging a visual diff in this app, always run the
+  control first; half these screens are not deterministic.
 - **A repro that depends on the seeded database will drift under you.** Hunting the
   above, the same probe reported 4/14 bad frames, then 0/42, then 3/3 — for identical
   code. Cause: every run reused one test account, and `feed_impressions` (the

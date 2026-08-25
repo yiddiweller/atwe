@@ -9510,6 +9510,22 @@ body.light .ac-scope-chip.active{color:var(--t1);}
 .offline-banner.online{background:rgba(48,209,88,.97);}
 .offline-banner .ob-dot{width:7px;height:7px;border-radius:50%;background:var(--red);box-shadow:0 0 0 3px rgba(255,0,51,.25);}
 .offline-banner.online .ob-dot{background:var(--green);box-shadow:0 0 0 3px rgba(48,209,88,.25);}
+/* "A new version is ready" — the same slim floating pill as the offline notice,
+   but tappable. Nothing reloads on its own: someone may be halfway through a
+   message, so it waits to be asked. */
+/* Bottom-centre, in the same family and position as the undo toast — NOT pinned
+   to the top, where it would sit straight across the feed tabs (which is the very
+   thing this build is fixing elsewhere). It is not urgent; it can wait down there. */
+.upd-banner{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 84px);transform:translateX(-50%) translateY(12px);
+  z-index:100000;background:rgba(40,40,44,.98);color:#fff;font-size:13px;font-weight:600;letter-spacing:.01em;
+  padding:9px 6px 9px 16px;border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.45);
+  display:inline-flex;align-items:center;gap:8px;white-space:nowrap;opacity:0;pointer-events:none;
+  transition:opacity var(--t-base) var(--ease),transform var(--t-base) var(--ease);max-width:calc(100vw - 28px);}
+.upd-banner.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto;}
+.upd-banner button{border:none;font-family:inherit;font-size:13px;font-weight:800;letter-spacing:.01em;cursor:pointer;border-radius:999px;}
+.upd-refresh{background:var(--primary);color:var(--on-primary);padding:6px 15px;}
+.upd-later{background:none;color:var(--t3);padding:6px 8px;}
+body.light .upd-banner{background:rgba(28,28,30,.98);}
 /* Deep-link peek bar: a signed-out visitor viewing one public profile gets a
    slim, always-visible sign-in invitation pinned to the bottom (the click-gate
    does the actual gating). Floats above the app, respects the safe-area. */
@@ -11838,60 +11854,11 @@ body.light #signupDob{color-scheme:light;}
      a time, matching the pre-existing .spin recipe).
 ════════════════════════════════════════════════════════════════ */
 
-/* Layer A — cursor pool. ONE fixed, pointer-events:none stage (#page-glow)
-   hosts the pool orb, the opening-lap orb, and (blueprint) page-scope comets.
-   The pool is a soft deep-blue radial (--pool ramp) that follows the pointer at
-   ~12% peak over a 420px radius; on touch it appears under the finger during a
-   drag only. Black theme only. */
-/* A soft AZURE radial (--accent family #0088FF, matching the login-panel glow +
-   the shop-icon blue) that follows the pointer, composited with SOFT-LIGHT on the
-   stage. Soft-light satisfies all four asks at once: it's INVISIBLE on true
-   #000000 (soft-light(#000,x)=#000, so the black void never lights), it lifts any
-   non-black surface (a hovered post, avatars, cards, text) SMOOTHLY — being a
-   low-contrast blend it never bands into the concentric rings color-dodge did,
-   nor skews the blue toward purple (dodge over-amplified the blue channel) — and
-   it reads soft. Blurred + faded to alpha-0 of its own colour for an extra-smooth
-   falloff. Black theme only; the pointer handler fades it out over <img>/<video>
-   so media never tints. */
-#page-glow{position:fixed;inset:0;pointer-events:none;z-index:1100;overflow:hidden;
-  mix-blend-mode:soft-light;}
-.pool-orb{position:absolute;left:0;top:0;width:840px;height:840px;border-radius:50%;
-  background:radial-gradient(closest-side, rgba(40,130,255,1) 0%, rgba(24,116,252,.5) 40%, rgba(10,110,255,0) 76%);
-  mix-blend-mode:normal;opacity:0;filter:blur(16px);
-  transition:opacity var(--t-slow) ease-out;}
-/* Full opacity — soft-light is inherently gentle, so this still reads soft. */
-#page-glow.pool-on .pool-orb{opacity:1;}
-body.light #page-glow .pool-orb{display:none;}
-/* Touch devices: kill the whole cursor-pool stage. It's a MOUSE-cursor glow —
-   meaningless without a pointer — but a fixed full-screen mix-blend-mode layer
-   is one of the most expensive things to composite, and pinch-zoom re-rasterizes
-   the entire blended viewport at zoom scale, which jettisons the page on
-   memory-tight iPhones (the black-blink → reload-to-home crash). display:none
-   removes the layer entirely; the JS shield-cloning + idle drift are gated off
-   to match. Zero visual change on touch. */
-@media (hover: none), (pointer: coarse){ #page-glow{display:none!important;} }
-/* ── EDGE-GLOW REMOVED (design rule: "no edge glow"). The pointer-tracked bulb rim
-   (.rim-ring) and the cursor pool (#page-glow) are disabled everywhere — no shiny rim
-   lighting up blue/white near the screen edge. The JS that injects them stays inert. ── */
-#page-glow{display:none!important;}
-.rim-ring{display:none!important;}
-
-/* Layer B — bulb rim. A 2.5px ring hugging the surface's rounded edge at
-   --gx/--gy, twin geometry in one element: the sharp core (white→icy) is the
-   masked ring itself, the blurred halo rides identical geometry via
-   drop-shadows. Injected as a CHILD span (never a pseudo-element — arbitrary
-   cards already use ::before/::after for their own chrome). Invisible at rest;
-   ~3.5s melt after the pointer leaves. Black theme only. */
-.rim-ring{position:absolute;inset:0;border-radius:inherit;padding:2.5px;pointer-events:none;z-index:3;
-  background:radial-gradient(var(--gr,300px) circle at var(--gx,50%) var(--gy,-40%),
-    var(--light-core) 0%, var(--light-fringe) 9%, var(--light-mid) 22%,
-    var(--light-blue) 40%, var(--light-deep) 62%, transparent 80%);
-  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-  -webkit-mask-composite:xor;mask-composite:exclude;
-  filter:drop-shadow(0 0 3px rgba(255,255,255,.85)) drop-shadow(0 0 10px rgba(96,130,255,.8));
-  opacity:0;transition:opacity var(--t-slow) cubic-bezier(.25,.6,.3,1);}
-.rim-ring.on{opacity:.85;transition:opacity var(--t-base) ease-out;}
-body.light .rim-ring{display:none;}
+/* (Layer A — the cursor pool (#page-glow / .pool-orb) is gone, along with the
+   .rim-ring in Layer B below. Both were already switched off under the "no
+   edge-glow" design rule; the markup, the CSS and the JavaScript behind them
+   have now been removed outright rather than left dormant. The .spin rim that
+   the intro sheets and the Atwe AI tab use is a different thing and is live.) */
 
 /* (Layer C — the opening-lap orb — was removed entirely at Yiddi's request:
    no light plays on its own at boot, login, or a tab's first open. All other
@@ -11924,10 +11891,10 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
 @keyframes aiShimmer{from{background-position:130% 0;}to{background-position:-130% 0;}}
 
 /* Reduced motion (blueprint): laps + comets are replaced by a simple static
-   soft-glow fade; the pool and rim render at their final state (the global
-   reduced-motion reset already collapses the melt transitions). */
+   soft-glow fade (the global reduced-motion reset already collapses the melt
+   transitions). */
 @media(prefers-reduced-motion:reduce){
-  .pool-orb,.ai-comet{display:none!important;}
+  .ai-comet{display:none!important;}
   body.light .ai-working::after{animation:none;}
   .ai-working{box-shadow:0 0 0 1px rgba(var(--accent-rgb),.28),0 0 24px rgba(var(--accent-rgb),.2);transition:box-shadow var(--t-slow) ease;}
 }
@@ -20102,7 +20069,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1706'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1707'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -53670,6 +53637,62 @@ function _offlineBannerEl() {
   }
   return b;
 }
+/* ── "There's a new version" ─────────────────────────────────────────────────
+   Nothing used to tell anyone a new build existed. A tab left open for days
+   quietly kept running old code, and the only way to know which build you were
+   on was to dig into Settings → About — which is exactly how you end up being
+   told something is fixed while looking at a version that predates the fix.
+   The server reports the build it is serving on /api/config; when that differs
+   from the one this tab loaded, a slim pill offers a refresh. It never reloads
+   by itself (someone may be mid-message) and it never nags: "Later" hides it
+   until the NEXT build after this one. */
+let _updSeen = null, _updBannerEl = null;
+function _updEl() {
+  if (_updBannerEl && document.body.contains(_updBannerEl)) return _updBannerEl;
+  const b = document.createElement('div');
+  b.className = 'upd-banner';
+  b.setAttribute('role', 'status');
+  document.body.appendChild(b);
+  _updBannerEl = b;
+  return b;
+}
+function updDismiss() {
+  try { localStorage.setItem('atwe_update_snooze', _updSeen || ''); } catch (e) {}
+  const b = _updEl(); b.classList.remove('show');
+}
+function updApply() { try { location.reload(); } catch (e) {} }
+function showUpdateBanner(build) {
+  _updSeen = build;
+  let snoozed = null;
+  try { snoozed = localStorage.getItem('atwe_update_snooze'); } catch (e) {}
+  if (snoozed && snoozed === build) return;             // already said "later" to THIS one
+  const b = _updEl();
+  b.innerHTML = '<span>A new version of Atwe is ready</span>'
+    + '<button class="upd-refresh" onclick="updApply()">Refresh</button>'
+    + '<button class="upd-later" onclick="updDismiss()">Later</button>';
+  requestAnimationFrame(() => b.classList.add('show'));
+  try { announce('A new version of Atwe is ready. Refresh to get it.'); } catch (e) {}
+}
+async function checkForUpdate() {
+  if (document.hidden) return;
+  try {
+    const r = await fetch('/api/config', { cache: 'no-store' });
+    if (!r.ok) return;
+    const c = await r.json();
+    if (c && c.build && String(c.build) !== String(ATWE_BUILD)) showUpdateBanner(String(c.build));
+  } catch (e) {}                                        // offline, a blip — say nothing
+}
+// Every 20 minutes, and whenever the tab comes back to the front (but not more
+// than once every 5 minutes, so flicking between tabs costs nothing).
+let _updLastCheck = 0;
+function _updMaybeCheck() {
+  if (Date.now() - _updLastCheck < 5 * 60000) return;
+  _updLastCheck = Date.now();
+  checkForUpdate();
+}
+setTimeout(() => { _updLastCheck = Date.now(); setInterval(_updMaybeCheck, 20 * 60000); }, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) _updMaybeCheck(); });
+
 function showOfflineBanner() {
   clearTimeout(_offlineHideT);
   const b = _offlineBannerEl();
@@ -62433,113 +62456,17 @@ function navInit() {
     }, true);
   })();
 
-  // ═══ THE STAGE (#page-glow) — one fixed, pointer-events:none layer hosting
-  // Layer A (the cursor pool). Created once; everything on it animates via
-  // transform/opacity only. (The opening-lap orb that used to live here was
-  // removed entirely — no light plays on its own at boot or tab switch.) ═══
-  var stage = document.createElement('div');
-  stage.id = 'page-glow'; stage.setAttribute('aria-hidden', 'true');
-  var poolOrb = document.createElement('span'); poolOrb.className = 'pool-orb';
-  stage.appendChild(poolOrb);
-  document.body.appendChild(stage);
-
-  // ═══ Media shield ═══ Photos/videos must NEVER catch the pool glow — even while
-  // the pointer only APPROACHES them — so they always feel like they sit on top of
-  // the screen. For every media element within the pool's reach of the cursor we
-  // lay an exact clean COPY on top of the glow (z above #page-glow): the copy is
-  // never tinted, while the real surface still glows around it. Clones track their
-  // originals each frame (survive scroll) and drop the instant they leave reach.
-  var shields = new Map();           // original media element -> clean clone
-  var POOL_REACH = 360;              // px: a touch beyond the visible glow radius
-  /* Everything that CLIPS the original — every scrolling ancestor, plus the window.
-     The clone is position:fixed, so none of them clip IT. Without this the copy of
-     a photo keeps painting at full size while the real one scrolls away under the
-     top bar: pictures float over the tabs, the sidebar, the rail — over the whole
-     app — and because the clone is pointer-events:none, everything still WORKS,
-     so hit-testing insists the bar is on top while your eyes say otherwise. That
-     is exactly the "every picture is on top of everything" this caused on desktop
-     (desktop only: the glow, and so the shield, is off on touch). */
-  function clippersOf(media) {
-    var out = [];
-    for (var n = media.parentElement; n && n !== document.documentElement; n = n.parentElement) {
-      var s = getComputedStyle(n);
-      if (s.overflow !== 'visible' || s.overflowX !== 'visible' || s.overflowY !== 'visible') out.push(n);
-      if (out.length >= 4) break;                      // deeper than this never clips media here
-    }
-    return out;
-  }
-  function positionShield(clone, media) {
-    var r = media.getBoundingClientRect();
-    clone.style.left = r.left + 'px'; clone.style.top = r.top + 'px';
-    clone.style.width = r.width + 'px'; clone.style.height = r.height + 'px';
-    // Clip the copy to the part of the original that is genuinely on screen.
-    var L = 0, T = 0, R = window.innerWidth, Bm = window.innerHeight;
-    var cl = clone._clippers || [];
-    for (var i = 0; i < cl.length; i++) {
-      var pr = cl[i].getBoundingClientRect();
-      if (pr.left > L) L = pr.left;
-      if (pr.top > T) T = pr.top;
-      if (pr.right < R) R = pr.right;
-      if (pr.bottom < Bm) Bm = pr.bottom;
-    }
-    if (R <= L || Bm <= T || r.width <= 0 || r.height <= 0) { clone.style.display = 'none'; return; }
-    clone.style.display = '';
-    var it = Math.max(0, T - r.top), ir = Math.max(0, r.right - R),
-        ib = Math.max(0, r.bottom - Bm), il = Math.max(0, L - r.left);
-    clone.style.clipPath = (it || ir || ib || il)
-      ? 'inset(' + it + 'px ' + ir + 'px ' + ib + 'px ' + il + 'px' + (clone._radius ? ' round ' + clone._radius : '') + ')'
-      : '';
-  }
-  function makeShield(media) {
-    try {
-      var cs = getComputedStyle(media);
-      var clone = media.cloneNode(false);
-      clone.id = ''; clone.className = ''; clone.removeAttribute('loading');
-      clone.setAttribute('data-pool-shield', '1'); // so the scan never re-shields a clone
-      clone._clippers = clippersOf(media);
-      clone._radius = cs.borderRadius;
-      if (clone.tagName === 'VIDEO') { clone.removeAttribute('autoplay'); clone.muted = true; }
-      clone.style.cssText = 'position:fixed;margin:0;pointer-events:none;z-index:1101;object-fit:' +
-        cs.objectFit + ';object-position:' + cs.objectPosition + ';border-radius:' + cs.borderRadius + ';';
-      positionShield(clone, media);
-      document.body.appendChild(clone);
-      shields.set(media, clone);
-    } catch (e) {}
-  }
-  function clearAllShields() { shields.forEach(function (c) { c.remove(); }); shields.clear(); }
-  // Rebuild the shield set from media within POOL_REACH of the cursor (px,py).
-  // Cheap: skips off-screen media and tiny icons/logos (< 44px).
-  // Is the glow actually being DRAWN? The cursor pool was switched off for good
-  // ("no edge-glow" in the design rules) with `#page-glow{display:none!important}`,
-  // and the comment there says the JS stays inert — but this shield only ever
-  // checked for the `pool-on` CLASS, which pointermove still adds. So it went on
-  // laying fixed, z-index:1101 copies of every nearby photo over the whole app to
-  // protect them from a light that has not existed for months. That is what the
-  // founder was seeing on desktop: pictures on top of everything. Ask whether the
-  // glow renders, not whether a class is present.
-  var glowSeenAt = 0, glowOn = false;
-  function glowRenders() {
-    var now = Date.now();
-    if (now - glowSeenAt > 1000) { glowSeenAt = now; glowOn = getComputedStyle(stage).display !== 'none'; }
-    return glowOn;
-  }
-  function syncShields() {
-    if (coarse) { if (shields.size) clearAllShields(); return; } // no cursor-pool on touch → nothing to shield
-    if (!glowRenders()) { if (shields.size) clearAllShields(); return; }  // nothing to shield against
-    if (!stage.classList.contains('pool-on')) { if (shields.size) clearAllShields(); return; }
-    var want = null, list = document.querySelectorAll('img,video');
-    for (var i = 0; i < list.length; i++) {
-      var m = list[i];
-      if (m.hasAttribute('data-pool-shield')) continue;                 // never re-shield a clone
-      var r = m.getBoundingClientRect();
-      if (r.width < 44 || r.height < 44) continue;
-      if (px < r.left - POOL_REACH || px > r.right + POOL_REACH ||
-          py < r.top - POOL_REACH || py > r.bottom + POOL_REACH) continue;
-      (want || (want = new Set())).add(m);
-      if (!shields.has(m)) makeShield(m);
-    }
-    shields.forEach(function (c, m) { if (!want || !want.has(m)) { c.remove(); shields.delete(m); } });
-  }
+  // (Layer A — the cursor pool (#page-glow) and its MEDIA SHIELD are gone.
+  //  The glow was switched off for good under the "no edge-glow" design rule, but
+  //  its shield kept running: it cloned every photo within 360px of the cursor into
+  //  a position:fixed, z-index:1101 copy pinned on top of the whole app, so that a
+  //  light which no longer existed could not tint them. A fixed copy is not clipped
+  //  by the feed's scroller, so pictures painted straight over the top bar — the
+  //  "every picture is on top of everything" the founder reported twice — and being
+  //  pointer-events:none it was invisible to every hit-test, which is why it hid so
+  //  well. Both are deleted. Layer B (.rim-ring) went with them: same design rule,
+  //  same display:none, same dead JS. Layers D/E and the .spin rim below are live
+  //  and stay.)
 
   // ═══ Layer E — AI comets: ONLY while Atwe AI is actually working. ═══
   // aiComets.start(host) rigs 3 comets orbiting the host's perimeter at
@@ -62631,21 +62558,12 @@ function navInit() {
     return;
   }
 
-  var curRim = null; // Layer B: the ONE surface currently under the pointer
   function paintB() {
     rafB = null;
     for (var i = 0; i < glows.length; i++) {
       var el = glows[i], r = el.getBoundingClientRect();
       el.style.setProperty('--mx', (px - r.left) + 'px');
       el.style.setProperty('--my', (py - r.top) + 'px');
-    }
-    // Layer B: keep the hovered surface's rim centered on the pointer. Only one
-    // element ever updates per frame; scrolling fires no events here, so the
-    // light stays put while content moves (the blueprint's "scroll does NOTHING").
-    if (curRim && curRim._rimRing) {
-      var rr = curRim.getBoundingClientRect();
-      curRim.style.setProperty('--gx', (px - rr.left) + 'px');
-      curRim.style.setProperty('--gy', (py - rr.top) + 'px');
     }
   }
   function bump(v) { boost = Math.min(1, boost + v); }
@@ -62655,14 +62573,7 @@ function navInit() {
     var mag = Math.hypot(e.movementX || 0, e.movementY || 0);
     bump(mag * .004);
     rim = Math.min(1, rim + mag * .004);
-    // Layer A: the pool lights while the pointer moves on the stage, and stays lit
-    // over media too (background keeps glowing) — the media SHIELD (synced in the
-    // loop) keeps every nearby photo/video itself untinted, even on approach.
-    stage.classList.add('pool-on');
   }, { passive: true });
-  addEventListener('pointerup', function (e) { if (e.pointerType === 'touch') { stage.classList.remove('pool-on'); clearAllShields(); } }, { passive: true });
-  addEventListener('pointercancel', function () { stage.classList.remove('pool-on'); clearAllShields(); }, { passive: true });
-  document.documentElement.addEventListener('pointerleave', function () { stage.classList.remove('pool-on'); clearAllShields(); });
   addEventListener('touchmove', function (e) {
     var t = e.touches && e.touches[0];
     if (t) { px = t.clientX; py = t.clientY; if (!rafB) rafB = requestAnimationFrame(paintB); }
@@ -62678,51 +62589,20 @@ function navInit() {
   // boot / first tab open) was REMOVED entirely at Yiddi's request (2026-07-08).
   // Pointer-driven light only: the .spin rim below follows the smoothed cursor
   // track from the first frame; nothing plays on its own at boot or tab switch.
-  var gx = innerWidth / 2, gy = 0, shieldTick = 0;
+  var gx = innerWidth / 2, gy = 0;
   (function loop() {
     boost = Math.max(0, boost - .02);
     rim = Math.max(0, rim - .0045);
     root.style.setProperty('--boost', boost.toFixed(3));
     root.style.setProperty('--rim', rim.toFixed(3));
     gx += (px - gx) * .18; gy += (py - gy) * .18;
-    // Layer A: the pool orb trails the pointer on the same smoothed track
-    // (~120ms ease-out follow), pure GPU transform.
-    poolOrb.style.transform = 'translate3d(' + (gx - 420) + 'px,' + (gy - 420) + 'px,0)';
     for (var j = 0; j < spins.length; j++) {
       var s = spins[j], r = s.getBoundingClientRect();
       s.style.setProperty('--gx', (gx - r.left) + 'px');
       s.style.setProperty('--gy', (gy - r.top) + 'px');
     }
-    // Media shields: re-scan which media are within reach a few times a second
-    // (catches approach + scroll), and glue existing clones to their originals
-    // every frame; drop any whose original left the DOM.
-    if ((shieldTick = (shieldTick + 1) % 4) === 0) syncShields();
-    if (shields.size) shields.forEach(function (c, m) {
-      if (!m.isConnected) { c.remove(); shields.delete(m); }
-      else positionShield(c, m);
-    });
     requestAnimationFrame(loop);
   })();
-
-  // ═══ Layer B — bulb rim on cards, inputs and sheets. The ring is rigged
-  // LAZILY on first hover (one extra child span per surface, so hundreds of
-  // off-screen cards cost nothing), lights while the pointer is on the surface,
-  // and melts over ~3.5s after it leaves (pure CSS transition). ═══
-  var RIM_SEL = '.job-card-modal,.notif-card,.set-sheet,.sheet-modal,.mk-card,.pf-card,.me-wallet,.xp-ai,.auth-input,.jp-in,.pf-finput,[data-rim]';
-  document.addEventListener('pointerover', function (e) {
-    var el = e.target.closest && e.target.closest(RIM_SEL);
-    if (el === curRim) return;
-    if (curRim && curRim._rimRing) curRim._rimRing.classList.remove('on'); // → 3.5s melt
-    curRim = el || null;
-    if (!curRim) return;
-    if (!curRim._rimRing) {
-      try { if (getComputedStyle(curRim).position === 'static') curRim.style.position = 'relative'; } catch (err) {}
-      var ring = document.createElement('span'); ring.className = 'rim-ring';
-      curRim.appendChild(ring); curRim._rimRing = ring;
-      curRim.style.setProperty('--gr', Math.max(200, Math.min(460, curRim.offsetWidth * .55)) + 'px');
-    }
-    curRim._rimRing.classList.add('on');
-  }, { passive: true });
 
   // (Layer C — the viewport opening lap, its per-session seen registry and the
   //  appTab wrapper that fired it — was removed entirely at Yiddi's request.)
