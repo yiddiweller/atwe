@@ -4035,8 +4035,8 @@ body.nav-mini{--sidebar-w:68px;}
 body.nav-mini .sidebar{padding-inline-start:0;padding-inline-end:0;}
 body.nav-mini .sb-nav{align-items:center;}
 body.nav-mini .sb-navbtn{position:relative;justify-content:center;gap:0;padding:11px 0;width:50px;margin:0 auto;}
-body.nav-mini .sb-navbtn > span:not(.sb-navic):not(.sb-navlogo){display:none;}
-body.nav-mini .sb-navbtn .sb-navic,body.nav-mini .sb-navbtn svg,body.nav-mini .sb-navbtn .sb-navlogo{width:21px!important;height:21px!important;}
+body.nav-mini .sb-navbtn > span:not(.sb-navic):not(.sb-ico):not(.sb-navlogo){display:none;}
+body.nav-mini .sb-navbtn .sb-navic,body.nav-mini .sb-navbtn .sb-ico,body.nav-mini .sb-navbtn svg,body.nav-mini .sb-navbtn .sb-navlogo{width:21px!important;height:21px!important;}
 body.nav-mini .sb-navbtn .ac-badge{position:absolute;top:5px;right:7px;margin:0;}
 body.nav-mini .sb-btn,body.nav-mini .sb-settings{justify-content:center;gap:0;padding:10px 0;font-size:0;width:50px;margin:0 auto;}
 body.nav-mini .sb-btn svg,body.nav-mini .sb-settings svg,body.nav-mini .sb-btn .sb-atwe-ic{margin:0;}
@@ -8930,8 +8930,21 @@ body.light .ac-brand-logo{filter:invert(1);}
 .ac-searchbar input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);font-size:15px;font-family:inherit;}
 .ac-searchbar input::placeholder{color:var(--t3);}
 /* Engine full-width search bar (sits under the brand row + scope tabs, inside the screen). */
-.eng-searchbar-wrap{padding:6px 10px 8px;}   /* +8px from the #acSearchScroll .ac-list padding = the 18px gutter */
-.eng-searchbar{display:flex;align-items:center;gap:10px;width:100%;padding:11px 16px;border-radius:999px;background:var(--s2);border:1px solid var(--b2);transition:border-color var(--t-fast) var(--ease);}
+/* The search bar no longer runs the full width: it shares the row with the Atwe AI
+   circle, which is exactly as tall as the bar so the two read as one control. */
+.eng-searchbar-wrap{padding:6px 10px 8px;display:flex;align-items:center;gap:10px;}
+.eng-searchbar-wrap .eng-searchbar{flex:1;min-width:0;}
+.eng-ai-btn{flex:none;width:46px;height:46px;border-radius:50%;border:1px solid var(--b2);background:var(--s2);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;
+  transition:background var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
+.eng-ai-btn:hover{background:var(--s3,var(--s2));border-color:var(--b3);}
+.eng-ai-btn:active{transform:scale(.93);}
+/* The swirl is the brand mark masked in currentColor, so it follows the theme and
+   never ships a second copy of the logo. */
+.eng-ai-mark{width:24px;height:24px;display:block;background:var(--t1);
+  -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
+   /* +8px from the #acSearchScroll .ac-list padding = the 18px gutter */
+.eng-searchbar{display:flex;align-items:center;gap:10px;width:auto;padding:11px 16px;border-radius:999px;background:var(--s2);border:1px solid var(--b2);transition:border-color var(--t-fast) var(--ease);}
 .eng-searchbar:focus-within{border-color:var(--b3);}
 .eng-searchbar svg{width:18px;height:18px;stroke:var(--t3);stroke-width:2;fill:none;flex-shrink:0;}
 .eng-searchbar input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);font-size:16px;font-family:inherit;}
@@ -10835,7 +10848,7 @@ body.light .skel-stories{border-bottom-color:rgba(0,0,0,.08);}
 .sb-navbtn.active svg{stroke:var(--accent);}
 .sb-navbtn .ac-badge{margin-inline-start:auto;}
 .sidebar.collapsed .sb-navbtn{justify-content:center;padding:9px 0;}
-.sidebar.collapsed .sb-navbtn span:not(.ac-badge):not(.sb-navic):not(.sb-navlogo){display:none;}
+.sidebar.collapsed .sb-navbtn span:not(.ac-badge):not(.sb-navic):not(.sb-ico):not(.sb-navlogo){display:none;}
 /* Desktop: roomier primary nav with a rounded pill hover (X-style). */
 @media(min-width:769px){
   .sb-navbtn{font-size:15.5px;padding:10px 13px;border-radius:var(--r-pill);gap:14px;}
@@ -11044,8 +11057,47 @@ body.light .skel-stories{border-bottom-color:rgba(0,0,0,.08);}
    NOT a :active state — so it always plays the full smooth zoom-in-and-out even on the
    quickest, tiniest touch (a plain :active gets cut short by a fast release → a jumpy
    half-pop). Every icon uses the exact same keyframe + timing. */
+/* Alerts is a TAB now, so the bar has to stay reachable while its panel is open —
+   otherwise the only way out is the panel's own back arrow, which is not how a tab
+   behaves. Lift the bar above the panel (it is z-index 120, panels are 1000) and pad
+   the list so the last row never hides under it. Scoped to body.notif-tab, which is
+   only set when Alerts was opened FROM the bar — opening notifications from the bell
+   on Home is still a plain panel over the page, exactly as before. */
+body.notif-tab #bottomNav{z-index:1400;}
+body.notif-tab #notifOverlay .notif-scroll,body.notif-tab #notifOverlay #notifList{padding-bottom:112px;}
+/* "Open …" buttons under an Atwe AI answer. Secondary actions, so grey pills —
+   the one white primary per screen is not spent here. */
+.ai-open-row{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 2px;}
+.ai-open-btn{font:inherit;font-size:14px;font-weight:500;color:var(--t1);background:var(--s2);
+  border:1px solid var(--b2);border-radius:999px;padding:9px 16px;cursor:pointer;
+  transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
+.ai-open-btn:hover{background:var(--s3,var(--s2));}
+.ai-open-btn:active{transform:scale(.96);}
+/* The Alerts count, sized and placed like the Beam dot it sits beside. BLUE, not
+   red: in this bar blue already means "something new" (see .bn-dot), and red is
+   reserved for destructive actions everywhere else in Atwe. */
+.bn-tab .ac-badge{position:absolute;top:3px;right:4px;min-width:17px;height:17px;padding:0 4px;
+  font-size:10.5px;font-weight:700;line-height:1;background:var(--accent);color:#fff;
+  border:2px solid rgba(64,64,68,.95);border-radius:999px;z-index:2;pointer-events:none;}
+.bn-tab .ac-badge.hidden{display:none;}
+.sb-navbtn .ac-badge{background:var(--accent);color:#fff;}
+/* ── The five nav icons: OUTLINE when you are not on that world, SOLID the moment
+   you are. Both states ship inline in the markup and CSS picks one, so switching
+   worlds costs nothing — no image to fetch, no flash, and the swap is instant
+   under the finger. `currentColor` on both means the existing active/inactive
+   colours, the blue "something new" state and the theme all keep working. ── */
+.bn-ico{position:relative;z-index:1;display:block;width:24px;height:24px;}
+.bn-ico svg{width:100%;height:100%;display:block;fill:currentColor;}
+.sb-ico{display:block;width:17px;height:17px;flex-shrink:0;}
+.sb-ico svg{width:100%;height:100%;display:block;fill:currentColor;}
+.bn-ico .nv-on,.sb-ico .nv-on{display:none;}
+.bn-tab.active .bn-ico .nv-off,.sb-navbtn.active .sb-ico .nv-off{display:none;}
+.bn-tab.active .bn-ico .nv-on,.sb-navbtn.active .sb-ico .nv-on{display:block;}
+/* The ring is a STROKE, so the blue "new activity" cue has to set `color` too —
+   setting fill alone would leave the outline its old grey. */
+.bn-tab.bn-notif .bn-ico svg,.sb-navbtn.bn-notif .sb-ico svg{fill:var(--accent);color:var(--accent);}
 @keyframes bnPop{0%{transform:scale(1);}42%{transform:scale(1.3);}100%{transform:scale(1);}}
-.bn-tab svg.bn-pop,.bn-tab .bn-logo.bn-pop,.bn-tab .bn-icon.bn-pop{animation:bnPop .42s ease-in-out;}
+.bn-tab svg.bn-pop,.bn-tab .bn-logo.bn-pop,.bn-tab .bn-icon.bn-pop,.bn-tab .bn-ico.bn-pop{animation:bnPop .42s ease-in-out;}
 /* On a nav tap the WHOLE bar (grey pill included, since it's a child) plays ONE full,
    smooth zoom-in-and-out — the exact same motion as the icon pop above, just subtler
    (1.03), so the bar + grey pill flex together as one Apple-liquid-glass piece. It's a
@@ -12263,6 +12315,39 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
      direct <body> child (NOT inside .app, whose z-index:1 would trap it below overlays)
      so its high z-index sits above app content AND overlays; pointer-events:none. -->
 <div id="statusScrim" aria-hidden="true"></div>
+    <nav class="bottom-nav" id="bottomNav">
+      <span class="bn-indicator" id="bnIndicator"></span>
+      <button class="bn-tab" id="bnav-home" onclick="appTab('home')" aria-label="Home" data-i18n-aria="Home">
+        <span class="bn-ico" aria-hidden="true"><svg class="nv-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.1 12.4a8.9 8.9 0 0 1 17.8 0v5.3a3.2 3.2 0 0 1-3.2 3.2H6.3a3.2 3.2 0 0 1-3.2-3.2Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/><path d="M9.15 20.9v-5.05a2.85 2.85 0 0 1 5.7 0v5.05" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/></svg><svg class="nv-on" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.1 12.4a8.9 8.9 0 0 1 17.8 0v5.3a3.2 3.2 0 0 1-3.2 3.2H6.3a3.2 3.2 0 0 1-3.2-3.2ZM9.15 20.9v-5.05a2.85 2.85 0 0 1 5.7 0v5.05Z" fill-rule="evenodd"/></svg></span>
+        <span class="bn-label" data-i18n="Home">Home</span>
+      </button>
+      <button class="bn-tab" id="bnav-chat" onclick="appTab('chat')" aria-label="Beam" data-i18n-aria="Beam">
+        <span class="bn-ico" aria-hidden="true"><svg class="nv-off" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="9.4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M7.55 10.4a1.6 1.6 0 1 1 0 3.2a1.6 1.6 0 0 1 0-3.2ZM12 10.4a1.6 1.6 0 1 1 0 3.2a1.6 1.6 0 0 1 0-3.2ZM16.45 10.4a1.6 1.6 0 1 1 0 3.2a1.6 1.6 0 0 1 0-3.2Z"/></svg><svg class="nv-on" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5999999999999996a9.4 9.4 0 1 0 0 18.8a9.4 9.4 0 1 0 0-18.8ZM7.55 10.4a1.6 1.6 0 1 1 0 3.2a1.6 1.6 0 0 1 0-3.2ZM12 10.4a1.6 1.6 0 1 1 0 3.2a1.6 1.6 0 0 1 0-3.2ZM16.45 10.4a1.6 1.6 0 1 1 0 3.2a1.6 1.6 0 0 1 0-3.2Z" fill-rule="evenodd"/></svg></span>
+        <span class="bn-label" data-i18n="Beam">Beam</span>
+        <span class="bn-dot hidden" id="bnavDot"></span>
+      </button>
+      <button class="bn-tab" id="bnav-search" onclick="appTab('search')" aria-label="Engine" data-i18n-aria="Engine">
+        <span class="bn-ico" aria-hidden="true"><svg class="nv-off" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="9.4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M17.8 6.2 14.19 13.49 10.51 9.81Z M6.2 17.8 9.81 10.51 13.49 14.19Z"/></svg><svg class="nv-on" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5999999999999996a9.4 9.4 0 1 0 0 18.8a9.4 9.4 0 1 0 0-18.8ZM17.8 6.2 14.19 13.49 10.51 9.81Z M6.2 17.8 9.81 10.51 13.49 14.19Z" fill-rule="evenodd"/></svg></span>
+        <span class="bn-label" data-i18n="Engine">Engine</span>
+      </button>
+      <!-- Atwe AI used to sit here. It now opens from the circle beside the Engine
+           search bar, and this slot belongs to Notifications. Notifications is a
+           panel over whatever world you are in rather than a world of its own, so
+           it goes through acNavNotifs() instead of appTab(). -->
+      <button class="bn-tab" id="bnav-notifs" onclick="acNavNotifs()" aria-label="Notifications" data-i18n-aria="Notifications">
+        <span class="bn-ico" aria-hidden="true"><svg class="nv-off" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="9.4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 6.05a4.15 4.15 0 0 1 4.15 4.15v2.35l1.05 1.85a.72.72 0 0 1-.63 1.08H7.43a.72.72 0 0 1-.63-1.08l1.05-1.85V10.2A4.15 4.15 0 0 1 12 6.05ZM10.35 16.55h3.3a1.65 1.65 0 0 1-3.3 0Z"/></svg><svg class="nv-on" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5999999999999996a9.4 9.4 0 1 0 0 18.8a9.4 9.4 0 1 0 0-18.8ZM12 6.05a4.15 4.15 0 0 1 4.15 4.15v2.35l1.05 1.85a.72.72 0 0 1-.63 1.08H7.43a.72.72 0 0 1-.63-1.08l1.05-1.85V10.2A4.15 4.15 0 0 1 12 6.05ZM10.35 16.55h3.3a1.65 1.65 0 0 1-3.3 0Z" fill-rule="evenodd"/></svg></span>
+        <span class="bn-label" data-i18n="Alerts">Alerts</span>
+        <span class="ac-badge hidden" id="bnavNotifBadge">0</span>
+      </button>
+      <button class="bn-tab" id="bnav-profile" onclick="appTab('profile')" aria-label="Account">
+        <span class="bn-ico" aria-hidden="true"><svg class="nv-off" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="9.4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 6.6a2.95 2.95 0 1 1 0 5.9a2.95 2.95 0 0 1 0-5.9ZM5.83 17.91A6.4 6.4 0 0 1 18.17 17.91A8.55 8.55 0 0 1 5.83 17.91Z"/></svg><svg class="nv-on" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5999999999999996a9.4 9.4 0 1 0 0 18.8a9.4 9.4 0 1 0 0-18.8ZM12 6.6a2.95 2.95 0 1 1 0 5.9a2.95 2.95 0 0 1 0-5.9ZM5.83 17.91A6.4 6.4 0 0 1 18.17 17.91A8.55 8.55 0 0 1 5.83 17.91Z" fill-rule="evenodd"/></svg></span>
+        <span class="bn-label" data-i18n="Account">Account</span>
+      </button>
+      <!-- Compose "+" revealed only when the nav morphs into a ball on scroll (feature: body.nav-morph) -->
+      <button class="bn-plus" id="bnPlus" onclick="acNavBallTap()" aria-label="New">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+    </nav>
 
 <!-- First-impression splash: a small dark-grey Atwe mark, centered -->
 <div id="splash"><span class="splash-mark" aria-hidden="true"></span></div>
@@ -13284,24 +13369,25 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <!-- Primary navigation (the 5 app tabs) -->
     <nav class="sb-nav" id="sbNav">
       <button class="sb-navbtn" id="snav-home" onclick="appTab('home')">
-        <span class="sb-navic" style="--ic:var(--icn-narch)" aria-hidden="true"></span>
-        <span>Home</span>
+        <span class="sb-ico" aria-hidden="true"><svg class="nv-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.1 12.4a8.9 8.9 0 0 1 17.8 0v5.3a3.2 3.2 0 0 1-3.2 3.2H6.3a3.2 3.2 0 0 1-3.2-3.2Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/><path d="M9.15 20.9v-5.05a2.85 2.85 0 0 1 5.7 0v5.05" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/></svg><svg class="nv-on" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.1 12.4a8.9 8.9 0 0 1 17.8 0v5.3a3.2 3.2 0 0 1-3.2 3.2H6.3a3.2 3.2 0 0 1-3.2-3.2ZM9.15 20.9v-5.05a2.85 2.85 0 0 1 5.7 0v5.05Z" fill-rule="evenodd"/></svg></span>
+        <span data-i18n="Home">Home</span>
       </button>
       <button class="sb-navbtn" id="snav-chat" onclick="appTab('chat')">
-        <span class="sb-navic" style="--ic:var(--icn-equals)" aria-hidden="true"></span>
-        <span>Beam</span>
+        <span class="sb-ico" aria-hidden="true"><svg class="nv-off" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="9.4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M7.55 10.4a1.6 1.6 0 1 1 0 3.2a1.6 1.6 0 0 1 0-3.2ZM12 10.4a1.6 1.6 0 1 1 0 3.2a1.6 1.6 0 0 1 0-3.2ZM16.45 10.4a1.6 1.6 0 1 1 0 3.2a1.6 1.6 0 0 1 0-3.2Z"/></svg><svg class="nv-on" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5999999999999996a9.4 9.4 0 1 0 0 18.8a9.4 9.4 0 1 0 0-18.8ZM7.55 10.4a1.6 1.6 0 1 1 0 3.2a1.6 1.6 0 0 1 0-3.2ZM12 10.4a1.6 1.6 0 1 1 0 3.2a1.6 1.6 0 0 1 0-3.2ZM16.45 10.4a1.6 1.6 0 1 1 0 3.2a1.6 1.6 0 0 1 0-3.2Z" fill-rule="evenodd"/></svg></span>
+        <span data-i18n="Beam">Beam</span>
         <span class="ac-badge hidden" id="acBadgeNav">0</span>
       </button>
       <button class="sb-navbtn" id="snav-search" onclick="appTab('search')">
-        <span class="sb-navic" style="--ic:var(--icn-ring)" aria-hidden="true"></span>
-        <span>Engine</span>
+        <span class="sb-ico" aria-hidden="true"><svg class="nv-off" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="9.4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M17.8 6.2 14.19 13.49 10.51 9.81Z M6.2 17.8 9.81 10.51 13.49 14.19Z"/></svg><svg class="nv-on" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5999999999999996a9.4 9.4 0 1 0 0 18.8a9.4 9.4 0 1 0 0-18.8ZM17.8 6.2 14.19 13.49 10.51 9.81Z M6.2 17.8 9.81 10.51 13.49 14.19Z" fill-rule="evenodd"/></svg></span>
+        <span data-i18n="Engine">Engine</span>
       </button>
-      <button class="sb-navbtn" id="snav-ai" onclick="appTab('ai')">
-        <span class="sb-navic" style="--ic:var(--icn-knot)" aria-hidden="true"></span>
-        <span>Atwe AI</span>
+      <button class="sb-navbtn" id="snav-notifs" onclick="acNavNotifs()">
+        <span class="sb-ico" aria-hidden="true"><svg class="nv-off" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="9.4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 6.05a4.15 4.15 0 0 1 4.15 4.15v2.35l1.05 1.85a.72.72 0 0 1-.63 1.08H7.43a.72.72 0 0 1-.63-1.08l1.05-1.85V10.2A4.15 4.15 0 0 1 12 6.05ZM10.35 16.55h3.3a1.65 1.65 0 0 1-3.3 0Z"/></svg><svg class="nv-on" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5999999999999996a9.4 9.4 0 1 0 0 18.8a9.4 9.4 0 1 0 0-18.8ZM12 6.05a4.15 4.15 0 0 1 4.15 4.15v2.35l1.05 1.85a.72.72 0 0 1-.63 1.08H7.43a.72.72 0 0 1-.63-1.08l1.05-1.85V10.2A4.15 4.15 0 0 1 12 6.05ZM10.35 16.55h3.3a1.65 1.65 0 0 1-3.3 0Z" fill-rule="evenodd"/></svg></span>
+        <span data-i18n="Alerts">Alerts</span>
+        <span class="ac-badge hidden" id="sbNotifBadge">0</span>
       </button>
       <button class="sb-navbtn" id="snav-profile" onclick="appTab('profile')">
-        <svg viewBox="0 0 24 24"><path d="M12 12.5a4.75 4.75 0 1 0 0-9.5 4.75 4.75 0 0 0 0 9.5z"/><path d="M3.75 20.4a8.25 8.25 0 0 1 16.5 0 .85.85 0 0 1-.85.85H4.6a.85.85 0 0 1-.85-.85z"/></svg>
+        <span class="sb-ico" aria-hidden="true"><svg class="nv-off" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="9.4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 6.6a2.95 2.95 0 1 1 0 5.9a2.95 2.95 0 0 1 0-5.9ZM5.83 17.91A6.4 6.4 0 0 1 18.17 17.91A8.55 8.55 0 0 1 5.83 17.91Z"/></svg><svg class="nv-on" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5999999999999996a9.4 9.4 0 1 0 0 18.8a9.4 9.4 0 1 0 0-18.8ZM12 6.6a2.95 2.95 0 1 1 0 5.9a2.95 2.95 0 0 1 0-5.9ZM5.83 17.91A6.4 6.4 0 0 1 18.17 17.91A8.55 8.55 0 0 1 5.83 17.91Z" fill-rule="evenodd"/></svg></span>
         <span data-i18n="Account">Account</span>
       </button>
     </nav>
@@ -13593,37 +13679,11 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <div class="social-wrap hidden" id="socialWrap"></div>
 
     <!-- Primary bottom navigation (mobile) -->
-    <nav class="bottom-nav" id="bottomNav">
-      <span class="bn-indicator" id="bnIndicator"></span>
-      <button class="bn-tab" id="bnav-home" onclick="appTab('home')" aria-label="Home" data-i18n-aria="Home">
-        <span class="bn-icon" style="--ic:var(--icn-narch)"></span>
-        <span class="bn-label" data-i18n="Home">Home</span>
-      </button>
-      <button class="bn-tab" id="bnav-chat" onclick="appTab('chat')" aria-label="Beam" data-i18n-aria="Beam">
-        <span class="bn-icon" style="--ic:var(--icn-equals)"></span>
-        <span class="bn-label" data-i18n="Beam">Beam</span>
-        <span class="bn-dot hidden" id="bnavDot"></span>
-      </button>
-      <!-- Middle (3rd) icon: keeps its swirl graphic (icn-knot) but now OPENS ENGINE.
-           4th icon: keeps its ring graphic (icn-ring) but now OPENS ATWE AI. Only the
-           destinations/ids swap; the icon graphics stay in place (founder request). -->
-      <button class="bn-tab" id="bnav-search" onclick="appTab('search')" aria-label="Engine" data-i18n-aria="Engine">
-        <span class="bn-icon" style="--ic:var(--icn-knot)"></span>
-        <span class="bn-label" data-i18n="Engine">Engine</span>
-      </button>
-      <button class="bn-tab" id="bnav-ai" onclick="appTab('ai')" aria-label="Atwe AI">
-        <span class="bn-icon" style="--ic:var(--icn-ring)"></span>
-        <span class="bn-label">Atwe AI</span>
-      </button>
-      <button class="bn-tab" id="bnav-profile" onclick="appTab('profile')" aria-label="Account">
-        <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-4 0-7 2.2-7 5 0 .6.4 1 1 1h12c.6 0 1-.4 1-1 0-2.8-3-5-7-5z"/></svg>
-        <span class="bn-label" data-i18n="Account">Account</span>
-      </button>
-      <!-- Compose "+" revealed only when the nav morphs into a ball on scroll (feature: body.nav-morph) -->
-      <button class="bn-plus" id="bnPlus" onclick="acNavBallTap()" aria-label="New">
-        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      </button>
-    </nav>
+    <!-- The bottom nav lives at BODY level, not inside #app. #app is position:relative
+         z-index:1, which is a stacking context — anything inside it can never paint
+         above a body-level panel no matter how high its own z-index goes (the same
+         trap #statusScrim had). It keeps z-index 120, so it still sits UNDER every
+         panel exactly as before; only the Alerts tab lifts it (body.notif-tab). -->
     <!-- Solid backdrop BEHIND + BELOW the floating nav pill (mobile browser only). The pill
          stays exactly as it is (floating, untouched); this just makes the whole bottom zone
          under and around it fully solid so feed content disappears cleanly there instead of
@@ -19157,6 +19217,12 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input id="tbSearchInput" type="text" placeholder="Search everything on Atwe" aria-label="Search everything on Atwe" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="acDoSearch(this.value)"/>
           </div>
+          <!-- Atwe AI. It used to be the 4th tab in the bottom bar; it lives here now,
+               beside search, the way the big platforms put their assistant. Same page,
+               same design — only the way in changed. -->
+          <button class="eng-ai-btn" id="engAiBtn" onclick="appTab('ai')" aria-label="Ask Atwe AI" title="Ask Atwe AI">
+            <span class="eng-ai-mark" aria-hidden="true"></span>
+          </button>
         </div>
         <div id="peopleFilters" class="ppl-filters" style="display:none;"></div>
         <div id="acSearchPageResults"><div class="ac-empty">Search for people and posts.</div></div>
@@ -20069,7 +20135,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1707'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1708'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -22031,6 +22097,8 @@ function closeOverlay(id) {
   if (!el || el.classList.contains('hidden')) return;
   // The job/listing overlays own a shareable path while open — clear it on close.
   if ((id === 'jobView' || id === 'listingView') && /^\/(job|listing)\/\d+$/.test(location.pathname)) acSetPath('/');
+  // Notifications borrows the nav highlight while it is open — give it back.
+  if (id === 'notifOverlay' && typeof acSyncNavActive === 'function') acSyncNavActive();
   el.classList.add('closing');
   if (el._closeDone) el.removeEventListener('animationend', el._closeDone); // drop a stale pending close
   const done = () => {
@@ -23698,7 +23766,9 @@ function initUI() {
   document.getElementById('sbHelp').style.display = guest ? 'flex' : 'none';
   document.getElementById('sbAtChat').style.display = guest ? 'none' : 'flex';
   // Accounts get Notifications (above the profile) + Settings (below it).
-  document.getElementById('sbNotif').style.display = guest ? 'none' : 'flex';
+  // Alerts has its own place in the nav now, so this older sidebar row would be the
+  // same destination listed twice. Kept in the DOM (it owns #notifBadge) but hidden.
+  document.getElementById('sbNotif').style.display = 'none';
   document.getElementById('sbSettings2').style.display = guest ? 'none' : 'flex';
   if (!guest) refreshNotifCount();
   document.getElementById('userName').textContent = name;
@@ -24051,7 +24121,9 @@ async function sendMessage() {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ messages: apiMessages, plan: S.plan }),
+      // appGuide = every page, feature and setting this member can actually reach,
+      // so the assistant answers about THIS app instead of in general.
+      body: JSON.stringify({ messages: apiMessages, plan: S.plan, appGuide: acAiGuide() }),
       signal: controller.signal,
     }).finally(() => clearTimeout(timeout));
 
@@ -24068,9 +24140,13 @@ async function sendMessage() {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
 
-    await typewriterEffect(aiNode, data.content);
+    // The reply may name places in the app; turn those into real buttons and keep
+    // the markers out of what the member reads.
+    const { clean, targets } = acAiOpenTargets(data.content);
+    await typewriterEffect(aiNode, clean);
+    acAiRenderOpen(aiNode, targets);
 
-    chat.messages.push({ role: 'assistant', content: data.content });
+    chat.messages.push({ role: 'assistant', content: clean });
     Store.save();
     Sync.saveChat(chat);
     renderHistory();
@@ -28591,6 +28667,35 @@ function _lastTab() {
     return ['home', 'chat', 'search', 'ai', 'profile'].includes(t) ? t : null;
   } catch { return null; }
 }
+// Which nav tab lights up for a given surface. Only AI differs: it lives behind
+// Engine now, so Engine stays selected while it is open.
+const NAV_ALIAS = { ai: 'search' };
+// Notifications is a full-screen panel over whatever world you are in, not a world
+// of its own — so it does NOT go through appTab (which would tear down and rebuild
+// the surface underneath). It just takes the highlight while it is open and hands
+// it straight back on close (see closeOverlay).
+function acNavNotifs() {
+  if (!isAccount()) { openLogin(); return; }
+  ['bnav-', 'snav-'].forEach((pre) => {
+    ['home', 'chat', 'search', 'notifs', 'profile'].forEach((t) => {
+      document.getElementById(pre + t)?.classList.toggle('active', t === 'notifs');
+    });
+  });
+  document.body.classList.add('notif-tab');
+  requestAnimationFrame(syncNavPill);
+  openNotifications();
+}
+// Put the highlight back on the world that is actually showing.
+function acSyncNavActive() {
+  document.body.classList.remove('notif-tab');
+  const on = NAV_ALIAS[_appTab] || _appTab;
+  ['bnav-', 'snav-'].forEach((pre) => {
+    ['home', 'chat', 'search', 'notifs', 'profile'].forEach((t) => {
+      document.getElementById(pre + t)?.classList.toggle('active', t === on);
+    });
+  });
+  requestAnimationFrame(syncNavPill);
+}
 function appTab(tab, opts) {
   // opts.silent: sync all tab chrome (active states, topbar, sidebar) WITHOUT
   // running the per-tab acGo* navigation — used by the back-stack restore,
@@ -28602,6 +28707,13 @@ function appTab(tab, opts) {
   // (Guest mode was removed — nothing is usable without an account.)
   if (!isAccount()) { openLogin(); return; }
   if (tab !== 'ai' && !S.user?.username) { showNotif('Pick a username to start.'); openProfileEdit(true); return; }
+  /* Alerts is a panel, not a world, so switching worlds has to CLOSE it — otherwise
+     the panel stays up over the world you just moved to, and the bar keeps the
+     raised layering it only gets while Alerts is open. */
+  if (document.body.classList.contains('notif-tab')) {
+    document.body.classList.remove('notif-tab');
+    closeOverlay('notifOverlay');
+  }
   // Blue-icon nav notif: leaving a world dismisses its glow (it re-blues only on NEW activity).
   if (_appTab && _appTab !== tab && !_silent && typeof acDismissNavNotif === 'function') acDismissNavNotif(_appTab);
   _appTab = tab;
@@ -28612,8 +28724,12 @@ function appTab(tab, opts) {
   document.getElementById('socialWrap').classList.toggle('hidden', !social);
   document.getElementById('sbAITools').classList.toggle('hidden', social);
   document.getElementById('sbContext').classList.toggle('hidden', !social);
-  ['home', 'chat', 'search', 'ai', 'profile', 'call'].forEach(t => {
-    const on = t === tab;
+  /* Atwe AI is no longer one of the five worlds in the bar — it opens from the
+     circle beside the Engine search bar — so while it is showing, ENGINE stays lit
+     rather than the pill vanishing off the bar entirely. 'notifs' is listed so that
+     switching to a real world clears its highlight again. */
+  ['home', 'chat', 'search', 'notifs', 'ai', 'profile', 'call'].forEach(t => {
+    const on = t === (NAV_ALIAS[tab] || tab);
     ['snav-' + t, 'bnav-' + t].forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
@@ -31739,6 +31855,59 @@ const TOP_PLACES = new Set(['wallet', 'send money', 'orders', 'cart', 'beam', 'h
   'write a post', 'new chat', 'go live']);
 
 let _appIndex = null;
+/* ── Atwe AI knows the app itself ────────────────────────────────────────────
+   The assistant is given the SAME index the search bar uses — every page, every
+   feature, every setting, with the words a person would actually use for it. So
+   "where do I change my password" or "how do I get paid" get a real answer about
+   THIS app rather than a generic one.
+   It never navigates by itself. It may only NAME a destination, in a [[open:Name]]
+   marker; the client then looks that name up in the index and renders a button
+   that runs the real opener. A name that matches nothing renders nothing, so the
+   assistant cannot invent a place that does not exist. */
+let _aiGuide = null;
+function acAiGuide() {
+  if (_aiGuide) return _aiGuide;
+  const u = S.user || {};
+  const isAdmin = !!u.is_admin, verified = !!u.verified;
+  const lines = acAppIndex()
+    .filter((it) => !it.when || (() => { try { return !!it.when(u, isAdmin, verified); } catch (e) { return false; } })())
+    .map((it) => '- ' + it.label + (it.sub ? ' (' + it.sub + ')' : ''));
+  _aiGuide = lines.join('\n');
+  return _aiGuide;
+}
+// Pull the markers out of a reply: returns the clean text plus the destinations
+// that actually resolve to somewhere real.
+function acAiOpenTargets(text) {
+  const names = [];
+  const clean = String(text || '').replace(/\[\[open:\s*([^\]]+?)\s*\]\]/gi, (_, n) => { names.push(n); return ''; })
+    .replace(/\n{3,}/g, '\n\n').trim();
+  const seen = new Set(), targets = [];
+  for (const n of names) {
+    const hit = (acFindPlaces(n, 1) || [])[0];
+    if (!hit || seen.has(hit.label)) continue;
+    seen.add(hit.label);
+    targets.push(hit);
+  }
+  return { clean, targets };
+}
+// Render the buttons under an answer. Stored on the element so a re-render (the
+// typewriter rewrites innerHTML) cannot lose them.
+function acAiRenderOpen(bubbleEl, targets) {
+  if (!bubbleEl || !targets || !targets.length) return;
+  const host = bubbleEl.parentElement || bubbleEl;
+  host.querySelector('.ai-open-row')?.remove();
+  const row = document.createElement('div');
+  row.className = 'ai-open-row';
+  targets.slice(0, 4).forEach((t, i) => {
+    const b = document.createElement('button');
+    b.className = 'ai-open-btn';
+    b.type = 'button';
+    b.textContent = 'Open ' + t.label;
+    b.onclick = () => { try { acRunPlace(t); } catch (e) { showNotif('Could not open that.'); } };
+    row.appendChild(b);
+  });
+  host.appendChild(row);
+}
 function acAppIndex() {
   if (_appIndex) return _appIndex;
   const out = [], seen = new Set();
@@ -31797,6 +31966,14 @@ function acFindPlaces(q, limit) {
 }
 
 const _PLACE_ARROW = '<svg class="ac-place-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+/* Run a destination from the index. `run` is our own code, taken from the same
+   tables the search rows use as an inline onclick — never anything a member or the
+   assistant typed. The assistant only ever supplies a NAME, which is looked up
+   here first; it can't reach this with a string of its own. */
+function acRunPlace(p) {
+  if (!p || !p.run) return;
+  new Function(p.run)();
+}
 function acPlaceRow(p) {
   return '<button class="ac-place" onclick="' + escHtml(p.run) + '">'
     + '<span class="ac-place-main"><span class="ac-place-name">' + escHtml(p.label) + '</span>'
@@ -32067,9 +32244,14 @@ function setNotifBadge(n) {
   AC._notifUnread = n || 0;
   acSyncBellDot();
   acSyncTabTitle();
-  const b = document.getElementById('notifBadge'); if (!b) return;
-  if (n > 0) { b.textContent = n > 99 ? '99+' : n; b.classList.remove('hidden'); }
-  else b.classList.add('hidden');
+  /* Alerts is a world in the bar now, so the count belongs on its tab (both the
+     phone bar and the desktop sidebar) as well as on the old row. */
+  const txt = n > 99 ? '99+' : String(n);
+  ['notifBadge', 'bnavNotifBadge', 'sbNotifBadge'].forEach((id) => {
+    const b = document.getElementById(id); if (!b) return;
+    if (n > 0) { b.textContent = txt; b.classList.remove('hidden'); }
+    else b.classList.add('hidden');
+  });
 }
 async function refreshNotifCount() {
   if (!isAccount()) return;
@@ -62026,7 +62208,9 @@ function bindNavBubble() {
   const nav = document.getElementById('bottomNav'); if (!nav) return;
   _navBubbleBound = true;
   const pop = (btn) => {
-    const ic = btn.querySelector('.bn-icon, svg, .bn-logo'); if (!ic) return;
+    // .bn-ico first: it WRAPS the outline+solid pair, so popping it scales whichever
+    // one is currently showing (popping the inner svg would only ever catch the outline).
+    const ic = btn.querySelector('.bn-ico, .bn-icon, svg, .bn-logo'); if (!ic) return;
     ic.classList.remove('bn-pop'); void ic.offsetWidth; ic.classList.add('bn-pop');
   };
   // Every tap starts a full smooth pop (perfect for quick taps). If the finger is STILL

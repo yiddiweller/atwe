@@ -138,8 +138,32 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
    edge. Motion is quiet feedback, never a light show. (The old `.rim-ring`/light-engine glow is removed.)
 8. **Brand & voice.** Product = **Atwe**; assistant = **Atwe AI** (the swirl). Never surface Claude/
    Anthropic. Plain, calm copy (Apple/X restraint). No emojis in the app chrome.
-9. **Five worlds** (bottom nav, in order): **Home · Beam · Engine · Atwe AI · Account** (internal tab
-   ids stay `home/chat/search/ai/profile`; only the *label* is "Account").
+9. **Five worlds** (bottom nav, in order): **Home · Beam · Engine · Alerts · Account**.
+   Internal tab ids stay `home/chat/search/profile`; only the *labels* changed.
+   **Atwe AI is no longer a nav world** — it opens from a circular brand-mark button
+   beside the Engine search bar (`#engAiBtn`, the way the big platforms put their
+   assistant next to search), and its slot in the bar belongs to **Alerts**
+   (notifications). `appTab('ai')` is untouched and still opens the same page from
+   everywhere else (the Me hub, deep links, the message ⋯ menu, forward-to-AI), so
+   nothing about the AI surface itself changed — only the way in.
+   **Nav icons are OUTLINE when inactive and SOLID when active** — each tab ships
+   both states inline (`.bn-ico` wraps `.nv-off` + `.nv-on`) and CSS picks one, so
+   the swap is instant with nothing to fetch. All five share one circle geometry
+   (r 9.4, stroke 1.7 in a 24 viewBox) so they read as one family; Home is the same
+   arch it always was, drawn as a stroke when inactive. Knockouts use
+   `fill-rule="evenodd"`, never `<mask>`/`<clipPath>` — each icon renders twice
+   (bottom nav + desktop sidebar) and ids would collide.
+   **Two traps live here.** (1) Put `fill="none"` on a `<path>`, never on the
+   `<svg>`: the app ships `.bn-tab svg{fill:currentColor}`, and a CSS rule on an
+   element beats a presentation attribute on that same element, so an outline with
+   `fill="none"` on its `<svg>` silently fills in solid. On a child it is safe —
+   children only INHERIT the svg's fill, and inheritance loses to their own
+   attribute. (2) `#bottomNav` is a **direct `<body>` child**, not inside `#app`:
+   `#app` is `position:relative;z-index:1`, a stacking context, so anything inside
+   it can never paint above a body-level panel however high its own z-index goes
+   (the same trap `#statusScrim` had). It keeps `z-index:120` so it still sits
+   UNDER every panel exactly as before; only `body.notif-tab` lifts it, so the bar
+   stays reachable while the Alerts panel is open.
 10. **Verified seal** = a neutral **silver** seal sized to the name (never blue, never a plain dot).
 11. **Anchored** flow = pure black, only answer-boxes boxed, buttons morph in place (no blink/jump),
     grey→white pills, red destructive. **Glide menu** = the frosted press-hold context sheet.
@@ -1502,6 +1526,15 @@ live under `/api/atchat/*`, `/api/social/*`, `/api/feeds/*`, `/api/circles/*`,
 `/api/rt/*`. The frontend lives in one big `AC` state object + `AC.*`/`ac*`
 functions, organized by banner comments.
 
+> **NB — the bar changed:** Atwe AI moved out of the bottom nav into a circle beside
+> the Engine search bar, and **Alerts** (notifications) took its slot. Alerts is a
+> PANEL over whatever world you are in, not a world of its own, so its button calls
+> `acNavNotifs()` (which borrows the highlight and sets `body.notif-tab`) rather than
+> `appTab()`; `closeOverlay('notifOverlay')` and `appTab()` both hand the highlight
+> back via `acSyncNavActive()`, and `appTab()` closes the panel so switching worlds
+> from inside Alerts actually leaves. `NAV_ALIAS = { ai: 'search' }` keeps Engine lit
+> while the AI page is open, rather than the pill vanishing off the bar.
+>
 > **World naming (design blueprint).** The five bottom-nav worlds are **Home ·
 > Beam · Engine · Atwe AI · Profile**. The messaging world is user-facing **Beam**
 > (nav `aria-label`, the `syncTopbar` `chat` label, the desktop right-rail tile) and
@@ -4513,6 +4546,27 @@ authenticated route — `create_event`→`/api/events`, `schedule_post`→`/api/
 `draft_invoice`→ resolve `@username`→id then `/api/invoices`; `draft_reply` is text-only
 (copy). So every action is user-confirmed and reuses existing per-row authz. Degrades
 to `503` without `ANTHROPIC_API_KEY`. Brand-safe (never exposes the AI vendor).
+
+### Atwe AI knows the app itself
+
+The assistant is given the **same index the search bar uses** (`acAppIndex()` — every
+page, feature and setting, with the words a person would actually use), so "where do I
+change my password" or "how do I get paid" gets an answer about THIS app rather than a
+generic one. `acAiGuide()` renders it as `- Name (section)` lines — ~145 destinations,
+~4KB — filtered by each item's `when` so nobody is pointed at a surface they can't
+reach, and sent with the chat request as `appGuide`. Server-side `appGuideBlock()`
+folds it into the system prompt (capped at `APP_GUIDE_MAX`=12000 so a client can't push
+an unbounded prompt through).
+
+**The assistant never navigates.** It may only NAME a destination, in an
+`[[open:Name]]` marker on its own line. `acAiOpenTargets()` strips the markers out of
+what the member reads and resolves each name through `acFindPlaces()`; only names that
+match something real survive, so a hallucinated place renders nothing at all.
+`acAiRenderOpen()` then draws grey "Open …" pills (secondary — the one white primary
+per screen isn't spent here) whose click runs `acRunPlace()`, i.e. the index's own
+opener string — the same one the search rows use as an inline onclick, never anything
+the model or a member typed. Adding a destination to `ME_HUB`/`PLACES_EXTRA` teaches
+the search bar AND the assistant in the same line.
 
 ## Atwe AI Copilot
 

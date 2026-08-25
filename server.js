@@ -43547,6 +43547,29 @@ setInterval(trackJob('broadcasts', flushScheduledBroadcasts), BCAST_FLUSH_MS).un
    Plan is taken from the authenticated user (authoritative);
    guests (no token) fall back to the client-sent plan, local-only.
 ═══════════════════════════════════════════════ */
+/* Atwe AI knows Atwe. The client sends the same index its search bar uses — every
+   page, feature and setting the MEMBER can actually reach — so questions like
+   "where do I change my password" or "how do I get paid" get an answer about this
+   app rather than a generic one.
+   The assistant never navigates. It may only NAME a destination in an [[open:Name]]
+   marker; the client looks that name up in its own index and renders a button that
+   runs the real opener, so a name matching nothing simply renders nothing. Capped
+   so a client cannot push an unbounded prompt through this. */
+const APP_GUIDE_MAX = 12000;
+function appGuideBlock(guide) {
+  const g = typeof guide === 'string' ? guide.slice(0, APP_GUIDE_MAX).trim() : '';
+  if (!g) return '';
+  return 'You are the assistant built INTO the Atwe app, and you know it well. '
+    + 'Here is every place in Atwe this member can reach, as "Name (section)":\n'
+    + g + '\n\n'
+    + 'When they ask where something is, how to do something in Atwe, or which part of Atwe '
+    + 'they need, answer from this list — briefly and in plain words, naming the exact place. '
+    + 'Then, on its own line, add a marker for each place you are sending them to, written '
+    + 'EXACTLY as [[open:Name]] using the name from the list. The app turns each marker into a '
+    + 'button; never write the marker inline in a sentence, never invent a name that is not on '
+    + 'the list, and add no marker at all when the question is not about finding somewhere in Atwe. '
+    + 'For anything else — writing, business questions, general help — answer normally and ignore the list.\n\n';
+}
 app.post('/api/chat', auth.requireAuth, rateLimit(30, 60000, 'chat'), requireFeature('ai'), requireGeo('ai'), async (req, res) => {
   const { messages, plan: clientPlan } = req.body;
 
@@ -43583,6 +43606,7 @@ app.post('/api/chat', auth.requireAuth, rateLimit(30, 60000, 'chat'), requireFea
       model: 'claude-sonnet-4-6',
       max_tokens: maxTokens,
       system: aiPrompt('chat',
+        appGuideBlock(req.body.appGuide) +
         'You are Atwe AI, an intelligent assistant for modern businesses. Give clear, accurate, well-structured answers. Be professional, concise, and genuinely helpful — thorough when it matters, brief when it does not. Use markdown (bold, lists, headings, code) only when it improves clarity. Keep a clean, classy, understated tone; do not use emojis unless the user uses them first.'),
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
     });
