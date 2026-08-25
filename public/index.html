@@ -20102,7 +20102,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1705'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1706'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -62451,10 +62451,44 @@ function navInit() {
   // originals each frame (survive scroll) and drop the instant they leave reach.
   var shields = new Map();           // original media element -> clean clone
   var POOL_REACH = 360;              // px: a touch beyond the visible glow radius
+  /* Everything that CLIPS the original — every scrolling ancestor, plus the window.
+     The clone is position:fixed, so none of them clip IT. Without this the copy of
+     a photo keeps painting at full size while the real one scrolls away under the
+     top bar: pictures float over the tabs, the sidebar, the rail — over the whole
+     app — and because the clone is pointer-events:none, everything still WORKS,
+     so hit-testing insists the bar is on top while your eyes say otherwise. That
+     is exactly the "every picture is on top of everything" this caused on desktop
+     (desktop only: the glow, and so the shield, is off on touch). */
+  function clippersOf(media) {
+    var out = [];
+    for (var n = media.parentElement; n && n !== document.documentElement; n = n.parentElement) {
+      var s = getComputedStyle(n);
+      if (s.overflow !== 'visible' || s.overflowX !== 'visible' || s.overflowY !== 'visible') out.push(n);
+      if (out.length >= 4) break;                      // deeper than this never clips media here
+    }
+    return out;
+  }
   function positionShield(clone, media) {
     var r = media.getBoundingClientRect();
     clone.style.left = r.left + 'px'; clone.style.top = r.top + 'px';
     clone.style.width = r.width + 'px'; clone.style.height = r.height + 'px';
+    // Clip the copy to the part of the original that is genuinely on screen.
+    var L = 0, T = 0, R = window.innerWidth, Bm = window.innerHeight;
+    var cl = clone._clippers || [];
+    for (var i = 0; i < cl.length; i++) {
+      var pr = cl[i].getBoundingClientRect();
+      if (pr.left > L) L = pr.left;
+      if (pr.top > T) T = pr.top;
+      if (pr.right < R) R = pr.right;
+      if (pr.bottom < Bm) Bm = pr.bottom;
+    }
+    if (R <= L || Bm <= T || r.width <= 0 || r.height <= 0) { clone.style.display = 'none'; return; }
+    clone.style.display = '';
+    var it = Math.max(0, T - r.top), ir = Math.max(0, r.right - R),
+        ib = Math.max(0, r.bottom - Bm), il = Math.max(0, L - r.left);
+    clone.style.clipPath = (it || ir || ib || il)
+      ? 'inset(' + it + 'px ' + ir + 'px ' + ib + 'px ' + il + 'px' + (clone._radius ? ' round ' + clone._radius : '') + ')'
+      : '';
   }
   function makeShield(media) {
     try {
@@ -62462,6 +62496,8 @@ function navInit() {
       var clone = media.cloneNode(false);
       clone.id = ''; clone.className = ''; clone.removeAttribute('loading');
       clone.setAttribute('data-pool-shield', '1'); // so the scan never re-shields a clone
+      clone._clippers = clippersOf(media);
+      clone._radius = cs.borderRadius;
       if (clone.tagName === 'VIDEO') { clone.removeAttribute('autoplay'); clone.muted = true; }
       clone.style.cssText = 'position:fixed;margin:0;pointer-events:none;z-index:1101;object-fit:' +
         cs.objectFit + ';object-position:' + cs.objectPosition + ';border-radius:' + cs.borderRadius + ';';
@@ -62473,8 +62509,23 @@ function navInit() {
   function clearAllShields() { shields.forEach(function (c) { c.remove(); }); shields.clear(); }
   // Rebuild the shield set from media within POOL_REACH of the cursor (px,py).
   // Cheap: skips off-screen media and tiny icons/logos (< 44px).
+  // Is the glow actually being DRAWN? The cursor pool was switched off for good
+  // ("no edge-glow" in the design rules) with `#page-glow{display:none!important}`,
+  // and the comment there says the JS stays inert — but this shield only ever
+  // checked for the `pool-on` CLASS, which pointermove still adds. So it went on
+  // laying fixed, z-index:1101 copies of every nearby photo over the whole app to
+  // protect them from a light that has not existed for months. That is what the
+  // founder was seeing on desktop: pictures on top of everything. Ask whether the
+  // glow renders, not whether a class is present.
+  var glowSeenAt = 0, glowOn = false;
+  function glowRenders() {
+    var now = Date.now();
+    if (now - glowSeenAt > 1000) { glowSeenAt = now; glowOn = getComputedStyle(stage).display !== 'none'; }
+    return glowOn;
+  }
   function syncShields() {
     if (coarse) { if (shields.size) clearAllShields(); return; } // no cursor-pool on touch → nothing to shield
+    if (!glowRenders()) { if (shields.size) clearAllShields(); return; }  // nothing to shield against
     if (!stage.classList.contains('pool-on')) { if (shields.size) clearAllShields(); return; }
     var want = null, list = document.querySelectorAll('img,video');
     for (var i = 0; i < list.length; i++) {
