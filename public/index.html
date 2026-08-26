@@ -6039,7 +6039,10 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
 .mc-cs-ic svg{width:22px;height:22px;}
 .mc-cs-when{font-size:13px;color:var(--t2);font-weight:600;margin-top:1px;}
 /* ── Custom status ── */
-.me-status{display:flex;align-items:center;gap:10px;width:100%;padding:12px 16px;margin:0 0 14px;background:var(--s1);border:none;border-radius:var(--r-md,16px);cursor:pointer;color:var(--t1);text-align:left;transition:transform var(--t-fast) var(--ease);}
+/* --s2 and a 20px radius, NOT --s1/16px: every other block on this page (hero,
+   search bar, the row cards) is --s2, and measured pixels put this one at 11,11,13
+   against their 20,20,22 — visibly darker, which read as a different material. */
+.me-status{display:flex;align-items:center;gap:10px;width:100%;padding:12px 16px;margin:0 0 12px;background:var(--s2);border:none;border-radius:20px;cursor:pointer;color:var(--t1);text-align:left;transition:transform var(--t-fast) var(--ease);}
 .me-status:active{transform:scale(.99);}
 .me-status-em{font-size:19px;line-height:1;flex-shrink:0;}
 .me-status-tx{font-size:14.5px;font-weight:600;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -20334,7 +20337,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1721'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1722'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -35095,8 +35098,7 @@ const ME_SECTIONS = [
     { l: 'Atwe AI · memory & tasks', ic: _ME_IC.spark, run: "acOpenAiBrain()", kw: 'ai memory tasks assistant remember' },
     { l: 'Do it for me', ic: _ME_IC.doit, run: "acOpenAgent()", kw: 'do it for me agent automate ai task' },
   ] },
-  { id: 'app', title: 'App &amp; help', ic: _ME_IC.gear, sub: 'Settings, notifications, devices and support', items: [
-    { l: 'Settings', ic: _ME_IC.gear, run: "openSettings()", kw: 'settings preferences options configuration account app' },
+  { id: 'app', title: 'App &amp; help', ic: _ME_IC.gear, sub: 'Notifications, devices, updates and support', items: [
     { l: 'Notifications', ic: _ME_IC.bell, run: "openNotifications()", kw: 'notifications alerts activity bell' },
     { l: 'Devices', ic: _ME_IC.device, run: "openDevices()", kw: 'devices sessions logged in where signed in' },
     { l: 'What’s new', ic: _ME_IC.bell, run: "acOpenChangelog()", kw: 'whats new changelog updates release notes' },
@@ -35105,10 +35107,15 @@ const ME_SECTIONS = [
     { l: 'Posts you\u2019ve read', ic: _ME_IC.eye || _ME_IC.bmk, run: "acOpenHistory()", kw: 'posts you have read history seen viewed' },
   ] },
 ];
-/* Joined onto the BOTTOM of the section list rather than filed inside a section (owner):
-   staff reach for it constantly and it is not a category of its own, so it rides with the
-   sections as their last row — connected to them, immediately above Log out. */
+/* Top-level rows that are not a category of their own, in their OWN card below the
+   sections (owner: they must read as separate, the way the search bar does — an
+   earlier pass glued them onto the bottom of the sections card and it looked like a
+   twelfth section). Settings is here rather than buried inside App & help because it
+   is the thing people reach for most; Admin dashboard because staff use it constantly.
+   Both are destinations you GO to, so they group together and away from the
+   categories above them. */
 const ME_HUB_TAIL = [
+  { l: 'Settings', ic: _ME_IC.gear, run: "openSettings()", kw: 'settings preferences options configuration account app' },
   { l: 'Admin dashboard', ic: _ME_IC.shield, run: "openAdmin()", kw: 'admin dashboard staff moderation', when: (u, isAdmin, verified) => isAdmin },
 ];
 /* Sits on the hub itself, under the sections — the way Settings keeps Sign Out at the
@@ -35163,12 +35170,11 @@ function acGoProfileHub() {
         <span class="me-ic">${g.ic}</span>
         <span class="me-secmain"><span class="me-lbl">${g.title}</span><span class="me-secsub">${escHtml(g.sub)}</span></span>
         <svg class="me-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
-      </button>`).join('')
-      /* The tail rides INSIDE the sections card as its last row(s) — connected to
-         them, not a card of its own (owner). Log out stays a separate card below. */
-      + ME_HUB_TAIL.filter((it) => acMeRowLive(it, u, isAdmin, verified))
-          .map((it) => item(meLabel(it), it.ic, it.run, null, it.danger)).join('')
-      + '</div>';
+      </button>`).join('') + '</div>';
+    /* Its OWN card, separate from the sections above it. */
+    const tail = ME_HUB_TAIL.filter((it) => acMeRowLive(it, u, isAdmin, verified))
+      .map((it) => item(meLabel(it), it.ic, it.run, null, it.danger)).join('');
+    if (tail) html += '<div class="me-group">' + tail + '</div>';
     const foot = ME_HUB_FOOT.filter((it) => acMeRowLive(it, u, isAdmin, verified))
       .map((it) => item(meLabel(it), it.ic, it.run, null, it.danger)).join('');
     if (foot) html += '<div class="me-group">' + foot + '</div>';

@@ -869,15 +869,30 @@ below).
 > App & help — under the unchanged hero and wallet card, with **Log out** on the
 > hub itself (`ME_HUB_FOOT`), the way Settings keeps Sign Out at the bottom of the account
 > page. **`ME_HUB_TAIL`** holds what belongs at the top level but is not a category —
-> today just **Admin dashboard**, which staff reach for constantly and which was silly
-> to bury inside App & help. It renders as the **last row INSIDE the sections card**
-> (a plain `.me-row`, not a `.me-sec`), so it reads as connected to the sections while
-> Log out stays a card of its own below — the founder's exact ask. It is in `acAppIndex`
-> too, subtitled plain `Account` rather than `Account · <section>`, since it is not in
-> one. The **status card** (`acMeStatusCard`, Slack/Discord-style) moved OFF the hub
+> **Settings** (the thing people reach for most; it used to be buried inside App & help)
+> and **Admin dashboard** (staff use it constantly). It renders as **its OWN card**
+> below the sections, so the page is three cards: the eleven categories, then these two,
+> then Log out. An earlier pass glued the tail onto the BOTTOM of the sections card and
+> the founder rejected it on sight — it read as a twelfth section rather than a separate
+> button. Both are in `acAppIndex` subtitled plain `Account` rather than
+> `Account · <section>`, since they are not in one. When adding a row here, keep the
+> App & help section's `sub` honest — it still advertised Settings after Settings moved
+> out. The **status card** (`acMeStatusCard`, Slack/Discord-style) moved OFF the hub
 > into the **Profile section**, above that section's rows and outside the `.me-group`
 > so it stays its own card: it is a thing you SET, not a place you go, and it read wrong
-> sitting in a list of destinations. `acMeSection(id)` renders one section into the same `#acMeBody` with a back arrow
+> sitting in a list of destinations.
+>
+> **Every card on this page is the same material — `--s2` at radius 20.** The status
+> card shipped as `--s1` at radius 16 and measured **11,11,13 against the others'
+> 20,20,22** on Black: visibly darker, which read as a different colour rather than a
+> deliberate one. `scratchpad/mecolor.js` samples REAL PIXELS from a screenshot of every
+> block (hero, search bar, sections, tail, foot, status, rows) in both themes and fails
+> if any drifts from the option rows. Two traps it had to learn: computed style is not
+> what lands on screen, and a block **below the fold has no pixel in a viewport
+> screenshot** — sampling it returns nothing, which reads as "no colour" rather than as
+> a failure, so it scrolls each block into view and verifies it is fully visible first.
+> NB Light theme defines `--s1` and `--s2` as the same value, so a regression here shows
+> up on Black only. `acMeSection(id)` renders one section into the same `#acMeBody` with a back arrow
 > and a big title (`.me-sechead`), reusing the SAME `.me-row`/`.me-ic`/`.me-chev` — only
 > the nesting is new, so nothing about the look shifted. Each section carries a one-line
 > `sub`: a bare list of nouns ("Selling", "Customers") does not tell you which one holds
