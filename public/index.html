@@ -2862,7 +2862,10 @@ body.light .tb-feedtab.active{color:var(--t1);}
   body.pgscroll #acProfileScreen .ac-prof-back{position:fixed;}
   /* Profile hub (the Profile nav tab) — same page-scroll; it owns no top bar. */
   body.pgscroll #acMeScreen{display:block;height:auto;min-height:0;}
-  body.pgscroll #acMeBody{display:block;height:auto;overflow:visible;padding-bottom:calc(76px + env(safe-area-inset-bottom,0px));}
+  /* Clear the FLOATING nav pill, not just the safe area: the bar sits inset from the
+     bottom (--nav-inset) and is ~60px tall, so 76px left the last row (Log out)
+     5px from the bar with nothing below it to scroll into. */
+  body.pgscroll #acMeBody{display:block;height:auto;overflow:visible;padding-bottom:calc(max(var(--nav-inset), env(safe-area-inset-bottom, 0px) - 11px) + 60px + 28px);}
   /* Beam (chats/calls/contacts) page-scroll: the whole document scrolls (Safari's bar
      shrinks); the fixed top bar (above) is cleared by padding the active pane, and the
      header collapse rides the window scroll (_onWinScroll). */
@@ -11463,6 +11466,7 @@ body.nav-ball #navBackdrop{opacity:0;}
   .sidebar .sb-settings .ac-badge{align-self:center;}
   /* Clear the floating nav: content scrolls under it, composer + FAB sit above */
   .ac-list{padding-bottom:96px;}
+  #acMeBody{padding-bottom:calc(max(var(--nav-inset), env(safe-area-inset-bottom, 0px) - 11px) + 60px + 28px);}
   /* NOT the Atwe AI composer. These two used to clear the floating nav bar, but the AI
      page is an inside page now and hides that bar entirely (appTab adds nav-off), so the
      allowance became a dead 74px gap under the input — the founder's "it should sit at
@@ -20302,7 +20306,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1718'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1719'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -32330,6 +32334,7 @@ function acAppIndex() {
   };
   PLACES_EXTRA.forEach((p) => add(p.l, p.sub, p.kw, p.run));
   ME_SECTIONS.forEach((g) => g.items.forEach((it) => add(meLabel(it), 'Account · ' + g.title.replace('&amp;', '&'), it.kw, it.run, it.when)));
+  ME_HUB_TAIL.forEach((it) => add(meLabel(it), 'Account', it.kw, it.run, it.when));
   ME_HUB_FOOT.forEach((it) => add(meLabel(it), 'Account', it.kw, it.run, it.when));
   SET_SEARCH_INDEX.forEach((it) => add(it.label, 'Settings · ' + it.sub, it.kw, "acGoSettingsPage('" + it.page + "')"));
   _appIndex = out;
@@ -35070,8 +35075,13 @@ const ME_SECTIONS = [
     { l: 'Help', ic: _ME_IC.help, run: "openHelp()", kw: 'help support faq contact us guide' },
     { l: 'Ask about your data', ic: _ME_IC.doit, run: "acOpenAiAsk()", kw: 'ask about your data ai question analytics' },
     { l: 'Posts you\u2019ve read', ic: _ME_IC.eye || _ME_IC.bmk, run: "acOpenHistory()", kw: 'posts you have read history seen viewed' },
-    { l: 'Admin dashboard', ic: _ME_IC.shield, run: "openAdmin()", kw: 'admin dashboard staff moderation', when: (u, isAdmin, verified) => isAdmin },
   ] },
+];
+/* Joined onto the BOTTOM of the section list rather than filed inside a section (owner):
+   staff reach for it constantly and it is not a category of its own, so it rides with the
+   sections as their last row — connected to them, immediately above Log out. */
+const ME_HUB_TAIL = [
+  { l: 'Admin dashboard', ic: _ME_IC.shield, run: "openAdmin()", kw: 'admin dashboard staff moderation', when: (u, isAdmin, verified) => isAdmin },
 ];
 /* Sits on the hub itself, under the sections — the way Settings keeps Sign Out at the
    bottom of the account page rather than filing it under a heading. */
@@ -35097,12 +35107,6 @@ function acGoProfileHub() {
         </div>
         <svg class="me-hero-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
       </button>`;
-    // Custom status (Slack/Discord-style) — quick to set from the hub.
-    { const st = u.status; html += `<button class="me-status" onclick="acStatusOpen()">
-        <span class="me-status-em">${st ? (st.emoji || '💬') : '😊'}</span>
-        <span class="me-status-tx ${st ? '' : 'me-status-empty'}">${st ? escHtml(st.text || '') : 'Set a status'}</span>
-        <svg class="me-hero-go" viewBox="0 0 24 24" style="margin-inline-start:auto;"><polyline points="9 18 15 12 9 6"/></svg>
-      </button>`; }
     // Wallet card sits directly under the identity header (design blueprint).
     html += `<button class="me-wallet" onclick="acOpenWallet()">
         <div class="me-wallet-head"><span class="me-wallet-cap">Atwe Wallet</span><svg class="me-wallet-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
@@ -35121,7 +35125,12 @@ function acGoProfileHub() {
         <span class="me-ic">${g.ic}</span>
         <span class="me-secmain"><span class="me-lbl">${g.title}</span><span class="me-secsub">${escHtml(g.sub)}</span></span>
         <svg class="me-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
-      </button>`).join('') + '</div>';
+      </button>`).join('')
+      /* The tail rides INSIDE the sections card as its last row(s) — connected to
+         them, not a card of its own (owner). Log out stays a separate card below. */
+      + ME_HUB_TAIL.filter((it) => acMeRowLive(it, u, isAdmin, verified))
+          .map((it) => item(meLabel(it), it.ic, it.run, null, it.danger)).join('')
+      + '</div>';
     const foot = ME_HUB_FOOT.filter((it) => acMeRowLive(it, u, isAdmin, verified))
       .map((it) => item(meLabel(it), it.ic, it.run, null, it.danger)).join('');
     if (foot) html += '<div class="me-group">' + foot + '</div>';
@@ -35135,6 +35144,17 @@ function acGoProfileHub() {
 function acMeRowLive(it, u, isAdmin, verified) {
   if (it.when && !it.when(u, isAdmin, verified)) return false;
   return !acEntryHidden(it.run);
+}
+/* Custom status (Slack/Discord-style). It lives at the top of the Profile section as
+   its own card, separate from the rows below it (owner) — it is a thing you SET, not a
+   place you go, so it reads wrong in a list of destinations. */
+function acMeStatusCard(u) {
+  const st = (u || {}).status;
+  return `<button class="me-status" onclick="acStatusOpen()">
+      <span class="me-status-em">${st ? (st.emoji || '💬') : '😊'}</span>
+      <span class="me-status-tx ${st ? '' : 'me-status-empty'}">${st ? escHtml(st.text || '') : 'Set a status'}</span>
+      <svg class="me-hero-go" viewBox="0 0 24 24" style="margin-inline-start:auto;"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>`;
 }
 let _meSection = null;   // which section page the Account tab is showing, null = the hub
 /* Open one section of the Account page. Same rows, same design as before — they just
@@ -35152,7 +35172,7 @@ function acMeSection(id) {
         <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
       <span class="me-sectitle">${g.title}</span>
-    </div><div class="me-group">${rows}</div>`;
+    </div>${id === 'profile' ? acMeStatusCard(u) : ''}<div class="me-group">${rows}</div>`;
   acPruneEmptyGroups(body);
   _meSection = id;
   body.scrollTop = 0;
