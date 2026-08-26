@@ -34,9 +34,16 @@ const b64 = (f, mime) => `data:${mime};base64,` + fs.readFileSync(D + f).toStrin
    The clapper renders SOLID rather than outlined, and that is inherent, not a bug: the
    outline is derived by eroding by WEIGHT, and a shape barely thicker than WEIGHT has
    nothing left to hollow out. */
-const BELL = `
-  <path d="M142 264a114 114 0 0 1 228 0v96a16 16 0 0 1-16 16H158a16 16 0 0 1-16-16Z"/>
+/* SPLAY: how far each side leans OUT between the dome and the base. 0 = perfectly
+   vertical, which the founder found a touch too rigid ("a drop less straight"). This is a
+   lean, not the wide flared rim the first bell had. Overridable: `SPLAY=26 node build.js`. */
+const SPLAY = Number(process.env.SPLAY || 18);
+const BELL = () => {
+  const S = SPLAY;
+  return `
+  <path d="M142 264a114 114 0 0 1 228 0L${370 + S} 360a16 16 0 0 1-16 16H${158 - S}a16 16 0 0 1-16-16Z"/>
   <path d="M212 400h88a44 44 0 0 1-88 0Z"/>`;
+};
 
 (async () => {
   const br = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
@@ -153,7 +160,7 @@ const BELL = `
     return out;
   }, { N, TARGET_R, weight: WEIGHT, foot: FOOT,
        refs: Object.fromEntries(Object.entries(REF).map(([k,v]) => [k, b64(v, 'image/jpeg')])),
-       homeSrc: b64('narch.png', 'image/png'), bell: BELL });
+       homeSrc: b64('narch.png', 'image/png'), bell: BELL() });
 
   const meta = {};
   for (const [k, v] of Object.entries(res)) {
