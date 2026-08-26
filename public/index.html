@@ -20274,7 +20274,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1714'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1715'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -22231,7 +22231,11 @@ function hideAll() {
 }
 
 // Dismiss an overlay with a brief fade-out (mirrors its entrance), then hide it.
-function closeOverlay(id) {
+/* noHistory: close WITHOUT walking history back. appTab uses it when switching worlds
+   closes the Notifications panel as a side effect — the walk fires an async popstate that
+   lands on the previous entry and overrides the world appTab just set. Measured: from
+   Notifications, appTab('ai') ended up on Home within 300ms and the AI page never opened. */
+function closeOverlay(id, noHistory) {
   const el = document.getElementById(id);
   if (!el || el.classList.contains('hidden')) return;
   // The job/listing overlays own a shareable path while open — clear it on close.
@@ -22257,7 +22261,7 @@ function closeOverlay(id) {
   // that keeps the history clean and makes Forward re-open it, the way a modal
   // behaves on any real site. Landed here on a deep link (nothing of ours to walk
   // back to)? Just rewrite the address in place and stay put.
-  if (!_histRestoring && _histDepth > 0 && ROUTE_BY_VIEW[id] && location.pathname === '/' + ROUTE_BY_VIEW[id]) {
+  if (!noHistory && !_histRestoring && _histDepth > 0 && ROUTE_BY_VIEW[id] && location.pathname === '/' + ROUTE_BY_VIEW[id]) {
     _histDepth--;
     try { history.back(); return; } catch (e) {}
   }
@@ -28908,7 +28912,9 @@ function appTab(tab, opts) {
      raised layering it only gets while Alerts is open. */
   if (document.body.classList.contains('notif-tab')) {
     document.body.classList.remove('notif-tab');
-    closeOverlay('notifOverlay');
+    // noHistory: appTab is about to set its own path. Letting the close walk history back
+    // fires a popstate that restores the PREVIOUS entry and undoes the switch.
+    closeOverlay('notifOverlay', true);
   }
   // Blue-icon nav notif: leaving a world dismisses its glow (it re-blues only on NEW activity).
   if (_appTab && _appTab !== tab && !_silent && typeof acDismissNavNotif === 'function') acDismissNavNotif(_appTab);
@@ -28951,18 +28957,7 @@ function appTab(tab, opts) {
   } else {
     // Atwe AI is an inside page, not a world — no bottom bar, a back arrow instead.
     document.getElementById('bottomNav')?.classList.add('nav-off');
-    /* The AI page is not an AC_SCREENS screen, so acShow() never runs for it — which
-       means everything acShow manages simply LEAKS IN from whichever world you came
-       from. Two of those were visible:
-        · body.pgscroll (mobile page-scroll mode) turns `.main` into display:block with
-          height:auto, so the composer stopped filling the column and just flowed after
-          the last message — the "the text bar is higher than it's supposed to be" gap.
-        · #tbTabTouch, the transparent strip laid over Home's tab row, stayed shown and
-          sat over this page's header band.
-       Clear both on the way in. acShow() sets them correctly again for every social
-       screen, so leaving the page needs nothing here. */
-    document.body.classList.remove('pgscroll', 'pgscroll-search');
-    if (typeof acTabTouchSync === 'function') { try { acTabTouchSync(); } catch (_) {} }
+    acEnterInsidePage();
   }
   if (_silent) { /* back-stack restore drives the screen itself */ }
   else if (tab === 'home') acGoHome();
@@ -28979,6 +28974,36 @@ function appTab(tab, opts) {
   acUpdateRail();
 }
 
+/* ── Leaving the five worlds for an inside page ──────────────────────────────────────
+   The Atwe AI page is NOT an AC_SCREENS screen, so acShow() never runs for it — and
+   acShow is what owns every piece of world chrome. Whatever the world you came FROM left
+   on <body>, the topbar and the document therefore carries straight over. That has now
+   produced four separate bugs (the bottom bar staying, the composer not reaching the
+   bottom, Home's tab-strip sitting over the header, and the page opening already scrolled
+   with its back arrow off-screen), so this is ONE list rather than a fix per symptom.
+
+   Everything here is state acShow() sets per screen. `pwa-installed` is deliberately NOT
+   in the list — that is device state, identical on every screen. If you add a new class
+   to acShow, add it here too; scratchpad/aileak.js fails the moment the AI page stops
+   looking identical arriving from all five worlds. */
+const WORLD_CHROME = ['feeds-immersive', 'feed-cover', 'brand-collapse', 'home-feed',
+                      'pgscroll', 'pgscroll-search', 'beam-has-chat'];
+function acEnterInsidePage() {
+  document.body.classList.remove(...WORLD_CHROME);
+  // The scroll-collapsed nav/header state belongs to a world's feed, not to an inside page.
+  if (typeof _setNavBall === 'function') { try { _setNavBall(false); } catch (_) {} }
+  document.body.classList.remove('nav-ball', 'tb-collapsed');
+  const tb = document.querySelector('.topbar');
+  if (tb) { tb.classList.remove('tabs-live'); tb.style.transform = ''; tb.style.marginTop = ''; }
+  /* pgscroll sets this inline so the WINDOW scrolls. Dropping the class alone left it
+     forced to `visible`, so the window kept the previous world's scroll position and the
+     page opened part-scrolled — that is what put the back arrow off-screen. */
+  try { document.documentElement.style.overflow = ''; } catch (_) {}
+  try { const se = document.scrollingElement || document.documentElement; if (se) se.scrollTop = 0; } catch (_) {}
+  // Home's transparent tab-row strip, and the scroll-up reveal bar, are both world chrome.
+  if (typeof acTabTouchSync === 'function') { try { acTabTouchSync(); } catch (_) {} }
+  if (typeof acRevealReset === 'function') { try { acRevealReset(); } catch (_) {} }
+}
 // X-style right rail: shown on wide desktop for Home/Search (the feed/explore
 // surfaces), hidden elsewhere. Search box is dropped on the Search tab itself.
 let _railLoaded = false;
