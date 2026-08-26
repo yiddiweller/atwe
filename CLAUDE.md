@@ -901,6 +901,33 @@ below).
 > nothing is worse than no result), and `scratchpad/meacct.js` for the tail/status/
 > clearance shapes.
 >
+> **Drilling in and out is the SAME push/pop the Settings sub-pages use** —
+> `meSlideIn` / `meSlideBack`, `.36s cubic-bezier(.32,.72,0,1)`, `translate3d` +
+> `will-change` so Blink composites it, driven by one helper (`acMeAnim(dir)`) so the
+> two directions cannot drift. It used to be a one-way 14px fade on `--t-base`/`--ease`
+> with **nothing at all on the way back**, which is exactly why drilling in read as a
+> pop rather than a navigation — the comment above it even claimed it matched Settings.
+> `acGoProfileHub` reads `_meSection` BEFORE clearing it: a non-null value means this is
+> a *back*, and only then does it animate — arriving from another world is not a
+> navigation within this page.
+>
+> **The Account page has its own iOS-Settings-style search** (`#acMeSearch`,
+> `acMeSearchInput`/`acMeSearchClear`), inline in the scroll flow **under the wallet
+> card** and separate from the cards below it (owner) — the way you reach one of 98
+> destinations you can already name without guessing its section. Everything below the
+> bar lives in `#acMeList`, so a query hides that block whole and fills `#acMeResults`;
+> clearing puts it back untouched, with no re-render of the hero/wallet. Matching is
+> **`acFindPlaces` filtered to the `Account` rows** — one ranking implementation shared
+> with the app-wide bar, so they cannot drift, and it already applies each row's `when`
+> gate and drops features switched off site-wide. Its `limit` is deliberately larger
+> than the whole index (400 vs ~150) because `acFindPlaces` slices BEFORE this filter
+> runs — a smaller limit would silently lose Account hits that ranked below the cut.
+> Result rows carry the destination's **own icon** (`acMeIcon`, a lazily-built
+> `run` → icon map over the same tables) rather than a column of identical magnifiers,
+> and name their section underneath. A dead end offers Atwe AI like every other search
+> (`acAskAiEmpty`) — it is the tenth bar in `scratchpad/searchsweep.js`. Search lives on
+> the hub only, as it does in iOS Settings. Covered by `scratchpad/mesearch.js`.
+>
 > **The bottom of the page must clear the FLOATING nav pill, not just the safe area.**
 > `#acMeBody`'s padding-bottom was `76px + safe-area`, and measured on a 390×844 phone
 > that left **Log out ending 5px above the bar with nothing below it to scroll into** —
@@ -4764,12 +4791,12 @@ the plain "nothing matched" line and adds the Atwe mark, a sentence, and a singl
 question for them, phrased as a person would say it so the transcript reads naturally.
 With no query there is nothing to hand over, so it falls back to the plain empty state.
 
-Wired into all nine searches that take a query: Engine (everything), Marketplace,
-Businesses, Services, Jobs, Collections, Beam chats, Orders and **Settings** — the last
-being the most apt of all ("where do I change my password"). Deliberately NOT wired into
+Wired into all ten searches that take a query: Engine (everything), Marketplace,
+Businesses, Services, Jobs, Collections, Beam chats, Orders, **Settings** — the most apt
+of all ("where do I change my password") — and the **Account** page's own bar. Deliberately NOT wired into
 the pickers, where the assistant cannot help: emoji, GIFs, sounds, social platforms, and
 the who-do-you-mean person pickers. `scratchpad/searchsweep.js` walks every one of them,
-asserts the nine show it and the pickers do not, and only counts blocks that are actually
+asserts the ten show it and the pickers do not, and only counts blocks that are actually
 ON SCREEN — a surface keeps its markup after you leave it, so a raw `querySelectorAll`
 counts stale ones and reports a false failure (it did, first time).
 

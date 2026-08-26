@@ -1612,10 +1612,33 @@ body.light #aiMenuPop,body.light #chatMenuPop,body.light #notifMenuPop,body.ligh
 .me-secback:active{opacity:.55;}
 .me-sectitle{font-size:24px;font-weight:800;letter-spacing:-.02em;color:var(--t1);min-width:0;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-/* The same push the Settings sub-pages use, so drilling in feels identical there. */
-@keyframes meSlideIn{from{opacity:0;transform:translateX(14px);}to{opacity:1;transform:none;}}
-.me-slide{animation:meSlideIn var(--t-base) var(--ease);}
-body.reduce-motion .me-slide{animation:none;}
+/* The push/pop the Settings sub-pages use — the SAME numbers, not merely the same
+   idea. This used to be a 14px one-way fade on --t-base/--ease with nothing at all on
+   the way back, which is why drilling in read as a pop rather than a navigation.
+   GPU-composited (will-change + translate3d) so it's smooth on Blink too, and BOTH
+   directions animate: forward comes in from the right, back from the left. */
+@keyframes meSlideIn{from{opacity:0;transform:translate3d(34px,0,0);}to{opacity:1;transform:translate3d(0,0,0);}}
+@keyframes meSlideBack{from{opacity:0;transform:translate3d(-34px,0,0);}to{opacity:1;transform:translate3d(0,0,0);}}
+.me-slide{animation:meSlideIn .36s cubic-bezier(.32,.72,0,1);will-change:transform,opacity;backface-visibility:hidden;}
+.me-slide-back{animation:meSlideBack .36s cubic-bezier(.32,.72,0,1);will-change:transform,opacity;backface-visibility:hidden;}
+body.reduce-motion .me-slide,body.reduce-motion .me-slide-back{animation:none;}
+/* Search — iOS-Settings-style, INLINE in the scroll flow under the wallet card, its
+   own block above the sections (owner). Solid fill, no outline, same 20px radius as
+   the wallet + the sections card, so the stack reads as one radius system. */
+.me-search{display:flex;align-items:center;gap:9px;width:100%;padding:12px 15px;margin:0 0 12px;
+  background:var(--s2);border:none;border-radius:20px;}
+.me-search-ic{width:17px;height:17px;stroke:var(--t3);stroke-width:2;fill:none;flex-shrink:0;}
+.me-search input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);
+  font-size:15px;font-family:inherit;}
+.me-search input::placeholder{color:var(--t3);}
+.me-search-x{display:flex;align-items:center;justify-content:center;width:20px;height:20px;flex-shrink:0;
+  border:none;border-radius:50%;background:var(--s4);cursor:pointer;
+  transition:transform var(--t-fast) var(--ease);}
+.me-search-x:active{transform:scale(.96);}
+.me-search-x svg{width:11px;height:11px;stroke:var(--t1);stroke-width:2.4;fill:none;}
+/* A result row names its section underneath, the way the section rows do — otherwise
+   "Orders" tells you nothing about where you are about to land. */
+.me-reshead{font-size:13px;font-weight:700;color:var(--t3);letter-spacing:.02em;margin:2px 0 8px 4px;}
 .me-row.danger .me-lbl{color:var(--red);}
 .me-row.danger .me-ic{background:none;color:var(--red);}
 .me-row.danger .me-ic svg{stroke:var(--red);}
@@ -20306,7 +20329,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1719'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1720'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -35117,6 +35140,16 @@ function acGoProfileHub() {
           <span class="me-wallet-act" onclick="event.stopPropagation();acOpenAddMoney()">Add</span>
         </div>
       </button>`;
+    /* iOS-Settings-style search, inline under the wallet card and separate from the
+       cards below it. 98 destinations live three taps deep now — this is how you get
+       to one you can already name. */
+    html += `<div class="me-search">
+        <svg class="me-search-ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="acMeSearch" type="search" autocomplete="off" autocorrect="off" spellcheck="false"
+               placeholder="Search your account" aria-label="Search your account"
+               oninput="acMeSearchInput(this.value)">
+        <button class="me-search-x hidden" id="acMeSearchX" onclick="acMeSearchClear()" aria-label="Clear search"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div><div id="acMeList">`;
     /* One row per SECTION, not per destination. A section whose every row is switched
        off for this account (a personal account has no storefront) is dropped whole —
        otherwise the top level would advertise a page that opens empty. */
@@ -35134,10 +35167,28 @@ function acGoProfileHub() {
     const foot = ME_HUB_FOOT.filter((it) => acMeRowLive(it, u, isAdmin, verified))
       .map((it) => item(meLabel(it), it.ic, it.run, null, it.danger)).join('');
     if (foot) html += '<div class="me-group">' + foot + '</div>';
-    _meSection = null;
-    document.getElementById('acMeBody').innerHTML = html;
-    acPruneEmptyGroups(document.getElementById('acMeBody')); // drop groups emptied by switched-off features
+    /* Everything below the search bar is one block, so a query can swap it out
+       whole and put it back untouched — no re-render of the hub, no lost hero. */
+    html += '</div><div id="acMeResults" class="hidden"></div>';
+    const wasSection = _meSection;   // read BEFORE clearing: it decides the direction
+    _meSection = null; _meQuery = '';
+    const body = document.getElementById('acMeBody');
+    body.innerHTML = html;
+    acPruneEmptyGroups(body); // drop groups emptied by switched-off features
+    body.scrollTop = 0;
+    // Coming BACK from a section pops left-to-right; arriving from another world
+    // is not a navigation within this page, so it stays still.
+    if (wasSection) acMeAnim('back');
   });
+}
+/* One place decides how the Account page moves, so the two directions can never
+   drift apart the way the old one-way 14px fade did. */
+function acMeAnim(dir) {
+  const body = document.getElementById('acMeBody');
+  if (!body) return;
+  body.classList.remove('me-slide', 'me-slide-back');
+  void body.offsetWidth;                                   // restart the animation
+  body.classList.add(dir === 'back' ? 'me-slide-back' : 'me-slide');
 }
 /* Is this row available to this account at all? `when` gates business-only and
    admin-only rows; acEntryHidden drops rows whose feature is switched off site-wide. */
@@ -35157,6 +35208,56 @@ function acMeStatusCard(u) {
     </button>`;
 }
 let _meSection = null;   // which section page the Account tab is showing, null = the hub
+let _meQuery = '';       // the live Account-page search query, '' = not searching
+/* Search the Account page's OWN destinations. It runs through the same ranking the
+   app-wide search bar uses (acFindPlaces) and then keeps only the Account rows, so
+   there is one ranking implementation and it cannot drift — acFindPlaces already
+   applies each row's `when` gate and drops features switched off site-wide. The limit
+   is deliberately larger than the whole index, so the filter can never lose an Account
+   hit that happened to rank below the cut. */
+function acMeFind(q) {
+  return (acFindPlaces(q, 400) || []).filter((p) => /^Account/.test(p.sub || '')).slice(0, 12);
+}
+/* A result should wear the SAME icon it wears in its section — a column of identical
+   magnifiers tells you nothing. The index carries no icon, so look it up from the
+   Account tables by the row's own `run` string, which is unique to a destination.
+   Built once, lazily. */
+let _meIcons = null;
+function acMeIcon(run) {
+  if (!_meIcons) {
+    _meIcons = {};
+    ME_SECTIONS.forEach((g) => g.items.forEach((it) => { _meIcons[it.run] = it.ic; }));
+    ME_HUB_TAIL.concat(ME_HUB_FOOT).forEach((it) => { _meIcons[it.run] = it.ic; });
+  }
+  return _meIcons[run] || _ME_SEARCH_IC;
+}
+const _ME_SEARCH_IC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
+function acMeSearchInput(q) {
+  _meQuery = (q || '').trim();
+  const list = document.getElementById('acMeList'), res = document.getElementById('acMeResults');
+  const x = document.getElementById('acMeSearchX');
+  if (x) x.classList.toggle('hidden', !_meQuery);
+  if (!list || !res) return;
+  if (!_meQuery) { res.classList.add('hidden'); res.innerHTML = ''; list.classList.remove('hidden'); return; }
+  const hits = acMeFind(_meQuery);
+  res.innerHTML = hits.length
+    ? '<div class="me-reshead">' + hits.length + (hits.length === 1 ? ' result' : ' results') + '</div><div class="me-group">'
+      /* The onclick is the row's OWN run string, escaped exactly the way acPlaceRow
+         does it — our code from our tables, never anything a member typed. */
+      + hits.map((h) => `<button class="me-row" onclick="${escHtml(h.run)}">
+          <span class="me-ic">${acMeIcon(h.run)}</span>
+          <span class="me-secmain"><span class="me-lbl">${escHtml(h.label)}</span><span class="me-secsub">${escHtml(h.sub)}</span></span>
+          <svg class="me-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>`).join('') + '</div>'
+    /* Every search in the app ends a dead end the same way — see acAskAiEmpty. */
+    : acAskAiEmpty(_meQuery, 'Nothing in your account matches \u201c' + escHtml(_meQuery) + '\u201d.');
+  res.classList.remove('hidden');
+  list.classList.add('hidden');
+}
+function acMeSearchClear() {
+  const inp = document.getElementById('acMeSearch'); if (inp) inp.value = '';
+  acMeSearchInput('');
+}
 /* Open one section of the Account page. Same rows, same design as before — they just
    live behind their section now. The header carries a back arrow because this screen
    has no top bar of its own (acMeScreen is in AC_OWN_HEADER). */
@@ -35176,8 +35277,7 @@ function acMeSection(id) {
   acPruneEmptyGroups(body);
   _meSection = id;
   body.scrollTop = 0;
-  // Same push/pop feel as the Settings sub-pages.
-  body.classList.remove('me-slide'); void body.offsetWidth; body.classList.add('me-slide');
+  acMeAnim('in');   // drilling in pushes right-to-left, as Settings does
 }
 // The Beam page is tabbed (Chats · Groups · Calls · Contacts), home-feed-tab style.
 // Chats = direct-only, Groups = group chats only (both reuse the message list);
