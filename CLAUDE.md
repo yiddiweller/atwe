@@ -140,19 +140,46 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
    Anthropic. Plain, calm copy (Apple/X restraint). No emojis in the app chrome.
 9. **Five worlds** (bottom nav, in order): **Home · Beam · Engine · Notifications · Account**.
    Internal tab ids stay `home/chat/search/profile`; only the *labels* changed.
+   **The tab row ends with the word "Add", not a "+" icon** (`.tb-feedtab-add`, on Home and
+   Beam) — same font-size and weight as a tab label so the row stays even, one step quieter
+   (**`--t3`, never `--t4`**) so it reads as an extra action rather than a sixth tab. `--t4`
+   is the icon-tint token: 2.30:1 on black, 2.03:1 on white, failing BOTH the 4.5:1 AA floor
+   for 15px text and the 3:1 floor for a UI control — the same misuse that once made the
+   muted-group unread badge illegible. `--t3` is 5.20:1 / 5.07:1 against the tabs' `--t2`
+   (6.44 / 5.80). Hover/press brightens to `--t2` and paints **no background pill**: the
+   tabs' own `:hover` pill would make "Add" read as a sixth tab on desktop. The colour rule is
+   deliberately specific (`.topbar .tb-feedtabs .tb-feedtab.tb-feedtab-add`): on phones
+   `.topbar.tb-home .tb-feedtab` (0,3,0) repaints the tabs `--t2` and beats a plain
+   `.tb-feedtab-add` (0,1,0) — the first attempt rendered "Add" in the exact same grey as
+   the tabs. Its `aria-label` must START with the visible word (WCAG 2.5.3 Label in Name),
+   hence "Add a new list" rather than "New list". `acRenderPinnedTabs`/`acRenderChatLists`
+   insert before it, so it must stay the row's last child.
    **Atwe AI is no longer a nav world** — it opens from a circular brand-mark button
    beside the Engine search bar (`#engAiBtn`, the way the big platforms put their
    assistant next to search), and its slot in the bar belongs to **Alerts**
    (notifications). `appTab('ai')` is untouched and still opens the same page from
-   everywhere else (the Me hub, deep links, the message ⋯ menu, forward-to-AI), so
-   nothing about the AI surface itself changed — only the way in.
+   everywhere else (the Me hub, deep links, the message ⋯ menu, forward-to-AI).
+   **Because it has no icon in the bar, it is an INSIDE PAGE, not a world:** `appTab`
+   adds `nav-off` to `#bottomNav` for it (and clears it again only when `_prevTab === 'ai'`,
+   so it can't flash the bar onto screens that legitimately hide it), and the brand row
+   leads with a back arrow (`#tbAiBack` → `acAiBack()`). `_aiFrom` remembers the world it
+   was opened from so the arrow returns there — every entry point funnels through
+   `appTab('ai')`, so one capture covers them all; it falls back to Home when the AI page
+   was simply the restored last tab on boot. `appGoBack()` routes through `acAiBack()` too,
+   so the system Back gesture leaves the page instead of arming press-again-to-exit. This is
+   **phone-shaped**: the brand row is `display:none` above 768px, so on desktop there is no
+   arrow and none is needed — the sidebar is the nav there and never goes away. The back
+   arrow + lockup are wrapped in `.tb-brand-lead` so `.tb-brandrow` still has exactly two
+   flex children (`justify-content:space-between` would otherwise shove the lockup to the
+   middle). Covered by `scratchpad/aipage.js`.
    **Nav icons are OUTLINE when inactive and SOLID when active.** Each tab ships
    both states as `--nv-<tab>-off` / `--nv-<tab>-on` — PNG **masks** painted in
    `currentColor` (`.bn-ico`/`.sb-ico` wrap `.nv-off` + `.nv-on`, CSS picks one), so
    one artwork serves the bottom bar, the sidebar, both themes and the blue
    "something new" cue, and the swap is instant with nothing to fetch.
-   **The artwork is the founder's own, not a redraw.** `scratchpad/icons/build.js`
-   is the generator: it traces their supplied files for Beam / Engine / Account,
+   **The artwork is the founder's own, not a redraw.** `tools/nav-icons/build.js`
+   is the generator (committed, with the founder's reference artwork beside it — it used
+   to live only in a session scratchpad, i.e. one restart from being lost): it traces their supplied files for Beam / Engine / Account,
    NORMALISES them so all three rings land on the same radius (they drew the compass
    smaller in its frame — used raw it sat visibly smaller in the bar), and derives
    the active state as the disc with their glyph punched out. Home is their existing
@@ -160,7 +187,13 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
    stroke follows their exact shape, doorway included. **Notifications is a bell with
    NO ring around it** — deliberate, at the founder's request: its own form is what
    is rounded. Regenerate with `node build.js` and re-embed; never hand-redraw.
-   **One `WEIGHT` drives every outline** (`WEIGHT=48 node build.js`, the shipped value)
+   **One `WEIGHT` drives every outline** (`WEIGHT=40 node build.js`, the shipped value —
+   40/364 = 11% of the icon's footprint; it shipped at 48 (13.2%) and the founder found that
+   "very thick, doesn't look professional", while their own drawn ring at 34 (9.3%) had
+   already been rejected as too thin, so 40 is the deliberate middle. Regenerate with
+   `cd tools/nav-icons && PW_SCRATCH=<dir with node_modules/playwright-core> node build.js`,
+   then rewrite the ten `--nv-*` variables in `public/index.html` from the emitted
+   `built.json`.)
    — the traced rings are REBUILT at that weight rather than kept as drawn, so a single
    number moves the whole set and nothing reads lighter than the thing beside it. A trap
    that shipped once: erosion by k leaves a k-thick edge, so the weight IS k — deriving
@@ -4573,6 +4606,21 @@ its own copy — without them the lockup renders at zero. `acNotifHeadSync()` fi
 avatar and binds the retract-on-scroll (`.nh-hide`, distance measured from the header's
 real height, listener `{passive:true}`).
 
+**Three things here were wrong and are easy to reintroduce.** (1) `padding-top` is **13px**,
+not 10: on the other worlds the lockup sits inside `.topbar`, which adds its own 2px above
+the brand row's 11px, so a flat 10 rendered the title 3px high (measured 14 vs 17). (2)
+`position` is **relative, not sticky**. The header is a plain flex sibling above the
+scrolling list inside an `overflow:hidden` card, so sticky did no work — but it DID clamp
+the retraction: `.nh-hide`'s negative `margin-top` pushed the box above the sticky
+scrollport's `top:0`, and sticky offset it straight back down, so the header faded on scroll
+but never moved a pixel (measured: top `0 -> 0`). That is why it did not "roll" like Home and
+Beam. (3) `#profileMenu` needs **z-index 1191**. `.brand-menu` gives it 600, and
+`#notifOverlay` is an opaque `.overlay` at 1000 — so tapping the header avatar opened the
+menu completely BEHIND the panel. It read as a dead button; the "it turns black" is the
+menu's own `_hideMenuSrcBtn` fading the avatar out. Covered by `scratchpad/notifhdr.js`,
+which needs **varied notification types AND distinct actors** or the list groups into one row
+and there is nothing to scroll.
+
 **Two layering rules, and they differ by device.** On phones the panel would cover the
 bottom bar, so `body.notif-tab` lifts `#bottomNav` to `z-index:1400`. On desktop the nav
 is the SIDEBAR, which lives inside `#app` — the same stacking context that makes lifting
@@ -5775,6 +5823,24 @@ today.
   no photos in it at all. A "fix" measured that way proves nothing. The probes now
   create a **fresh account per run**, and the fixture posts are given enough likes to
   rank deterministically. Before trusting any before/after, run the "before" twice.
+- **An element that MOVES must not stay tappable while it moves.** Scrolling up on Home
+  or Beam flies the bottom nav back from the "+" ball at the right edge by animating its
+  `left` over `--t-slow`. The five buttons ride along, and the rule that makes them inert
+  (`body.nav-morph.nav-ball .bn-tab{pointer-events:none}`) is scoped to `.nav-ball`, so it
+  lifts the instant the class comes off — while the geometry is still wrong. Measured on a
+  390px phone: **79ms into the expansion a tap on Account opened ENGINE**, at 109ms a tap on
+  Engine opened HOME, and most taps in the first ~180ms hit nothing at all. That is exactly
+  the founder's "it jumps to the wrong page / sometimes I have to tap it twice" — 19 of 25
+  timed taps landed wrong. Fixed by resolving a tap against the bar's **resting** layout
+  while it is in flight: `_navCaptureRest()` snapshots the layout just before each collapse,
+  `_navAimBtn(x)` answers "what did the finger aim at", and a document-level capture-phase
+  `click` listener (`_navMorphClick`) swallows the stray click and re-fires it on the right
+  button. It is keyed off **live geometry, not a flag or a timer**, so it can never get stuck
+  holding taps hostage — once the bar is back where it belongs it is a no-op. `_navAimBtn` is
+  used by the press pickup too, or the highlight pill still glides to the wrong icon first.
+  Covered by `scratchpad/navtap.js`, which taps at exact offsets **from inside the page** —
+  Playwright's own click latency is tens of ms and overshot the 180ms window entirely, so an
+  earlier version of the probe passed with the fix disabled, which is worse than no probe.
 - **A JS-sized element whose ONLY styling lives inside a media query becomes a black
   block in normal flow everywhere else.** `#tbTabTouch` (the transparent strip laid over
   the tab row so a phone tap reaches the menu behind the covering feed) had its whole
