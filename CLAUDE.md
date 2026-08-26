@@ -5911,16 +5911,30 @@ today.
   row — on phones it deliberately sits above it and covers it, so the check is
   one-sided, not `abs(gap)==0`).
 - **The Atwe AI page is NOT an `AC_SCREENS` screen, so everything `acShow()` manages leaks
-  in from whatever world you came from.** This has now caused three separate bugs, so treat
-  it as a standing hazard: anything acShow toggles must be handled explicitly in `appTab`'s
-  `else` (AI) branch. (1) `nav-off` — the bottom bar stayed on a page with no icon for
-  itself. (2) **`body.pgscroll`** — mobile page-scroll mode turns `.main` into
-  `display:block;height:auto`, so the composer stopped filling the column and simply flowed
-  after the last message; that was the founder's "the text bar is higher than it's supposed
-  to be", and it looked like a spacing bug rather than a leaked mode. (3) **`#tbTabTouch`** —
-  Home's transparent tab-strip stayed shown, `position:fixed` over this page's header band.
-  All three are cleared on the way into the page; leaving needs nothing, because acShow sets
-  them correctly for every social screen.
+  in from whatever world you came from.** Four separate bugs came from this before it was
+  fixed at the root, so it is now ONE list — **`WORLD_CHROME` + `acEnterInsidePage()`**,
+  called from `appTab`'s AI branch — rather than a patch per symptom. **If you add a class
+  to `acShow`, add it to `WORLD_CHROME` too.** The four: (1) `nav-off` — the bottom bar
+  stayed on a page with no icon for itself. (2) **`body.pgscroll`** — mobile page-scroll
+  mode turns `.main` into `display:block;height:auto`, so the composer stopped filling the
+  column and simply flowed after the last message; that read as a spacing bug, not a leaked
+  mode. (3) **`#tbTabTouch`** — Home's transparent tab-strip stayed shown, `position:fixed`
+  over this page's header band. (4) **`documentElement.style.overflow`** — `pgscroll` sets
+  it inline, so dropping the CLASS alone left the window still scrollable and holding the
+  previous world's scroll position: the page opened part-scrolled with its **back arrow off
+  the top of the screen**, i.e. no way out. `acEnterInsidePage` clears the inline style AND
+  resets `scrollTop`. `pwa-installed` is deliberately NOT in the list — device state, not
+  world state. `scratchpad/aileak.js` is the guard: it arrives at the page from all five
+  worlds (each left SCROLLED, which is what arms the collapsed states) and fails the moment
+  the resulting chrome differs by origin — an invariant that catches leaks nobody predicted.
+- **Closing a route-owning panel walks history BACK — so it must not run when the close is
+  a side effect of navigating somewhere else.** `closeOverlay` calls `history.back()` when it
+  closes a panel whose route it pushed (that is what makes Forward re-open it). `appTab`
+  closes the Notifications panel when you switch worlds, which fired that walk; the async
+  `popstate` then restored the PREVIOUS entry and undid the switch. Measured: from
+  Notifications, `appTab('ai')` landed on Home within 300ms and the AI page never opened.
+  `closeOverlay(id, noHistory)` takes an opt-out and `appTab` passes it, because appTab is
+  about to set its own path. Any future "close this panel and go somewhere" needs the same.
 - **`:hover` is not a desktop-only affordance on a phone — a tap satisfies it and it
   LATCHES.** The Atwe AI answer's copy / regenerate / thumbs row was `opacity:0` with
   `.msg:hover .msg-actions{opacity:1}` and no `@media(hover:hover)` guard, so on iOS it
