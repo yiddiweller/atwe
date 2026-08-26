@@ -192,9 +192,10 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
    arch, with the outline derived by subtracting an eroded copy of itself so the
    stroke follows their exact shape, doorway included. **Notifications is a bell with
    NO ring around it** — deliberate, at the founder's request: its own form is what
-   is rounded. The bell has **no hanger ball on top and no flared rim** (owner request): a
-   half-round dome, two straight vertical sides and a flat bottom with only a small corner
-   radius, plus the clapper. The clapper renders SOLID rather than outlined and that is
+   is rounded. The bell has **no hanger ball on top and no wide flared rim** (owner request):
+   a half-round dome, two sides that lean out only slightly (`SPLAY`, shipped at 18 — a
+   perfectly vertical 0 read as too rigid, "a drop less straight"), and a flat bottom with a
+   small corner radius, plus the clapper. The clapper renders SOLID rather than outlined and that is
    inherent, not a bug — the outline is derived by eroding by `WEIGHT`, and a shape barely
    thicker than `WEIGHT` has nothing left to hollow out. The Home arch's **feet are rounded**
    by `roundCorners()` (an OPEN then a CLOSE, so both the outer corner and the inner one where
@@ -5909,6 +5910,28 @@ today.
   `scratchpad/gapmob.js` (five widths; asserts the feed is never pushed BELOW the tab
   row — on phones it deliberately sits above it and covers it, so the check is
   one-sided, not `abs(gap)==0`).
+- **The Atwe AI page is NOT an `AC_SCREENS` screen, so everything `acShow()` manages leaks
+  in from whatever world you came from.** This has now caused three separate bugs, so treat
+  it as a standing hazard: anything acShow toggles must be handled explicitly in `appTab`'s
+  `else` (AI) branch. (1) `nav-off` — the bottom bar stayed on a page with no icon for
+  itself. (2) **`body.pgscroll`** — mobile page-scroll mode turns `.main` into
+  `display:block;height:auto`, so the composer stopped filling the column and simply flowed
+  after the last message; that was the founder's "the text bar is higher than it's supposed
+  to be", and it looked like a spacing bug rather than a leaked mode. (3) **`#tbTabTouch`** —
+  Home's transparent tab-strip stayed shown, `position:fixed` over this page's header band.
+  All three are cleared on the way into the page; leaving needs nothing, because acShow sets
+  them correctly for every social screen.
+- **`:hover` is not a desktop-only affordance on a phone — a tap satisfies it and it
+  LATCHES.** The Atwe AI answer's copy / regenerate / thumbs row was `opacity:0` with
+  `.msg:hover .msg-actions{opacity:1}` and no `@media(hover:hover)` guard, so on iOS it
+  appeared only after you TAPPED the answer text and then stayed. It is now visible by
+  default and hidden only while the reply is still arriving — `.ai-busy` (set in
+  `appendBubble` when streaming, cleared by `renderStream` on the first real content) covers
+  the thinking swirl, `.ai-typing` (set by `typewriterEffect`, cleared in a `finally`)
+  covers the typewriter. An error message clears `.ai-busy` and never sets `.ai-typing`, so
+  Regenerate is reachable on a failed reply, which is exactly when it is wanted. NB
+  `.msg-act` (the buttons) is a genuine duplicate shared with Beam's action row — the later
+  copy at ~5296 wins — so never "fix" the AI copy at ~3002 expecting it to take effect.
 - **A duplicate class declaration put a label back that a surface had deliberately hidden.**
   The Atwe AI page showed the member's name above their own message and "Atwe AI" above the
   reply. Its own CSS said `.msg-sender{display:none}` — it never wanted them. But a second,
