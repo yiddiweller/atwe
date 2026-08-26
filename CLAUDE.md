@@ -5775,6 +5775,24 @@ today.
   no photos in it at all. A "fix" measured that way proves nothing. The probes now
   create a **fresh account per run**, and the fixture posts are given enough likes to
   rank deterministically. Before trusting any before/after, run the "before" twice.
+- **A JS-sized element whose ONLY styling lives inside a media query becomes a black
+  block in normal flow everywhere else.** `#tbTabTouch` (the transparent strip laid over
+  the tab row so a phone tap reaches the menu behind the covering feed) had its whole
+  rule — `position:fixed`, `display:none`, `background:transparent` — inside
+  `@media(max-width:768px)`. `acTabTouchSync()` had no width gate, so on DESKTOP it set
+  `display:block; height:48px` inline on an element that was plain `position:static`
+  with no background: a **48px black band in normal flow** between the tab row and the
+  feed, on Home AND Beam, at every scroll position — and at the top of the feed it also
+  pushed the story ring down. It read to the owner as "black space in between when I
+  scroll". Nothing errored and every functional probe passed, because the element is
+  transparent-by-intent and the app still worked; only GEOMETRY showed it (`#socialWrap`
+  at `top=99` while `.topbar` ended at `51`). Fixed both ways: the base rule is now
+  global (so it can never fall into flow again) and `acTabTouchActive()` returns false
+  above 768px. **Rule: base layout properties — `position`, `display`, `background` —
+  belong OUTSIDE the media query; only the responsive deltas go inside.** Covered by
+  `scratchpad/gapmob.js` (five widths; asserts the feed is never pushed BELOW the tab
+  row — on phones it deliberately sits above it and covers it, so the check is
+  one-sided, not `abs(gap)==0`).
 - **A class may be declared TWICE at the same level, and the LATER copy wins.**
   Editing the first one changes nothing and the failure is silent. This has bitten
   real work three times (`.mc-call-sub`, `.mc-inv-sub`, `.msg-act`). A sweep counts
