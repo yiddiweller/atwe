@@ -866,9 +866,18 @@ below).
 > junk drawers (camera filters next to Devices and Log out; a shop till next to ad
 > campaigns). Now the top level is **11 section rows** — Profile · Money · Selling ·
 > Customers · Marketing · Jobs & hiring · Orders & saved · Planning · Creating · Atwe AI ·
-> App & help — under the unchanged hero, status and wallet card, with **Log out** on the
+> App & help — under the unchanged hero and wallet card, with **Log out** on the
 > hub itself (`ME_HUB_FOOT`), the way Settings keeps Sign Out at the bottom of the account
-> page. `acMeSection(id)` renders one section into the same `#acMeBody` with a back arrow
+> page. **`ME_HUB_TAIL`** holds what belongs at the top level but is not a category —
+> today just **Admin dashboard**, which staff reach for constantly and which was silly
+> to bury inside App & help. It renders as the **last row INSIDE the sections card**
+> (a plain `.me-row`, not a `.me-sec`), so it reads as connected to the sections while
+> Log out stays a card of its own below — the founder's exact ask. It is in `acAppIndex`
+> too, subtitled plain `Account` rather than `Account · <section>`, since it is not in
+> one. The **status card** (`acMeStatusCard`, Slack/Discord-style) moved OFF the hub
+> into the **Profile section**, above that section's rows and outside the `.me-group`
+> so it stays its own card: it is a thing you SET, not a place you go, and it read wrong
+> sitting in a list of destinations. `acMeSection(id)` renders one section into the same `#acMeBody` with a back arrow
 > and a big title (`.me-sechead`), reusing the SAME `.me-row`/`.me-ic`/`.me-chev` — only
 > the nesting is new, so nothing about the look shifted. Each section carries a one-line
 > `sub`: a bare list of nouns ("Selling", "Customers") does not tell you which one holds
@@ -886,7 +895,23 @@ below).
 > the page instead of returning to the section list. Re-tapping the Account tab pops back
 > to the top, as tapping a tab twice does on iPhone. Covered by `scratchpad/mehub.js`,
 > which asserts all **98** destinations are still reachable (it runs the completeness pass
-> as a business ADMIN — the only account that can see every row).
+> as a business ADMIN — the only account that can see every row), `scratchpad/meidx.js`,
+> which asserts the declared row count and the indexed count are **the same number** and
+> that every indexed `run` names a function that really exists (a search result that does
+> nothing is worse than no result), and `scratchpad/meacct.js` for the tail/status/
+> clearance shapes.
+>
+> **The bottom of the page must clear the FLOATING nav pill, not just the safe area.**
+> `#acMeBody`'s padding-bottom was `76px + safe-area`, and measured on a 390×844 phone
+> that left **Log out ending 5px above the bar with nothing below it to scroll into** —
+> it looked cut off and the page would not scroll further. The bar is not flush to the
+> bottom: it sits inset by `--nav-inset` and is ~60px tall, so its real footprint is
+> ~83px. Both the `body.pgscroll` rule and the mobile non-pgscroll one now use
+> `calc(max(var(--nav-inset), env(safe-area-inset-bottom,0px) - 11px) + 60px + 28px)` —
+> **the bar's own bottom expression plus its height plus a real gap**, so it can never
+> drift out of step with the bar again. NB `#acMeBody`'s own ID rule beats the mobile
+> `.ac-list{padding-bottom:96px}`, which is why the non-pgscroll path needs it spelled
+> out separately rather than inheriting.
 > `_ME_IC` carries the glyph set; biz-only rows are gated by `acIsBiz(u)`. Same
 > full-width,
 > page-bg-coloured hairline treatment as `.iset-row` (see the Settings UI section
@@ -5389,7 +5414,9 @@ is findable the day it ships and the two can never drift:
 **`ME_SECTIONS` is the Profile hub's own source of truth** — `acGoProfileHub()` renders
 the section list from it and `acMeSection(id)` renders one section's rows (`meLabel(it)`
 resolves a label that is a function, e.g. Upgrade-vs-Manage plan, which must NOT be
-evaluated at file-load time). `ME_HUB_FOOT` holds the rows that stay on the hub itself. Every entry carries a `kw`
+evaluated at file-load time). `ME_HUB_TAIL` holds top-level rows that are not a category
+(Admin dashboard — rendered as the sections card's last row); `ME_HUB_FOOT` holds the rows
+that stay on the hub as their own card (Log out). Every entry carries a `kw`
 string of synonyms, which is what makes "cv" find Resumes, "basket" find Cart,
 "incognito" find Private profile views and "dark mode" find Appearance.
 
