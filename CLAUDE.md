@@ -192,7 +192,15 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
    arch, with the outline derived by subtracting an eroded copy of itself so the
    stroke follows their exact shape, doorway included. **Notifications is a bell with
    NO ring around it** — deliberate, at the founder's request: its own form is what
-   is rounded. Regenerate with `node build.js` and re-embed; never hand-redraw.
+   is rounded. The bell has **no hanger ball on top and no flared rim** (owner request): a
+   half-round dome, two straight vertical sides and a flat bottom with only a small corner
+   radius, plus the clapper. The clapper renders SOLID rather than outlined and that is
+   inherent, not a bug — the outline is derived by eroding by `WEIGHT`, and a shape barely
+   thicker than `WEIGHT` has nothing left to hollow out. The Home arch's **feet are rounded**
+   by `roundCorners()` (an OPEN then a CLOSE, so both the outer corner and the inner one where
+   each foot meets the doorway round off), driven by `FOOT`, shipped at **34** — the ceiling:
+   at 42 the CLOSE fills the doorway's bottom and the two legs fuse into one arch.
+   Regenerate with `node build.js` and re-embed; never hand-redraw.
    **One `WEIGHT` drives every outline** (`WEIGHT=40 node build.js`, the shipped value —
    40/364 = 11% of the icon's footprint; it shipped at 48 (13.2%) and the founder found that
    "very thick, doesn't look professional", while their own drawn ring at 34 (9.3%) had
@@ -4612,7 +4620,20 @@ its own copy — without them the lockup renders at zero. `acNotifHeadSync()` fi
 avatar and binds the retract-on-scroll (`.nh-hide`, distance measured from the header's
 real height, listener `{passive:true}`).
 
-**Three things here were wrong and are easy to reintroduce.** (1) `padding-top` is **13px**,
+**The entry flourish runs here too.** Landing on Notifications rolls the swirl and spits
+the word out to the right, exactly as Home/Beam/Engine/AI do. Nothing about the animation is
+special-cased: `.tb-brand.rolling` is CLASS-scoped, not tied to `#tbBrandLogo`, and
+`#notifHead`'s lockup is already a `.tb-brand` holding the mark and the word — the only
+reason it never played is that the trigger lives in `syncTopbar()`, and Notifications is a
+PANEL opened by `acNavNotifs()`, which never calls it. `acNotifHeadSync(arriving)` adds the
+class (and clears it after 640ms, or its higher-specificity rule permanently overrides the
+tab-tap `.spinning` animation — the same trap `syncTopbar` documents). `openNotifications`
+captures the open-state BEFORE `showOverlay` so a re-tap of the bell does not replay it as a
+twitch. The same function now also resets `.nh-hide` + `scrollTop` on every open — that
+class survived a close, so anyone who scrolled down, left and came back found the header
+already retracted and gone.
+
+**Four things here were wrong and are easy to reintroduce.** (1) `padding-top` is **13px**,
 not 10: on the other worlds the lockup sits inside `.topbar`, which adds its own 2px above
 the brand row's 11px, so a flat 10 rendered the title 3px high (measured 14 vs 17). (2)
 `position` is **relative, not sticky**. The header is a plain flex sibling above the
@@ -4620,7 +4641,13 @@ scrolling list inside an `overflow:hidden` card, so sticky did no work — but i
 the retraction: `.nh-hide`'s negative `margin-top` pushed the box above the sticky
 scrollport's `top:0`, and sticky offset it straight back down, so the header faded on scroll
 but never moved a pixel (measured: top `0 -> 0`). That is why it did not "roll" like Home and
-Beam. (3) `#profileMenu` needs **z-index 1191**. `.brand-menu` gives it 600, and
+Beam. (3) the lockup must NOT override `.tb-brand`'s `gap` (it derives 10.56px from
+`--tb-brand-h`; a hardcoded 10px made this one lockup a half-pixel tighter than every other
+world's), and the row's bottom padding is **12px** like the others, not 10. Verified by
+pixel-scanning the rendered INK, not the boxes: the title now starts at 19.75px, identical
+to Engine, 0.25px from Home's wordmark and 1px from Beam — and that last 1px is only which
+letters they are ("Beam" has no ascenders; "Notifications" has an f and two dots).
+(4) `#profileMenu` needs **z-index 1191**. `.brand-menu` gives it 600, and
 `#notifOverlay` is an opaque `.overlay` at 1000 — so tapping the header avatar opened the
 menu completely BEHIND the panel. It read as a dead button; the "it turns black" is the
 menu's own `_hideMenuSrcBtn` fading the avatar out. Covered by `scratchpad/notifhdr.js`,
@@ -5817,7 +5844,11 @@ today.
   CSS and JS. What remains of `lightEngine()` is live and must stay: the `.spin` rim
   (driven by `--rim`/`--gx`/`--gy`/`--gr`, used by the intro sheets and the Atwe AI
   tab), the `--mx`/`--my` press-glow on auth buttons, `aiComets`, and the auth-button
-  press-and-hold zoom. Proof the deletion changed nothing: 20 surfaces across both
+  press-and-hold zoom. **Layer E — the AI comets — is now deleted too**, at the founder's
+  request ("remove it entirely"): three glowing dots that orbited the answer container while
+  Atwe AI was working. CSS, the `window.aiComets` object and all six call sites went
+  together, not just the styling — the whole point of the lesson above is that switching an
+  effect off in CSS leaves its JS running. Proof the deletion changed nothing: 20 surfaces across both
   themes captured before and after — and a **control run of identical code twice
   differed on the same 10 surfaces by the same amounts** (the boot swirl caught
   mid-spin, and feed content). When judging a visual diff in this app, always run the
@@ -5865,6 +5896,15 @@ today.
   `scratchpad/gapmob.js` (five widths; asserts the feed is never pushed BELOW the tab
   row — on phones it deliberately sits above it and covers it, so the check is
   one-sided, not `abs(gap)==0`).
+- **A duplicate class declaration put a label back that a surface had deliberately hidden.**
+  The Atwe AI page showed the member's name above their own message and "Atwe AI" above the
+  reply. Its own CSS said `.msg-sender{display:none}` — it never wanted them. But a second,
+  later `.msg-sender` rule, commented "above a group message bubble", set `display:block`,
+  and being later it silently won. That group feature no longer exists (Beam puts a sender's
+  name INSIDE the first bubble of a run), so the rule was pure orphaned cruft whose only
+  remaining effect was to un-hide labels on a different surface. Both rules and the emitting
+  markup are gone. This is the same trap as the entry below — worth its own note because the
+  symptom looked like a design decision rather than a bug.
 - **A class may be declared TWICE at the same level, and the LATER copy wins.**
   Editing the first one changes nothing and the failure is silent. This has bitten
   real work three times (`.mc-call-sub`, `.mc-inv-sub`, `.msg-act`). A sweep counts

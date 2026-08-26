@@ -20,22 +20,29 @@ const N = 512, TARGET_R = 182;                 // the ring radius the set agrees
    the Home outline looked thin next to the rings. Erosion by k leaves a k-thick edge,
    so the weight IS k. Overridable: `WEIGHT=52 node build.js`. */
 const WEIGHT = Number(process.env.WEIGHT || 40);
+/* How far to round the Home arch's feet — the founder asked for the point taken off them.
+   34 is the most rounding the shape survives: at 42 the CLOSE fills the doorway's bottom
+   and the two legs fuse into an arch. Overridable: `FOOT=28 node build.js`. */
+const FOOT = Number(process.env.FOOT || 34);
 const REF = { chat: 'ref-beam.jpg', search: 'ref-engine.jpg', profile: 'ref-account.jpg' };
 const b64 = (f, mime) => `data:${mime};base64,` + fs.readFileSync(D + f).toString('base64');
 
-/* A bell with no circle around it, rounder than a stock bell: the head is close to
-   a true circle rather than a tapered dome, the rim is a fully-rounded bar, and the
-   clapper is a disc. Sized so its visual mass matches the ringed icons beside it. */
+/* A bell with no circle around it, and no hanger ball on top — the founder asked for it
+   removed and for the sides to come STRAIGHT down instead of flaring out into a wider rim.
+   So: a true half-round dome, two vertical sides, and a flat bottom with only a small
+   corner radius, plus the clapper below. Sized so its visual mass matches the ringed icons.
+   The clapper renders SOLID rather than outlined, and that is inherent, not a bug: the
+   outline is derived by eroding by WEIGHT, and a shape barely thicker than WEIGHT has
+   nothing left to hollow out. */
 const BELL = `
-  <path d="M256 108a26 26 0 0 1 26 26v14a1 1 0 0 1-52 0v-14a26 26 0 0 1 26-26Z"/>
-  <path d="M256 140c62 0 112 50 112 112v56a34 34 0 0 0 10 24l14 14a20 20 0 0 1-14 34H134a20 20 0 0 1-14-34l14-14a34 34 0 0 0 10-24v-56c0-62 50-112 112-112Z"/>
-  <path d="M212 404h88a44 44 0 0 1-88 0Z"/>`;
+  <path d="M142 264a114 114 0 0 1 228 0v96a16 16 0 0 1-16 16H158a16 16 0 0 1-16-16Z"/>
+  <path d="M212 400h88a44 44 0 0 1-88 0Z"/>`;
 
 (async () => {
   const br = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
   const p = await br.newPage();
   await p.goto('data:text/html,<body></body>');
-  const res = await p.evaluate(async ({ N, TARGET_R, weight, refs, homeSrc, bell }) => {
+  const res = await p.evaluate(async ({ N, TARGET_R, weight, foot, refs, homeSrc, bell }) => {
     const load = (src) => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; });
     const ctx = () => { const c = document.createElement('canvas'); c.width = c.height = N; return c.getContext('2d', { willReadFrequently: true }); };
     const bits = (x) => { const d = x.getImageData(0, 0, N, N).data; const o = new Uint8Array(N * N);
@@ -62,6 +69,22 @@ const BELL = `
         }
         o[y*N+x2] = keep;
       } return o; };
+    // grow a mask by k px — the counterpart to erode, used to round corners
+    const dilate = (m, k) => { const o = new Uint8Array(N * N);
+      for (let y = 0; y < N; y++) for (let x2 = 0; x2 < N; x2++) {
+        if (!m[y*N+x2]) continue;
+        for (let dy = -k; dy <= k; dy++) for (let dx = -k; dx <= k; dx++) {
+          if (dx*dx + dy*dy > k*k) continue;
+          const yy = y+dy, xx = x2+dx;
+          if (yy >= 0 && xx >= 0 && yy < N && xx < N) o[yy*N+xx] = 1;
+        }
+      } return o; };
+    /* Round every corner of a shape at radius r. An OPEN (erode then dilate) rounds the
+       convex corners, a CLOSE (dilate then erode) rounds the concave ones — the Home arch
+       needs both, because each foot has an outer corner and an inner one where it meets the
+       doorway. Everything else on the arch is already curved at a far larger radius, so this
+       leaves their drawing alone and only takes the point off the feet. */
+    const roundCorners = (m, r) => erode(dilate(dilate(erode(m, r), r), r), r);
     const bbox = (m) => { let x0=N,y0=N,x1=-1,y1=-1;
       for (let y=0;y<N;y++) for (let x2=0;x2<N;x2++) if (m[y*N+x2]) { if(x2<x0)x0=x2; if(x2>x1)x1=x2; if(y<y0)y0=y; if(y>y1)y1=y; }
       return { x0, y0, x1, y1, w: x1-x0+1, h: y1-y0+1 }; };
@@ -102,7 +125,7 @@ const BELL = `
       const want = TARGET_R * 2, s = want / Math.max(bb.w, bb.h);
       const c = ctx(); c.imageSmoothingQuality = 'high';
       c.drawImage(await load(homeSrc), -bb.x0*s + (N-bb.w*s)/2, -bb.y0*s + (N-bb.h*s)/2, N*s, N*s);
-      const solid = bits(c);
+      const solid = roundCorners(bits(c), foot);   // take the point off the feet
       const stroke = weight;   // erosion by k leaves a k-thick edge — the weight IS k
       const inner = erode(solid, stroke);
       const outline = new Uint8Array(N*N);
@@ -128,7 +151,7 @@ const BELL = `
       out.notifs = { off: toPng(outline), on: toPng(filled), stroke };
     }
     return out;
-  }, { N, TARGET_R, weight: WEIGHT,
+  }, { N, TARGET_R, weight: WEIGHT, foot: FOOT,
        refs: Object.fromEntries(Object.entries(REF).map(([k,v]) => [k, b64(v, 'image/jpeg')])),
        homeSrc: b64('narch.png', 'image/png'), bell: BELL });
 
