@@ -160,6 +160,13 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
    stroke follows their exact shape, doorway included. **Notifications is a bell with
    NO ring around it** — deliberate, at the founder's request: its own form is what
    is rounded. Regenerate with `node build.js` and re-embed; never hand-redraw.
+   **One `WEIGHT` drives every outline** (`WEIGHT=48 node build.js`, the shipped value)
+   — the traced rings are REBUILT at that weight rather than kept as drawn, so a single
+   number moves the whole set and nothing reads lighter than the thing beside it. A trap
+   that shipped once: erosion by k leaves a k-thick edge, so the weight IS k — deriving
+   Home with `erode(shape, 34/2)` made its outline half the weight of the rings next to
+   it and it looked visibly thin. Sizes live in `--nv-size` (bar) and `--nv-size-side`
+   (sidebar), both well above the 24/17 they first shipped at.
    An earlier pass DID hand-redraw them as SVG and it was rejected — close in idea,
    wrong in every detail.
    **Two traps live here.** (1) When an icon IS an inline `<svg>`, put `fill="none"`
@@ -4555,6 +4562,42 @@ authenticated route — `create_event`→`/api/events`, `schedule_post`→`/api/
 `draft_invoice`→ resolve `@username`→id then `/api/invoices`; `draft_reply` is text-only
 (copy). So every action is user-confirmed and reuses existing per-row authz. Degrades
 to `503` without `ANTHROPIC_API_KEY`. Brand-safe (never exposes the AI vendor).
+
+### Notifications is a world, so it looks and behaves like one
+
+Its header is the same lockup every other world uses — `#notifHead` carries
+`.tb-brandrow` and the same `.tb-brand` / `.tb-brand-act` classes as `#tbBrandRow`, so
+it inherits the sizing, theme and press behaviour instead of imitating them. The
+`--tb-brand-*` variables normally come from `.topbar.tb-solo`, so `#notifHead` supplies
+its own copy — without them the lockup renders at zero. `acNotifHeadSync()` fills the
+avatar and binds the retract-on-scroll (`.nh-hide`, distance measured from the header's
+real height, listener `{passive:true}`).
+
+**Two layering rules, and they differ by device.** On phones the panel would cover the
+bottom bar, so `body.notif-tab` lifts `#bottomNav` to `z-index:1400`. On desktop the nav
+is the SIDEBAR, which lives inside `#app` — the same stacking context that makes lifting
+impossible — so the panel is inset by `var(--sidebar-w)` instead, exactly as the mobile
+drawer's own backdrop already is. Without that, opening Notifications on a desktop
+covered the whole nav: clicking Account did nothing and Notifications stayed lit, which
+is what the founder saw as the tab "popping back" to the wrong icon. `appTab()` also
+closes the panel when you switch worlds, or it would sit over the world you moved to.
+
+**Testing note:** the notifications list GROUPS identical entries ("X and 39 others
+followed you"), so 40 seeded `follow` rows collapse to ONE row and there is nothing to
+scroll — which makes the retraction look broken when it is fine. Seed varied types AND
+distinct actors.
+
+### The desktop right rail answers in place
+
+The rail's search used to be a button that threw you onto Engine, and "Show more" under
+Who-to-follow navigated away too — both of which cost you your place in the feed, the
+one thing a side rail should never do. `acRailSearch()` now answers in the rail (pages &
+features from `acFindPlaces`, then people, then text posts), guards against a slow
+earlier request overwriting a newer one, and falls through to `acAskAiEmpty` when
+nothing matches; `acRailSearchClear()` puts Who-to-follow back. `acRailMore()` appends
+the next batch via `acRailSuggestRow` — one row shape shared with the initial five so
+they cannot drift apart. Posts with no text are filtered out: a picture post has no
+words, and a "Posts" heading over blank rows is worse than no heading.
 
 ### A search that finds nothing offers Atwe AI
 
