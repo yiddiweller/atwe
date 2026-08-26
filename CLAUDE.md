@@ -871,10 +871,14 @@ below).
 > page. **`ME_HUB_TAIL`** holds what belongs at the top level but is not a category —
 > **Settings** (the thing people reach for most; it used to be buried inside App & help)
 > and **Admin dashboard** (staff use it constantly). It renders as **its OWN card**
-> below the sections, so the page is three cards: the eleven categories, then these two,
-> then Log out. An earlier pass glued the tail onto the BOTTOM of the sections card and
-> the founder rejected it on sight — it read as a twelfth section rather than a separate
-> button. Both are in `acAppIndex` subtitled plain `Account` rather than
+> below the sections — **one card EACH**, so the page is four separate cards: the eleven
+> categories, Settings, Admin dashboard, Log out. Two earlier passes got this wrong and
+> the founder rejected each on sight: gluing the tail onto the BOTTOM of the sections
+> card read as a twelfth section, and stacking Settings + Admin in one shared card made
+> two unrelated destinations read as a pair. Every gap down the page is **12px** —
+> `.me-wallet` shipped with `margin-bottom:6px`, which left the search bar visibly
+> tighter to the wallet than to the cards below it (measured 6 vs 12);
+> `scratchpad/megap.js` walks every gap and fails if they are not equal. Both are in `acAppIndex` subtitled plain `Account` rather than
 > `Account · <section>`, since they are not in one. When adding a row here, keep the
 > App & help section's `sub` honest — it still advertised Settings after Settings moved
 > out. The **status card** (`acMeStatusCard`, Slack/Discord-style) moved OFF the hub
@@ -5660,6 +5664,41 @@ a `<button>` needs its own colour.
 **To add a destination:** a new section is picked up from `NAV_TITLES`
 automatically (give it keywords in `ADMIN_TAB_KW`); a new panel is picked up by
 adding it to `ADMIN_PANELS`; a new verb goes in `ADMIN_ACTIONS`.
+
+### Photos and videos draw their own edge (`--img-edge`)
+
+A near-black photo vanishes into the black app and a near-white one vanishes into the
+light app — the founder sent a screenshot of exactly that. Every photo/video in the
+**home feed** (`.ac-post-img`, `.ac-imggrid`, `.ac-vid-wrap .ac-post-vid`) and in
+**Beam** (`.msg-photo`, `.msg-imgcar`, `.msg-video`) carries a 1px hairline in
+**`--img-edge`** (`rgba(255,255,255,.13)` on dark, `rgba(0,0,0,.13)` on light).
+
+This is the ONE outline the colour law allows, and it is deliberate: the law forbids
+outlining **boxes** (cards, panels, sheets — they separate by fill), whereas this is
+**content** whose own extent would otherwise be invisible. Never reach for
+`--img-edge` on a card. Stickers stay borderless on purpose — a sticker IS its shape.
+
+`box-sizing:border-box` is set app-wide (`*,*::before,*::after`), so a plain `border`
+costs **no layout** — the outer size is unchanged and nothing shifts. Prefer it over
+`outline`/`box-shadow` here for exactly that reason.
+
+**Proving this took three tries, and the first two passed on broken code** — worth
+knowing before writing a similar check:
+1. "Is there any pixel near the edge unlike the page or the photo?" — the photos
+   letterbox against `--s2`, and that band is unlike both, so it passed with the
+   border removed.
+2. "Does the outer pixel differ from what is inside it?" — a square test image
+   letterboxes, so it still passed. Fixed by seeding **16:10 (feed) and 4:3 (chat)**
+   images that fill their boxes edge-to-edge.
+3. Still passed: a **transparent** border still shows the element's own background as
+   a 1px band. The check that actually works is **edge pixel vs the element's own
+   computed `background-color`** — `scratchpad/imgedge.js`, which seeds a genuinely
+   black (and genuinely white) photo into both a post and a DM and fails 4 checks when
+   `--img-edge` is switched off.
+
+NB the For You feed is engagement-ranked and buries a brand-new post, so that probe
+reads the **Following** scope, which serves your own posts chronologically — same home
+feed, same `acPostCard`, same CSS.
 
 ## Conventions
 
