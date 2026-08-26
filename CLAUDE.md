@@ -232,8 +232,8 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
    number moves the whole set and nothing reads lighter than the thing beside it. A trap
    that shipped once: erosion by k leaves a k-thick edge, so the weight IS k — deriving
    Home with `erode(shape, 34/2)` made its outline half the weight of the rings next to
-   it and it looked visibly thin. Sizes live in `--nv-size` (bar, **36px**) and
-   `--nv-size-side` (sidebar, **32px**), declared on `:root` rather than surviving only as
+   it and it looked visibly thin. Sizes live in `--nv-size` (bar, **34px**) and
+   `--nv-size-side` (sidebar, **30px**), declared on `:root` rather than surviving only as
    fallbacks inside the two width/height rules. The bar's tab is 50px tall — that is the
    ceiling. They first shipped at 24/17.
    An earlier pass DID hand-redraw them as SVG and it was rejected — close in idea,
