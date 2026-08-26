@@ -1412,9 +1412,16 @@ always hit the network. The cache is versioned via the `CACHE` constant
 > `activate` handler deletes any cache whose key doesn't match. `admin.html`
 > isn't pre-cached, but the network-first navigation fallback still serves it.
 
-**Installed-PWA safe areas (iOS standalone).** The app runs `black-translucent`
-+ `viewport-fit=cover` so content is **fullscreen top-to-bottom** (feed/media can
-extend under the notch). The app shell (`.app`) is pinned with **`position:fixed;
+**Installed-PWA safe areas (iOS standalone).** The shipped markup is
+`apple-mobile-web-app-status-bar-style="black"` + `viewport-fit=cover` — NOT
+`black-translucent`, which this file claimed for a long time and which several
+paragraphs below still reason from. With `black`, iOS does not extend the web view
+under the status bar in standalone mode, so `env(safe-area-inset-top)` resolves to 0
+there and a headless measurement matches a real iPhone. The safe-area padding below is
+still correct and still load-bearing (`viewport-fit=cover` in a browser tab, notched
+Android, and any future switch back), it simply resolves to zero in today's installed
+app. **Check the meta tag before reasoning from this paragraph** — the doc and the
+markup have disagreed once already. The app shell (`.app`) is pinned with **`position:fixed;
 inset:0`** (not `height:100dvh`) so it truly fills the visual viewport edge-to-edge —
 including under the home indicator — with no bottom gap (dvh can fall short in iOS
 standalone). The chrome respects the safe-area insets:
@@ -1424,8 +1431,8 @@ standalone). The chrome respects the safe-area insets:
 - A **persistent status-bar backdrop** (`#statusScrim`) keeps the iOS clock/battery
   legible. It's a **solid `var(--bg)` fill (no blur)** so the status strip reads as clean
   flat colour — **full black** on the dark themes (content scrolling under it is fully
-  hidden, no colour bleed behind the clock). Because `black-translucent` makes the clock
-  **always white**, Light theme (`body.light #statusScrim`) overlays a **dark vignette**
+  hidden, no colour bleed behind the clock). Because a translucent status bar would make
+  the clock **always white** (see the caveat above — the shipped tag is `black`), Light theme (`body.light #statusScrim`) overlays a **dark vignette**
   gradient instead so the white clock stays legible on the white bg. Always on, and a
   **direct `<body>` child** (NOT inside `.app`, whose `z-index:1` would trap it below
   overlays) with a very high z-index, so it sits above app content *and* overlays/sheets
@@ -4653,6 +4660,12 @@ menu completely BEHIND the panel. It read as a dead button; the "it turns black"
 menu's own `_hideMenuSrcBtn` fading the avatar out. Covered by `scratchpad/notifhdr.js`,
 which needs **varied notification types AND distinct actors** or the list groups into one row
 and there is nothing to scroll.
+
+**Overlays sit outside `.app`, so the impersonation banner has to move them too.**
+`showOverlay` appends to `<body>`, and the amber "view as user" banner shifts `.app`
+down 40px — which left every overlay, Notifications included, tucked under the banner
+during a support session. The banner's own stylesheet now shifts `.overlay` by the same
+40px alongside `.app`.
 
 **Two layering rules, and they differ by device.** On phones the panel would cover the
 bottom bar, so `body.notif-tab` lifts `#bottomNav` to `z-index:1400`. On desktop the nav

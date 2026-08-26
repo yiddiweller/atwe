@@ -21166,7 +21166,7 @@ let _pendingGo = null; // a tab requested via a PWA shortcut (/?go=chat)
 function _impInit(token) {
   if (document.getElementById('impBanner')) return;
   const st = document.createElement('style');
-  st.textContent = "#impBanner{position:fixed;top:0;left:0;right:0;min-height:40px;z-index:100000;background:linear-gradient(90deg,var(--amber),var(--amber));color:var(--text-black);display:flex;align-items:center;justify-content:center;gap:14px;font-size:13px;font-weight:500;padding:6px 12px;box-shadow:0 2px 12px rgba(0,0,0,.45);text-align:center;}#impBanner button{background:rgba(29,29,31,.16);border:1px solid rgba(29,29,31,.35);color:var(--text-black);border-radius:8px;padding:5px 14px;font:inherit;font-weight:700;cursor:pointer;flex:0 0 auto;}body.impersonating .app{top:40px;}";
+  st.textContent = "#impBanner{position:fixed;top:0;left:0;right:0;min-height:40px;z-index:100000;background:linear-gradient(90deg,var(--amber),var(--amber));color:var(--text-black);display:flex;align-items:center;justify-content:center;gap:14px;font-size:13px;font-weight:500;padding:6px 12px;box-shadow:0 2px 12px rgba(0,0,0,.45);text-align:center;}#impBanner button{background:rgba(29,29,31,.16);border:1px solid rgba(29,29,31,.35);color:var(--text-black);border-radius:8px;padding:5px 14px;font:inherit;font-weight:700;cursor:pointer;flex:0 0 auto;}body.impersonating .app{top:40px;}body.impersonating .overlay{top:40px;}";
   document.head.appendChild(st);
   const bar = document.createElement('div');
   bar.id = 'impBanner';
