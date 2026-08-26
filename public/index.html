@@ -3746,12 +3746,17 @@ body.light .settings-date{color-scheme:light;}
 /* Extra bottom clearance (well past the old 30px) so the last row of any page
    never sits under the floating search pill, which is fixed to the viewport now
    rather than part of the scrolling flow. */
-.settings-card.iset{padding:6px 12px 96px;max-width:600px;}
-/* No backdrop-filter on the settings overlay: a filtered ancestor becomes the
-   containing block for position:fixed, which made the fixed "Search settings" bar
-   ride the overlay's scroll instead of pinning to the viewport. Without it the bar
-   is truly viewport-fixed and stays at the bottom while the list scrolls. */
-#settingsOverlay{padding:0;backdrop-filter:none;-webkit-backdrop-filter:none;}
+/* 28px, not 96: the 96 was headroom for the floating search pill that used to sit
+   at the bottom of the screen. The bar is inline at the top now. */
+.settings-card.iset{padding:6px 12px 28px;max-width:600px;}
+/* The blur is BACK. It was switched off only because a filtered ancestor becomes the
+   containing block for position:fixed, which made the old fixed "Search settings" bar
+   ride the overlay's scroll instead of pinning to the viewport. That bar is inline at
+   the top now and nothing inside here is position:fixed, so the workaround has no
+   reason to exist — and without the blur the .88 scrim let the page behind ghost
+   through between the cards. If you ever add a position:fixed child in here, this is
+   why it will misbehave. */
+#settingsOverlay{padding:0;}
 .iset-head{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;
   padding:10px 2px 12px;margin-bottom:4px;background:var(--bg);
   -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);}
@@ -3759,31 +3764,31 @@ body.light .settings-date{color-scheme:light;}
   border-radius:50%;flex-shrink:0;transition:background var(--t-fast) var(--ease);}
 .iset-back:hover{background:var(--s2);}
 .iset-back svg{width:22px;height:22px;stroke:var(--t1);stroke-width:2.4;fill:none;stroke-linecap:round;stroke-linejoin:round;}
-.iset-title{font-size:18px;font-weight:800;letter-spacing:-.02em;flex:1;min-width:0;
+/* Same size and weight as the Account page's section titles (.me-sectitle), so the
+   two settings-shaped surfaces read as one system. */
+.iset-title{font-size:24px;font-weight:800;letter-spacing:-.02em;flex:1;min-width:0;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-/* Search bar — a floating pill fixed to the bottom of the screen, matching
-   `.bottom-nav`'s exact positioning/material (same gutter insets, same frosted
-   glass) rather than sitting inline at the top of the list. `#settingsOverlay`
-   itself is the nearest `position:fixed` ancestor and carries no transform, so
-   this still anchors to the true viewport, not just the settings card. Extra
-   bottom padding on `.settings-card.iset` (below) keeps the last row of every
-   page clear of it. */
-.iset-search{position:fixed;z-index:6;display:flex;align-items:center;gap:8px;
-  left:var(--feed-gutter);right:var(--feed-gutter);
-  bottom:max(var(--feed-gutter), env(safe-area-inset-bottom, 0px) - 16px);
-  background:rgba(32,32,36,.50);
-  -webkit-backdrop-filter:blur(30px) saturate(150%);backdrop-filter:blur(30px) saturate(150%);
-  border:1px solid rgba(255,255,255,.05);
-  box-shadow:0 10px 34px rgba(0,0,0,.5),0 2px 8px rgba(0,0,0,.3);
-  border-radius:999px;padding:12px 16px;}
-body.light .iset-search{background:rgba(255,255,255,.82);border-color:var(--b3);
-  box-shadow:0 10px 34px rgba(0,0,0,.14),0 2px 8px rgba(0,0,0,.08);}
+/* Search bar — INLINE at the top of the list, where the account card used to be
+   (owner). It was a frosted pill fixed to the bottom of the screen; it is now the
+   same component as the Account page's own search (`.me-search`) — solid --s2 fill,
+   no outline, 20px radius, same gutter — so the two settings-shaped surfaces are one
+   system. Hub only, as in iOS Settings and on the Account page: `body.set-sub` hides
+   it on a sub-page, where a "Search settings" box under "Your account" reads wrong. */
+.iset-search{display:flex;align-items:center;gap:9px;width:100%;padding:12px 15px;
+  margin:0 2px 12px;background:var(--s2);border:none;border-radius:20px;}
+.set-sub .iset-search{display:none;}
 .iset-search-ic{width:17px;height:17px;stroke:var(--t3);stroke-width:2;fill:none;flex-shrink:0;}
 .iset-search input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);
   font-size:15px;font-family:inherit;}
 .iset-search input::placeholder{color:var(--t3);}
+/* type="search" paints a native clear button next to our own — two x's side by side.
+   Same trap as the Account page's bar; see --img-edge's neighbour note there. */
+.iset-search input::-webkit-search-cancel-button,
+.iset-search input::-webkit-search-decoration{-webkit-appearance:none;appearance:none;display:none;}
 .iset-search-x{display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;
-  border:none;background:var(--s4);flex-shrink:0;}
+  border:none;background:var(--s4);flex-shrink:0;cursor:pointer;
+  transition:transform var(--t-fast) var(--ease);}
+.iset-search-x:active{transform:scale(.96);}
 .iset-search-x svg{width:11px;height:11px;stroke:var(--t1);stroke-width:2.4;fill:none;}
 /* Page panels + slide */
 /* iOS-style push/pop between the hub and sub-pages. GPU-composited (will-change +
@@ -3795,16 +3800,6 @@ body.light .iset-search{background:rgba(255,255,255,.82);border-color:var(--b3);
 .iset-body.iset-back-anim{animation:isetSlideBack .36s cubic-bezier(.32,.72,0,1);}
 @keyframes isetSlideBack{from{opacity:0;transform:translate3d(-34px,0,0);}to{opacity:1;transform:translate3d(0,0,0);}}
 body.reduce-motion .iset-body{animation:none;}
-/* Account card (top of hub) */
-.iset-acct{display:flex;align-items:center;gap:14px;background:var(--s2);border:none;
-  border-radius:18px;padding:16px 16px;margin:0 2px 22px;cursor:pointer;
-  transition:background var(--t-fast) var(--ease);}
-.iset-acct:hover{background:var(--s2);}
-.iset-acct-ava{width:58px;height:58px;font-size:22px;flex-shrink:0;}
-.iset-acct-main{flex:1;min-width:0;}
-.iset-acct-name{font-size:19px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:5px;}
-.iset-acct-sub{font-size:13px;color:var(--t3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.iset-acct .iset-chev{width:18px;height:18px;}
 /* Grouped card */
 .iset-group{background:var(--s2);border:none;border-radius:16px;overflow:hidden;
   margin:0 2px 22px;}
@@ -3877,8 +3872,8 @@ body.light .iset-select{color-scheme:light;}
    page-bg hairlines). Light keeps a faint border on the ones WITHOUT their own
    hairline framing since the fill ~ the white bg — `.iset-group` and `.iset-search`
    are excluded here, each already manages its own border above. */
-.iset-acct,.iset-signout{border:none;}
-body.light .iset-acct,body.light .iset-signout{border:1px solid var(--b1);}
+.iset-signout{border:none;}
+body.light .iset-signout{border:1px solid var(--b1);}
 /* Danger label variant inside rows */
 .iset-label.danger{color:var(--red-txt);}
 /* Empty search */
@@ -3886,12 +3881,12 @@ body.light .iset-acct,body.light .iset-signout{border:1px solid var(--b1);}
 /* ── Micro-interactions: real press feedback (touch has no hover) ── */
 .iset-row:active{background:var(--s3);transition-duration:0s;}
 .iset-row[data-static]:active{background:none;}
-.iset-acct:active{background:var(--s3);transform:scale(.992);}
+
 .iset-back:active{transform:scale(.88);background:var(--s2);}
 .iset-signout:active{transform:scale(.985);background:rgba(255,0,51,.12);}
 .iset-select:active{border-color:var(--accent);}
 .ac-ptab:active{background:var(--s1);}
-.iset-acct,.iset-back,.iset-signout{transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
+.iset-back,.iset-signout{transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
 .ac-pill-btn:active,.iset-search-x:active{transform:scale(.96);}
 .iset-search-x{transition:transform var(--t-fast) var(--ease);}
 /* iOS-style present: full-screen settings sheets fade + settle in (no
@@ -3899,7 +3894,7 @@ body.light .iset-acct,body.light .iset-signout{border:1px solid var(--b1);}
 .overlay.set-fs{animation:setFsIn .24s var(--ease);}
 @keyframes setFsIn{from{opacity:0;transform:scale(.985);}to{opacity:1;transform:none;}}
 /* Keyboard focus rings (only for keyboard nav, not touch/mouse). */
-.iset-row:focus-visible,.iset-acct:focus-visible,.iset-back:focus-visible,
+.iset-row:focus-visible,.iset-back:focus-visible,
 .iset-signout:focus-visible,.iset-select:focus-visible,.ac-ptab:focus-visible,
 .iset-search input:focus-visible,.set-sheet .jp-in:focus-visible{
   outline:2px solid var(--accent);outline-offset:-2px;border-radius:12px;}
@@ -13354,21 +13349,13 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
       </button>
       <span class="iset-title" id="setTitle" data-i18n="Settings">Settings</span>
     </div>
-    <div class="iset-search">
+    <div class="iset-search" id="setSearchBar">
       <svg class="iset-search-ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input id="setSearch" placeholder="Search settings" data-i18n-ph="Search settings" autocomplete="off" oninput="setSearchInput(this.value)"/>
-      <button class="iset-search-x hidden" id="setSearchX" onclick="setSearchClear()" aria-label="Clear"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <input id="setSearch" type="search" placeholder="Search settings" data-i18n-ph="Search settings" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Search settings" oninput="setSearchInput(this.value)"/>
+      <button class="iset-search-x hidden" id="setSearchX" onclick="setSearchClear()" aria-label="Clear search"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="iset-body hidden" id="setSearchResults"></div>
     <div class="iset-body" data-page="hub" data-title="Settings">
-      <div class="iset-acct" onclick="setNav('account')">
-        <div class="user-avatar iset-acct-ava no-img" id="settingsAvatar"><svg class="ava-person" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8.6" r="4.15"/><path d="M12 14.1c-5.6 0-10.2 4.4-10.2 9.9V24h20.4v-.1c0-5.5-4.6-9.9-10.2-9.9z"/></svg></div>
-        <div class="iset-acct-main">
-          <div class="iset-acct-name" id="settingsName">Guest</div>
-          <div class="iset-acct-sub" id="settingsAcctSub">Profile, account &amp; more</div>
-        </div>
-        <svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
-      </div>
       <div class="iset-group"><button class="iset-row iset-acctonly" onclick="setNav('account')"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.6 3.1-5.6 7-5.6s7 2 7 5.6"/></svg></span><div class="iset-main"><div class="iset-label">Your account</div><div class="iset-sub">Account info, password, your data</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row iset-acctonly" onclick="setNav('privacy')"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6z"/></svg></span><div class="iset-main"><div class="iset-label">Privacy &amp; safety</div><div class="iset-sub">Who can reach you, blocking, muting</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row iset-acctonly" onclick="setNav('security')"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9.5" rx="2.4"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><div class="iset-main"><div class="iset-label">Security &amp; access</div><div class="iset-sub">Password, two-factor, devices</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row iset-acctonly" onclick="setNav('notifications')"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 0 1 12 0c0 4.5 2 5.5 2 5.5H4s2-1 2-5.5"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></svg></span><div class="iset-main"><div class="iset-label">Notifications</div><div class="iset-sub">Push alerts on this device</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div>
       <div class="iset-group iset-acctonly" id="hubStoreGroup"><button class="iset-row" onclick="closeSettings();acOpenStoreManage()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span><div class="iset-main"><div class="iset-label">Manage store</div><div class="iset-sub">Products, coupons, orders &amp; storefront</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div>
       <div class="iset-group"><button class="iset-row iset-acctonly" onclick="setNav('premium')"><span class="iset-ic"><svg viewBox="0 0 24 24"><polygon points="12 3 14.7 8.7 21 9.5 16.4 13.9 17.6 20.2 12 17.1 6.4 20.2 7.6 13.9 3 9.5 9.3 8.7"/></svg></span><div class="iset-main"><div class="iset-label">Premium &amp; verification</div><div class="iset-sub">Your plan, verified badge, subscriptions</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="setNav('display')"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/></svg></span><div class="iset-main"><div class="iset-label">Display &amp; accessibility</div><div class="iset-sub">Theme and appearance</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="setNav('assistant')"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg></span><div class="iset-main"><div class="iset-label">Atwe Assistant</div><div class="iset-sub">AI model and chat history</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row iset-acctonly" onclick="setNav('data')"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8"/><path d="M10 3v2.4M14 3v2.4M10 18.6V21M14 18.6V21M3 10h2.4M3 14h2.4M18.6 10H21M18.6 14H21"/></svg></span><div class="iset-main"><div class="iset-label">Your data &amp; storage</div><div class="iset-sub">Download or delete your data</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div>
@@ -20348,7 +20335,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1723'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1724'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -23950,7 +23937,6 @@ async function changeName() {
   try {
     await API.req('PUT', '/api/auth/profile', { name });
     S.user.name = name; Store.save(); initUI();
-    document.getElementById('settingsName').textContent = name;
     document.getElementById('profileNameDesc').textContent = name;
     showNotif('Name updated.');
   } catch (e) { showNotif(e.message || 'Could not update name.'); }
@@ -24982,20 +24968,15 @@ function openSettings() {
   // the device is actually on the latest deploy (a stale PWA cache would show an old one).
   const bAbout = document.getElementById('settingsBuildAbout');
   if (bAbout) bAbout.textContent = '1.0.0 · build ' + ATWE_BUILD;
-  document.getElementById('settingsName').textContent = S.user?.name || 'Guest';
-  renderAvatar(document.getElementById('settingsAvatar'), S.user?.name, S.user?.avatar);
-  const planTxt = S.plan === 'pro' ? 'Pro' : 'Free';
-  const acctSub = document.getElementById('settingsAcctSub');
-  if (acctSub) acctSub.textContent = acct
-    ? (S.user?.username ? '@' + S.user.username + ' · ' : '') + planTxt + ' plan'
-    : 'Guest · sign in to save your data';
+  /* The account card at the top of the hub was removed (owner) — the search bar took
+     its place. "Your account" is still the first row of the first group. */
   const sv = meVerified();
   const vpending = !!(S.user && S.user.verification && S.user.verification.pending);
   document.getElementById('settingsVerifiedBadge').innerHTML = sv ? AC_VBADGE : '';
   document.getElementById('settingsVerifiedDesc').textContent = sv ? 'Verified ✓' : (vpending ? 'Application under review' : 'Tap to apply for the verified badge');
   document.getElementById('settingsVerifiedRow').onclick = sv ? null : acGetVerified;
   document.getElementById('settingsVerifiedRow').style.cursor = sv ? 'default' : 'pointer';
-  const pv = document.getElementById('setPlanVal'); if (pv) pv.textContent = planTxt;
+  const pv = document.getElementById('setPlanVal'); if (pv) pv.textContent = (S.plan === 'pro' ? 'Pro' : 'Free');
   const ml = (MODELS[S.model] || MODELS[0]).label;
   document.getElementById('settingsModel').textContent = ml;
   const ma = document.getElementById('settingsModelAbout'); if (ma) ma.textContent = ml;
@@ -25044,6 +25025,11 @@ function setNav(pageName, opts) {
     }
   });
   _setPage = pageName;
+  /* Search lives on the hub only, as it does in iOS Settings and on the Account page —
+     a "Search settings" box under the title "Your account" reads wrong. The class goes
+     on the card, the nearest ancestor of the bar. */
+  const card = overlay.querySelector('.settings-card');
+  if (card) card.classList.toggle('set-sub', pageName !== 'hub');
   const t = document.getElementById('setTitle'); if (t) t.textContent = i18nT(title);
   overlay.scrollTop = 0;
   if (pageName === 'notifications') { acLoadNotifPrefs(); acSyncSmsRows(); }

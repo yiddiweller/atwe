@@ -637,7 +637,7 @@ Everything lives in one file, organized by banner comments
 `#settingsOverlay` is a full-screen **iOS-Settings-style** surface (not a flat
 list): a sticky header (back arrow + title only — no trailing "Done" button;
 `setBack()` already closes the whole overlay when it's called at the hub page),
-an account card, and grouped
+the **search bar**, and grouped
 rounded cards of rows with **plain icon glyphs (no tile background at all)** +
 chevrons (`.iset-group`/`.iset-row`/`.iset-ic`) — each row's own hairline is a
 full-width `border-bottom` in the exact PAGE-background colour (`var(--bg)`,
@@ -645,11 +645,31 @@ not a grey tint), so it reads as a clean cut rather than a visible divider
 line, and every group is framed by a matching line at both the top
 (`.iset-group`'s own `border-top`) and the bottom (the last row's own
 `border-bottom`), not just between rows. The **"Search settings"** bar
-(`.iset-search`) is a **floating frosted pill fixed to the bottom of the
-screen** — same positioning/material as `.bottom-nav` (same gutter insets,
-same blur) — rather than an inline bar at the top of the list; the card's own
-bottom padding is generous enough that the last row of any page never sits
-under it. The hub follows X's
+(`.iset-search`) is **inline at the top of the list**, directly under the header,
+where an account card used to sit — the founder had both removed and swapped. It is
+deliberately the SAME component as the Account page's own bar (`.me-search`): solid
+`--s2`, no outline, 20px radius, same padding, same height, `type="search"` with the
+native `::-webkit-search-cancel-button` suppressed so there aren't two x's. **Hub
+only**, as in iOS Settings and on the Account page — `setNav` puts `.set-sub` on
+`.settings-card` for any other page and the CSS hides the bar there. `.iset-title`
+is **24px/800**, matching `.me-sectitle`, so the two settings-shaped surfaces read as
+one system.
+
+Two things fell out of removing the fixed bar, and both were workarounds for it:
+`.settings-card.iset`'s **96px bottom padding** (headroom for the pill) dropped to 28,
+and **`#settingsOverlay`'s `backdrop-filter` came back**. The blur had been switched
+off because a filtered ancestor becomes the containing block for `position:fixed`,
+which made the pill ride the overlay's scroll — with nothing fixed in there any more
+the workaround had no reason to exist, and without the blur the `.88` scrim let the
+page behind ghost through between the cards. **If you ever add a `position:fixed`
+child inside `#settingsOverlay`, that is why it will misbehave.**
+
+The old **account card** (`.iset-acct*`, `#settingsAvatar`/`#settingsName`/
+`#settingsAcctSub`) is gone entirely — markup, CSS and the `openSettings` code that
+filled it. NB `.iset-acctonly` is a DIFFERENT class (rows gated to signed-in accounts)
+and stays. Removing that block deleted a `const planTxt` that was still read further
+down by `#setPlanVal`; `scratchpad/setpage.js` opens Settings inside a try and asserts
+it does not throw, which is what caught it. The hub follows X's
 information architecture and slides into sub-pages (`.iset-body[data-page]`) with
 a **GPU-composited iOS push/pop** (`isetSlide`/`isetSlideBack`, `will-change:
 transform,opacity` + `translate3d` so it's buttery on Chrome/Blink, not just
