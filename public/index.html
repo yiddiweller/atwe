@@ -2636,6 +2636,19 @@ body.light .tb-feedtab.active{color:var(--t1);}
    apart from the content) and it reverses PERFECTLY even during an iOS momentum
    flick (JS could never keep up with that). */
 .tb-hairline{display:none;}
+/* ADDITIVE tab-row touch strip (see the matching HTML/JS). Transparent, sits over the
+   tab row, forwards taps + horizontal drags to the real tabs. z-index 8 = above the
+   covering content (z5) so it actually receives the touches; pointer-events default
+   none (JS turns it on only while at the very top). overflow-x makes it a horizontal
+   scroller; touch-action:pan-x lets vertical drags fall through as normal page intent.
+   NOT inside the phone media query: it used to be, so on DESKTOP the element had no
+   position/display at all and the JS that sizes it turned it into a 48px black block
+   in normal flow, pushing the whole feed down under the tab row. */
+#tbTabTouch{position:fixed;z-index:8;overflow-x:auto;overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;touch-action:pan-x;background:transparent;
+  pointer-events:none;display:none;scrollbar-width:none;}
+#tbTabTouch::-webkit-scrollbar{display:none;}
+#tbTabTouchInner{height:1px;}
 @media(max-width:768px){
   /* The content wrapper rides ABOVE the menu (z:5 > the bar's z:4) so as it rises it
      COVERS the menu — solid, fully visible, never chopped, never see-through. A
@@ -2693,16 +2706,6 @@ body.light .tb-feedtab.active{color:var(--t1);}
   body.feed-cover #acFeed::before{
     content:'';display:block;position:sticky;top:calc(-1 * var(--tabrow-h));z-index:10;
     height:1px;margin-bottom:-1px;background:var(--b2);pointer-events:none;}
-  /* ADDITIVE tab-row touch strip (see the matching HTML/JS). Transparent, sits over the
-     tab row, forwards taps + horizontal drags to the real tabs. z-index 8 = above the
-     covering content (z5) so it actually receives the touches; pointer-events default
-     none (JS turns it on only while at the very top). overflow-x makes it a horizontal
-     scroller; touch-action:pan-x lets vertical drags fall through as normal page intent. */
-  #tbTabTouch{position:fixed;z-index:8;overflow-x:auto;overflow-y:hidden;
-    -webkit-overflow-scrolling:touch;touch-action:pan-x;background:transparent;
-    pointer-events:none;display:none;scrollbar-width:none;}
-  #tbTabTouch::-webkit-scrollbar{display:none;}
-  #tbTabTouchInner{height:1px;}
   /* Scroll-up reveal bar — a floating copy of the menu parked off the top. Slides in on
      scroll-up (adds .shown), out on scroll-down/at-top. Transform-only slide (the safe
      method the nav uses — no layer-swap), so it can't freeze the scroll. The id selector
@@ -20223,7 +20226,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1710'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1711'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -61979,6 +61982,11 @@ function acTabTouchTabsEl() {                    // the visible tab scroller for
   return null;
 }
 function acTabTouchActive() {
+  // Phone only. The strip exists because on a phone the menu sits BEHIND the covering
+  // feed and cannot hear a tap; on desktop the menu is on top and hears taps itself, so
+  // the strip has no job there — and its CSS used to be phone-only too, which made it a
+  // 48px black block in normal flow above the desktop feed.
+  if (!window.matchMedia || !matchMedia('(max-width:768px)').matches) return false;
   const row = document.getElementById('tbTabRow');
   return document.body.classList.contains('feed-cover') && row && !row.classList.contains('hidden')
     && (_appTab === 'home' || _appTab === 'chat');
