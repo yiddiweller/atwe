@@ -11222,7 +11222,7 @@ body.notif-tab #notifOverlay .notif-scroll,body.notif-tab #notifOverlay #notifLi
 /* Nav glyph size — bar and sidebar. Declared here rather than living only as a fallback
    inside the two width/height rules, so it is one place to change and one place to find.
    The bar's tab is 50px tall, which is the ceiling these have to respect. */
-:root{--nv-size:36px;--nv-size-side:32px;}
+:root{--nv-size:34px;--nv-size-side:30px;}
 .bn-ico{position:relative;z-index:1;display:block;width:var(--nv-size,30px);height:var(--nv-size,30px);}
 .sb-ico{display:block;width:var(--nv-size-side,26px);height:var(--nv-size-side,26px);flex-shrink:0;}
 /* Each state is a masked box painted in currentColor, so one artwork serves every
@@ -20278,7 +20278,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1716'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1717'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
