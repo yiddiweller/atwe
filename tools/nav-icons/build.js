@@ -24,24 +24,50 @@ const WEIGHT = Number(process.env.WEIGHT || 40);
    34 is the most rounding the shape survives: at 42 the CLOSE fills the doorway's bottom
    and the two legs fuse into an arch. Overridable: `FOOT=28 node build.js`. */
 const FOOT = Number(process.env.FOOT || 34);
+/* And the DOORWAY's two inside corners, separately and MORE — the founder wants those
+   rounder while the feet stay put. Applied locally (see roundInnerFeet), so unlike a global
+   radius it cannot eat the doorway. `DOORWAY=60 node build.js`. */
+const DOORWAY = Number(process.env.DOORWAY || 60);
 const REF = { chat: 'ref-beam.jpg', search: 'ref-engine.jpg', profile: 'ref-account.jpg' };
 const b64 = (f, mime) => `data:${mime};base64,` + fs.readFileSync(D + f).toString('base64');
 
-/* A bell with no circle around it, and no hanger ball on top — the founder asked for it
-   removed and for the sides to come STRAIGHT down instead of flaring out into a wider rim.
-   So: a true half-round dome, two vertical sides, and a flat bottom with only a small
-   corner radius, plus the clapper below. Sized so its visual mass matches the ringed icons.
-   The clapper renders SOLID rather than outlined, and that is inherent, not a bug: the
+/* THE BELL. No ring around it and no hanger ball on top, and the sides lean OUT a little
+   rather than dropping straight (owner: a perfectly vertical bell read as too rigid).
+
+   The lean is built TANGENTIALLY, and that is the whole point of this construction. The
+   first version drew a full semicircle dome and then started the slanted side from its
+   end point — but a semicircle's edge arrives VERTICAL, so the outward slant began with a
+   visible kink. The founder called it "the twist" and asked for one even, straight slant
+   instead. So the dome stops short on each side, exactly where its tangent already equals
+   the side's lean, and the straight side continues from there: curve flows into line with
+   no corner at all. LEAN is that angle in degrees, and every point below is derived from it —
+   nothing here is a hand-placed coordinate, so changing LEAN keeps the shape correct.
+   LARGE-ARC IS 0, and getting that wrong is not subtle: the tangent points sit ABOVE the
+   circle's centre, so the arc over the top is SHORTER than a semicircle (180 - 2*LEAN).
+   Asking for the large arc makes SVG choose a different circle through the same two points
+   entirely, and the side develops a visible bulge — worse than the kink this replaces.
+
+   CORNER rounds the two bottom corners. The fillet's tangent length is cr/tan(45deg+LEAN/2)
+   — not simply cr — because the corner is not a right angle once the side leans out.
+
+   The clapper renders SOLID rather than outlined and that is inherent, not a bug: the
    outline is derived by eroding by WEIGHT, and a shape barely thicker than WEIGHT has
    nothing left to hollow out. */
-/* SPLAY: how far each side leans OUT between the dome and the base. 0 = perfectly
-   vertical, which the founder found a touch too rigid ("a drop less straight"). This is a
-   lean, not the wide flared rim the first bell had. Overridable: `SPLAY=26 node build.js`. */
-const SPLAY = Number(process.env.SPLAY || 18);
+const LEAN   = Number(process.env.LEAN   || 11);   // degrees the sides lean out from vertical
+const CORNER = Number(process.env.CORNER || 44);   // radius of the two bottom corners
 const BELL = () => {
-  const S = SPLAY;
+  const R = 114, CX = 256, CY = 264, YB = 376;     // dome radius / centre, and the base line
+  const th = LEAN * Math.PI / 180;
+  // Where the dome's tangent already equals the side's lean — the join with no kink.
+  const txR = CX + R * Math.cos(th), txL = CX - R * Math.cos(th), ty = CY - R * Math.sin(th);
+  const run = (YB - ty) / Math.cos(th);            // how far the straight side travels
+  const bxR = txR + run * Math.sin(th), bxL = CX - (bxR - CX);
+  const d = CORNER / Math.tan(Math.PI / 4 + th / 2);   // fillet tangent length
+  const f = (n) => (+n).toFixed(1);
+  const aR = [bxR - d * Math.sin(th), YB - d * Math.cos(th)], bR = [bxR - d, YB];
+  const aL = [bxL + d * Math.sin(th), YB - d * Math.cos(th)], bL = [bxL + d, YB];
   return `
-  <path d="M142 264a114 114 0 0 1 228 0L${370 + S} 360a16 16 0 0 1-16 16H${158 - S}a16 16 0 0 1-16-16Z"/>
+  <path d="M${f(txL)} ${f(ty)}A${R} ${R} 0 0 1 ${f(txR)} ${f(ty)}L${f(aR[0])} ${f(aR[1])}A${CORNER} ${CORNER} 0 0 1 ${f(bR[0])} ${f(bR[1])}H${f(bL[0])}A${CORNER} ${CORNER} 0 0 1 ${f(aL[0])} ${f(aL[1])}Z"/>
   <path d="M212 400h88a44 44 0 0 1-88 0Z"/>`;
 };
 
@@ -49,7 +75,7 @@ const BELL = () => {
   const br = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
   const p = await br.newPage();
   await p.goto('data:text/html,<body></body>');
-  const res = await p.evaluate(async ({ N, TARGET_R, weight, foot, refs, homeSrc, bell }) => {
+  const res = await p.evaluate(async ({ N, TARGET_R, weight, foot, doorway, refs, homeSrc, bell }) => {
     const load = (src) => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; });
     const ctx = () => { const c = document.createElement('canvas'); c.width = c.height = N; return c.getContext('2d', { willReadFrequently: true }); };
     const bits = (x) => { const d = x.getImageData(0, 0, N, N).data; const o = new Uint8Array(N * N);
@@ -86,12 +112,51 @@ const BELL = () => {
           if (yy >= 0 && xx >= 0 && yy < N && xx < N) o[yy*N+xx] = 1;
         }
       } return o; };
-    /* Round every corner of a shape at radius r. An OPEN (erode then dilate) rounds the
-       convex corners, a CLOSE (dilate then erode) rounds the concave ones — the Home arch
-       needs both, because each foot has an outer corner and an inner one where it meets the
-       doorway. Everything else on the arch is already curved at a far larger radius, so this
-       leaves their drawing alone and only takes the point off the feet. */
-    const roundCorners = (m, r) => erode(dilate(dilate(erode(m, r), r), r), r);
+    /* Round a shape's convex corners: an OPEN (erode then dilate) at radius r. On the Home
+       arch that is the two outer feet AND the two inner corners where each leg meets the
+       doorway — all four are convex, so one open moves them together. */
+    const roundCorners = (m, r) => dilate(erode(m, r), r);
+    /* The founder wants the DOORWAY's two inside corners rounder than the feet, and the feet
+       left exactly as they are. A bigger open would round all four; a CLOSE is the wrong tool
+       entirely (it rounds CONCAVE corners, and these are convex — all it actually did was
+       fill the doorway in from the bottom and turn the arch into a blob once the radius
+       passed half the doorway's width).
+       So: open the whole shape at the bigger radius, then keep that result ONLY inside a
+       small box around each inner corner. An open only ever removes pixels, so this carves
+       those two corners and cannot touch anything else. */
+    const roundInnerFeet = (m, r) => {
+      if (!(r > 0)) return m;
+      let yb = -1;
+      for (let y = N - 1; y >= 0 && yb < 0; y--) for (let x = 0; x < N; x++) if (m[y*N+x]) { yb = y; break; }
+      if (yb < 0) return m;
+      // A few rows up from the very bottom, where the feet's own rounding has not yet
+      // narrowed the legs — that is where the doorway's true edges are.
+      const probe = Math.max(0, yb - Math.round(r * 0.6));
+      const runs = []; let inRun = false;
+      for (let x = 0; x < N; x++) {
+        const on = !!m[probe*N+x];
+        if (on && !inRun) { runs.push({ a: x, b: x }); inRun = true; }
+        else if (on) runs[runs.length-1].b = x;
+        else inRun = false;
+      }
+      if (runs.length !== 2) return m;                       // not the two-legged shape — leave it
+      const gapL = runs[0].b, gapR = runs[1].a;
+      /* Cap the radius against the LEG's own width, not the doorway's. Past roughly the leg
+         width the open eats the leg itself and the carve-box lets the damage through — the
+         foot squares off and the arch reads as chopped. Derived rather than hardcoded so the
+         knob stays safe if the artwork is ever redrawn at a different weight. */
+      const legW = runs[0].b - runs[0].a;
+      const rr = Math.min(r, Math.round(legW * 0.6));
+      const big = dilate(erode(m, rr), rr);
+      const out = new Uint8Array(m);
+      const pad = Math.round(rr * 1.25);
+      for (let y = yb - pad; y <= yb; y++) {
+        if (y < 0) continue;
+        for (let x = gapL - pad; x <= gapL; x++) if (x >= 0) out[y*N+x] = big[y*N+x];
+        for (let x = gapR; x <= gapR + pad; x++) if (x < N) out[y*N+x] = big[y*N+x];
+      }
+      return out;
+    };
     const bbox = (m) => { let x0=N,y0=N,x1=-1,y1=-1;
       for (let y=0;y<N;y++) for (let x2=0;x2<N;x2++) if (m[y*N+x2]) { if(x2<x0)x0=x2; if(x2>x1)x1=x2; if(y<y0)y0=y; if(y>y1)y1=y; }
       return { x0, y0, x1, y1, w: x1-x0+1, h: y1-y0+1 }; };
@@ -132,7 +197,8 @@ const BELL = () => {
       const want = TARGET_R * 2, s = want / Math.max(bb.w, bb.h);
       const c = ctx(); c.imageSmoothingQuality = 'high';
       c.drawImage(await load(homeSrc), -bb.x0*s + (N-bb.w*s)/2, -bb.y0*s + (N-bb.h*s)/2, N*s, N*s);
-      const solid = roundCorners(bits(c), foot);   // take the point off the feet
+      // Feet first (all four convex corners), then extra rounding on the doorway's two only.
+      const solid = roundInnerFeet(roundCorners(bits(c), foot), doorway);
       const stroke = weight;   // erosion by k leaves a k-thick edge — the weight IS k
       const inner = erode(solid, stroke);
       const outline = new Uint8Array(N*N);
@@ -158,7 +224,7 @@ const BELL = () => {
       out.notifs = { off: toPng(outline), on: toPng(filled), stroke };
     }
     return out;
-  }, { N, TARGET_R, weight: WEIGHT, foot: FOOT,
+  }, { N, TARGET_R, weight: WEIGHT, foot: FOOT, doorway: DOORWAY,
        refs: Object.fromEntries(Object.entries(REF).map(([k,v]) => [k, b64(v, 'image/jpeg')])),
        homeSrc: b64('narch.png', 'image/png'), bell: BELL() });
 

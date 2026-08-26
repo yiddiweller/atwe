@@ -193,14 +193,33 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
    stroke follows their exact shape, doorway included. **Notifications is a bell with
    NO ring around it** — deliberate, at the founder's request: its own form is what
    is rounded. The bell has **no hanger ball on top and no wide flared rim** (owner request):
-   a half-round dome, two sides that lean out only slightly (`SPLAY`, shipped at 18 — a
-   perfectly vertical 0 read as too rigid, "a drop less straight"), and a flat bottom with a
-   small corner radius, plus the clapper. The clapper renders SOLID rather than outlined and that is
+   a half-round dome, two sides that lean out slightly (`LEAN`, shipped at 11°), a base with
+   generously rounded corners (`CORNER`, 44), and the clapper. **The lean is built
+   TANGENTIALLY and that is the whole point:** the first version drew a full semicircle and
+   started the slant from its end point, but a semicircle's edge arrives VERTICAL, so the
+   slant began with a visible kink — the founder called it "the twist". The dome now stops
+   short on each side, exactly where its own tangent already equals the lean, so curve flows
+   into line with no corner. **LARGE-ARC IS 0 and getting that wrong is not subtle:** the
+   tangent points sit ABOVE the circle's centre, so the arc over the top is SHORTER than a
+   semicircle (180° − 2·LEAN); asking for the large arc makes SVG pick a different circle
+   through the same two points and the side develops a bulge worse than the kink it replaced.
+   Every point is derived from LEAN — nothing is hand-placed — and the bottom fillet's tangent
+   length is `CORNER/tan(45°+LEAN/2)`, not simply CORNER, because that corner is no longer a
+   right angle once the side leans. The clapper renders SOLID rather than outlined and that is
    inherent, not a bug — the outline is derived by eroding by `WEIGHT`, and a shape barely
    thicker than `WEIGHT` has nothing left to hollow out. The Home arch's **feet are rounded**
-   by `roundCorners()` (an OPEN then a CLOSE, so both the outer corner and the inner one where
-   each foot meets the doorway round off), driven by `FOOT`, shipped at **34** — the ceiling:
-   at 42 the CLOSE fills the doorway's bottom and the two legs fuse into one arch.
+   by `roundCorners()` — an OPEN at `FOOT` (34), which rounds every CONVEX corner: both outer
+   feet and both inner corners where each leg meets the doorway. **The doorway's two inside
+   corners are then rounded FURTHER** by `roundInnerFeet()` at `DOORWAY` (60), because the
+   founder wanted those rounder while the feet stayed put. That needs a LOCAL treatment, and
+   the obvious tools are both wrong: a bigger OPEN rounds all four, and a CLOSE is not the
+   opposite of an open here — those inner corners are convex, so a close does nothing to them
+   and merely fills the doorway in from the bottom until the arch becomes a blob. Instead
+   `roundInnerFeet` opens the whole shape at the larger radius and keeps that result ONLY
+   inside a small box at each inner corner; an open can only remove pixels, so it carves those
+   two corners and cannot touch anything else. Its radius is capped against the LEG's width
+   (0.6×), not the doorway's — past roughly the leg width the open eats the leg itself and the
+   carve-box lets the damage through.
    Regenerate with `node build.js` and re-embed; never hand-redraw.
    **One `WEIGHT` drives every outline** (`WEIGHT=40 node build.js`, the shipped value —
    40/364 = 11% of the icon's footprint; it shipped at 48 (13.2%) and the founder found that
@@ -213,8 +232,10 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
    number moves the whole set and nothing reads lighter than the thing beside it. A trap
    that shipped once: erosion by k leaves a k-thick edge, so the weight IS k — deriving
    Home with `erode(shape, 34/2)` made its outline half the weight of the rings next to
-   it and it looked visibly thin. Sizes live in `--nv-size` (bar) and `--nv-size-side`
-   (sidebar), both well above the 24/17 they first shipped at.
+   it and it looked visibly thin. Sizes live in `--nv-size` (bar, **36px**) and
+   `--nv-size-side` (sidebar, **32px**), declared on `:root` rather than surviving only as
+   fallbacks inside the two width/height rules. The bar's tab is 50px tall — that is the
+   ceiling. They first shipped at 24/17.
    An earlier pass DID hand-redraw them as SVG and it was rejected — close in idea,
    wrong in every detail.
    **Two traps live here.** (1) When an icon IS an inline `<svg>`, put `fill="none"`
