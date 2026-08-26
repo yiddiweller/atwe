@@ -1631,6 +1631,11 @@ body.reduce-motion .me-slide,body.reduce-motion .me-slide-back{animation:none;}
 .me-search input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);
   font-size:15px;font-family:inherit;}
 .me-search input::placeholder{color:var(--t3);}
+/* type="search" earns the iOS "Search" return key, but WebKit then paints its OWN
+   clear button inside the field — next to the custom one below, that is TWO x's side
+   by side (measured, not assumed). Suppress the native decoration; ours stays. */
+.me-search input::-webkit-search-cancel-button,
+.me-search input::-webkit-search-decoration{-webkit-appearance:none;appearance:none;display:none;}
 .me-search-x{display:flex;align-items:center;justify-content:center;width:20px;height:20px;flex-shrink:0;
   border:none;border-radius:50%;background:var(--s4);cursor:pointer;
   transition:transform var(--t-fast) var(--ease);}
@@ -20329,7 +20334,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1720'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1721'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;

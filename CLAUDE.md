@@ -928,6 +928,19 @@ below).
 > (`acAskAiEmpty`) — it is the tenth bar in `scratchpad/searchsweep.js`. Search lives on
 > the hub only, as it does in iOS Settings. Covered by `scratchpad/mesearch.js`.
 >
+> **`type="search"` ships a SECOND clear button and it really renders.** The input keeps
+> `type="search"` for the iOS "Search" return key, but WebKit/Blink then paint their own
+> `::-webkit-search-cancel-button` inside the field — right beside the custom
+> `.me-search-x` — so the bar showed **two x's side by side**. Suppressed with a scoped
+> `-webkit-appearance:none;display:none` on `::-webkit-search-cancel-button` +
+> `::-webkit-search-decoration`. The other `type="search"` fields in the app
+> (`acInChatSearchInput`, `acCircleSearch`, `acBmkSearch`) ship no custom clear button
+> and deliberately keep the native one — only add the suppression where a custom x
+> exists. **`getComputedStyle(el, '::-webkit-search-cancel-button')` LIES in Chromium**
+> — it reports `display:block` whether or not the rule applies — so `mesearchx.js`
+> counts INK in a screenshot of the bar's right-hand end instead: one blob = one button.
+> It reports two blobs in both themes with the rule removed.
+>
 > **The bottom of the page must clear the FLOATING nav pill, not just the safe area.**
 > `#acMeBody`'s padding-bottom was `76px + safe-area`, and measured on a 390×844 phone
 > that left **Log out ending 5px above the bar with nothing below it to scroll into** —
