@@ -171,7 +171,13 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
    arrow and none is needed — the sidebar is the nav there and never goes away. The back
    arrow + lockup are wrapped in `.tb-brand-lead` so `.tb-brandrow` still has exactly two
    flex children (`justify-content:space-between` would otherwise shove the lockup to the
-   middle). Covered by `scratchpad/aipage.js`.
+   middle). Covered by `scratchpad/aipage.js`, including the one case that could strand
+   someone — the app reloading while on the AI page, where `boot()` restores it as the
+   last tab and there is no remembered world: the arrow is still there and falls back to
+   Home. **A probe that leaves the AI page by clicking the bottom bar will now hang** (the
+   bar is hidden there); it must use `#tbAiBack`. `scratchpad/acctbug.js` did exactly that
+   and reported SIX failures for one changed behaviour, because being stranded on `/ai`
+   made every later case fail too.
    **Nav icons are OUTLINE when inactive and SOLID when active.** Each tab ships
    both states as `--nv-<tab>-off` / `--nv-<tab>-on` — PNG **masks** painted in
    `currentColor` (`.bn-ico`/`.sb-ico` wrap `.nv-off` + `.nv-on`, CSS picks one), so
