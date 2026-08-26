@@ -860,19 +860,33 @@ below).
 > design blueprint lists icon discs among blue's allowed identity uses; `.danger`
 > rows, e.g. Log out, use a red-tint disc instead). The `color` param on `item(lbl,
 > ic, onclick, color, danger)` is accepted for back-compat but no longer applied.
-> Category labels, all gutter-aligned. **The hub is the blueprint's "everything
-> yours" home — ~35 personal surfaces migrated out of Engine, grouped:** an account
-> group (Edit profile · Upgrade/Manage plan · Get verified), then **Money** (Wallet ·
-> Send money · Money requests · Invoices · Quotes · Split a bill · Money pools ·
-> Scheduled payments · Payment links · Gift cards · Atwe Card · Rewards · Invite
-> friends · Get a handle · Help & refunds), **Selling & business** (Business dashboard ·
-> My listings · Manage store [biz] · Sales & analytics · Business analytics [biz] ·
-> Advertise · Ads Manager · Affiliate program · Team · Affiliation), **Work & network**
-> (My network · Post a job · Jobs I posted · My applications · Saved jobs · Job alerts ·
-> Saved candidates · Resumes · Open to work), **Library** (Collections · Orders · Cart ·
-> Bookings · Saved items · Subscriptions · My courses · Newsletters · Showcase ·
-> Addresses), **Planning** (Calendar · Appointments · Events), **Tools** (Do it for me ·
-> QR code), and **App** (Settings · Notifications · Devices · Help · Admin · Log out).
+> **The hub is TWO LEVELS, shaped like iPhone Settings** (`ME_SECTIONS`). It used to be
+> one flat list of **98 rows** and the founder's team called it out — "scroll and scroll
+> and scroll" — fairly: no phone screen holds 98 rows, and the groups had drifted into
+> junk drawers (camera filters next to Devices and Log out; a shop till next to ad
+> campaigns). Now the top level is **11 section rows** — Profile · Money · Selling ·
+> Customers · Marketing · Jobs & hiring · Orders & saved · Planning · Creating · Atwe AI ·
+> App & help — under the unchanged hero, status and wallet card, with **Log out** on the
+> hub itself (`ME_HUB_FOOT`), the way Settings keeps Sign Out at the bottom of the account
+> page. `acMeSection(id)` renders one section into the same `#acMeBody` with a back arrow
+> and a big title (`.me-sechead`), reusing the SAME `.me-row`/`.me-ic`/`.me-chev` — only
+> the nesting is new, so nothing about the look shifted. Each section carries a one-line
+> `sub`: a bare list of nouns ("Selling", "Customers") does not tell you which one holds
+> what you want, and the subtitle is what makes the top level scannable rather than a
+> guessing game. Page height went from ~5000px to 1144px.
+>
+> Three things are load-bearing. (1) **`ME_SECTIONS` is also the app-wide search index**
+> (`acAppIndex`), so every row stays findable from any search bar with `Account · <section>`
+> as its subtitle — that is what makes it safe to nest them three taps deep at all. Add a
+> row and it lands in the hub AND in search in one edit. (2) A section whose every row is
+> gated off for this account (a personal account has no storefront) is **dropped whole**
+> from the top level, or it would advertise a page that opens empty. (3) `appGoBack()`
+> handles a section BEFORE its recorded-screen-history step — the Account page is one
+> screen as far as that stack is concerned, so Back would otherwise walk straight out of
+> the page instead of returning to the section list. Re-tapping the Account tab pops back
+> to the top, as tapping a tab twice does on iPhone. Covered by `scratchpad/mehub.js`,
+> which asserts all **98** destinations are still reachable (it runs the completeness pass
+> as a business ADMIN — the only account that can see every row).
 > `_ME_IC` carries the glyph set; biz-only rows are gated by `acIsBiz(u)`. Same
 > full-width,
 > page-bg-coloured hairline treatment as `.iset-row` (see the Settings UI section
@@ -4757,7 +4771,7 @@ match something real survive, so a hallucinated place renders nothing at all.
 `acAiRenderOpen()` then draws grey "Open …" pills (secondary — the one white primary
 per screen isn't spent here) whose click runs `acRunPlace()`, i.e. the index's own
 opener string — the same one the search rows use as an inline onclick, never anything
-the model or a member typed. Adding a destination to `ME_HUB`/`PLACES_EXTRA` teaches
+the model or a member typed. Adding a destination to `ME_SECTIONS`/`PLACES_EXTRA` teaches
 the search bar AND the assistant in the same line.
 
 ## Atwe AI Copilot
@@ -5369,12 +5383,13 @@ is findable the day it ships and the two can never drift:
 | source | what it contributes |
 |---|---|
 | **`PLACES_EXTRA`** | the five worlds, the public browse surfaces, and the common *actions* people type ("write a post", "go live", "new chat") |
-| **`ME_HUB`** | every row of the Profile hub — ~98 destinations |
+| **`ME_SECTIONS`** | every row of the Profile hub — 98 destinations across 11 sections |
 | **`SET_SEARCH_INDEX`** | every setting, down to individual rows |
 
-**`ME_HUB` is the Profile hub's own source of truth** — `acGoProfileHub()` renders
-from it (`meLabel(it)` resolves a label that is a function, e.g. Upgrade-vs-Manage
-plan, which must NOT be evaluated at file-load time). Every entry carries a `kw`
+**`ME_SECTIONS` is the Profile hub's own source of truth** — `acGoProfileHub()` renders
+the section list from it and `acMeSection(id)` renders one section's rows (`meLabel(it)`
+resolves a label that is a function, e.g. Upgrade-vs-Manage plan, which must NOT be
+evaluated at file-load time). `ME_HUB_FOOT` holds the rows that stay on the hub itself. Every entry carries a `kw`
 string of synonyms, which is what makes "cv" find Resumes, "basket" find Cart,
 "incognito" find Private profile views and "dark mode" find Appearance.
 
@@ -5392,7 +5407,7 @@ scope only (`#acPlaces`, `.ac-place` rows). They are held on the device, so
 block (`acRenderPlaces`), leaving server results underneath in place, so the list
 you are reading does not blink on every keystroke. Best 5, then "Show N more".
 
-**Adding a destination:** put it in `ME_HUB` (if it belongs in the Profile hub) or
+**Adding a destination:** put it in the right section of `ME_SECTIONS` (if it belongs in the Profile hub) or
 `PLACES_EXTRA`, with a `kw` string of the words a non-technical person would
 actually type. `test/`-style coverage lives in the scratchpad probes; the index
 test asserts every entry's opener is a real function — a search result that does
