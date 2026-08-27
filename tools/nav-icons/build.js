@@ -29,6 +29,14 @@ const FOOT = Number(process.env.FOOT || 34);
    radius it cannot eat the doorway. `DOORWAY=60 node build.js`. */
 const DOORWAY = Number(process.env.DOORWAY || 60);
 const REF = { chat: 'ref-beam.jpg', search: 'ref-engine.jpg', profile: 'ref-account.jpg' };
+/* Shrink an icon's INNER MARK about the centre, leaving the ring exactly where it is.
+   Only Beam's three dots are touched, and only a little: the founder asked for them
+   "literally a drop smaller, almost invisible". Rendered at 1.00/0.95/0.92/0.88 —
+   0.88 is plainly smaller, 0.95 is the edge of perceptible, 0.94 is the drop.
+   Scaled about the centre rather than eroded, so the dots AND their spacing shrink
+   together and the drawing keeps its proportions; eroding would thin each dot but
+   leave the group as wide, which reads as three thin dots rather than a smaller mark. */
+const GLYPH_SCALE = { chat: Number(process.env.DOTS || 0.94) };
 const b64 = (f, mime) => `data:${mime};base64,` + fs.readFileSync(D + f).toString('base64');
 
 /* THE BELL. No ring around it and no hanger ball on top, and the sides lean OUT a little
@@ -111,7 +119,7 @@ const BELL = () => {
   const br = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
   const p = await br.newPage();
   await p.goto('data:text/html,<body></body>');
-  const res = await p.evaluate(async ({ N, TARGET_R, weight, foot, doorway, bellInner, refs, homeSrc, bell }) => {
+  const res = await p.evaluate(async ({ N, TARGET_R, weight, foot, doorway, bellInner, glyphScale, refs, homeSrc, bell }) => {
     const load = (src) => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; });
     const ctx = () => { const c = document.createElement('canvas'); c.width = c.height = N; return c.getContext('2d', { willReadFrequently: true }); };
     const bits = (x) => { const d = x.getImageData(0, 0, N, N).data; const o = new Uint8Array(N * N);
@@ -235,13 +243,19 @@ const BELL = () => {
       c.drawImage(await load(src), off, off, dw, dw);
       const m = bits(c);
       const cx = N/2, drawnInner = TARGET_R - (ix - ox) * scale;
+      const gs = glyphScale[key] || 1;
       /* Rebuild the ring at the shared WEIGHT and keep THEIR glyph exactly as drawn,
          so one number controls the whole set's weight without touching their shapes. */
       const innerR = TARGET_R - weight;
       const glyph = new Uint8Array(N*N), solid = new Uint8Array(N*N), outline = new Uint8Array(N*N);
       for (let y=0;y<N;y++) for (let x2=0;x2<N;x2++) {
         const r = Math.hypot(x2+0.5-cx, y+0.5-cx); const i = y*N+x2;
-        glyph[i]   = (m[i] && r < drawnInner - 1) ? 1 : 0;           // their inner mark
+        // Read their mark at the SCALED position: gs < 1 shrinks it about the centre and
+        // leaves the ring untouched, since the ring is drawn from r, not from m.
+        const sx = Math.round(cx + (x2+0.5-cx)/gs - 0.5), sy = Math.round(cx + (y+0.5-cx)/gs - 0.5);
+        const inb = sx >= 0 && sy >= 0 && sx < N && sy < N;
+        const sr = inb ? Math.hypot(sx+0.5-cx, sy+0.5-cx) : Infinity;
+        glyph[i]   = (inb && m[sy*N+sx] && sr < drawnInner - 1) ? 1 : 0;   // their inner mark
         outline[i] = ((r <= TARGET_R && r >= innerR) || glyph[i]) ? 1 : 0;
         solid[i]   = (r <= TARGET_R && !glyph[i]) ? 1 : 0;
       }
@@ -284,6 +298,7 @@ const BELL = () => {
     }
     return out;
   }, { N, TARGET_R, weight: WEIGHT, foot: FOOT, doorway: DOORWAY, bellInner: BELL_INNER,
+       glyphScale: GLYPH_SCALE,
        refs: Object.fromEntries(Object.entries(REF).map(([k,v]) => [k, b64(v, 'image/jpeg')])),
        homeSrc: b64('narch.png', 'image/png'), bell: BELL() });
 
