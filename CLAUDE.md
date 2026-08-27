@@ -5972,6 +5972,47 @@ Covered by `scratchpad/postcard.js` (both themes: concentric corners, the card a
 44pt targets, all three contrast steps, counts, header untouched) and `scratchpad/cardsweep.js`
 (home, profile, bookmarks, hashtag, search). Reverting the design fails 8 of them.
 
+### One radius, everywhere the shapes meet
+
+When you scroll, the nav bar and the top bar's round buttons ride OVER the post cards, so
+their corners are compared side by side. They were three near-misses — card **26**, the
++ button **28**, nav bar **30** — and the founder called it out on zoomed screenshots.
+There is one system now, and the two numbers in it are related rather than chosen:
+
+| | radius |
+|---|---|
+| nav bar (a 60px pill), post card, the floating + (grown 56 → 60) | **30** |
+| top-bar **+** / **⋯** / profile (36px circles), post avatar (40 → 36), action pills, post photo | **18** |
+
+**30 = 18 + 12** — the card's own padding. So the small radius and the big one are the
+same rule that already keeps the inside of a card concentric with it (`--post-inner-r`),
+not two decisions. Change `--post-card-r` or `--post-pad` and everything follows.
+
+Two consequences worth knowing, both deliberate: the **action pills grew 28 → 36** tall
+(a capsule's radius is half its height, so 18 is what makes their corner agree with the
+photo's), and the **feed avatar shrank 40 → 36** so its radius is 18 too — it sits in the
+card's top-left corner inset by the padding, which is exactly the case rule 4 covers.
+
+`scratchpad/radii.js` compares **effective** radii, not declared ones: a capsule declares
+`999px` and renders at half its height, a circle declares `50%`. Comparing the declared
+values would call a pill and a card different when they curve identically. It fails 6
+checks with the old numbers restored.
+
+**Every count is compacted.** Only views used `acCompact`; replies, reposts and likes
+rendered raw, so a post with 123,456 likes wrote the whole number into a pill — measured
+on a 320px phone it did not fit. All four now compact (123K, 9.9M), which is both what
+every feed does and what keeps the row inside the card on the narrowest device.
+`scratchpad/pillfit.js` checks it there, with seven-digit counts. **It must compare the
+NUMBER's box with the pill's, not `scrollWidth`**: each pill carries a `::before` that
+deliberately reaches 3px past it on each side for the 44pt target, so `scrollWidth`
+exceeds `clientWidth` on every pill — including the empty bookmark, which cannot clip
+anything. The first version of that check reported all five as clipped on correct layout.
+
+**NB the post card is no longer `--set-card-r`.** Settings-shaped cards (the Settings
+pages, the Account hub) stay at **26** — they live inside an overlay and never sit beside
+the nav bar. The post card is **30** because it does. If those two ever need to converge
+again, 30 is the value that carries a reason with it.
+
 ### No line between the Dailies and the feed
 
 The story tray used to draw its own `border-bottom` (`.ac-home-stories`, and
