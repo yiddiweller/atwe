@@ -333,24 +333,58 @@ html,body{
 body.light .splash-mark{background-color:#d2d2d8;animation:splashPulseLight 2s ease-in-out infinite, splashSpin 2.4s cubic-bezier(.7,0,.3,1) infinite;}
 @keyframes splashPulseLight{0%,100%{background-color:#c8c8d0;opacity:.85;scale:.94;}50%{background-color:#1c1c20;opacity:1;scale:1.06;}}
 
-/* Welcome-back splash on login: the Atwe mark fades in soft + see-through,
-   then the member's own photo fades through it, then we reveal the app. */
-#welcomeSplash{position:fixed;inset:0;z-index:9998;background:var(--bg);
-  display:none;align-items:center;justify-content:center;opacity:1;transition:opacity var(--t-slow) var(--ease);}
+/* Welcome-back splash on login. The Atwe mark ROLLS in see-through — one full turn on
+   the boot splash's own fast-then-slow curve, so arriving at your account has the same
+   rhythm as opening the app — then dims away as the member's own photo zooms up THROUGH
+   it at FULL colour and holds. Three deliberate choices, all the owner's:
+     · the mark stays see-through, the photo does not. The photo used to top out at
+       opacity .32 and read as washed out — it is the person, so it lands solid.
+     · the mark gets darker as it advances rather than simply cutting: 0 -> .28 -> 0.
+     · the photo keeps growing slightly through the hold, so the moment moves forward
+       instead of freezing before the app appears.
+   `rotate` and `scale` are the STANDALONE properties, not `transform`, so the roll and
+   the zoom compose without either overwriting the other and both run on the compositor. */
+/* --wb-out is the exit, deliberately its OWN number rather than --t-slow: this is a
+   one-off cinematic moment, not a UI transition, and 350ms clears the screen faster than
+   the eye wants after a 2.3s build-up. It must stay under the 560ms the JS waits before
+   tearing the stage down. */
+#welcomeSplash{--wb-out:480ms;
+  position:fixed;inset:0;z-index:9998;background:var(--bg);
+  display:none;align-items:center;justify-content:center;opacity:1;
+  transition:opacity var(--wb-out) cubic-bezier(.4,0,.6,1);}
 #welcomeSplash.show{display:flex;}
 #welcomeSplash.hide{opacity:0;pointer-events:none;}
-.wb-stage{position:relative;width:140px;height:140px;display:flex;align-items:center;justify-content:center;}
-.wb-logo{position:absolute;width:72px;height:72px;background:var(--t1);opacity:0;
-  -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
-.wb-logo.in{animation:wbLogoIn 1.55s var(--ease) forwards;}
-@keyframes wbLogoIn{0%{opacity:0;transform:scale(.9);}26%{opacity:.26;transform:scale(1);}
-  64%{opacity:.26;transform:scale(1);}100%{opacity:0;transform:scale(1.05);}}
-.wb-ava{position:absolute;width:118px;height:118px;border-radius:50%;object-fit:cover;opacity:0;
-  border:1px solid var(--bg-2);}
-.wb-ava.in{animation:wbAvaIn 1.5s var(--ease) forwards;}
-@keyframes wbAvaIn{0%{opacity:0;transform:scale(.92);}30%{opacity:.32;transform:scale(1);}
-  72%{opacity:.32;transform:scale(1);}100%{opacity:.32;transform:scale(1.02);}}
-@media(prefers-reduced-motion:reduce){.wb-logo.in,.wb-ava.in{animation-duration:.6s;}}
+/* The whole stage eases forward as the splash clears, so it reads as moving INTO the
+   app rather than the app being switched on behind a curtain. */
+#welcomeSplash .wb-stage{transition:scale var(--wb-out) cubic-bezier(.4,0,.6,1);}
+#welcomeSplash.hide .wb-stage{scale:1.07;}
+.wb-stage{position:relative;width:150px;height:150px;display:flex;align-items:center;justify-content:center;}
+.wb-logo{position:absolute;width:76px;height:76px;background:var(--t1);opacity:0;
+  -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;
+  will-change:opacity,scale,rotate;}
+/* Same curve as the boot splash's own spin — winds up fast, eases to a near-stop. */
+.wb-logo.in{animation:wbLogoIn 1.5s cubic-bezier(.7,0,.3,1) forwards;}
+@keyframes wbLogoIn{
+  0%{opacity:0;scale:.84;rotate:0deg;}
+  20%{opacity:.28;}
+  56%{opacity:.28;scale:1;}
+  100%{opacity:0;scale:1.1;rotate:360deg;}}
+.wb-ava{position:absolute;width:124px;height:124px;border-radius:50%;object-fit:cover;opacity:0;
+  border:1px solid var(--bg-2);will-change:opacity,scale;}
+.wb-ava.in{animation:wbAvaIn 1.25s cubic-bezier(.22,1,.36,1) forwards;}
+@keyframes wbAvaIn{
+  0%{opacity:0;scale:.7;}
+  60%{opacity:1;scale:1;}
+  100%{opacity:1;scale:1.05;}}
+/* Reduced motion: no roll and no zoom at all — just a short fade to the same end state,
+   which is the whole point of the setting. Shortening the duration alone (what this used
+   to do) still spun the mark through a full turn. */
+@media(prefers-reduced-motion:reduce){
+  .wb-logo.in{animation:wbLogoInCalm .7s linear forwards;}
+  .wb-ava.in{animation:wbAvaInCalm .5s linear forwards;}
+  #welcomeSplash.hide .wb-stage{scale:1;}
+  @keyframes wbLogoInCalm{0%{opacity:0;}30%{opacity:.28;}100%{opacity:0;}}
+  @keyframes wbAvaInCalm{from{opacity:0;}to{opacity:1;}}}
 
 /* ── Clean full-screen auth (login landing) ── */
 /* Higher specificity than .overlay (defined later) so the auth screens lay out
@@ -4107,7 +4141,12 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
   padding:13px 22px;
   font-size:13.5px;font-weight:600;color:#fff;text-align:center;
   box-shadow:0 10px 30px rgba(0,0,0,.45),inset 0 0.5px 0 rgba(255,255,255,.08);
-  animation:notifIn .28s cubic-bezier(.22,1,.36,1);
+  /* It TRAVELS in from above rather than appearing in place (owner: "fade in from the
+     top, smooth but fast"). 14px over .28s was too small a move to read as a slide — at
+     that distance the eye only registers the opacity and it looks like a pop. 26px over
+     .34s reads as the banner coming down from off-screen, and the ease-out curve puts
+     almost all of that distance in the first half so it still feels quick. */
+  animation:notifIn .34s cubic-bezier(.2,.9,.25,1);
   transition:top var(--t-base) var(--ease);
   /* WIDTH:MAX-CONTENT is the load-bearing part. The box is anchored at left:50% with no
      right edge, so its available width is only the half-viewport to the right of that
@@ -4118,8 +4157,11 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
   width:max-content;
   max-width:min(560px,calc(100vw - 28px));
 }
-.notif.notif-multi{border-radius:20px;text-align:start;line-height:1.4;}
-@keyframes notifIn{from{opacity:0;transform:translateX(-50%) translateY(-14px);}to{opacity:1;transform:translateX(-50%);}}
+/* A wrapped message keeps the text CENTRED (owner) — left-aligning it made the banner
+   read as a paragraph pinned to one side rather than one centred notice. The corner goes
+   to the app's own card radius so it matches every other rounded surface. */
+.notif.notif-multi{border-radius:var(--set-card-r);text-align:center;line-height:1.45;}
+@keyframes notifIn{from{opacity:0;transform:translateX(-50%) translateY(-26px);}to{opacity:1;transform:translateX(-50%);}}
 
 /* ─────────────────────────────────────────────
    SIDEBAR TOGGLE (mobile)
@@ -9754,7 +9796,14 @@ body.light .upd-banner{background:rgba(28,28,30,.98);}
    floating nav, with a blue text "Undo" action; auto-dismisses. */
 .undo-toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 84px);transform:translateX(-50%) translateY(12px);
   z-index:100000;background:rgba(40,40,44,.98);color:#fff;font-size:13px;font-weight:600;letter-spacing:.01em;
-  padding:9px 6px 9px 16px;border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.45);
+  /* 9px on the RIGHT, not 6 — the gap beside the blue pill has to equal the gap above and
+     below it (owner). Not merely symmetry: with both shapes fully round, concentric means
+     outer radius = inner radius + gap. The button is 29px tall (radius 14.5) inside a 47px
+     toast (radius 23.5), and the difference is exactly 9. Any other number and the blue
+     pill stops sitting evenly inside the grey one. NB the near-identical block above is
+     `.upd-banner`, a DIFFERENT component whose trailing control is a borderless text
+     button — it has no inner pill to be concentric with, so it keeps its own spacing. */
+  padding:9px 9px 9px 16px;border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.45);
   display:inline-flex;align-items:center;gap:8px;white-space:nowrap;opacity:0;pointer-events:none;
   transition:opacity var(--t-base) var(--ease),transform var(--t-base) var(--ease);max-width:calc(100vw - 28px);}
 .undo-toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto;}
@@ -20421,7 +20470,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1733'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1734'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -22007,8 +22056,13 @@ function playWelcomeSplash(user) {
   ov.classList.add('show');
   void ov.offsetWidth;            // restart cleanly
   logo.classList.add('in');
-  if (hasAva) { ava.src = user.avatar; setTimeout(() => ava.classList.add('in'), 1000); }
-  const hold = hasAva ? 2500 : 1550;
+  /* The photo starts WHILE the mark is still turning and has begun to dim (the mark's
+     own fade-out runs from 56% of 1.5s = 840ms), so the two cross over instead of one
+     ending and the next starting. It used to begin at 1000ms, after the hand-off was
+     already over, which is what made it read as two separate beats. */
+  if (hasAva) { ava.src = user.avatar; setTimeout(() => ava.classList.add('in'), 820); }
+  /* 820 + 1250 = 2070ms for the photo to finish, then a short beat at full colour. */
+  const hold = hasAva ? 2350 : 1500;
   setTimeout(() => {
     ov.classList.add('hide');
     setTimeout(() => { ov.classList.remove('show', 'hide'); ava.removeAttribute('src'); }, 560);
@@ -62110,6 +62164,12 @@ let _toastStack = [];
 function _restackToasts() {
   const GAP = 10;
   let offset = 0;
+  /* Drop anything no longer in the document FIRST. A detached node measures 0 high but
+     still contributes its GAP, so every stale entry pushes the live toasts 10px further
+     down for the rest of the session. Only the dismiss timer removes a toast today, so
+     this has never bitten in the app — it turned up because a test cleared the toasts
+     itself, and the stack kept them. Cheap to make impossible. */
+  _toastStack = _toastStack.filter((el) => el.isConnected);
   _toastStack.forEach((el) => {
     el.style.top = `calc(env(safe-area-inset-top,0px) + 54px + ${offset}px)`;
     offset += el.offsetHeight + GAP;
@@ -62133,9 +62193,10 @@ function showNotif(msg) {
   _toastStack.push(el);
   _restackToasts();
   setTimeout(() => {
+    // Leaves the way it arrived — back up off the top, same distance.
     el.style.transition = 'opacity .3s var(--ease), transform .3s var(--ease)';
     el.style.opacity = '0';
-    el.style.transform = 'translateX(-50%) translateY(-14px)';
+    el.style.transform = 'translateX(-50%) translateY(-26px)';
     setTimeout(() => {
       el.remove();
       _toastStack = _toastStack.filter((x) => x !== el);
