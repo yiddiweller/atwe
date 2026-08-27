@@ -903,14 +903,26 @@ below).
 > rows go through `item()` → `escHtml`, whereas a section's `title` is interpolated raw
 > in two places. Get it backwards and the entity renders as text ("App &amp; help").
 >
-> **`--card-r` (26px) is the radius for every settings-shaped card**, on the Account page
-> AND the Settings page — the two are meant to read as one system, so change it once.
+> **`--set-card-r` (26px) is the radius for every settings-shaped card**, on the Account
+> page AND the Settings page — the two are meant to read as one system, so change it once.
 > A card holding a **single row is a full capsule** instead
 > (`:not(:has(> :nth-child(2))){border-radius:999px}`), the way a lone row looks in
 > iPhone Settings; 26 is a 52px row's own capsule radius, which is what makes the big
 > cards concentric with the small ones. NB a short box (the search field, 42px) **clamps**
 > a 26px radius to about half its height and renders as a capsule — so a probe must
 > assert the SHAPE, not the literal token value.
+>
+> **The token is `--set-card-r`, not `--card-r`, and that is a scar.** `--card-r` was
+> already declared on `:root` further down the file (18px, for the meta-card family
+> beside `--card-hair`/`--card-fill`). Naming the new one `--card-r` made the later
+> declaration silently win: every card rendered at **18px while the line declaring it
+> said 26**, for a whole build, and only `meacct.js`'s radius assertion caught it.
+> **A custom property collides exactly the way a duplicate class does** — grep before
+> naming one. `python3 tools/find-duplicate-vars.py` now reports any variable declared
+> twice on the same selector with different values. It strips comments FIRST: a comment
+> sitting between `}` and the next selector otherwise becomes part of that selector's
+> text, so the two `:root` blocks stop matching — the first version of the tool missed
+> this very bug for that reason and reported a clean sweep.
 >
 > **A text field must never draw a focus ring, and `:focus-visible` will not save you.**
 > The app's own law (in the focus block near `input:focus{outline:none}`) is *"text
@@ -6207,7 +6219,9 @@ today.
   ALWAYS `grep -n` for every definition of a class before editing one, and prefer
   fixing the winning copy. `python3 tools/find-duplicate-css.py` lists them (it
   separates `@media` blocks, so a deliberate responsive override is never reported
-  as a clash).
+  as a clash). **`python3 tools/find-duplicate-vars.py` does the same for CSS custom
+  properties** — a `--var` declared twice on one selector with different values, which
+  bit `--card-r` for real in build 1726.
 
 - There is **no lint**, and only a **small opt-in money/auth test suite**
   (`npm test`, skips without a database) — for anything it doesn't cover, verify
