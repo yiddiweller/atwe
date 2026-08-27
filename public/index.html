@@ -202,6 +202,13 @@ a{text-decoration:none;color:inherit;}
   --post-card: #1C1C1E;
   --post-pill: #4B4B4B;
   --post-pill-ink: #C7C7CC;
+  /* A loading placeholder sitting ON the card. The shared `.skel` grey is --s2, which is
+     LIGHTER than the black page but DARKER than the card — so inside a post card the
+     placeholder bars read as holes punched out of it, and because they cover most of the
+     card while it loads, the whole loading state looked like a different, muddier grey
+     than a real post. That is what the owner saw. A placeholder has to be a step ABOVE
+     whatever it lies on. */
+  --post-skel: #2E2E31;
 
   /* Status — functional signals only, never theme decoration */
   --green: #88FF00; --green-edge: #A6FF4D; --green-tint: #F1FFDC; --on-green: #163300; --green-ink: var(--on-green);
@@ -4455,6 +4462,8 @@ body.light{
      reads as a heavy blot. Same three steps, mirrored — page, card, control — with
      the ink dark enough to clear 4.5:1 on the pill. */
   --post-card:#E3E6EB;--post-pill:#C3CBD4;--post-pill-ink:#3A3A3F;
+  /* On a light card a placeholder reads better a step DARKER, not lighter. */
+  --post-skel:#CBD2DA;
   --verify:#5b7083;   /* light theme: slate silver — the seal is never blue */
   --rose:#007AFF;--rose-bg:rgba(0,122,255,.1);--rose-bg-2:rgba(0,122,255,.18);--rose-line:rgba(0,122,255,.4);
   --violet:#007AFF;--violet-bg:rgba(0,122,255,.12);--violet-line:rgba(0,122,255,.38);
@@ -11106,6 +11115,10 @@ body.light .ac-place:hover{background:rgba(0,0,0,.04);}
   font-family:inherit;font-size:14px;font-weight:600;color:var(--accent);text-align:start;}
 /* Skeleton loaders (replace bare loading text) */
 .skel{position:relative;overflow:hidden;background:var(--s2);border-radius:8px;}
+/* Inside a post card the placeholder needs its own grey — see --post-skel. Everywhere
+   else (the chat list, the profile, notifications) a skeleton lies on the PAGE, where
+   --s2 is already the step up and is correct. */
+.ac-post .skel,.ac-postfocus .skel{background:var(--post-skel);}
 .skel::after{content:'';position:absolute;inset:0;transform:translateX(-100%);
   background:linear-gradient(90deg,transparent,rgba(255,255,255,.05),transparent);animation:shimmer 1.25s infinite;}
 @keyframes shimmer{100%{transform:translateX(100%);}}
@@ -20567,7 +20580,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1736'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1737'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
