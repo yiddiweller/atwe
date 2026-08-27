@@ -195,11 +195,20 @@ a{text-decoration:none;color:inherit;}
   --post-card-r: 26px;                                        /* = --set-card-r */
   --post-inner-r: calc(var(--post-card-r) - var(--post-pad)); /* 14px */
   --post-gap: 12px;
-  /* The card is the design system's own "Dark grey". The pill is a NEW step: a
-     control sitting ON a dark-grey card needs to be lighter than the card, and
-     nothing in the ladder was. --post-pill-ink comes with it because --t3 measures
-     only 2.2:1 on that grey — the same trap the muted-group badge fell into. */
-  --post-card: #1C1C1E;
+  /* THE CARD IS --s2 — the same surface every other card in the app is made of (Who to
+     follow, Settings rows, Account cards, sheets: 384 usages). It shipped as the design
+     law's named "Dark grey" #1C1C1E, which is what the team's mockup measured, and the
+     founder called it out on a real screenshot: the post card was rgb(28,28,29) with the
+     Who-to-follow card rgb(20,20,21) directly beneath it — two greys side by side. They
+     chose consistency with the app over the mockup's value.
+     There is deliberately NO --post-card token: the card rule says `var(--s2)` at the
+     point of use. An alias declared here would resolve against THIS block's --s2 and
+     inherit that value down, so Light kept the dark grey — --s2 is redefined in four
+     different scopes (body.light, the two auth overlays, .sf-look-warm) and only a
+     use-site reference re-resolves in each of them.
+     The pill is still a NEW step: a control sitting ON a card has to be lighter than the
+     card, and nothing in the ladder was. --post-pill-ink comes with it because --t3
+     measures only 2.2:1 on that grey — the trap the muted-group badge fell into. */
   --post-pill: #4B4B4B;
   --post-pill-ink: #C7C7CC;
   /* A loading placeholder sitting ON the card. The shared `.skel` grey is --s2, which is
@@ -4457,11 +4466,11 @@ body.light{
   --accent-tint:#FFFFFF;   /* Apple's own light-mode blue buttons use white text */
   --primary:#111114;--on-primary:#FFFFFF;   /* Light-theme primary: near-black fill, white label */
   --t1:#1D1D1F;--t2:#65656A;--t3:#6E6E73;--t4:#aab8c2;
-  /* The post card in Light. The mockup is Black-only, and neither of its greys
-     survives the flip: #1C1C1E would be a black slab on white, and a #4B4B4B pill
-     reads as a heavy blot. Same three steps, mirrored — page, card, control — with
-     the ink dark enough to clear 4.5:1 on the pill. */
-  --post-card:#E3E6EB;--post-pill:#C3CBD4;--post-pill-ink:#3A3A3F;
+  /* The post card in Light is --s2 too (inherited from :root, so not repeated here).
+     The pill and its ink still need their own values: the mockup is Black-only and
+     neither of its greys survives the flip — #1C1C1E would be a black slab on white and
+     a #4B4B4B pill reads as a heavy blot. */
+  --post-pill:#C3CBD4;--post-pill-ink:#3A3A3F;
   /* On a light card a placeholder reads better a step DARKER, not lighter. */
   --post-skel:#CBD2DA;
   --verify:#5b7083;   /* light theme: slate silver — the seal is never blue */
@@ -5973,7 +5982,7 @@ body.reduce-motion .ac-newposts{animation:none;}
   padding:var(--post-pad) calc(var(--post-edge) + var(--post-pad)) calc(var(--post-pad) + var(--post-gap));
   border-bottom:none;}
 .ac-post::before,.ac-postfocus::before{content:"";position:absolute;inset:0 var(--post-edge) var(--post-gap);
-  background:var(--post-card);border-radius:var(--post-card-r);
+  background:var(--s2);border-radius:var(--post-card-r);
   transition:background var(--t-fast) var(--ease);pointer-events:none;}
 .ac-postfocus > *{position:relative;z-index:1;}
 /* .ac-list pads itself by 8, so the card needs 10 more to reach the same 18. */
@@ -20580,7 +20589,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1737'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1738'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -39034,7 +39043,25 @@ const _POSTSHOT_ICONS = {
   like: 'M12 21.3l-1.45-1.32C5.4 15.3 2 12.2 2 8.4 2 5.4 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.4 22 8.4c0 3.8-3.4 6.9-8.55 11.59L12 21.3Z',
   bookmark: 'M17 2.6H7A2.4 2.4 0 0 0 4.6 5v15.6a1 1 0 0 0 1.57.82L12 17.3l5.83 4.12A1 1 0 0 0 19.4 20.6V5A2.4 2.4 0 0 0 17 2.6Z'
 };
-function _psVar(v, fb) { const c = getComputedStyle(document.body).getPropertyValue(v).trim(); return c || fb; }
+/* RESOLVES the variable, rather than returning whatever text is written after the colon.
+   getPropertyValue on a custom property hands back the SPECIFIED value — so a token
+   defined as `var(--s2)` comes back as the literal string "var(--s2)", which canvas
+   cannot parse: fillStyle silently keeps its previous value and the shape paints the
+   wrong colour with no error. Painting it onto a throwaway element and reading back the
+   used colour is what makes a token-of-a-token work here. */
+function _psVar(v, fb) {
+  const raw = getComputedStyle(document.body).getPropertyValue(v).trim();
+  if (!raw) return fb;
+  if (!/var\(/.test(raw)) return raw;
+  try {
+    const d = document.createElement('div');
+    d.style.cssText = 'position:absolute;left:-9999px;color:' + raw;
+    document.body.appendChild(d);
+    const out = getComputedStyle(d).color;
+    d.remove();
+    return out || fb;
+  } catch (e) { return fb; }
+}
 function _psImg(src) { return new Promise(res => { if (!src) { res(null); return; } const im = new Image(); if (!/^data:/.test(src)) im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = () => res(null); im.src = src; }); }
 function _psRR(ctx, x, y, w, h, r) { r = Math.min(r, w / 2, h / 2); ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 function _psWrap(ctx, text, maxW) { const out = []; for (const para of String(text || '').split('\n')) { if (!para) { out.push(''); continue; } let line = ''; for (const w of para.split(' ')) { const t = line ? line + ' ' + w : w; if (ctx.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t; } out.push(line); } return out; }
@@ -39098,7 +39125,7 @@ async function _renderPostshot(p) {
   const bg = _psVar('--bg', light ? '#fff' : '#000'), t1 = _psVar('--t1', light ? '#1d1d1f' : '#ffffff'),
     t3 = _psVar('--t3', '#6e6e73'), accent = _psVar('--accent', '#0088FF'), rose = _psVar('--rose', '#0088FF'),
     verify = _psVar('--verify', light ? '#6E6E73' : '#d3d5d7'),
-    cardBg = _psVar('--post-card', light ? '#E3E6EB' : '#1C1C1E'),
+    cardBg = _psVar('--s2', light ? '#F5F5F7' : '#141416'),
     pillBg = _psVar('--post-pill', light ? '#C3CBD4' : '#4B4B4B'),
     pillInk = _psVar('--post-pill-ink', light ? '#3A3A3F' : '#C7C7CC');
   const a = p.author || {};
