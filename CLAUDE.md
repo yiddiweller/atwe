@@ -6013,6 +6013,38 @@ pages, the Account hub) stay at **26** — they live inside an overlay and never
 the nav bar. The post card is **30** because it does. If those two ever need to converge
 again, 30 is the value that carries a reason with it.
 
+**Everything in the feed obeys the same three-shape vocabulary**, and `scratchpad/adcard.js`
+enforces it as an invariant rather than as a list of classes: every rounded element inside
+`#acFeed` must be a **card at 30**, an **inner shape at 18**, or a **full capsule/circle**
+(radius = half its own short side). Nothing else is allowed, so a new component cannot
+quietly arrive with a fourth number. Six things were outside it when the owner photographed
+a sponsored ad sitting next to a post:
+
+| | was | now |
+|---|---|---|
+| the sponsored ad card | 18, photo flush to its edge | shares `.ac-post`'s rules outright |
+| the who-to-follow card | 16 | `--post-card-r` |
+| the in-feed announcement bar | 16 | `--post-card-r` |
+| the post header's ⋯ | a 6px square | a circle, like every other round icon button |
+| the ad's "AD" chip | 6 | `--r-pill`, as `.bundle-tag` already was |
+| the advertiser's own photo preview | an inline 14px | `--post-inner-r`, so it previews what ships |
+
+**The ad card is not a copy of the post card — it IS one.** `.ac-adcard` was added to the
+`.ac-post,.ac-postfocus` selectors (the base rule, the `::before`, the `> *` z-index lift,
+the `.ac-list` and `#acFeed` gutters, the hover), leaving only `border:none;cursor:pointer`
+of its own. That is what makes its photo land on exactly the same width, x-position and
+corner as a post's photo, and it removes the possibility of the two drifting again.
+
+**It also fixed a bug nobody had reported.** As a plain `background:var(--s2)`, the ad card
+was black-filled by `body.feed-cover #acFeed > *` — the rule that paints every direct child
+of the feed opaque so the rising column covers the tab menu — which is *more specific* than
+`.ac-adcard`. So in a **mobile browser tab** a sponsored ad had no card at all, just text on
+black. It looked fine on the founder's phone because `feed-cover` is off in the **installed**
+app (`_bc` takes the `brand-collapse` path in standalone display-mode instead), which is
+exactly the sort of thing that makes a bug survive: the person most likely to notice it is
+the one person who can't see it. The `::before` card is immune, for the same reason the post
+card was moved to one.
+
 ### No line between the Dailies and the feed
 
 The story tray used to draw its own `border-bottom` (`.ac-home-stories`, and
