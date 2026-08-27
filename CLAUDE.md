@@ -5924,6 +5924,20 @@ theirs, and the hashtag page measured a 38px gutter that way. Zero means each su
 gutter it already had; only `#acFeed` (no padding of its own → 18px) and `.ac-list` (8px → 10 more)
 name a value. Add a surface and it is right by default.
 
+**A loading placeholder needs its OWN grey (`--post-skel`).** The shared `.skel` fill is
+`--s2` — lighter than the black page, which is right everywhere a skeleton lies on the
+page, but DARKER than the post card. Inside a card the placeholder bars therefore read as
+holes punched out of it, and because they cover most of the card while it loads, the whole
+loading state looked like a different, muddier grey than a real post. That is what the
+founder reported as "the post gray is not the same gray we use" — the two cards were in
+fact already identical (`rgb(28,28,29)` in both of their screenshots); it was the
+placeholders on top making one of them *look* different. A placeholder has to be a step
+ABOVE whatever it lies on: `#2E2E31` on Black, and a step DARKER (`#CBD2DA`) on Light,
+where darker is what reads as a placeholder. `scratchpad/skelgrey.js` takes the card
+colour from its computed `::before` and the placeholder from a REAL pixel — sampling the
+card by guessing a coordinate landed on the page instead, so the check was
+placeholder-vs-black and passed with the old inverted grey still in place.
+
 **Colours are three steps, and Light needed its own.** `--post-card` / `--post-pill` /
 `--post-pill-ink`. The card is the design system's own Dark grey (`#1C1C1E`), sampled straight out
 of the team's mockup. The pill (`#4B4B4B`) is a NEW step — a control sitting ON a dark-grey card
