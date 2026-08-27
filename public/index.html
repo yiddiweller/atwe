@@ -273,9 +273,13 @@ a{text-decoration:none;color:inherit;}
   /* One shared left/right gutter for the home feed column + the floating nav, so
      every row's start line and the nav edges sit on the same vertical line. */
   --feed-gutter: 16px;
-  /* The floating bottom-nav pill is inset MORE than the content gutter (matching
-     the native iOS app): posts peek out ~17px on both sides of the pill. */
-  --nav-inset: var(--feed-gutter);
+  /* The floating bottom-nav pill is inset MORE than the content gutter (matching the
+     native iOS app): the cards peek out on both sides of the pill. Deliberately an
+     ABSOLUTE number, not `gutter + n` — widening the content must not drag the bar out
+     with it, which is exactly what made them line up and read as "touching". At the
+     shipped 14px gutter the bar sits 9px inside the cards on each side. It also sets the
+     bar's gap from the BOTTOM (evenly-inset pill), so the bar rides a little higher. */
+  --nav-inset: 23px;
   /* Nav icons embedded as data URIs (NOT external files): iOS Safari evicts
      images + SW caches under memory pressure, so mask icons loaded from
      /nav-*.png could vanish for seconds on resume until re-fetched. Inline
@@ -2747,8 +2751,11 @@ body.light .tb-feedtab.active{color:var(--t1);}
   body.light .topbar.tb-home .tb-feedtab.active{color:var(--t1);}
   /* Keep the home tab row to exactly ≡ + the four tabs (no extra buttons). */
   .topbar.tb-home .tb-ai-btn{display:none;}
-  /* A touch more inset on mobile so content sits a little further into the screen. */
-  :root{--feed-gutter:18px;}
+  /* Was 18 — widened by 4 on each side (owner) so the cards reach further out and the
+     narrower nav bar reads as sitting inside them. Everything content-side follows this
+     one number: the post + ad cards, the Account page cards, the story tray, the feed
+     tab row and its hairline, the top bar's + / ⋯ / photo, and the compose +. */
+  :root{--feed-gutter:14px;}
   /* Solid, opaque home bar with a clean grey hairline under the tabs — content
      scrolls up and disappears CLEANLY beneath it (no blur/darken fade), X-style.
      The hairline is INSET to the same gutter as the posts + nav below it. */
@@ -3889,7 +3896,7 @@ body.light .settings-date{color-scheme:light;}
    (owner). Same keyframes, same duration, restarted from setNav. Kept in this one rule
    rather than a second `.iset-search{}` block further down: a class declared twice is how
    this file's worst silent bugs start. */
-.iset-search{display:flex;align-items:center;gap:9px;width:100%;padding:12px 15px;
+.iset-search{display:flex;align-items:center;gap:9px;padding:12px 15px;
   margin:0 2px 12px;background:var(--s2);border:none;border-radius:var(--set-card-r);
   animation:isetSlide .36s cubic-bezier(.32,.72,0,1);will-change:transform,opacity;
   backface-visibility:hidden;}
@@ -11793,7 +11800,7 @@ body.nav-ball #navBackdrop{opacity:0;}
   /* FAB right edge aligns with the nav's right edge (same --nav-inset); it rides
      just above the nav at the same bottom offset + the nav's height. The scroll
      choreography (JS) slides it down together with the nav via a transform. */
-  .ac-fab{bottom:calc(max(var(--nav-inset), env(safe-area-inset-bottom, 0px) - 11px) + 68px);right:var(--nav-inset);}
+  .ac-fab{bottom:calc(max(var(--nav-inset), env(safe-area-inset-bottom, 0px) - 11px) + 68px);right:var(--feed-gutter);}
   /* The post-detail list has its own reply bar (nav hidden) — no nav clearance */
   #acPostView{padding-bottom:12px;}
 }
@@ -20611,7 +20618,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1743'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1744'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;

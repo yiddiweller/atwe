@@ -6008,13 +6008,28 @@ deliberately reaches 3px past it on each side for the 44pt target, so `scrollWid
 exceeds `clientWidth` on every pill — including the empty bookmark, which cannot clip
 anything. The first version of that check reported all five as clipped on correct layout.
 
-**Matching CURVES is only half of it — the shapes must start on the same line.** The nav
-bar was `--nav-inset: calc(var(--feed-gutter) + 5px)`, so a post card riding under it stuck
-out 5px on each side; measured on the founder's own screenshot, cards and the top-bar icons
-sat at 18 and the bar at 24. That is what "almost perfect, but not perfect" was. `--nav-inset`
-is now `var(--feed-gutter)` and the compose **+** references the gutter too instead of
-repeating `18px`. NB `--nav-inset` also sets the bar's gap from the BOTTOM (the evenly-inset
-pill) and feeds `#acMeBody`'s bottom clearance, so both moved with it — intentionally.
+**The bar and the content deliberately do NOT share a start line — and that took two goes.**
+Build 1742 read the owner's "match perfectly the navigation bar" literally and set
+`--nav-inset: var(--feed-gutter)`, so the bar and the cards began at the same 18px. Shown
+that, the owner said the opposite of what it looked like on paper: *"the navigation bar ends
+and starts the same place where the post is… I don't want that."* The bar is meant to sit
+visibly INSIDE the content. So the gap was opened from both sides at once (owner-confirmed
+before building): the content gutter went **18 → 14** and `--nav-inset` became an **absolute
+23px**, leaving the bar **9px inside the cards at each end**.
+
+`--nav-inset` is deliberately NOT `gutter + n` any more: derived from the gutter, widening the
+content drags the bar out with it, which is exactly how the two ended up on one line. It also
+sets the bar's gap from the BOTTOM (the evenly-inset pill) and feeds `#acMeBody`'s bottom
+clearance, so the bar rides a little higher too — intentional, and how it sat before 1742.
+
+**Everything content-side is one number.** `--feed-gutter` drives the post + ad cards, the
+Account page cards (`#acMeBody`), the story tray, the feed tab row and its hairline, the top
+bar's **+ / ⋯ / photo**, and the compose **+**. The owner was asked explicitly and chose that
+the top-bar icons and the FAB follow the CARDS rather than the bar, so the whole content
+column shares one line and the bar is the only thing set apart. NB the mobile `.ac-fab` rule
+had `right:var(--nav-inset)` — it would have pinned the FAB to the bar; it reads the gutter now.
+`scratchpad/radii.js` asserts the bar is inset MORE than the cards **by the same amount at
+both ends**, and that it still turns on the very same corner while doing it.
 
 **A profile picture only hugs a rounded corner when its centre IS the corner's centre.**
 `.ac-post-top` centres its children and the name+handle column is taller than the 36px
@@ -6051,6 +6066,13 @@ that deliberately top-aligns is skipped by reading its own `align-items`** — `
 three-line one looks wrong; the rule is "if you centre, actually centre", not "centre
 everything". Post detail was already correct and stays correct: its picture (48) is taller than
 its text, so it was never the one drifting.
+
+**A block-level flex box with `width:100%` PLUS side margins overflows by exactly those
+margins.** `.iset-search` (the Settings search bar) had both, so inside a symmetric panel it
+sat **14 from the left and 10 from the right** — the same trap the composer cards hit. Dropping
+the `width` lets it fill the panel and respect both margins. Measure a bar like this against
+its PARENT, not the window: a scrollbar can fake the same 4px, and ruling that out is what
+proved this one real.
 
 **NB the post card is no longer `--set-card-r`.** Settings-shaped cards (the Settings
 pages, the Account hub) stay at **26** — they live inside an overlay and never sit beside
