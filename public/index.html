@@ -182,6 +182,27 @@ a{text-decoration:none;color:inherit;}
   --t4: #48484A;
   --text-black: #1D1D1F;   /* text on a light or yellow surface only */
 
+  /* ── The feed post card ──────────────────────────────────────────
+     ONE number drives every corner. --post-inner-r is DERIVED, never typed: a
+     shape sitting inside the card, inset by the card's own padding, is concentric
+     with the card's corner exactly when its radius is the card's radius minus that
+     padding. Deriving it means the photo and the action pills can never drift out
+     of step with the card the way hand-picked numbers do. The pill's height is
+     twice the inner radius for the same reason — a capsule's radius IS half its
+     height, so this is the only height at which its corner matches the photo's.
+     Change --post-pad or --post-card-r and everything follows. */
+  --post-pad: 12px;
+  --post-card-r: 26px;                                        /* = --set-card-r */
+  --post-inner-r: calc(var(--post-card-r) - var(--post-pad)); /* 14px */
+  --post-gap: 12px;
+  /* The card is the design system's own "Dark grey". The pill is a NEW step: a
+     control sitting ON a dark-grey card needs to be lighter than the card, and
+     nothing in the ladder was. --post-pill-ink comes with it because --t3 measures
+     only 2.2:1 on that grey — the same trap the muted-group badge fell into. */
+  --post-card: #1C1C1E;
+  --post-pill: #4B4B4B;
+  --post-pill-ink: #C7C7CC;
+
   /* Status — functional signals only, never theme decoration */
   --green: #88FF00; --green-edge: #A6FF4D; --green-tint: #F1FFDC; --on-green: #163300; --green-ink: var(--on-green);
   --red:   #FF0033; --red-edge: #FF3355;   --red-tint: #FFE0E6;
@@ -4429,6 +4450,11 @@ body.light{
   --accent-tint:#FFFFFF;   /* Apple's own light-mode blue buttons use white text */
   --primary:#111114;--on-primary:#FFFFFF;   /* Light-theme primary: near-black fill, white label */
   --t1:#1D1D1F;--t2:#65656A;--t3:#6E6E73;--t4:#aab8c2;
+  /* The post card in Light. The mockup is Black-only, and neither of its greys
+     survives the flip: #1C1C1E would be a black slab on white, and a #4B4B4B pill
+     reads as a heavy blot. Same three steps, mirrored — page, card, control — with
+     the ink dark enough to clear 4.5:1 on the pill. */
+  --post-card:#E3E6EB;--post-pill:#C3CBD4;--post-pill-ink:#3A3A3F;
   --verify:#5b7083;   /* light theme: slate silver — the seal is never blue */
   --rose:#007AFF;--rose-bg:rgba(0,122,255,.1);--rose-bg-2:rgba(0,122,255,.18);--rose-line:rgba(0,122,255,.4);
   --violet:#007AFF;--violet-bg:rgba(0,122,255,.12);--violet-line:rgba(0,122,255,.38);
@@ -5913,28 +5939,63 @@ body.reduce-motion .ac-newposts{animation:none;}
    full width; padding keeps the avatar at the same 24px inset. */
 /* Header row on top (avatar + name); content full-width below — starting under the
    avatar, FB/LinkedIn-style. A narrow photo is indented under the name (see media). */
-.ac-post{--post-indent:57px;display:block;margin:0 -8px;padding:16px;border-bottom:1px solid var(--b2);transition:background var(--t-fast) var(--ease);}
-body.light .ac-post{border-bottom-color:rgba(0,0,0,.07);}
+/* A post is a CARD, not a row between hairlines. The feed carries polls, product
+   tags, price cards, quote posts, article teasers, locked posts and ads — a divider
+   is weak containment for that much variety, and every other surface in Atwe
+   (listings, jobs, settings) is already a card, so the feed was the odd one out. */
+/* THE CARD IS A PSEUDO-ELEMENT, NOT THE ELEMENT'S OWN BACKGROUND, and that is
+   load-bearing. On phones the feed rides UP over the tab menu as you scroll, and
+   `body.feed-cover #acFeed > *` paints every row with the page colour so the rising
+   content covers the menu instead of letting it show through. A card is inset by the
+   gutter with a transparent gap between posts — so as a plain background it would have
+   let the menu show through the gutters permanently and flash through every gap. Worse,
+   that cover rule is (1,1,1) specific and silently BEAT the card's own background: the
+   geometry was perfect and the fill simply never painted. So the row stays full-bleed
+   and opaque for the cover, and the card is drawn inside it.
+   The gap between posts is PADDING, not margin, for the same reason — a margin is
+   transparent and the menu would strobe through it. */
+/* --post-edge is how far the card is inset from the ROW's own edge, and it DEFAULTS TO
+   ZERO on purpose. This card renders on 22 surfaces and most of them (the hashtag page,
+   the cashtag page, search, circles…) already pad themselves, so an inset of our own
+   would stack on top of theirs — the hashtag page measured a 38px gutter that way. Zero
+   means each surface inherits the gutter it already had; only the two containers that
+   provide none, or too little, name a value. Add a surface and it is right by default. */
+.ac-post{--post-indent:57px;--post-edge:0px;display:block;position:relative;margin:0;
+  padding:var(--post-pad) calc(var(--post-edge) + var(--post-pad)) calc(var(--post-pad) + var(--post-gap));
+  border-bottom:none;}
+.ac-post::before{content:"";position:absolute;inset:0 var(--post-edge) var(--post-gap);
+  background:var(--post-card);border-radius:var(--post-card-r);
+  transition:background var(--t-fast) var(--ease);pointer-events:none;}
+/* .ac-list pads itself by 8, so the card needs 10 more to reach the same 18. */
+.ac-list .ac-post{--post-edge:10px;}
+/* The content has to sit ABOVE the card it is drawn on. */
+.ac-post > *{position:relative;z-index:1;}
 /* Home feed: one consistent left gutter for every row (avatar, body, actions,
    inline who-to-follow), full-width hairline dividers, and a slightly smaller, more
    inset card — so the whole column shares one start line with the floating nav. */
 #acFeed{padding-inline-start:0;padding-inline-end:0;overflow-anchor:none;}
 /* The hairline divider between posts is INSET to the same gutter the content (and
    the floating nav) use, so it starts/ends exactly where the posts do. */
-#acFeed .ac-post{--post-indent:52px;margin:0;padding:12px var(--feed-gutter);border-bottom:none;position:relative;contain:layout;}
+/* In the feed the card is inset to the SAME 18px gutter the tab row, the hairline
+   and the floating nav already use, so the whole column shares one start line. */
+/* Full-bleed row (so the cover works edge to edge); the CARD inside it is inset to the
+   same 18px gutter the tab row and the floating nav already use. */
+#acFeed .ac-post{--post-indent:52px;--post-edge:var(--feed-gutter);margin:0;position:relative;contain:layout;}
 /* NB: content-visibility:auto was tried here and REMOVED — some iOS 18.x WebKit
    builds have real crash bugs with c-v in scrolling containers, and after the
    media-by-URL fix its memory benefit is redundant. Don't re-add without testing
    on a physical iPhone. */
-/* 0.5px hairline between posts (blueprint), inset to the content gutter. */
-#acFeed .ac-post::after{content:"";position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:0.5px;background:var(--b2);}
-body.light #acFeed .ac-post::after{background:rgba(0,0,0,.08);}
+/* No hairline between posts any more — the card's own fill is the separation, and a
+   line as well as a gap would be belt and braces. (Kept as a note rather than a
+   deleted mystery: this used to be a 0.5px rule inset to the gutter.) */
 /* The ⋯ menu's dots end flush with the inset divider's right edge (the gutter). */
 #acFeed .ac-post-more{padding-inline-end:0;margin-inline-end:-2px;}
 #acFeed .ac-post .user-avatar{width:40px;height:40px;font-size:15px;}
 #acFeed .ac-sg-row{padding-inline-start:var(--feed-gutter);padding-inline-end:var(--feed-gutter);}
 #acFeed .ac-empty{padding-inline-start:var(--feed-gutter);padding-inline-end:var(--feed-gutter);}
-@media(hover:hover){.ac-post:hover{background:rgba(255,255,255,.025);}}
+/* Hover lifts the CARD, not the row — the row is the opaque backdrop and tinting it
+   would light up the gutters too. */
+@media(hover:hover){.ac-post:hover::before{filter:brightness(1.35);}}
 .ac-post-top{display:flex;align-items:center;gap:11px;}
 .ac-post-av{flex:0 0 auto;cursor:pointer;}
 .ac-post .user-avatar{width:46px;height:46px;font-size:17px;flex-shrink:0;cursor:pointer;}
@@ -5956,13 +6017,13 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.08);}
    ratio by acFitPostImg the moment its true size is known. */
 /* 1px hairline on every photo/video (see --img-edge). box-sizing is border-box
    app-wide, so this costs no layout — the outer size is unchanged. */
-.ac-post-img{display:block;margin-top:10px;max-width:100%;max-height:560px;object-fit:cover;border-radius:16px;border:1px solid var(--img-edge);cursor:pointer;
+.ac-post-img{display:block;margin-top:10px;max-width:100%;max-height:560px;object-fit:cover;border-radius:var(--post-inner-r);border:1px solid var(--img-edge);cursor:pointer;
   width:100%;aspect-ratio:16 / 10;background:var(--s2);}
 /* Once loaded we know the real shape, so honour it instead of the placeholder. */
 .ac-post-img.ac-img-sized{aspect-ratio:auto;}
 .ac-post-img.ac-img-wide{width:100%;height:auto;}
 /* X-style multi-image mosaic — 2/3/4 photos in one rounded, centred box. */
-.ac-imggrid{display:grid;gap:2px;margin-top:10px;width:100%;aspect-ratio:16/10;border-radius:16px;overflow:hidden;border:1px solid var(--img-edge);background:var(--s2);}
+.ac-imggrid{display:grid;gap:2px;margin-top:10px;width:100%;aspect-ratio:16/10;border-radius:var(--post-inner-r);overflow:hidden;border:1px solid var(--img-edge);background:var(--s2);}
 .ac-imggrid img{width:100%;height:100%;min-width:0;min-height:0;object-fit:cover;display:block;cursor:pointer;}
 .ac-imggrid.n2{grid-template-columns:1fr 1fr;grid-template-rows:1fr;}
 .ac-imggrid.n3,.ac-imggrid.n4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;}
@@ -5971,7 +6032,7 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.08);}
 .ac-post-vid{width:100%;max-height:600px;object-fit:contain;background:#000;cursor:default;}
 /* Video duration chip (blueprint §Home). */
 .ac-vid-wrap{position:relative;display:block;margin-top:10px;}
-.ac-vid-wrap .ac-post-vid{margin-top:0;display:block;border-radius:16px;border:1px solid var(--img-edge);}
+.ac-vid-wrap .ac-post-vid{margin-top:0;display:block;border-radius:var(--post-inner-r);border:1px solid var(--img-edge);}
 /* No backdrop-filter here: one blurred chip PER VIDEO POST in the scrolling feed
    multiplied into many composited layers on iOS (crash pressure); a slightly more
    opaque solid fill is visually identical over video. */
@@ -6346,12 +6407,29 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
 /* Engagement row (blueprint §Home): five OUTLINE icons at 18px spread full-width
    (space-between), compact counts, 44px invisible touch targets. Active states
    FILL — like = blue, repost = blue, bookmark = blue (via the token rules below). */
-.ac-post-actions{display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:4px;}
-.ac-post-actions svg{width:18px;height:18px;}
-.ac-post-actions .ax-btn img{width:18px;height:18px;}
-/* 44px invisible hit area on every action (padding out, margin back so layout is unchanged). */
-.ac-post .ac-post-actions>*{padding:13px 8px;margin:-13px -8px;}
+.ac-post-actions{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:6px;}
+.ac-post-actions svg{width:17px;height:17px;}
+.ac-post-actions .ax-btn img{width:17px;height:17px;}
+/* Each action is a pill sitting ON the card. Its height is twice the card's derived
+   inner radius, which is the only height at which a capsule's corner matches the
+   photo's above it — so the two rounded things inside the card agree. */
+.ac-post .ac-post-actions>*{
+  height:calc(var(--post-inner-r) * 2);
+  padding:0 11px;margin:0;flex:0 1 auto;min-width:0;
+  display:inline-flex;align-items:center;justify-content:center;gap:5px;
+  background:var(--post-pill);border-radius:999px;color:var(--post-pill-ink);
+  position:relative;
+}
+/* The pill is 28pt tall because that is what the corner arithmetic demands; the
+   TARGET is 44pt, the touch minimum, carried by an invisible overlay. Sizing the
+   visible pill to 44 instead would have made the row a wall of grey. The 3px of
+   horizontal reach closes the gap between neighbours without overlapping them. */
+.ac-post .ac-post-actions>*::before{content:"";position:absolute;left:-3px;right:-3px;top:-8px;bottom:-8px;}
+.ac-post .ac-post-actions>* .ac-act-n{color:inherit;}
+.ac-post .ac-post-actions>* svg{stroke:currentColor;}
 .ac-post .ac-post-actions>.ac-views{cursor:default;}
+@media(hover:hover){.ac-post .ac-post-actions>*:hover{filter:brightness(1.22);}}
+.ac-post .ac-post-actions>*:active{transform:scale(.94);}
 @keyframes acLikePop{0%{transform:scale(1);}38%{transform:scale(1.34);}68%{transform:scale(.92);}100%{transform:scale(1);}}
 .ac-like.pop svg{animation:acLikePop .42s cubic-bezier(.2,.8,.25,1);}
 /* Postshot preview — a rendered PNG of a post to save/share */
@@ -20470,7 +20548,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1734'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1735'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
