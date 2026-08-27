@@ -123,8 +123,13 @@ a{text-decoration:none;color:inherit;}
      page, which the founder asked to look like one system. A card holding a SINGLE row
      is a full capsule instead, and a 52px row's capsule radius is 26, so 26 here makes
      the big cards concentric with it — the "matching corners" rule, and what iPhone
-     Settings does. Change it here and both surfaces move together. */
-  --card-r: 26px;
+     Settings does. Change it here and both surfaces move together.
+
+     NOT `--card-r`: that name is ALREADY declared on :root further down (18px, for the
+     meta-card family alongside --card-hair/--card-fill), and being later it silently
+     won — every card here rendered at 18 while this line said 26. A custom property
+     collides exactly the way a duplicate class does. Grep before naming one. */
+  --set-card-r: 26px;
   --divider: #3A3A3C;
 
   /* Accent — the ONE blue, everywhere it's used: primary buttons, links,
@@ -1578,7 +1583,7 @@ body.light #aiMenuPop,body.light #chatMenuPop,body.light #notifMenuPop,body.ligh
 .me-wallet{display:block;width:100%;text-align:start;border:none;cursor:pointer;color:#fff;
   /* 12px below, not 6: every other gap down this page is 12, and 6 left the search
      bar visibly tighter to the wallet than to the cards under it. */
-  margin:0 0 12px;padding:15px 18px 14px;border-radius:var(--card-r);
+  margin:0 0 12px;padding:15px 18px 14px;border-radius:var(--set-card-r);
   background:linear-gradient(135deg,var(--accent) 0%,#123f96 100%);
   box-shadow:0 8px 24px rgba(0,0,0,.26);-webkit-tap-highlight-color:transparent;}
 .me-wallet:active{transform:scale(.99);}
@@ -1594,7 +1599,7 @@ body.light #aiMenuPop,body.light #chatMenuPop,body.light #notifMenuPop,body.ligh
    matching `.iset-group`/`.iset-row` comment above. */
 /* Card gray matches the floating nav bar (rgba(18,18,21,.90) ≈ --s2 #141416) —
    a dark near-black, kept theme-aware so Light stays a light card. */
-.me-group{background:var(--s2);border:none;border-top:1px solid var(--bg);border-radius:var(--card-r);overflow:hidden;margin-bottom:12px;}
+.me-group{background:var(--s2);border:none;border-top:1px solid var(--bg);border-radius:var(--set-card-r);overflow:hidden;margin-bottom:12px;}
 /* A card holding ONE row is a full capsule, the way a single row is on iPhone
    Settings (owner). :has() picks the multi-row case, so this is the "no second
    child" case. The row's own 15px side padding already clears the curve at this
@@ -1647,7 +1652,7 @@ body.reduce-motion .me-slide,body.reduce-motion .me-slide-back{animation:none;}
    own block above the sections (owner). Solid fill, no outline, same 20px radius as
    the wallet + the sections card, so the stack reads as one radius system. */
 .me-search{display:flex;align-items:center;gap:9px;width:100%;padding:12px 15px;margin:0 0 12px;
-  background:var(--s2);border:none;border-radius:var(--card-r);}
+  background:var(--s2);border:none;border-radius:var(--set-card-r);}
 .me-search-ic{width:17px;height:17px;stroke:var(--t3);stroke-width:2;fill:none;flex-shrink:0;}
 .me-search input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);
   font-size:15px;font-family:inherit;}
@@ -3789,7 +3794,7 @@ body.light .settings-date{color-scheme:light;}
    system. Hub only, as in iOS Settings and on the Account page: `body.set-sub` hides
    it on a sub-page, where a "Search settings" box under "Your account" reads wrong. */
 .iset-search{display:flex;align-items:center;gap:9px;width:100%;padding:12px 15px;
-  margin:0 2px 12px;background:var(--s2);border:none;border-radius:var(--card-r);}
+  margin:0 2px 12px;background:var(--s2);border:none;border-radius:var(--set-card-r);}
 .set-sub .iset-search{display:none;}
 .iset-search-ic{width:17px;height:17px;stroke:var(--t3);stroke-width:2;fill:none;flex-shrink:0;}
 .iset-search input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);
@@ -3817,7 +3822,7 @@ body.reduce-motion .iset-body{animation:none;}
 /* Grouped card */
 /* Same radius system as the Account page's cards (--card-r), and a card holding one
    row is a full capsule — the two surfaces are meant to read as one. */
-.iset-group{background:var(--s2);border:none;border-radius:var(--card-r);overflow:hidden;
+.iset-group{background:var(--s2);border:none;border-radius:var(--set-card-r);overflow:hidden;
   margin:0 2px 22px;}
 .iset-group:not(:has(> :nth-child(2))){border-radius:999px;}
 .iset-cap{font-size:12px;color:var(--t3);margin:0 14px 8px;line-height:1.45;}
@@ -6075,7 +6080,7 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
 /* --s2 and a 20px radius, NOT --s1/16px: every other block on this page (hero,
    search bar, the row cards) is --s2, and measured pixels put this one at 11,11,13
    against their 20,20,22 — visibly darker, which read as a different material. */
-.me-status{display:flex;align-items:center;gap:10px;width:100%;padding:12px 16px;margin:0 0 12px;background:var(--s2);border:none;border-radius:var(--card-r);cursor:pointer;color:var(--t1);text-align:left;transition:transform var(--t-fast) var(--ease);}
+.me-status{display:flex;align-items:center;gap:10px;width:100%;padding:12px 16px;margin:0 0 12px;background:var(--s2);border:none;border-radius:var(--set-card-r);cursor:pointer;color:var(--t1);text-align:left;transition:transform var(--t-fast) var(--ease);}
 .me-status:active{transform:scale(.99);}
 .me-status-em{font-size:19px;line-height:1;flex-shrink:0;}
 .me-status-tx{font-size:14.5px;font-weight:600;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -6623,7 +6628,7 @@ body.reduce-motion .ac-react-bar,body.reduce-motion .ac-rb-btn{animation:none;}
    newlines and indents of the card's own markup as real blank space — the band
    of nothing above the picture and below the domain. Same trap the rich cards
    were carrying. */
-.lp-card{display:block;margin:5px 0 0;border-radius:var(--card-r);overflow:hidden;white-space:normal;
+.lp-card{display:block;margin:5px 0 0;border-radius:var(--set-card-r);overflow:hidden;white-space:normal;
   background:var(--card-fill);border:none;text-decoration:none;color:var(--t1);
   width:272px;max-width:100%;align-self:inherit;}
 .msg-row.me .lp-card{margin-inline-start:auto;}
@@ -12380,7 +12385,7 @@ body.light{--card-hair:var(--bg);--card-fill:var(--s3);}
 .msg-row.team .msg-bubble.msg-meta,
 .msg-bubble.msg-meta.meta-call,
 .msg-row.me .msg-bubble.msg-meta.meta-call{
-  background:none;padding:0;border-radius:var(--card-r);max-width:286px;
+  background:none;padding:0;border-radius:var(--set-card-r);max-width:286px;
   white-space:normal;color:var(--t1);box-shadow:none;}
 /* A call log follows the same blue/grey rule as every other message (owner
    request): one YOU placed rides in your own outgoing bubble colour, one you
@@ -12399,7 +12404,7 @@ body.light{--card-hair:var(--bg);--card-fill:var(--s3);}
 .msg-bubble.msg-meta.meta-sticker .meta-card{background:none;border:none;}
 
 .meta-card{display:block;background:var(--card-fill);border:none;
-  border-radius:var(--card-r);overflow:hidden;white-space:normal;text-align:start;
+  border-radius:var(--set-card-r);overflow:hidden;white-space:normal;text-align:start;
   -webkit-tap-highlight-color:transparent;
   transition:background var(--t-fast) var(--ease);}
 @media(hover:hover){.meta-card[onclick]:hover{background:var(--s3);}}
@@ -12435,7 +12440,7 @@ body.light{--card-hair:var(--bg);--card-fill:var(--s3);}
 .mc-invoice{display:block;padding:0;}
 
 /* ── A reply or reaction to someone's Daily ───────────────────────────────── */
-.mc-storyreply{padding:0;max-width:none;background:var(--card-fill);border-radius:var(--card-r);}
+.mc-storyreply{padding:0;max-width:none;background:var(--card-fill);border-radius:var(--set-card-r);}
 .mc-story-thumb{width:30px;height:40px;border-radius:7px;overflow:hidden;flex-shrink:0;
   display:grid;place-items:center;background:var(--s3);}
 .mc-story-thumb img{width:100%;height:100%;object-fit:cover;}
@@ -20362,7 +20367,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1726'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1727'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
