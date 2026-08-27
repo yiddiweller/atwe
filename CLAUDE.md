@@ -891,13 +891,32 @@ below).
 > page. **`ME_HUB_TAIL`** holds what belongs at the top level but is not a category —
 > **Settings** (the thing people reach for most; it used to be buried inside App & help)
 > and **Admin dashboard** (staff use it constantly). It renders as **its OWN card**
-> below the sections — **one card EACH**, so the page is four separate cards: the eleven
-> categories, Settings, Admin dashboard, Log out. Two earlier passes got this wrong and
+> below the sections — **one card EACH**, so the page is five separate cards: the ten
+> categories, Settings, App & help, Admin dashboard, Log out. **App & help is a real
+> SECTION promoted to its own card** (`solo: true` on the section + an entry in
+> `ME_HUB_TAIL` whose `run` is `acMeSection('app')`), so it still opens the section page
+> and `acAppIndex` still indexes its rows as `Account · App & help`. It carries a **Send
+> feedback** row wired to the feedback sheet that **already existed** (`acOpenFeedback`
+> → `POST /api/feedback` → the support inbox) — nothing new was built for it.
+>
+> **A tail/foot label uses a plain `&`; a section `title` uses `&amp;`.** Tail and foot
+> rows go through `item()` → `escHtml`, whereas a section's `title` is interpolated raw
+> in two places. Get it backwards and the entity renders as text ("App &amp; help").
+>
+> **`--card-r` (26px) is the radius for every settings-shaped card**, on the Account page
+> AND the Settings page — the two are meant to read as one system, so change it once.
+> A card holding a **single row is a full capsule** instead
+> (`:not(:has(> :nth-child(2))){border-radius:999px}`), the way a lone row looks in
+> iPhone Settings; 26 is a 52px row's own capsule radius, which is what makes the big
+> cards concentric with the small ones. NB a short box (the search field, 42px) **clamps**
+> a 26px radius to about half its height and renders as a capsule — so a probe must
+> assert the SHAPE, not the literal token value. Two earlier passes got this wrong and
 > the founder rejected each on sight: gluing the tail onto the BOTTOM of the sections
 > card read as a twelfth section, and stacking Settings + Admin in one shared card made
 > two unrelated destinations read as a pair. Every gap down the page is **12px** —
-> `.me-wallet` shipped with `margin-bottom:6px`, which left the search bar visibly
-> tighter to the wallet than to the cards below it (measured 6 vs 12);
+> `.me-wallet` shipped with `margin-bottom:6px` and `.me-hero` with `18px`, which left
+> the search bar tighter to the wallet, and the wallet further from the header, than the
+> cards sit from each other (measured 6 / 18 against 12);
 > `scratchpad/megap.js` walks every gap and fails if they are not equal. Both are in `acAppIndex` subtitled plain `Account` rather than
 > `Account · <section>`, since they are not in one. When adding a row here, keep the
 > App & help section's `sub` honest — it still advertised Settings after Settings moved
@@ -5719,6 +5738,38 @@ knowing before writing a similar check:
 NB the For You feed is engagement-ranked and buries a brand-new post, so that probe
 reads the **Following** scope, which serves your own posts chronologically — same home
 feed, same `acPostCard`, same CSS.
+
+### Explore opens finished, not growing (`acXpSet` / `acXpPaintCached`)
+
+Every block on the Engine empty state — Recently viewed, Recently visited, Recent
+searches, Collections, Trending — arrives from its own request and rewrote its own box
+when it landed. Measured on a 390×844 phone: the page opened **724px tall and was
+1298px 100ms later**, which is the founder's "the first second it looks one way, then
+it updates". It is **not** a double render — `acDoSearch('')` runs exactly once; it is
+five independent late arrivals.
+
+Each block now paints its **last known html synchronously** from the device before its
+request is even sent (`acXpPaintCached`, called for all five right after the container
+is written), and each loader writes through **`acXpSet(id, html)`**, which touches the
+DOM only when the html actually differs. So a returning visitor sees the finished page
+on the very first frame and nothing moves. Measured after: opens 1298 → settles 1298.
+
+Rules baked in, each for a reason:
+- The cache is keyed by the **signed-in account id** and cleared in `logout()` —
+  otherwise the next person to sign in on that phone sees the previous one's recent
+  people for a frame.
+- `acXpPaintCached` only ever fills an **empty** box, so it can never overwrite fresher
+  content.
+- A failed refresh **leaves what is on screen** rather than blanking it (the old
+  `catch { box.innerHTML = '' }` made a flaky network look like an empty account).
+- Blocks over `_XP_MAX` are not remembered, so a page of cards can't fill localStorage.
+- **Near you is deliberately NOT cached** — it depends on a live location permission
+  and a stale "near you" would be wrong.
+
+Covered by `scratchpad/engsettle.js`, which opens Engine **twice** (the first visit has
+nothing remembered and is allowed to settle once) and fails if the second visit's height
+changes at all after the first frame. With the paint-from-cache line removed it reports
+`opens 724 → settles 1298` and fails.
 
 ## Conventions
 
