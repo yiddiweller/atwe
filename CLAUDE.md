@@ -202,10 +202,16 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
    the other icons"*. The ellipse splits them: **`DOME_W` is how wide and round the top is**
    (the thing being matched to the ring icons) and **`DOME_H` is how tall the cap is** (what
    keeps the sides long and straight). Measured against a ring icon: a circular 88 gave a cap
-   running 27% of the bell's height but shoulders only 84 from centre — pinched; **112×76**
-   keeps the cap at 28%, so the sides stay straight, while the shoulders reach 110 and the
-   top reads round. Past about 128×64 it flattens into a squat shape that stops reading as a
-   bell. The bell's top is pinned (`CY = TOP + DOME_H`) so changing the cap never moves it. **The lean is built
+   running 27% of the bell's height but shoulders only 84 from centre — pinched. A
+   wide-and-shallow **112×76** fixed the width but left a visible **bend at the shoulder**,
+   which the founder marked on a screenshot. **That bend is a CURVATURE jump, not a kink**:
+   a tangent-continuous arc meeting a line still steps from the arc's curvature to zero, and
+   the tighter the arc is at the join, the more it shows. The number to watch is the
+   **curvature radius at the join** — 112×76 gives 54; the shipped **104×104 gives 104**,
+   nearly twice as gentle, and the shoulder reads smooth. So the cap is a TRUE CIRCLE again,
+   but far bigger than the 88 that read pinched, with `LEAN` at 20 keeping the sides long and
+   straight beneath it. Past about 128×64 it flattens and stops reading as a bell. The bell's
+   top is pinned (`CY = TOP + DOME_H`) so changing the cap never moves it. **The lean is built
    TANGENTIALLY and that is the whole point:** the first version drew a full semicircle and
    started the slant from its end point, but a semicircle's edge arrives VERTICAL, so the
    slant began with a visible kink — the founder called it "the twist". The cap now stops
