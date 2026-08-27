@@ -691,6 +691,21 @@ only**, as in iOS Settings and on the Account page — `setNav` puts `.set-sub` 
 is **24px/800**, matching `.me-sectitle`, so the two settings-shaped surfaces read as
 one system.
 
+**The bar slides WITH the page.** It is a sibling of the `.iset-body` panels, not part
+of one, so the push/pop animation never touched it: everything under it slid in from
+the right while the search bar sat dead still, which read as a separate thing bolted on
+top rather than part of the page. It now runs the same `isetSlide`/`isetSlideBack`
+keyframes on the same curve, restarted from `setNav` by clearing and re-setting
+`style.animation` (a class alone will not replay an animation the element already has),
+and skipped when `opts.immediate` — opening Settings should not animate — or under
+`body.reduce-motion`. `scratchpad/setslide.js` samples the bar and the panel at the same
+instants through a back-navigation: with the fix out, the panel travels 34px and the bar
+travels 0. It compares the GAP between them rather than their raw positions — the bar
+rests 2px right of the panel (its own `margin:0 2px`), and calling that a drift is how the
+first version of the check failed on correct code. Going FORWARD the bar simply
+disappears with the outgoing page, which is right: `setNav` never slides a panel out
+either, only the incoming one in.
+
 Two things fell out of removing the fixed bar, and both were workarounds for it:
 `.settings-card.iset`'s **96px bottom padding** (headroom for the pill) dropped to 28,
 and **`#settingsOverlay`'s `backdrop-filter` came back**. The blur had been switched
@@ -922,22 +937,46 @@ below).
 > junk drawers (camera filters next to Devices and Log out; a shop till next to ad
 > campaigns). Now the top level is **11 section rows** — Profile · Money · Selling ·
 > Customers · Marketing · Jobs & hiring · Orders & saved · Planning · Creating · Atwe AI ·
-> App & help — under the unchanged hero and wallet card, with **Log out** on the
+> Help & feedback — under the unchanged hero and wallet card, with **Log out** on the
 > hub itself (`ME_HUB_FOOT`), the way Settings keeps Sign Out at the bottom of the account
 > page. **`ME_HUB_TAIL`** holds what belongs at the top level but is not a category —
 > **Settings** (the thing people reach for most; it used to be buried inside App & help)
 > and **Admin dashboard** (staff use it constantly). It renders as **its OWN card**
 > below the sections — **one card EACH**, so the page is five separate cards: the ten
-> categories, Settings, App & help, Admin dashboard, Log out. **App & help is a real
-> SECTION promoted to its own card** (`solo: true` on the section + an entry in
-> `ME_HUB_TAIL` whose `run` is `acMeSection('app')`), so it still opens the section page
-> and `acAppIndex` still indexes its rows as `Account · App & help`. It carries a **Send
-> feedback** row wired to the feedback sheet that **already existed** (`acOpenFeedback`
-> → `POST /api/feedback` → the support inbox) — nothing new was built for it.
+> categories, Settings, Help & feedback, Admin dashboard, Log out. **Help & feedback is a
+> real SECTION promoted to its own card** (`solo: true` on the section + an entry in
+> `ME_HUB_TAIL` whose `run` is `acMeSection('app')` — the id stays `app`), so it still
+> opens the section page and `acAppIndex` still indexes its rows as
+> `Account · Help & feedback`. It carries a **Send feedback** row wired to the feedback
+> sheet that **already existed** (`acOpenFeedback` → `POST /api/feedback` → the support
+> inbox) — nothing new was built for it.
+>
+> **It used to be "App & help" and carried the APP's own options too.** The founder split
+> them: everything about running the app belongs in **Settings**, and what is left on the
+> Account page is only how you get help. Five rows moved and **nothing was lost** — each
+> is still reachable, and still findable by its old name from any search bar:
+>
+> | was on the Account page | where it lives now |
+> |---|---|
+> | Notifications | the nav bell, and Settings → Notifications (it duplicated both) |
+> | Devices | Settings → Security & access, as **"Devices & sessions"** (also a duplicate) |
+> | What's new | Settings, beside About & legal |
+> | Ask about your data | Settings → Atwe Assistant (it is an assistant feature) |
+> | Posts you've read | Settings → Your data & storage (it is your own history) |
+>
+> The three that were not already in Settings were added to **`SET_SEARCH_INDEX`** at the
+> same time, and **Notifications was added to `PLACES_EXTRA`** — the bell is one of the
+> five worlds but had never been in that list, so app-wide search only ever found it
+> *through this card*, and trimming the card silently took it out of search. `mehub.js`
+> caught that: it now carries a `MOVED` map that excludes the five from the Account-page
+> completeness pass **and** asserts each is still returned by `acFindPlaces` under its old
+> name, so the exclusion is not a free pass — deleting one from either index fails it
+> (self-tested by renaming the `PLACES_EXTRA` entry). Reachable destinations from the
+> Account page went 100 → 95.
 >
 > **A tail/foot label uses a plain `&`; a section `title` uses `&amp;`.** Tail and foot
 > rows go through `item()` → `escHtml`, whereas a section's `title` is interpolated raw
-> in two places. Get it backwards and the entity renders as text ("App &amp; help").
+> in two places. Get it backwards and the entity renders as text ("Help &amp; feedback").
 >
 > **`--set-card-r` (26px) is the radius for every settings-shaped card**, on the Account
 > page AND the Settings page — the two are meant to read as one system, so change it once.
@@ -981,8 +1020,8 @@ below).
 > cards sit from each other (measured 6 / 18 against 12);
 > `scratchpad/megap.js` walks every gap and fails if they are not equal. Both are in `acAppIndex` subtitled plain `Account` rather than
 > `Account · <section>`, since they are not in one. When adding a row here, keep the
-> App & help section's `sub` honest — it still advertised Settings after Settings moved
-> out. The **status card** (`acMeStatusCard`, Slack/Discord-style) moved OFF the hub
+> Help & feedback section's `sub` honest — it still advertised Settings after Settings
+> moved out. The **status card** (`acMeStatusCard`, Slack/Discord-style) moved OFF the hub
 > into the **Profile section**, above that section's rows and outside the `.me-group`
 > so it stays its own card: it is a thing you SET, not a place you go, and it read wrong
 > sitting in a list of destinations.
@@ -1014,7 +1053,8 @@ below).
 > screen as far as that stack is concerned, so Back would otherwise walk straight out of
 > the page instead of returning to the section list. Re-tapping the Account tab pops back
 > to the top, as tapping a tab twice does on iPhone. Covered by `scratchpad/mehub.js`,
-> which asserts all **98** destinations are still reachable (it runs the completeness pass
+> which asserts every destination the old flat list had is still reachable (95 on the
+> Account page, plus the five that moved to Settings — it runs the completeness pass
 > as a business ADMIN — the only account that can see every row), `scratchpad/meidx.js`,
 > which asserts the declared row count and the indexed count are **the same number** and
 > that every indexed `run` names a function that really exists (a search result that does
@@ -4943,7 +4983,7 @@ use. When adding a search, grep for its ACTUAL empty string rather than assuming
 The assistant is given the **same index the search bar uses** (`acAppIndex()` — every
 page, feature and setting, with the words a person would actually use), so "where do I
 change my password" or "how do I get paid" gets an answer about THIS app rather than a
-generic one. `acAiGuide()` renders it as `- Name (section)` lines — ~145 destinations,
+generic one. `acAiGuide()` renders it as `- Name (section)` lines — ~151 destinations,
 ~4KB — filtered by each item's `when` so nobody is pointed at a surface they can't
 reach, and sent with the chat request as `appGuide`. Server-side `appGuideBlock()`
 folds it into the system prompt (capped at `APP_GUIDE_MAX`=12000 so a client can't push
@@ -5562,13 +5602,13 @@ whether it was right only after pressing the button. It searches the existing
 The Engine search box used to know about people, posts, listings, jobs — real
 CONTENT — but nothing about the app around it. Someone looking for gift cards, a
 refund, or where dark mode lives got "No results". `acAppIndex()` now assembles
-**~143 destinations** from the tables that already describe the app, so a feature
+**~151 destinations** from the tables that already describe the app, so a feature
 is findable the day it ships and the two can never drift:
 
 | source | what it contributes |
 |---|---|
 | **`PLACES_EXTRA`** | the five worlds, the public browse surfaces, and the common *actions* people type ("write a post", "go live", "new chat") |
-| **`ME_SECTIONS`** | every row of the Profile hub — 98 destinations across 11 sections |
+| **`ME_SECTIONS`** | every row of the Profile hub — 95 destinations across 11 sections |
 | **`SET_SEARCH_INDEX`** | every setting, down to individual rows |
 
 **`ME_SECTIONS` is the Profile hub's own source of truth** — `acGoProfileHub()` renders
