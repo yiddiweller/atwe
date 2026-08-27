@@ -6008,6 +6008,23 @@ deliberately reaches 3px past it on each side for the 44pt target, so `scrollWid
 exceeds `clientWidth` on every pill — including the empty bookmark, which cannot clip
 anything. The first version of that check reported all five as clipped on correct layout.
 
+**Matching CURVES is only half of it — the shapes must start on the same line.** The nav
+bar was `--nav-inset: calc(var(--feed-gutter) + 5px)`, so a post card riding under it stuck
+out 5px on each side; measured on the founder's own screenshot, cards and the top-bar icons
+sat at 18 and the bar at 24. That is what "almost perfect, but not perfect" was. `--nav-inset`
+is now `var(--feed-gutter)` and the compose **+** references the gutter too instead of
+repeating `18px`. NB `--nav-inset` also sets the bar's gap from the BOTTOM (the evenly-inset
+pill) and feeds `#acMeBody`'s bottom clearance, so both moved with it — intentionally.
+
+**A profile picture only hugs a rounded corner when its centre IS the corner's centre.**
+`.ac-post-top` centres its children and the name+handle column is taller than the 36px
+avatar, so the avatar sat **15.7px from the card's top while being 12px in from its left** —
+the gap to the corner's curve was uneven and the two shapes read as unrelated. `.ac-post-av`
+now carries `align-self:flex-start`, which puts both insets on `--post-pad`; the avatar's
+centre and the corner arc's centre are then the same point and the gap is a constant 12 all
+the way round. This is the same rule as `--post-inner-r`, applied to POSITION rather than
+radius, and `scratchpad/radii.js` asserts both insets equal the padding.
+
 **NB the post card is no longer `--set-card-r`.** Settings-shaped cards (the Settings
 pages, the Account hub) stay at **26** — they live inside an overlay and never sit beside
 the nav bar. The post card is **30** because it does. If those two ever need to converge
@@ -6028,6 +6045,18 @@ a sponsored ad sitting next to a post:
 | the post header's ⋯ | a 6px square | a circle, like every other round icon button |
 | the ad's "AD" chip | 6 | `--r-pill`, as `.bundle-tag` already was |
 | the advertiser's own photo preview | an inline 14px | `--post-inner-r`, so it previews what ships |
+
+**The loading placeholder was asked to be darker twice**, so the number is not a guess:
+`--post-skel` shipped at `#2E2E31` (1.36:1 against the card — "a very light gray"), went to
+`#242427` (1.19), and is now **`#1B1B1E` (1.07)**; Light went `#CBD2DA` → `#D8DDE3` →
+**`#E6EAEF` (1.11)**. `scratchpad/skelgrey.js` bounds it at **1.04–1.20** — the floor is what
+stops it vanishing into the card, because a loading state with no visible placeholders just
+looks like a column of empty cards.
+
+**The per-card ✕ on a who-to-follow card is gone** (owner). The markup, the CSS and
+`acDismissSuggestOne` went together — but **`acDismissedSuggest()` stays**: it is the READ
+side, and anyone who already dismissed someone keeps them hidden. The section-level ✕ beside
+the "Who to follow" heading is a different control and stays.
 
 **The ad card is not a copy of the post card — it IS one.** `.ac-adcard` was added to the
 `.ac-post,.ac-postfocus` selectors (the base rule, the `::before`, the `> *` z-index lift,
