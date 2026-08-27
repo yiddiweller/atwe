@@ -193,19 +193,22 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
    stroke follows their exact shape, doorway included. **Notifications is a bell with
    NO ring around it** — deliberate, at the founder's request: its own form is what
    is rounded. The bell has **no hanger ball on top and no wide flared rim** (owner request):
-   a dome cap (`DOME`, 88), two sides that lean out (`LEAN`, shipped at **18°**), a base with
-   generously rounded corners (`CORNER`, 44), and the clapper.
-   **`DOME` is the knob that decides whether the sides read as LINES or as CURVES**, and it
-   is the one the founder kept coming back to. The tangential join (below) blends curve into
-   line smoothly — but with a big dome, most of each visible "side" is still curve. Measured:
-   at `DOME=114` the dome ran **41% of the bell's height** and the founder called the sides
-   round; at 88 it is **27%** and they read as straight lines that splay. Below about 76 it
-   turns into a tent. **`LEAN` rises as `DOME` shrinks** to keep the SAME base width — the
-   ask was the same widening achieved with a line instead of a curve — and the bell's top is
-   pinned (`CY = TOP + DOME`) so changing `DOME` never moves it. **The lean is built
+   an **elliptical** cap (`DOME_W` 112 × `DOME_H` 76), two sides that lean out (`LEAN`,
+   shipped at **15°**), a base with generously rounded corners (`CORNER`, 44), and the clapper.
+   **The cap is an ELLIPSE, and that is the whole reason it can be both wide and shallow.**
+   With a circular dome its width and its height are one number, so the knob that makes the
+   sides read as straight LINES (a short cap) also made the top narrow — which the founder
+   spotted at once: *"you made the top narrow, I want it wider and more rounded, matching
+   the other icons"*. The ellipse splits them: **`DOME_W` is how wide and round the top is**
+   (the thing being matched to the ring icons) and **`DOME_H` is how tall the cap is** (what
+   keeps the sides long and straight). Measured against a ring icon: a circular 88 gave a cap
+   running 27% of the bell's height but shoulders only 84 from centre — pinched; **112×76**
+   keeps the cap at 28%, so the sides stay straight, while the shoulders reach 110 and the
+   top reads round. Past about 128×64 it flattens into a squat shape that stops reading as a
+   bell. The bell's top is pinned (`CY = TOP + DOME_H`) so changing the cap never moves it. **The lean is built
    TANGENTIALLY and that is the whole point:** the first version drew a full semicircle and
    started the slant from its end point, but a semicircle's edge arrives VERTICAL, so the
-   slant began with a visible kink — the founder called it "the twist". The dome now stops
+   slant began with a visible kink — the founder called it "the twist". The cap now stops
    short on each side, exactly where its own tangent already equals the lean, so curve flows
    into line with no corner. **LARGE-ARC IS 0 and getting that wrong is not subtle:** the
    tangent points sit ABOVE the circle's centre, so the arc over the top is SHORTER than a
@@ -216,13 +219,17 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
    right angle once the side leans. The clapper renders SOLID rather than outlined and that is
    inherent, not a bug — the outline is derived by eroding by `WEIGHT`, and a shape barely
    thicker than `WEIGHT` has nothing left to hollow out.
-   **The bell's INNER bottom corners are rounded by `BELL_INNER` (26)**, and it has to be
+   **The bell's INNER bottom corners are rounded by `BELL_INNER` (36)**, and it has to be
    LOCAL for exactly the reason the Home doorway did: a global open also rounds the inner
-   dome and visibly thickens the shoulders. `roundBottomCorners` opens the inner shape and
+   cap and visibly thickens the shoulders. `roundBottomCorners` opens the inner shape and
    keeps that result only inside a box at each of its two bottom corners — and the box is
-   **1.1× the radius, not 1.6×**: at 1.6 it reached far enough up to round the dome anyway,
-   the same failure arriving more slowly. Rendered side by side at 0/26/34/42, 26 rounds the
-   corners with everything else untouched. The Home arch's **feet are rounded**
+   **0.9× the radius, not 1.6×**: at 1.6 it reached far enough up to round the cap anyway,
+   the same failure arriving more slowly. The radius is set so the inner corner reads as the
+   **same corner as the outer one** — a smaller concentric version of it, not a tight nick
+   inside a generous curve, which is how the founder put it ("it should feel it goes
+   together"). Judge it on a **3.4× zoom of the bottom-left corner**, not the whole icon: at
+   whole-icon size 26 looked fine and only the zoom showed its curve was far tighter than the
+   outer 44. 36 is the match. The Home arch's **feet are rounded**
    by `roundCorners()` — an OPEN at `FOOT` (34), which rounds every CONVEX corner: both outer
    feet and both inner corners where each leg meets the doorway. **The doorway's two inside
    corners are then rounded FURTHER** by `roundInnerFeet()` at `DOORWAY` (60), because the
