@@ -5873,13 +5873,58 @@ nothing remembered and is allowed to settle once) and fails if the second visit'
 changes at all after the first frame. With the paint-from-cache line removed it reports
 `opens 724 → settles 1298` and fails.
 
+### The welcome moment on login (`#welcomeSplash`)
+
+Signing in covers the screen for about 2.3 seconds while the app loads behind it, then
+clears. What plays there is deliberate, and each beat is the founder's:
+
+- **The Atwe mark ROLLS.** One full 360° turn on `cubic-bezier(.7,0,.3,1)` — the boot
+  splash's own fast-then-slow curve, so arriving at your account has the same rhythm as
+  opening the app. It used to be a plain fade.
+- **The mark stays see-through; the photo does not.** The mark peaks at `.28`. The photo
+  used to peak at `.32` and read as washed out — it is the person, so it lands at full
+  opacity.
+- **The mark gets darker as it advances** rather than cutting: `0 → .28 → 0`, and its
+  fade-out begins at 56% of its 1.5s, which is why `playWelcomeSplash` starts the photo at
+  **820ms** — the two cross over. It started at 1000ms, after the hand-off was already
+  finished, and read as two separate beats stacked back to back.
+- **The photo zooms in** (`.7 → 1 → 1.05`) and keeps growing slightly through the hold, so
+  the moment moves forward instead of freezing before the app appears.
+- **The exit is `--wb-out` (480ms), not `--t-slow`.** This is a one-off cinematic moment,
+  not a UI transition, and 350ms clears the screen faster than the eye wants after a 2.3s
+  build-up. It must stay under the 560ms the JS waits before tearing the stage down. The
+  whole stage eases forward to `scale(1.07)` on the way out, so it reads as moving INTO
+  the app.
+
+`rotate` and `scale` are the **standalone properties**, not `transform`, so the roll and
+the zoom compose without either overwriting the other and both stay on the compositor.
+Under `prefers-reduced-motion` both get their own calm keyframes — a plain fade with no
+roll and no zoom. Shortening the duration (what this used to do) still spun the mark
+through a full turn, which is not what the setting asks for.
+
+`scratchpad/welcome.js` samples the real computed opacity, rotation and scale every 90ms
+and asserts all five: see-through mark, full-colour photo, a real turn, the dim-away, and
+the zoom. Restoring the old keyframes fails three of them.
+
 ### Toasts, the staff row, and the bottom fade
 
 **The top-centre toast (`.notif`) has no outline, and its shape follows its length** —
-a **capsule** while it is one line, a **rounded rectangle (20px) once it wraps**, because
-a stadium shape around a paragraph reads wrong (this is what X does). CSS cannot ask how
-many lines it wrapped to, so `showNotif` measures the rendered height against the
-element's OWN line-height and adds `.notif-multi`.
+a **capsule** while it is one line, a **rounded rectangle once it wraps** at the app's own
+`--set-card-r`, because a stadium shape around a paragraph reads wrong (this is what X
+does). CSS cannot ask how many lines it wrapped to, so `showNotif` measures the rendered
+height against the element's OWN line-height and adds `.notif-multi`. **A wrapped message
+stays CENTRED** — it was left-aligned for one build and read as a paragraph pinned to one
+side rather than as one centred notice.
+
+**It TRAVELS in from above** (`notifIn`, **26px over .34s** on an ease-out). It shipped at
+14px over .28s, and over that distance the eye only registers the fade — it read as
+appearing in place, which is the very thing the founder asked to be rid of. The exit
+mirrors it, back up the same 26px. `scratchpad/toastpolish.js` samples the box's real
+`top` across the first eleven frames and fails under 14px of travel. **Measure it on a
+FRESH page:** an earlier version of that probe cleared the toasts with `remove()`, which
+left them in `_toastStack`, and the restack then pushed each new toast 10px further down —
+the probe read that drift as the animation and passed on a 2px slide. `_restackToasts`
+now drops detached nodes first, so a stack of ghosts can never shift a live toast again.
 
 **`width:max-content` is the load-bearing part of that rule.** The toast is anchored at
 `left:50%` with no right edge, so its available width is only the half-viewport to the
@@ -5890,7 +5935,15 @@ text's own; `max-width` then clamps it. The founder's own example went from 3 li
 195px to **1 line at 344px** on that change alone.
 
 **The Undo in `.undo-toast` is a filled blue pill**, not blue text (owner). It is the
-one place blue is an action rather than identity.
+one place blue is an action rather than identity. Its padding is `9px 9px 9px 16px` — the
+gap to the RIGHT of the blue pill equals the gap above and below it, and that is not
+merely symmetry: with both shapes fully round, **equal gaps is exactly the condition for
+the two capsules to be concentric** (outer radius = inner radius + gap — a 29px button,
+radius 14.5, inside a 47px toast, radius 23.5, differ by 9). It shipped at 6px on the
+right and the founder spotted the blue pill sitting off-centre in the grey one. NB
+`.upd-banner` a few rules above carries a near-identical shorthand but is a DIFFERENT
+component whose trailing control is a borderless text button — no inner pill, nothing to
+be concentric with, so leave its spacing alone.
 
 **A staff-only row is deliberately quieter** (`.me-row.me-staff`, `.iset-row.iset-staff`):
 Admin dashboard steps its label and glyph down to `--t3` so it does not read as another
