@@ -6074,10 +6074,33 @@ the `width` lets it fill the panel and respect both margins. Measure a bar like 
 its PARENT, not the window: a scrollbar can fake the same 4px, and ruling that out is what
 proved this one real.
 
-**NB the post card is no longer `--set-card-r`.** Settings-shaped cards (the Settings
-pages, the Account hub) stay at **26** — they live inside an overlay and never sit beside
-the nav bar. The post card is **30** because it does. If those two ever need to converge
-again, 30 is the value that carries a reason with it.
+**Every card in the app turns on the SAME corner, and that took an audit to see.** The
+owner kept saying the edges were not even and could not say which two; measuring the whole
+app found **four different card corners on screen at once** — post cards and the nav bar at
+**30**, the settings-shaped cards (`--set-card-r`) at **26**, and `.me-hero` and `.xp-ai`
+hardcoded at **20**. Three of them stack directly above a 30 nav bar on the Account page,
+which is the screen they photographed first. `--set-card-r` is now `var(--post-card-r)`
+(kept as its own name because those cards live on their own surfaces, but deliberately the
+same value) and both hardcoded 20s reference it.
+
+**This costs no width, and that is why it was the right answer.** Raising a POST card's
+corner would force its padding up with it (`--post-inner-r = card − pad`, and the avatar
+and pills derive from that), pushing the text away from the edge — the owner tried that
+version and rejected it, wanting the content "as close to the edge as possible". A
+settings-shaped card holds ROWS with their own padding and nothing nested in its corner, so
+its radius moves freely. **Corner roundness, padding and inner-shape size are one
+three-way trade on a post card; you can pick any two.**
+
+Two consequences worth knowing: a **single-row** card stays a full capsule
+(`:not(:has(> :nth-child(2))){border-radius:999px}`), so at a 52px row height its ends are
+26 while a group is now 30 — 26 used to be chosen precisely so those agreed; it is a 4px
+difference on a shape that reads as a capsule rather than a card. And `--r-xl` (24), the
+modal/sheet family, is deliberately NOT part of this — sheets are overlays, not cards on a
+page. `scratchpad/evencards.js` walks seven surfaces and fails if any painted, non-capsule
+block wider than 200px turns on anything other than `--post-card-r`; it excludes the
+desktop sidebar and right rail (nav, off-canvas on a phone) and anything with no painted
+fill, and it counts a **gradient** as painted — the wallet card and the Engine AI hero are
+both `background-image`, and an earlier version silently skipped both.
 
 **Everything in the feed obeys the same three-shape vocabulary**, and `scratchpad/adcard.js`
 enforces it as an invariant rather than as a list of classes: every rounded element inside
