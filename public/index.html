@@ -5990,7 +5990,7 @@ body.reduce-motion .ac-newposts{animation:none;}
    would stack on top of theirs — the hashtag page measured a 38px gutter that way. Zero
    means each surface inherits the gutter it already had; only the two containers that
    provide none, or too little, name a value. Add a surface and it is right by default. */
-.ac-post,.ac-postfocus,.ac-adcard{--post-indent:57px;--post-edge:0px;display:block;position:relative;margin:0;
+.ac-post,.ac-postfocus,.ac-adcard{--post-indent:57px;--post-edge:0px;--post-av:46px;display:block;position:relative;margin:0;
   padding:var(--post-pad) calc(var(--post-edge) + var(--post-pad)) calc(var(--post-pad) + var(--post-gap));
   border-bottom:none;}
 .ac-post::before,.ac-postfocus::before,.ac-adcard::before{content:"";position:absolute;inset:0 var(--post-edge) var(--post-gap);
@@ -6024,7 +6024,8 @@ body.reduce-motion .ac-newposts{animation:none;}
 /* 36px so the avatar's radius (18) equals --post-inner-r — the same corner as the photo
    and the action pills. It sits in the card's top-left corner inset by the padding, which
    is exactly the case rule 4 covers: box radius = inner radius + the gap (18 + 12 = 30). */
-#acFeed .ac-post .user-avatar{width:36px;height:36px;font-size:14px;}
+#acFeed .ac-post,#acFeed .ac-adcard{--post-av:36px;}
+#acFeed .ac-post .user-avatar{font-size:14px;}
 #acFeed .ac-sg-row{padding-inline-start:var(--feed-gutter);padding-inline-end:var(--feed-gutter);}
 #acFeed .ac-empty{padding-inline-start:var(--feed-gutter);padding-inline-end:var(--feed-gutter);}
 /* Hover lifts the CARD, not the row — the row is the opaque backdrop and tinting it
@@ -6032,8 +6033,8 @@ body.reduce-motion .ac-newposts{animation:none;}
 @media(hover:hover){.ac-post:hover::before,.ac-adcard:hover::before{filter:brightness(1.35);}}
 .ac-post-top{display:flex;align-items:center;gap:11px;}
 .ac-post-av{flex:0 0 auto;cursor:pointer;align-self:flex-start;}
-.ac-post .user-avatar{width:46px;height:46px;font-size:17px;flex-shrink:0;cursor:pointer;}
-.ac-post-idcol{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}
+.ac-post .user-avatar{width:var(--post-av);height:var(--post-av);font-size:17px;flex-shrink:0;cursor:pointer;}
+.ac-post-idcol{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:1px;height:var(--post-av);}
 .ac-post-body{margin-top:9px;}
 /* Long feed posts clamp to ~10 lines with a "Show more" toggle (X/FB-style). */
 .ac-post-text.clamp .apt-inner{display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;}
@@ -6419,7 +6420,7 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
 .pinfo-head .pinfo-hd{font-size:13px;color:var(--t3);}
 .ac-stat-link,.sbpc-link{cursor:pointer;}
 .ac-stat-link:hover,.sbpc-link:hover{text-decoration:underline;}
-.ac-post-handle{font-size:13.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
+.ac-post-handle{font-size:13.5px;line-height:1.2;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
 .ac-post-del{color:var(--t3);background:none;border:none;cursor:pointer;padding:2px;flex-shrink:0;border-radius:50%;}
 .ac-post-del:hover{color:var(--red);}
 .ac-post-del svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
@@ -9228,10 +9229,10 @@ body.light .ac-follow-btn.following{background:transparent;color:var(--t1);}
 /* The post detail is the SAME card as the feed (owner: a post should look the same
    everywhere you meet one). It keeps its own roomier type and the full timestamp; only
    the container changed. --post-edge matches the feed so the two read as one thing. */
-.ac-postfocus{--post-edge:var(--feed-gutter);}
+.ac-postfocus{--post-edge:var(--feed-gutter);--post-av:48px;}
 .ac-pf-head{display:flex;align-items:center;gap:11px;}
-.ac-pf-head .user-avatar{width:48px;height:48px;font-size:18px;flex-shrink:0;cursor:pointer;}
-.ac-pf-who{min-width:0;cursor:pointer;}
+.ac-pf-head .user-avatar{width:var(--post-av);height:var(--post-av);font-size:18px;flex-shrink:0;cursor:pointer;}
+.ac-pf-who{min-width:0;cursor:pointer;display:flex;flex-direction:column;justify-content:center;height:var(--post-av);}
 .ac-pf-who .ac-post-name{font-size:15.5px;}
 .ac-pf-text{font-size:17px;line-height:1.5;color:var(--t1);margin-top:13px;white-space:pre-wrap;word-break:break-word;}
 .ac-pf-time{font-size:13.5px;color:var(--t3);margin-top:13px;}
@@ -11153,6 +11154,7 @@ body.light .ac-place:hover{background:rgba(0,0,0,.04);}
 @keyframes shimmer{100%{transform:translateX(100%);}}
 .skel-row{display:flex;gap:12px;padding:14px 16px;border-bottom:1px solid var(--b1);}
 .skel-ava{width:42px;height:42px;border-radius:50%;flex-shrink:0;}
+.ac-post .skel-ava{width:var(--post-av);height:var(--post-av);}
 .skel-ava.biz{border-radius:50%;} /* business skeleton is a full circle too, matching the real business avatar (owner) */
 .skel-lines{flex:1;display:flex;flex-direction:column;gap:9px;padding-top:4px;}
 .skel-line{height:11px;border-radius:6px;}
@@ -20609,7 +20611,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1742'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1743'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;

@@ -6025,6 +6025,33 @@ centre and the corner arc's centre are then the same point and the gap is a cons
 the way round. This is the same rule as `--post-inner-r`, applied to POSITION rather than
 radius, and `scratchpad/radii.js` asserts both insets equal the padding.
 
+**The header row's height is the PICTURE's, never the text's — `--post-av`.** Pinning the
+avatar to the padding edge (above) solved concentricity and immediately created the next
+problem: the name+handle column is **41.4px** tall against a **36px** picture in the feed, so
+with `align-items:center` the taller one set the row height and the text sat **3.7px lower
+than the picture**, which the founder photographed as the name looking slumped. The two goals
+— picture at the padding edge, text centred on the picture — hold **only when the column is
+exactly as tall as the picture**; otherwise one of them drifts by half the difference.
+
+`--post-av` is that height, declared once per surface (`.ac-post` 46 · `#acFeed .ac-post` 36 ·
+`.ac-postfocus` 48) and read by the picture (`.ac-post .user-avatar`, `.ac-pf-head
+.user-avatar`), the text column (`.ac-post-idcol`, `.ac-pf-who` — both `height:var(--post-av)`
++ `justify-content:center`) **and the loading placeholder** (`.ac-post .skel-ava`, which was a
+flat 42 inside a 36 header). So the picture and the text can never disagree about how tall the
+row is. `.ac-post-handle` also gained `line-height:1.2` — it was inheriting the BODY's 1.6,
+loose for a one-line handle, and those 5.4px were most of what pushed the column past the
+picture (18.75 + 1 + 16.2 ≈ 36 now, so nothing overflows the fixed height).
+
+`scratchpad/headcentre.js` enforces it as an invariant across six surfaces rather than a class
+list: for every visible profile picture with text BESIDE it (text starting after the picture,
+overlapping it vertically, no more than 1.6× its height — so a name UNDER a picture, as in the
+story tray or a profile header, is correctly ignored), the two must share a centre. **A row
+that deliberately top-aligns is skipped by reading its own `align-items`** — `.notif-row` is
+`flex-start` on purpose, because a notification is a sentence and centring a picture against a
+three-line one looks wrong; the rule is "if you centre, actually centre", not "centre
+everything". Post detail was already correct and stays correct: its picture (48) is taller than
+its text, so it was never the one drifting.
+
 **NB the post card is no longer `--set-card-r`.** Settings-shaped cards (the Settings
 pages, the Account hub) stay at **26** — they live inside an overlay and never sit beside
 the nav bar. The post card is **30** because it does. If those two ever need to converge
