@@ -19,7 +19,7 @@ const N = 512, TARGET_R = 182;                 // the ring radius the set agrees
    build derived Home and the bell with erode(shape, 34/2) — HALF that — which is why
    the Home outline looked thin next to the rings. Erosion by k leaves a k-thick edge,
    so the weight IS k. Overridable: `WEIGHT=52 node build.js`. */
-const WEIGHT = Number(process.env.WEIGHT || 40);
+const WEIGHT = Number(process.env.WEIGHT || 38);
 /* How far to round the Home arch's feet — the founder asked for the point taken off them.
    34 is the most rounding the shape survives: at 42 the CLOSE fills the doorway's bottom
    and the two legs fuse into an arch. Overridable: `FOOT=28 node build.js`. */
@@ -53,10 +53,25 @@ const b64 = (f, mime) => `data:${mime};base64,` + fs.readFileSync(D + f).toStrin
    The clapper renders SOLID rather than outlined and that is inherent, not a bug: the
    outline is derived by eroding by WEIGHT, and a shape barely thicker than WEIGHT has
    nothing left to hollow out. */
-const LEAN   = Number(process.env.LEAN   || 11);   // degrees the sides lean out from vertical
+const LEAN   = Number(process.env.LEAN   || 18);   // degrees the sides lean out from vertical
 const CORNER = Number(process.env.CORNER || 44);   // radius of the two bottom corners
+/* DOME is what makes the sides read as LINES rather than curves, and it is the knob the
+   founder was actually asking about. The tangential join means the curve becomes the
+   straight side smoothly — but with a big dome most of each visible "side" is still
+   curve. Measured: at R=114 the dome ran 41% of the bell's height and the sides read as
+   rounded. At R=88 it is 27% and they read as straight lines that splay. Below about
+   R=76 the shape turns into a tent. LEAN rises with a smaller dome to keep the SAME
+   base width — the founder wanted the same widening, just achieved with a line. */
+const DOME   = Number(process.env.DOME   || 88);   // dome radius
+/* And the INNER shape's two bottom corners, which came to a sharp point (founder: "the
+   inside bottom corners are still pointy... a little round, similar to the home icon").
+   Applied LOCALLY, exactly like roundInnerFeet on the arch: a global open also rounds
+   the inner dome and visibly thickens the shoulders, and a generous carve-box does the
+   same thing more slowly — 1.1x the radius is tight enough to stay at the bottom.
+   Rendered side by side at 0/26/34/42: 26 rounds the corners with the rest untouched. */
+const BELL_INNER = Number(process.env.BELL_INNER || 26);
 const BELL = () => {
-  const R = 114, CX = 256, CY = 264, YB = 376;     // dome radius / centre, and the base line
+  const R = DOME, CX = 256, TOP = 150, CY = TOP + R, YB = 376;   // top stays put as DOME changes
   const th = LEAN * Math.PI / 180;
   // Where the dome's tangent already equals the side's lean — the join with no kink.
   const txR = CX + R * Math.cos(th), txL = CX - R * Math.cos(th), ty = CY - R * Math.sin(th);
@@ -75,7 +90,7 @@ const BELL = () => {
   const br = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
   const p = await br.newPage();
   await p.goto('data:text/html,<body></body>');
-  const res = await p.evaluate(async ({ N, TARGET_R, weight, foot, doorway, refs, homeSrc, bell }) => {
+  const res = await p.evaluate(async ({ N, TARGET_R, weight, foot, doorway, bellInner, refs, homeSrc, bell }) => {
     const load = (src) => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; });
     const ctx = () => { const c = document.createElement('canvas'); c.width = c.height = N; return c.getContext('2d', { willReadFrequently: true }); };
     const bits = (x) => { const d = x.getImageData(0, 0, N, N).data; const o = new Uint8Array(N * N);
@@ -124,6 +139,29 @@ const BELL = () => {
        So: open the whole shape at the bigger radius, then keep that result ONLY inside a
        small box around each inner corner. An open only ever removes pixels, so this carves
        those two corners and cannot touch anything else. */
+    /* Round the INNER shape's two bottom corners — the bell's, which came to a sharp
+       point. Same idea as roundInnerFeet: open the whole thing, then keep that result
+       only inside a TIGHT box at each bottom corner. An open can only remove pixels, so
+       nothing outside those boxes can change. The box is 1.1x the radius on purpose: at
+       1.6x it reached far enough up to round the inner dome as well and thicken the
+       shoulders, which is the very thing a global open does wrong. */
+    const roundBottomCorners = (m, r) => {
+      if (!(r > 0)) return m;
+      let yb = -1;
+      for (let y = N - 1; y >= 0 && yb < 0; y--) for (let x = 0; x < N; x++) if (m[y*N+x]) { yb = y; break; }
+      if (yb < 0) return m;
+      const row = Math.max(0, yb - 2);
+      let xa = -1, xb = -1;
+      for (let x = 0; x < N; x++) if (m[row*N+x]) { if (xa < 0) xa = x; xb = x; }
+      if (xa < 0) return m;
+      const o = roundCorners(m, r), out = m.slice(), box = Math.round(r * 1.1);
+      for (let y = yb - box; y <= yb + 2; y++) {
+        if (y < 0 || y >= N) continue;
+        for (let x = xa - box; x <= xa + box; x++) if (x >= 0 && x < N) out[y*N+x] = o[y*N+x];
+        for (let x = xb - box; x <= xb + box; x++) if (x >= 0 && x < N) out[y*N+x] = o[y*N+x];
+      }
+      return out;
+    };
     const roundInnerFeet = (m, r) => {
       if (!(r > 0)) return m;
       let yb = -1;
@@ -218,13 +256,13 @@ const BELL = () => {
       c2.drawImage(img, -bb.x0*s + (N-bb.w*s)/2, -bb.y0*s + (N-bb.h*s)/2, N*s, N*s);
       const filled = bits(c2);
       const stroke = weight;
-      const inner = erode(filled, stroke);
+      const inner = roundBottomCorners(erode(filled, stroke), bellInner);
       const outline = new Uint8Array(N*N);
       for (let i = 0; i < N*N; i++) outline[i] = filled[i] && !inner[i] ? 1 : 0;
       out.notifs = { off: toPng(outline), on: toPng(filled), stroke };
     }
     return out;
-  }, { N, TARGET_R, weight: WEIGHT, foot: FOOT, doorway: DOORWAY,
+  }, { N, TARGET_R, weight: WEIGHT, foot: FOOT, doorway: DOORWAY, bellInner: BELL_INNER,
        refs: Object.fromEntries(Object.entries(REF).map(([k,v]) => [k, b64(v, 'image/jpeg')])),
        homeSrc: b64('narch.png', 'image/png'), bell: BELL() });
 
