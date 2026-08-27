@@ -1353,7 +1353,7 @@ button.ac-poll-opt:hover{background:var(--accent-dim);border-color:var(--accent)
 .ac-poll-total{font-size:12.5px;color:var(--t3);padding:1px 2px;}
 
 /* Post "more" button + author action sheet */
-.ac-post-more{margin-inline-start:auto;background:none;border:none;color:var(--t3);cursor:pointer;padding:2px 4px;display:flex;align-items:center;justify-content:center;border-radius:6px;min-width:32px;min-height:32px;margin-top:-6px;margin-bottom:-6px;}
+.ac-post-more{margin-inline-start:auto;background:none;border:none;color:var(--t3);cursor:pointer;padding:2px 4px;display:flex;align-items:center;justify-content:center;border-radius:50%;min-width:32px;min-height:32px;margin-top:-6px;margin-bottom:-6px;}
 .ac-post-more svg{width:18px;height:18px;stroke:none;fill:currentColor;}
 .ac-post-more:hover{color:var(--t1);background:var(--s1);}
 /* ── Unified menu material (Apple iOS context-menu look, per theme) ──
@@ -5990,17 +5990,17 @@ body.reduce-motion .ac-newposts{animation:none;}
    would stack on top of theirs — the hashtag page measured a 38px gutter that way. Zero
    means each surface inherits the gutter it already had; only the two containers that
    provide none, or too little, name a value. Add a surface and it is right by default. */
-.ac-post,.ac-postfocus{--post-indent:57px;--post-edge:0px;display:block;position:relative;margin:0;
+.ac-post,.ac-postfocus,.ac-adcard{--post-indent:57px;--post-edge:0px;display:block;position:relative;margin:0;
   padding:var(--post-pad) calc(var(--post-edge) + var(--post-pad)) calc(var(--post-pad) + var(--post-gap));
   border-bottom:none;}
-.ac-post::before,.ac-postfocus::before{content:"";position:absolute;inset:0 var(--post-edge) var(--post-gap);
+.ac-post::before,.ac-postfocus::before,.ac-adcard::before{content:"";position:absolute;inset:0 var(--post-edge) var(--post-gap);
   background:var(--s2);border-radius:var(--post-card-r);
   transition:background var(--t-fast) var(--ease);pointer-events:none;}
 .ac-postfocus > *{position:relative;z-index:1;}
 /* .ac-list pads itself by 8, so the card needs 10 more to reach the same 18. */
-.ac-list .ac-post{--post-edge:10px;}
+.ac-list .ac-post,.ac-list .ac-adcard{--post-edge:10px;}
 /* The content has to sit ABOVE the card it is drawn on. */
-.ac-post > *{position:relative;z-index:1;}
+.ac-post > *,.ac-adcard > *{position:relative;z-index:1;}
 /* Home feed: one consistent left gutter for every row (avatar, body, actions,
    inline who-to-follow), full-width hairline dividers, and a slightly smaller, more
    inset card — so the whole column shares one start line with the floating nav. */
@@ -6011,7 +6011,7 @@ body.reduce-motion .ac-newposts{animation:none;}
    and the floating nav already use, so the whole column shares one start line. */
 /* Full-bleed row (so the cover works edge to edge); the CARD inside it is inset to the
    same 18px gutter the tab row and the floating nav already use. */
-#acFeed .ac-post{--post-indent:52px;--post-edge:var(--feed-gutter);margin:0;position:relative;contain:layout;}
+#acFeed .ac-post,#acFeed .ac-adcard{--post-indent:52px;--post-edge:var(--feed-gutter);margin:0;position:relative;contain:layout;}
 /* NB: content-visibility:auto was tried here and REMOVED — some iOS 18.x WebKit
    builds have real crash bugs with c-v in scrolling containers, and after the
    media-by-URL fix its memory benefit is redundant. Don't re-add without testing
@@ -6029,7 +6029,7 @@ body.reduce-motion .ac-newposts{animation:none;}
 #acFeed .ac-empty{padding-inline-start:var(--feed-gutter);padding-inline-end:var(--feed-gutter);}
 /* Hover lifts the CARD, not the row — the row is the opaque backdrop and tinting it
    would light up the gutters too. */
-@media(hover:hover){.ac-post:hover::before{filter:brightness(1.35);}}
+@media(hover:hover){.ac-post:hover::before,.ac-adcard:hover::before{filter:brightness(1.35);}}
 .ac-post-top{display:flex;align-items:center;gap:11px;}
 .ac-post-av{flex:0 0 auto;cursor:pointer;}
 .ac-post .user-avatar{width:46px;height:46px;font-size:17px;flex-shrink:0;cursor:pointer;}
@@ -7053,7 +7053,7 @@ body.light .order-success{background:rgba(255,255,255,.82);}
 
 /* ── In-app announcement banner (MOTD) — solid grey card, no outline, style-coloured accent dot, white-pill CTA ── */
 /* beats `body.feed-cover #acFeed > *{background:var(--bg)}` (line ~2539) which black-fills every feed child */
-.ac-annbar,body.feed-cover #acFeed>.ac-annbar{margin:10px var(--feed-gutter) 4px;background:var(--s3)!important;border-radius:16px;padding:13px 14px;
+.ac-annbar,body.feed-cover #acFeed>.ac-annbar{margin:0 var(--feed-gutter) var(--post-gap);background:var(--s3)!important;border-radius:var(--post-card-r);padding:13px 14px;
   display:flex;align-items:center;gap:11px;}
 .ac-annbar.hidden{display:none;}
 body.light .ac-annbar,body.light.feed-cover #acFeed>.ac-annbar{background:#f0f2f5!important;}
@@ -8633,7 +8633,7 @@ body.reduce-motion .live-gift-float{animation:none;opacity:0;}
 .ac-sg-foot{padding-inline-start:var(--feed-gutter);}
 .ac-sg-scroll{display:flex;gap:11px;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scroll-padding-inline-start:var(--feed-gutter);scrollbar-width:none;padding:4px var(--feed-gutter) 8px;}
 .ac-sg-scroll::-webkit-scrollbar{display:none;}
-.ac-sgc{position:relative;flex:0 0 auto;width:248px;scroll-snap-align:start;background:var(--bg-2);border:none;border-radius:16px;overflow:hidden;cursor:pointer;transition:background var(--t-fast) var(--ease);}
+.ac-sgc{position:relative;flex:0 0 auto;width:248px;scroll-snap-align:start;background:var(--bg-2);border:none;border-radius:var(--post-card-r);overflow:hidden;cursor:pointer;transition:background var(--t-fast) var(--ease);}
 @media(hover:hover){.ac-sgc:hover{background:var(--s3);}}
 .ac-sgc-cover{height:72px;background:var(--s2);background-size:cover;background-position:center;}
 /* Per-card "not interested" ✕ (top-right of a who-to-follow card) */
@@ -8817,26 +8817,31 @@ body.light .cc-ic-img{filter:brightness(0);}
 /* Opaque fallback logo: show it in its own colours (no white-forcing → no white box). */
 .cc-ic-img.cc-ic-raw,body.light .cc-ic-img.cc-ic-raw{filter:none;}
 /* ─── Sponsored ad card (in the feed) + advertiser flow ─── */
-.ac-adcard{margin:0 0 2px;border:none;border-radius:18px;overflow:hidden;background:var(--s2);
-  box-shadow:0 4px 20px rgba(0,0,0,.20);cursor:pointer;}
+/* A sponsored ad IS a post card: it shares .ac-post's rules above (radius, 12px padding,
+   --s2 fill drawn as a ::before, gutter, hover). Only the pointer is ad-specific. That is
+   what puts its photo on --post-inner-r exactly like a post's photo — the owner
+   photographed the old 18px card as "not the same rounded" — and it also fixes a real bug:
+   as a plain background it was black-filled by `body.feed-cover #acFeed > *` (the rule
+   that makes the rising feed cover the tab menu), so in a mobile BROWSER tab the ad had
+   no card at all. Installed on a phone that rule is off, which is why it looked fine. */
+.ac-adcard{border:none;cursor:pointer;}
 /* In the home feed, inset the ad to the same gutter as posts so it starts/ends
    at the exact width of a post card (not edge-to-edge). */
-#acFeed .ac-adcard{margin:6px var(--feed-gutter) 8px;}
-body.light .ac-adcard{box-shadow:0 4px 16px rgba(15,20,25,.07);}
-.ac-ad-media{position:relative;display:block;width:100%;background:#000;line-height:0;}
+.ac-ad-media{position:relative;display:block;width:100%;background:#000;line-height:0;
+  border-radius:var(--post-inner-r);overflow:hidden;}
 .ac-ad-media img,.ac-ad-media video{width:100%;display:block;max-height:520px;object-fit:cover;}
-.ac-ad-body{padding:11px 14px 2px;}
+.ac-ad-body{padding:11px 0 2px;}
 .ac-ad-title{font-size:15px;font-weight:800;color:var(--t1);line-height:1.3;letter-spacing:-.01em;}
 .ac-ad-sub{font-size:13.5px;color:var(--t2);margin-top:3px;line-height:1.4;}
-.ac-ad-cta{display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:8px 16px;border:none;border-radius:999px;
+.ac-ad-cta{display:inline-flex;align-items:center;gap:6px;margin-top:10px;height:calc(var(--post-inner-r) * 2);padding:0 16px;border:none;border-radius:999px;
   background:var(--t1);color:var(--bg);font:inherit;font-size:13.5px;font-weight:700;cursor:pointer;}
 .ac-ad-cta svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.4;fill:none;stroke-linecap:round;stroke-linejoin:round;}
-.ac-ad-foot{display:flex;align-items:center;gap:9px;padding:10px 14px;}
+.ac-ad-foot{display:flex;align-items:center;gap:9px;padding:10px 0 0;}
 .ac-ad-spon{display:flex;align-items:center;gap:7px;min-width:0;flex:1;font-size:13px;color:var(--t3);font-weight:500;}
 .ac-ad-spon svg{width:16px;height:16px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;}
 .ac-ad-spon b{color:var(--t2);font-weight:700;}
 .ac-ad-chip{flex:0 0 auto;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);
-  border:1px solid var(--divider);border-radius:6px;padding:2px 6px;}
+  border:1px solid var(--divider);border-radius:var(--r-pill);padding:2px 8px;}
 .ac-ad-info{flex:0 0 auto;background:none;border:none;color:var(--t3);cursor:pointer;padding:3px;border-radius:50%;display:flex;}
 .ac-ad-info svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.9;fill:none;}
 @media(hover:hover){.ac-ad-info:hover{color:var(--t1);}}
@@ -20608,7 +20613,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1740'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1741'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -48420,8 +48425,8 @@ function acAdPickMedia(input) {
     AC._adDraft.media = data; AC._adDraft.mediaKind = kind;
     const pv = document.getElementById('adPreview');
     if (pv) pv.innerHTML = kind === 'video'
-      ? `<video src="${data}" muted loop autoplay playsinline style="width:100%;border-radius:14px;"></video>`
-      : `<img src="${data}" style="width:100%;border-radius:14px;display:block;" alt=""/>`;
+      ? `<video src="${data}" muted loop autoplay playsinline style="width:100%;border-radius:var(--post-inner-r);"></video>`
+      : `<img src="${data}" style="width:100%;border-radius:var(--post-inner-r);display:block;" alt=""/>`;
     const btn = document.getElementById('adPickBtn'); if (btn) btn.textContent = 'Change image / video';
   };
   r.readAsDataURL(f);
