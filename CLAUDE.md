@@ -5833,6 +5833,43 @@ nothing remembered and is allowed to settle once) and fails if the second visit'
 changes at all after the first frame. With the paint-from-cache line removed it reports
 `opens 724 → settles 1298` and fails.
 
+### Toasts, the staff row, and the bottom fade
+
+**The top-centre toast (`.notif`) has no outline, and its shape follows its length** —
+a **capsule** while it is one line, a **rounded rectangle (20px) once it wraps**, because
+a stadium shape around a paragraph reads wrong (this is what X does). CSS cannot ask how
+many lines it wrapped to, so `showNotif` measures the rendered height against the
+element's OWN line-height and adds `.notif-multi`.
+
+**`width:max-content` is the load-bearing part of that rule.** The toast is anchored at
+`left:50%` with no right edge, so its available width is only the half-viewport to the
+right of that point — **measured 195px on a 390px phone**. The `max-width` was therefore
+never reached and even a short sentence wrapped to three lines, which is exactly what
+made the capsule look wrong. `max-content` ignores the available width and takes the
+text's own; `max-width` then clamps it. The founder's own example went from 3 lines at
+195px to **1 line at 344px** on that change alone.
+
+**The Undo in `.undo-toast` is a filled blue pill**, not blue text (owner). It is the
+one place blue is an action rather than identity.
+
+**A staff-only row is deliberately quieter** (`.me-row.me-staff`, `.iset-row.iset-staff`):
+Admin dashboard steps its label and glyph down to `--t3` so it does not read as another
+thing the app offers. `--t3` is 5.20:1 on that fill — **never `--t4` here**, which fails
+the 4.5:1 floor (same misuse as the "Add" tab).
+
+**Settings' Sign out is a left-aligned row with its icon**, matching Log out at the
+bottom of the Account page — the two surfaces are one system.
+
+**The bottom fade (`#navBackdrop`) must be hidden by `body:has(.bottom-nav.nav-off)`,
+not by a sibling selector.** The original rule was `.bottom-nav.nav-off ~ #navBackdrop`,
+and **they are not siblings**: `#bottomNav` is a child of `<body>` while `#navBackdrop`
+sits inside `<main>`. So it never fired, and the fade kept painting over an open chat's
+composer — measured, the pill read **7,7,7 at the top against 3,3,3 at the bottom**, the
+founder's "the bottom of the text bar is very dark". NB the line numbers put the backdrop
+after the nav in the source, which makes the sibling rule look correct until you check
+the real tree. **A z-index on the composer cannot fix this**: the backdrop is a
+body-level layer and the composer lives inside `#app`, which is its own stacking context.
+
 ## Conventions
 
 - **One-file-per-surface frontend.** `index.html` is the app; `admin.html` is the

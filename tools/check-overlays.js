@@ -26,7 +26,13 @@ const FILE = 'file://' + path.join(__dirname, '..', 'public', 'index.html');
   if (!chromium) { console.log('playwright not installed — skipping (install it to run this check)'); process.exit(0); }
   const exe = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
   const browser = await chromium.launch({ executablePath: exe, args: ['--no-sandbox'] });
-  const page = await browser.newPage();
+  /* SCRIPTS OFF. This tool checks how the file PARSES, and nothing else — but the app's
+     own boot code moves elements around (showOverlay reparents an overlay to <body>,
+     acShow swaps screens), so reading the DOM after scripts ran made the result depend on
+     how far boot happened to get. It reported 17 screens "trapped" on a file whose markup
+     was byte-identical to a passing one, which is a false alarm that would block every
+     future edit. With JS disabled the DOM is exactly what the parser built. */
+  const page = await browser.newPage({ javaScriptEnabled: false });
   await page.goto(FILE, { waitUntil: 'domcontentloaded' });
   const r = await page.evaluate(() => {
     const all = [...document.querySelectorAll('.overlay')];
@@ -34,7 +40,16 @@ const FILE = 'file://' + path.join(__dirname, '..', 'public', 'index.html');
       id: o.id || o.className.slice(0, 30),
       parent: o.parentElement.tagName + (o.parentElement.id ? '#' + o.parentElement.id : '.' + String(o.parentElement.className).split(' ')[0]),
     }));
-    const screens = [...document.querySelectorAll('.ac-screen')].filter((s) => s.closest('.overlay')).map((s) => s.id);
+    /* AtChat's screens LIVE inside #atchatOverlay — that is the real structure, not a
+       trap. This check exists to catch a screen swallowed by an UNRELATED overlay after
+       a lost </div> (build 1694 put 353 of them inside #groupCallOverlay), so it asks
+       which overlay, not whether. It used to flag all 17 of AtChat's own screens and
+       only ever passed because the app's boot JS moved them before the check looked —
+       with scripts off it failed on a file with byte-identical markup to a passing one. */
+    const HOME_OVERLAY = 'atchatOverlay';
+    const screens = [...document.querySelectorAll('.ac-screen')]
+      .filter((s) => { const o = s.closest('.overlay'); return o && o.id !== HOME_OVERLAY; })
+      .map((s) => s.id + ' (in #' + (s.closest('.overlay').id || '?') + ')');
     return { total: all.length, stray, screens };
   });
   await browser.close();
