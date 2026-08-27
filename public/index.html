@@ -3912,10 +3912,20 @@ body.light .iset-signout{border:1px solid var(--b1);}
 @keyframes setFsIn{from{opacity:0;transform:scale(.985);}to{opacity:1;transform:none;}}
 /* Keyboard focus rings (only for keyboard nav, not touch/mouse). */
 .iset-row:focus-visible,.iset-back:focus-visible,
-.iset-signout:focus-visible,.iset-select:focus-visible,.ac-ptab:focus-visible,
-.iset-search input:focus-visible,.set-sheet .jp-in:focus-visible{
+.iset-signout:focus-visible,.iset-select:focus-visible,.ac-ptab:focus-visible{
   outline:2px solid var(--accent);outline-offset:-2px;border-radius:12px;}
 .iset-select:focus-visible{outline-offset:1px;}
+/* TEXT FIELDS ARE NOT IN THAT LIST, and that is deliberate. The app's own law (see the
+   focus block further down) is "text fields never show a ring — a bright outline around
+   the box looks like a bug", and this rule used to break it for the settings search and
+   the leaf-sheet input. The comment above them claimed "not touch", which is simply not
+   how :focus-visible works on a text field: per spec a focused text input ALWAYS matches
+   it, because it takes keyboard input — so on a phone EVERY tap drew a blue rectangle
+   inside the grey pill. The founder reported exactly that.
+
+   Focus is still shown, the way the colour law allows — the pill's own fill lifts a
+   step. No outline, works on phone and desktop alike, and the caret is there too. */
+.iset-search:focus-within,.me-search:focus-within{background:var(--s3);}
 /* Settings leaf sub-pages (Blocked, Muted, Muted words, 2FA) — full-screen
    sheets that match the iOS-settings look instead of a floating card. */
 .overlay.set-fs{padding:0;flex-direction:column;align-items:stretch;justify-content:flex-start;background:var(--bg);overflow-y:auto;z-index:1100;}
@@ -20352,7 +20362,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1725'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1726'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
