@@ -53,28 +53,38 @@ const b64 = (f, mime) => `data:${mime};base64,` + fs.readFileSync(D + f).toStrin
    The clapper renders SOLID rather than outlined and that is inherent, not a bug: the
    outline is derived by eroding by WEIGHT, and a shape barely thicker than WEIGHT has
    nothing left to hollow out. */
-const LEAN   = Number(process.env.LEAN   || 18);   // degrees the sides lean out from vertical
+const LEAN   = Number(process.env.LEAN   || 15);   // degrees the sides lean out from vertical
 const CORNER = Number(process.env.CORNER || 44);   // radius of the two bottom corners
-/* DOME is what makes the sides read as LINES rather than curves, and it is the knob the
-   founder was actually asking about. The tangential join means the curve becomes the
-   straight side smoothly — but with a big dome most of each visible "side" is still
-   curve. Measured: at R=114 the dome ran 41% of the bell's height and the sides read as
-   rounded. At R=88 it is 27% and they read as straight lines that splay. Below about
-   R=76 the shape turns into a tent. LEAN rises with a smaller dome to keep the SAME
-   base width — the founder wanted the same widening, just achieved with a line. */
-const DOME   = Number(process.env.DOME   || 88);   // dome radius
+/* THE CAP IS AN ELLIPSE, and that is the whole reason it can be both wide and shallow.
+   With a circular dome its width and its height are ONE number, so making the sides read
+   as straight lines (which needs a short cap) also made the top narrow — the founder saw
+   that immediately: "you made the top narrow, I want it wider and more rounded, matching
+   the other icons". An ellipse splits them:
+     DOME_W  how WIDE and round the top is   — the thing being matched to the ring icons
+     DOME_H  how TALL the cap is             — what keeps the sides long and straight
+   Tangency still holds, so there is still no kink: the join angle t solves
+   tan t = (DOME_H/DOME_W)·tan(LEAN), and every point below is derived from it.
+   Measured against a ring icon: at 88/88 the cap ran 27% of the bell's height but the
+   shoulders sat only 84 from centre and it read pinched; at 112/76 the cap is still 28%
+   — the sides stay straight — while the shoulders reach 110 and the top reads round. Past
+   about 128/64 it flattens into a squat shape that stops reading as a bell. */
+const DOME_W = Number(process.env.DOME_W || 112);  // cap half-width
+const DOME_H = Number(process.env.DOME_H || 76);   // cap height
 /* And the INNER shape's two bottom corners, which came to a sharp point (founder: "the
    inside bottom corners are still pointy... a little round, similar to the home icon").
    Applied LOCALLY, exactly like roundInnerFeet on the arch: a global open also rounds
    the inner dome and visibly thickens the shoulders, and a generous carve-box does the
    same thing more slowly — 1.1x the radius is tight enough to stay at the bottom.
-   Rendered side by side at 0/26/34/42: 26 rounds the corners with the rest untouched. */
-const BELL_INNER = Number(process.env.BELL_INNER || 26);
+   The radius is chosen so the inner corner reads as the SAME corner as the outer one, a
+   smaller concentric version of it rather than a tight nick inside a generous curve —
+   judged on a 3.4x zoom of the bottom-left corner at 0/26/36/46, where 36 is the match. */
+const BELL_INNER = Number(process.env.BELL_INNER || 36);
 const BELL = () => {
-  const R = DOME, CX = 256, TOP = 150, CY = TOP + R, YB = 376;   // top stays put as DOME changes
+  const A = DOME_W, B = DOME_H, CX = 256, TOP = 150, CY = TOP + B, YB = 376;  // top stays put
   const th = LEAN * Math.PI / 180;
-  // Where the dome's tangent already equals the side's lean — the join with no kink.
-  const txR = CX + R * Math.cos(th), txL = CX - R * Math.cos(th), ty = CY - R * Math.sin(th);
+  // Where the ellipse's tangent already equals the side's lean — the join with no kink.
+  const t = Math.atan((B / A) * Math.tan(th));
+  const txR = CX + A * Math.cos(t), txL = CX - (txR - CX), ty = CY - B * Math.sin(t);
   const run = (YB - ty) / Math.cos(th);            // how far the straight side travels
   const bxR = txR + run * Math.sin(th), bxL = CX - (bxR - CX);
   const d = CORNER / Math.tan(Math.PI / 4 + th / 2);   // fillet tangent length
@@ -82,7 +92,7 @@ const BELL = () => {
   const aR = [bxR - d * Math.sin(th), YB - d * Math.cos(th)], bR = [bxR - d, YB];
   const aL = [bxL + d * Math.sin(th), YB - d * Math.cos(th)], bL = [bxL + d, YB];
   return `
-  <path d="M${f(txL)} ${f(ty)}A${R} ${R} 0 0 1 ${f(txR)} ${f(ty)}L${f(aR[0])} ${f(aR[1])}A${CORNER} ${CORNER} 0 0 1 ${f(bR[0])} ${f(bR[1])}H${f(bL[0])}A${CORNER} ${CORNER} 0 0 1 ${f(aL[0])} ${f(aL[1])}Z"/>
+  <path d="M${f(txL)} ${f(ty)}A${A} ${B} 0 0 1 ${f(txR)} ${f(ty)}L${f(aR[0])} ${f(aR[1])}A${CORNER} ${CORNER} 0 0 1 ${f(bR[0])} ${f(bR[1])}H${f(bL[0])}A${CORNER} ${CORNER} 0 0 1 ${f(aL[0])} ${f(aL[1])}Z"/>
   <path d="M212 400h88a44 44 0 0 1-88 0Z"/>`;
 };
 
@@ -154,7 +164,7 @@ const BELL = () => {
       let xa = -1, xb = -1;
       for (let x = 0; x < N; x++) if (m[row*N+x]) { if (xa < 0) xa = x; xb = x; }
       if (xa < 0) return m;
-      const o = roundCorners(m, r), out = m.slice(), box = Math.round(r * 1.1);
+      const o = roundCorners(m, r), out = m.slice(), box = Math.round(r * 0.9);
       for (let y = yb - box; y <= yb + 2; y++) {
         if (y < 0 || y >= N) continue;
         for (let x = xa - box; x <= xa + box; x++) if (x >= 0 && x < N) out[y*N+x] = o[y*N+x];
