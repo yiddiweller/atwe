@@ -7029,8 +7029,12 @@ body.light .order-success{background:rgba(255,255,255,.82);}
    poking out on the left. NOTE this deliberately differs from the skeleton (.skel-stories),
    which uses the plain gutter: the skeleton has no rim, so its bare circle lands on the line
    at the plain gutter. Two different paddings, but both put the visible left edge on the line. */
-.ac-home-stories{gap:14px;padding:8px calc(var(--feed-gutter) + 4px) 12px;border-bottom:0.5px solid var(--b2);}
-body.light .ac-home-stories{border-bottom-color:rgba(0,0,0,.08);}
+/* NO line under the Dailies (owner). It has to say `none` rather than just dropping the
+   declaration: without it this inherits .story-tray's own `border-bottom:1px solid
+   var(--b1)`, which is HEAVIER than the hairline being removed — the line would have come
+   back thicker. The tray and the posts are separated by the gap and by the post card's
+   own fill, which is the same reason the divider between posts went. */
+.ac-home-stories{gap:14px;padding:8px calc(var(--feed-gutter) + 4px) 12px;border-bottom:none;}
 
 /* ── In-app announcement banner (MOTD) — solid grey card, no outline, style-coloured accent dot, white-pill CTA ── */
 /* beats `body.feed-cover #acFeed > *{background:var(--bg)}` (line ~2539) which black-fills every feed child */
@@ -11146,8 +11150,8 @@ body.light .ac-place:hover{background:rgba(0,0,0,.04);}
 .skel-pill{width:52px;height:calc(var(--post-inner-r) * 2);border-radius:999px;}
 /* Home-feed skeleton: a row of grey circles at the top, ghosting the Dailies/stories
    tray, so the loading state matches the real home layout. */
-.skel-stories{display:flex;gap:14px;padding:8px var(--feed-gutter) 12px;overflow:hidden;border-bottom:0.5px solid var(--b2);}
-body.light .skel-stories{border-bottom-color:rgba(0,0,0,.08);}
+/* The loading tray matches the real one: no line. */
+.skel-stories{display:flex;gap:14px;padding:8px var(--feed-gutter) 12px;overflow:hidden;border-bottom:none;}
 .skel-story-cell{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:8px;width:54px;}
 .skel-story-ring{width:54px;height:54px;border-radius:50%;}
 .skel-story-name{width:38px;height:9px;border-radius:5px;}
@@ -20589,7 +20593,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1738'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1739'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;

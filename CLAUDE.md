@@ -5972,6 +5972,24 @@ Covered by `scratchpad/postcard.js` (both themes: concentric corners, the card a
 44pt targets, all three contrast steps, counts, header untouched) and `scratchpad/cardsweep.js`
 (home, profile, bookmarks, hashtag, search). Reverting the design fails 8 of them.
 
+### No line between the Dailies and the feed
+
+The story tray used to draw its own `border-bottom` (`.ac-home-stories`, and
+`.skel-stories` for the loading copy). It is gone at the founder's request — the gap and
+the post card's own fill are the separation now, the same reason the divider between
+posts went when the card arrived.
+
+**It has to say `border-bottom:none`, not just drop the declaration.**
+`.ac-home-stories` is a modifier on `.story-tray`, which carries
+`border-bottom:1px solid var(--b1)` — heavier than the hairline being removed. Deleting
+the line would have brought a thicker one back.
+
+`scratchpad/trayline.js` scans REAL PIXELS in the left gutter, outside the post card, so
+the card's own edge cannot be mistaken for a divider — a hairline is a row brighter (on
+Black) or darker (on Light) than both its neighbours, which is exactly how the founder's
+screenshot showed it at brightness 19 on black (`--b2` is 8% white ≈ 20). It checks the
+loading tray and the real one in both themes, and fails 8 checks with the border restored.
+
 ### A photo shows a blurry version of itself, not a grey box
 
 A picture used to open as a grey box and pop in when the file arrived. Now the composer
