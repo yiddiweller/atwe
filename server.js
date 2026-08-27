@@ -2617,6 +2617,18 @@ function cleanImage(img) {
 // A GIF picked from the search proxy is sent as a remote https URL (not stored as
 // base64) — validate it's an https URL on an allowed GIF CDN host.
 const GIF_HOSTS = /^https:\/\/(media\.tenor\.com|c\.tenor\.com|media[0-9]?\.giphy\.com|i\.giphy\.com)\//i;
+/* A low-quality image placeholder: the ~20px-wide JPEG the composer made of the photo.
+   It is shipped INLINE with the post (a few hundred bytes) rather than through the media
+   route, because the whole point is that it is there on the first frame with no second
+   request. Capped hard — anything bigger than a genuine thumbnail is refused rather than
+   quietly stored, so this can never become a second copy of the picture. */
+const LQIP_MAX_CHARS = 3000;
+function cleanLqip(v) {
+  if (typeof v !== 'string' || !v) return null;
+  if (v.length > LQIP_MAX_CHARS) return null;
+  if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v)) return null;
+  return v;
+}
 function cleanGifUrl(u) {
   if (typeof u !== 'string' || u.length > 600) return null;
   return GIF_HOSTS.test(u) ? u : null;
@@ -18326,7 +18338,7 @@ async function recomputeNoteStatus(noteId) {
   } catch (e) { /* best-effort */ }
 }
 const POSTS_SELECT = `
-  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.media_name, p.doc_url, p.doc_name, p.doc_size, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only, p.min_tier_level, p.image_alt, p.ppv_cents, p.occasion, p.article_title, p.pinned_reply_id, p.poll_ends_at, p.ai_assisted, p.image_w, p.image_h,
+  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.media_name, p.doc_url, p.doc_name, p.doc_size, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only, p.min_tier_level, p.image_alt, p.ppv_cents, p.occasion, p.article_title, p.pinned_reply_id, p.poll_ends_at, p.ai_assisted, p.image_w, p.image_h, p.image_lqip,
          (p.promoted_until IS NOT NULL AND p.promoted_until > now()) AS promoted,
          (p.subscribers_only = false OR p.user_id = $1 OR EXISTS(SELECT 1 FROM creator_subs cs LEFT JOIN creator_tiers ct ON ct.id = cs.tier_id WHERE cs.creator_id = p.user_id AND cs.subscriber_id = $1 AND cs.status = 'active' AND (cs.period_end IS NULL OR cs.period_end > now()) AND COALESCE(ct.level, 0) >= p.min_tier_level)) AS sub_ok,
          (COALESCE(p.ppv_cents,0) = 0 OR p.user_id = $1 OR EXISTS(SELECT 1 FROM post_unlocks pu WHERE pu.post_id = p.id AND pu.user_id = $1)) AS ppv_ok,
@@ -18488,6 +18500,7 @@ function mapPost(r) {
     // URL like every other stored file, never inlined into the feed payload.
     doc: r.doc_url ? { url: mediaRef(r.doc_url, 'post-doc', r.id), name: r.doc_name || 'Document', size: r.doc_size || null } : null,
     subscribersOnly: !!r.subscribers_only, locked: false, minTierLevel: r.min_tier_level || 0, imageAlt: r.image_alt || null,
+    lqip: r.image_lqip || null,
     imageW: r.image_w || null, imageH: r.image_h || null,   // lets the feed reserve the photo's box before it loads
     ppvCents: r.ppv_cents > 0 ? r.ppv_cents : undefined,
     tagged: Array.isArray(r.tags) ? r.tags.filter((t) => t.kind === 'tag').map(({ kind, ...u }) => u) : [],
@@ -20801,6 +20814,8 @@ app.post('/api/social/posts', auth.requireAuth, blockLimited, rateLimit(40, 6000
   if (images === undefined) return res.status(400).json({ error: 'Those images could not be attached.' });
   // A GIF is sent by its remote URL (validated Tenor/Giphy CDN host) — same as chat.
   const gifUrl = cleanGifUrl(req.body.gifUrl);
+  // The blurry stand-in the composer made, so the photo has something to show instantly.
+  const imageLqip = cleanLqip(req.body.lqip);
   // A document (a PDF, a deck, a price list) — the thing a business actually
   // wants to put in front of people. Same data-URL storage as every other file.
   const doc = cleanPostDoc(req.body.doc, req.body.docName);
@@ -20936,10 +20951,10 @@ app.post('/api/social/posts', auth.requireAuth, blockLimited, rateLimit(40, 6000
     // Celebration: an occasion tag on a top-level post gives its card a festive banner.
     const occasion = (parentId == null && POST_OCCASIONS.includes(req.body.occasion)) ? req.body.occasion : null;
     const ins = await db.query(
-      `INSERT INTO posts (user_id, body, image, images, media, media_kind, media_name, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope, subscribers_only, image_alt, ppv_cents, min_tier_level, product_id, occasion, article_title, poll_ends_at, ai_assisted, doc_url, doc_name, doc_size)
-       VALUES ($1, $2, $3, $4, $5, $6, $20, $7, $8, $9, COALESCE($10::timestamptz, now()), $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, ${hasPoll ? `now() + interval '${pollDays} days'` : 'NULL'}, $21, $22, $23, $24) RETURNING id`,
+      `INSERT INTO posts (user_id, body, image, images, media, media_kind, media_name, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope, subscribers_only, image_alt, ppv_cents, min_tier_level, product_id, occasion, article_title, poll_ends_at, ai_assisted, doc_url, doc_name, doc_size, image_lqip)
+       VALUES ($1, $2, $3, $4, $5, $6, $20, $7, $8, $9, COALESCE($10::timestamptz, now()), $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, ${hasPoll ? `now() + interval '${pollDays} days'` : 'NULL'}, $21, $22, $23, $24, $25) RETURNING id`,
       [req.user.id, body, image, images.length > 1 ? images : null, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId, replyScope, subscribersOnly, imageAlt, ppvCents, minTierLevel, productId, occasion, articleTitle, media.name, req.body.aiAssisted === true,
-        doc ? doc.data : null, doc ? doc.name : null, doc ? doc.size : null]
+        doc ? doc.data : null, doc ? doc.name : null, doc ? doc.size : null, imageLqip]
     );
     const postId = ins.rows[0].id;
     if (quoteOwner != null) notify(quoteOwner, req.user.id, 'quote', postId);

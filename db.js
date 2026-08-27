@@ -3844,6 +3844,12 @@ async function initSchema() {
   // picture loads. Measured once from the image itself (backfillImageSizes) and
   // remembered — the same machinery chat messages already use.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS image_w INTEGER;`);
+  /* A ~20px-wide JPEG of the picture, a few hundred bytes, shipped inline with the post.
+     Stretched to full width by the browser it is naturally blurry — so a photo appears
+     instantly as a soft version of ITSELF and sharpens when the real file lands, instead
+     of sitting as a grey box. No CSS filter is involved, deliberately: a per-post blur is
+     what used to crash iOS on the feed. */
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS image_lqip TEXT;`);
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS image_h INTEGER;`);
 
   // Product tags (multi) — a piece of content (a post, a reel/short feed_post, or a
