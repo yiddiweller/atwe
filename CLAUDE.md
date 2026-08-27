@@ -5811,13 +5811,21 @@ a `<button>` needs its own colour.
 automatically (give it keywords in `ADMIN_TAB_KW`); a new panel is picked up by
 adding it to `ADMIN_PANELS`; a new verb goes in `ADMIN_ACTIONS`.
 
-### Photos and videos draw their own edge (`--img-edge`)
+### Photos and videos draw their own edge (`--img-edge`) — in CHAT only
 
 A near-black photo vanishes into the black app and a near-white one vanishes into the
-light app — the founder sent a screenshot of exactly that. Every photo/video in the
-**home feed** (`.ac-post-img`, `.ac-imggrid`, `.ac-vid-wrap .ac-post-vid`) and in
-**Beam** (`.msg-photo`, `.msg-imgcar`, `.msg-video`) carries a 1px hairline in
-**`--img-edge`** (`rgba(255,255,255,.13)` on dark, `rgba(0,0,0,.13)` on light).
+light app — the founder sent a screenshot of exactly that. **Beam** photos/videos
+(`.msg-photo`, `.msg-imgcar`, `.msg-video`) carry a 1px hairline in **`--img-edge`**
+(`rgba(255,255,255,.13)` on dark, `rgba(0,0,0,.13)` on light) — a bubble's photo sits on
+the page with nothing else to bound it.
+
+**POST photos no longer do** (owner). Once the post became a card, the card behind the
+picture already gives it an edge and the outline was doing the job twice, so
+`.ac-post-img`, `.ac-imggrid` and `.ac-vid-wrap .ac-post-vid` carry `border:none`.
+`scratchpad/imgedge.js` still proves the CHAT hairline by scanning real pixels, but
+asserts the post's ABSENCE from the computed style — scanning can prove a border is
+there and cannot prove one is absent (a border the same colour as what is behind it looks
+identical to none, and near a 14px rounded corner the sample lands on the card).
 
 This is the ONE outline the colour law allows, and it is deliberate: the law forbids
 outlining **boxes** (cards, panels, sheets — they separate by fill), whereas this is
@@ -5839,8 +5847,12 @@ knowing before writing a similar check:
 3. Still passed: a **transparent** border still shows the element's own background as
    a 1px band. The check that actually works is **edge pixel vs the element's own
    computed `background-color`** — `scratchpad/imgedge.js`, which seeds a genuinely
-   black (and genuinely white) photo into both a post and a DM and fails 4 checks when
-   `--img-edge` is switched off.
+   black (and genuinely white) photo into both a post and a DM.
+4. And the mirror lesson, learned when the post hairline was removed: **you cannot prove
+   a border is ABSENT by scanning pixels.** A border the same colour as what sits behind
+   it is indistinguishable from none, and near the post photo's 14px rounded corner the
+   sample lands on the card instead of the picture. Absence is asserted from the computed
+   `border-top-width`; only PRESENCE is worth a pixel scan.
 
 NB the For You feed is engagement-ranked and buries a brand-new post, so that probe
 reads the **Following** scope, which serves your own posts chronologically — same home
@@ -5945,6 +5957,76 @@ menu.
 Covered by `scratchpad/postcard.js` (both themes: concentric corners, the card actually painting,
 44pt targets, all three contrast steps, counts, header untouched) and `scratchpad/cardsweep.js`
 (home, profile, bookmarks, hashtag, search). Reverting the design fails 8 of them.
+
+### A photo shows a blurry version of itself, not a grey box
+
+A picture used to open as a grey box and pop in when the file arrived. Now the composer
+makes a **~20px-wide JPEG of the photo** (`makeLqip`, a few hundred bytes), sends it with
+the post, and it is stored on `posts.image_lqip` and shipped INLINE on `mapPost` as
+`lqip` — inline, not through the media route, because the whole point is that it is there
+on the first frame with no second request.
+
+**The blur is free, and that is deliberate.** A 20px image stretched to full width is
+naturally soft — no CSS filter is involved anywhere. A per-post `backdrop-filter` is
+exactly what used to make iOS jettison the feed (see the memory notes above), so this
+had to cost nothing to composite.
+
+**The stand-in goes on the IMAGE'S OWN background**, not a wrapper: the browser paints
+the background while the file is in flight and the picture paints over it the moment it
+decodes — same box, same colours, so it reads as sharpening rather than a swap. No
+wrapper also means no layout to get wrong (a post photo is either full-width or indented
+under the name, and a wrapper would have to track both) and no extra element per post.
+
+**One style attribute, not two.** `_postImgDims` emits the size and `_lqipCss` the
+stand-in, and they SHARE one `style=` — two `style` attributes on a tag is not an error,
+the browser keeps the first and silently drops the second. That is exactly how this
+shipped invisible the first time: the data was on the post, the DOM had it, and nothing
+appeared.
+
+**Limit worth knowing:** only photos posted from now on have a stand-in. Existing posts
+have no `image_lqip` and keep the grey box — backfilling would need an image library on
+the server (`sharp` or similar), which is a real dependency and a deploy risk, so it was
+not added. `cleanLqip` caps the value at 3000 chars and requires a `data:image/...`
+base64 payload, so this can never quietly become a second copy of the picture.
+
+Covered by `scratchpad/blurup.js`, which posts a real photo through the real path and
+then **blocks the media request entirely** to see what a viewer gets while waiting.
+
+### Nothing rearranges under the reader
+
+Three surfaces used to grow or shift a beat after opening. Measured on a 390×844 phone:
+Engine 605→864px at 291ms, Home 1390→4513, Beam 606→481.
+
+- **Engine.** Its blocks each arrive on their own request. `acXpPaintCached` already
+  painted a returning visitor's remembered html; now, when there is nothing remembered,
+  it **holds the block's height open** (`min-height`) until the content lands. The height
+  is remembered separately from the html (`_xpHeights`) because a height survives content
+  changes that the html does not; a device that has never opened Engine falls back to
+  `_XP_TYPICAL`. `acXpSet` releases the hold and records the new height.
+- **Home.** The skeleton averaged 219px a post against a real 403 — the page more than
+  doubled a fifth of a second in. Most skeleton posts now carry a media box and the
+  pills are the real size. The 180px media box is **tuned, not derived**: at the photo's
+  true 206px the first skeleton post came out 27px taller than the first real one and the
+  post below it visibly rose.
+
+`scratchpad/settle.js` measures the thing that actually matters — **whether anything ON
+SCREEN moves after the first paint** — rather than total height, which is allowed to grow
+below the fold (Home legitimately goes from 5 skeleton posts to a real feed).
+
+**Home is the one surface that cannot reach zero, and the reason is measurable.** A real
+post is **269–653px** tall depending on the SHAPE of its photo, so one skeleton height
+cannot match whichever post happens to arrive first; the skeleton sits near the median
+(345) and the residual is one post's variance. It shifts UP, which is far less disruptive
+than being pushed down. The probe allows 150px there and 2px everywhere else — a bound,
+not a fudge: the starting point was a 1390→4513px growth, so a regression still fails.
+
+**It throttles every API call to 700ms, and without that it proves nothing.** On a server
+running on the same machine the blocks arrive within a frame or two, so a broken page and
+a fixed one measure identically — the self-test passed with the fix removed until the
+throttle was added. Engine additionally asserts the page did not GROW, because on an
+account that has content in those blocks they sit above the fold and growth there pushes
+the page down; a fresh test account renders them empty and below the fold, where the
+on-screen check cannot see it.
 
 ### The welcome moment on login (`#welcomeSplash`)
 
