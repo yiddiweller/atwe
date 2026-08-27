@@ -910,7 +910,21 @@ below).
 > iPhone Settings; 26 is a 52px row's own capsule radius, which is what makes the big
 > cards concentric with the small ones. NB a short box (the search field, 42px) **clamps**
 > a 26px radius to about half its height and renders as a capsule — so a probe must
-> assert the SHAPE, not the literal token value. Two earlier passes got this wrong and
+> assert the SHAPE, not the literal token value.
+>
+> **A text field must never draw a focus ring, and `:focus-visible` will not save you.**
+> The app's own law (in the focus block near `input:focus{outline:none}`) is *"text
+> fields never show a ring — a bright outline around the box looks like a bug"*, but a
+> later, more specific rule re-added one to `.iset-search input:focus-visible` and
+> `.set-sheet .jp-in:focus-visible`, commented "only for keyboard nav, not touch". That
+> comment is wrong about text inputs: **per spec a focused text field ALWAYS matches
+> `:focus-visible`**, because it takes keyboard input — so on a phone every tap drew a
+> blue rectangle inside the grey pill, which is what the founder reported. Both were
+> removed. Focus is still shown the way the colour law allows — the pill's own fill
+> lifts a step (`.iset-search:focus-within,.me-search:focus-within{background:var(--s3)}`),
+> no outline, identical on phone and desktop. `scratchpad/focusring.js` focuses each bar
+> and fails if ANY pixel in it is the brand blue, in both themes; restoring the old rule
+> fails it four times. Two earlier passes got this wrong and
 > the founder rejected each on sight: gluing the tail onto the BOTTOM of the sections
 > card read as a twelfth section, and stacking Settings + Admin in one shared card made
 > two unrelated destinations read as a pair. Every gap down the page is **12px** —
