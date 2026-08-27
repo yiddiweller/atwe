@@ -249,6 +249,13 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
    (0.6×), not the doorway's — past roughly the leg width the open eats the leg itself and the
    carve-box lets the damage through.
    Regenerate with `node build.js` and re-embed; never hand-redraw.
+   **`GLYPH_SCALE` shrinks an icon's INNER MARK about the centre and leaves its ring
+   exactly where it is** (the ring is drawn from the radius, not from their bitmap, so
+   scaling the sample position moves only the mark). Today only Beam's three dots use it,
+   at **0.94** — the founder asked for them "literally a drop smaller, almost invisible".
+   Rendered at 1.00/0.95/0.92/0.88: 0.88 is plainly smaller, 0.95 is the edge of
+   perceptible. **Scale it, don't erode it**: eroding thins each dot but leaves the group
+   as wide, which reads as three thin dots rather than a smaller mark.
    **One `WEIGHT` drives every outline** (`WEIGHT=38 node build.js`, the shipped value —
    38/364 = 10.4% of the icon's footprint. It shipped at 48 (13.2%) and the founder found
    that "very thick, doesn't look professional"; their own drawn ring at 34 (9.3%) had
