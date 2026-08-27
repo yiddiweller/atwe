@@ -53,8 +53,8 @@ const b64 = (f, mime) => `data:${mime};base64,` + fs.readFileSync(D + f).toStrin
    The clapper renders SOLID rather than outlined and that is inherent, not a bug: the
    outline is derived by eroding by WEIGHT, and a shape barely thicker than WEIGHT has
    nothing left to hollow out. */
-const LEAN   = Number(process.env.LEAN   || 15);   // degrees the sides lean out from vertical
-const CORNER = Number(process.env.CORNER || 44);   // radius of the two bottom corners
+const LEAN   = Number(process.env.LEAN   || 20);   // degrees the sides lean out from vertical
+const CORNER = Number(process.env.CORNER || 82);   // radius of the two bottom corners
 /* THE CAP IS AN ELLIPSE, and that is the whole reason it can be both wide and shallow.
    With a circular dome its width and its height are ONE number, so making the sides read
    as straight lines (which needs a short cap) also made the top narrow — the founder saw
@@ -65,20 +65,31 @@ const CORNER = Number(process.env.CORNER || 44);   // radius of the two bottom c
    Tangency still holds, so there is still no kink: the join angle t solves
    tan t = (DOME_H/DOME_W)·tan(LEAN), and every point below is derived from it.
    Measured against a ring icon: at 88/88 the cap ran 27% of the bell's height but the
-   shoulders sat only 84 from centre and it read pinched; at 112/76 the cap is still 28%
-   — the sides stay straight — while the shoulders reach 110 and the top reads round. Past
-   about 128/64 it flattens into a squat shape that stops reading as a bell. */
-const DOME_W = Number(process.env.DOME_W || 112);  // cap half-width
-const DOME_H = Number(process.env.DOME_H || 76);   // cap height
+   shoulders sat only 84 from centre and it read pinched; a wide-and-shallow 112/76 fixed
+   the width but left a visible BEND at the shoulder, which the founder marked. That bend
+   is a CURVATURE jump, not a kink: a tangent-continuous arc meeting a line still goes from
+   the arc's curvature to zero in one step, and the tighter the arc is there, the more it
+   shows. The curvature radius at the join is what to watch — 112/76 gives 54, and the
+   shipped 104/104 gives 104, nearly twice as gentle. So the cap is back to a TRUE CIRCLE,
+   but a much bigger one than the 88 that read pinched, with LEAN at 20 to keep the sides
+   long and straight underneath it. Past about 128/64 the shape flattens and stops reading
+   as a bell. */
+const DOME_W = Number(process.env.DOME_W || 104);  // cap half-width
+const DOME_H = Number(process.env.DOME_H || 104);  // cap height
 /* And the INNER shape's two bottom corners, which came to a sharp point (founder: "the
    inside bottom corners are still pointy... a little round, similar to the home icon").
    Applied LOCALLY, exactly like roundInnerFeet on the arch: a global open also rounds
    the inner dome and visibly thickens the shoulders, and a generous carve-box does the
    same thing more slowly — 1.1x the radius is tight enough to stay at the bottom.
-   The radius is chosen so the inner corner reads as the SAME corner as the outer one, a
-   smaller concentric version of it rather than a tight nick inside a generous curve —
-   judged on a 3.4x zoom of the bottom-left corner at 0/26/36/46, where 36 is the match. */
-const BELL_INNER = Number(process.env.BELL_INNER || 36);
+   IT IS 0, AND THAT IS THE FIX, NOT A REGRESSION. Artificially rounding the inner corner
+   is what made the bottom look wrong: the founder marked it as "the inside is more rounded
+   than the outside". The real relationship is exact — a stroke of width WEIGHT around an
+   outer corner of radius CORNER leaves an inner radius of exactly CORNER - WEIGHT. At
+   CORNER=44 that was 6, nearly sharp, which is why the inner corner ever needed help; the
+   help then overshot the outside. Raising CORNER to 82 gives 82-38 = 44 inside, so the two
+   curves are CONCENTRIC BY CONSTRUCTION — evenly round by definition, nothing to tune.
+   Keep this at 0 unless the stroke and the corner stop being able to do that on their own. */
+const BELL_INNER = Number(process.env.BELL_INNER || 0);
 const BELL = () => {
   const A = DOME_W, B = DOME_H, CX = 256, TOP = 150, CY = TOP + B, YB = 376;  // top stays put
   const th = LEAN * Math.PI / 180;
