@@ -126,6 +126,11 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
 2. **Boxes are the exception, not the rule.** Most buttons/controls sit **directly on black, no box**
    (Home top-right icons, the login screen). A grey box is used **only** to group options/content —
    never wrap a button in a box just to have one; plain-on-black is the default.
+   **One deliberate exception, added by the founder's team: the feed post card and the row of
+   action pills inside it** (see "The feed post is a card"). The card itself was always allowed —
+   a post is grouped content — but the pills are a real amendment to the sentence above, made on
+   purpose rather than by drift: they are what stops the feed reading as an X transplant, and
+   they only apply INSIDE a post card. Everywhere else, plain-on-black still wins.
 3. **Solid, never outlined.** Grey boxes/cards are **solid fills, NO outline border** — they separate
    from black by their fill. The ONLY border in the app is the thin one on a secondary button.
 4. **Matching corners.** When a pill sits in a grey box's corner, the box's corner rounds to **hug it**
@@ -5872,6 +5877,74 @@ Covered by `scratchpad/engsettle.js`, which opens Engine **twice** (the first vi
 nothing remembered and is allowed to settle once) and fails if the second visit's height
 changes at all after the first frame. With the paint-from-cache line removed it reports
 `opens 724 → settles 1298` and fails.
+
+### The feed post is a card
+
+A post is a **card**, not a row between hairlines — the founder's team's design, adopted to stop
+the feed reading as X and to match the rest of Atwe, where listings, jobs and settings are already
+cards. Measured before adopting: density is unchanged (**1.77 posts per screen before, 1.80
+after** — the narrower photo inside the card pays for the padding), so the usual objection to
+cards did not apply here.
+
+**One number drives every corner, and it is DERIVED, never typed.** A shape sitting inside the
+card, inset by the card's own padding, is concentric with the card's corner exactly when its
+radius is `card radius − padding`. So `--post-inner-r` is
+`calc(var(--post-card-r) - var(--post-pad))` (26 − 12 = 14), the photo uses it, and the action
+pill's HEIGHT is `--post-inner-r × 2` — because a capsule's radius is half its height, that is the
+only height at which its corner matches the photo's. Change `--post-pad` or `--post-card-r` and
+everything follows. Hand-picked numbers are what drift.
+
+**The card is a `::before`, not the element's own background, and that is load-bearing.** On
+phones the feed rides UP over the tab menu as you scroll, and `body.feed-cover #acFeed > *`
+paints every row with the page colour so the rising content covers the menu. A card is inset by
+the gutter with a transparent gap between posts — as a plain background that would have let the
+menu show through the gutters permanently and strobe through every gap. Worse, that cover rule is
+more specific and **silently beat the card's own background**: the geometry was pixel-perfect and
+the fill simply never painted, with no error and nothing in the CSS that mentioned `.ac-post`.
+(Chasing it cost an hour. `background: red !important` set inline ALSO computed to black, which
+looks impossible — reading `getComputedStyle` in the same tick as the write returns a stale value.
+Wait a frame, or screenshot it.) So the row stays full-bleed and opaque for the cover, and the
+card is drawn inside it. The gap between posts is **padding, not margin**, for the same reason.
+
+**`--post-edge` defaults to ZERO.** The card renders on **22 surfaces**, and most of them (the
+hashtag page, cashtag, search, circles) already pad themselves — an inset of our own stacks on
+theirs, and the hashtag page measured a 38px gutter that way. Zero means each surface inherits the
+gutter it already had; only `#acFeed` (no padding of its own → 18px) and `.ac-list` (8px → 10 more)
+name a value. Add a surface and it is right by default.
+
+**Colours are three steps, and Light needed its own.** `--post-card` / `--post-pill` /
+`--post-pill-ink`. The card is the design system's own Dark grey (`#1C1C1E`), sampled straight out
+of the team's mockup. The pill (`#4B4B4B`) is a NEW step — a control sitting ON a dark-grey card
+has to be lighter than it, and nothing in the ladder was. **`--post-pill-ink` exists because `--t3`
+measures 2.2:1 on that grey** — the same trap the muted-group unread badge fell into, one surface
+further in; the count is 13px text and needs 4.5:1, so the ink is `#C7C7CC` (5.18:1, matching the
+5.20:1 the row has on black today). Neither of the mockup's greys survives the flip to Light —
+`#1C1C1E` is a black slab on white and a `#4B4B4B` pill is a blot — so Light has its own three
+(`#E3E6EB` / `#C3CBD4` / `#3A3A3F`). NB **contrast ratio understates a step at the light end**, so
+Light's card→pill of 1.31 looks like Black's 1.95; demanding the same number would force a pill
+dark enough to look wrong.
+
+**The pill is 28pt but the target is 44.** The corner arithmetic fixes the visible height; the
+touch minimum is carried by an invisible `::before` overlay (±8 vertical, ±3 horizontal to close
+the gap between neighbours). Sizing the visible pill to 44 would make the row a wall of grey. The
+team's mockup measured **27.4 × 28.6pt** with no overlay — 62% of the minimum area, seven in a row.
+
+**What was NOT taken from the mockup, at the founder's instruction:** the header is unchanged —
+**relative time and the ⋯ stay exactly where they are**. The mockup showed an absolute date
+("Aug 23, 2026") and no ⋯; relative time is what signals freshness, the app already reveals the
+full date on tap, and the ⋯ is where report / mute / not-interested live. `scratchpad/postcard.js`
+fails if either creeps back in. **Counts were kept too** — the mockup's pills are icon-only, but
+views is a poster's proof of reach and there is a "Hide like counts" setting, which only makes
+sense if counts normally show.
+
+**Still open:** the mockup has seven pills; today there are five (reply · repost · like · views ·
+bookmark). With the ⋯ staying in the header that accounts for six, and the seventh was most likely
+**share** — not added, because it was never explicitly asked for and share already lives in the ⋯
+menu.
+
+Covered by `scratchpad/postcard.js` (both themes: concentric corners, the card actually painting,
+44pt targets, all three contrast steps, counts, header untouched) and `scratchpad/cardsweep.js`
+(home, profile, bookmarks, hashtag, search). Reverting the design fails 8 of them.
 
 ### The welcome moment on login (`#welcomeSplash`)
 
