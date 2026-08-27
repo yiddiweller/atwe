@@ -193,8 +193,16 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
    stroke follows their exact shape, doorway included. **Notifications is a bell with
    NO ring around it** — deliberate, at the founder's request: its own form is what
    is rounded. The bell has **no hanger ball on top and no wide flared rim** (owner request):
-   a half-round dome, two sides that lean out slightly (`LEAN`, shipped at 11°), a base with
-   generously rounded corners (`CORNER`, 44), and the clapper. **The lean is built
+   a dome cap (`DOME`, 88), two sides that lean out (`LEAN`, shipped at **18°**), a base with
+   generously rounded corners (`CORNER`, 44), and the clapper.
+   **`DOME` is the knob that decides whether the sides read as LINES or as CURVES**, and it
+   is the one the founder kept coming back to. The tangential join (below) blends curve into
+   line smoothly — but with a big dome, most of each visible "side" is still curve. Measured:
+   at `DOME=114` the dome ran **41% of the bell's height** and the founder called the sides
+   round; at 88 it is **27%** and they read as straight lines that splay. Below about 76 it
+   turns into a tent. **`LEAN` rises as `DOME` shrinks** to keep the SAME base width — the
+   ask was the same widening achieved with a line instead of a curve — and the bell's top is
+   pinned (`CY = TOP + DOME`) so changing `DOME` never moves it. **The lean is built
    TANGENTIALLY and that is the whole point:** the first version drew a full semicircle and
    started the slant from its end point, but a semicircle's edge arrives VERTICAL, so the
    slant began with a visible kink — the founder called it "the twist". The dome now stops
@@ -207,7 +215,14 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
    length is `CORNER/tan(45°+LEAN/2)`, not simply CORNER, because that corner is no longer a
    right angle once the side leans. The clapper renders SOLID rather than outlined and that is
    inherent, not a bug — the outline is derived by eroding by `WEIGHT`, and a shape barely
-   thicker than `WEIGHT` has nothing left to hollow out. The Home arch's **feet are rounded**
+   thicker than `WEIGHT` has nothing left to hollow out.
+   **The bell's INNER bottom corners are rounded by `BELL_INNER` (26)**, and it has to be
+   LOCAL for exactly the reason the Home doorway did: a global open also rounds the inner
+   dome and visibly thickens the shoulders. `roundBottomCorners` opens the inner shape and
+   keeps that result only inside a box at each of its two bottom corners — and the box is
+   **1.1× the radius, not 1.6×**: at 1.6 it reached far enough up to round the dome anyway,
+   the same failure arriving more slowly. Rendered side by side at 0/26/34/42, 26 rounds the
+   corners with everything else untouched. The Home arch's **feet are rounded**
    by `roundCorners()` — an OPEN at `FOOT` (34), which rounds every CONVEX corner: both outer
    feet and both inner corners where each leg meets the doorway. **The doorway's two inside
    corners are then rounded FURTHER** by `roundInnerFeet()` at `DOORWAY` (60), because the
@@ -221,10 +236,11 @@ Green/red/yellow lettered text sits on their fills with **dark** text (bright hu
    (0.6×), not the doorway's — past roughly the leg width the open eats the leg itself and the
    carve-box lets the damage through.
    Regenerate with `node build.js` and re-embed; never hand-redraw.
-   **One `WEIGHT` drives every outline** (`WEIGHT=40 node build.js`, the shipped value —
-   40/364 = 11% of the icon's footprint; it shipped at 48 (13.2%) and the founder found that
-   "very thick, doesn't look professional", while their own drawn ring at 34 (9.3%) had
-   already been rejected as too thin, so 40 is the deliberate middle. Regenerate with
+   **One `WEIGHT` drives every outline** (`WEIGHT=38 node build.js`, the shipped value —
+   38/364 = 10.4% of the icon's footprint. It shipped at 48 (13.2%) and the founder found
+   that "very thick, doesn't look professional"; their own drawn ring at 34 (9.3%) had
+   already been rejected as too thin; 40 was the middle, and 38 is where it landed when
+   they asked for "literally a drop thinner". Regenerate with
    `cd tools/nav-icons && PW_SCRATCH=<dir with node_modules/playwright-core> node build.js`,
    then rewrite the ten `--nv-*` variables in `public/index.html` from the emitted
    `built.json`.)
