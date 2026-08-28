@@ -6074,6 +6074,26 @@ the `width` lets it fill the panel and respect both margins. Measure a bar like 
 its PARENT, not the window: a scrollbar can fake the same 4px, and ruling that out is what
 proved this one real.
 
+**ONE eye in the whole app.** There were **three** open-eye drawings and **two** crossed
+ones scattered through `index.html` — the classic Feather almond with sharp points at each
+end, in two slightly different sizes, plus a busy crossed variant with its own tiny pupil.
+All 25 places now draw the same shape: a softer lens with rounded ends and a larger pupil
+(`M2.8 12C5.2 7.9 8.4 5.8 12 5.8s6.8 2.1 9.2 6.2c-2.4 4.1-5.6 6.2-9.2 6.2S5.2 16.1 2.8 12Z`
++ `r=3.4`), and the hidden state is **that same lens with a slash and no pupil**, so the
+pair reads as one icon in two states rather than two icons. Sites: the post's views count,
+every show-password toggle, the Privacy & safety rows, a Daily's viewer count.
+
+Owner reference point: they described it as "the eye in Beam that turns blue when someone
+saw your message". **There is no eye there** — Beam's seen indicator is blue double ticks
+(`.mi-ic.seen`, `stroke:var(--accent)`). They were describing the QUALITY they wanted, not a
+specific existing glyph.
+
+`scratchpad/oneeye.js` greps the source for every old path (in `admin.html` too) and — the
+part that matters — **drives the show-password toggle**, because swapping icon markup is
+exactly the kind of edit that silently breaks the `.eye-open`/`.eye-off` classes the CSS
+switches on. It asserts the input really flips `password → text → password` and that the
+crossed eye is what shows while revealed.
+
 **The action row is ONE rhythm: equal buttons, and the gap between them is the card's own
 edge padding.** They used to size to their content — a count of 123 made one button wider
 than an empty one (measured **45 vs 40**) — and `justify-content:space-between` then spread
