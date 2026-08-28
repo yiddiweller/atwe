@@ -6206,6 +6206,18 @@ change to `--post-av` or the name's line-height cannot pull them apart again. It
 Covered by `scratchpad/timealign.js`, which also re-asserts both corner insets — the whole
 point is that fixing the alignment must not cost the concentric corner.
 
+**The post PAGE uses the same wrapper, with nothing in it but the ⋯.** It has no timestamp
+in its header, so the wrapper looks pointless there — it is not. `.ac-post-more` used to
+carry `margin-inline-start:auto` + `align-self:flex-start` itself; moving those onto
+`.ac-post-meta` for the feed silently un-pinned the detail page's ⋯, which measured **18px
+from the top and 146.6px from the right** (`.ac-pf-who` is not `flex:1`, so nothing pushed
+it over). Wrapping it too puts both surfaces on one rule instead of two. `postcorners.js`
+caught it; `postcard.js`'s ⋯ assertion had to be loosened at the same time — it named the
+⋯'s PARENT, which is now the wrapper. It asks two things now: the ⋯ is somewhere in the
+header row, and it is **not** inside `.ac-post-idcol`. That second half is the assertion
+that matters — the column has a fixed height, and nesting the ⋯ there is what crushed the
+@handle to nothing in build 1746. Re-nesting it still fails the loosened check.
+
 **The ⋯ is a sibling of the picture and the name column, NOT nested inside the column —
 and getting that wrong deleted the @username from every post.** `.ac-post-idcol` has a
 FIXED height (`--post-av`, so the name+handle centre on the picture), and the ⋯ used to sit
