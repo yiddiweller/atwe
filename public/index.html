@@ -9900,8 +9900,9 @@ body.light .call-fab-opt:active{background:rgba(0,0,0,.07);}
    the inverse so they keep the same rendered line weight. Change --foot-ic in one
    breakpoint and all three follow. */
 .sb-settings.sb-foot .sb-ico{width:var(--foot-ic,22px);height:var(--foot-ic,22px);}
-body:not(.nav-mini) .sidebar #sbSettingsRow.sb-foot svg{width:calc(var(--foot-ic,22px)*.733);height:calc(var(--foot-ic,22px)*.733);stroke-width:2.524;}
-body:not(.nav-mini) .sidebar #sbHelp2.sb-foot svg{width:calc(var(--foot-ic,22px)*.870);height:calc(var(--foot-ic,22px)*.870);stroke-width:2.129;}
+body:not(.nav-mini) .sidebar .sb-settings.sb-foot svg{width:var(--foot-ic,22px);height:var(--foot-ic,22px);}
+body:not(.nav-mini) .sidebar #sbSettingsRow.sb-foot svg{transform:scale(.733);stroke-width:2.524;}
+body:not(.nav-mini) .sidebar #sbHelp2.sb-foot svg{transform:scale(.870);stroke-width:2.129;}
 .ac-err{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:48px 28px;gap:4px;}
 .ac-err-ic{width:48px;height:48px;border-radius:50%;background:var(--s2);display:flex;align-items:center;justify-content:center;margin-bottom:10px;}
 .ac-err-ic svg{width:24px;height:24px;stroke:var(--t3);stroke-width:1.9;fill:none;}
@@ -20766,7 +20767,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1759'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1760'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
