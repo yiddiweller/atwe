@@ -1361,7 +1361,7 @@ button.ac-poll-opt:hover{background:var(--accent-dim);border-color:var(--accent)
 .ac-poll-total{font-size:12.5px;color:var(--t3);padding:1px 2px;}
 
 /* Post "more" button + author action sheet */
-.ac-post-more{margin-inline-start:auto;background:none;border:none;color:var(--t3);cursor:pointer;padding:2px 4px;display:flex;align-items:center;justify-content:center;border-radius:50%;min-width:32px;min-height:32px;margin-top:-6px;margin-bottom:-6px;}
+.ac-post-more{margin-inline-start:auto;align-self:flex-start;background:none;border:none;color:var(--t3);cursor:pointer;padding:2px 4px;display:flex;align-items:center;justify-content:center;border-radius:50%;min-width:36px;min-height:36px;}
 .ac-post-more svg{width:18px;height:18px;stroke:none;fill:currentColor;}
 .ac-post-more:hover{color:var(--t1);background:var(--s1);}
 /* ── Unified menu material (Apple iOS context-menu look, per theme) ──
@@ -6032,7 +6032,7 @@ body.reduce-motion .ac-newposts{animation:none;}
    line as well as a gap would be belt and braces. (Kept as a note rather than a
    deleted mystery: this used to be a 0.5px rule inset to the gutter.) */
 /* The ⋯ menu's dots end flush with the inset divider's right edge (the gutter). */
-#acFeed .ac-post-more{padding-inline-end:0;margin-inline-end:-2px;}
+#acFeed .ac-post-more{padding-inline-end:0;}
 /* 36px so the avatar's radius (18) equals --post-inner-r — the same corner as the photo
    and the action pills. It sits in the card's top-left corner inset by the padding, which
    is exactly the case rule 4 covers: box radius = inner radius + the gap (18 + 12 = 30). */
@@ -20623,7 +20623,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1745'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1746'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
