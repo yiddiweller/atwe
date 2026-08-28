@@ -6369,6 +6369,17 @@ genuinely blank screen renders none.
 **The slim top pill stays.** Taking the whole screen for two seconds of lost signal would be
 obnoxious; the pill is right for a blip and this is right for "there is nothing to show".
 
+**The takeover is not the common case, and the first pass missed the common one.** The
+founder hit it with the wifi off and got the app fully rendered (it boots from the cached
+profile, so no takeover fires) with a generic *"Something went wrong"* where the feed should
+be — technically true, unhelpful, and not the screen we built. That is **`acErr(el, retry)`**,
+the shared inline failure state behind every panel in the app. It draws the satellite now,
+at 120px, and **switches its wording to the offline one** after asking `acCanReachServer()`
+— rendering first and correcting after, so a panel never waits on a probe. **`acSatelliteHtml`
+CLONES the drawing out of `#stateScreen`'s own markup** so there is exactly one satellite in
+the app and the two can never drift; the clone duplicates the gradient ids, which is harmless
+precisely because the definitions are identical (both resolve to the first).
+
 Focus moves to `.st-wrap` (`tabindex="-1"`), **not** to the button: focusing the button drew
 the app's global `:focus-visible` ring on a plain phone tap, so the one control arrived
 pre-highlighted. The picture is `aria-hidden` and the state is `announce()`d — the words and
@@ -6439,6 +6450,17 @@ the question mark beside it, in all three layouts. `scratchpad/sbfoot.js` had th
 spot: it measured `querySelector('svg')`, which returns null for this row, so the size
 comparison silently stopped meaning anything. It looks for `svg,.sb-ico` now and separately
 asserts the `.nv-off` mask is really there.
+
+**The three footer icons are matched by INK, not by box** — the same lesson as the post's
+action row, one surface further in. They already shared a 22px box and still looked wrong:
+the founder's nav artwork carries its own padding (ink 16), the gear fills its viewBox edge
+to edge (22), the question mark sits between (19). `--foot-ic` is the Account mask's box and
+the only thing a breakpoint changes; each stroked icon is scaled by the ratio its own drawing
+overfills that box by (`.727`, `.842`) with **`stroke-width` scaled by the inverse**, so a
+shrunk icon does not also come out lighter. Scoped `body:not(.nav-mini)`: the collapsed icon
+rail shows no labels, so equal boxes is the right rule there and scaling a 14px gear to .727
+would just make it a speck. `sbfoot.js` measures the real ink in a screenshot — asserting
+equal BOXES is what let this ship wrong in the first place.
 
 They carry `.sb-foot`, which steps them down from the hub rows — 19px/26px → **16.5/22** in
 the mobile drawer, 18px/24px → **15.5/21** on the desktop rail. **Two overrides are needed,
