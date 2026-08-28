@@ -6353,6 +6353,38 @@ hidden element still HAS a rect, an all-zero one, so the existing "no anchor" fa
 never fired and the chooser would have opened in the screen's top-left corner on every
 phone. It tests the rect's WIDTH now, not just the element's existence.
 
+**The drawer's footer is Account + Help & feedback, a step quieter than the hub.** The
+gear row was renamed and repointed (owner): `#sbSettings2` now reads **Account** with a
+person glyph and opens the Account world (`acNavAccount` → `appTab('profile')`), and
+`#sbHelp2` sits under it opening that hub's own Help & feedback section
+(`acNavHelp` → `acMeSection('app')`). Neither is a new surface. **Settings is therefore one
+tap further in** — on the Account page's own Settings card, which is where it moved when
+that page was restructured; it is no longer in the drawer at all. Both openers close the
+mobile drawer first, exactly as `acNavUpgrade` does, or the destination opens behind it.
+
+They carry `.sb-foot`, which steps them down from the hub rows — 19px/26px → **16.5/22** in
+the mobile drawer, 18px/24px → **15.5/21** on the desktop rail. **Two overrides are needed,
+one per media query**, because the drawer and the rail each size `.sb-settings` separately;
+one rule silently covers only half the app.
+
+**Between 768 and 1282px the rail is icons only** (`body.nav-mini`, `font-size:0`), so
+"a step smaller" has nothing to say there — but the icons still sit in one column, and
+`.sb-settings svg`'s base **17px against `.sb-btn svg`'s 14** made the two footer icons
+visibly bigger than every hub icon above them. Pre-existing, and plainly wrong in a rail
+whose entire content is icons; evened up in the same pass. `scratchpad/sbfoot.js` checks
+all three widths and branches on `font-size === 0` to ask the right question at each.
+
+**The Pro row is hidden once you are Pro**, in both places that build it (the hub context's
+`proBtn` and the per-page `upgradeBtn`) — same rule as the profile popover's plan row.
+**The `© Atwe Inc` line is gone**, along with its CSS and the two collapsed-rail rules that
+named it.
+
+**One thing left odd on DESKTOP only, flagged rather than guessed at:** `#sbProfile` still
+sits above the new pair labelled "Profile", and it opens the ACCOUNT MENU (Add account /
+Log out), not the profile — so a row called "Profile" now sits directly above one called
+"Account". It stays because it is desktop's only route to **Add account** (Log out is also
+on the Account page, but Add account is not).
+
 **The bottom nav pill sliced through the open drawer, and z-index could not fix it.**
 `.sidebar` lives inside `#app`, which is `position:fixed; z-index:1` — a stacking context —
 so however high the drawer's own z-index goes (200) it can never paint above a body-level
