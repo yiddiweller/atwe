@@ -6322,6 +6322,59 @@ exactly the sort of thing that makes a bug survive: the person most likely to no
 the one person who can't see it. The `::before` card is immune, for the same reason the post
 card was moved to one.
 
+### When there is nothing to show: the offline / error takeover
+
+A blank screen was the app's answer to both "your wifi is off" and "the code threw".
+`#stateScreen` replaces that with a clay satellite, one line, and one button — the shape
+every guide on error states converges on, and the shape the founder asked for.
+
+**The illustration is drawn INLINE and that is not a style choice.** This is the one screen
+that must work with the network completely dead, so an `<img>` would be a broken-image icon
+in exactly the moment it exists to cover. It is SVG + CSS, a few KB, shipped in the shell.
+`offstate.js` asserts zero remote images on the screen.
+
+**Claymorphism, monochrome** (founder: *"just stay like a black or white design"*). Soft
+radial shading, inflated forms, no strokes. The clay tones are `--st-c1/c2/c3` + `--st-ink`
+so **Light can darken them** — the Black values are near-white and would be an invisible
+satellite on a white page. The probe proves it by sampling REAL PIXELS inside the artwork
+box and requiring >3:1 between its lightest and darkest point in both themes.
+
+**`body.light .overlay` had to be beaten explicitly.** This is a PAGE, not a sheet over one,
+so without `body.light .overlay.st-screen{background:var(--bg)}` it inherited the dark scrim
+and Light rendered a grey slab (measured `rgba(0,0,0,.42)`) — the same trap `.set-fs` hit.
+
+**`navigator.onLine` LIES, and this was caught the hard way.** A browser put genuinely
+offline — every request failing with `ERR_INTERNET_DISCONNECTED` — still reported
+`navigator.onLine === true` in a freshly reloaded document, so the first version of this
+screen never appeared. The flag reports a LINK, not reachability: a router with no internet
+behind it, a captive portal, a cellular dead zone all read as online. Everything now asks
+the network instead — **`acCanReachServer()`** does one aborting `fetch('/api/health')` and
+believes only the answer. Three places depend on it: the Try-again button (which says "still
+no connection" rather than reloading into the same wall), the quiet 5-second poll that
+recovers on its own, and the watchdog's choice between offline and error. The `online` event
+is kept only as a hint to probe early — never as proof.
+
+**Boot's own trigger uses the better signal it already has:** `meErr && !meErr.status`. An
+HTTP status means a server ANSWERED (so a 401 really is a login problem and the gate is the
+right answer); no status means the request never arrived. That branch fires before the
+login gate, so "your wifi is off" stops being answered with "sign in".
+
+**There is deliberately NO global `window.onerror` takeover.** Blanking a working app the
+first time some unrelated handler throws is worse than the bug. Two safe triggers instead:
+boot's own `.catch` (if boot threw, nothing rendered, so a takeover cannot cover anything),
+and **`_blankWatchdog()`** — one check, 6s after boot settles, keyed off the SYMPTOM:
+`document.body.innerText` being empty. Every real surface in this app renders some text; a
+genuinely blank screen renders none.
+
+**The slim top pill stays.** Taking the whole screen for two seconds of lost signal would be
+obnoxious; the pill is right for a blip and this is right for "there is nothing to show".
+
+Focus moves to `.st-wrap` (`tabindex="-1"`), **not** to the button: focusing the button drew
+the app's global `:focus-visible` ring on a plain phone tap, so the one control arrived
+pre-highlighted. The picture is `aria-hidden` and the state is `announce()`d — the words and
+the button carry the whole meaning, which is the accessibility rule every source repeats.
+Covered by `scratchpad/offstate.js` (23 checks) which drives a REAL offline browser context.
+
 ### The account menu, the drawer, and where a plan change lives
 
 **The top-right profile popover is three rows: the account, Add account, Log out** — plus a
