@@ -6074,6 +6074,25 @@ the `width` lets it fill the panel and respect both margins. Measure a bar like 
 its PARENT, not the window: a scrollbar can fake the same 4px, and ruling that out is what
 proved this one real.
 
+**A post card has FOUR corners and each one holds something — they must all be inset by
+`--post-pad`.** Three were: the profile picture top-left, and the first and last action
+pills bottom-left and bottom-right, each 36 across at 12, so their centres land on (30,30)
+— the corner arc's own centre — and each nests in its curve with an even 12 all the way
+round. The **⋯ in the top-right was the odd one out**: 32 across, and dragged out by
+`margin-top:-6px` / `margin-inline-end:-2px` left over from when the header row had no
+fixed height. Measured **10 from the right and 6.4 from the top** where every other corner
+is 12/12 — one corner of every post in the app was visibly tighter than the other three,
+which is what the owner kept seeing and could not name. It is 36 across now, with the
+negative margins gone, plus **`align-self:flex-start`**: in the feed the row is exactly its
+height so that changes nothing, but on the post PAGE the row is 48 tall and centring left
+it 18 from the card's top while the picture opposite sat at 12.
+
+`scratchpad/postcorners.js` checks all four corners on the feed AND the post page in both
+themes. Two traps it hit: the post page's action row is `.ac-pf-actions`, not
+`.ac-post-actions`, so the first version silently found no pills there; and a probe passed
+to `page.evaluate` **as a string** is run as an expression, so its argument arrives
+`undefined` and `querySelector(undefined)` quietly returns null — pass a real function.
+
 **Every card in the app turns on the SAME corner, and that took an audit to see.** The
 owner kept saying the edges were not even and could not say which two; measuring the whole
 app found **four different card corners on screen at once** — post cards and the nav bar at
