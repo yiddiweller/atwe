@@ -6074,6 +6074,19 @@ the `width` lets it fill the panel and respect both margins. Measure a bar like 
 its PARENT, not the window: a scrollbar can fake the same 4px, and ruling that out is what
 proved this one real.
 
+**The ⋯ is a sibling of the picture and the name column, NOT nested inside the column —
+and getting that wrong deleted the @username from every post.** `.ac-post-idcol` has a
+FIXED height (`--post-av`, so the name+handle centre on the picture), and the ⋯ used to sit
+inside `.ac-post-head` INSIDE that column. The moment the ⋯ grew 32 → 36 so its corner
+could match the card's other three, `.ac-post-head` grew with it, the column's content went
+past its height, and **flex silently shrank the @handle to zero** — the username vanished
+app-wide and nothing failed, because every probe checked position and none checked that the
+line still had height. It is a direct child of `.ac-post-top` now, which is also what it
+always should have been: it belongs to the card's top-right corner, not to the person's
+name. `.ac-post-idcol > *{flex:0 0 auto}` makes the collapse impossible to repeat, and
+`postcorners.js` asserts BOTH lines have real height. **A fixed-height flex column will
+crush its own children rather than overflow — assert height, not just presence.**
+
 **A post card has FOUR corners and each one holds something — they must all be inset by
 `--post-pad`.** Three were: the profile picture top-left, and the first and last action
 pills bottom-left and bottom-right, each 36 across at 12, so their centres land on (30,30)

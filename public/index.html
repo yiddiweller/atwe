@@ -6047,6 +6047,10 @@ body.reduce-motion .ac-newposts{animation:none;}
 .ac-post-av{flex:0 0 auto;cursor:pointer;align-self:flex-start;}
 .ac-post .user-avatar{width:var(--post-av);height:var(--post-av);font-size:17px;flex-shrink:0;cursor:pointer;}
 .ac-post-idcol{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:1px;height:var(--post-av);}
+/* The column's height is fixed, so its two lines must be unshrinkable — otherwise flex
+   quietly collapses one of them to nothing, which is exactly how the @handle disappeared
+   from every post in build 1746. */
+.ac-post-idcol > *{flex:0 0 auto;}
 .ac-post-body{margin-top:9px;}
 /* Long feed posts clamp to ~10 lines with a "Show more" toggle (X/FB-style). */
 .ac-post-text.clamp .apt-inner{display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;}
@@ -20623,7 +20627,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1746'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1747'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -37137,10 +37141,10 @@ function acPostCard(p) {
         <div class="ac-post-head">
           <span class="ac-post-nameline"><span class="ac-post-name" onclick="event.stopPropagation();acGoProfile('${h}')">${escHtml(p.author.name)}${vbadge(acIsVerified(p.author))}</span>${(p.coAuthors && p.coAuthors.length) ? `<span class="ac-coauthor"> & ${p.coAuthors.map(c => `<b onclick="event.stopPropagation();acGoProfile(${jsAttr(c.username || '')})">${escHtml(c.name.split(' ')[0])}</b>`).join(', ')}</span>` : ''}${acAffBadge(p.author)}</span>
           <span class="ac-post-time">${acTime(p.created_at)}</span>${p.editedAt ? '<span class="ac-post-edited">· Edited</span>' : ''}
-          ${more}
         </div>
         <div class="ac-post-handle" onclick="event.stopPropagation();acGoProfile('${h}')">@${escHtml(h)}</div>
       </div>
+      ${more}
     </div>
     <div class="ac-post-body">
       ${(!p.locked && p.occasion) ? acOccasionBanner(p.occasion) : ''}
