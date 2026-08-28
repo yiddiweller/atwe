@@ -1363,7 +1363,7 @@ button.ac-poll-opt:hover{background:var(--accent-dim);border-color:var(--accent)
 .ac-poll-total{font-size:12.5px;color:var(--t3);padding:1px 2px;}
 
 /* Post "more" button + author action sheet */
-.ac-post-more{margin-inline-start:auto;align-self:flex-start;background:none;border:none;color:var(--t3);cursor:pointer;padding:2px 4px;display:flex;align-items:center;justify-content:center;border-radius:50%;min-width:36px;min-height:36px;}
+.ac-post-more{background:none;border:none;color:var(--t3);cursor:pointer;padding:2px 4px;display:flex;align-items:center;justify-content:center;border-radius:50%;min-width:36px;min-height:36px;}
 .ac-post-more svg{width:18px;height:18px;stroke:none;fill:currentColor;}
 .ac-post-more:hover{color:var(--t1);background:var(--s1);}
 /* ── Unified menu material (Apple iOS context-menu look, per theme) ──
@@ -6430,11 +6430,20 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
 .ac-prof-name .ac-affbadge{width:22px;height:22px;border-radius:7px;margin-inline-start:6px;}
 .ac-prof-name>.ac-affbadge{transform:translateY(.24em);}
 .ac-post-name:hover{text-decoration:underline;}
-.ac-post-time{font-size:13px;color:var(--t3);white-space:nowrap;margin-inline-start:auto;flex-shrink:0;}
+/* The timestamp and the ⋯ are ONE cluster in the card's top-right corner, so they must
+   share a line. They cannot while the time lives inside .ac-post-head: that sits in
+   .ac-post-idcol, a FIXED-height column (--post-av) that centres its two lines, so the
+   time rides the NAME's line — while the ⋯ is pinned to the top of the row, which it has
+   to be, or its corner stops being concentric with the card's. Measured 8.6px apart, and
+   the founder photographed exactly that. The wrapper takes them both out of the column:
+   its own height is the ⋯'s, and centring inside it puts the two on one line by
+   construction rather than by a hand-tuned nudge. */
+.ac-post-meta{display:flex;align-items:center;gap:2px;margin-inline-start:auto;
+  align-self:flex-start;min-height:36px;flex-shrink:0;}
+.ac-post-time{font-size:13px;color:var(--t3);white-space:nowrap;flex-shrink:0;}
 .ac-post-edited{font-size:12px;color:var(--t3);white-space:nowrap;flex-shrink:0;margin-inline-start:5px;}
 /* In a post header the time + ⋯ sit together on the right (the time's auto
    margin already pushes the group over, so the more-button shouldn't add its own). */
-.ac-post-head .ac-post-more{margin-inline-start:0;}
 /* Post info sheet (⋯ → Info): exact date/time + engagement details. */
 .pinfo-row{display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid var(--divider);}
 .pinfo-row:last-child{border-bottom:none;}
@@ -20646,7 +20655,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1751'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1752'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -37178,11 +37187,10 @@ function acPostCard(p) {
       <div class="ac-post-idcol">
         <div class="ac-post-head">
           <span class="ac-post-nameline"><span class="ac-post-name" onclick="event.stopPropagation();acGoProfile('${h}')">${escHtml(p.author.name)}${vbadge(acIsVerified(p.author))}</span>${(p.coAuthors && p.coAuthors.length) ? `<span class="ac-coauthor"> & ${p.coAuthors.map(c => `<b onclick="event.stopPropagation();acGoProfile(${jsAttr(c.username || '')})">${escHtml(c.name.split(' ')[0])}</b>`).join(', ')}</span>` : ''}${acAffBadge(p.author)}</span>
-          <span class="ac-post-time">${acTime(p.created_at)}</span>${p.editedAt ? '<span class="ac-post-edited">· Edited</span>' : ''}
         </div>
         <div class="ac-post-handle" onclick="event.stopPropagation();acGoProfile('${h}')">@${escHtml(h)}</div>
       </div>
-      ${more}
+      <div class="ac-post-meta"><span class="ac-post-time">${acTime(p.created_at)}</span>${p.editedAt ? '<span class="ac-post-edited">· Edited</span>' : ''}${more}</div>
     </div>
     <div class="ac-post-body">
       ${(!p.locked && p.occasion) ? acOccasionBanner(p.occasion) : ''}
