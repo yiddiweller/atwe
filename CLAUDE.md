@@ -6074,6 +6074,29 @@ the `width` lets it fill the panel and respect both margins. Measure a bar like 
 its PARENT, not the window: a scrollbar can fake the same 4px, and ruling that out is what
 proved this one real.
 
+**The five post actions are drawn ONCE and normalised to one visual size.** They used to
+be inline in two places and had drifted — the feed and the post page even carried different
+reply bubbles — and each glyph filled a different amount of the 24×24 box: measured, repost
+was **22 tall**, the heart **20.8 wide**, the eye only **13.8 tall**, the bookmark **14
+wide**. `_ACT_REPLY` / `_ACT_REPOST` / `_ACT_VIEWS` / `_ACT_BOOKMARK` / `_LIKE_SVG` are now
+the single source and both surfaces interpolate them.
+
+**Fitting a common BOX is not the same as looking the same size** — a wide flat glyph fills
+its box in one direction only and still reads small beside a heart, which is exactly what
+the owner saw. Each glyph is scaled so its **geometric mean `sqrt(w·h)` is 18**, uniformly
+so nothing distorts, wrapped in a `<g transform="… scale(s)" stroke-width="W/s">` — the
+**compensated stroke-width is what keeps a scaled glyph's line identical to an unscaled
+one**, and forgetting it is how an icon set drifts. Stroke went 1.9 → **2.3** (owner: "a
+little thicker").
+
+**The eye was the one still wrong afterwards, and it was CSS, not the drawing.**
+`.ac-views svg` carried its own `width:17px` and `stroke-width:1.9` while its four
+neighbours were 18 and 2.3 — same specificity as the shared row rule but **later in the
+file, so it won**. That is why the eye read smaller and lighter no matter what the artwork
+did. It inherits the row now. `scratchpad/iconsize.js` measures each glyph's geometry box
+AND its **on-screen** stroke via `getScreenCTM()` — a compensated stroke only looks right
+if you check the rendered result, not the attribute.
+
 **ONE eye in the whole app.** There were **three** open-eye drawings and **two** crossed
 ones scattered through `index.html` — the classic Feather almond with sharp points at each
 end, in two slightly different sizes, plus a busy crossed variant with its own tiny pupil.
