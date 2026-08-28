@@ -6362,6 +6362,20 @@ tap further in** — on the Account page's own Settings card, which is where it 
 that page was restructured; it is no longer in the drawer at all. Both openers close the
 mobile drawer first, exactly as `acNavUpgrade` does, or the destination opens behind it.
 
+**The Account row draws the founder's OWN nav artwork, not a stand-in glyph.** It uses the
+exact mask pair the bottom bar's Account tab uses — `<span class="sb-ico"><i class="nv-off"
+style="--m:var(--nv-profile-off)"><i class="nv-on" style="--m:var(--nv-profile-on)"></span>`
+(the internal tab id is still `profile`). Never hand-draw one of these: they come out of
+`tools/nav-icons/build.js`. It stays in the outline state because the row is a destination,
+not the active tab, and `.nv-on` only shows under `.active`.
+
+That costs THREE extra sizing rules, because `.sb-ico` is sized by `--nv-size-side` (30px)
+and every footer rule so far named only `svg` — so the account mark would have towered over
+the question mark beside it, in all three layouts. `scratchpad/sbfoot.js` had the same blind
+spot: it measured `querySelector('svg')`, which returns null for this row, so the size
+comparison silently stopped meaning anything. It looks for `svg,.sb-ico` now and separately
+asserts the `.nv-off` mask is really there.
+
 They carry `.sb-foot`, which steps them down from the hub rows — 19px/26px → **16.5/22** in
 the mobile drawer, 18px/24px → **15.5/21** on the desktop rail. **Two overrides are needed,
 one per media query**, because the drawer and the rail each size `.sb-settings` separately;
