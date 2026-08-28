@@ -68,6 +68,11 @@ from them; "go" is the whole instruction.
    was already built, what broke and how it was caught, and what is NOT done.
    Then wait for the next "go".
 
+**Apple Developer enrollment is APPROVED** (28 Aug 2026, Team `TH3FQ8FMKB`) — it is no
+longer a blocker, and `atwe-mobile/PROJECT-STATUS.md` carries the detail. What still sits
+outside the code: a paid TURN/call-relay service (voice + video fall back to a free public
+relay and often fail on cellular), Railway database backups, and a Play developer account.
+
 **Tone with this owner:** they are non-technical and test on a real iPhone.
 Explain plainly, never oversell, always volunteer the limitation or the bug
 before they find it. Honest small numbers beat flattering big ones.
