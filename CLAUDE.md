@@ -6380,6 +6380,14 @@ CLONES the drawing out of `#stateScreen`'s own markup** so there is exactly one 
 the app and the two can never drift; the clone duplicates the gradient ids, which is harmless
 precisely because the definitions are identical (both resolve to the first).
 
+**It is CENTRED by measurement, not by a CSS guess.** `.ac-err` is only as tall as its
+content and the feed container starts just under the tab row, so the block rode high — the
+founder's second complaint. A blanket `min-height` in CSS would be wrong, because the same
+state renders inside small sheets, so `acErr` measures the room at render time (container
+top → viewport bottom, less ~96px for the floating nav pill) and stretches only when that
+is a real screenful (>380px). Measured: content midpoint 426 against a screen midpoint of
+422. The satellite is 168px here.
+
 Focus moves to `.st-wrap` (`tabindex="-1"`), **not** to the button: focusing the button drew
 the app's global `:focus-visible` ring on a plain phone tap, so the one control arrived
 pre-highlighted. The picture is `aria-hidden` and the state is `announce()`d — the words and
@@ -6456,7 +6464,8 @@ action row, one surface further in. They already shared a 22px box and still loo
 the founder's nav artwork carries its own padding (ink 16), the gear fills its viewBox edge
 to edge (22), the question mark sits between (19). `--foot-ic` is the Account mask's box and
 the only thing a breakpoint changes; each stroked icon is scaled by the ratio its own drawing
-overfills that box by (`.727`, `.842`) with **`stroke-width` scaled by the inverse**, so a
+overfills that box by (`.733`, `.870`, tuned by measuring until all three read **16×16**)
+with **`stroke-width` scaled by the inverse**, so a
 shrunk icon does not also come out lighter. Scoped `body:not(.nav-mini)`: the collapsed icon
 rail shows no labels, so equal boxes is the right rule there and scaling a 14px gear to .727
 would just make it a speck. `sbfoot.js` measures the real ink in a screenshot — asserting
