@@ -5924,31 +5924,57 @@ theirs, and the hashtag page measured a 38px gutter that way. Zero means each su
 gutter it already had; only `#acFeed` (no padding of its own → 18px) and `.ac-list` (8px → 10 more)
 name a value. Add a surface and it is right by default.
 
-**A loading placeholder needs its OWN grey (`--post-skel`).** The shared `.skel` fill is
-`--s2` — lighter than the black page, which is right everywhere a skeleton lies on the
-page, but DARKER than the post card. Inside a card the placeholder bars therefore read as
-holes punched out of it, and because they cover most of the card while it loads, the whole
-loading state looked like a different, muddier grey than a real post. That is what the
-founder reported as "the post gray is not the same gray we use" — the two cards were in
-fact already identical (`rgb(28,28,29)` in both of their screenshots); it was the
-placeholders on top making one of them *look* different. A placeholder has to be a step
-ABOVE whatever it lies on: `#2E2E31` on Black, and a step DARKER (`#CBD2DA`) on Light,
-where darker is what reads as a placeholder. `scratchpad/skelgrey.js` takes the card
-colour from its computed `::before` and the placeholder from a REAL pixel — sampling the
-card by guessing a coordinate landed on the page instead, so the check was
-placeholder-vs-black and passed with the old inverted grey still in place.
+**A loading placeholder needs its OWN grey (`--post-skel`), and it is the PILL's grey.**
+The shared `.skel` fill is `--s2` — lighter than the black page, which is right everywhere
+a skeleton lies on the page, but DARKER than the post card. Inside a card the placeholder
+bars therefore read as holes punched out of it, and because they cover most of the card
+while it loads, the whole loading state looked like a different, muddier grey than a real
+post. That is what the founder reported as "the post gray is not the same gray we use" —
+the two cards were in fact already identical (`rgb(28,28,29)` in both of their
+screenshots); it was the placeholders on top making one of them *look* different.
 
-**Colours are three steps, and Light needed its own.** `--post-card` / `--post-pill` /
-`--post-pill-ink`. The card is the design system's own Dark grey (`#1C1C1E`), sampled straight out
-of the team's mockup. The pill (`#4B4B4B`) is a NEW step — a control sitting ON a dark-grey card
-has to be lighter than it, and nothing in the ladder was. **`--post-pill-ink` exists because `--t3`
-measures 2.2:1 on that grey** — the same trap the muted-group unread badge fell into, one surface
-further in; the count is 13px text and needs 4.5:1, so the ink is `#C7C7CC` (5.18:1, matching the
-5.20:1 the row has on black today). Neither of the mockup's greys survives the flip to Light —
-`#1C1C1E` is a black slab on white and a `#4B4B4B` pill is a blot — so Light has its own three
-(`#E3E6EB` / `#C3CBD4` / `#3A3A3F`). NB **contrast ratio understates a step at the light end**, so
-Light's card→pill of 1.31 looks like Black's 1.95; demanding the same number would force a pill
-dark enough to look wrong.
+The first fix made it a step ABOVE the card and it was asked darker **three times**:
+`#2E2E31` (1.36:1, "a very light gray") → `#242427` (1.19) → `#1B1B1E` (1.07) → *"I want
+you should make the lighter gray should be fully black… all the buttons and lines should
+be fully black"*. So it stopped being a step above and became the PAGE colour — a loading
+card is now one dark-grey box with black shapes cut into it and no second grey anywhere in
+it. It is deliberately the **same value as `--post-pill`**, so loading → loaded never
+changes tone. Light mirrors the idea but takes it DOWN from the card (`#DFE4EA`), because
+Light's card `#F5F5F7` is already within 1.09:1 of white and a white placeholder would be
+invisible. `scratchpad/skelgrey.js` asserts the identity rather than a direction now, and
+takes the card colour from its computed `::before` and the placeholder from a REAL pixel —
+sampling the card by guessing a coordinate landed on the page instead, so the check was
+placeholder-vs-black and passed with the old inverted grey still in place. **It reads
+`--post-pill` off `document.body`, not `:root`** — `body.light` redefines it, and asking
+the root element hands back the Black value on both themes.
+
+**Colours are three steps, and the pill points DOWN, not up.** `--post-card` /
+`--post-pill` / `--post-pill-ink`. The card is the design system's own Dark grey, sampled from the
+team's mockup. The pill started as a NEW step ABOVE it (`#4B4B4B`) on the reasoning that a control
+sitting ON a card has to be lighter than it — and the founder asked for the opposite: *"all the
+button icons on the bottom of the post should be fully black instead of grey and the icon logo
+should be a darker grey."* So the pill **is the page colour** (`#000000`), reading as a hole
+punched through the card rather than a raised control, and the glyph steps down to `#8E8E93`. The
+row goes quiet and the card is the only grey in the post — the same move as the loading
+placeholder above, which is why the two share a value.
+
+**`--post-pill-ink` exists because `--t3` measures 2.2:1 on the old pill grey** — the same trap the
+muted-group unread badge fell into, one surface further in. The count is 13px text and needs
+4.5:1; `#8E8E93` is 6.4:1 on black, clearly darker than the `#C7C7CC` it replaced (12.5:1) without
+going under the floor.
+
+**Light gets its own values and they do NOT follow the "page colour" rule** — Light's card
+(`#F5F5F7`) is already within 1.09:1 of white, so a white pill would vanish. The idea that
+translates is "the quietest step that still reads", which on a light card means a step DOWN:
+`#DFE4EA` (1.17:1 from the card, where the old `#C3CBD4` was 1.55) with `#5A5A5F` ink (5.4:1).
+NB **contrast ratio understates a step at the light end**, so demanding Black's number on Light
+would force a pill dark enough to look like a blot.
+
+**Never write `var(--bg)` into one of these tokens.** A custom property whose value references
+another one resolves **where it is declared**, and `:root` is a different element from
+`body.light` — so `--post-pill: var(--bg)` on `:root` freezes at black and Light never flips. Spell
+the value out literally in each theme block. (`--s2` carries a comment about the mirror-image case:
+a *use-site* `var()` DOES re-resolve per scope.)
 
 **The pill is 28pt but the target is 44.** The corner arithmetic fixes the visible height; the
 touch minimum is carried by an invisible `::before` overlay (±8 vertical, ±3 horizontal to close
@@ -6106,16 +6132,43 @@ All 25 places now draw the same shape: a softer lens with rounded ends and a lar
 pair reads as one icon in two states rather than two icons. Sites: the post's views count,
 every show-password toggle, the Privacy & safety rows, a Daily's viewer count.
 
-Owner reference point: they described it as "the eye in Beam that turns blue when someone
-saw your message". **There is no eye there** — Beam's seen indicator is blue double ticks
-(`.mi-ic.seen`, `stroke:var(--accent)`). They were describing the QUALITY they wanted, not a
-specific existing glyph.
+**The eye is BEAM'S OWN, lifted verbatim — do not redraw it.** It is the read mark in the
+chat list, sitting under a conversation's name beside the preview ("👁 Photo"), grey when
+your message is sent and accent-blue once it has been seen — `.ac-ticks` / `.ac-ticks.seen`,
+built inline in the DM row as `const EYE` (`acRenderChats`). The shape is an **`<ellipse>`
+`rx=8.6 ry=7.4` with a SOLID `<circle> r=3.1` pupil** (`fill="currentColor" stroke="none"`).
 
-`scratchpad/oneeye.js` greps the source for every old path (in `admin.html` too) and — the
-part that matters — **drives the show-password toggle**, because swapping icon markup is
-exactly the kind of edit that silently breaks the `.eye-open`/`.eye-off` classes the CSS
-switches on. It asserts the input really flips `password → text → password` and that the
-crossed eye is what shows while revealed.
+Two earlier passes got this wrong and both were rejected. The first note in this file
+claimed **"there is no eye in Beam — its seen indicator is blue double ticks"** and told the
+owner so; that is simply false (`.mi-ic.seen` is the *message-info popup*, a different
+surface), and it sent the work off to invent a shape instead of copying one that already
+existed. The invented shape was a **lens** — two arcs meeting at a point — and the owner
+kept saying it was nearly right but *"more rounded on the two edges on the two sides on the
+right and left side"*. That sentence describes an ellipse exactly, and no amount of
+`stroke-linejoin` work will round a lens's tip, because a tip is a CORNER between two arcs
+and a round join only softens a corner as far as its angle allows. **When an owner names an
+existing thing in the app, go and find it before drawing anything.**
+
+The crossed state keeps the ellipse and drops the pupil (a slash over a filled dot reads as
+clutter). The pupil is a child `<circle fill="currentColor">`, which is safe inside an
+`<svg fill="none">` — children only INHERIT the svg's fill, so their own attribute wins;
+putting `fill` on the `<svg>` itself would lose to `.bn-tab svg{fill:currentColor}`.
+
+`_ACT_VIEWS` re-normalises for the new geometry: the ellipse's box is 17.2 × 14.8, so
+`sqrt(w·h)` = 15.96 and the scale is **1.1282** with a compensated `stroke-width` of
+**2.0387**, landing it at exactly 18 / 1.73px like its four neighbours.
+
+`scratchpad/oneeye.js` greps the source for every old path (in `admin.html` too, and the
+rejected lens is now on that list) and — the part that matters — **drives the show-password
+toggle**, because swapping icon markup is exactly the kind of edit that silently breaks the
+`.eye-open`/`.eye-off` classes the CSS switches on. It asserts the input really flips
+`password → text → password` and that the crossed eye is what shows while revealed.
+
+**`scratchpad/iconsize.js` must list `ellipse` in its shape selector** (`'ellipse,path,
+polyline,circle'`). Without it the eye's outline is invisible to the probe and it measures
+the PUPIL instead — or, since the pupil carries `stroke="none"`, drops the icon from the
+list altogether and quietly stops covering it. That happened on this very change: the first
+run reported all icons matching and the eye simply was not among them.
 
 **The action row is ONE rhythm: equal buttons, and the gap between them is the card's own
 edge padding.** They used to size to their content — a count of 123 made one button wider
@@ -6244,6 +6297,54 @@ app (`_bc` takes the `brand-collapse` path in standalone display-mode instead), 
 exactly the sort of thing that makes a bug survive: the person most likely to notice it is
 the one person who can't see it. The `::before` card is immune, for the same reason the post
 card was moved to one.
+
+### The account menu, the drawer, and where a plan change lives
+
+**The top-right profile popover is three rows: the account, Add account, Log out** — plus a
+blue **Upgrade to Pro** that only a free account sees. Settings and Help were removed
+(they duplicate the drawer and the Account page), and so was **Downgrade to Free**, which
+was a red row sitting where a menu's loudest item goes — the fastest thing to reach in the
+whole popover was the way to lose what you had paid for. A Pro account now gets **no plan
+row at all**: there is nothing for them to do there.
+
+**Removing it left no way out of Pro, so leaving Pro moved to the plans sheet.** A
+subscription with no in-app cancel is not shippable, and the plans sheet had only ever been
+built for the upgrade direction — the Standard card's button was a dead `closePlans()`
+label. `openPlans()` now flips which card is "yours": on Pro the Standard card offers
+**Switch to Free** and the Pro card becomes a quiet label, on Free it reads the normal way
+round. `.plan-btn.is-current` is what makes the label quiet — without it the Pro button
+still shouted in accent blue while reading "Your current plan". `upgradeToPro()` early-
+returns when you are already Pro, because its button is now reachable as a label.
+
+**The drawer has no "Profile" row on phones.** It never opened the profile — it opened the
+ACCOUNT MENU, which is what made it confusing sitting directly above Settings. On a phone
+that menu is one tap from the top-right avatar and the drawer's own avatar card at the top
+goes to the real profile. **Desktop keeps it**: there is no top-bar avatar on most worlds
+there, so it is the only route to Add account / Log out. Hidden in **CSS with
+`!important`**, not JS — the row carries an inline `display`, and a width read at init time
+would let a rotate bring it back.
+
+That exposed a live bug in **`openAddAccount`**, which anchors its chooser to that row: a
+hidden element still HAS a rect, an all-zero one, so the existing "no anchor" fallback
+never fired and the chooser would have opened in the screen's top-left corner on every
+phone. It tests the rect's WIDTH now, not just the element's existence.
+
+**The bottom nav pill sliced through the open drawer, and z-index could not fix it.**
+`.sidebar` lives inside `#app`, which is `position:fixed; z-index:1` — a stacking context —
+so however high the drawer's own z-index goes (200) it can never paint above a body-level
+`#bottomNav` at 120. Reading the numbers says the drawer wins; the screen says otherwise.
+The only lever is the nav's own layer: `body.sb-open #bottomNav{z-index:0}` drops it under
+`#app` while the drawer is open, so the drawer covers it, the way it does on X. Same trap
+`#statusScrim` and `#notifOverlay` hit, taken in the other direction (`body.notif-tab`
+LIFTS the nav to 1400). `#bottomNav` only renders below 769px, so the rule is inherently
+mobile-only. `toggleSidebar`/`closeSidebar` own the class.
+
+Covered by `scratchpad/menutrim.js` (25 checks). Two things it had to learn: it compares
+**paint order via `elementFromPoint`, not z-index** — with the fix disabled it reports the
+hit as `bnav-home`, i.e. a finger inside the drawer would have pressed the Home tab — and
+it must **click the real `#tbBrandProf` avatar**, never synthesise the event with
+`currentTarget: document.body`, because `_hideMenuSrcBtn` sets `opacity:0` on the trigger
+and passing the body blanks the entire screen (every screenshot came back solid black).
 
 ### No line between the Dailies and the feed
 
