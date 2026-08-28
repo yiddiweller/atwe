@@ -4335,7 +4335,7 @@ body.nav-mini .sb-btn,body.nav-mini .sb-settings{justify-content:center;gap:0;pa
 body.nav-mini .sb-btn svg,body.nav-mini .sb-settings svg,body.nav-mini .sb-btn .sb-atwe-ic{margin:0;}
 /* One icon size down the whole rail: .sb-settings' own base is 17px against .sb-btn's 14,
    which made the footer icons read bigger than every hub icon above them. */
-body.nav-mini .sb-settings svg{width:14px;height:14px;}
+body.nav-mini .sb-settings svg,body.nav-mini .sb-settings .sb-ico{width:14px;height:14px;}
 body.nav-mini .sb-label,body.nav-mini #projList,body.nav-mini #histList,
 body.nav-mini .sb-prof-id,body.nav-mini .sb-profile-counts,body.nav-mini #sbProfile .sb-profile-label{display:none;}
 body.nav-mini .sb-logo{justify-content:center;}
@@ -4360,7 +4360,8 @@ body.nav-mini .sb-divider{width:38px;margin-inline-start:auto;margin-inline-end:
   body:not(.nav-mini) .sidebar:not(.collapsed) .sb-btn .sb-atwe-ic{width:22px;height:22px;}
   /* Same step down on the desktop rail, from its own 18px/24px. */
   body:not(.nav-mini) .sidebar:not(.collapsed) .sb-settings.sb-foot{font-size:15.5px;padding:10px 12px;gap:15px;}
-  body:not(.nav-mini) .sidebar:not(.collapsed) .sb-settings.sb-foot svg{width:21px;height:21px;}
+  body:not(.nav-mini) .sidebar:not(.collapsed) .sb-settings.sb-foot svg,
+  body:not(.nav-mini) .sidebar:not(.collapsed) .sb-settings.sb-foot .sb-ico{width:21px;height:21px;}
   /* World-nav tabs matched to the hub rows (size + weight + inactive colour); the
      active tab keeps its own accent pill via :not(.active). */
   body:not(.nav-mini) .sidebar:not(.collapsed) .sb-navbtn{font-size:18px;gap:18px;font-weight:600;}
@@ -11816,7 +11817,8 @@ body.nav-ball #navBackdrop{opacity:0;}
   /* Account + Help & feedback are destinations you reach for less often than the hub, so
      they sit a step down from its 19px/26px (owner: "a little smaller"). */
   .sidebar .sb-settings.sb-foot{font-size:16.5px;padding:11px 12px;gap:17px;}
-  .sidebar .sb-settings.sb-foot svg{width:22px;height:22px;}
+  .sidebar .sb-settings.sb-foot svg,
+  .sidebar .sb-settings.sb-foot .sb-ico{width:22px;height:22px;}
   /* The verified check in the header must NOT inherit the big 26px hub-icon size — it's
      an SVG inside .sb-profilebtn (a .sb-btn). Keep it proportional to the name (owner:
      "the check is very big"). More specific than `.sidebar .sb-btn svg`, so it wins. */
@@ -13983,7 +13985,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
            be — Settings is one tap further in, on the Account page's own Settings card,
            which is where it was moved to when that page was restructured. -->
       <button class="sb-settings sb-foot" id="sbSettings2" onclick="acNavAccount()" style="display:none;">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4.3"/><path d="M4 20.5a8 8 0 0 1 16 0"/></svg>
+        <span class="sb-ico" aria-hidden="true"><i class="nv-off" style="--m:var(--nv-profile-off)"></i><i class="nv-on" style="--m:var(--nv-profile-on)"></i></span>
         Account
       </button>
       <button class="sb-settings sb-foot" id="sbHelp2" onclick="acNavHelp()" style="display:none;">
@@ -20662,7 +20664,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1754'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1755'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
