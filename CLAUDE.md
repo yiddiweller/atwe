@@ -6406,14 +6406,25 @@ hidden element still HAS a rect, an all-zero one, so the existing "no anchor" fa
 never fired and the chooser would have opened in the screen's top-left corner on every
 phone. It tests the rect's WIDTH now, not just the element's existence.
 
-**The drawer's footer is Account + Help & feedback, a step quieter than the hub.** The
-gear row was renamed and repointed (owner): `#sbSettings2` now reads **Account** with a
-person glyph and opens the Account world (`acNavAccount` → `appTab('profile')`), and
-`#sbHelp2` sits under it opening that hub's own Help & feedback section
-(`acNavHelp` → `acMeSection('app')`). Neither is a new surface. **Settings is therefore one
-tap further in** — on the Account page's own Settings card, which is where it moved when
-that page was restructured; it is no longer in the drawer at all. Both openers close the
-mobile drawer first, exactly as `acNavUpgrade` does, or the destination opens behind it.
+**The drawer's footer is Account → Settings → Help & feedback, a step quieter than the
+hub.** The gear row was renamed and repointed (owner): `#sbSettings2` now reads **Account**
+with a person glyph and opens the Account world (`acNavAccount` → `appTab('profile')`);
+`#sbSettingsRow` sits directly under it (`acNavSettings` → `openSettings()`); and `#sbHelp2`
+opens the Account hub's own Help & feedback section (`acNavHelp` → `acMeSection('app')`).
+None is a new surface. Settings was briefly moved OUT of the drawer entirely in 1754 and the
+owner asked for it back in 1757 — it is also still on the Account page's own Settings card,
+which is the deliberate duplicate. All three openers close the mobile drawer first, exactly
+as `acNavUpgrade` does, or the destination opens behind it.
+
+**The dead space under the last row was 14pt of ours ON TOP of iOS's 34.** The sidebar padded
+`calc(14px + env(safe-area-inset-bottom))`, so an iPhone got 48pt of black under Help &
+feedback — which the owner photographed. Adding the two was the mistake: the reserved strip
+IS the breathing room. It is `max(12px, calc(env(safe-area-inset-bottom) - 6px))` now — 28pt
+on an iPhone, 12px on a device with no inset — the same subtract-from-the-inset shape the
+floating nav pill already uses. The floor is what keeps the row clear of the home indicator,
+which occupies roughly the bottom 21pt. **`env()` cannot be simulated in a headless browser**,
+so `sbfoot.js` injects the real inset and re-declares the app's OWN expression with it;
+hard-coding a final number would measure the number rather than the rule.
 
 **The Account row draws the founder's OWN nav artwork, not a stand-in glyph.** It uses the
 exact mask pair the bottom bar's Account tab uses — `<span class="sb-ico"><i class="nv-off"

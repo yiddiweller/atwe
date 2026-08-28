@@ -1216,7 +1216,7 @@ body.light .auth-danger,body.light .auth-input{box-shadow:none;}
   border-inline-end:1px solid rgba(255,255,255,0.07);
   display:flex;
   flex-direction:column;
-  padding:calc(14px + env(safe-area-inset-top, 0px)) 10px calc(14px + env(safe-area-inset-bottom, 0px));
+  padding:calc(14px + env(safe-area-inset-top, 0px)) 10px max(12px, calc(env(safe-area-inset-bottom, 0px) - 6px));
   gap:2px;
   overflow:hidden;
   scrollbar-width:none;
@@ -14027,6 +14027,10 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
         <span class="sb-ico" aria-hidden="true"><i class="nv-off" style="--m:var(--nv-profile-off)"></i><i class="nv-on" style="--m:var(--nv-profile-on)"></i></span>
         Account
       </button>
+      <button class="sb-settings sb-foot" id="sbSettingsRow" onclick="acNavSettings()" style="display:none;">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </button>
       <button class="sb-settings sb-foot" id="sbHelp2" onclick="acNavHelp()" style="display:none;">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.1a3 3 0 0 1 5.8 1c0 2-3 2.9-3 2.9"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         Help &amp; feedback
@@ -20753,7 +20757,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1756'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1757'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -24399,6 +24403,7 @@ function initUI() {
   // same destination listed twice. Kept in the DOM (it owns #notifBadge) but hidden.
   document.getElementById('sbNotif').style.display = 'none';
   document.getElementById('sbSettings2').style.display = guest ? 'none' : 'flex';
+  document.getElementById('sbSettingsRow').style.display = guest ? 'none' : 'flex';
   document.getElementById('sbHelp2').style.display = guest ? 'none' : 'flex';
   if (!guest) refreshNotifCount();
   document.getElementById('userName').textContent = name;
@@ -25162,6 +25167,10 @@ async function planFreeAction() {
 function acNavAccount() {
   if (window.innerWidth <= 768) closeSidebar();
   appTab('profile');
+}
+function acNavSettings() {
+  if (window.innerWidth <= 768) closeSidebar();
+  openSettings();
 }
 function acNavHelp() {
   if (window.innerWidth <= 768) closeSidebar();
