@@ -6459,16 +6459,16 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
 /* Engagement row (blueprint §Home): five OUTLINE icons at 18px spread full-width
    (space-between), compact counts, 44px invisible touch targets. Active states
    FILL — like = blue, repost = blue, bookmark = blue (via the token rules below). */
-.ac-post-actions{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:6px;}
-.ac-post-actions svg{width:17px;height:17px;}
+.ac-post-actions{display:flex;align-items:center;margin-top:10px;gap:var(--post-pad,12px);}
+.ac-post-actions svg{width:17px;height:17px;flex:0 0 auto;}
 .ac-post-actions .ax-btn img{width:17px;height:17px;}
 /* Each action is a pill sitting ON the card. Its height is twice the card's derived
    inner radius, which is the only height at which a capsule's corner matches the
    photo's above it — so the two rounded things inside the card agree. */
 .ac-post .ac-post-actions>*{
   height:calc(var(--post-inner-r) * 2);
-  padding:0 11px;margin:0;flex:0 1 auto;min-width:0;
-  display:inline-flex;align-items:center;justify-content:center;gap:5px;
+  padding:0 2px;margin:0;flex:1 1 0;min-width:0;
+  display:inline-flex;align-items:center;justify-content:center;gap:4px;
   background:var(--post-pill);border-radius:999px;color:var(--post-pill-ink);
   position:relative;
 }
@@ -8715,7 +8715,8 @@ body.light .pf-ai{color:var(--accent-hover);}
 .ac-views{display:inline-flex;align-items:center;gap:6px;color:var(--t3);font-size:13px;font-weight:600;}
 .ac-views svg{width:17px;height:17px;stroke:currentColor;stroke-width:1.9;fill:none;}
 /* Engagement-row count text — consistent muted gray beside each icon */
-.ac-act-n{font-size:13px;font-weight:600;color:var(--t3);line-height:1;}
+.ac-act-n{font-size:13px;font-weight:600;color:var(--t3);line-height:1;
+  min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 /* "Hide like counts" display pref: drop the like + repost numbers everywhere. */
 body.hide-counts .ac-like .ac-like-n,body.hide-counts .ac-repost .ac-rp-n{display:none;}
 .ac-like.on .ac-act-n{color:var(--rose);}
@@ -9257,14 +9258,14 @@ body.light .ac-follow-btn.following{background:transparent;color:var(--t1);}
 .ac-pf-stats b{color:var(--t1);font-weight:700;}
 /* Post-detail action row: the same pills as the feed. The hairlines above and below it
    are gone with the rest of the divider grammar — the card is the container now. */
-.ac-pf-actions{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:6px;
+.ac-pf-actions{display:flex;align-items:center;margin-top:10px;gap:var(--post-pad,12px);
   border-top:none;border-bottom:none;}
-.ac-pf-actions svg{width:18px;height:18px;}
+.ac-pf-actions svg{width:18px;height:18px;flex:0 0 auto;}
 .ac-pf-actions .ax-btn img{width:18px;height:18px;}
 .ac-postfocus .ac-pf-actions>*{
   height:calc(var(--post-inner-r) * 2);
-  padding:0 11px;margin:0;flex:0 1 auto;min-width:0;
-  display:inline-flex;align-items:center;justify-content:center;gap:5px;
+  padding:0 2px;margin:0;flex:1 1 0;min-width:0;
+  display:inline-flex;align-items:center;justify-content:center;gap:4px;
   background:var(--post-pill);border-radius:999px;color:var(--post-pill-ink);
   position:relative;
 }
@@ -20627,7 +20628,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1747'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1748'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;

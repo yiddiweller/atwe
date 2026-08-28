@@ -6074,6 +6074,30 @@ the `width` lets it fill the panel and respect both margins. Measure a bar like 
 its PARENT, not the window: a scrollbar can fake the same 4px, and ruling that out is what
 proved this one real.
 
+**The action row is ONE rhythm: equal buttons, and the gap between them is the card's own
+edge padding.** They used to size to their content — a count of 123 made one button wider
+than an empty one (measured **45 vs 40**) — and `justify-content:space-between` then spread
+the leftovers unevenly. Now each is `flex:1 1 0` and the row's `gap` is `--post-pad`, so the
+whole row reads as one even beat: 12, button, 12, button, … 12, with the first and last
+already 12 from the card's sides. On a 390 phone that makes each button **58 wide** (44 at
+320, 66 at 430) — wider than before as well as equal.
+
+Two things had to move with it, and both are load-bearing. **The icon never shrinks**
+(`.ac-post-actions svg{flex:0 0 auto}`): equal-width buttons no longer grow to fit a big
+number, so on a narrow phone the icons collapsed to slivers while the number spilled past
+the pill's rounded edge. And **the number is contained on ITSELF**, not on the button
+(`.ac-act-n{min-width:0;overflow:hidden;text-overflow:ellipsis}`) — `overflow:hidden` on the
+button would clip its `::before`, which IS the invisible 44pt touch target, quietly shrinking
+every action back to 36. The side padding went 11 → 2 and the icon-to-count gap 5 → 4 because
+the flex share sets the width now and "9.9M" needed those last few pixels at 390.
+
+`scratchpad/actionrow.js` checks all of it at **320 / 390 / 430**, on the feed and the post
+page, with counts on some buttons and not others. **Its first clipping test was worthless
+and passed on a layout whose numbers were visibly outside the pill**: it compared the
+count's BOX to the button's, and flex shrinks that box, so the box stays inside while the
+TEXT overflows it. The honest measures are `scrollWidth > clientWidth` on the number and
+the icon's rendered width against its declared one.
+
 **The ⋯ is a sibling of the picture and the name column, NOT nested inside the column —
 and getting that wrong deleted the @username from every post.** `.ac-post-idcol` has a
 FIXED height (`--post-av`, so the name+handle centre on the picture), and the ⋯ used to sit
