@@ -6465,8 +6465,12 @@ the founder's nav artwork carries its own padding (ink 16), the gear fills its v
 to edge (22), the question mark sits between (19). `--foot-ic` is the Account mask's box and
 the only thing a breakpoint changes; each stroked icon is scaled by the ratio its own drawing
 overfills that box by (`.733`, `.870`, tuned by measuring until all three read **16×16**)
-with **`stroke-width` scaled by the inverse**, so a
-shrunk icon does not also come out lighter. Scoped `body:not(.nav-mini)`: the collapsed icon
+applied as a **`transform:scale()`, never as a width** — with `stroke-width` scaled by the
+inverse so a shrunk icon does not also come out lighter. **The transform is the load-bearing
+part:** scaling an icon's WIDTH shrinks its layout box too, so the three boxes became 22/16/19
+and flex started each narrower box's drawing — and its LABEL — further left. Measured 25/22/24
+for the icons and 61/55/58 for the labels; the founder spotted it zoomed in. A transform draws
+smaller without touching the box, so all three keep one left edge (25/25/25, labels 61/61/61). Scoped `body:not(.nav-mini)`: the collapsed icon
 rail shows no labels, so equal boxes is the right rule there and scaling a 14px gear to .727
 would just make it a speck. `sbfoot.js` measures the real ink in a screenshot — asserting
 equal BOXES is what let this ship wrong in the first place.
