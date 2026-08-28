@@ -20655,7 +20655,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1752'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1753'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -40282,7 +40282,7 @@ function acPostFocusCard(p) {
         <div class="ac-post-name">${escHtml(p.author.name)}${vbadge(acIsVerified(p.author))}${acAffBadge(p.author)}</div>
         <div class="ac-post-handle">@${escHtml(h)}</div>
       </div>
-      ${del}
+      <div class="ac-post-meta">${del}</div>
     </div>
     ${(!p.locked && p.occasion) ? acOccasionBanner(p.occasion) : ''}
     ${p.body ? `<div class="ac-pf-text">${acChatFmt(p.body)}</div>` : ''}
