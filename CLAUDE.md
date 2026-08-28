@@ -6194,6 +6194,18 @@ count's BOX to the button's, and flex shrinks that box, so the box stays inside 
 TEXT overflows it. The honest measures are `scrollWidth > clientWidth` on the number and
 the icon's rendered width against its declared one.
 
+**The timestamp and the ⋯ are ONE cluster (`.ac-post-meta`), and that is why.** The time
+used to live inside `.ac-post-head`, i.e. inside `.ac-post-idcol` — a FIXED-height column
+that centres its two lines — so it rode the NAME's line, while the ⋯ is pinned to the top of
+the row (it has to be, or its corner stops being concentric with the card's). Measured
+**8.6px apart** on phone and desktop alike, and the founder photographed exactly that. The
+wrapper lifts both out of the column: its own height is the ⋯'s (36), and centring inside it
+puts the two on one line **by construction** rather than by a hand-tuned nudge, so a future
+change to `--post-av` or the name's line-height cannot pull them apart again. It owns the
+`margin-inline-start:auto` and the `align-self:flex-start` that the ⋯ used to carry itself.
+Covered by `scratchpad/timealign.js`, which also re-asserts both corner insets — the whole
+point is that fixing the alignment must not cost the concentric corner.
+
 **The ⋯ is a sibling of the picture and the name column, NOT nested inside the column —
 and getting that wrong deleted the @username from every post.** `.ac-post-idcol` has a
 FIXED height (`--post-av`, so the name+handle centre on the picture), and the ⋯ used to sit
