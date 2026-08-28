@@ -4049,6 +4049,10 @@ body.light .iset-signout{border:1px solid var(--b1);}
 .overlay.set-fs{padding:0;flex-direction:column;align-items:stretch;justify-content:flex-start;background:var(--bg);overflow-y:auto;z-index:1100;}
 /* Win over `body.light .overlay` (specificity) so the sheet stays an opaque page in light mode. */
 body.light .overlay.set-fs{background:var(--bg);backdrop-filter:none;-webkit-backdrop-filter:none;}
+/* Same reason for the offline / error takeover: it is a PAGE, not a sheet over one,
+   so it must not inherit `body.light .overlay`'s dark scrim (which measured
+   rgba(0,0,0,.42) and turned the white theme's screen into a grey slab). */
+body.light .overlay.st-screen{background:var(--bg);backdrop-filter:none;-webkit-backdrop-filter:none;}
 /* These full-screen surfaces are intentionally dark in BOTH themes (auth flow,
    image cropper, immersive shorts viewer/composer). Keep them opaque-dark in
    light mode too, otherwise `body.light .overlay`'s scrim shows the page through. */
@@ -9926,6 +9930,41 @@ body.light .ac-scope-chip.active{color:var(--t1);}
 .demo-banner.hide{opacity:0;transform:translateX(-50%) translateY(-10px);}
 /* "You're offline" floating pill — driven by the browser online/offline events.
    Non-blocking, never shifts layout; sits just under the demo pill if both show. */
+/* ═══ Offline / error takeover ══════════════════════════════════════════════
+   Claymorphism, monochrome (owner: "just stay like a black or white design").
+   The clay tones are variables so Light can darken them — the Black values are
+   near-white, which on a white page would be an invisible satellite. */
+:root{
+  --st-c1:#FCFCFE; --st-c2:#DADDE2; --st-c3:#9297A0; --st-ink:#41464F;
+  --st-shadow:rgba(0,0,0,.85);
+}
+body.light{
+  --st-c1:#FFFFFF; --st-c2:#D3D7DD; --st-c3:#8E949E; --st-ink:#33383F;
+  --st-shadow:rgba(0,0,0,.18);
+}
+.st-screen{z-index:1300;background:var(--bg);-webkit-backdrop-filter:none;backdrop-filter:none;
+  display:flex;align-items:center;justify-content:center;padding:24px;}
+.st-wrap{display:flex;flex-direction:column;align-items:center;text-align:center;max-width:320px;outline:none;}
+.st-art{width:200px;height:200px;}
+.st-art svg{width:100%;height:100%;overflow:visible;}
+.st-title{font-size:22px;font-weight:800;letter-spacing:-.01em;color:var(--t1);margin-top:16px;}
+.st-sub{font-size:15px;line-height:1.5;color:var(--t3);margin-top:8px;}
+.st-btn{margin-top:24px;background:var(--primary);color:var(--on-primary);border:none;
+  border-radius:var(--r-pill);padding:13px 30px;font-size:15.5px;font-weight:600;cursor:pointer;
+  transition:filter var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
+.st-btn:active{filter:brightness(.92);transform:scale(.97);}
+/* A slow drift, not a hop — the calm motion the owner picked. */
+@keyframes stDrift{0%,100%{transform:translateY(-6px) rotate(3deg)}50%{transform:translateY(6px) rotate(-3deg)}}
+@keyframes stShad{0%,100%{transform:scaleX(1);opacity:.5}50%{transform:scaleX(.86);opacity:.3}}
+@keyframes stBlink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.12)}}
+@keyframes stIn{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
+.st-float{animation:stDrift 5.2s ease-in-out infinite;transform-origin:50% 50%;}
+.st-sh{animation:stShad 5.2s ease-in-out infinite;transform-origin:50% 50%;}
+.st-eye{animation:stBlink 5s infinite;transform-origin:center;}
+.st-eye2{animation-delay:.09s;}
+.st-screen:not(.hidden) .st-wrap{animation:stIn .42s cubic-bezier(.32,.72,0,1) both;}
+body.reduce-motion .st-float,body.reduce-motion .st-sh,body.reduce-motion .st-eye{animation:none;}
+body.reduce-motion .st-screen:not(.hidden) .st-wrap{animation:none;}
 .offline-banner{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);left:50%;transform:translateX(-50%) translateY(-10px);z-index:100000;
   background:rgba(40,40,44,.97);color:#fff;font-size:11.5px;font-weight:700;letter-spacing:.02em;padding:5px 14px 5px 11px;border-radius:999px;
   box-shadow:0 4px 14px rgba(0,0,0,.4);pointer-events:none;white-space:nowrap;display:inline-flex;align-items:center;gap:7px;
@@ -20653,6 +20692,56 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
   </div>
 </div>
 
+<!-- ═══ Offline / something-went-wrong takeover ═══════════════════════════════
+     The one screen that MUST work with the network completely dead, so the
+     satellite is drawn inline rather than fetched — an <img> here would be a
+     broken icon in exactly the moment it exists to cover. Claymorphism: soft
+     radial shading, no strokes, inflated forms. Colour comes from --st-* so the
+     Light theme can darken the clay (a white satellite on white is invisible).
+     The picture is aria-hidden: the title, the line and the button carry the
+     whole meaning, which is the rule every guide on error states repeats. -->
+<div class="overlay st-screen hidden" id="stateScreen" role="dialog" aria-modal="true" aria-labelledby="stTitle">
+  <div class="st-wrap" tabindex="-1">
+    <div class="st-art" aria-hidden="true">
+      <svg viewBox="0 0 200 200" focusable="false">
+        <defs>
+          <radialGradient id="stBody" cx="32%" cy="22%">
+            <stop offset="0" stop-color="var(--st-c1)"/><stop offset=".55" stop-color="var(--st-c2)"/><stop offset="1" stop-color="var(--st-c3)"/>
+          </radialGradient>
+          <linearGradient id="stWing" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="var(--st-c2)"/><stop offset="1" stop-color="var(--st-c3)"/>
+          </linearGradient>
+          <filter id="stShad"><feGaussianBlur stdDeviation="7"/></filter>
+        </defs>
+        <ellipse class="st-sh" cx="100" cy="178" rx="38" ry="7" fill="var(--st-shadow)" filter="url(#stShad)"/>
+        <g class="st-float">
+          <g transform="rotate(-8 100 104)">
+            <rect x="14" y="90" width="52" height="28" rx="8" fill="url(#stWing)"/>
+            <rect x="134" y="90" width="52" height="28" rx="8" fill="url(#stWing)"/>
+            <g stroke="var(--st-c3)" stroke-width="2.4" opacity=".55">
+              <line x1="31" y1="92" x2="31" y2="116"/><line x1="48" y1="92" x2="48" y2="116"/>
+              <line x1="151" y1="92" x2="151" y2="116"/><line x1="168" y1="92" x2="168" y2="116"/>
+            </g>
+            <rect x="62" y="99" width="14" height="10" rx="4" fill="var(--st-c3)"/>
+            <rect x="124" y="99" width="14" height="10" rx="4" fill="var(--st-c3)"/>
+          </g>
+          <rect x="96" y="46" width="8" height="24" rx="4" fill="var(--st-c3)"/>
+          <circle cx="100" cy="44" r="8.5" fill="var(--st-c2)"/>
+          <circle cx="97" cy="41" r="3" fill="var(--st-c1)"/>
+          <rect x="64" y="66" width="72" height="76" rx="30" fill="url(#stBody)"/>
+          <ellipse cx="84" cy="84" rx="17" ry="11" fill="var(--st-c1)" opacity=".62"/>
+          <ellipse class="st-eye" cx="86" cy="102" rx="5.8" ry="7" fill="var(--st-ink)"/>
+          <ellipse class="st-eye st-eye2" cx="114" cy="102" rx="5.8" ry="7" fill="var(--st-ink)"/>
+          <path d="M92 119q8 7 16 0" stroke="var(--st-ink)" stroke-width="4.6" fill="none" stroke-linecap="round"/>
+        </g>
+      </svg>
+    </div>
+    <h2 class="st-title" id="stTitle">You&rsquo;re offline</h2>
+    <p class="st-sub" id="stSub"></p>
+    <button class="st-btn" id="stBtn" onclick="acStateAction()">Try again</button>
+  </div>
+</div>
+
 <script>
 /* ═══════════════════════════════════════════════
    CRASH TELEMETRY — must run FIRST (before anything that could throw).
@@ -20664,7 +20753,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1755'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1756'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -55061,6 +55150,106 @@ function _updMaybeCheck() {
 setTimeout(() => { _updLastCheck = Date.now(); setInterval(_updMaybeCheck, 20 * 60000); }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) _updMaybeCheck(); });
 
+/* ═══════════════════════════════════════════════
+   OFFLINE / SOMETHING-WENT-WRONG TAKEOVER
+   The slim top pill (below) stays for a brief blip — taking the whole screen for
+   two seconds of lost signal would be obnoxious. THIS is for the case where the
+   app genuinely has nothing to show, which until now was a blank screen.
+═══════════════════════════════════════════════ */
+const APP_STATES = {
+  offline: { title: 'You\u2019re offline', sub: 'Check your connection \u2014 we\u2019ll pick up right where you left off.', btn: 'Try again' },
+  error:   { title: 'Something went wrong', sub: 'That one\u2019s on us, not you. Reloading usually sorts it.', btn: 'Reload' },
+};
+let _stateKind = null;
+function acShowState(kind) {
+  const cfg = APP_STATES[kind]; if (!cfg) return;
+  const el = document.getElementById('stateScreen'); if (!el) return;
+  if (_stateKind === kind && !el.classList.contains('hidden')) return;   // already up
+  _stateKind = kind;
+  document.getElementById('stTitle').textContent = cfg.title;
+  document.getElementById('stSub').textContent = cfg.sub;
+  document.getElementById('stBtn').textContent = cfg.btn;
+  el.classList.remove('hidden');
+  try { hideSplash(); } catch (e) {}          // never leave the splash on top of it
+  // The picture is decoration; this is what a screen reader actually gets.
+  try { announce(cfg.title + '. ' + cfg.sub, true); } catch (e) {}
+  try { el.querySelector('.st-wrap').focus({ preventScroll: true }); } catch (e) {}
+  if (kind === 'offline') _stateWatchStart(); else _stateWatchStop();
+}
+function acHideState() {
+  _stateKind = null;
+  _stateWatchStop();
+  const el = document.getElementById('stateScreen');
+  if (el) el.classList.add('hidden');
+}
+/* ASK the network; never trust navigator.onLine. That flag reports true whenever
+   the device has a link — a wifi router with no internet behind it, a captive
+   portal, a cellular dead zone — and it was observed reporting true on a browser
+   that genuinely could not reach anything at all. A one-line request that either
+   answers or does not is the only honest test. */
+let _stateProbing = false;
+async function acCanReachServer(ms) {
+  try {
+    const c = new AbortController();
+    const t = setTimeout(() => c.abort(), ms || 4500);
+    const r = await fetch('/api/health', { cache: 'no-store', signal: c.signal });
+    clearTimeout(t);
+    return !!(r && r.ok);
+  } catch (e) { return false; }
+}
+async function acStateAction() {
+  const btn = document.getElementById('stBtn');
+  if (_stateKind !== 'offline') { location.reload(); return; }
+  if (_stateProbing) return;
+  _stateProbing = true;
+  const label = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking\u2026'; }
+  const up = await acCanReachServer();
+  _stateProbing = false;
+  if (up) { location.reload(); return; }
+  if (btn) { btn.disabled = false; btn.textContent = label; }
+  const sub = document.getElementById('stSub');
+  if (sub) sub.textContent = 'Still no connection. We\u2019ll bring you back the moment there is one.';
+  try { announce('Still no connection.', true); } catch (e) {}
+}
+/* Recover on its own. The `online` event alone is not enough — it fires for a
+   link, not for reachability — so it just triggers an early probe, and a quiet
+   poll covers the case where no event ever fires. Nobody should have to tap
+   anything to undo something they did not choose to break. */
+let _stateWatch = null;
+function _stateWatchStart() {
+  if (_stateWatch) return;
+  _stateWatch = setInterval(async () => {
+    if (_stateKind !== 'offline') { _stateWatchStop(); return; }
+    if (_stateProbing) return;
+    _stateProbing = true;
+    const up = await acCanReachServer(3500);
+    _stateProbing = false;
+    if (up && _stateKind === 'offline') location.reload();
+  }, 5000);
+}
+function _stateWatchStop() { if (_stateWatch) { clearInterval(_stateWatch); _stateWatch = null; } }
+window.addEventListener('online', () => {
+  if (_stateKind === 'offline') setTimeout(async () => {
+    if (_stateKind === 'offline' && await acCanReachServer(3500)) location.reload();
+  }, 400);
+});
+
+/* The blank-screen watchdog. Deliberately keyed off the SYMPTOM rather than off a
+   thrown exception: a global window.onerror takeover would blank a perfectly
+   working app the first time some unrelated handler threw, which is worse than
+   the bug it fixes. A truly blank screen has NO visible text anywhere — every
+   real surface in this app renders some — so that is what it checks, once. */
+function _blankWatchdog() {
+  setTimeout(() => {
+    if (_stateKind) return;                                    // a state screen is already up
+    if (document.getElementById('splash')) return;             // still booting
+    let txt = '';
+    try { txt = (document.body.innerText || '').trim(); } catch (e) { return; }
+    if (txt.length > 2) return;                                // something rendered — fine
+    acCanReachServer(3500).then(up => acShowState(up ? 'error' : 'offline'));
+  }, 6000);
+}
 function showOfflineBanner() {
   clearTimeout(_offlineHideT);
   const b = _offlineBannerEl();
@@ -64121,9 +64310,14 @@ const _bootDone = (async function boot() {
       consumePendingRoute();
       return;
     }
-    // No cached profile to fall back on either — show the login screen, but
-    // keep the token (don't call API.setToken(null)) so a manual retry once
-    // back online can still recover the session without re-entering a password.
+    // No cached profile to fall back on either. If the reason is simply that
+    // there is no connection, say THAT — a login screen is a misleading answer
+    // to "your wifi is off", and it is the blank/confusing screen the owner
+    // reported. The token is kept either way so a retry once back online
+    // recovers the session without re-entering a password.
+    // meErr with no HTTP status = the request never reached a server at all.
+    // That is the reliable signal; navigator.onLine is not (see acCanReachServer).
+    if ((meErr && !meErr.status) || !navigator.onLine) { acShowState('offline'); return; }
   }
 
   // Not signed in → a MANDATORY login gate for everything, including Atwe AI.
@@ -64151,7 +64345,13 @@ function hideSplash() {
   s.classList.add('hide');
   setTimeout(() => s.remove(), 550);
 }
-_bootDone.catch(() => {}).finally(() => setTimeout(hideSplash, 250));
+_bootDone.catch((e) => {
+  // Until now this was swallowed and the member got a blank app with no
+  // explanation. Boot throwing means nothing rendered, so a takeover here can't
+  // cover working content.
+  console.error('[boot]', e);
+  acCanReachServer(3500).then(up => acShowState(up ? 'error' : 'offline'));
+}).finally(() => { setTimeout(hideSplash, 250); _blankWatchdog(); });
 setTimeout(hideSplash, 4000);
 
 if ('serviceWorker' in navigator) {
