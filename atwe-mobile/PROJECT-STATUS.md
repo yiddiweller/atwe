@@ -228,13 +228,19 @@ npx expo start --tunnel                    # scan QR with Expo Go
 
 ## Apple / distribution status
 - **Apple ID:** business email (ceo@atwe.com), 2FA on.
-- **Apple Developer Program:** enrolled as **Individual** — **payment confirmed,
-  enrollment PENDING approval** (awaiting the "Welcome" email). Business isn't a
-  legal entity yet; upgrade Individual → Organization (ATWE INC) before public
-  launch.
-- **On approval:** connect Apple account to EAS (App Store Connect API key) →
-  `eas build --platform ios` (cloud) → `eas submit` → install via **TestFlight**
-  (real icon, no Mac needed). Then every update = tap "Update" in TestFlight.
+- **Apple Developer Program: APPROVED** (founder confirmed, 28 Aug 2026), enrolled
+  as **Individual**, Team `TH3FQ8FMKB`. Business isn't a legal entity yet; upgrade
+  Individual → Organization (ATWE INC) before public App Store launch.
+  *(This section said "PENDING" long after the EAS section below already recorded a
+  successful production build under that Team ID — a build Apple would not have
+  issued certificates for otherwise. Two places tracking one fact is how that
+  happened; the EAS section is the one that gets touched during real work, so treat
+  it as the source of truth and keep this line in step with it.)*
+- **Nothing is blocked on Apple any more.** Certs, provisioning profile and the
+  APNs push key are already created and held on EAS, so rebuilds skip the Apple
+  login and 2FA entirely. The remaining step to get it on the phone is
+  `eas submit -p ios --latest` → TestFlight → install; after that every update is
+  the founder tapping **Update** in TestFlight.
 
 ## Key decisions (locked)
 - **True native, phase by phase** (not a web wrapper) — matches the premium spec.
