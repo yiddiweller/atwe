@@ -69,9 +69,20 @@ from them; "go" is the whole instruction.
    Then wait for the next "go".
 
 **Apple Developer enrollment is APPROVED** (28 Aug 2026, Team `TH3FQ8FMKB`) — it is no
-longer a blocker, and `atwe-mobile/PROJECT-STATUS.md` carries the detail. What still sits
-outside the code: a paid TURN/call-relay service (voice + video fall back to a free public
-relay and often fail on cellular), Railway database backups, and a Play developer account.
+longer a blocker, and `atwe-mobile/PROJECT-STATUS.md` carries the detail.
+
+**TURN is CONFIGURED and live** (28 Aug 2026): the owner has Cloudflare Realtime TURN set
+up, and the admin Site tab reports it **Active & healthy**. That badge is not a flag —
+`GET /api/admin/turn` calls `cloudflareTurnServer()`, which POSTs to
+`rtc.live.cloudflare.com/.../credentials/generate` and throws unless Cloudflare hands back
+a well-formed credential set, so green means Cloudflare answered *at that moment*. The
+relay list it returns includes the **TCP and TLS (5349) variants**, which are the ones that
+get through restrictive mobile networks — the exact case the free public fallback used to
+fail. **Do not tell the owner calls need a relay; they bought one.** This file said
+otherwise for several sessions after it was true.
+
+What still sits outside the code: Railway database backups, a Play developer account, and
+upgrading the Apple enrollment Individual → Organization before a public App Store launch.
 
 **Tone with this owner:** they are non-technical and test on a real iPhone.
 Explain plainly, never oversell, always volunteer the limitation or the bug
@@ -2380,6 +2391,9 @@ functions, organized by banner comments.
   across mobile/symmetric-NAT networks require a real TURN server** — set
   `CLOUDFLARE_TURN_KEY_ID`/`CLOUDFLARE_TURN_API_TOKEN` (or `TURN_URL`/`TURN_USERNAME`/
   `TURN_CREDENTIAL`); the free `openrelay` fallback is best-effort and often unreliable.
+**On the live server this is DONE** — Cloudflare Realtime TURN is configured and the admin
+Site tab reports it Active & healthy, so the openrelay path describes the degraded case
+only, not the owner's.
   **Remote media must be explicitly played** — `callAttachRemote()` sets the remote
   `<video id=callRemoteVid>` `srcObject` AND calls `.play()` (unmuted); iOS Safari won't
   autoplay an audio-bearing remote stream, so without the explicit play a call can
