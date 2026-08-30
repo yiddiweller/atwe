@@ -99,9 +99,14 @@ const PHOTO='data:image/png;base64,'+Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAMAAA
      bar's radius PLUS that gap — the same rule that keeps the card's own contents
      concentric, applied outward. */
   const navGap = r.edges ? +(r.edges.cardR - r.edges.navR).toFixed(1) : null;
-  ok(navGap!==null && Math.abs((r.nav.r + navGap) - r.card.r) <= 1.5,
-     'the post card is the nav bar’s corner PLUS the gap — the two arcs share a centre',
-     'nav '+r.nav.r+' + gap '+navGap+' = '+(r.nav.r+navGap)+',  card '+r.card.r);
+  /* Two named presets are legal here (see "THE POST CARD'S ONE KNOB" in index.html):
+     EVEN CORNERS puts the card at nav + gap so both arcs share a centre, CLASSIC puts it
+     equal to the nav and accepts the 41%-wider diagonal. Anything else is drift. */
+  const evenP = navGap!==null && Math.abs((r.nav.r + navGap) - r.card.r) <= 1.5;
+  const classicP = Math.abs(r.nav.r - r.card.r) <= 1.5;
+  ok(evenP||classicP,
+     'the post card is on a named preset — '+(evenP?'EVEN CORNERS':'CLASSIC'),
+     'nav '+r.nav.r+' + gap '+navGap+',  card '+r.card.r);
   ok(r.fab.r===r.nav.r, 'the + button is the same circle as the bar’s ends', '+ '+r.fab.r+'  nav '+r.nav.r);
   /* Everything inside the card is card − padding, so each hugs the card's corner. */
   const inner = r.card.r - r.pad;
@@ -126,8 +131,11 @@ const PHOTO='data:image/png;base64,'+Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAMAAA
   ok(inset !== null && inset > 4 && Math.abs(inset - insetR) < 0.6,
      'the nav bar sits INSIDE the cards, by the same amount at both ends ('+inset+'px)',
      e?('left gap '+inset+'  right gap '+insetR):'no boxes');
-  ok(r.card && r.nav && Math.abs((r.nav.r + inset) - r.card.r) <= 1.5,
-     'and the gap it leaves is even right around the corner, not just down the sides',
+  /* Whether that gap is EVEN round the corner is the preset, not a law — see above. */
+  const evenGap = r.card && r.nav && Math.abs((r.nav.r + inset) - r.card.r) <= 1.5;
+  ok(evenP ? evenGap : !evenGap,
+     evenP ? 'and the gap it leaves is even right around the corner, not just down the sides'
+           : 'CLASSIC: the gap is even down the sides and 41% wider on the diagonal, by choice',
      r.card?('nav '+r.nav.r+' + '+inset+' = '+(r.nav.r+inset)+',  card '+r.card.r):'');
   /* the compose + belongs to the CONTENT, so it tracks the cards' gutter, not the bar */
   ok(e && e.fabMeasured, 'the + button was measured where it actually LANDS, not from its CSS',

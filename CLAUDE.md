@@ -5917,32 +5917,57 @@ cards. Measured before adopting: density is unchanged (**1.77 posts per screen b
 after** — the narrower photo inside the card pays for the padding), so the usual objection to
 cards did not apply here.
 
-**EQUAL radii are not a match — the outer shape is the inner one PLUS the gap.** This is
-the law, and it was got WRONG for several builds by setting everything to one number. The
-nav bar is a 60px pill (radius 30) sitting **9px inside** the card's edge (`--nav-inset` 23
-minus `--feed-gutter` 14). With the card also at 30 the two arcs had centres 9px apart, so
-the space between them ran 9 down the sides and **9·√2 = 12.7 across the diagonal** — 41%
-wider exactly at the corner. The founder's team marked that spot repeatedly and it was
-misread three times as a curve problem; the curve is a true circle (measured, 1.2% error).
-The card is therefore **39** — the bar's 30 plus the 9 — which puts both arcs on one centre
-and makes the gap even the whole way round. Same rule fixes the collapsed nav ball, since
-that is the same pill. The ratio is fixed: a round shape inside a corner of its own radius
-is ALWAYS 1.41× wider on the diagonal, whatever the gap.
+**Two named presets, and the founder picks by name.** The card's whole design is TWO
+numbers in `public/index.html` — everything else on the card derives from them, so nothing
+is hand-typed and flipping cannot half-apply:
 
-**The padding moves with the radius, and that is not optional.** `--post-inner-r` is
-`card − pad`, so leaving the padding at 12 would drag every inner shape to 27 and the action
-pills to **54px tall**. `--post-pad: 15` keeps inner at 24, so the avatar, the ⋯, the photo
-and the pills are 48 — bigger than before, not huge — AND stay concentric (24 + 15 = 39).
-The founder walked this personally: pad 21 (inner unchanged at 18) was rejected as *"so
-inside with so much space around"*, pad 12 (inner 27, 54px avatar) as too heavy, and 15 was
-chosen as *"in between but more the right side"*. Text is 332 wide on a 390 phone against
-338 before. A bonus falls out: at 48 the pills clear the 44pt touch minimum on their own,
-which 36 never did.
+| preset | `--post-pad` | `--post-card-r` | → inner | → `--post-shape` (avatar · ⋯ · pill height) |
+|---|---|---|---|---|
+| **CLASSIC** (shipped) | 12 | 30 | 18 | 36 |
+| **EVEN CORNERS** | 15 | 39 | 24 | 48 |
+
+`--post-inner-r` is `card − pad` and `--post-shape` is `inner × 2` (a capsule's radius IS
+half its height, so that is the only height at which a pill's corner matches the photo's).
+**Switching to EVEN CORNERS is: those two numbers, plus uncommenting the `≤360px`
+`--post-row-gap: 5px` override** — 48px pills come out 43 wide at 320px and their corner
+clamps to 21.4, below the card's 24; CLASSIC's 36px pills are 42 wide and their 18 already
+holds, so it keeps the 12 gap. **Say "even corners" and it flips; say "classic" and it goes
+back.** Base `--post-av` (46, non-feed post cards) and `.ac-postfocus` (48) are separate and
+untouched by either.
+
+**EQUAL radii are not a match — the outer shape is the inner one PLUS the gap.** That is
+the geometry behind EVEN CORNERS, and it was got wrong for several builds by setting
+everything to one number. The nav bar is a 60px pill (radius 30) sitting **9px inside** the
+card's edge (`--nav-inset` 23 minus `--feed-gutter` 14). With the card also at 30 the two
+arcs have centres 9px apart, so the space between them runs 9 down the sides and
+**9·√2 = 12.7 across the diagonal** — 41% wider exactly at the corner. The founder's team
+marked that spot repeatedly and it was misread three times as a curve problem; the curve is
+a true circle (measured, 1.2% error). At 30 + 9 = **39** both arcs share one centre and the
+gap is even the whole way round; the same rule fixes the collapsed nav ball, since that is
+the same pill. The ratio is fixed: a round shape inside a corner of its own radius is
+ALWAYS 1.41× wider on the diagonal, whatever the gap.
+
+**The padding moves with the radius, and that is the trade — which is why this is a CHOICE,
+not a fix.** `--post-inner-r` is `card − pad`, so at card 39 leaving the padding at 12 drags
+every inner shape to 27 (a 54px avatar, 54px pills — too heavy), while keeping the shapes at
+18 needs pad 21, which pushes the text 9px further in. The founder walked all three
+personally: pad 21 rejected as *"so inside with so much space around"*, pad 12 as too heavy,
+15 chosen as *"in between but more the right side"* — and then, seeing it, *"I can't decide…
+make it back the way it was but give me a name"*. Hence the presets. Text measures 338 wide
+on a 390 phone in CLASSIC and 332 in EVEN CORNERS. One thing EVEN CORNERS buys: at 48 the
+pills clear the 44pt touch minimum on their own, which 36 never does (CLASSIC carries it on
+the invisible `::before` overlay instead).
+
+**Neither preset may go red in the probes.** `concentric.js` and `radii.js` assert the card
+is on one of the two named values — nav radius, or nav radius + the gap — and print which;
+a THIRD value is what they fail on, because that means something drifted. Do not "fix" a
+passing CLASSIC run by re-asserting the concentric law unconditionally.
 
 **A capsule's radius clamps to half its SHORT side.** On a 320px phone the five action pills
 came out 43 wide, so their corner clamped to 21.4 and stopped matching the card's 24 —
-`concentric.js` caught it at that width only. `--post-row-gap` drops to 5 under 360px, which
-buys each pill back to 48 wide and its corner holds.
+`concentric.js` caught it at that width only. Under EVEN CORNERS `--post-row-gap` drops to 5
+below 360px, which buys each pill back to 48 wide and its corner holds; the override ships
+commented out because CLASSIC does not need it.
 
 **Four probes had the numbers written in as literals and every one went stale the moment
 the card's corner moved** — `pillfit` (a 36px pill), `radii` (the top bar tied to
