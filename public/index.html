@@ -195,16 +195,29 @@ a{text-decoration:none;color:inherit;}
      twice the inner radius for the same reason — a capsule's radius IS half its
      height, so this is the only height at which its corner matches the photo's.
      Change --post-pad or --post-card-r and everything follows. */
-  --post-pad: 12px;
-  /* 30 = THE NAV BAR'S OWN RADIUS. The bar is a full pill 60px tall, so its ends curve
-     at 30; the card was 26 and the + button 28, and when you scroll they overlap and the
-     three near-misses read as sloppy (owner: "match perfectly the navigation bar and the
-     plus icon"). The + is grown to 60px so its circle is 30 too. Everything large in the
-     feed now turns on the same corner, and --post-inner-r keeps everything INSIDE the
-     card concentric with it, as before. */
-  --post-card-r: 30px;
-  --post-inner-r: calc(var(--post-card-r) - var(--post-pad)); /* 14px */
+  --post-pad: 21px;
+  /* 39 = THE NAV BAR'S RADIUS **PLUS THE GAP**, and the "plus" is the whole point.
+     Equal radii are NOT a match. The bar is a 60px pill (radius 30) sitting 9px inside
+     the card's edge (--nav-inset 23 minus --feed-gutter 14). With the card also at 30 the
+     two curves have DIFFERENT centres 9px apart, so the space between them runs 9 along
+     the sides and 9*sqrt(2) = 12.7 across the diagonal — 41% wider exactly at the corner,
+     which is what the founder's team kept marking. Setting the card to 30 + 9 puts both
+     arcs on ONE centre and the gap is 9 the whole way round. This is the app's own rule 4
+     ("box radius = pill radius + the padding gap") applied outward instead of inward, and
+     it fixes the collapsed nav ball at the same time, since that is the same pill.
+     THE PADDING MOVES WITH IT. --post-inner-r is card - pad, so leaving pad at 12 would
+     drag every inner shape to 27 and the action pills to 54 tall. 21 keeps inner at 18,
+     so the avatar, the photo, the pills and the dots all stay exactly the size the
+     founder approved and every one of them stays concentric (18 + 21 = 39). The cost is
+     real and was accepted: text sits 9px further from the card's edge (338 -> 320 on a
+     390 phone). */
+  --post-card-r: 39px;
+  --post-inner-r: calc(var(--post-card-r) - var(--post-pad)); /* 18px */
   --post-gap: 12px;
+  /* The gap BETWEEN action pills. It used to be --post-pad, so the row read as one even
+     beat with the card's edge. Once the padding grew to 21 that left each pill ~33px wide
+     on a 320px phone and the counts clipped, so the row keeps the original 12. */
+  --post-row-gap: 12px;
   /* THE CARD IS --s2 — the same surface every other card in the app is made of (Who to
      follow, Settings rows, Account cards, sheets: 384 usages). It shipped as the design
      law's named "Dark grey" #1C1C1E, which is what the team's mockup measured, and the
@@ -6483,7 +6496,7 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
 /* Engagement row (blueprint §Home): five OUTLINE icons at 18px spread full-width
    (space-between), compact counts, 44px invisible touch targets. Active states
    FILL — like = blue, repost = blue, bookmark = blue (via the token rules below). */
-.ac-post-actions{display:flex;align-items:center;margin-top:10px;gap:var(--post-pad,12px);}
+.ac-post-actions{display:flex;align-items:center;margin-top:10px;gap:var(--post-row-gap,12px);}
 .ac-post-actions svg{width:18px;height:18px;flex:0 0 auto;}
 .ac-post-actions .ax-btn img{width:17px;height:17px;}
 /* Each action is a pill sitting ON the card. Its height is twice the card's derived
@@ -9282,7 +9295,7 @@ body.light .ac-follow-btn.following{background:transparent;color:var(--t1);}
 .ac-pf-stats b{color:var(--t1);font-weight:700;}
 /* Post-detail action row: the same pills as the feed. The hairlines above and below it
    are gone with the rest of the divider grammar — the card is the container now. */
-.ac-pf-actions{display:flex;align-items:center;margin-top:10px;gap:var(--post-pad,12px);
+.ac-pf-actions{display:flex;align-items:center;margin-top:10px;gap:var(--post-row-gap,12px);
   border-top:none;border-bottom:none;}
 .ac-pf-actions svg{width:18px;height:18px;flex:0 0 auto;}
 .ac-pf-actions .ax-btn img{width:18px;height:18px;}
@@ -20767,7 +20780,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1760'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1761'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;

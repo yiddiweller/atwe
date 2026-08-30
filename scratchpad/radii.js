@@ -92,9 +92,17 @@ const PHOTO='data:image/png;base64,'+Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAMAAA
   console.log('     card padding   '+r.pad);
 
   ok(r.nav && r.fab && r.card, 'the nav bar, the + button and a post card are all on screen');
-  /* The three shapes that overlap when you scroll must turn on the SAME corner. */
-  ok(r.card.r===r.nav.r, 'the post card turns on the nav bar’s own corner', 'card '+r.card.r+'  nav '+r.nav.r);
-  ok(r.fab.r===r.nav.r, 'and so does the + button', '+ '+r.fab.r+'  nav '+r.nav.r);
+  /* EQUAL radii are not a match, and believing they were is what shipped wrong for
+     several builds. The bar sits 9px inside the card's edge, so with both at 30 their
+     arcs had centres 9px apart and the space between them ran 9 along the sides but
+     9*sqrt(2)=12.7 across the diagonal. The card is the OUTER shape, so it must be the
+     bar's radius PLUS that gap — the same rule that keeps the card's own contents
+     concentric, applied outward. */
+  const navGap = r.edges ? +(r.edges.cardR - r.edges.navR).toFixed(1) : null;
+  ok(navGap!==null && Math.abs((r.nav.r + navGap) - r.card.r) <= 1.5,
+     'the post card is the nav bar’s corner PLUS the gap — the two arcs share a centre',
+     'nav '+r.nav.r+' + gap '+navGap+' = '+(r.nav.r+navGap)+',  card '+r.card.r);
+  ok(r.fab.r===r.nav.r, 'the + button is the same circle as the bar’s ends', '+ '+r.fab.r+'  nav '+r.nav.r);
   /* Everything inside the card is card − padding, so each hugs the card's corner. */
   const inner = r.card.r - r.pad;
   ok(r.photo.r===inner, 'the photo turns on card − padding', 'photo '+r.photo.r+'  want '+inner);
@@ -118,8 +126,9 @@ const PHOTO='data:image/png;base64,'+Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAMAAA
   ok(inset !== null && inset > 4 && Math.abs(inset - insetR) < 0.6,
      'the nav bar sits INSIDE the cards, by the same amount at both ends ('+inset+'px)',
      e?('left gap '+inset+'  right gap '+insetR):'no boxes');
-  ok(r.card && r.nav && r.card.r===r.nav.r,
-     'and it still turns on the very same corner while doing it', r.card?('card '+r.card.r+'  nav '+r.nav.r):'');
+  ok(r.card && r.nav && Math.abs((r.nav.r + inset) - r.card.r) <= 1.5,
+     'and the gap it leaves is even right around the corner, not just down the sides',
+     r.card?('nav '+r.nav.r+' + '+inset+' = '+(r.nav.r+inset)+',  card '+r.card.r):'');
   /* the compose + belongs to the CONTENT, so it tracks the cards' gutter, not the bar */
   ok(e && e.fabMeasured, 'the + button was measured where it actually LANDS, not from its CSS',
      e?('measured: '+e.fabMeasured):'');

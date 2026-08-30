@@ -5917,6 +5917,32 @@ cards. Measured before adopting: density is unchanged (**1.77 posts per screen b
 after** — the narrower photo inside the card pays for the padding), so the usual objection to
 cards did not apply here.
 
+**EQUAL radii are not a match — the outer shape is the inner one PLUS the gap.** The nav
+bar is a 60px pill (radius 30) sitting **9px inside** the card's edge (`--nav-inset` 23
+minus `--feed-gutter` 14). With the card also at 30 the two arcs had centres 9px apart, so
+the space between them ran 9 down the sides and **9·√2 = 12.7 across the diagonal** — 41%
+wider exactly at the corner. The founder's team marked that spot repeatedly and it was
+misread three times as a curve problem; the curve is a true circle (measured, 1.2% error).
+The card is therefore **39** — the bar's 30 plus the 9 — which puts both arcs on one centre
+and makes the gap even the whole way round. Same rule fixes the collapsed nav ball, since
+that is the same pill. The ratio is fixed: a round shape inside a corner of its own radius
+is ALWAYS 1.41× wider on the diagonal, whatever the gap.
+
+**The padding moves with the radius, and that is not optional.** `--post-inner-r` is
+`card − pad`, so leaving the padding at 12 would have dragged every inner shape to 27 and
+the action pills to **54px tall**. `--post-pad: 21` keeps inner at 18, so the avatar, the
+photo, the pills and the ⋯ all stay the size the founder approved AND stay concentric
+(18 + 21 = 39). The accepted cost: text sits 9px further from the card's edge (338 → 320 on
+a 390 phone), which trades against the founder's earlier "closest to the edge" preference —
+they were told, and chose the corner.
+
+**`--post-row-gap` exists because of this.** The action row's gap used to be `--post-pad`
+so the row read as one even beat with the card's edge. At pad 21 that left each pill ~33px
+on a 320px phone and the counts clipped, so the row keeps the original 12 while the card's
+edge padding grows. `scratchpad/concentric.js` checks every nested shape at 320/390/430 and
+asserts no count clips; `scratchpad/radii.js`'s old "card radius EQUALS nav radius"
+assertion was the wrong law and now tests the sum.
+
 **One number drives every corner, and it is DERIVED, never typed.** A shape sitting inside the
 card, inset by the card's own padding, is concentric with the card's corner exactly when its
 radius is `card radius − padding`. So `--post-inner-r` is
