@@ -5917,8 +5917,9 @@ cards. Measured before adopting: density is unchanged (**1.77 posts per screen b
 after** — the narrower photo inside the card pays for the padding), so the usual objection to
 cards did not apply here.
 
-**EQUAL radii are not a match — the outer shape is the inner one PLUS the gap.** The nav
-bar is a 60px pill (radius 30) sitting **9px inside** the card's edge (`--nav-inset` 23
+**EQUAL radii are not a match — the outer shape is the inner one PLUS the gap.** This is
+the law, and it was got WRONG for several builds by setting everything to one number. The
+nav bar is a 60px pill (radius 30) sitting **9px inside** the card's edge (`--nav-inset` 23
 minus `--feed-gutter` 14). With the card also at 30 the two arcs had centres 9px apart, so
 the space between them ran 9 down the sides and **9·√2 = 12.7 across the diagonal** — 41%
 wider exactly at the corner. The founder's team marked that spot repeatedly and it was
@@ -5929,17 +5930,31 @@ that is the same pill. The ratio is fixed: a round shape inside a corner of its 
 is ALWAYS 1.41× wider on the diagonal, whatever the gap.
 
 **The padding moves with the radius, and that is not optional.** `--post-inner-r` is
-`card − pad`, so leaving the padding at 12 would have dragged every inner shape to 27 and
-the action pills to **54px tall**. `--post-pad: 21` keeps inner at 18, so the avatar, the
-photo, the pills and the ⋯ all stay the size the founder approved AND stay concentric
-(18 + 21 = 39). The accepted cost: text sits 9px further from the card's edge (338 → 320 on
-a 390 phone), which trades against the founder's earlier "closest to the edge" preference —
-they were told, and chose the corner.
+`card − pad`, so leaving the padding at 12 would drag every inner shape to 27 and the action
+pills to **54px tall**. `--post-pad: 15` keeps inner at 24, so the avatar, the ⋯, the photo
+and the pills are 48 — bigger than before, not huge — AND stay concentric (24 + 15 = 39).
+The founder walked this personally: pad 21 (inner unchanged at 18) was rejected as *"so
+inside with so much space around"*, pad 12 (inner 27, 54px avatar) as too heavy, and 15 was
+chosen as *"in between but more the right side"*. Text is 332 wide on a 390 phone against
+338 before. A bonus falls out: at 48 the pills clear the 44pt touch minimum on their own,
+which 36 never did.
+
+**A capsule's radius clamps to half its SHORT side.** On a 320px phone the five action pills
+came out 43 wide, so their corner clamped to 21.4 and stopped matching the card's 24 —
+`concentric.js` caught it at that width only. `--post-row-gap` drops to 5 under 360px, which
+buys each pill back to 48 wide and its corner holds.
+
+**The top bar's round buttons are chrome, not card contents.** Tying them to `card − pad`
+was a coincidence of the old numbers (36px circles happened to be 18 when inner was 18).
+They cannot be concentric with a card at all — they sit on the same gutter as the card's own
+edge, so the gap is zero and concentricity would demand a 78px button. `radii.js` now only
+asks that the three match each other.
 
 **`--post-row-gap` exists because of this.** The action row's gap used to be `--post-pad`
-so the row read as one even beat with the card's edge. At pad 21 that left each pill ~33px
-on a 320px phone and the counts clipped, so the row keeps the original 12 while the card's
-edge padding grows. `scratchpad/concentric.js` checks every nested shape at 320/390/430 and
+so the row read as one even beat with the card's edge. Once the padding grew, that starved
+the pills on a narrow phone, so the row keeps 12 while the card's edge padding moves — and
+drops to **5 under 360px**, where a pill would otherwise fall under 48 wide and its capsule
+corner would clamp below the card's 24. `scratchpad/concentric.js` checks every nested shape at 320/390/430 and
 asserts no count clips; `scratchpad/radii.js`'s old "card radius EQUALS nav radius"
 assertion was the wrong law and now tests the sum.
 
