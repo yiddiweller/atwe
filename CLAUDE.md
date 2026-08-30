@@ -5944,6 +5944,14 @@ came out 43 wide, so their corner clamped to 21.4 and stopped matching the card'
 `concentric.js` caught it at that width only. `--post-row-gap` drops to 5 under 360px, which
 buys each pill back to 48 wide and its corner holds.
 
+**Four probes had the numbers written in as literals and every one went stale the moment
+the card's corner moved** — `pillfit` (a 36px pill), `radii` (the top bar tied to
+`card − pad`), `actionrow` (the row gap == the padding) and `adcard`, whose stray-shape
+detector allowed only 30 and 18 and therefore reported correctly-sized shapes as strays.
+All four now resolve `--post-card-r` / `--post-inner-r` **inside the page**, where the
+`calc()` is real — `getPropertyValue` on a calc returns the expression, not a number. If you
+change these tokens again, nothing should need editing in the probes.
+
 **The top bar's round buttons are chrome, not card contents.** Tying them to `card − pad`
 was a coincidence of the old numbers (36px circles happened to be 18 when inner was 18).
 They cannot be concentric with a card at all — they sit on the same gutter as the card's own
