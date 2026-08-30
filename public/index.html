@@ -195,37 +195,43 @@ a{text-decoration:none;color:inherit;}
      twice the inner radius for the same reason — a capsule's radius IS half its
      height, so this is the only height at which its corner matches the photo's.
      Change --post-pad or --post-card-r and everything follows. */
-  /* ═══ THE POST CARD'S ONE KNOB ════════════════════════════════════════════
+  /* ═══ THE POST CARD'S ONE KNOB — TWO NAMED PRESETS ════════════════
      Three numbers are locked together and you may pick any TWO:
          corner roundness  ·  edge padding  ·  the size of everything inside
-     because --post-inner-r is card − pad, and concentricity (the even gap round
-     a corner) requires exactly that. The shipped set is:
-         card 39 · pad 15 · inner 24 → avatar/⋯ 48, action pills 48 tall
-     TO GO BACK to the design before 2026-08-30, change these three lines to
-         --post-pad: 12px;  --post-card-r: 30px;  and --post-av: 36px (three
-     places, search "--post-av"), plus .ac-post-more min-width/height 36px.
-     That restores the pre-concentric look exactly; nothing else depends on them.
-     Or simply: git revert the "concentric corners" commit. */
-  --post-pad: 15px;
-  /* 39 = THE NAV BAR'S RADIUS **PLUS THE GAP**, and the "plus" is the whole point.
-     Equal radii are NOT a match. The bar is a 60px pill (radius 30) sitting 9px inside
-     the card's edge (--nav-inset 23 minus --feed-gutter 14). With the card also at 30 the
-     two curves have DIFFERENT centres 9px apart, so the space between them runs 9 along
-     the sides and 9*sqrt(2) = 12.7 across the diagonal — 41% wider exactly at the corner,
-     which is what the founder's team kept marking. Setting the card to 30 + 9 puts both
-     arcs on ONE centre and the gap is 9 the whole way round. This is the app's own rule 4
-     ("box radius = pill radius + the padding gap") applied outward instead of inward, and
-     it fixes the collapsed nav ball at the same time, since that is the same pill.
-     THE PADDING MOVES WITH IT, and that is the whole trade. --post-inner-r is card - pad,
-     so pad 21 keeps the inner shapes at their old 18 but pushes text 9px in (the founder
-     rejected that: "I don't like when it is so inside"), while pad 12 keeps text where it
-     was but drags every inner shape to 27 — a 54px avatar and 54px-tall pills, which
-     reads too heavy. 15 is the settled middle, deliberately nearer the tight end: text
-     332 wide on a 390 phone against 338 before and 320 at pad 21, with inner shapes at 24
-     (avatar and ⋯ 48, pills 48 tall). A bonus that falls out of it: at 48 the pills clear
-     the 44pt touch minimum on their own, which 36 never did. */
-  --post-card-r: 39px;
-  --post-inner-r: calc(var(--post-card-r) - var(--post-pad)); /* 18px */
+     because --post-inner-r is card − pad, and concentricity (the even gap round a
+     corner) requires exactly that. So the whole design is TWO lines and the rest of the
+     card follows on its own: --post-shape (the avatar, the ⋯, an action pill's height)
+     is inner × 2, and the photo's corner is inner.
+
+       PRESET "CLASSIC"       pad 12 · card 30 → inner 18, shapes 36   <- SHIPPED
+       PRESET "EVEN CORNERS"  pad 15 · card 39 → inner 24, shapes 48
+
+     The founder can ask for either BY NAME. To switch to EVEN CORNERS: set --post-pad to
+     15px, --post-card-r to 39px, and uncomment the <=360px --post-row-gap override
+     further down (48px pills need the tighter gap on the narrowest phones; 36px pills do
+     not). Nothing else changes — no other size on the card is hand-typed.
+
+     WHY 39 IS THE EVEN ONE: the nav bar is a 60px pill (radius 30) sitting 9px inside the
+     card's edge (--nav-inset 23 minus --feed-gutter 14). Equal radii are NOT a match —
+     with the card also at 30 the two arcs have different centres 9px apart, so the gap
+     runs 9 along the sides and 9·√2 = 12.7 across the diagonal, 41% wider exactly at the
+     corner, which is what the founder's design team kept marking. 30 + 9 puts both arcs
+     on one centre. That is the app's own rule 4 ("box radius = pill radius + the padding
+     gap") applied outward instead of inward.
+     THE COST, and why it is a real choice rather than a bug fix: the padding has to move
+     with it. Keeping the inner shapes at 18 needs pad 21, which pushes the text 9px
+     further in ("I don't like when it is so inside" — rejected); keeping the text where
+     it is needs pad 12, which drags every inner shape to 27, i.e. a 54px avatar and 54px
+     pills, too heavy. 15 is the settled middle: text 332 wide on a 390 phone against 338
+     in CLASSIC, with 48px shapes that clear the 44pt touch minimum on their own — which
+     36 never did. */
+  --post-pad: 12px;
+  --post-card-r: 30px;
+  --post-inner-r: calc(var(--post-card-r) - var(--post-pad)); /* 18px CLASSIC / 24px EVEN */
+  /* Everything round that sits inside the card: the avatar, the ⋯, the height of an
+     action pill. A capsule's radius IS half its height, so twice the inner radius is the
+     only height at which a pill's corner matches the photo's. Never type these sizes. */
+  --post-shape: calc(var(--post-inner-r) * 2); /* 36px CLASSIC / 48px EVEN */
   --post-gap: 12px;
   /* The gap BETWEEN action pills. It used to be --post-pad, so the row read as one even
      beat with the card's edge. Once the padding grew to 21 that left each pill ~33px wide
@@ -1388,7 +1394,7 @@ button.ac-poll-opt:hover{background:var(--accent-dim);border-color:var(--accent)
 .ac-poll-total{font-size:12.5px;color:var(--t3);padding:1px 2px;}
 
 /* Post "more" button + author action sheet */
-.ac-post-more{background:none;border:none;color:var(--t3);cursor:pointer;padding:2px 4px;display:flex;align-items:center;justify-content:center;border-radius:50%;min-width:48px;min-height:48px;}
+.ac-post-more{background:none;border:none;color:var(--t3);cursor:pointer;padding:2px 4px;display:flex;align-items:center;justify-content:center;border-radius:50%;min-width:var(--post-shape);min-height:var(--post-shape);}
 .ac-post-more svg{width:18px;height:18px;stroke:none;fill:currentColor;}
 .ac-post-more:hover{color:var(--t1);background:var(--s1);}
 /* ── Unified menu material (Apple iOS context-menu look, per theme) ──
@@ -6043,7 +6049,7 @@ body.reduce-motion .ac-newposts{animation:none;}
    would stack on top of theirs — the hashtag page measured a 38px gutter that way. Zero
    means each surface inherits the gutter it already had; only the two containers that
    provide none, or too little, name a value. Add a surface and it is right by default. */
-.ac-post,.ac-postfocus,.ac-adcard{--post-indent:57px;--post-edge:0px;--post-av:48px;display:block;position:relative;margin:0;
+.ac-post,.ac-postfocus,.ac-adcard{--post-indent:57px;--post-edge:0px;--post-av:46px;display:block;position:relative;margin:0;
   padding:var(--post-pad) calc(var(--post-edge) + var(--post-pad)) calc(var(--post-pad) + var(--post-gap));
   border-bottom:none;}
 .ac-post::before,.ac-postfocus::before,.ac-adcard::before{content:"";position:absolute;inset:0 var(--post-edge) var(--post-gap);
@@ -6074,10 +6080,13 @@ body.reduce-motion .ac-newposts{animation:none;}
    deleted mystery: this used to be a 0.5px rule inset to the gutter.) */
 /* The ⋯ menu's dots end flush with the inset divider's right edge (the gutter). */
 #acFeed .ac-post-more{padding-inline-end:0;}
-/* 36px so the avatar's radius (18) equals --post-inner-r — the same corner as the photo
-   and the action pills. It sits in the card's top-left corner inset by the padding, which
-   is exactly the case rule 4 covers: box radius = inner radius + the gap (18 + 12 = 30). */
-#acFeed .ac-post,#acFeed .ac-adcard{--post-av:48px;}
+/* --post-shape, so the feed avatar's radius is exactly --post-inner-r — the same corner as
+   the photo and the action pills — under EITHER preset. It sits in the card's top-left
+   corner inset by the padding, which is exactly the case rule 4 covers: box radius = inner
+   radius + the gap (CLASSIC 18 + 12 = 30, EVEN CORNERS 24 + 15 = 39). Never type a number
+   here: the base .ac-post above keeps its own 46 for the non-feed surfaces, which is
+   deliberately outside the preset. */
+#acFeed .ac-post,#acFeed .ac-adcard{--post-av:var(--post-shape);}
 #acFeed .ac-post .user-avatar{font-size:14px;}
 #acFeed .ac-sg-row{padding-inline-start:var(--feed-gutter);padding-inline-end:var(--feed-gutter);}
 #acFeed .ac-empty{padding-inline-start:var(--feed-gutter);padding-inline-end:var(--feed-gutter);}
@@ -6466,7 +6475,7 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
    its own height is the ⋯'s, and centring inside it puts the two on one line by
    construction rather than by a hand-tuned nudge. */
 .ac-post-meta{display:flex;align-items:center;gap:2px;margin-inline-start:auto;
-  align-self:flex-start;min-height:48px;flex-shrink:0;}
+  align-self:flex-start;min-height:var(--post-shape);flex-shrink:0;}
 .ac-post-time{font-size:13px;color:var(--t3);white-space:nowrap;flex-shrink:0;}
 .ac-post-edited{font-size:12px;color:var(--t3);white-space:nowrap;flex-shrink:0;margin-inline-start:5px;}
 /* In a post header the time + ⋯ sit together on the right (the time's auto
@@ -6510,10 +6519,11 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
    (space-between), compact counts, 44px invisible touch targets. Active states
    FILL — like = blue, repost = blue, bookmark = blue (via the token rules below). */
 .ac-post-actions{display:flex;align-items:center;margin-top:10px;gap:var(--post-row-gap,12px);}
-/* A capsule's radius clamps to half its SHORT side. At 320px the five pills come out 43
-   wide, so their corner clamped to 21.4 and stopped matching the card's. Tightening the
-   row gap on the narrowest phones keeps each pill wide enough to hold its 24. */
-@media(max-width:360px){:root{--post-row-gap:5px;}}
+/* EVEN CORNERS ONLY — uncomment with that preset. A capsule's radius clamps to half its
+   SHORT side, so at 320px with 48px pills each comes out 43 wide and its corner clamps to
+   21.4, no longer matching the card's 24. Tightening the gap buys that width back.
+   CLASSIC's 36px pills are 42 wide at 320 and their corner (18) already holds. */
+/* @media(max-width:360px){:root{--post-row-gap:5px;}} */
 .ac-post-actions svg{width:18px;height:18px;flex:0 0 auto;}
 .ac-post-actions .ax-btn img{width:17px;height:17px;}
 /* Each action is a pill sitting ON the card. Its height is twice the card's derived
@@ -20797,7 +20807,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1762'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1763'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;

@@ -75,8 +75,14 @@ const ok=(c,m,d)=>{c?pass++:fail++;console.log('  '+(c?'ok  ':'FAIL')+' '+m+(d?'
         'concentric: '+it.n+' — its corner '+it.r+' + gap '+it.inset+' = '+want,
         'card is '+m.cardR);
     }
-    ok(Math.abs((m.navR+m.navGap)-m.cardR)<=1.5,
-      'concentric: the nav bar — its corner '+m.navR+' + gap '+m.navGap+' = '+(m.navR+m.navGap),
+    /* The nav bar is the ONE shape whose relationship is a deliberate PRESET rather than
+       a law (see "THE POST CARD'S ONE KNOB" in index.html). EVEN CORNERS makes the card
+       nav + gap, so the two arcs share a centre; CLASSIC makes the card equal to the nav,
+       which the founder chose knowing the diagonal gap runs 41% wider there. Either is
+       correct; a THIRD value would mean something drifted, and that is what this asserts. */
+    const even = Math.abs((m.navR+m.navGap)-m.cardR)<=1.5, classic = Math.abs(m.navR-m.cardR)<=1.5;
+    ok(even||classic,
+      'the card is on a named preset — '+(even?'EVEN CORNERS (nav '+m.navR+' + gap '+m.navGap+')':'CLASSIC (nav '+m.navR+', diagonal gap 41% wider by choice)'),
       'card is '+m.cardR);
     ok(m.clipped===0,'no action count is clipped at this width', m.clipped+' clipped, pill '+m.pillW+'px wide');
     await p.close();
