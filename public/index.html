@@ -601,8 +601,12 @@ body.light .splash-mark{background-color:#d2d2d8;animation:splashPulseLight 2s e
 .auth-terms a:hover{color:#fff;text-decoration:underline;}
 
 /* ── Full-screen auth steps (username → password) ── */
+/* The wizard steps join the app's one margin. NB .auth-inner right above keeps its 20px
+   on purpose — that is the start screen (Continue with Email / Google / Apple), the one
+   page the founder asked to leave exactly as it was. Two separate classes, so widening
+   the steps cannot reach it. */
 .auth-step{display:flex;flex-direction:column;width:100%;max-width:440px;margin:0 auto;min-height:100%;
-  padding:calc(env(safe-area-inset-top) + 8px) 20px max(calc(28px + env(safe-area-inset-bottom)), calc(var(--kb, 0px) + 16px));
+  padding:calc(env(safe-area-inset-top) + 8px) var(--feed-gutter) max(calc(28px + env(safe-area-inset-bottom)), calc(var(--kb, 0px) + 16px));
   transition:padding-bottom var(--t-base) var(--ease);}
 .auth-step.hidden{display:none;}
 /* Steps swap instantly so the shared header/back/Continue never blink; only the
@@ -4090,7 +4094,11 @@ body.light .overlay.st-screen{background:var(--bg);backdrop-filter:none;-webkit-
    light mode too, otherwise `body.light .overlay`'s scrim shows the page through. */
 body.light .overlay.auth-screen,body.light .overlay.crop-overlay,
 body.light .overlay.feed-viewer,body.light .overlay.feed-compose{background:#000;backdrop-filter:none;-webkit-backdrop-filter:none;}
-.set-sheet{width:100%;max-width:600px;margin:0 auto;padding:0 12px 30px;display:block;
+/* 2px less than the gutter ON PURPOSE, and it is not a fudge: .iset-group carries its own
+   2px margin, so padding this by the full gutter puts the visible CARDS at 16 while the
+   Settings hub — which pads its card by exactly this — has them at 14. The number that has
+   to match across the two surfaces is where the cards land, not where their container does. */
+.set-sheet{width:100%;max-width:600px;margin:0 auto;padding:0 calc(var(--feed-gutter) - 2px) 30px;display:block;
   background:none;border:none;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;}
 .set-sheet .iset-head{margin-bottom:8px;}
 .set-sheet .iset-cap{margin-top:2px;}
@@ -4332,7 +4340,12 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
   /* Login / sign-up fade up into a centered, rounded card with space around.
      Delete-account uses the same flat padding so its full-screen step doesn't
      double-stack the safe-area inset. */
-  #loginOverlay,#signupOverlay,#deleteAccountOverlay,#devicesOverlay{align-items:center;padding:20px;overflow-y:auto;}
+  /* Delete-account and Devices are .set-fs FULL-SCREEN sheets — they are pages, not the
+     centred login card this rule is for — and being named here by ID overrode
+     .overlay.set-fs{padding:0}, parking their content at 34px (20 here + the sheet's 12 +
+     the group's 2) while every other inside page reaches 14. They are out of the list. */
+  #loginOverlay,#signupOverlay{align-items:center;padding:20px;overflow-y:auto;}
+  #deleteAccountOverlay,#devicesOverlay{align-items:center;overflow-y:auto;}
   #confirmOverlay{align-items:center;padding:20px;}
   /* Stories must stay edge-to-edge full-screen on phones (no top inset / scroll). */
   .story-overlay{align-items:stretch;padding:0;overflow:hidden;}
@@ -8839,7 +8852,7 @@ body.light .ac-pdot{background:var(--accent);}
    centered with the name via the flex row. */
 #cashtagView{align-items:stretch;justify-content:center;padding:0;}
 #cashtagView .job-card-modal{width:100%;max-width:600px;height:100%;max-height:none;border-radius:0;
-  padding:max(14px,env(safe-area-inset-top)) 16px 26px;box-shadow:none;overflow-y:auto;}
+  padding:max(14px,env(safe-area-inset-top)) var(--feed-gutter) 26px;box-shadow:none;overflow-y:auto;}
 #cashtagView .sheet-close{display:none;}
 .cash-head{padding:2px 0 14px;}
 .cash-toprow{display:flex;align-items:center;gap:10px;}
@@ -10194,12 +10207,21 @@ body.light .ac-job-tag.featured{color:var(--accent);}
    content runs wider with tighter side padding. Shared by wallet, job detail, and the
    many feature views that use .job-card-modal. */
 .job-card-modal{width:100%;max-width:520px;max-height:90vh;overflow-y:auto;background:var(--bg);border:none;
-  border-radius:var(--r-lg);padding:46px 14px 26px;box-shadow:none;animation:rise .26s var(--ease);position:relative;}
+  border-radius:var(--r-lg);padding:46px var(--feed-gutter) 26px;box-shadow:none;animation:rise .26s var(--ease);position:relative;}
 /* Bare top-left back arrow (replaces the old circled ✕) on flat feature sheets. */
-.job-card-modal .sheet-close{top:8px;left:6px;right:auto;width:38px;height:38px;border-radius:0;background:transparent;color:var(--t1);}
+/* Left-aligned, not centred: the chevron is 11px inside a 38px button, so centring it
+   parks the visible mark ~19px further in than the button's own edge — which is why the
+   arrow read as floating in the middle even when its box was on the margin. The button is
+   positioned at 0 and padded by the gutter, so the INK lands on the same line as the title
+   under it while the 38px tap area is untouched. The +2.3px is not a fudge: the chevron is
+   an 11px SQUARE turned 45 degrees, and a rotated square reaches past its own box by
+   (sqrt(2)-1)/2 of its side — 2.28px here — so padding it by exactly the gutter parks the
+   INK at 11.7 and the arrow still reads a hair further out than the title beneath it. */
+.job-card-modal .sheet-close{top:8px;left:0;right:auto;width:38px;height:38px;border-radius:0;background:transparent;color:var(--t1);
+  justify-content:flex-start;padding-inline-start:calc(var(--feed-gutter) + 2.3px);}
 .job-card-modal .sheet-close:hover{background:transparent;opacity:.6;}
 .job-card-modal .sheet-close svg{display:none;}
-.job-card-modal .sheet-close::before{content:'';width:11px;height:11px;border-left:2.4px solid currentColor;border-bottom:2.4px solid currentColor;border-radius:1.5px;transform:rotate(45deg);margin-inline-start:5px;}
+.job-card-modal .sheet-close::before{content:'';width:11px;height:11px;border-left:2.4px solid currentColor;border-bottom:2.4px solid currentColor;border-radius:1.5px;transform:rotate(45deg);margin-inline-start:0;}
 /* When the sheet's header is a jp-title, sit the title INLINE with the back arrow
    ("‹ Send money"). Dynamic-body sheets (job/order/wallet-style, no direct jp-title)
    keep the reserved top strip above so the arrow never overlaps their content. */
@@ -10220,7 +10242,30 @@ body.light .ac-job-tag.featured{color:var(--accent);}
 /* Don't show a second back chevron when the header already has a .notif-back. */
 .notif-head .notif-back ~ .sheet-close{display:none;}
 /* Let the flat feature sheet run wider on phones (less side gutter from the overlay). */
-.overlay:has(> .job-card-modal){padding-inline-start:10px;padding-inline-end:10px;}
+/* An inside page reaches the SAME 14px line as a Home post card. It used to sit at 24 —
+   10 here plus the card's own 14 — which is 10px further in on each side than Home, i.e.
+   20px narrower overall, and the founder read the whole sheet family as "more in the
+   middle, not close to the edges". The card keeps a max-width, so on a desktop it is still
+   a centred 520px sheet; this only closes the gap on a phone, where the card fills the
+   screen and its own padding is the only inset. Pop-ups (menus, confirms, pickers, intro
+   sheets) deliberately keep the base .overlay padding — stretching a small "Are you sure?"
+   box to the edges makes it a slab. */
+.overlay:has(> .job-card-modal){padding-inline-start:0;padding-inline-end:0;}
+/* Same for the sign-up / sign-in WIZARD steps, and this selector is doing real work: the
+   login overlay holds the start page (.auth-inner) AND every wizard step as siblings, and
+   only one is ever visible. Matching ":has a VISIBLE .auth-step" is therefore exactly the
+   discrimination the founder asked for — the steps reach the app margin, and the start
+   screen (Continue with Email / Google / Apple), which they asked to leave alone, keeps
+   the overlay's own 20px because when it is showing every step is .hidden. */
+.overlay:has(> .auth-step:not(.hidden)){padding-inline-start:0;padding-inline-end:0;}
+/* And again at ID strength, because #loginOverlay/#signupOverlay set `padding:20px` by ID
+   inside the phone media query — (0,1,0,0) beats the class rule above however far down the
+   file it sits, so the class rule alone matched and changed nothing. The wizard's own back
+   arrow needs no separate nudge: .auth-backarrow already carries margin-inline-start:-18px,
+   which cancels the offset of a 30px chevron centred in a 48px tap box, so its INK tracks
+   the step's padding edge on its own once the overlay stops adding 20px in front of it. */
+#loginOverlay:has(> .auth-step:not(.hidden)),
+#signupOverlay:has(> .auth-step:not(.hidden)){padding-inline-start:0;padding-inline-end:0;}
 .ac-job-h{font-size:22px;font-weight:800;letter-spacing:-.02em;color:var(--t1);padding-inline-end:30px;}
 .ac-job-poster{display:flex;align-items:center;gap:11px;margin:14px 0;padding:11px;background:var(--s1);border-radius:14px;cursor:pointer;}
 .ac-job-poster .user-avatar{width:42px;height:42px;font-size:17px;}
@@ -13772,7 +13817,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <div class="iset-body hidden" id="setSearchResults"></div>
     <div class="iset-body" data-page="hub" data-title="Settings">
       <div class="iset-group"><button class="iset-row iset-acctonly" onclick="setNav('account')"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.6 3.1-5.6 7-5.6s7 2 7 5.6"/></svg></span><div class="iset-main"><div class="iset-label">Your account</div><div class="iset-sub">Account info, password, your data</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row iset-acctonly" onclick="setNav('privacy')"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6z"/></svg></span><div class="iset-main"><div class="iset-label">Privacy &amp; safety</div><div class="iset-sub">Who can reach you, blocking, muting</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row iset-acctonly" onclick="setNav('security')"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9.5" rx="2.4"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><div class="iset-main"><div class="iset-label">Security &amp; access</div><div class="iset-sub">Password, two-factor, devices</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row iset-acctonly" onclick="setNav('notifications')"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 0 1 12 0c0 4.5 2 5.5 2 5.5H4s2-1 2-5.5"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></svg></span><div class="iset-main"><div class="iset-label">Notifications</div><div class="iset-sub">Push alerts on this device</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div>
-      <div class="iset-group iset-acctonly" id="hubStoreGroup"><button class="iset-row" onclick="closeSettings();acOpenStoreManage()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span><div class="iset-main"><div class="iset-label">Manage store</div><div class="iset-sub">Products, coupons, orders &amp; storefront</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div>
+      <div class="iset-group iset-acctonly" id="hubStoreGroup"><button class="iset-row" onclick="closeSettings(true);acOpenStoreManage()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span><div class="iset-main"><div class="iset-label">Manage store</div><div class="iset-sub">Products, coupons, orders &amp; storefront</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div>
       <div class="iset-group"><button class="iset-row iset-acctonly" onclick="setNav('premium')"><span class="iset-ic"><svg viewBox="0 0 24 24"><polygon points="12 3 14.7 8.7 21 9.5 16.4 13.9 17.6 20.2 12 17.1 6.4 20.2 7.6 13.9 3 9.5 9.3 8.7"/></svg></span><div class="iset-main"><div class="iset-label">Premium &amp; verification</div><div class="iset-sub">Your plan, verified badge, subscriptions</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="setNav('display')"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/></svg></span><div class="iset-main"><div class="iset-label">Display &amp; accessibility</div><div class="iset-sub">Theme and appearance</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="setNav('assistant')"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg></span><div class="iset-main"><div class="iset-label">Atwe Assistant</div><div class="iset-sub">AI model and chat history</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row iset-acctonly" onclick="setNav('data')"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8"/><path d="M10 3v2.4M14 3v2.4M10 18.6V21M14 18.6V21M3 10h2.4M3 14h2.4M18.6 10H21M18.6 14H21"/></svg></span><div class="iset-main"><div class="iset-label">Your data &amp; storage</div><div class="iset-sub">Download or delete your data</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div>
       <div class="iset-group" id="hubAdminGroup"><button class="iset-row iset-staff" onclick="setNav('__admin')"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.5 5.5l1.8 1.8M16.7 16.7l1.8 1.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8"/></svg></span><div class="iset-main"><div class="iset-label">Admin dashboard</div><div class="iset-sub">Manage users, plans and access</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div>
       <div class="iset-group"><button class="iset-row" onclick="acOpenChangelog()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14.5 3v4.5H19"/><line x1="8.5" y1="12" x2="15" y2="12"/><line x1="8.5" y1="16" x2="13" y2="16"/></svg></span><div class="iset-main"><div class="iset-label">What’s new</div><div class="iset-sub">Changelog and release notes</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="setNav('about')"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.8" r="0.7"/></svg></span><div class="iset-main"><div class="iset-label">About &amp; legal</div><div class="iset-sub">Version, privacy policy, terms</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div>
@@ -13782,7 +13827,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 <div class="iset-group"><button class="iset-row" onclick="changeName()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.6 3.1-5.6 7-5.6s7 2 7 5.6"/></svg></span><div class="iset-main"><div class="iset-label">Display name</div></div><span class="iset-val" id="profileNameDesc"></span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="changeUsername()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 12v1.6a2.4 2.4 0 0 0 4.8 0V12a8.8 8.8 0 1 0-3.4 7"/></svg></span><div class="iset-main"><div class="iset-label">Username</div></div><span class="iset-val" id="profileUserDesc"></span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 21h16v-7H4z"/><path d="M6 14v-3a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v3"/><path d="M12 9V5"/><circle cx="12" cy="4" r="0.6"/></svg></span><div class="iset-main"><div class="iset-label">Birthday</div><div class="iset-sub">Only you can see this</div></div><input type="date" class="settings-date" id="settingsBirthday" onchange="saveBirthday(this.value)"/></div><button class="iset-row" onclick="openChangeEmail()"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7.5l8.5 5.5 8.5-5.5"/></svg></span><div class="iset-main"><div class="iset-label">Email</div></div><span class="iset-val" id="setAcctEmail"></span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Your account information is private. Only you can see your email and birthday.</div><div class="iset-group"><button class="iset-row" id="settingsPwRow" onclick="changePassword()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="8" cy="13" r="3.2"/><path d="M10.6 11.6l8-8M16 6l2.4 2.4M14 8l2 2"/></svg></span><div class="iset-main"><div class="iset-label" id="settingsPwLabel">Password</div><div class="iset-sub" id="settingsPwDesc">We’ll email you a secure reset link</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="shareProfile()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.4"/><circle cx="17.5" cy="6" r="2.4"/><circle cx="17.5" cy="18" r="2.4"/><line x1="8.1" y1="10.9" x2="15.4" y2="7.1"/><line x1="8.1" y1="13.1" x2="15.4" y2="16.9"/></svg></span><div class="iset-main"><div class="iset-label">Share profile</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acDownloadData()"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8"/><path d="M10 3v2.4M14 3v2.4M10 18.6V21M14 18.6V21M3 10h2.4M3 14h2.4M18.6 10H21M18.6 14H21"/></svg></span><div class="iset-main"><div class="iset-label">Download an archive of your data</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="openPause()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="10" y1="9" x2="10" y2="15"/><line x1="14" y1="9" x2="14" y2="15"/></svg></span><div class="iset-main"><div class="iset-label">Pause my account</div><div class="iset-sub">Show as “away” with a message. Turn off any time · Pro</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="openDeactivate()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12.5"/><circle cx="12" cy="16" r="0.6"/></svg></span><div class="iset-main"><div class="iset-label">Deactivate account</div><div class="iset-sub">Hide your profile temporarily. Sign back in to restore it</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="openDeleteAccount()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Delete account</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div>
     </div>
     <div class="iset-body hidden" data-page="privacy" data-title="Privacy & safety">
-<div class="iset-group"><button class="iset-row" onclick="closeSettings();openContactPrivacy()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.4 7.2L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"/></svg></span><div class="iset-main"><div class="iset-label">Who can contact you</div><div class="iset-sub">Choose who can message &amp; call you</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><polyline points="3 12.5 6.6 16 12 9.5"/><polyline points="11.5 13 13.2 14.8 21 6.5"/></svg></span><div class="iset-main"><div class="iset-label">Read receipts</div><div class="iset-sub" id="rrDesc">Send &amp; see blue “seen” ticks</div></div><label class="ios-switch"><input type="checkbox" id="rrSwitch" onchange="toggleReadReceipts()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8.6" ry="7.4"/><circle cx="12" cy="12" r="3.1" fill="currentColor" stroke="none"/></svg></span><div class="iset-main"><div class="iset-label">Private browsing</div><div class="iset-sub" id="ppvDesc">Browse profiles anonymously, but you won’t see who viewed you either</div></div><label class="ios-switch"><input type="checkbox" id="ppvSwitch" onchange="togglePrivateViews()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4.5 5.5c0 7.5 6.5 14 14 14l1.5-3-4-1.8-2 2a12 12 0 0 1-5.7-5.7l2-2L8.5 5z"/><line x1="4" y1="4" x2="20" y2="20"/></svg></span><div class="iset-main"><div class="iset-label">Silence unknown callers</div><div class="iset-sub">Calls from people you don’t know won’t ring. They land as a missed call</div></div><label class="ios-switch"><input type="checkbox" id="apSilenceUnknown" onchange="toggleAccPriv('silenceUnknownCallers', this.checked)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-group"><button class="iset-row" onclick="openBlockedAccounts()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.7" y1="5.7" x2="18.3" y2="18.3"/></svg></span><div class="iset-main"><div class="iset-label">Blocked accounts</div><div class="iset-sub">They can’t see or reach you</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenMutedAccounts()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M11 5 6.5 9H3.5v6h3L11 19z"/><line x1="15.5" y1="9.5" x2="20.5" y2="14.5"/><line x1="20.5" y1="9.5" x2="15.5" y2="14.5"/></svg></span><div class="iset-main"><div class="iset-label">Muted accounts</div><div class="iset-sub">Their posts are hidden from your feed</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenMutedWords()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 8h15M3.5 14h12"/><path d="M10 4 8 20M16 4l-1.5 11"/></svg></span><div class="iset-main"><div class="iset-label">Muted words</div><div class="iset-sub">Hide posts containing these</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Your profile is public, but blocks, mutes and contact controls put you in charge of who reaches you.</div>
+<div class="iset-group"><button class="iset-row" onclick="closeSettings(true);openContactPrivacy()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.4 7.2L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"/></svg></span><div class="iset-main"><div class="iset-label">Who can contact you</div><div class="iset-sub">Choose who can message &amp; call you</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><polyline points="3 12.5 6.6 16 12 9.5"/><polyline points="11.5 13 13.2 14.8 21 6.5"/></svg></span><div class="iset-main"><div class="iset-label">Read receipts</div><div class="iset-sub" id="rrDesc">Send &amp; see blue “seen” ticks</div></div><label class="ios-switch"><input type="checkbox" id="rrSwitch" onchange="toggleReadReceipts()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8.6" ry="7.4"/><circle cx="12" cy="12" r="3.1" fill="currentColor" stroke="none"/></svg></span><div class="iset-main"><div class="iset-label">Private browsing</div><div class="iset-sub" id="ppvDesc">Browse profiles anonymously, but you won’t see who viewed you either</div></div><label class="ios-switch"><input type="checkbox" id="ppvSwitch" onchange="togglePrivateViews()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4.5 5.5c0 7.5 6.5 14 14 14l1.5-3-4-1.8-2 2a12 12 0 0 1-5.7-5.7l2-2L8.5 5z"/><line x1="4" y1="4" x2="20" y2="20"/></svg></span><div class="iset-main"><div class="iset-label">Silence unknown callers</div><div class="iset-sub">Calls from people you don’t know won’t ring. They land as a missed call</div></div><label class="ios-switch"><input type="checkbox" id="apSilenceUnknown" onchange="toggleAccPriv('silenceUnknownCallers', this.checked)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-group"><button class="iset-row" onclick="openBlockedAccounts()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.7" y1="5.7" x2="18.3" y2="18.3"/></svg></span><div class="iset-main"><div class="iset-label">Blocked accounts</div><div class="iset-sub">They can’t see or reach you</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenMutedAccounts()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M11 5 6.5 9H3.5v6h3L11 19z"/><line x1="15.5" y1="9.5" x2="20.5" y2="14.5"/><line x1="20.5" y1="9.5" x2="15.5" y2="14.5"/></svg></span><div class="iset-main"><div class="iset-label">Muted accounts</div><div class="iset-sub">Their posts are hidden from your feed</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenMutedWords()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 8h15M3.5 14h12"/><path d="M10 4 8 20M16 4l-1.5 11"/></svg></span><div class="iset-main"><div class="iset-label">Muted words</div><div class="iset-sub">Hide posts containing these</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Your profile is public, but blocks, mutes and contact controls put you in charge of who reaches you.</div>
 <div class="iset-cap" style="margin-top:18px;font-weight:600;color:var(--t2);">Connections &amp; visibility</div>
 <div class="iset-group">
   <div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></svg></span><div class="iset-main"><div class="iset-label">Active status</div><div class="iset-sub">Who sees when you’re online</div></div><select class="iset-select" id="apPresence" aria-label="Active status visibility" onchange="setAccPriv('presenceVisibility', this.value)"><option value="everyone">Everyone</option><option value="connections">Connections</option><option value="nobody">No one</option></select></div>
@@ -13848,10 +13893,10 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 <div class="iset-group"><button class="iset-row" onclick="acOpenLanguage()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Language">Language</div><div class="iset-sub" id="setLangVal">English</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="acOpenCurrency()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M14.5 9a2.6 2.6 0 0 0-2.5-1.6C10.6 7.4 9.4 8.3 9.4 9.6c0 3 5.4 1.6 5.4 4.6 0 1.3-1.2 2.3-2.8 2.3A2.8 2.8 0 0 1 9.3 15"/><line x1="12" y1="5.6" x2="12" y2="7.4"/><line x1="12" y1="16.6" x2="12" y2="18.4"/></svg></span><div class="iset-main"><div class="iset-label">Currency</div><div class="iset-sub" id="setCurrencyVal">US Dollar</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-sectlabel" data-i18n="Appearance">Appearance</div><div class="iset-group"><div class="theme-picker" id="themePicker"><button class="theme-card" data-theme="black" onclick="setTheme('black')" aria-label="Black theme"><span class="theme-swatch sw-black"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="Black">Black</span></button><button class="theme-card" data-theme="light" onclick="setTheme('light')" aria-label="Light theme"><span class="theme-swatch sw-light"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="Light">Light</span></button><button class="theme-card" data-theme="system" onclick="setTheme('system')" aria-label="System theme"><span class="theme-swatch sw-system"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="System">System</span></button></div></div><div class="iset-sectlabel" data-i18n="Accent colour">Accent colour</div><div class="iset-group"><div class="accent-picker" id="accentPicker"></div></div><div class="iset-cap" data-i18n="Pick any colour for buttons, links & highlights across the app.">Pick any colour for buttons, links &amp; highlights across the app.</div><div class="iset-group"><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M5 7V5h14v2"/><line x1="12" y1="5" x2="12" y2="19"/><line x1="9" y1="19" x2="15" y2="19"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Larger text">Larger text</div><div class="iset-sub" data-i18n="Increase text size across the app">Increase text size across the app</div></div><label class="ios-switch"><input type="checkbox" id="bigTextToggle" onchange="toggleBigText()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Reduce motion">Reduce motion</div><div class="iset-sub" data-i18n="Minimise animations & transitions">Minimise animations &amp; transitions</div></div><label class="ios-switch"><input type="checkbox" id="reduceMotionToggle" onchange="toggleReduceMotion()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/><line x1="3" y1="3" x2="21" y2="21"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Hide like counts">Hide like counts</div><div class="iset-sub" data-i18n="Don’t show like & repost numbers on posts">Don’t show like &amp; repost numbers on posts</div></div><label class="ios-switch"><input type="checkbox" id="hideCountsToggle" onchange="toggleHideCounts()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-cap" data-i18n="Appearance settings are saved on this device.">Appearance settings are saved on this device.</div>
     </div>
     <div class="iset-body hidden" data-page="assistant" data-title="Atwe Assistant">
-<div class="iset-group"><button class="iset-row" onclick="closeSettings();acOpenAiAsk()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg></span><div class="iset-main"><div class="iset-label">Ask about your data</div><div class="iset-sub">Put a question to Atwe AI about your own account</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8"/><path d="M10 3v2.4M14 3v2.4M10 18.6V21M14 18.6V21M3 10h2.4M3 14h2.4M18.6 10H21M18.6 14H21"/></svg></span><div class="iset-main"><div class="iset-label">Active model</div></div><span class="iset-val" id="settingsModel">Atwe Standard</span></div><button class="iset-row" onclick="shareFromSettings()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.4"/><circle cx="17.5" cy="6" r="2.4"/><circle cx="17.5" cy="18" r="2.4"/><line x1="8.1" y1="10.9" x2="15.4" y2="7.1"/><line x1="8.1" y1="13.1" x2="15.4" y2="16.9"/></svg></span><div class="iset-main"><div class="iset-label">Share conversation</div><div class="iset-sub">Copy a link to this chat</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="clearHistory()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Clear chat history</div><div class="iset-sub">Delete all saved AI conversations</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Atwe AI is your built-in assistant. Conversations are saved to your account so you can pick up where you left off.</div>
+<div class="iset-group"><button class="iset-row" onclick="closeSettings(true);acOpenAiAsk()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg></span><div class="iset-main"><div class="iset-label">Ask about your data</div><div class="iset-sub">Put a question to Atwe AI about your own account</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8"/><path d="M10 3v2.4M14 3v2.4M10 18.6V21M14 18.6V21M3 10h2.4M3 14h2.4M18.6 10H21M18.6 14H21"/></svg></span><div class="iset-main"><div class="iset-label">Active model</div></div><span class="iset-val" id="settingsModel">Atwe Standard</span></div><button class="iset-row" onclick="shareFromSettings()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.4"/><circle cx="17.5" cy="6" r="2.4"/><circle cx="17.5" cy="18" r="2.4"/><line x1="8.1" y1="10.9" x2="15.4" y2="7.1"/><line x1="8.1" y1="13.1" x2="15.4" y2="16.9"/></svg></span><div class="iset-main"><div class="iset-label">Share conversation</div><div class="iset-sub">Copy a link to this chat</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="clearHistory()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Clear chat history</div><div class="iset-sub">Delete all saved AI conversations</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Atwe AI is your built-in assistant. Conversations are saved to your account so you can pick up where you left off.</div>
     </div>
     <div class="iset-body hidden" data-page="data" data-title="Your data & storage">
-<div class="iset-group"><button class="iset-row" onclick="closeSettings();acOpenHistory()"><span class="iset-ic"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8.6" ry="7.4"/><circle cx="12" cy="12" r="3.1" fill="currentColor" stroke="none"/></svg></span><div class="iset-main"><div class="iset-label">Posts you’ve read</div><div class="iset-sub">What you’ve already seen</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acDownloadData()"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8"/><path d="M10 3v2.4M14 3v2.4M10 18.6V21M14 18.6V21M3 10h2.4M3 14h2.4M18.6 10H21M18.6 14H21"/></svg></span><div class="iset-main"><div class="iset-label">Download your data</div><div class="iset-sub">Profile, posts, messages &amp; more as a file</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="deleteFullHistory()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Delete full history</div><div class="iset-sub">Erase posts, messages, chats &amp; notifications</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="openDeleteAccount()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Delete account</div><div class="iset-sub">Permanently remove your account &amp; everything in it</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Deleting your account is permanent and cannot be undone.</div>
+<div class="iset-group"><button class="iset-row" onclick="closeSettings(true);acOpenHistory()"><span class="iset-ic"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8.6" ry="7.4"/><circle cx="12" cy="12" r="3.1" fill="currentColor" stroke="none"/></svg></span><div class="iset-main"><div class="iset-label">Posts you’ve read</div><div class="iset-sub">What you’ve already seen</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acDownloadData()"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8"/><path d="M10 3v2.4M14 3v2.4M10 18.6V21M14 18.6V21M3 10h2.4M3 14h2.4M18.6 10H21M18.6 14H21"/></svg></span><div class="iset-main"><div class="iset-label">Download your data</div><div class="iset-sub">Profile, posts, messages &amp; more as a file</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="deleteFullHistory()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Delete full history</div><div class="iset-sub">Erase posts, messages, chats &amp; notifications</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="openDeleteAccount()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Delete account</div><div class="iset-sub">Permanently remove your account &amp; everything in it</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Deleting your account is permanent and cannot be undone.</div>
     </div>
     <div class="iset-body hidden" data-page="about" data-title="About">
 <div class="iset-group"><button class="iset-row" onclick="acOpenFeedback()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="15" r="0.6"/></svg></span><div class="iset-main"><div class="iset-label">Report a problem</div><div class="iset-sub">Tell us about a bug or share an idea</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div>
@@ -20807,7 +20852,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1763'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1764'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -22320,7 +22365,7 @@ function logout() {
   // X-style: log out the active account, and if another is signed in, switch to it.
   Accounts.remove(currentAccountId());
   const next = Accounts.list()[0];
-  closeSettings();
+  closeSettings(true);
   if (next) { switchAccount(next.id); return; }
   API.setToken(null);
   ['atwe_user','atwe_chats','atwe_projects','atwe_plan'].forEach(k => localStorage.removeItem(k));
@@ -25527,7 +25572,7 @@ function openSettings() {
 // ── Settings hub ↔ sub-page navigation ──
 function setNav(pageName, opts) {
   opts = opts || {};
-  if (pageName === '__admin') { closeSettings(); openAdmin(); return; }
+  if (pageName === '__admin') { closeSettings(true); openAdmin(); return; }
   _setHideSearch();
   const overlay = document.getElementById('settingsOverlay');
   let title = 'Settings';
@@ -25635,8 +25680,18 @@ function setSearchClear() {
 function openAdmin() {
   window.location.href = '/admin.html';
 }
-function closeSettings() {
-  closeOverlay('settingsOverlay');
+/* `handover` = "I am closing Settings in order to open something else". It matters, and
+   getting it wrong breaks the destination outright: Settings owns the /settings route, so
+   a plain close walks history BACK — and the popstate that follows arrives AFTER the next
+   surface has been shown and closes it again, because _navApplyUrl shuts any route-owning
+   panel that does not belong to the restored address. The symptom is a row that appears to
+   do nothing: tapping "Devices & sessions" closed Settings and opened a sheet that was
+   killed a frame later, leaving the member back on the app with no explanation. Every
+   caller that opens a surface next must pass true. (This is the same trap appTab already
+   documents for the Notifications panel — the fix existed, it had just never been applied
+   to the Settings handovers.) */
+function closeSettings(handover) {
+  closeOverlay('settingsOverlay', handover);
 }
 // Blocked accounts (Privacy settings).
 async function openBlockedAccounts() {
@@ -25802,7 +25857,7 @@ async function disable2FA() {
 }
 // Change @username via the full profile editor (focused on the username field).
 function changeUsername() {
-  closeSettings();
+  closeSettings(true);
   openProfileEdit(true);
 }
 // Save / clear the (private) birthday.
@@ -25948,7 +26003,7 @@ function renderLockedSections() {
   wrap.innerHTML = LOCK_SECTIONS.map((s) => `<div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24">${s.icon}</svg></span><div class="iset-main"><div class="iset-label">${s.label}</div><div class="iset-sub">${s.sub}</div></div><label class="ios-switch"><input type="checkbox" id="lock-${s.key}" onchange="toggleSectionLock(this,'${s.key}')"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>`).join('');
   syncSectionLockRows();
 }
-function openLockedSections() { closeSettings(); showOverlay('lockedSectionsOverlay'); renderLockedSections(); }
+function openLockedSections() { closeSettings(true); showOverlay('lockedSectionsOverlay'); renderLockedSections(); }
 function closeLockedSections() { closeOverlay('lockedSectionsOverlay'); setTimeout(openSettings, 180); }
 function syncSectionLockRows() {
   const locked = appLockEnabled() ? getLockedSections() : [];
@@ -26221,7 +26276,7 @@ function openDeleteAccount() {
   btn.classList.add('is-empty');
   btn.disabled = false;
   btn.textContent = 'Continue';
-  closeSettings();
+  closeSettings(true);
   showOverlay('deleteAccountOverlay');
   kbFocus('delAcctPass');
 }
@@ -26232,7 +26287,7 @@ function closeDeleteAccount() {
 
 /* ─── Devices & sessions ─── */
 function openDevices() {
-  closeSettings();
+  closeSettings(true);
   showOverlay('devicesOverlay');
   setBtnLoading(document.getElementById('devLogoutAll'), false);
   document.getElementById('devList').innerHTML = '<div class="ac-empty" style="padding:34px 0;">Loading…</div>';
@@ -62538,11 +62593,11 @@ async function saveProfile() {
 }
 
 function closePlansFromSettings() {
-  closeSettings();
+  closeSettings(true);
   openPlans();
 }
 function shareFromSettings() {
-  closeSettings();
+  closeSettings(true);
   shareChat();
 }
 
@@ -62572,8 +62627,8 @@ function acOpenHelpArticle(id) {
 }
 function openHelp() {
   // Guests don't have a support thread — send them to sign in first.
-  if (!isAccount()) { closeSettings(); openLogin(); return; }
-  closeSettings();
+  if (!isAccount()) { closeSettings(true); openLogin(); return; }
+  closeSettings(true);
   const ce = document.getElementById('contactEmail');
   if (ce && !ce.value) ce.value = S.user?.email || '';
   showOverlay('helpOverlay');

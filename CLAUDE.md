@@ -6091,6 +6091,88 @@ Covered by `scratchpad/postcard.js` (both themes: concentric corners, the card a
 44pt targets, all three contrast steps, counts, header untouched) and `scratchpad/cardsweep.js`
 (home, profile, bookmarks, hashtag, search). Reverting the design fails 8 of them.
 
+### One margin, everywhere you go INSIDE something
+
+Every page content starts **14px** from each edge on a phone — the same line as a Home post
+card. It did not: the sheet family sat at **24** (the overlay's own 10 plus the card's 14),
+i.e. 10px further in on each side, 20px narrower overall, and the founder read the whole
+lot as *"everything is more in the middle, not close to the edges"*. Their design team was
+right, and it was one rule, not 319 edits — every inside page shares `.job-card-modal`.
+
+| | before | after |
+|---|---|---|
+| the sheet family (Wallet, Orders, Gift cards, Invoices, Events, Courses, Marketplace, …) | 24 | **14** |
+| the settings leaf sheets | 14 (cards already 14) | unchanged |
+| the sign-up / sign-in wizard steps | 40 (overlay 20 + step 20) | **14** |
+| Devices & sessions · Delete account | 34 | **14** |
+| **the START page** (Continue with Email / Google / Apple) | 20 | **20 — deliberately untouched** |
+| pop-ups: menus, confirms, pickers, intro sheets | their own | **unchanged** |
+
+**The exceptions are the point, and both are asserted.** The founder asked for the start
+screen to stay exactly as it was, and separately agreed that pop-ups are not pages —
+stretching a small "Are you sure?" card to the edges makes it a slab. `.auth-inner` (start)
+and `.auth-step` (wizard) are already different classes, so the widening cannot reach the
+start page; the overlay-level rule is `:has(> .auth-step:not(.hidden))`, which is exactly
+the discrimination needed, since the two are siblings and only one is ever visible.
+
+**A bare icon button's INK is ~19px inside its own box, and that is most of what the
+founder was seeing.** The sheet back arrow is an 11px chevron centred in a 38px button:
+putting the BUTTON on the margin still leaves the visible mark far inside it. It is now
+left-aligned and padded by the gutter — tap area unchanged. The `+2.3px` on that padding
+is not a fudge: the chevron is an 11px square turned 45°, and a rotated square reaches past
+its box by `(√2−1)/2` of its side = 2.28px. The wizard's own arrow needs no such nudge —
+`.auth-backarrow` already carries `margin-inline-start:-18px`, which cancels a 30px glyph
+centred in a 48px box, so its ink tracks the step's padding edge on its own.
+
+**Two ID-level rules were quietly outranking everything.** `#loginOverlay,#signupOverlay,
+#deleteAccountOverlay,#devicesOverlay{padding:20px}` is (0,1,0,0) and beat the class rule
+however far down the file it sat — the first attempt matched (verified with
+`el.matches()`) and changed nothing. The two `.set-fs` full-screen sheets in that list were
+never the centred login card it exists for, and being named there also overrode
+`.overlay.set-fs{padding:0}`; they are out of it now, which is what took them 34 → 14.
+
+**`--set-card-r`-style 2px offsets are a system, not noise.** The settings family pads its
+container 2px narrower and gives every child a 2px margin — container 12 + child 2 = 14 —
+so the visible CARDS were already on the line and Settings needed no change at all. An
+intermediate build that "fixed" it to 14 pushed the cards to 16. When comparing two
+surfaces, compare where the CARDS land, not where their containers do.
+
+**`scratchpad/gutters.js`** is the guard (60 checks) and two of its own bugs are worth
+knowing, because both passed on broken output and then failed on correct output:
+- **Ink on the LEFT, a box on the RIGHT.** Left has to be ink — that is where a centred
+  chevron hides. Scanning ink from the right instead reports wherever a *centred empty
+  state* happens to stop ("No invoices to pay." came back as 137px) and failed nine healthy
+  pages.
+- **The reference pixel and the threshold.** Column 0 samples `18,18,18` where the page is
+  truly black, so the reference is taken at x=2; and a *sum* of channel differences is the
+  wrong measure — a post card is `20,20,22` on black, 62 in sum, which sits on a 60
+  threshold and got skipped, so the scan reported the PHOTO inside the card (26px) as the
+  margin. Compare the largest single-channel difference.
+- Asserting "no non-page overlay is at 0" flagged four immersive full-screen viewers that
+  were edge-to-edge long before this. Settled by diffing **every** overlay's padding
+  against the committed file: **317 changed, all of them inside pages going 10 → 0, and not
+  one pop-up.** The probe now names the pop-ups that must keep their space.
+
+### Tapping a Settings row that opens something else did nothing
+
+`closeSettings()` walked history back — Settings owns `/settings` — and the `popstate` that
+followed landed **after** the next surface was shown and closed it, because `_navApplyUrl`
+shuts any route-owning panel that does not match the restored address. So **Devices &
+sessions**, **Who can contact you**, **Posts you've read**, **Ask about your data**,
+**Manage store**, **Delete account**, **Locked sections**, **Change username**, **Plans**,
+**Share conversation**, **Support** and **Admin** all closed Settings and opened nothing:
+the member landed back on the app with no explanation, and the row read as dead.
+
+This is the trap `appTab` already documents for the Notifications panel — the fix
+(`closeOverlay(id, noHistory)`) existed and had simply never been applied to the Settings
+handovers. `closeSettings(handover)` now forwards it, and **every caller that opens a
+surface next must pass `true`**; a plain close still walks back, which is correct.
+
+**No probe caught it for months because probes called the opener FUNCTION and then measured
+the surface.** The bug lives one frame later, in what the popstate does. `scratchpad/sethandoff.js`
+TAPS the real rows and asserts something is actually on screen afterwards — the only shape
+of check that can see this.
+
 ### One radius, everywhere the shapes meet
 
 When you scroll, the nav bar and the top bar's round buttons ride OVER the post cards, so
