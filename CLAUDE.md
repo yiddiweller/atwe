@@ -6152,15 +6152,33 @@ talking about this scrolling"*. The lesson is worth keeping: **"doesn't feel par
 app" was about how it MOVED, not how it looked.** Rows are back to bare on the page at the
 gutter; `.notif-group` survives as a plain pass-through wrapper the renderer still emits.
 
-**What actually made it rough: the header flapped.** Retracting animates a 58px `margin-top`
-over 260ms, which REFLOWS the list under the finger — and the trigger was 4px of travel in
-either direction. A finger never moves in one direction, so ordinary scrolling flipped the
-header open and shut repeatedly and the content jumped each time. Two guards now: it never
-retracts until you are past the header's own height, and it takes **26px accumulated in ONE
-direction** to flip, with the accumulator resetting whenever the finger turns (which is what
-stops a slow drift from creeping up on the threshold). `scratchpad/notifscroll.js` drives a
-realistic wobbling scroll and counts state changes: **3 on the old threshold, 0 now**, while
-a deliberate scroll still retracts it and scrolling back up still brings it back.
+**What made it rough: the header retracted at all — THE HEADER NO LONGER MOVES ON SCROLL.**
+Retracting animates a 58px `margin-top` over 260ms, which REFLOWS the whole list under the
+finger. Build 1766 added hysteresis so it could not flap on a wobble (it triggered on 4px in
+either direction, and a finger never travels in one direction); that helped and the founder
+still felt it, because a *single* retraction mid-scroll costs a run of dropped frames.
+Measured on a **6x-throttled CPU**, 90 frames through 70 notifications:
+
+| | p95 frame | frames over 32ms |
+|---|---|---|
+| as it was | 45ms | 5 |
+| **header frozen — shipped** | **19ms** | **0** |
+| the Account page, for comparison | 19ms | 0 |
+
+**Two candidates were rejected on the measurement rather than on taste.** Removing the
+overlay's invisible full-screen `backdrop-filter` changed nothing here (kept anyway — it is
+provably invisible under an opaque background, and a phone pays for a blur a headless
+desktop does not). And `content-visibility` on the rows — the trick the FEED uses — made it
+**three times worse** (18 frames over 32ms): a feed card is tall and expensive so skipping it
+pays, while a notification row is cheap and deferring its layout just moves the work into the
+scroll. Keeping the retract would mean rebuilding it as a composited transform on a
+non-scrolling wrapper, a real change to the page's layout for 58px nobody asked for.
+
+**`scratchpad/notifscroll.js` measures frame pacing, not a class — and it throttles the CPU
+to do it.** That is load-bearing: on an unthrottled desktop this page renders a clean 60fps
+whether the bug is there or not, so the first version of the check passed on broken code. It
+compares against the Account page (a list of the same shape) rather than a fixed number, and
+self-tests: restoring the retract fails four of its six checks.
 
 **Two fixes from that build are kept**, because they were real bugs rather than the design:
 a notification row carries `.ac-item`, whose base `:hover` has **no `@media(hover:hover)`

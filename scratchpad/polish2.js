@@ -51,7 +51,13 @@ const TYPES=['follow','like','reply','mention','connection','endorse','repost','
   ok(roll.word==='tbWordSpit', 'the word spits out to the right, same as Beam/Engine', roll.word);
   ok(roll.cleared, 'and the class is cleared afterwards (or it kills the tab-tap spin)');
 
-  // ── the retraction still works, and resets on reopen ──
+  /* ── the header does NOT retract on scroll ──
+     It used to, and this line used to assert that it did. Animating its 58px margin-top
+     reflows the whole list under the finger, which is what made the page scroll choppily;
+     the founder reported it twice. Measured on a throttled CPU it cost 5 dropped frames a
+     scroll, against zero with the header still — see scratchpad/notifscroll.js, which owns
+     the frame-pacing measurement. What is still checked here is that the page opens
+     showing its header, which is what a member sees. */
   const rt = await p.evaluate(async()=>{
     const list=document.getElementById('notifList'), head=document.getElementById('notifHead');
     await new Promise(r=>setTimeout(r,600));
@@ -66,7 +72,9 @@ const TYPES=['follow','like','reply','mention','connection','endorse','repost','
       hid:document.getElementById('notifOverlay').classList.contains('nh-hide')};
   });
   console.log('  retraction:', JSON.stringify(rt));
-  ok(rt.after < rt.before-20, 'it still rolls away on scroll', JSON.stringify(rt));
+  ok(Math.abs(rt.after - rt.before) < 2, 'the header stays put while you scroll (that reflow WAS the jank)',
+     JSON.stringify(rt));
+  ok(!rt.hid, 'and nothing re-introduced the retract class', JSON.stringify(rt));
   ok(!rt.hid && rt.reopened>=0, 'and reopening shows the header again (it used to stay hidden)', JSON.stringify(rt));
 
   // ── 2. no comets on the AI page ──
