@@ -11683,23 +11683,20 @@ body.light .ac-place:hover{background:rgba(0,0,0,.04);}
    which adds its own 2px above the brand row's 11px. At 10px the title rendered 3px
    higher than Atwe / Beam / Engine (measured: 14px vs 17px) — visibly out of line.
    position is relative, NOT sticky: this header is a plain flex sibling above the
-   scrolling list inside an overflow:hidden card, so sticky did no work — but it DID
-   clamp the retraction. The .nh-hide margin-top pushed the box above the sticky
-   scrollport's top:0, so sticky offset it straight back down: the header faded on
-   scroll but never moved a pixel (measured: top 0 -> 0), which is exactly why it did
-   not "roll" like Home and Beam. */
+   scrolling list inside an overflow:hidden card, so sticky does no work here anyway.
+   (It used to also clamp the retract-on-scroll, which is gone — that reflow was the
+   page's choppiness; see acNotifHeadSync for the frame measurements.) */
 #notifHead.tb-brandrow{--tb-brand-h:22px;--tb-brand-icon:28px;--tb-brand-circle:36px;
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:10px var(--feed-gutter) 12px;border-bottom:none;background:var(--bg);
   position:relative;z-index:3;
   padding-top:calc(13px + env(safe-area-inset-top,0px));
-  transition:margin-top var(--t-base) var(--ease),opacity var(--t-base) var(--ease);}
+  }
 #notifHead .tb-brand-word-txt{display:block;}
 /* No gap override: .tb-brand derives its gap from --tb-brand-h (10.56px), and hardcoding
    10px here made this one lockup a half-pixel tighter than every other world's. */
-/* Retract with the scroll, exactly like Home and Beam: the header slides up and
-   fades, content flowing into the space it leaves. */
-#notifOverlay.nh-hide #notifHead{margin-top:calc(-1 * var(--nh-h,58px));opacity:0;}
+/* No retract-on-scroll here — see acNotifHeadSync for the measurements. Animating this
+   header's margin-top reflowed the whole list mid-scroll and was the page's choppiness. */
 body.notif-tab #bottomNav{z-index:1400;}
 /* The mobile drawer slices UNDER the floating nav pill unless the nav is pushed below
    the app. .sidebar lives inside #app, and #app is position:fixed;z-index:1 — a stacking
@@ -12495,7 +12492,7 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 
 /* Notifications panel */
 /* Notifications: a full-black page (no card/box), clean header (back arrow + title). */
-#notifOverlay{padding:0;align-items:stretch;background:var(--bg);}
+#notifOverlay{padding:0;align-items:stretch;background:var(--bg);backdrop-filter:none;-webkit-backdrop-filter:none;}
 .notif-card{background:var(--bg);width:100%;max-width:600px;height:100%;max-height:none;border-radius:0;
   border:none;display:flex;flex-direction:column;overflow:hidden;margin:0 auto;position:relative;}
 /* Notification detail — a self-contained page that slides in over the list; its own
@@ -20897,7 +20894,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1766'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1767'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -29603,9 +29600,8 @@ function acNotifHeadSync(arriving) {
   const ov = document.getElementById('notifOverlay');
   if (!list || !head || !ov) return;
   /* Everything from here to the bind-once guard runs on EVERY open, deliberately. */
-  // Always open showing the header. .nh-hide survives a close, so without this a member who
-  // scrolled down, left, and came back would find the title already retracted and gone.
-  ov.classList.remove('nh-hide');
+  // Open at the top of the list. (The header no longer retracts, so there is no longer a
+  // retracted state to reset — see the note at the end of this function.)
   list.scrollTop = 0;
   /* The world-entry flourish — the same one syncTopbar plays for Home / Beam / Engine /
      Atwe AI: the swirl rolls and the word spits out to the right. Notifications never got it
@@ -29622,33 +29618,25 @@ function acNotifHeadSync(arriving) {
       setTimeout(() => lk.classList.remove('rolling'), 640);
     }
   }
-  if (list._nhBound) return;
-  list._nhBound = true;
-  // Measure the header so the retraction distance is its real height, not a guess.
-  const setH = () => { const h = Math.round(head.getBoundingClientRect().height);
-    if (h > 0) ov.style.setProperty('--nh-h', h + 'px'); };
-  requestAnimationFrame(setH);
-  /* Hysteresis, and it is the whole reason this page felt rough. Retracting the header
-     animates a 58px margin-top over 260ms, which REFLOWS the list under the finger — so
-     with the old 4px threshold, ordinary scroll jitter (a finger never travels in one
-     direction) flipped it open and shut repeatedly and the content jumped each time. The
-     founder read that as the page not scrolling smoothly, and they were right.
-     Two guards now: it never retracts until you are genuinely past the header, and it
-     takes RUN px of travel accumulated in ONE direction to flip, so a wobble cannot. The
-     accumulator resets whenever the direction changes, which is what stops a slow drift
-     from creeping up on the threshold. */
-  const RUN = 26;
-  let last = 0, run = 0;
-  list.addEventListener('scroll', () => {
-    const y = list.scrollTop, d = y - last;
-    last = y;
-    const headH = parseFloat(getComputedStyle(ov).getPropertyValue('--nh-h')) || 58;
-    if (y <= 2) { ov.classList.remove('nh-hide'); run = 0; return; }
-    if (!d) return;
-    run = (run > 0) === (d > 0) ? run + d : d;   // reset the run when the finger turns
-    if (run > RUN && y > headH) { ov.classList.add('nh-hide'); run = 0; }
-    else if (run < -RUN) { ov.classList.remove('nh-hide'); run = 0; }
-  }, { passive: true });   // never preventDefault here — keep scrolling off the main thread
+  /* THE HEADER NO LONGER RETRACTS ON SCROLL, and that is the fix for a page the founder
+     called choppy twice. Retracting animated a 58px margin-top over 260ms, which REFLOWS
+     the whole list under the finger. Build 1766 added hysteresis so it could not flap on
+     a wobble; that helped, but a single retraction mid-scroll still costs a run of dropped
+     frames, and the founder still felt it.
+     Measured on a 6x-throttled CPU, scrolling 90 frames through 70 notifications:
+         as it was          p95 45ms   5 frames over 32ms
+         header frozen      p95 20ms   0 frames over 32ms   <- and this is what shipped
+         Account page       p95 19ms   0                    (the comparison it now matches)
+     Two things were tried and rejected on the measurement rather than on taste. Removing
+     the overlay's invisible full-screen backdrop-filter changed nothing here (kept anyway
+     — it is provably invisible under an opaque background, and a real phone pays for a
+     blur a headless desktop does not). And content-visibility on the rows, which is the
+     trick the FEED uses, made it three times WORSE (18 frames over 32ms): a feed card is
+     tall and expensive, so skipping it pays, while a notification row is cheap and
+     deferring its layout just moves the work into the scroll itself.
+     Keeping the retract would mean rebuilding it as a composited transform on a
+     non-scrolling wrapper — a real change to how the page is laid out, for 58px of screen
+     that nobody asked for. The header simply stays put now, like the Account page's. */
 }
 // Put the highlight back on the world that is actually showing.
 function acSyncNavActive() {
