@@ -6091,6 +6091,80 @@ Covered by `scratchpad/postcard.js` (both themes: concentric corners, the card a
 44pt targets, all three contrast steps, counts, header untouched) and `scratchpad/cardsweep.js`
 (home, profile, bookmarks, hashtag, search). Reverting the design fails 8 of them.
 
+### One size for every option, and a capsule with no line across it
+
+Two things the founder's design team caught on a real phone, both in the same family:
+
+**The search bar was thinner than the rows.** It had no `min-height` at all, so it took its
+content height (42px) while a row took its own (55px) — 13px shorter, visibly a different
+kind of thing. On top of that the Account rows declared `min-height:52px` and the Settings
+rows `50px`, so the two pages that are meant to read as one system were a hair apart too.
+**`--row-h` (55px) is now the one number**, used by `.me-row`, `.iset-row`, `.me-search` and
+`.iset-search`. 55 is not a tidy round pick — it is the row's own content height (12px of
+padding around a 31px line), and anything smaller simply does not bind, leaving the row at
+55 while the search bar obeys the token and comes out short. A row with a **subtitle** is
+still taller, because it holds more text, exactly as on iPhone.
+
+**A single-row card is a capsule, and it was drawing a straight line across its curve.**
+`.me-group` frames itself with a 1px hairline in the page colour at the top and its last
+row does the same at the bottom — right for a stack of rows, wrong for a capsule: a
+straight line drawn along a shape whose top IS a curve flattens both ends. That is exactly
+what they circled on the Settings pill. A single-row group now drops both — there is
+nothing to divide inside one row, and nothing to frame that the capsule is not already
+doing. `scratchpad/rowsize.js` asserts it in both themes: same height for search bar, row
+and pill; no hairline on a capsule; and that the capsule's radius really is half its height
+(a `999px` radius is meaningless on its own — it clamps, so the probe measures the clamped
+value, not the token).
+
+### Demo mode must never show a broken picture
+
+Demo accounts get their photos from free placeholder hosts (randomuser.me, api.dicebear.com,
+picsum.photos) through our own `/api/demo-media` proxy. The owner turned demo mode on and
+got portraits and monogram logos but an **empty box for every post, banner and story photo**
+— one of those hosts was not answering for them. They make no uptime promise, so swapping
+one for another only moves the problem: any upstream failure now falls through to
+**`demoMediaFallback`**, a deterministic soft gradient the server generates itself from a
+hash of the requested URL (so the same seed is always the same picture and a feed does not
+reshuffle its colours on every load). Brand-safe, no text, ~600 bytes, no dependency.
+A real photo is cached for a year; the fallback for **10 minutes**, so the moment the
+upstream host recovers the real photos come back on their own.
+
+**Being fast is half the fix, and it is the half that was missed first.** The upstream
+timeout was **8 seconds**, so against a host that hangs rather than refusing, every picture
+on the screen sat blank for eight seconds before the fallback could draw — measured, 14
+images and not one finished. It is 3.5s now, and a failure marks that host down for a
+minute (`demoHostDown`) so the next twelve images fall back instantly instead of each
+rediscovering the same thing. Measured after: a 900×650 demo photo decodes in **27ms**, and
+eight at once in 69ms, with the upstream host completely unreachable.
+`scratchpad/demomedia.js` asserts a post/banner/portrait all render, at the size the page
+asked for, that eight at once stay under 2.5s, and that a host off the allowlist is still
+refused — the fallback must not turn the proxy into an open one.
+
+**Note for testing:** these three hosts are blocked from the build environment, so a probe
+here always exercises the FALLBACK path. That is the path worth guarding; it does mean the
+happy path cannot be tested from here.
+
+### Notifications is built from the same material as the other worlds
+
+The rows were bare, edge-to-edge on black — deliberately X-like, decided before the app
+moved to cards everywhere — and the founder's read was that the page "doesn't feel part of
+the other tabs". They now sit in **one card** at the app's 14px margin with the same
+`--set-card-r` corner and the same page-coloured hairline between rows as the Account page
+and Settings (`.notif-group`). One card holding the rows, not a card per row: a column of
+separate pills reads as a list of buttons, not a feed.
+
+**The grey block in their screenshot was a real bug, not the design.** A notification row
+carries `.ac-item`, and the base `.ac-item:hover` has **no `@media(hover:hover)` guard** —
+so iOS and Chrome latch a synthetic `:hover` onto the last-touched row after release and
+leave a grey slab sitting there. Same bug the chat list was fixed for; Notifications simply
+never got the same treatment. `.notif-list .notif-row:hover{background:none}` with the real
+hover restored inside `@media(hover:hover)`, and `:active` for press, which releases.
+
+The row reserves **32px at its end** for the unread dot on EVERY row, not only unread ones:
+the dot is absolutely positioned so it takes no space of its own and a long line ran
+underneath it — and reserving it only when unread would make a row reflow the moment it was
+read.
+
 ### One margin, everywhere you go INSIDE something
 
 Every page content starts **14px** from each edge on a phone — the same line as a Home post
