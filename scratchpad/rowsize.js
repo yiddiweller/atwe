@@ -50,6 +50,22 @@ const ok=(c,m,d)=>{c?pass++:fail++;console.log('  '+(c?'ok  ':'FAIL')+' '+m+(d?'
           bb:getComputedStyle(g.firstElementChild).borderBottomWidth,
           label:(g.textContent||'').trim().slice(0,16)})),
       };});
+    /* A card's own top and bottom edges are CURVES. A straight hairline drawn along them
+       flattens both corners — the same fault as on a capsule, one step out, and the founder
+       marked the bottom corners of a multi-row card after the capsules were fixed. Only the
+       lines BETWEEN rows are real dividers. */
+    const multi=await p.evaluate(()=>{
+      const g=[...document.querySelectorAll('#acMeBody .me-group')].find(x=>x.children.length>1);
+      if(!g) return null; const k=[...g.children];
+      return {groupTop:getComputedStyle(g).borderTopWidth,
+              first:getComputedStyle(k[0]).borderBottomWidth,
+              last:getComputedStyle(k[k.length-1]).borderBottomWidth};});
+    ok(multi && parseFloat(multi.groupTop)===0 && parseFloat(multi.last)===0,
+       'Account: a multi-row card draws no hairline across its own top or bottom edge',
+       multi?('group top '+multi.groupTop+', last row bottom '+multi.last):'no multi-row card');
+    ok(multi && parseFloat(multi.first)>0,
+       'Account: but the dividers BETWEEN its rows are still there',
+       multi?('first row bottom '+multi.first):'');
     ok(acct.search===acct.row, 'Account: the search bar is the same height as an option row',
        'search '+acct.search+', row '+acct.row);
     ok(acct.singles.length>0, 'Account: there are single-row capsule cards', acct.singles.length+' of them');
@@ -69,12 +85,23 @@ const ok=(c,m,d)=>{c?pass++:fail++;console.log('  '+(c?'ok  ':'FAIL')+' '+m+(d?'
       const search=document.querySelector('#settingsOverlay .iset-search');
       const singles=[...document.querySelectorAll('#settingsOverlay .iset-group')]
         .filter(g=>g.children.length===1 && g.getBoundingClientRect().height>2);
-      return {search:search?H(search):null,
+      const so=document.querySelector('#settingsOverlay .iset-signout');
+      const g=[...document.querySelectorAll('#settingsOverlay .iset-group')]
+        .find(x=>x.children.length>1 && x.getBoundingClientRect().height>2);
+      const k=g?[...g.children]:null;
+      return {search:search?H(search):null, signout:so?H(so):null,
+        multi:g?{groupTop:getComputedStyle(g).borderTopWidth,
+                 last:getComputedStyle(k[k.length-1]).borderBottomWidth}:null,
         singles:singles.map(g=>({bt:getComputedStyle(g).borderTopWidth,
           bb:getComputedStyle(g.firstElementChild).borderBottomWidth,
           label:(g.textContent||'').trim().slice(0,14)}))};});
     ok(set.search===acct.search, 'Settings: its search bar is the SAME size as the Account one',
        'settings '+set.search+', account '+acct.search);
+    ok(set.signout===acct.row, 'Settings: "Sign out" is the same size as any other single option',
+       'sign out '+set.signout+', a row '+acct.row);
+    ok(set.multi && parseFloat(set.multi.groupTop)===0 && parseFloat(set.multi.last)===0,
+       'Settings: a multi-row card draws no hairline across its own top or bottom edge',
+       set.multi?('group top '+set.multi.groupTop+', last row bottom '+set.multi.last):'none');
     for(const g of set.singles)
       ok(parseFloat(g.bt)===0 && parseFloat(g.bb)===0,
          'Settings "'+g.label+'" draws no hairline across its rounded ends',

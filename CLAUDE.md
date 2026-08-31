@@ -6144,26 +6144,45 @@ refused — the fallback must not turn the proxy into an open one.
 here always exercises the FALLBACK path. That is the path worth guarding; it does mean the
 happy path cannot be tested from here.
 
-### Notifications is built from the same material as the other worlds
+### Notifications: the rows stay bare, and the SCROLL was the real complaint
 
-The rows were bare, edge-to-edge on black — deliberately X-like, decided before the app
-moved to cards everywhere — and the founder's read was that the page "doesn't feel part of
-the other tabs". They now sit in **one card** at the app's 14px margin with the same
-`--set-card-r` corner and the same page-coloured hairline between rows as the Account page
-and Settings (`.notif-group`). One card holding the rows, not a card per row: a column of
-separate pills reads as a list of buttons, not a feed.
+Build 1765 put the rows in a grey card to match the Account page and the founder rejected
+it on sight — *"I don't like this gray background, remove it, look like it was before I was
+talking about this scrolling"*. The lesson is worth keeping: **"doesn't feel part of the
+app" was about how it MOVED, not how it looked.** Rows are back to bare on the page at the
+gutter; `.notif-group` survives as a plain pass-through wrapper the renderer still emits.
 
-**The grey block in their screenshot was a real bug, not the design.** A notification row
-carries `.ac-item`, and the base `.ac-item:hover` has **no `@media(hover:hover)` guard** —
-so iOS and Chrome latch a synthetic `:hover` onto the last-touched row after release and
-leave a grey slab sitting there. Same bug the chat list was fixed for; Notifications simply
-never got the same treatment. `.notif-list .notif-row:hover{background:none}` with the real
-hover restored inside `@media(hover:hover)`, and `:active` for press, which releases.
+**What actually made it rough: the header flapped.** Retracting animates a 58px `margin-top`
+over 260ms, which REFLOWS the list under the finger — and the trigger was 4px of travel in
+either direction. A finger never moves in one direction, so ordinary scrolling flipped the
+header open and shut repeatedly and the content jumped each time. Two guards now: it never
+retracts until you are past the header's own height, and it takes **26px accumulated in ONE
+direction** to flip, with the accumulator resetting whenever the finger turns (which is what
+stops a slow drift from creeping up on the threshold). `scratchpad/notifscroll.js` drives a
+realistic wobbling scroll and counts state changes: **3 on the old threshold, 0 now**, while
+a deliberate scroll still retracts it and scrolling back up still brings it back.
 
-The row reserves **32px at its end** for the unread dot on EVERY row, not only unread ones:
-the dot is absolutely positioned so it takes no space of its own and a long line ran
-underneath it — and reserving it only when unread would make a row reflow the moment it was
-read.
+**Two fixes from that build are kept**, because they were real bugs rather than the design:
+a notification row carries `.ac-item`, whose base `:hover` has **no `@media(hover:hover)`
+guard**, so iOS and Chrome latch a synthetic hover onto the last-touched row and leave a grey
+slab sitting there (the same bug the chat list was fixed for); and the row reserves 32px at
+its end for the unread dot on EVERY row, since the dot is absolutely positioned and a long
+line ran underneath it.
+
+### A card's own edges are curves — no hairline across them
+
+The settings-shaped card frames itself with a 1px line in the page colour at the top, and its
+last row draws one at the bottom. That is right for the lines BETWEEN rows and wrong at the
+card's own two edges: a straight line drawn along a shape whose corner is a curve flattens
+that corner. The founder caught it twice — first on the single-row **capsules**, then on the
+**bottom corners of a multi-row card**. Both are gone now on `.me-group` and `.iset-group`;
+only the dividers between rows remain, and the card separates itself from the page by its own
+fill, which is the app's own rule 3.
+
+**`.iset-signout` is not an `.iset-row`**, so it never inherited the row height and came out
+visibly shorter than every other single-option pill above it — it had its own `min-height`
+declared twice in the same block, the later one winning. It is on `--row-h` now, and
+`scratchpad/rowsize.js` asserts it matches an ordinary row.
 
 ### One margin, everywhere you go INSIDE something
 

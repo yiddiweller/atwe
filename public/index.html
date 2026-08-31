@@ -1736,7 +1736,14 @@ body.light #aiMenuPop,body.light #chatMenuPop,body.light #notifMenuPop,body.ligh
    matching `.iset-group`/`.iset-row` comment above. */
 /* Card gray matches the floating nav bar (rgba(18,18,21,.90) ≈ --s2 #141416) —
    a dark near-black, kept theme-aware so Light stays a light card. */
-.me-group{background:var(--s2);border:none;border-top:1px solid var(--bg);border-radius:var(--set-card-r);overflow:hidden;margin-bottom:12px;}
+/* No border-top, and the last row draws no border-bottom (below): a card's own top and
+   bottom edges are CURVES, and a straight 1px line in the page colour drawn along them
+   flattens both corners — the same thing that was wrong on the single-row capsules, one
+   step out. The founder marked the bottom corners of a multi-row card next. Only the
+   lines BETWEEN rows are real dividers; the card separates itself from the page by its
+   own fill, which is the app's own rule 3. */
+.me-group{background:var(--s2);border:none;border-radius:var(--set-card-r);overflow:hidden;margin-bottom:12px;}
+.me-group > .me-row:last-child{border-bottom:none;}
 /* A card holding ONE row is a full capsule, the way a single row is on iPhone
    Settings (owner). :has() picks the multi-row case, so this is the "no second
    child" case. The row's own 15px side padding already clears the curve at this
@@ -4011,7 +4018,7 @@ body.reduce-motion .iset-body{animation:none;}
    does, so leaving the other three sides un-reset showed up as a stray white
    outline around every row there, invisible on iOS but not on Chrome. */
 .iset-row{border:none;border-bottom:1px solid var(--bg);}
-.iset-group{border-top:1px solid var(--bg);}
+.iset-group > .iset-row:last-child{border-bottom:none;}
 /* No per-row icon tile — a plain glyph directly on the card, no rounded-square
    background at all. */
 .iset-ic{display:flex;align-items:center;justify-content:center;width:30px;height:30px;
@@ -4036,8 +4043,10 @@ body.light .iset-select{color-scheme:light;}
 /* Left-aligned with its icon, like Log out at the bottom of the Account page — the two
    surfaces are one system and a centred red word did not belong to it (owner). Same
    capsule a single-row card gets, same row height and side padding. */
+/* Not an .iset-row, so it does not inherit the row height — it had its own, and came out
+   visibly shorter than every other single-option pill above it. */
 .iset-signout{display:flex;align-items:center;gap:13px;width:calc(100% - 4px);margin:6px 2px 0;
-  background:var(--s2);border:none;border-radius:999px;padding:12px 15px;min-height:52px;
+  background:var(--s2);border:none;border-radius:999px;padding:12px 15px;min-height:var(--row-h);
   font-size:15.5px;font-weight:600;color:var(--red);text-align:left;
   transition:background var(--t-fast) var(--ease);}
 .iset-signout svg{width:22px;height:22px;flex-shrink:0;stroke:var(--red);stroke-width:1.9;fill:none;
@@ -12519,19 +12528,14 @@ body.reduce-motion .notif-detail{transition:none;}
 .notif-more svg{width:20px;height:20px;fill:var(--t2);stroke:none;}
 .notif-more:active{transform:scale(.9);}
 .notif-list{overflow-y:auto;-webkit-overflow-scrolling:touch;}
-/* Notifications is a WORLD, so it is built out of the same material as the others: the
-   rows sit in a card at the app's 14px margin with the same corner and the same
-   page-coloured hairline between them as the Account page and Settings. They used to be
-   bare rows straight on black — deliberately X-like, decided before the app moved to
-   cards everywhere — and the founder's read was that the page "doesn't feel part of the
-   other tabs". It is one card holding the rows, not a card per row: a column of separate
-   pills reads as a list of buttons, not a feed. */
-.notif-group{background:var(--s2);border-radius:var(--set-card-r);overflow:hidden;
-  margin:0 var(--feed-gutter) 12px;}
+/* X-style rows: gutter-aligned, no card, no divider lines, no heavy block. Build 1765 put
+   them in a grey card to match the Account page and the founder rejected it on sight — the
+   "doesn't feel part of the app" they had reported was about the SCROLL, not the look. The
+   card is gone; .notif-group is a plain pass-through wrapper the renderer still emits. */
+.notif-group{display:block;}
 .notif-list .notif-row{position:relative;display:flex;align-items:flex-start;gap:12px;
-  padding:13px 15px;padding-inline-end:32px;cursor:pointer;border-bottom:1px solid var(--bg);
+  padding:13px var(--feed-gutter);padding-inline-end:32px;cursor:pointer;
   transition:background var(--t-fast) var(--ease);}
-.notif-list .notif-row:last-child{border-bottom:none;}
 .notif-list .notif-row.unread{background:transparent;}
 /* A notification row is also an .ac-item, and the BASE .ac-item:hover has no
    @media(hover:hover) guard — so iOS and Chrome latch a synthetic :hover onto the
@@ -12568,7 +12572,7 @@ body.reduce-motion .notif-detail{transition:none;}
    the dot is absolutely positioned so it takes no space of its own, and without the
    reservation a long line ran underneath it — and reserving it only when unread would
    make a row reflow the moment it was read. */
-.notif-dot{position:absolute;top:50%;right:15px;transform:translateY(-50%);width:9px;height:9px;border-radius:50%;background:var(--accent);flex-shrink:0;}
+.notif-dot{position:absolute;top:50%;right:var(--feed-gutter);transform:translateY(-50%);width:9px;height:9px;border-radius:50%;background:var(--accent);flex-shrink:0;}
 
 /* Contacts: add (+/✓) buttons */
 .ac-addc{display:flex;align-items:center;background:none;border:none;cursor:pointer;color:var(--t3);padding:0;transition:color var(--t-fast) var(--ease);}
@@ -20893,7 +20897,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1765'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1766'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -29624,14 +29628,26 @@ function acNotifHeadSync(arriving) {
   const setH = () => { const h = Math.round(head.getBoundingClientRect().height);
     if (h > 0) ov.style.setProperty('--nh-h', h + 'px'); };
   requestAnimationFrame(setH);
-  let last = 0;
+  /* Hysteresis, and it is the whole reason this page felt rough. Retracting the header
+     animates a 58px margin-top over 260ms, which REFLOWS the list under the finger — so
+     with the old 4px threshold, ordinary scroll jitter (a finger never travels in one
+     direction) flipped it open and shut repeatedly and the content jumped each time. The
+     founder read that as the page not scrolling smoothly, and they were right.
+     Two guards now: it never retracts until you are genuinely past the header, and it
+     takes RUN px of travel accumulated in ONE direction to flip, so a wobble cannot. The
+     accumulator resets whenever the direction changes, which is what stops a slow drift
+     from creeping up on the threshold. */
+  const RUN = 26;
+  let last = 0, run = 0;
   list.addEventListener('scroll', () => {
-    const y = list.scrollTop;
-    // Pin open at the very top; otherwise follow the direction of travel.
-    if (y <= 2) ov.classList.remove('nh-hide');
-    else if (y > last + 4) ov.classList.add('nh-hide');
-    else if (y < last - 4) ov.classList.remove('nh-hide');
+    const y = list.scrollTop, d = y - last;
     last = y;
+    const headH = parseFloat(getComputedStyle(ov).getPropertyValue('--nh-h')) || 58;
+    if (y <= 2) { ov.classList.remove('nh-hide'); run = 0; return; }
+    if (!d) return;
+    run = (run > 0) === (d > 0) ? run + d : d;   // reset the run when the finger turns
+    if (run > RUN && y > headH) { ov.classList.add('nh-hide'); run = 0; }
+    else if (run < -RUN) { ov.classList.remove('nh-hide'); run = 0; }
   }, { passive: true });   // never preventDefault here — keep scrolling off the main thread
 }
 // Put the highlight back on the world that is actually showing.
