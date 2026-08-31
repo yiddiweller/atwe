@@ -3000,25 +3000,76 @@ app.get('/api/media/:kind/:id/:idx/:sig', async (req, res) => {
 // third-party image hosts are blocked, so demo images vanished there while loading fine
 // elsewhere. Serving them through our OWN origin sidesteps that entirely. Strictly host-
 // allowlisted (no SSRF), https-only, hard-cached. Used only by demo.js's seeded image URLs.
+
+/* Demo mode must never show a BROKEN picture. It used to 502 when an upstream placeholder
+   host was unreachable, and the owner saw exactly that on a real phone: portraits and
+   monogram logos rendered (randomuser.me, api.dicebear.com) while every post/banner/story
+   photo was an empty box, because picsum.photos was not answering for them. Those hosts are
+   free third parties with no uptime promise, so the honest fix is not to swap one for
+   another — it is to stop the failure being visible. Any upstream failure now falls through
+   to a picture WE generate: a deterministic soft gradient derived from the requested URL, so
+   the same seed always yields the same image and a feed does not reshuffle its colours on
+   every load. Brand-safe, no text, no dependency, a couple of hundred bytes.
+   Cached for only 10 minutes (a real image is cached for a year) so the moment the upstream
+   host recovers, real photos come back on their own. */
+const demoHostDown = new Map();   // hostname -> when it last failed
+function demoMediaFallback(req, res) {
+  try {
+    const u = String(req.query.u || '');
+    // picsum urls end /WIDTH/HEIGHT; anything else gets a square.
+    const m = u.match(/\/(\d{2,4})\/(\d{2,4})(?:[?#]|$)/);
+    const w = m ? Math.min(2000, +m[1]) : 800;
+    const h = m ? Math.min(2000, +m[2]) : 800;
+    let seed = 0;
+    for (let i = 0; i < u.length; i++) seed = (seed * 31 + u.charCodeAt(i)) >>> 0;
+    const hue = seed % 360;
+    const hue2 = (hue + 24 + (seed >> 9) % 40) % 360;
+    const a = `hsl(${hue} 32% 26%)`, b = `hsl(${hue2} 38% 14%)`, c = `hsl(${hue} 40% 40%)`;
+    const cx = 18 + (seed >> 3) % 64, cy = 16 + (seed >> 7) % 68, r = 30 + (seed >> 11) % 26;
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="${w}" height="${h}" preserveAspectRatio="none">` +
+      `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
+      `<stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient>` +
+      `<radialGradient id="s"><stop offset="0" stop-color="${c}" stop-opacity=".55"/>` +
+      `<stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient></defs>` +
+      `<rect width="100" height="100" fill="url(#g)"/>` +
+      `<circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#s)"/>` +
+      `<circle cx="${100 - cx}" cy="${100 - cy}" r="${r * 0.7}" fill="url(#s)" opacity=".7"/></svg>`;
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Cache-Control', 'public, max-age=600');
+    res.end(svg);
+  } catch (e) { res.status(502).end(); }
+}
 const DEMO_MEDIA_HOSTS = new Set(['randomuser.me', 'api.dicebear.com', 'picsum.photos', 'fastly.picsum.photos', 'i.picsum.photos']);
 app.get('/api/demo-media', async (req, res) => {
   try {
     let url;
     try { url = new URL(String(req.query.u || '')); } catch { return res.status(400).end(); }
     if (url.protocol !== 'https:' || !DEMO_MEDIA_HOSTS.has(url.hostname)) return res.status(400).end();
+    /* A placeholder is not worth waiting on. The upstream timeout was 8s, so with a host
+       that hangs rather than refusing, every demo picture on the screen sat blank for eight
+       seconds before the fallback below could draw — measured: 14 images, none finished.
+       And once one request to a host has failed there is no sense making the next thirteen
+       discover the same thing, so a failure marks that host down for a minute and every
+       other image falls back instantly. It clears itself, so a host coming back needs no
+       deploy and no restart. */
+    if (Date.now() - (demoHostDown.get(url.hostname) || 0) < 60000) return demoMediaFallback(req, res);
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), 8000);
+    const timer = setTimeout(() => ac.abort(), 3500);
     let up;
     try { up = await fetch(url.href, { signal: ac.signal, redirect: 'follow', headers: { 'User-Agent': 'AtweDemo/1.0', 'Accept': 'image/*' } }); }
     finally { clearTimeout(timer); }
-    if (!up || !up.ok) return res.status(502).end();
+    if (!up || !up.ok) { demoHostDown.set(url.hostname, Date.now()); return demoMediaFallback(req, res); }
     const ct = (up.headers.get('content-type') || 'image/jpeg').split(';')[0].trim();
-    if (!/^image\//.test(ct)) return res.status(502).end();   // only ever serve images
+    if (!/^image\//.test(ct)) { demoHostDown.set(url.hostname, Date.now()); return demoMediaFallback(req, res); }
     const buf = Buffer.from(await up.arrayBuffer());
     res.setHeader('Content-Type', ct);
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     res.end(buf);
-  } catch (e) { res.status(502).end(); }
+  } catch (e) {
+    try { demoHostDown.set(new URL(String(req.query.u || '')).hostname, Date.now()); } catch (e2) {}
+    demoMediaFallback(req, res);
+  }
 });
 
 // Structured rich-message payload (poll / event / location / contact).
