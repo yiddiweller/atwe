@@ -48,7 +48,12 @@ export default function ListingDetail() {
   const [checkingOut, setCheckingOut] = useState(false);
   // You cannot buy your own listing, and the server says so with a 400 — better
   // to not offer the button than to offer it and refuse.
-  const mine = !!listing && !!user && listing.seller.id === user.id;
+  /* The listing DETAIL does carry a seller (the server maps it with the join),
+     but the type no longer promises one — a shop's own catalogue has none — so
+     it is read once and every use goes through this, rather than each site
+     assuming. */
+  const seller = listing?.seller;
+  const mine = !!seller && !!user && seller.id === user.id;
   // A listing with size or colour options needs the picker that is not built
   // yet; sending no variant would be refused, so it goes to chat instead.
   const buyable = !!listing && !mine && listing.active && !listing.soldOut && !listing.hasVariants;
@@ -173,27 +178,29 @@ export default function ListingDetail() {
             )}
 
             {/* Seller */}
-            <Pressable
-              onPress={() => listing.seller.username && router.push(`/user/${listing.seller.username}`)}
-              style={[styles.seller, { backgroundColor: c.s1, borderRadius: radius.card }]}
-            >
-              <Avatar
-                name={listing.seller.name}
-                avatar={listing.seller.avatar}
-                biz={listing.seller.accountType === 'business'}
-                size={40}
-              />
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <View style={styles.sellerName}>
-                  <Text variant="headline" numberOfLines={1}>{listing.seller.name}</Text>
-                  {listing.seller.verified && <VerifiedBadge size={14} />}
+            {!!seller && (
+              <Pressable
+                onPress={() => seller.username && router.push(`/user/${seller.username}`)}
+                style={[styles.seller, { backgroundColor: c.s1, borderRadius: radius.card }]}
+              >
+                <Avatar
+                  name={seller.name}
+                  avatar={seller.avatar}
+                  biz={seller.accountType === 'business'}
+                  size={40}
+                />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <View style={styles.sellerName}>
+                    <Text variant="headline" numberOfLines={1}>{seller.name}</Text>
+                    {seller.verified && <VerifiedBadge size={14} />}
+                  </View>
+                  {seller.username && (
+                    <Text variant="caption" tone="t3">@{seller.username}</Text>
+                  )}
                 </View>
-                {listing.seller.username && (
-                  <Text variant="caption" tone="t3">@{listing.seller.username}</Text>
-                )}
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={c.t3} />
-            </Pressable>
+                <Ionicons name="chevron-forward" size={18} color={c.t3} />
+              </Pressable>
+            )}
 
             {/* Description */}
             {!!listing.description && (
@@ -243,16 +250,18 @@ export default function ListingDetail() {
                   This one comes in options — message the seller to choose.
                 </Text>
               )}
-              <Button
-                title="Message seller"
-                kind={buyable ? 'secondary' : 'primary'}
-                onPress={() => router.push(`/chat/${listing.seller.id}`)}
-              />
-              {listing.seller.accountType === 'business' && listing.seller.username && (
+              {!!seller && (
+                <Button
+                  title="Message seller"
+                  kind={buyable ? 'secondary' : 'primary'}
+                  onPress={() => router.push(`/chat/${seller.id}`)}
+                />
+              )}
+              {seller?.accountType === 'business' && !!seller.username && (
                 <Button
                   title="Visit store"
                   kind="secondary"
-                  onPress={() => router.push(`/user/${listing.seller.username}`)}
+                  onPress={() => router.push(`/user/${seller.username}`)}
                 />
               )}
             </View>
@@ -262,7 +271,7 @@ export default function ListingDetail() {
           {!!listing.moreFromSeller?.length && (
             <View style={{ marginTop: 8 }}>
               <Text variant="headline" style={{ marginHorizontal: spacing.gutter, marginBottom: 10 }}>
-                More from {listing.seller.name}
+                More from {seller?.name ?? 'this seller'}
               </Text>
               {listing.moreFromSeller.map((l) => (
                 <ListingCard key={l.id} listing={l} />
@@ -278,7 +287,7 @@ export default function ListingDetail() {
           onClose={() => setCheckingOut(false)}
           target={{ kind: 'buy', productId: listing.id, qty }}
           title={listing.name}
-          sub={qty > 1 ? `${qty} × ${listingPrice(listing)}` : `from ${listing.seller.name}`}
+          sub={qty > 1 ? `${qty} × ${listingPrice(listing)}` : seller ? `from ${seller.name}` : undefined}
           needsShipping={listing.kind === 'physical' && !listing.pickup}
         />
       )}

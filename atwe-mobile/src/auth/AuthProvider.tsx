@@ -38,6 +38,25 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/**
+ * Who am I? — `/api/auth/me` answers `{ user: … }`, NOT a bare user.
+ *
+ * Both the cold-start path and refresh() used to take the whole reply and store
+ * it as the account, so `user.name`, `user.accountType`, `user.id`,
+ * `user.username` and everything else were undefined — on every launch that did
+ * not go through the login screen, which is every ordinary launch. What that
+ * looked like: no name on the Account page, "Not verified" beside a verified
+ * email, no story tray at all (it needs a username), no Book button or opening
+ * hours on a business account, and Buy Now offered on your own listing. Logging
+ * in fresh hid all of it, because THAT path reads `res.user` correctly.
+ *
+ * One function, so the unwrapping cannot be forgotten at a third call site.
+ */
+async function fetchMe(): Promise<User> {
+  const r = await api.get<{ user: User }>('/api/auth/me');
+  return r.user;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUserState] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -67,8 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (token) {
         tokenRef.current = token;
         try {
-          const me = await api.get<User>('/api/auth/me');
-          setUserState(me);
+          setUserState(await fetchMe());
           realtime.connect();
         } catch {
           await hardLogout();
@@ -123,8 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(async () => {
     if (!tokenRef.current) return;
-    const me = await api.get<User>('/api/auth/me');
-    setUserState(me);
+    setUserState(await fetchMe());
   }, []);
 
   const value: AuthContextValue = {

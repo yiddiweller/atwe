@@ -83,13 +83,25 @@ export interface Eta {
   transitDays?: [number, number];
 }
 
-/** "7–14 Sep", or a single day when both ends land on it. */
+/**
+ * "7–14 Sep", or "7 Sep – 3 Oct" across a month boundary, or one date when both
+ * ends land on the same day.
+ *
+ * Built from the parts rather than by gluing a bare number onto a formatted
+ * date: `${a.getDate()}–${format(b)}` reads "7–Sep 14" in a locale that puts
+ * the month first, which is not a range anyone writes.
+ */
 export function etaLabel(e: Eta): string {
-  const d = (iso: string) => new Date(iso);
-  const a = d(e.minAt), b = d(e.maxAt);
+  const a = new Date(e.minAt), b = new Date(e.maxAt);
   if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return '';
-  const day = (x: Date) => x.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-  return a.toDateString() === b.toDateString() ? day(a) : `${a.getDate()}–${day(b)}`;
+  const full = (x: Date) => x.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  if (a.toDateString() === b.toDateString()) return full(a);
+  // Same month: two days, then the month once.
+  if (a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()) {
+    const month = b.toLocaleDateString(undefined, { month: 'short' });
+    return `${a.getDate()}–${b.getDate()} ${month}`;
+  }
+  return `${full(a)} – ${full(b)}`;
 }
 
 export interface Quote {

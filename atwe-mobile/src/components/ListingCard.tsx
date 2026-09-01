@@ -17,8 +17,15 @@ import { mediaUri } from '@/lib/media';
 export function ListingCard({ listing }: { listing: Listing }) {
   const { c, radius } = useTheme();
   const router = useRouter();
+  /* A listing does NOT always carry a seller, and assuming it did crashed the
+     whole app. `/api/businesses/:id/products` — one shop's own catalogue — maps
+     each row with `mapProduct`, which has no seller on it, because on a
+     storefront every item is by the same person and their name is already in
+     the header. Reading `listing.seller.name` there threw, React unmounted the
+     tree, and every screen after went blank. So the header is only drawn when
+     there is somebody to draw, which is also the right thing to show. */
   const s = listing.seller;
-  const cover = listing.image || listing.images[0] || null;
+  const cover = listing.image || listing.images?.[0] || null;
 
   return (
     <Pressable
@@ -29,21 +36,27 @@ export function ListingCard({ listing }: { listing: Listing }) {
         pressed && { opacity: 0.9 },
       ]}
     >
-      {/* Seller header */}
-      <Pressable
-        style={styles.head}
-        onPress={() => s.username && router.push(`/user/${s.username}`)}
-        hitSlop={6}
-      >
-        <Avatar name={s.name} avatar={s.avatar} biz={s.accountType === 'business'} size={30} />
-        <View style={styles.headName}>
-          <Text variant="callout" weight="700" numberOfLines={1}>{s.name}</Text>
-          {s.verified && <VerifiedBadge size={13} />}
-        </View>
-        {!!listing.category && (
-          <Text variant="micro" tone="t3" numberOfLines={1}>{listing.category}</Text>
-        )}
-      </Pressable>
+      {/* Seller header — only where there is a seller to name. */}
+      {s ? (
+        <Pressable
+          style={styles.head}
+          onPress={() => s.username && router.push(`/user/${s.username}`)}
+          hitSlop={6}
+        >
+          <Avatar name={s.name} avatar={s.avatar} biz={s.accountType === 'business'} size={30} />
+          <View style={styles.headName}>
+            <Text variant="callout" weight="700" numberOfLines={1}>{s.name}</Text>
+            {s.verified && <VerifiedBadge size={13} />}
+          </View>
+          {!!listing.category && (
+            <Text variant="micro" tone="t3" numberOfLines={1}>{listing.category}</Text>
+          )}
+        </Pressable>
+      ) : !!listing.category && (
+        <Text variant="micro" tone="t3" numberOfLines={1} style={styles.head}>
+          {listing.category}
+        </Text>
+      )}
 
       {/* Cover */}
       {cover && (

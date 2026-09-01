@@ -36,6 +36,9 @@ export interface Listing {
   reviewCount: number;
   category: string | null;
   saved?: boolean;
+  /** NOT always there. The marketplace and a listing detail carry a seller;
+   *  one shop's own catalogue (`/api/businesses/:id/products`) does not, because
+   *  every item on it is by the same person. Assuming it crashed the app. */
   /** Collect in person instead of posting it — a pickup listing needs no
    *  delivery address, so checkout must know before it asks for one. */
   pickup?: boolean;
@@ -43,7 +46,7 @@ export interface Listing {
   shipFree?: boolean;
   shipFeeCents?: number | null;
   needsShipping?: boolean;
-  seller: ListingSeller;
+  seller?: ListingSeller;
   createdAt?: string;
   moreFromSeller?: Listing[];
 }
