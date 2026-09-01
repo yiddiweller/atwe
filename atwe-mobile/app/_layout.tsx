@@ -204,6 +204,10 @@ function RootNavigator() {
           <Stack.Screen name="scheduled-messages" />
           <Stack.Screen name="chat-labels" />
           <Stack.Screen name="locked-chats" />
+          <Stack.Screen name="lists" />
+          <Stack.Screen name="list/[id]" />
+          <Stack.Screen name="close-friends" />
+          <Stack.Screen name="highlight/[id]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
           <Stack.Screen name="reviews/[id]" />
           <Stack.Screen name="shop/[id]" />
           <Stack.Screen name="edit-profile" options={{ presentation: 'modal' }} />

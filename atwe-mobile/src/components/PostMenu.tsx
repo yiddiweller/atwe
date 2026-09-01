@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { View, Modal, Pressable, ScrollView, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { Text } from './Text';
 import { useTheme } from '@/theme/ThemeProvider';
 import { haptics } from '@/lib/haptics';
 import {
-  notInterested, muteUser, blockUser, reportThing, deletePost, pinPost,
+  notInterested, muteUser, blockUser, reportThing, deletePost, pinPost, translatePost,
   REPORT_REASONS, type ReportReason,
 } from '@/api/social';
 import type { Post } from '@/api/social';
@@ -29,6 +30,7 @@ export function PostMenu({ post, mine, visible, onClose, onGone }: {
   onGone?: () => void;
 }) {
   const { c, radius } = useTheme();
+  const router = useRouter();
   const [page, setPage] = useState<'menu' | 'report'>('menu');
   const [busy, setBusy] = useState(false);
   const author = post.author;
@@ -51,6 +53,34 @@ export function PostMenu({ post, mine, visible, onClose, onGone }: {
     } finally { setBusy(false); }
   };
 
+  /**
+   * Into the reader's own language, whatever the phone is set to. Without an
+   * API key the server 503s, which is "not available here" rather than a
+   * failure — so it is said that way.
+   */
+  const translate = async () => {
+    if (busy) return;
+    haptics.tap();
+    setBusy(true);
+    try {
+      /* The reader's own language, without a native dependency for it:
+         Hermes ships Intl, so the resolved locale is already here. Wrapped
+         because a runtime without it would otherwise take the whole menu down
+         for the sake of a translation. */
+      let to = 'en';
+      try { to = Intl.DateTimeFormat().resolvedOptions().locale.split('-')[0] || 'en'; } catch { /* keep en */ }
+      const r = await translatePost(post.id, to);
+      close();
+      Alert.alert('Translation', r.text);
+    } catch (e) {
+      haptics.error();
+      const status = (e as { status?: number }).status;
+      Alert.alert('Translate', status === 503
+        ? 'Translation is not switched on for this server.'
+        : (e as Error).message);
+    } finally { setBusy(false); }
+  };
+
   const confirmThen = (title: string, msg: string, verb: string, fn: () => void) => {
     Alert.alert(title, msg, [
       { text: 'Cancel', style: 'cancel' },
@@ -65,6 +95,23 @@ export function PostMenu({ post, mine, visible, onClose, onGone }: {
         <View style={[styles.grab, { backgroundColor: c.t4 }]} />
         {page === 'menu' ? (
           <ScrollView bounces={false}>
+            {/* Quoting is not moderation — it belongs to everybody, including
+                on your own post, so it sits above the split. */}
+            <Row
+              icon="chatbox-ellipses-outline"
+              label="Quote this post"
+              sub="Share it with something of your own"
+              onPress={() => { haptics.tap(); close(); router.push(`/compose?quote=${post.id}`); }}
+            />
+            {/* Only where there is something to translate. Offering it on a
+                photo with no words would be a row that can only disappoint. */}
+            {!!post.body?.trim() && (
+              <Row
+                icon="language-outline"
+                label="Translate"
+                onPress={translate}
+              />
+            )}
             {mine ? (
               <>
                 {/* Pin only, never Unpin: `mapPost` carries no pinned flag, so a

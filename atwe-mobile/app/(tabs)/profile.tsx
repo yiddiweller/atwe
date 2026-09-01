@@ -225,6 +225,23 @@ export default function Profile() {
           />
         </Group>
 
+        {/* Reading and being read */}
+        <Group label="YOUR FEED">
+          <NavRow
+            icon="list-outline"
+            label="Lists"
+            onPress={() => router.push('/lists')}
+            c={c}
+          />
+          <NavRow
+            icon="people-circle-outline"
+            label="Close friends"
+            onPress={() => router.push('/close-friends')}
+            c={c}
+            last
+          />
+        </Group>
+
         {/* App group */}
         <Group label="APP">
           <NavRow

@@ -152,6 +152,13 @@ const CASES = [
   ['AtweEvent',      '/api/events?scope=upcoming',           (j) => j.events[0]],
   ['EventHost',      '/api/events?scope=upcoming',           (j) => j.events[0].host],
   ['Attendee',       null,                                   null],  // needs an event id
+  // Social: polls, quotes, lists, close friends, highlights.
+  ['Poll',           null,                                   null],  // needs a poll post
+  ['PollOption',     null,                                   null],
+  ['QuotedPost',     null,                                   null],  // needs a quote post
+  ['UserList',       '/api/social/lists',                    (j) => j.lists[0]],
+  ['Highlight',      `/api/highlights?username=${UN}`,       (j) => j.highlights[0]],
+  ['HighlightItem',  `/api/highlights?username=${UN}`,       (j) => j.highlights[0].items[0]],
   // Beam's rarer corners.
   ['StarredItem',    '/api/atchat/starred',                  (j) => j.items[0]],
   ['ChatPrefs',      '/api/atchat/prefs',                    (j) => j],

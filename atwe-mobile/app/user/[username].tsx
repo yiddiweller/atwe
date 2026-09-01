@@ -21,6 +21,7 @@ import {
 } from '@/api/social';
 import { compact, monthYear, timeAgo } from '@/lib/format';
 import { FeedTab } from '@/components/FeedTab';
+import { HighlightsRow } from '@/components/HighlightsRow';
 import { mediaUri } from '@/lib/media';
 
 /**
@@ -95,6 +96,7 @@ export default function UserProfile() {
           ListHeaderComponent={
             <>
               <ProfileHeader data={data} />
+              <HighlightsRow username={username} />
               {/* Word-only tabs, not pills — the web's own `.ac-prof-tabs`, and
                   the practical reason too: five pills measure ~700px of content
                   in a 390px row, so the last one ("About") sat half off-screen

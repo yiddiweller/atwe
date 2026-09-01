@@ -14,6 +14,8 @@ import { compact, timeAgo } from '@/lib/format';
 import { likePost, repostPost, bookmarkPost, type Post } from '@/api/social';
 import { mediaUri } from '@/lib/media';
 import { PostMenu } from './PostMenu';
+import { PostPoll } from './PostPoll';
+import { QuotedPostCard } from './QuotedPostCard';
 import { haptics } from '@/lib/haptics';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -163,6 +165,8 @@ export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDeta
         ) : (
           <>
             {!!post.body && <Text variant="body">{post.body}</Text>}
+            {!!post.poll && <PostPoll postId={post.id} poll={post.poll} />}
+            {!!post.quote && <QuotedPostCard quote={post.quote} />}
             {img && (
               <Image
                 source={{ uri: mediaUri(img) }}

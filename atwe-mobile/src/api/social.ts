@@ -37,6 +37,10 @@ export interface Post {
   locked?: boolean;
   subscribersOnly?: boolean;
   ppvCents?: number;
+  /** Present only on a post that IS a poll. */
+  poll?: Poll | null;
+  /** The post this one quotes, rendered flat inside it. */
+  quote?: QuotedPost | null;
   author: PostAuthor;
 }
 
@@ -129,12 +133,25 @@ export async function createPost(input: {
   image?: string;
   /** What is in the picture, for anyone who cannot see it. */
   imageAlt?: string;
+  /** 2-4 options. Top-level posts only — the server ignores it on a reply. */
+  poll?: string[];
+  /** How long the poll runs: 1, 3, 7 or 14 days. */
+  pollDays?: number;
+  /** The id of the post this one quotes. */
+  quoteId?: number;
 }): Promise<{ post: Post }> {
   return api.post<{ post: Post }>('/api/social/posts', {
     body: input.body,
     ...(input.parentId != null ? { parentId: input.parentId } : {}),
     ...(input.image ? { image: input.image } : {}),
     ...(input.imageAlt ? { imageAlt: input.imageAlt } : {}),
+    /* Two options is the minimum the server accepts, and it silently drops a
+       shorter list — so a half-filled poll must not be sent at all, or the post
+       goes out as plain text and the author never finds out why. */
+    ...(input.poll && input.poll.length >= 2
+      ? { poll: input.poll, pollDays: input.pollDays ?? 7 }
+      : {}),
+    ...(input.quoteId != null ? { quoteId: input.quoteId } : {}),
   });
 }
 
@@ -380,4 +397,170 @@ export async function deletePost(id: number): Promise<void> {
 export async function pinPost(id: number, on: boolean): Promise<void> {
   if (on) await api.post(`/api/social/posts/${id}/pin`, {});
   else await api.del(`/api/social/posts/${id}/pin`);
+}
+
+/* ── Polls, and quoting ───────────────────────────────────────────────────── */
+
+export interface PollOption {
+  id: number;
+  text: string;
+  votes: number;
+}
+
+export interface Poll {
+  options: PollOption[];
+  total: number;
+  /** The option id you picked, or null. One vote each, and it cannot be changed. */
+  myVote: number | null;
+  endsAt: string | null;
+  closed: boolean;
+}
+
+/** Vote, and get the whole post back with the counts already updated. */
+export function votePoll(postId: number, optionId: number) {
+  return api.post<{ post: Post }>(`/api/social/posts/${postId}/vote`, { optionId });
+}
+
+/** The post being quoted, as it rides on the quoting post. */
+export interface QuotedPost {
+  id: number;
+  body: string | null;
+  image: string | null;
+  media: string | null;
+  mediaKind: string | null;
+  created_at: string;
+  author: PostAuthor;
+}
+
+/* ── Curated lists ────────────────────────────────────────────────────────── */
+
+export interface UserList {
+  id: number;
+  name: string;
+  members: number;
+  created_at: string;
+}
+
+export function useLists() {
+  return useQuery({
+    queryKey: ['lists'],
+    queryFn: () => api.get<{ lists: UserList[] }>('/api/social/lists'),
+  });
+}
+export function useListTimeline(id: number | undefined) {
+  return useQuery({
+    queryKey: ['list-timeline', id],
+    /* Posts only — the list's own name comes from `GET /api/social/lists/:id`,
+       which is why the screen asks for both. */
+    queryFn: () => api.get<{ posts: Post[] }>(`/api/social/lists/${id}/timeline`),
+    enabled: id != null,
+  });
+}
+/** The list itself and who is on it — one call, `GET /api/social/lists/:id`. */
+export function useListMembers(id: number | undefined) {
+  return useQuery({
+    queryKey: ['list-members', id],
+    queryFn: () => api.get<{ list: { id: number; name: string }; members: PostAuthor[] }>(
+      `/api/social/lists/${id}`,
+    ),
+    enabled: id != null,
+  });
+}
+export function createList(name: string) {
+  return api.post<{ list: UserList }>('/api/social/lists', { name });
+}
+export function deleteList(id: number) {
+  return api.del(`/api/social/lists/${id}`);
+}
+/**
+ * Adding takes the user id in the BODY as `uid`, and removing takes it in the
+ * PATH. Not symmetric, and guessing it was symmetric produced a 404 that looked
+ * like the list did not exist.
+ */
+export function setListMember(listId: number, userId: number, on: boolean) {
+  if (on) return api.post(`/api/social/lists/${listId}/members`, { uid: userId });
+  return api.del(`/api/social/lists/${listId}/members/${userId}`);
+}
+
+/* ── Close friends ────────────────────────────────────────────────────────── */
+
+/**
+ * Who sees a "close friends" story. They are never told they are on it — that
+ * is the point, and it is worth saying on the screen so nobody assumes
+ * otherwise.
+ */
+export function useCloseFriends() {
+  return useQuery({
+    queryKey: ['close-friends'],
+    queryFn: () => api.get<{ friends: PostAuthor[] }>('/api/close-friends'),
+  });
+}
+export function setCloseFriend(userId: number, on: boolean) {
+  if (on) return api.post(`/api/close-friends/${userId}`, {});
+  return api.del(`/api/close-friends/${userId}`);
+}
+
+/* ── Story highlights ─────────────────────────────────────────────────────── */
+
+export interface HighlightItem {
+  id: number;
+  kind: 'image' | 'video' | 'text';
+  media: string | null;
+  caption: string | null;
+  bg: string | null;
+}
+
+export interface Highlight {
+  id: number;
+  title: string;
+  cover: string | null;
+  count: number;
+  /** True on your own — the viewer offers editing only then. */
+  mine?: boolean;
+  items?: HighlightItem[];
+}
+
+/**
+ * Stories kept past their 24 hours. The server SNAPSHOTS the content into the
+ * highlight, so one survives the story expiring — a highlight is a copy, not a
+ * pointer, and that is why an expired story still shows here.
+ */
+export function useHighlights(username: string | undefined) {
+  return useQuery({
+    queryKey: ['highlights', username],
+    queryFn: () => api.get<{ highlights: Highlight[] }>(`/api/highlights?username=${username}`),
+    enabled: !!username,
+  });
+}
+/**
+ * There is NO `GET /api/highlights/:id` — the list route already returns each
+ * highlight with its items, so a viewer reads from that rather than asking for
+ * one. Written the other way first, and every highlight opened as "not
+ * available" because the route it called does not exist.
+ */
+export function useOneHighlight(username: string | undefined, id: number | undefined) {
+  const q = useHighlights(username);
+  return {
+    ...q,
+    highlight: (q.data?.highlights ?? []).find((h) => h.id === id) ?? null,
+  };
+}
+export function addToHighlight(storyId: number, target: { title: string } | { highlightId: number }) {
+  /* It answers `{ok, highlightId}`, NOT the highlight — reading `.highlight`
+     off this would be undefined forever, which is the exact failure this
+     project's type checker exists to catch. */
+  return api.post<{ ok: true; highlightId: number }>('/api/highlights', { storyId, ...target });
+}
+export function deleteHighlight(id: number) {
+  return api.del(`/api/highlights/${id}`);
+}
+
+/* ── Translate a post ─────────────────────────────────────────────────────── */
+
+/**
+ * Translate into the reader's own language. 503 without an API key, which the
+ * caller shows as "not available" rather than as a failure.
+ */
+export function translatePost(id: number, to: string) {
+  return api.post<{ text: string; from?: string }>(`/api/social/posts/${id}/translate`, { to });
 }
