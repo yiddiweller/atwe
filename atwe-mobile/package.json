@@ -1,8 +1,8 @@
 {
   "name": "atwe-mobile",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Atwe — native iOS (and Android) app. Expo + TypeScript client for the existing Atwe backend.",
+  "description": "Atwe \u2014 native iOS (and Android) app. Expo + TypeScript client for the existing Atwe backend.",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
@@ -18,6 +18,7 @@
     "@expo/vector-icons": "^15.0.3",
     "@tanstack/react-query": "^5.62.0",
     "expo": "~54.0.0",
+    "expo-asset": "~12.0.13",
     "expo-audio": "~1.1.1",
     "expo-blur": "~15.0.8",
     "expo-clipboard": "~8.0.8",
