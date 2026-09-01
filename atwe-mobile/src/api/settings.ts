@@ -94,3 +94,77 @@ export function useSaveNotifPrefs() {
     onError: (_e, _p, ctx) => { if (ctx?.prev) qc.setQueryData(['notif-prefs'], ctx.prev); },
   });
 }
+
+/* ── Devices & sessions ───────────────────────────────────────────────────── */
+
+export interface Session {
+  id: number;
+  userAgent: string;
+  ip: string;
+  /** Roughly where, from the IP — often empty, and empty is fine. */
+  location: string;
+  created_at: string;
+  last_seen: string;
+  /** The one you are holding. It cannot be signed out from itself here — use
+   *  Sign out — so it is shown without the action rather than with a dead one. */
+  current: boolean;
+}
+
+export function useSessions() {
+  return useQuery({
+    queryKey: ['sessions'],
+    queryFn: () => api.get<{ sessions: Session[] }>('/api/auth/sessions'),
+  });
+}
+
+export function useRevokeSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.del<{ ok: true }>(`/api/auth/sessions/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sessions'] }),
+  });
+}
+
+/** Signs out EVERY device, this one included — so the caller must expect to be
+ *  thrown back to the login screen, not just see a shorter list. */
+export function signOutEverywhere() {
+  return api.del<{ ok: true }>('/api/auth/sessions');
+}
+
+/** A device string is not a device NAME. This turns the useful part of a user
+ *  agent into something a person recognises. */
+export function deviceName(ua: string): string {
+  if (!ua) return 'Unknown device';
+  if (/iPhone/i.test(ua)) return 'iPhone';
+  if (/iPad/i.test(ua)) return 'iPad';
+  if (/Android/i.test(ua)) return 'Android phone';
+  if (/Macintosh|Mac OS/i.test(ua)) return 'Mac';
+  if (/Windows/i.test(ua)) return 'Windows PC';
+  if (/Linux/i.test(ua)) return 'Linux';
+  return 'Web browser';
+}
+
+/* ── Your data ────────────────────────────────────────────────────────────── */
+
+/** The owner-scoped bundle — everything of yours, no secrets. Returned as JSON
+ *  so the caller can hand it to the share sheet. */
+export function exportMyData() {
+  return api.get<Record<string, unknown>>('/api/account/export');
+}
+
+/** Reversible: signing back in reactivates it. Password-gated server-side, so a
+ *  stolen unlocked phone cannot hide somebody's account. */
+export function deactivateAccount(password: string) {
+  return api.post<{ ok: true }>('/api/account/deactivate', { password });
+}
+
+/* ── Feedback ─────────────────────────────────────────────────────────────── */
+
+export const FEEDBACK_CATEGORIES = ['bug', 'idea', 'question', 'other'] as const;
+export type FeedbackCategory = typeof FEEDBACK_CATEGORIES[number];
+
+/** Straight into the support inbox staff already work — not an email link that
+ *  opens a mail app somebody may not have set up. */
+export function sendFeedback(v: { category: FeedbackCategory; body: string; build?: string }) {
+  return api.post<{ ok: true }>('/api/feedback', { ...v, platform: 'ios' });
+}

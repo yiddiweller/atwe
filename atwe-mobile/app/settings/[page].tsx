@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { View, ScrollView, Pressable, StyleSheet, Linking, ActivityIndicator } from 'react-native';
+import {
+  View, ScrollView, Pressable, StyleSheet, Linking, ActivityIndicator, Alert, Share,
+} from 'react-native';
+import { File, Paths } from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
-import Constants from 'expo-constants';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
@@ -11,9 +13,16 @@ import { radius, spacing } from '@/theme/tokens';
 import { useAuth } from '@/auth/AuthProvider';
 import { haptics } from '@/lib/haptics';
 import { setPage } from '@/settings/pages';
+import { HapticInput } from '@/components/HapticInput';
+import { Button } from '@/components/Button';
 import {
   useAccountPrivacy, useSaveAccountPrivacy, useNotifPrefs, useSaveNotifPrefs, useSavePrivacy,
+  useSessions, useRevokeSession, signOutEverywhere, deviceName,
+  exportMyData, deactivateAccount,
 } from '@/api/settings';
+import { api } from '@/api/client';
+import { timeAgo } from '@/lib/format';
+import { APP_VERSION } from '@/lib/version';
 
 /**
  * One Settings page. Same header and same cards as the hub, so the tree is one
@@ -40,8 +49,10 @@ export default function SettingsPage() {
 
         {p.id === 'account' && <AccountPage />}
         {p.id === 'privacy' && <PrivacyPage />}
+        {p.id === 'security' && <SecurityPage />}
         {p.id === 'notifications' && <NotificationsPage />}
         {p.id === 'display' && <DisplayPage />}
+        {p.id === 'data' && <DataPage />}
         {p.id === 'about' && <AboutPage />}
       </ScrollView>
     </Screen>
@@ -214,12 +225,10 @@ function DisplayPage() {
 
 /* ── About ─────────────────────────────────────────────────────────────────── */
 function AboutPage() {
-  const v = Constants.expoConfig?.version ?? '—';
-  const build = (Constants.expoConfig as { ios?: { buildNumber?: string } } | null)?.ios?.buildNumber;
   return (
     <>
       <MeGroup>
-        <MeFactRow label="Version" value={build ? `${v} (${build})` : v} />
+        <MeFactRow label="Version" value={APP_VERSION} />
         <MeFactRow label="Made by" value="Atwe Inc" last />
       </MeGroup>
       <MeGroup>
@@ -228,6 +237,196 @@ function AboutPage() {
         <MeRow icon="lock-closed-outline" label="Privacy Policy" last
           onPress={() => { haptics.tap(); void Linking.openURL('https://atwe.com/privacy.html'); }} />
       </MeGroup>
+    </>
+  );
+}
+
+/* ── Security & access ─────────────────────────────────────────────────────── */
+function SecurityPage() {
+  const { c } = useTheme();
+  const { user, logout } = useAuth();
+  const { data, isLoading } = useSessions();
+  const revoke = useRevokeSession();
+  const [sent, setSent] = useState(false);
+  if (!user) return null;
+
+  /* Changing a password goes through the emailed link, deliberately: a phone
+     that is already unlocked and signed in should not be enough to change the
+     credential that gets you back in if it is stolen. The server's own flow. */
+  const emailReset = () => {
+    haptics.tap();
+    Alert.alert(
+      'Change your password',
+      `We'll email a secure link to ${user.email}. Open it to set a new one.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send the link',
+          onPress: async () => {
+            /* `noAuth` and always-200 by design — the endpoint never says
+               whether an address exists, and it is the same route the login
+               screen uses. */
+            try { await api.post('/api/auth/forgot', { email: user.email }, { noAuth: true }); } catch {}
+            setSent(true);
+            haptics.success();
+          },
+        },
+      ],
+    );
+  };
+
+  const everywhere = () => {
+    haptics.tap();
+    Alert.alert(
+      'Sign out everywhere?',
+      'Every device, including this one. You will need to sign in again.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign out everywhere',
+          style: 'destructive',
+          onPress: async () => {
+            try { await signOutEverywhere(); } catch {}
+            /* The server has already dropped this device's session, so the
+               local one has to go too or the app sits holding a dead token. */
+            void logout();
+          },
+        },
+      ],
+    );
+  };
+
+  const sessions = data?.sessions ?? [];
+  return (
+    <>
+      <MeGroup>
+        <MeRow icon="key-outline" label="Change password"
+          sub={sent ? 'Link sent — check your email' : 'We email you a secure link'}
+          onPress={emailReset} />
+        <MeRow icon="shield-checkmark-outline" label="Two-factor authentication"
+          sub={user.twoFactorEnabled ? 'On' : 'Set this up on atwe.com'} last
+          onPress={() => { haptics.tap(); void Linking.openURL('https://atwe.com/settings'); }} />
+      </MeGroup>
+
+      <Cap>Devices signed in to your account. Removing one signs it out at once.</Cap>
+      {isLoading ? <ActivityIndicator style={{ marginTop: 12 }} /> : (
+        <MeGroup>
+          {sessions.map((sn, i) => (
+            <MeRow
+              key={sn.id}
+              icon={/iPhone|iPad|Android/i.test(sn.userAgent) ? 'phone-portrait-outline' : 'desktop-outline'}
+              label={deviceName(sn.userAgent) + (sn.current ? ' · this device' : '')}
+              sub={[sn.location || sn.ip, sn.last_seen ? timeAgo(sn.last_seen) : null]
+                .filter(Boolean).join(' · ')}
+              /* The device you are holding gets no chevron and no action: it
+                 cannot sign itself out from here, and offering the row anyway
+                 would be a control that does nothing. */
+              noChevron={sn.current}
+              last={i === sessions.length - 1}
+              onPress={() => {
+                if (sn.current) return;
+                haptics.tap();
+                Alert.alert('Remove this device?', `${deviceName(sn.userAgent)} will be signed out.`, [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Remove', style: 'destructive', onPress: () => revoke.mutate(sn.id) },
+                ]);
+              }}
+            />
+          ))}
+        </MeGroup>
+      )}
+
+      <MeGroup>
+        <MeRow icon="log-out-outline" label="Sign out everywhere" danger last noChevron
+          onPress={everywhere} />
+      </MeGroup>
+    </>
+  );
+}
+
+/* ── Your data & storage ───────────────────────────────────────────────────── */
+function DataPage() {
+  const { user } = useAuth();
+  const { logout } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [pw, setPw] = useState('');
+  const [asking, setAsking] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const { c } = useTheme();
+  if (!user) return null;
+
+  /* Written to a real file and handed to the share sheet rather than pasted
+     into a message: the bundle is every post, order and message you have, and
+     a share sheet full of raw JSON is not something anybody can save. */
+  const download = async () => {
+    haptics.tap();
+    setBusy(true);
+    try {
+      const bundle = await exportMyData();
+      const f = new File(Paths.cache, `atwe-${user.username || user.id}-data.json`);
+      if (f.exists) f.delete();
+      f.create();
+      f.write(JSON.stringify(bundle, null, 2));
+      await Share.share({ url: f.uri, title: 'Your Atwe data' });
+      haptics.success();
+    } catch (e) {
+      Alert.alert('Could not build your data', (e as Error).message);
+    } finally { setBusy(false); }
+  };
+
+  const deactivate = async () => {
+    setErr(null);
+    setBusy(true);
+    try {
+      await deactivateAccount(pw);
+      haptics.success();
+      void logout();
+    } catch (e) {
+      setErr((e as Error).message);
+      haptics.error();
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <>
+      <MeGroup>
+        <MeRow icon="download-outline" label={busy ? 'Working…' : 'Download your data'}
+          sub="Everything of yours, as one file" last
+          onPress={() => { if (!busy) void download(); }} />
+      </MeGroup>
+      <Cap>Your posts, messages, orders and account details. No passwords and nothing about anyone else.</Cap>
+
+      {!asking ? (
+        <MeGroup>
+          <MeRow icon="pause-circle-outline" label="Deactivate account" danger last noChevron
+            onPress={() => { haptics.tap(); setAsking(true); }} />
+        </MeGroup>
+      ) : (
+        <MeGroup>
+          <View style={styles.deact}>
+            <Text variant="headline">Deactivate your account</Text>
+            {/* Said plainly, because "deactivate" and "delete" are not the same
+                word and people reasonably fear the wrong one. */}
+            <Text variant="body" tone="t3" style={{ marginTop: 6, lineHeight: 20 }}>
+              Your profile stops showing anywhere and nobody can reach you.
+              Nothing is deleted — signing back in brings it all back.
+            </Text>
+            <HapticInput
+              value={pw} onChangeText={setPw} secureTextEntry
+              placeholder="Your password" placeholderTextColor={c.t3}
+              style={[styles.pwIn, { backgroundColor: c.s3, color: c.text }]}
+              autoCapitalize="none" autoCorrect={false}
+              accessibilityLabel="Your password"
+            />
+            {!!err && <Text variant="caption" style={{ color: c.danger, marginTop: 8 }}>{err}</Text>}
+            <View style={{ height: 12 }} />
+            <Button title={busy ? 'Deactivating…' : 'Deactivate'} kind="danger"
+              disabled={busy || pw.length < 1} onPress={() => void deactivate()} />
+            <View style={{ height: 8 }} />
+            <Button title="Cancel" kind="secondary" onPress={() => { setAsking(false); setPw(''); setErr(null); }} />
+          </View>
+        </MeGroup>
+      )}
     </>
   );
 }
@@ -249,5 +448,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12, paddingHorizontal: 15, minHeight: 55,
   },
   swatch: { width: 30, height: 30, borderRadius: radius.sm, borderWidth: 1 },
+  deact: { padding: 15 },
+  pwIn: { marginTop: 14, borderRadius: radius.md, paddingHorizontal: 14, height: 46, fontSize: 16 },
   pickLbl: { flex: 1, fontSize: 15.5, fontWeight: '600', letterSpacing: -0.155 },
 });

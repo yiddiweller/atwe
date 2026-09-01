@@ -11,6 +11,8 @@ import { haptics } from '@/lib/haptics';
 import {
   useConversations, conversationPreview, type Conversation,
   useGroups, groupPreview, type Group,
+  useCalls, callSubtitle, type CallLog,
+  useContacts, type Person,
 } from '@/api/beam';
 import { timeAgo } from '@/lib/format';
 import { useRealtimeInvalidate } from '@/lib/useRealtime';
@@ -22,22 +24,52 @@ import { BrandBar } from '@/components/BrandBar';
 import { RowDivider } from '@/components/RowDivider';
 
 /**
- * Beam — the messaging world. Chats (1:1) and Groups, each a real list over its own
- * route, opening a live thread. Calls, stories-in-chat and the rich composer are later
- * slices. The tab row mirrors the web's, minus the scopes the phone does not have yet —
- * an empty tab is worse than a missing one.
+ * Beam — the messaging world, with the web's own four tabs.
+ *
+ * It shipped with two (Chats · Groups) because Calls and Contacts had no list
+ * behind them. They do now: the call LOG is a plain read of `/api/calls`, which
+ * is worth having on its own — a record of who rang and who was missed —
+ * whether or not you can place a call from the phone yet. Placing one still
+ * needs WebRTC and is not here.
+ *
+ * ALL is the merge, and it is what the web opens on: one list of every
+ * conversation, DM and group together, newest first. Two lists side by side
+ * make you check both to find out what just happened.
  */
-type Tab = 'chats' | 'groups';
+type Tab = 'all' | 'chats' | 'calls' | 'contacts';
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'chats', label: 'Chats' },
+  { key: 'calls', label: 'Calls' },
+  { key: 'contacts', label: 'Contacts' },
+];
+
+/** One row of the All list — a DM or a group, told apart by which field is set. */
+type AnyRow =
+  | { kind: 'dm'; at: string | null; convo: Conversation }
+  | { kind: 'group'; at: string | null; group: Group };
 
 export default function Beam() {
   const { c } = useTheme();
-  const [tab, setTab] = useState<Tab>('chats');
+  const [tab, setTab] = useState<Tab>('all');
   const [newChat, setNewChat] = useState(false);
   const [tools, setTools] = useState(false);
   const { data, isLoading, isError, refetch, isRefetching } = useConversations();
   const convos = data?.conversations ?? [];
   const groupsQ = useGroups();
   const groups = groupsQ.data?.groups ?? [];
+  /* Only fetched once the tab is opened — a call log and a contact book are not
+     needed to show somebody their messages, and asking for them on every visit
+     to Beam is two requests nobody reads. */
+  const callsQ = useCalls();
+  const contactsQ = useContacts();
+
+  /* Newest first, DMs and groups interleaved. A row with no timestamp has never
+     been used, so it sorts last rather than to the top on a falsy compare. */
+  const all: AnyRow[] = [
+    ...convos.map((x) => ({ kind: 'dm' as const, at: x.last_at, convo: x })),
+    ...groups.map((g) => ({ kind: 'group' as const, at: g.last_at, group: g })),
+  ].sort((a, b) => (b.at ? Date.parse(b.at) : 0) - (a.at ? Date.parse(a.at) : 0));
   // A message arriving anywhere reorders this list and changes an unread count,
   // so the list is refetched the moment one does — rather than only when the
   // screen is pulled down.
@@ -77,13 +109,8 @@ export default function Beam() {
           </Pressable>
         </View>
         <View style={styles.tabs}>
-          {(['chats', 'groups'] as Tab[]).map((t) => (
-            <FeedTab
-              key={t}
-              label={t === 'chats' ? 'Chats' : 'Groups'}
-              active={tab === t}
-              onPress={() => setTab(t)}
-            />
+          {TABS.map((t) => (
+            <FeedTab key={t.key} label={t.label} active={tab === t.key} onPress={() => setTab(t.key)} />
           ))}
         </View>
       </View>
@@ -98,22 +125,75 @@ export default function Beam() {
             Couldn't load your chats.
           </Text>
         </View>
-      ) : tab === 'groups' ? (
+      ) : tab === 'all' ? (
         <FlatList
-          data={groups}
-          keyExtractor={(g) => String(g.id)}
-          renderItem={({ item }) => <GroupRow group={item} />}
-          contentContainerStyle={groups.length ? { paddingBottom: 24 } : styles.emptyWrap}
+          data={all}
+          keyExtractor={(r) => (r.kind === 'dm'
+            ? `d${r.convo.id}:${r.convo.thread_id ?? 'main'}`
+            : `g${r.group.id}`)}
+          renderItem={({ item }) => (item.kind === 'dm'
+            ? <ConvoRow convo={item.convo} />
+            : <GroupRow group={item.group} />)}
+          contentContainerStyle={all.length ? { paddingBottom: 24 } : styles.emptyWrap}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={groupsQ.isRefetching} onRefresh={groupsQ.refetch} tintColor={c.t3} />
+            <RefreshControl refreshing={isRefetching || groupsQ.isRefetching}
+              onRefresh={() => { void refetch(); void groupsQ.refetch(); }} tintColor={c.t3} />
           }
           ListEmptyComponent={
             <View style={styles.center}>
-              <Text variant="title" tone="t2">No groups yet</Text>
+              <Text variant="title" tone="t2">No conversations yet</Text>
               <Text variant="body" tone="t3" style={{ marginTop: 6, textAlign: 'center' }}>
-                Groups you're added to show up here.
+                Message anybody on Atwe.
               </Text>
+              <View style={{ height: 18 }} />
+              <Button title="Start a conversation" onPress={() => setNewChat(true)} />
+            </View>
+          }
+        />
+      ) : tab === 'calls' ? (
+        <FlatList
+          data={callsQ.data?.calls ?? []}
+          keyExtractor={(x) => String(x.id)}
+          renderItem={({ item }) => <CallRow call={item} />}
+          contentContainerStyle={(callsQ.data?.calls?.length) ? { paddingBottom: 24 } : styles.emptyWrap}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={callsQ.isRefetching} onRefresh={callsQ.refetch} tintColor={c.t3} />
+          }
+          ListEmptyComponent={
+            <View style={styles.center}>
+              {callsQ.isLoading ? <ActivityIndicator color={c.accent} /> : (
+                <>
+                  <Text variant="title" tone="t2">No calls yet</Text>
+                  <Text variant="body" tone="t3" style={{ marginTop: 6, textAlign: 'center' }}>
+                    Calls you make or miss are listed here.
+                  </Text>
+                </>
+              )}
+            </View>
+          }
+        />
+      ) : tab === 'contacts' ? (
+        <FlatList
+          data={contactsQ.data?.contacts ?? []}
+          keyExtractor={(p) => String(p.id)}
+          renderItem={({ item }) => <ContactRow person={item} />}
+          contentContainerStyle={(contactsQ.data?.contacts?.length) ? { paddingBottom: 24 } : styles.emptyWrap}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={contactsQ.isRefetching} onRefresh={contactsQ.refetch} tintColor={c.t3} />
+          }
+          ListEmptyComponent={
+            <View style={styles.center}>
+              {contactsQ.isLoading ? <ActivityIndicator color={c.accent} /> : (
+                <>
+                  <Text variant="title" tone="t2">No contacts yet</Text>
+                  <Text variant="body" tone="t3" style={{ marginTop: 6, textAlign: 'center' }}>
+                    People you message or connect with show up here.
+                  </Text>
+                </>
+              )}
             </View>
           }
         />
@@ -252,6 +332,79 @@ function ConvoRow({ convo }: { convo: Conversation }) {
             </View>
           )}
         </View>
+      </View>
+      <RowDivider />
+    </Pressable>
+  );
+}
+
+/* One entry in the call log. Deliberately the same row shape as a chat — same
+   avatar, same two lines, same right-hand time — because a call and a message
+   are two things that happened with the same person, and a different-looking
+   row would say otherwise.
+
+   A MISSED call is the one thing here worth colouring, and only a missed one: a
+   SILENCED call is the "silence unknown callers" setting working as asked, not
+   something that went wrong, so it stays quiet grey. */
+function CallRow({ call }: { call: CallLog }) {
+  const { c } = useTheme();
+  const router = useRouter();
+  const missed = call.missed || !call.duration;
+  const bad = missed && !call.silenced;
+  return (
+    <Pressable
+      onPress={() => { haptics.tap(); router.push(`/chat/${call.peer.id}`); }}
+      style={({ pressed }) => [styles.row, pressed && { backgroundColor: c.s1 }]}
+      accessibilityRole="button"
+      accessibilityLabel={`${call.direction === 'in' ? 'Incoming' : 'Outgoing'} ${call.media} call with ${call.peer.name}. ${callSubtitle(call)}`}
+    >
+      <Avatar name={call.peer.name} avatar={call.peer.avatar} size={52} />
+      <View style={styles.mid}>
+        <View style={styles.topline}>
+          <Text variant="headline" numberOfLines={1}
+            style={[styles.name, bad && { color: c.danger }]}>
+            {call.peer.name}
+          </Text>
+          <Text variant="caption" tone="t3">{timeAgo(call.created_at)}</Text>
+        </View>
+        <View style={styles.botline}>
+          <Ionicons
+            name={call.direction === 'in' ? 'arrow-down-outline' : 'arrow-up-outline'}
+            size={13} color={bad ? c.danger : c.t3} style={{ marginRight: 5 }}
+          />
+          <Text variant="body" style={{ flex: 1, color: bad ? c.danger : c.t3 }} numberOfLines={1}>
+            {callSubtitle(call)}
+          </Text>
+          <Ionicons name={call.media === 'video' ? 'videocam-outline' : 'call-outline'}
+            size={16} color={c.t3} />
+        </View>
+      </View>
+      <RowDivider />
+    </Pressable>
+  );
+}
+
+/* A contact opens the CONVERSATION, not the profile — this is the messaging
+   world, and the reason to look somebody up here is to say something to them.
+   Their profile is one tap further, from the thread's own header. */
+function ContactRow({ person }: { person: Person }) {
+  const { c } = useTheme();
+  const router = useRouter();
+  return (
+    <Pressable
+      onPress={() => { haptics.tap(); router.push(`/chat/${person.id}`); }}
+      style={({ pressed }) => [styles.row, pressed && { backgroundColor: c.s1 }]}
+      accessibilityRole="button"
+      accessibilityLabel={`Message ${person.name}`}
+    >
+      <Avatar name={person.name} avatar={person.avatar} biz={person.accountType === 'business'} size={52} />
+      <View style={styles.mid}>
+        <Text variant="headline" numberOfLines={1}>{person.name}</Text>
+        {!!person.username && (
+          <Text variant="body" tone="t3" numberOfLines={1} style={{ marginTop: 2 }}>
+            @{person.username}
+          </Text>
+        )}
       </View>
       <RowDivider />
     </Pressable>

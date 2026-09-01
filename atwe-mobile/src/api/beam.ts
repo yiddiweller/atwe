@@ -586,3 +586,39 @@ export interface ViewOnceMedia {
 export function openViewOnce(messageId: number) {
   return api.post<ViewOnceMedia>(`/api/atchat/message/${messageId}/view`, {});
 }
+
+
+/* ── The call log ─────────────────────────────────────────────────────────── */
+
+export interface CallLog {
+  id: number;
+  /** Which way it went, from YOUR side of the log. */
+  direction: 'in' | 'out';
+  media: 'audio' | 'video';
+  missed: boolean;
+  /** Silenced by "silence unknown callers" — a record without a ring. It is a
+   *  DIFFERENT thing from missed and must not be painted red: nothing went
+   *  wrong, the setting did its job. */
+  silenced: boolean;
+  /** Seconds. 0 means it never connected. */
+  duration: number;
+  created_at: string;
+  peer: { id: number; name: string; username: string | null; avatar: string | null };
+}
+
+/** Recent calls, newest first — the Calls tab. */
+export function useCalls() {
+  return useQuery({
+    queryKey: ['calls'],
+    queryFn: () => api.get<{ calls: CallLog[] }>('/api/calls'),
+  });
+}
+
+/** "Missed", "Silenced", or how long it lasted. */
+export function callSubtitle(c: CallLog): string {
+  if (c.silenced) return 'Silenced';
+  if (c.missed || !c.duration) return c.direction === 'in' ? 'Missed' : 'No answer';
+  const m = Math.floor(c.duration / 60);
+  const s = c.duration % 60;
+  return m ? `${m}m ${s}s` : `${s}s`;
+}

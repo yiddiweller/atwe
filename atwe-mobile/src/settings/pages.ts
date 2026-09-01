@@ -24,11 +24,12 @@ export interface SetPage {
  * duplicated the Engine tab — nothing like the web, which is exactly what the
  * founder called out.
  *
- * WHAT IS MISSING, AND WHY. The web has eleven rows; four of them (Security &
- * access, Premium & verification, Atwe Assistant, Your data & storage) have no
- * screen on the phone yet. A row that opens an empty page is worse than one
- * that is honestly absent, so they are not here. Everything the old Settings
- * screen could reach still is.
+ * WHAT IS MISSING, AND WHY. Two of the web's rows — Premium & verification and
+ * Atwe Assistant — have no screen on the phone. Premium in particular is not an
+ * oversight: selling a subscription inside an iOS app is Apple's business, not
+ * a Stripe redirect, and doing it wrong is how an app gets rejected. A row that
+ * opens an empty page is worse than one that is honestly absent, so neither is
+ * here.
  */
 export const SET_GROUPS: SetPage[][] = [
   [
@@ -36,6 +37,8 @@ export const SET_GROUPS: SetPage[][] = [
       ic: 'person-outline', kw: 'account name username email plan verified two factor' },
     { id: 'privacy', label: 'Privacy & safety', sub: 'Who can reach you, and what you share',
       ic: 'shield-outline', kw: 'privacy safety read receipts private browsing who can contact presence last seen' },
+    { id: 'security', label: 'Security & access', sub: 'Password and the devices you are signed in on',
+      ic: 'lock-closed-outline', kw: 'security access password devices sessions sign out two factor' },
     { id: 'notifications', label: 'Notifications', sub: 'Push alerts on this device',
       ic: 'notifications-outline', kw: 'notifications push alerts sounds badges mute' },
   ],
@@ -47,6 +50,8 @@ export const SET_GROUPS: SetPage[][] = [
   [
     { id: 'display', label: 'Display & accessibility', sub: 'Theme, and the taps you feel',
       ic: 'moon-outline', kw: 'display accessibility theme dark light appearance haptics vibration' },
+    { id: 'data', label: 'Your data & storage', sub: 'Download or deactivate',
+      ic: 'server-outline', kw: 'your data storage download export archive deactivate delete account' },
     { id: 'about', label: 'About', sub: 'Version and legal',
       ic: 'information-circle-outline', kw: 'about version build legal terms privacy policy' },
   ],

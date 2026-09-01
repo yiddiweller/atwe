@@ -28,6 +28,9 @@ export interface MeSection {
    *  the search results and as the section's own description. */
   sub: string;
   items: MeItem[];
+  /** Rendered as its OWN card at the top level instead of a row in the sections
+   *  list — still a real section underneath. */
+  solo?: boolean;
 }
 
 /**
@@ -156,6 +159,20 @@ export const ME_SECTIONS: MeSection[] = [
     ],
   },
   {
+    id: 'app', title: 'Help & feedback', ic: 'help-circle-outline',
+    /* `solo` — its own card at the top level rather than a row in the sections
+       list, but still a real section: the search indexes its rows and the
+       section page opens normally. The web does the same. */
+    solo: true,
+    sub: 'Get help, or tell us what went wrong',
+    items: [
+      { l: 'Help', ic: 'help-circle-outline', to: 'https://atwe.com/help.html',
+        kw: 'help support faq contact us guide how do i' },
+      { l: 'Send feedback', ic: 'chatbox-ellipses-outline', to: '/feedback',
+        kw: 'send feedback report a problem bug idea suggestion complain tell us' },
+    ],
+  },
+  {
     id: 'planning', title: 'Planning', ic: 'calendar-outline',
     sub: 'Appointments and events',
     items: [
@@ -175,6 +192,10 @@ export const ME_SECTIONS: MeSection[] = [
 export const ME_HUB_TAIL: MeItem[] = [
   { l: 'Settings', ic: 'settings-outline', to: '/settings',
     kw: 'settings preferences options configuration account app' },
+  /* Its own card under Settings. `to` opens the real section page, so the entry
+     lives here only to sit at the top level rather than inside the list. */
+  { l: 'Help & feedback', ic: 'help-circle-outline', to: '/me/app',
+    kw: 'help feedback support report a problem contact us faq' },
 ];
 
 /** On the hub itself, under everything — the way Settings keeps Sign Out at the
@@ -183,6 +204,10 @@ export const ME_HUB_FOOT: MeItem[] = [
   { l: 'Log out', ic: 'log-out-outline', to: '', kw: 'log out sign out logout exit', danger: true },
 ];
 
+/** A destination that leaves the app. Help is a web page, not a screen, and
+ *  `router.push` on an http URL silently does nothing. */
+export const meExternal = (to: string) => /^https?:\/\//.test(to);
+
 /** The label, resolved — some depend on the account (plan, verification). */
 export const meLabel = (it: MeItem, u: User) => (typeof it.l === 'function' ? it.l(u) : it.l);
 
@@ -190,7 +215,14 @@ export const meLabel = (it: MeItem, u: User) => (typeof it.l === 'function' ? it
 export const meItems = (s: MeSection, u: User) => s.items.filter((i) => !i.when || i.when(u));
 
 /** A section with nothing left in it would advertise a page that opens empty. */
-export const meSections = (u: User) => ME_SECTIONS.filter((s) => meItems(s, u).length > 0);
+/** The rows of the top-level sections card — solo sections are excluded, since
+ *  they get a card of their own. */
+export const meSections = (u: User) =>
+  ME_SECTIONS.filter((s) => !s.solo && meItems(s, u).length > 0);
+
+/** Every section, solo included — what SEARCH looks through, because a row is
+ *  no less findable for living in a card of its own. */
+export const meAllSections = (u: User) => ME_SECTIONS.filter((s) => meItems(s, u).length > 0);
 
 export const meSection = (id: string) => ME_SECTIONS.find((s) => s.id === id);
 
@@ -202,7 +234,7 @@ export function meFind(q: string, u: User) {
   if (!needle) return [];
   const words = needle.split(/\s+/).filter(Boolean);
   const out: { item: MeItem; section: MeSection; score: number }[] = [];
-  for (const s of meSections(u)) {
+  for (const s of meAllSections(u)) {
     for (const item of meItems(s, u)) {
       const name = meLabel(item, u).toLowerCase();
       const kw = item.kw.toLowerCase();

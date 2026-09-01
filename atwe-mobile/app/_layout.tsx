@@ -140,6 +140,7 @@ function RootNavigator() {
           <Stack.Screen name="settings" />
           <Stack.Screen name="me/[section]" />
           <Stack.Screen name="settings/[page]" />
+          <Stack.Screen name="feedback" />
           <Stack.Screen name="marketplace" />
           <Stack.Screen name="listing/[id]" />
           <Stack.Screen name="wallet" />

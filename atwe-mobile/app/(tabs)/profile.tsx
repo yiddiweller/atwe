@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { View, ScrollView, Pressable, StyleSheet, Alert } from 'react-native';
+import { View, ScrollView, Pressable, StyleSheet, Alert, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,7 +14,7 @@ import { radius, row, spacing } from '@/theme/tokens';
 import { useAuth } from '@/auth/AuthProvider';
 import { money } from '@/api/wallet';
 import { haptics } from '@/lib/haptics';
-import { ME_HUB_FOOT, ME_HUB_TAIL, meFind, meLabel, meSections } from '@/me/sections';
+import { ME_HUB_FOOT, ME_HUB_TAIL, meExternal, meFind, meLabel, meSections } from '@/me/sections';
 
 /**
  * Account — the web's Me hub, rebuilt.
@@ -140,7 +140,11 @@ export default function Profile() {
                   icon={h.item.ic}
                   label={meLabel(h.item, user)}
                   sub={h.section.title}
-                  onPress={() => { haptics.tap(); router.push(h.item.to as never); }}
+                  onPress={() => {
+                    haptics.tap();
+                    if (meExternal(h.item.to)) void Linking.openURL(h.item.to);
+                    else router.push(h.item.to as never);
+                  }}
                   last={i === hits.length - 1}
                 />
               ))}
@@ -166,12 +170,18 @@ export default function Profile() {
               ))}
             </MeGroup>
 
-            {/* Settings gets its OWN card: it is not a category, and gluing it
-                to the bottom of the sections list reads as one more section. */}
+            {/* Settings and Help each get their OWN card: neither is a category,
+                and gluing them to the bottom of the sections list reads as two
+                more sections. One card EACH, not one shared card — two unrelated
+                destinations stacked together read as a pair. */}
             {ME_HUB_TAIL.map((it) => (
               <MeGroup key={String(it.l)}>
                 <MeRow icon={it.ic} label={meLabel(it, user)} staff={it.staff} last
-                  onPress={() => { haptics.tap(); router.push(it.to as never); }} />
+                  onPress={() => {
+                    haptics.tap();
+                    if (meExternal(it.to)) void Linking.openURL(it.to);
+                    else router.push(it.to as never);
+                  }} />
               </MeGroup>
             ))}
 

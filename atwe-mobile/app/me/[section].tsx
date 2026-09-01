@@ -9,7 +9,8 @@ import { spacing } from '@/theme/tokens';
 import { useAuth } from '@/auth/AuthProvider';
 import { money } from '@/api/wallet';
 import { haptics } from '@/lib/haptics';
-import { meItems, meLabel, meSection } from '@/me/sections';
+import { Linking } from 'react-native';
+import { meExternal, meItems, meLabel, meSection } from '@/me/sections';
 
 /**
  * One section of the Account page — the web's `acMeSection`.
@@ -50,7 +51,11 @@ export default function MeSectionPage() {
               /* The wallet row carries the balance, the way the web does — a
                  number you were going to open the screen to read anyway. */
               value={it.to === '/wallet' ? money(user.balanceCents ?? 0) : undefined}
-              onPress={() => { haptics.tap(); router.push(it.to as never); }}
+              onPress={() => {
+                haptics.tap();
+                if (meExternal(it.to)) void Linking.openURL(it.to);
+                else router.push(it.to as never);
+              }}
               last={i === items.length - 1}
             />
           ))}
