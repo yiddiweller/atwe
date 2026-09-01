@@ -2290,3 +2290,25 @@ appears in zero lines of our source, the glass work touched neither
 uses `NativeTabsView.js` (react-native-screens, the real controller). The
 preview server now hides it, so a screenshot represents the phone.
 
+### Round thirteen — the floating ＋ is gone
+
+The founder photographed it and said remove it. Done: `ComposeFab` is deleted,
+not just unmounted, and with it the last floating control on Home and Beam.
+
+**Nothing was lost, which is why this was a clean delete.** Both worlds already
+had a better way in, and the FAB was duplicating it:
+
+- **Home** — the top bar's ＋ opens a glass menu with **New post · New story ·
+  Sell an item · Post a job**. Four destinations against the FAB's one. There is
+  also the quiet "Add" at the end of the feed-tab row, the same as the web.
+- **Beam** — the top bar's ＋ opens the new-chat sheet directly.
+
+It had been added back a few rounds earlier at the founder's own request ("bring
+back the web's ＋ button"), then reworked twice — white, then glass — before they
+saw it in place and did not want it at all. Worth remembering rather than
+re-adding on the next reading of the web: **the web's ＋ lives in the tab row,
+not floating over the feed**, and the phone now matches that.
+
+`spacing.gutter` and the safe-area maths it needed went with it; nothing else
+referenced the component. tsc clean, eight source checkers green.
+

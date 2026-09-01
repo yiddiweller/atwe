@@ -21,7 +21,6 @@ import { FeedTab } from '@/components/FeedTab';
 import { NewChatSheet } from '@/components/NewChatSheet';
 import { BeamToolsMenu } from '@/components/BeamToolsMenu';
 import { BrandBar } from '@/components/BrandBar';
-import { ComposeFab } from '@/components/ComposeFab';
 import { useChromeRetract } from '@/lib/chromeRetract';
 import { ChromeButton, ChromeBar, chromePad, BEAM_TABS_H } from '@/components/Chrome';
 import { RowDivider } from '@/components/RowDivider';
@@ -231,7 +230,6 @@ export default function Beam() {
       </View>
       </ChromeBar>
 
-      <ComposeFab onPress={() => setNewChat(true)} label="New chat" />
 
       <NewChatSheet visible={newChat} onClose={() => setNewChat(false)} />
       <BeamToolsMenu visible={tools} onClose={() => setTools(false)} />

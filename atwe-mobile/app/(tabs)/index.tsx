@@ -17,7 +17,6 @@ import { useChromeRetract } from '@/lib/chromeRetract';
 import { haptics } from '@/lib/haptics';
 import { FeedTab } from '@/components/FeedTab';
 import { BrandBar } from '@/components/BrandBar';
-import { ComposeFab } from '@/components/ComposeFab';
 import { ChromeBar, chromePad, FEED_TABS_H } from '@/components/Chrome';
 
 // The same four the web Home has, in the same order.
@@ -210,7 +209,6 @@ export default function Home() {
       </View>
       </ChromeBar>
 
-      <ComposeFab onPress={() => router.push('/compose')} />
     </Screen>
   );
 }
