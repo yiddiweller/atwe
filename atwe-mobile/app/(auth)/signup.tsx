@@ -116,7 +116,8 @@ export default function Signup() {
     : 'Choose your @username';
 
   const sub =
-    step === 'code' ? `We sent a six-digit code to ${email.trim()}.`
+    step === 'email' ? "We'll send you a code to check it's yours."
+    : step === 'code' ? `We sent a six-digit code to ${email.trim()}.`
     : step === 'dob' ? 'This is never shown on your profile.'
     : step === 'password' ? 'At least 8 characters.'
     : step === 'username' ? 'People find you at atwe.com/yourname. You can change it later.'
@@ -164,7 +165,7 @@ export default function Signup() {
                     <Text variant="headline">{k === 'business' ? 'A business' : 'Just me'}</Text>
                     <Text variant="caption" tone="t3">
                       {k === 'business'
-                        ? 'Sell, take bookings, hire — a business IS its account on Atwe.'
+                        ? 'Sell, take bookings and hire.'
                         : 'Post, message, buy and get paid.'}
                     </Text>
                   </View>

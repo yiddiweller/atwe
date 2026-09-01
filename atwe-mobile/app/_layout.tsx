@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -81,6 +82,7 @@ function RootNavigator() {
   const { c, name } = useTheme();
   const { feedReady } = useAppReady();
   const [splashDone, setSplashDone] = useState(false);
+  useNoFocusRingOnWeb();
   useProtectedRoute(signedIn, loading);
   useSignedInEffects(signedIn);
 
@@ -156,6 +158,32 @@ function RootNavigator() {
       {showSplash && <AnimatedSplash appReady={appReady} onDone={() => setSplashDone(true)} />}
     </>
   );
+}
+
+/**
+ * A text field must never draw a focus ring.
+ *
+ * That is the app's own law — a bright outline around a box reads as a bug —
+ * and on a phone it holds for free: a React Native TextInput is a native field
+ * with no outline to draw. On the WEB it does not, because react-native-web
+ * renders it as a real `<input>` and the browser paints its own ring
+ * (`outline-style: auto`, which is exactly what showed up as a yellow box in a
+ * screenshot). The web build exists so the screens can be looked at during
+ * development, so what it shows has to be what a phone shows.
+ *
+ * One stylesheet, injected once, on web only. Focus is still visible where it
+ * should be — a real button keeps its ring; only text fields lose theirs.
+ */
+function useNoFocusRingOnWeb() {
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const id = 'atwe-no-input-ring';
+    if (document.getElementById(id)) return;
+    const el = document.createElement('style');
+    el.id = id;
+    el.textContent = 'input:focus,textarea:focus{outline:none!important;box-shadow:none!important;}';
+    document.head.appendChild(el);
+  }, []);
 }
 
 /** How long the opening mark may wait for the feed before revealing anyway.
