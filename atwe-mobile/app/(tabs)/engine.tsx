@@ -11,13 +11,15 @@ import {
 } from 'react-native';
 import { useRouter, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, radius } from '@/theme/tokens';
+import { spacing, radius, post as card } from '@/theme/tokens';
+import { haptics } from '@/lib/haptics';
 import {
   useTrending,
   useSuggestions,
@@ -183,6 +185,34 @@ function Explore({ spacing }: { spacing: ReturnType<typeof useTheme>['spacing'] 
         />
       }
     >
+      {/* The one thing on Engine that is not a list: ask, in your own words.
+          Blue is identity here, not action — this is the assistant's own colour
+          — so the gradient is the accent and the pill inside it stays white,
+          which keeps "white acts" true even on a coloured ground. */}
+      <Pressable
+        onPress={() => { haptics.tap(); router.push('/ai'); }}
+        style={({ pressed }) => [styles.aiHero, pressed && { opacity: 0.92 }]}
+        accessibilityRole="button"
+        accessibilityLabel="Ask Atwe AI"
+      >
+        <LinearGradient
+          colors={[c.accent, '#3D6BFF', '#6E3AFF']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.aiHeroFill}
+        >
+          <View style={{ flex: 1 }}>
+            <Text variant="headline" style={{ color: '#fff' }}>Ask Atwe AI</Text>
+            <Text variant="caption" style={{ color: 'rgba(255,255,255,0.86)', marginTop: 3 }}>
+              Find anything, or get something written
+            </Text>
+          </View>
+          <View style={styles.aiHeroPill}>
+            <Ionicons name="sparkles" size={16} color={c.accent} />
+          </View>
+        </LinearGradient>
+      </Pressable>
+
       {/* Discover tiles */}
       <View style={{ paddingTop: spacing.sm }}>
         <Text variant="headline" style={styles.sectionTitle}>
@@ -407,6 +437,12 @@ function DiscoverTile({
 
 const styles = StyleSheet.create({
   searchWrap: { paddingHorizontal: 12, paddingBottom: 10 },
+  aiHero: { marginHorizontal: spacing.gutter, marginTop: spacing.sm, borderRadius: card.cardRadius, overflow: 'hidden' },
+  aiHeroFill: { flexDirection: 'row', alignItems: 'center', padding: 18 },
+  aiHeroPill: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: '#fff',
+    alignItems: 'center', justifyContent: 'center', marginLeft: 12,
+  },
   tileRow: { paddingHorizontal: spacing.gutter, gap: 12 },
   tile: { width: 176, padding: 14 },
   tileIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },

@@ -33,6 +33,9 @@ const path = require('path');
 const T = process.env.TOK;
 const B = process.env.BASE || 'http://localhost:3000';
 const UN = process.env.UN;
+/* The About tab needs an account that has actually filled one in; the runner's
+   own usually has not, and an empty array is reported as skipped, not passed. */
+const UN_ABOUT = process.env.UN_ABOUT || UN;
 if (!T || !UN) {
   console.error('Set TOK (a bearer token) and UN (that account\'s username).');
   process.exit(2);
@@ -141,6 +144,12 @@ const CASES = [
   ['AtweEvent',      '/api/events?scope=upcoming',           (j) => j.events[0]],
   ['EventHost',      '/api/events?scope=upcoming',           (j) => j.events[0].host],
   ['Attendee',       null,                                   null],  // needs an event id
+  // The profile's About tab.
+  ['Experience',     '/api/social/profile/' + UN_ABOUT,      (j) => j.experiences[0]],
+  ['Education',      '/api/social/profile/' + UN_ABOUT,      (j) => j.education[0]],
+  ['Certification',  '/api/social/profile/' + UN_ABOUT,      (j) => j.certifications[0]],
+  ['Skill',          '/api/social/profile/' + UN_ABOUT,      (j) => j.skills[0]],
+  ['Recommendation', null,                                   null],  // needs one written
   // Money. Several need a seeded example, so they are checked from whichever
   // list the account genuinely has; a bare `null` is reported as skipped, never
   // as a pass.
