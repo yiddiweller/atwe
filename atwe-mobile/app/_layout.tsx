@@ -14,6 +14,7 @@ import { AnimatedSplash } from '@/components/AnimatedSplash';
 import { WelcomeSplash } from '@/components/WelcomeSplash';
 import { AppReadyProvider, useAppReady } from '@/lib/appReady';
 import { ConnectionProvider } from '@/lib/connection';
+import { StatusScrim } from '@/components/StatusScrim';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { registerForPush } from '@/api/push';
 import { routeForUrl } from '@/lib/deeplinks';
@@ -225,6 +226,9 @@ function RootNavigator() {
           <Stack.Screen name="add-story" options={{ presentation: 'modal' }} />
         </Stack>
       )}
+      {/* Covers the clock so a retracting bar can leave the screen completely
+          instead of stopping short and printing its tabs across the time. */}
+      <StatusScrim />
       <OfflineBanner />
       {/* Never both at once: the boot splash owns the screen until it clears,
           and a sign-in that happens under it would otherwise play its welcome

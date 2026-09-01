@@ -2502,3 +2502,35 @@ shipped.** The founder is near the end of their free EAS builds and asked to
 hold. `ship` is one commit behind on purpose. Do not push to `ship` until they
 say so.
 
+### Round nineteen — the "layers" were the retracted bar resting ON the clock
+
+The founder photographed Home mid-scroll: **"For You" printed straight across
+5:48**, the story avatar showing twice, everything reading as stacked layers.
+
+**The arithmetic, because this was a reasoning error and not a styling one.**
+`ChromeBar` retracted by its height LESS the safe-area inset, on the stated
+belief that the leftover box would go on covering the status bar. The BOX did.
+Its CONTENTS did not: they are laid out after `paddingTop: inset`, so they ride
+up with everything else. On Home — a 98pt bar, a 59pt inset — the box came to
+rest at `[-39, 59]` and the tab row inside it at **`[20, 59]`**, against a
+status bar occupying `[0, 59]`. A 39pt overlap, every scroll, on every world.
+The comment in the code asserted the opposite and had never been measured.
+
+The bar now retracts by its **full height** and leaves the screen, and
+**`StatusScrim`** covers the clock instead — a blurred strip at the root,
+always on, never moving. That is the same answer the web reached years ago
+(`#statusScrim`, a direct `<body>` child) and for the same reason it is a
+root-level sibling of the navigator here: a per-screen strip would slide away
+with the screen it belongs to.
+
+Measured after, with a 59pt inset injected: the tab label rests at **y=-37..-16
+on Home, -39..-18 on Beam, -39..-21 on Engine** — entirely above the visible
+area, nothing overlapping. `scratchpad/statusclash.js` fails if any of the three
+comes back down onto the strip.
+
+**A note on the previous round's reasoning.** Round fourteen removed a stack of
+four blurs because it produced visible seams; that was right. But the "layers"
+the founder kept describing were never only the blur — half of it was this
+collision, which no amount of material work would have touched. When someone
+says "layers", measure WHERE THINGS ARE before changing what they are made of.
+

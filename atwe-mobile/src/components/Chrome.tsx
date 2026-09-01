@@ -3,7 +3,6 @@ import { Platform, StyleSheet, View, type LayoutChangeEvent, type ViewStyle } fr
 import Animated, { useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated';
 import { initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { useTheme } from '@/theme/ThemeProvider';
 import { GlassSurface, GlassIcon } from './Glass';
 import { Text } from './Text';
@@ -95,8 +94,6 @@ const BLUR_INTENSITY = 55;
  * tint is the only thing standing between a label and the photo behind it, so
  * it carries the whole job.
  */
-/** Real glass already frosts and adapts, so the tint is only a whisper. */
-const SCRIM_GLASS = 0.16;
 const SCRIM_BLURRED = 0.42;
 const SCRIM_FLAT = 0.86;
 
@@ -239,8 +236,14 @@ export function ChromeBar({ children, style, edge = 'top', onLayout, inset = tru
   const { c, name } = useTheme();
   const top = edge === 'top';
 
-  /* What slides is the bar's CONTENT — its own height less the safe-area strip
-     — so a fully retracted bar still leaves that strip covering the clock. */
+  /* The bar retracts by its FULL height and leaves the screen.
+     It used to stop short — height LESS the safe-area inset — believing the
+     leftover box would keep covering the clock. The box did; its CONTENTS did
+     not, since they sit after `paddingTop: inset` and ride up with everything
+     else. Measured on Home: a 98pt bar with a 59pt inset put the tab row at
+     y=20..59 against a status bar at 0..59, and the founder photographed "For
+     You" printed across the time. `StatusScrim` covers the clock now, so this
+     has no reason to stop short. */
   const travel = useSharedValue(0);
   const slide = useAnimatedStyle(() => {
     if (!retract) return {};
@@ -259,7 +262,7 @@ export function ChromeBar({ children, style, edge = 'top', onLayout, inset = tru
     <Animated.View
       onLayout={(e) => {
         const h = e.nativeEvent.layout.height;
-        travel.value = Math.max(0, h - (top ? insets.top : insets.bottom));
+        travel.value = h;
       }}
       style={[
         {
