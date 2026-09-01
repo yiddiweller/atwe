@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  View, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView,
+  View, TextInput, Pressable, ScrollView,
   Linking, StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,8 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { AuthButton } from '@/components/AuthButton';
 import { AtweMark } from '@/components/AtweMark';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useKeyboardHeight } from '@/lib/keyboard';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useAuth } from '@/auth/AuthProvider';
@@ -31,6 +33,8 @@ type Step = 'landing' | 'email' | 'username' | 'password';
 
 export default function Login() {
   const { c } = useTheme();
+  const insets = useSafeAreaInsets();
+  const kb = useKeyboardHeight();
   const { login } = useAuth();
 
   const [step, setStep] = useState<Step>('landing');
@@ -180,10 +184,19 @@ export default function Login() {
   };
 
   return (
-    <Screen edges={['top', 'bottom']}>
-      <KeyboardAvoidingView style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.step} keyboardShouldPersistTaps="handled">
+    /* Top inset only: the step's own padding-bottom below covers the home
+       indicator AND the keyboard, the way `.auth-step` does. Letting Screen
+       claim the bottom too would pad it twice. */
+    <Screen edges={['top']}>
+        <ScrollView
+          style={styles.flex}
+          /* `.auth-step`'s own padding-bottom:
+             max(28 + safe-area, keyboard + 16) — so Continue clears the
+             keyboard when it is up and the home indicator when it is not. */
+          contentContainerStyle={[styles.step, { paddingBottom: Math.max(26 + insets.bottom, kb + 16) }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.stepbar}>
             <Pressable
               onPress={() => go(onPassword ? (identifier.includes('@') ? 'email' : 'username') : 'landing')}
@@ -285,7 +298,6 @@ export default function Login() {
             onPress={next}
           />
         </ScrollView>
-      </KeyboardAvoidingView>
     </Screen>
   );
 }
@@ -335,12 +347,12 @@ const styles = StyleSheet.create({
   alt: { fontSize: 15, fontWeight: '600' },
   title: { fontSize: 30, fontWeight: '800', letterSpacing: -0.9, lineHeight: 35, marginBottom: 30 },
   sub: { fontSize: 15, lineHeight: 22, marginTop: -18, marginBottom: 26 },
-  echo: { fontSize: 26, fontWeight: '500', marginBottom: 12 },
+  echo: { fontSize: 26, fontWeight: '500', marginBottom: 12, lineHeight: 31},
   bigField: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     minHeight: 43, paddingVertical: 6, marginBottom: 18,
   },
-  at: { fontSize: 26, fontWeight: '500' },
+  at: { fontSize: 26, fontWeight: '500', lineHeight: 31},
   bigInput: { flex: 1, minWidth: 0, fontSize: 26, fontWeight: '500', padding: 0 },
   err: { fontSize: 13.5, fontWeight: '600', lineHeight: 19, marginTop: 4 },
   grow: { flex: 1, minHeight: 24 },

@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   back: { width: 40, alignItems: 'center' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
   card: { padding: 20 },
-  balance: { color: '#fff', fontSize: 40, fontWeight: '800', marginTop: 4 },
+  balance: { color: '#fff', fontSize: 40, fontWeight: '800', marginTop: 4, lineHeight: 46},
   actionsRow: { flexDirection: 'row', marginTop: 18, gap: 8, flexWrap: 'wrap' },
   action: {
     flexDirection: 'row',

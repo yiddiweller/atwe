@@ -1498,6 +1498,50 @@ what is honestly incomplete is said so below rather than counted.
    (`src/me/sections.ts`, `src/settings/pages.ts`) that drives the hub, the pages
    AND the search, so a row lands in all three in one edit.
 
+### 0.8.0 — the chopped text
+
+The founder photographed three screens with the bottom of the letters sliced
+off: the wallet balance `$0.00`, the `@handle` echoed on the password screen,
+and the `@` beside the username field. One cause behind all three, and it is the
+same primitive that was wrong the build before.
+
+`Text` applies the `body` variant by default, and body carries
+`lineHeight: 21`. **Any style that raised `fontSize` past 21 without also
+raising `lineHeight` was drawing a tall glyph inside a short box**, and on iOS
+that clips. A scan found **thirteen** styles with that shape — including the
+40px balance on the Wallet screen, which nobody had reported yet.
+
+Fixed twice over, on purpose:
+- **In the primitive.** When a style sets a `fontSize` at least as large as the
+  line box it would inherit, and says nothing about `lineHeight`, the inherited
+  one is dropped and the font decides. Deliberately only when it would actually
+  clip — below that the roomier default is the look that shipped.
+- **At each site.** All ten `Text` styles now name their own line box (~1.18×,
+  which is what a browser gives a heading and what `.auth-steptitle` uses at
+  30/34.5), so the spacing is a decision rather than whatever is left over. The
+  three `TextInput` styles are deliberately exempt: an input has no inherited
+  line height to be crushed by, and setting one on iOS shifts the caret.
+
+**`tools/check-lineheight.js`** is the guard, and it is a SOURCE check rather
+than a screenshot one for a reason worth remembering: **a browser does not clip
+a short line-height, it lets the text overflow.** The web preview every other
+part of this app is checked in physically cannot show this class of bug. It is
+only visible on a real phone, so it has to be caught in the source or not at
+all. Self-tested by re-breaking the wallet balance.
+
+**And the Continue button sat under the keyboard** on the signup steps — visible
+in the founder's third screenshot, half-covered on the @username step.
+`KeyboardAvoidingView` works out its own lift by measuring its frame against the
+keyboard's, and inside a safe-area view that already claims the bottom inset the
+two measurements disagree. Replaced with the web's own rule, ported: read the
+keyboard's height directly (`lib/keyboard`, the `--kb` custom property) and pad
+the step by `max(26 + safe-area, keyboard + 16)`, which is `.auth-step`'s
+padding-bottom verbatim. No measurement left to get wrong. `Screen` drops its
+bottom edge on those steps so the inset is not counted twice.
+
+**Checked:** 162 screen loads (54 × dark, light, business), a full new-account
+signup end to end, and all six checkers.
+
 ### 0.7.0 — what the founder found on a real phone
 
 Creating an account **works** — confirmed on their iPhone, which is the one thing

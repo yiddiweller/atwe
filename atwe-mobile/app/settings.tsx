@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
   back: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', marginLeft: -9 },
   /* `.iset-title` — 24/800, the same as a section page's, so the two settings-
      shaped surfaces read as one system. */
-  title: { fontSize: 24, fontWeight: '800', letterSpacing: -0.48 },
+  title: { fontSize: 24, fontWeight: '800', letterSpacing: -0.48, lineHeight: 29},
   search: {
     flexDirection: 'row', alignItems: 'center', gap: 9,
     paddingVertical: 12, paddingHorizontal: 15, marginBottom: 12,

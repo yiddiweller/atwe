@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import { Text as RNText, type TextProps, type TextStyle } from 'react-native';
+import { StyleSheet, Text as RNText, type TextProps, type TextStyle } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { type } from '@/theme/tokens';
 
@@ -34,13 +34,35 @@ const Nested = createContext(false);
  * for a variant. Colour and weight still apply, which is all a span like that
  * ever wanted. It is the same rule CSS has, and it fixes every nesting in the
  * app at once rather than one at a time.
+ *
+ * AND A BIGGER FONT NEEDS A BIGGER LINE BOX, which is the same mistake wearing
+ * a different hat. `body` carries `lineHeight: 21`, so a style that raised
+ * `fontSize` to 26 or 29 or 40 without ALSO raising lineHeight was drawing a
+ * 40px glyph inside a 21px box — and the bottom of every letter was sliced off.
+ * The founder photographed three of them in one go: the wallet balance, the
+ * @handle echoed on the password screen, and the @ beside the username field.
+ * Thirteen styles in the app had that shape.
+ *
+ * So when a style sets its own fontSize LARGER than the inherited line box and
+ * says nothing about lineHeight, the inherited one is dropped and the font
+ * decides. Deliberately only when it would actually clip: below that, the
+ * roomier default is the look that shipped and there is no reason to change it.
  */
 export function Text({ variant, tone = 'text', weight, style, ...rest }: Props) {
   const { c } = useTheme();
   const nested = useContext(Nested);
   /* Only a span that says nothing about its size inherits. Ask for a variant
      and you get it, nested or not. */
-  const base = variant ? type[variant] : nested ? null : type.body;
+  let base: TextStyle | null = variant ? type[variant] : nested ? null : type.body;
+  const own = StyleSheet.flatten(style) as TextStyle | undefined;
+  if (
+    base?.lineHeight != null &&
+    own?.fontSize != null && own.lineHeight == null &&
+    own.fontSize >= base.lineHeight
+  ) {
+    const { lineHeight: _crushed, ...rest } = base;
+    base = rest;
+  }
   /* A nested span with no tone of its own inherits the colour too — stamping
      the default `text` on it would override the parent for no reason. */
   const color = tone === 'text' && nested ? null : { color: c[tone] };

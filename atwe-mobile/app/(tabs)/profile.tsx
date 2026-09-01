@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
   },
   walletHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   walletCap: { fontSize: 13, fontWeight: '600', color: '#fff', opacity: 0.9 },
-  walletBal: { fontSize: 29, fontWeight: '800', color: '#fff', letterSpacing: -0.29, marginTop: 5, marginBottom: 12 },
+  walletBal: { fontSize: 29, fontWeight: '800', color: '#fff', letterSpacing: -0.29, marginTop: 5, marginBottom: 12, lineHeight: 34},
   walletActs: { flexDirection: 'row', gap: 8 },
   walletAct: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: radius.pill },
   walletActTxt: { fontSize: 13, fontWeight: '600', color: '#fff' },

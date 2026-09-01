@@ -1,6 +1,6 @@
 {
   "name": "atwe-mobile",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "description": "Atwe \u2014 native iOS (and Android) app. Expo + TypeScript client for the existing Atwe backend.",
   "main": "expo-router/entry",

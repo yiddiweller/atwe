@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  View, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView, StyleSheet,
+  View, TextInput, Pressable, ScrollView, StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { AuthButton } from '@/components/AuthButton';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useKeyboardHeight } from '@/lib/keyboard';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { useAuth } from '@/auth/AuthProvider';
@@ -36,6 +38,8 @@ const ORDER: Step[] = ['kind', 'email', 'code', 'dob', 'name', 'password', 'user
 
 export default function Signup() {
   const { c } = useTheme();
+  const insets = useSafeAreaInsets();
+  const kb = useKeyboardHeight();
   const { signup } = useAuth();
   const params = useLocalSearchParams<{ email?: string }>();
 
@@ -141,10 +145,19 @@ export default function Signup() {
     : null;
 
   return (
-    <Screen edges={['top', 'bottom']}>
-      <KeyboardAvoidingView style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.step} keyboardShouldPersistTaps="handled">
+    /* Top inset only: the step's own padding-bottom below covers the home
+       indicator AND the keyboard, the way `.auth-step` does. Letting Screen
+       claim the bottom too would pad it twice. */
+    <Screen edges={['top']}>
+        <ScrollView
+          style={styles.flex}
+          /* `.auth-step`'s own padding-bottom:
+             max(28 + safe-area, keyboard + 16) — so Continue clears the
+             keyboard when it is up and the home indicator when it is not. */
+          contentContainerStyle={[styles.step, { paddingBottom: Math.max(26 + insets.bottom, kb + 16) }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.stepbar}>
             <Pressable onPress={back} hitSlop={10} style={styles.backArrow}
               accessibilityRole="button" accessibilityLabel="Back">
@@ -304,7 +317,6 @@ export default function Signup() {
             onPress={next}
           />
         </ScrollView>
-      </KeyboardAvoidingView>
     </Screen>
   );
 }
@@ -327,7 +339,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 6,
     minHeight: 43, paddingVertical: 6, marginBottom: 18,
   },
-  at: { fontSize: 26, fontWeight: '500' },
+  at: { fontSize: 26, fontWeight: '500', lineHeight: 31},
   bigInput: { flex: 1, minWidth: 0, fontSize: 26, fontWeight: '500', padding: 0 },
   kind: {
     flexDirection: 'row', alignItems: 'center',

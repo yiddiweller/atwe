@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
   page: { paddingHorizontal: spacing.gutter, paddingTop: 2, paddingBottom: 60 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingBottom: 14 },
   back: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', marginLeft: -9 },
-  title: { fontSize: 24, fontWeight: '800', letterSpacing: -0.48 },
+  title: { fontSize: 24, fontWeight: '800', letterSpacing: -0.48, lineHeight: 29},
   pick: {
     flexDirection: 'row', alignItems: 'center', gap: 13,
     paddingVertical: 12, paddingHorizontal: 15, minHeight: 55,

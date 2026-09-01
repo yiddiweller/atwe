@@ -86,6 +86,6 @@ const styles = StyleSheet.create({
     borderRadius: 16, borderWidth: 1,
     alignItems: 'center', justifyContent: 'center',
   },
-  digit: { fontSize: 26, fontWeight: '600', color: '#fff' },
+  digit: { fontSize: 26, fontWeight: '600', color: '#fff', lineHeight: 31},
   hidden: { position: 'absolute', left: -9999, width: 1, height: 1, opacity: 0 },
 });
