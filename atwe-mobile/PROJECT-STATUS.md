@@ -250,6 +250,44 @@ is one number rather than a sweep:
 - **Verified:** `npx tsc --noEmit` clean throughout and `npx expo export --platform ios`
   builds, so every route and import still resolves after the sweep.
 
+## Recently added (Beam: groups + photos in messages)
+- **Groups are real.** Beam has **Chats / Groups** tabs; the Groups list is
+  `GET /api/atchat/groups` (avatar, preview, unread, member count, and an **@** when you
+  were mentioned since you last read — the one thing worth interrupting someone for in a
+  busy group). A row opens **`app/group/[id].tsx`**: the live thread over
+  `GET /api/atchat/groups/:id`, sending via `POST …/messages` with an optimistic echo and
+  `clientId` idempotency (the server has a unique index on group+sender+clientId, so a
+  double-tap or a retry lands once). Live over SSE, **scoped to that group** — a message
+  elsewhere on the account must not make the open thread refetch.
+  - A group message carries a **sender**, which a DM does not, so `GroupMessage` is a
+    superset rather than a reuse of `DmMessage`. The name and face show **once per run**
+    of consecutive messages from one person; repeating them on every line is what makes a
+    group read like a log file rather than a conversation. The avatar gutter is held open
+    on the rest of a run so bubbles do not step left and right.
+  - A **broadcast group is a channel**: admin-post-only. The composer says so instead of
+    letting someone type into a message the server will refuse.
+- **Photos in messages**, in both DMs and groups. `src/lib/pickPhoto.ts` picks, then
+  **downscales to 1280px / quality 0.7** — and that is not an optimisation, it is what
+  makes the feature work: a modern phone photo is 4–8 MB and the server refuses anything
+  over `MAX_IMG_CHARS` (3.5M base64 chars), so sending the original would fail for most
+  real photos. It mirrors that ceiling locally so a too-big photo gets a plain sentence
+  instead of an opaque 400, and a **cancel says nothing** — cancelling is deliberate, not
+  an error.
+  - The composer grew an attachment slot (thumbnail + remove), and **a photo with no
+    caption is a valid message** — requiring text as well would let you attach one and
+    then not be allowed to send it.
+  - New deps: `expo-image-picker ~17.0.11`, `expo-image-manipulator ~14.0.8`. **`npx expo
+    install` cannot run in the build environment** (Expo's version API is not reachable
+    through the egress proxy), so the versions were read from
+    `node_modules/expo/bundledNativeModules.json` — the SDK's own answer — and installed
+    with plain npm. Do that rather than guessing a version.
+  - `NSPhotoLibraryUsageDescription` was already present, checked rather than assumed: a
+    missing one is an instant crash on a real phone, not a warning.
+- **Verified:** `npx tsc --noEmit` clean, `npx expo export --platform ios` builds
+  (4.87 MB, up from 4.84 with the new native modules).
+- **Not yet:** voice notes (needs an audio library), reactions, replies-in-thread, and
+  calls.
+
 ## Next up (phases 3, 4, 6, 7 remain partial)
 1. ~~Profile navigation from feed/detail~~ ✅ done (`app/user/[username].tsx`).
    ~~Stories tray + viewer~~ ✅ done (`StoriesTray` + `app/story/[userId].tsx`).

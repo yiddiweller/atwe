@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
+import { Alert } from 'react-native';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Avatar } from '@/components/Avatar';
@@ -21,6 +22,7 @@ import { GlassComposer } from '@/components/GlassComposer';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useThread, sendDm, type DmMessage, type DmThreadData } from '@/api/beam';
 import { useRealtime } from '@/lib/useRealtime';
+import { pickPhoto, pickPhotoMessage } from '@/lib/pickPhoto';
 import { useCallback } from 'react';
 
 /**
@@ -58,6 +60,15 @@ export default function ChatThread() {
   const { data, isLoading } = useThread(Number.isFinite(peerId) ? peerId : undefined);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  // A photo waiting to go with (or instead of) the next message.
+  const [photo, setPhoto] = useState<string | null>(null);
+
+  const attachPhoto = async () => {
+    const r = await pickPhoto();
+    if (r.ok) { setPhoto(r.dataUrl); return; }
+    const msg = pickPhotoMessage(r.reason);
+    if (msg) Alert.alert('Photo', msg);   // a cancel says nothing — it was deliberate
+  };
   const listRef = useRef<FlatList<DmMessage>>(null);
 
   const messages = data?.messages ?? [];
@@ -67,12 +78,12 @@ export default function ChatThread() {
 
   const send = async () => {
     const body = text.trim();
-    if (!body || sending) return;
+    if ((!body && !photo) || sending) return;
     const clientId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const optimistic: DmMessage = {
       id: -Date.now(),
       body,
-      image: null,
+      image: photo,
       images: [],
       media_kind: null,
       created_at: new Date().toISOString(),
@@ -87,10 +98,11 @@ export default function ChatThread() {
       old ? { ...old, messages: [...old.messages, optimistic] } : old,
     );
     setText('');
+    setPhoto(null);
     setSending(true);
     scrollEnd();
     try {
-      await sendDm(peerId, body, clientId);
+      await sendDm(peerId, body, clientId, photo ?? undefined);
     } catch {
       // leave the optimistic bubble; the reconcile below will drop it if it failed
     } finally {
@@ -154,6 +166,9 @@ export default function ChatThread() {
             onSend={send}
             placeholder={canMessage ? 'Message' : "You can't message this account"}
             sending={sending}
+            onPlus={attachPhoto}
+            attachment={photo}
+            onRemoveAttachment={() => setPhoto(null)}
             editable={canMessage}
           />
         </KeyboardAvoidingView>

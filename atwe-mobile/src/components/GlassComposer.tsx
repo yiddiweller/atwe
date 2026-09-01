@@ -1,4 +1,4 @@
-import { TextInput, Pressable, StyleSheet, Platform } from 'react-native';
+import { View, TextInput, Pressable, StyleSheet, Platform } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -7,6 +7,7 @@ import Animated, {
   Extrapolation,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { BlurView } from 'expo-blur';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -39,6 +40,8 @@ export function GlassComposer({
   onPlus,
   autoFocus,
   editable = true,
+  attachment,
+  onRemoveAttachment,
 }: {
   value: string;
   onChangeText: (t: string) => void;
@@ -48,12 +51,17 @@ export function GlassComposer({
   onPlus?: () => void;
   autoFocus?: boolean;
   editable?: boolean;
+  /** A photo waiting to be sent, as a data URL. Shown above the input. */
+  attachment?: string | null;
+  onRemoveAttachment?: () => void;
 }) {
   const { c, name } = useTheme();
   const insets = useSafeAreaInsets();
   const focused = useSharedValue(0);
   const glass = isLiquidGlassAvailable();
-  const canSend = editable && !!value.trim() && !sending;
+  // A photo with no caption IS a message — requiring text as well would mean you
+  // could attach one and then not be allowed to send it.
+  const canSend = editable && (!!value.trim() || !!attachment) && !sending;
 
   const padStyle = useAnimatedStyle(() => ({
     paddingBottom: interpolate(
@@ -69,6 +77,18 @@ export function GlassComposer({
 
   const inner = (
     <>
+      {!!attachment && (
+        <View style={styles.attachWrap}>
+          <Image source={{ uri: attachment }} style={styles.attachImg} contentFit="cover" />
+          {!!onRemoveAttachment && (
+            <Pressable onPress={onRemoveAttachment} hitSlop={8}
+              style={[styles.attachX, { backgroundColor: c.bg }]}
+              accessibilityRole="button" accessibilityLabel="Remove photo">
+              <Ionicons name="close" size={14} color={c.text} />
+            </Pressable>
+          )}
+        </View>
+      )}
       {!!onPlus && (
         <Pressable onPress={onPlus} hitSlop={8} style={styles.plus} accessibilityLabel="Add attachment">
           <Ionicons name="add" size={26} color={c.t2} />
@@ -145,6 +165,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   fallback: {},
+  attachWrap: { position: 'relative', marginRight: 8 },
+  attachImg: { width: 40, height: 40, borderRadius: 10 },
+  attachX: {
+    position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
+  },
   plus: { width: 34, height: 38, alignItems: 'center', justifyContent: 'center' },
   input: {
     flex: 1,

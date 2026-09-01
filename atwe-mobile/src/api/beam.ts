@@ -84,6 +84,115 @@ export function useThread(peerId: number | undefined) {
 }
 
 /** Send a text message to a peer (idempotent via clientId). */
-export async function sendDm(peerId: number, body: string, clientId: string): Promise<void> {
-  await api.post(`/api/atchat/with/${peerId}`, { body, clientId });
+export async function sendDm(
+  peerId: number, body: string, clientId: string, image?: string,
+): Promise<void> {
+  await api.post(`/api/atchat/with/${peerId}`, { body, clientId, image });
+}
+
+/* ── Groups ───────────────────────────────────────────────────────────────────
+ * The same three shapes as a DM, against the group routes:
+ *   GET  /api/atchat/groups          the groups you are in
+ *   GET  /api/atchat/groups/:id      one group (members + messages)
+ *   POST /api/atchat/groups/:id/messages
+ * A group message carries a SENDER, which a DM does not — a thread with several
+ * people in it is unreadable without one, so the shape is a superset rather than
+ * a reuse of DmMessage.
+ */
+
+/** One row in the Groups list. */
+export interface Group {
+  id: number;
+  name: string;
+  username: string | null;
+  avatar: string | null;
+  broadcast: boolean;      // a "channel": only admins post
+  muted: boolean;
+  members: number;
+  last_body: string | null;
+  last_image: boolean;
+  last_media_kind: string | null;
+  last_meta: string | null;
+  last_at: string | null;
+  last_sender: string | null;
+  last_mine: boolean;
+  unread: number;
+  mentioned: boolean;      // you were @mentioned since you last read
+}
+
+export function useGroups() {
+  return useQuery({
+    queryKey: ['groups'],
+    queryFn: () => api.get<{ groups: Group[] }>('/api/atchat/groups'),
+    staleTime: 15_000,
+  });
+}
+
+/** The list-row preview. Unlike a DM it names the sender, because in a group
+ *  "Photo" without a name tells you nothing about who you are hearing from. */
+export function groupPreview(g: Group): string {
+  let s: string;
+  if (g.last_meta) s = '📎 Attachment';
+  else if (g.last_media_kind === 'audio') s = '🎤 Voice message';
+  else if (g.last_media_kind === 'video') s = '🎬 Video';
+  else if (g.last_image) s = '📷 Photo';
+  else s = g.last_body || '';
+  if (!s) return '';
+  if (g.last_mine) return `You: ${s}`;
+  const who = (g.last_sender || '').split(' ')[0];
+  return who ? `${who}: ${s}` : s;
+}
+
+export interface GroupMessage {
+  id: number;
+  body: string | null;
+  image: string | null;
+  media_kind: string | null;
+  created_at: string;
+  mine: boolean;
+  sender_id: number;
+  sender_name: string | null;
+  sender_avatar: string | null;
+  deleted_all?: boolean;
+}
+
+export interface GroupMember {
+  id: number;
+  name: string;
+  username: string | null;
+  avatar: string | null;
+  verified: boolean;
+  isOwner: boolean;
+  isAdmin: boolean;
+}
+
+export interface GroupThreadData {
+  group: {
+    id: number; name: string; username: string | null; avatar: string | null;
+    createdBy: number; broadcast: boolean; muted: boolean; iAmAdmin: boolean;
+    description: string | null;
+  };
+  members: GroupMember[];
+  messages: GroupMessage[];
+}
+
+export function useGroupThread(groupId: number | undefined) {
+  return useQuery({
+    queryKey: ['group', groupId],
+    queryFn: () => api.get<GroupThreadData>(`/api/atchat/groups/${groupId}`),
+    enabled: !!groupId,
+    // A safety net only: the live SSE stream is what actually keeps this current.
+    refetchInterval: 25_000,
+  });
+}
+
+/** clientId is what makes a double-tap or a retry land ONCE — the server has a
+ *  unique index on (group, sender, client_id) and returns the existing row. */
+export async function sendGroupMessage(
+  groupId: number,
+  body: string,
+  clientId: string,
+  image?: string,
+): Promise<void> {
+  await api.post(`/api/atchat/groups/${groupId}/messages`, { body, clientId, image });
 }
