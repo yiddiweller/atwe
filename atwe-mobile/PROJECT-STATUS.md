@@ -1498,6 +1498,52 @@ what is honestly incomplete is said so below rather than counted.
    (`src/me/sections.ts`, `src/settings/pages.ts`) that drives the hub, the pages
    AND the search, so a row lands in all three in one edit.
 
+### Finishing it off (0.6.0)
+
+The three gaps named above were closed, and one real bug turned up doing it.
+
+- **Beam has the web's four tabs — All · Chats · Calls · Contacts.** *All* is the
+  merge and what it opens on: every conversation, DM and group together, newest
+  first. Two lists side by side make you check both to find out what just
+  happened. *Calls* is a plain read of `/api/calls` — worth having whether or not
+  a call can be placed from the phone yet. A **missed** call is red; a
+  **silenced** one is not, because that is the "silence unknown callers" setting
+  working as asked and colouring it would say otherwise. *Contacts* opens the
+  conversation, not the profile — this is the messaging world, and the reason to
+  look somebody up here is to say something to them.
+- **Settings → Security & access:** the devices signed in, with the one you are
+  holding marked and deliberately given no action (it cannot sign itself out from
+  there; a control that does nothing is worse than none), remove-one, and sign
+  out everywhere — which logs this device out locally too rather than leaving the
+  app holding a dead token. Changing a password goes through the emailed link on
+  purpose: an unlocked, signed-in phone should not be enough to change the
+  credential that gets you back in if the phone is stolen.
+- **Settings → Your data & storage:** download everything of yours as a real file
+  handed to the share sheet, and deactivate — reversible, and it says so in those
+  words, because "deactivate" and "delete" are not the same thing.
+- **Account → Help & feedback**, its own card as on the web. Feedback goes
+  straight into the `support_requests` inbox staff already work, not a mailto:
+  link to a mail app somebody may never have set up. Proven end to end: a real
+  row landed with the right category.
+
+**The bug:** that row came back stamped `0.1.0` — a version in neither app.json
+(0.5.0) nor package.json (0.2.0). It was reading `Constants.expoConfig.version`,
+the runtime manifest, which is not the file. A version on a support ticket is the
+first thing anybody checks, and a wrong one is worse than none. `src/lib/version`
+now reads app.json directly, and package.json was pulled into step — two fields
+that can disagree eventually do.
+
+**Still not there, and why:** *Premium & verification* — selling a subscription
+inside an iOS app is Apple's business, not a Stripe redirect, and doing it wrong
+is how an app gets rejected. *Atwe Assistant* — nothing behind it yet. Placing a
+call still needs `react-native-webrtc`, which cannot be tested from this
+environment.
+
+**Checked:** 162 screen loads (54 screens × dark, light, and as a business), the
+four checkers (haptics 198 files, 50 design colours, 106 notification verbs, 44
+API shapes with no required-field gaps), and the call log proved against seeded
+rows so the missed / silenced / answered states were each seen rendering.
+
 ### What is honestly NOT there
 - The web's **Customers, Creating, Atwe AI and Help & feedback** sections of the
   Account page, and Settings' **Security & access, Premium & verification, Atwe
