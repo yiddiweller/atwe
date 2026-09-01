@@ -52,6 +52,11 @@ export interface User {
   awaySchedule?: 'always' | 'outside_hours';
   cartRecoveryEnabled?: boolean;
   cartRecoveryDelayHours?: number;
+  /* The two reciprocal privacy switches. They ride on `publicUser` rather than
+     living behind /api/account-privacy, because the app has to know them
+     without asking: a read receipt you withhold is one you do not get. */
+  readReceipts?: boolean;
+  privateProfileViews?: boolean;
   // …extend as screens are built.
 }
 

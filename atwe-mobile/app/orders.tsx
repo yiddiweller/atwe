@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, FlatList, Pressable, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
@@ -12,7 +12,11 @@ import { timeAgo } from '@/lib/format';
 /** What you have bought, and what you have sold. */
 export default function Orders() {
   const { c, spacing } = useTheme();
-  const [scope, setScope] = useState<'buyer' | 'seller'>('buyer');
+  /* Deep-linkable so Manage store can open the SELLER side directly — a row
+     called "Orders" under a store that lands you on your own purchases is
+     answering a different question than the one that was asked. */
+  const p = useLocalSearchParams<{ tab?: string }>();
+  const [scope, setScope] = useState<'buyer' | 'seller'>(p.tab === 'seller' ? 'seller' : 'buyer');
   const { data, isLoading, refetch, isRefetching } = useOrders(scope);
   const orders = data?.orders ?? [];
 

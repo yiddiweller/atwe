@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   View, FlatList, ScrollView, Pressable, ActivityIndicator, RefreshControl, StyleSheet,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
@@ -37,7 +37,12 @@ export default function Jobs() {
   const { user } = useAuth();
   const [q, setQ] = useState('');
   const [dq, setDq] = useState('');
-  const [scope, setScope] = useState<Scope>('all');
+  /* Deep-linkable, because the Account page has a row for each shelf ("Jobs I
+     posted", "My applications", "Saved jobs") and three rows that all land on
+     the same unfiltered board are three rows pretending to be different. */
+  const params = useLocalSearchParams<{ scope?: string }>();
+  const initial = SCOPES.some((s) => s.key === params.scope) ? (params.scope as Scope) : 'all';
+  const [scope, setScope] = useState<Scope>(initial);
   const [type, setType] = useState<string | null>(null);
   const [remote, setRemote] = useState(false);
   useEffect(() => {
