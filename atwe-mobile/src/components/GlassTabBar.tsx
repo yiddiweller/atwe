@@ -16,7 +16,6 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useNavMorph } from '@/lib/navMorph';
 import { haptics } from '@/lib/haptics';
-import { nav as navToken } from '@/theme/tokens';
 
 /**
  * The five-world tab bar — a custom REAL Apple Liquid Glass bar (expo-glass-effect)
@@ -32,7 +31,23 @@ import { nav as navToken } from '@/theme/tokens';
      --nv-size    34px                  → the icon, not the 26 this was drawing
    The bar was inset 14 (the CONTENT gutter), which is the one thing the web is
    explicit should NOT match: the bar sits deliberately INSIDE the cards. */
-const GUTTER = navToken.inset;   // 23
+/* THE BAR'S INSET IS THE FOUNDER'S CALL, NOT THE WEB'S.
+
+   The web uses --nav-inset 23 against a 14 content gutter, i.e. the bar sits 9px
+   inside the cards on each side — deliberately, so the two lines read as a
+   decision rather than a near-miss. Matching that exactly made the bar visibly
+   NARROWER than the one they had been using, and they said so: "it looks a
+   little narrow now".
+
+   So the principle is kept and the amount is theirs: the bar is still inside the
+   cards, by 4 rather than 9. On a 390pt phone that is a 354pt bar against 344 at
+   the web's value and 362 if it simply matched the cards.
+
+   This is the one number in the file that is NOT the web's, which is why it says
+   so here rather than quietly reading a token. */
+const CARD_GUTTER = 14;          // spacing.gutter — where the post cards start
+const INSIDE_BY = 4;             // how far inside them the bar sits
+const GUTTER = CARD_GUTTER + INSIDE_BY;   // 18
 const TAB_H = 50;
 const PAD = 4;
 const BAR_H = TAB_H + PAD * 2;   // 58

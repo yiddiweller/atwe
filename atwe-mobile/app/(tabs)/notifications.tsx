@@ -119,7 +119,12 @@ function NotifRow({ n }: { n: Notification }) {
       onPress={go}
       style={({ pressed }) => [
         styles.row,
-        { borderBottomColor: c.border, backgroundColor: n.read ? 'transparent' : c.accentDim },
+        /* The web is explicit: notification rows are "theme-following var(--bg)"
+           with NO divider lines and a subtle unread DOT. This tinted every unread
+           row blue and drew a line under each — on a page of unread alerts that is
+           a wall of blue stripes, which is the opposite of the clean feed the web
+           settled on. The dot is the whole cue. */
+        { backgroundColor: 'transparent' },
         pressed && { backgroundColor: c.s1 },
       ]}
     >
@@ -172,7 +177,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.gutter,
     paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   brand: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   mid: { flex: 1, marginLeft: 12 },

@@ -602,6 +602,33 @@ assume the CLI is the route until somebody connects it.
 Then: Apple processes the build (usually 5–20 minutes) and it appears in
 TestFlight as **Atwe 0.2.0**.
 
+## The nav bar's INSET is the founder's number, not the web's
+
+Matching `--nav-inset` 23 exactly made the bar visibly narrower than the one they
+had been living with, and they said so: *"it looks a little narrow now"*. So the
+web's PRINCIPLE is kept — the bar sits inside the cards, deliberately, so the two
+lines read as a decision — and the amount is theirs: **inside by 4, not 9**. On a
+390pt phone that is a 354pt bar, against 344 at the web's value and 362 if it
+simply matched the cards.
+
+`GlassTabBar` spells this out rather than reading a token, because it is the one
+number in that file that is NOT the web's and a future reader would otherwise
+"fix" it back.
+
+## Notification rows and list dividers
+
+Two more the web is explicit about and the phone was not doing:
+
+- **A notification row is `var(--bg)` with NO divider and a subtle unread dot.**
+  The phone tinted every unread row with `accentDim` AND drew a line under each,
+  so a page of unread alerts was a wall of blue stripes. The dot is the whole cue.
+- **A list hairline is INSET to the gutter** (`::after` with `left/right:
+  var(--feed-gutter)`), which is what makes a list read as rows sharing a page
+  rather than a table with ruled lines. `borderBottomWidth` on the row itself
+  cannot do that — it always spans the full width, padding included — so there is
+  now a `RowDivider` that pins itself absolutely to the row's bottom, costing no
+  height. Its parent must be `position:relative`.
+
 ## The nav bar: why it went muddy, and the web's actual recipe
 
 The founder photographed the bar going orange over an orange photo, and called it

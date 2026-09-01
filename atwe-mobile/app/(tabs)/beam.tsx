@@ -13,6 +13,7 @@ import { timeAgo } from '@/lib/format';
 import { useRealtimeInvalidate } from '@/lib/useRealtime';
 import { useState } from 'react';
 import { FeedTab } from '@/components/FeedTab';
+import { RowDivider } from '@/components/RowDivider';
 
 /**
  * Beam — the messaging world. Chats (1:1) and Groups, each a real list over its own
@@ -120,7 +121,6 @@ function GroupRow({ group }: { group: Group }) {
       onPress={() => router.push(`/group/${group.id}`)}
       style={({ pressed }) => [
         styles.row,
-        { borderBottomColor: c.border },
         pressed && { backgroundColor: c.s1 },
       ]}
       accessibilityRole="button"
@@ -157,6 +157,7 @@ function GroupRow({ group }: { group: Group }) {
           )}
         </View>
       </View>
+      <RowDivider />
     </Pressable>
   );
 }
@@ -171,7 +172,6 @@ function ConvoRow({ convo }: { convo: Conversation }) {
       onPress={() => router.push(`/chat/${convo.id}`)}
       style={({ pressed }) => [
         styles.row,
-        { borderBottomColor: c.border },
         pressed && { backgroundColor: c.s1 },
       ]}
     >
@@ -212,6 +212,7 @@ function ConvoRow({ convo }: { convo: Conversation }) {
           )}
         </View>
       </View>
+      <RowDivider />
     </Pressable>
   );
 }
@@ -222,11 +223,11 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyWrap: { flexGrow: 1 },
   row: {
+    position: 'relative',   // RowDivider pins itself to this row's bottom edge
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.gutter,
     paddingVertical: 11,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   mid: { flex: 1, marginLeft: 12 },
   topline: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
