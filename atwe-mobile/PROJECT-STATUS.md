@@ -424,6 +424,122 @@ balance up first and offers the way there.
 **Gotcha worth keeping:** `Alert.prompt` is **iOS-only**. On Android it is
 undefined, so a guarded call is a button that does nothing. Use a sheet.
 
+## Recently added (buying, selling, booking — and the first look at the screens)
+
+### 6. The cart, and selling from the phone
+
+The server keeps ONE cart grouped by seller, because an order goes to a single
+business — so the screen is a list of little carts, each with its own total and
+its own Checkout. Buying from two sellers really is two orders.
+
+**One thing worth knowing:** a cart checkout that succeeds but whose response is
+lost cannot be retried into a replay. The server's "your cart is empty" guard
+runs BEFORE the idempotency claim, so the retry is refused rather than returning
+the first order. No double charge either way, but the buyer would see a failure
+for something that worked — so on a failure the sheet re-reads the cart, and if
+that seller's group is gone it says the order already went through.
+
+Selling: **Your listings** (the owner's own list, hidden ones included, because
+a seller who cannot see what they took down cannot put it back), a small create/
+edit form, and **Sales**, which leads with orders paid for and waiting to be
+posted rather than with revenue. Two load-bearing details in the form — a blank
+stock box means UNTRACKED and is sent as null, and the photo is only sent when
+it CHANGED, since the stored one comes back as a signed URL rather than bytes.
+
+### 7. Your own profile, posts with pictures, and stories
+
+There was no way to change your name, photo, headline, bio or website from the
+phone at all. Three server rules the editor respects: name and username are
+always sent (the route refuses a body with no name and reads a missing username
+as "clear it"); a photo only when it changed; and **every field must be
+prefilled** — `location` and `website` were missing from the app's User type, so
+those boxes would have opened blank and the first save would have wiped them.
+
+The composer takes a photo now, with a description box beside it, and a picture
+with no words is a valid post. The story tray has YOU first, with a + when you
+have nothing up. That turned up a viewer bug: `bg` on a story is a preset id
+('g1'…'g6'), which is what the web writes, and the viewer only trusted a hex —
+so every text story posted from a browser rendered plain black. `src/lib/storyBg.ts`
+resolves both.
+
+### 8. Booking
+
+A business with opening hours can be booked. The times offered are generated
+from those hours, cut into pieces the length of the service, with anything
+already taken removed. Taking one is CONFIRMED on the spot — publishing it was
+the approval. An Appointments screen runs both sides, and a services manager
+sets out what is offered, how long it takes and an optional deposit.
+
+The hours themselves are now editable in the profile editor: the Book sheet
+could say "they haven't put up their opening hours" and there was nowhere on the
+phone to put them up.
+
+**A real money bug, caught by driving it:** the deposit is decided from the
+SERVICE ROW and the server only looks it up when a `serviceId` is sent. Sending
+the service NAME alone — all the sheet did at first — meant a service with a
+deposit took none, silently, and the business would have believed it was
+protected. **Always send `serviceId`.** Verified: without it "deposit 0, held
+false"; with it, held, released on completion, refunded on cancellation.
+
+### 9. A business profile that shows it is a business
+
+Open/closed now with the week underneath, the star rating tapping into reviews
+you can read and write, and the shop grouped by the seller's own sections.
+Open-now is computed from the READER'S clock, which is the only honest reading:
+hours are stored as wall-clock times with no timezone, so a traveller checking a
+shop abroad sees it wrong. That is a limit of the storage, not of the phone.
+
+### 10. Looking at the screens — `npx expo export --platform web`
+
+Everything above was verified by driving the API and by the compiler. Nobody had
+seen a pixel. Expo builds the same code for the web through react-native-web, so
+the screens can be LOOKED at. **How:**
+
+```bash
+cd atwe-mobile
+npm i --no-save react-dom@19.1.0 react-native-web@~0.21.0 @expo/metro-runtime@~6.1.2
+EXPO_PUBLIC_API_URL='' npx expo export --platform web --output-dir dist-web
+# then serve dist-web at the ROOT of an origin that proxies /api to the server
+# (expo-router does not know a path prefix, and there is no CORS on the API)
+```
+
+Drive it with Playwright at 390x844 and navigate CLIENT-SIDE (`history.pushState`
++ a `popstate` event) — every hard reload re-runs the splash and photographs it
+instead of the screen. It reaches about half the screens; the rest bounce between
+the splash and the login gate because the harness fights the app's auth timing.
+**It is not a phone** — glass, haptics and native sheets are not what renders —
+but it is the difference between having seen the work and not, and it earned its
+keep immediately:
+
+- **The splash could hang forever on a deep link.** It waits for the Home feed to
+  settle, and Home does not always mount: arrive on a notification about an order
+  or a shared listing link and nothing ever says the feed is ready. Capped at
+  `SPLASH_MAX_WAIT` (2.5s).
+- **One card corner.** The post card was at 30 and every other card at 20 —
+  `radius.card` is now the one name for it; `radius.lg` stays for what is NOT a
+  card (a photo in a form, a story preview).
+- Orders said the word "Back" where every other screen has a chevron; Home was
+  chopping "Collections" mid-letter at its scroll edge.
+
+Also: `expo-secure-store` has NO web implementation and throws, taking the auth
+bootstrap with it — token storage falls back to localStorage on web only. Nothing
+ships to a browser.
+
+### The standing check: `tools/check-api-types.js`
+
+**Run it against a POPULATED account after touching any `src/api/*.ts` type.**
+
+```bash
+TOK=<bearer> UN=<username> BASE=http://localhost:3000 node tools/check-api-types.js
+```
+
+37 interfaces, checked against what the server really sends. It has now found
+six real bugs: the group message shape, order buyer/seller, `email_verified`
+(snake on the wire, and `is_admin` too — **do not "tidy" those back to
+camelCase**), the `eta` range, and two more. A required field the server never
+sends is a failure; an optional one is reported to eyeball, because absence can
+be legitimate. An empty list is skipped, never passed.
+
 ## Next up (phases 3, 4, 6, 7 remain partial)
 1. ~~Profile navigation from feed/detail~~ ✅ done (`app/user/[username].tsx`).
    ~~Stories tray + viewer~~ ✅ done (`StoriesTray` + `app/story/[userId].tsx`).
@@ -434,12 +550,18 @@ undefined, so a guarded call is a button that does nothing. Use a sheet.
    money · App Store polish.
 
 ### What is genuinely left
-- **Phase 3 — Beam:** ~~groups, media/voice, reactions~~ ✅ done. **Calls** remain
-  (WebRTC over the existing SSE signalling — a real slice of work on its own).
-- **Phase 4 — Engine:** ~~buying inside the app~~ ✅ done (address + quote +
-  wallet/escrow + the order afterwards). **Cart** (several items from one seller)
-  and **paying by card** remain.
-- **Phase 6 — Profile & money:** managing a storefront, business analytics.
+- **Phase 3 — Beam:** ~~groups, media/voice, reactions~~ ✅ done. **Calls** remain.
+  They need `react-native-webrtc` (a config plugin, and no Expo Go — fine, since
+  we ship through EAS anyway). The honest blocker is that a call cannot be TESTED
+  here at all: no device, no second party. Building it means handing over several
+  hundred lines nobody has watched work. Flagged to the founder as a decision
+  rather than assumed either way.
+- **Phase 4 — Engine:** ~~buying~~ ✅ ~~cart~~ ✅ done. **Paying by card** remains
+  — it goes through Stripe Checkout, a browser flow; the sheet currently says
+  plainly that you top the balance up first.
+- **Phase 6 — Profile & money:** ~~storefront management~~ ✅ ~~appointments~~ ✅
+  ~~business profile~~ ✅ done. **Business analytics** (the reach dashboard, as
+  distinct from the sales one) remains.
 - **Phase 7 — App Store:** Apple Pay; the public listing needs Apple to approve
   the developer account.
 - **Android release:** configured and buildable; needs a Play developer account.
