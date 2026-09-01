@@ -642,6 +642,103 @@ now verified against live payloads; 50 in total, 0 failures.
 `underDayHeading` and shows the clock alone there. Everywhere else — the local
 hub, a profile — there is no heading, so it carries the whole date.
 
+## Finishing it: the seller's half, business ops, Beam's corners, the social gaps
+
+Four batches, all against a real Postgres, all shot in both themes, all landing
+with zero page errors. The app went **74 screens → 95**, and the four checkers
+grew with it.
+
+### Manage store — the hub the phone did not have
+
+The BUYING side was complete; the running-a-business side had almost nothing,
+and what existed was scattered (listings on an Account row, sales behind an icon
+inside that screen). `app/store.tsx` is now the one place, with a live count of
+orders waiting so nobody has to open it to find out whether anything is.
+
+**Discount codes** — buyers could already TYPE one at checkout, so the box was
+there for codes that could not exist. **Bundles** — several of your own things
+for one price, and the SAVING is what the card leads with, because the saving is
+the product. **Make an offer** — propose, counter, accept, decline, withdraw,
+pay; ONE list rather than two shelves, because an offer changes sides as it goes
+and splitting "mine" from "theirs" would move a row across the screen
+mid-conversation. **Product Q&A** on every listing, seller's answer flagged.
+
+**The checkout learned two targets rather than growing two checkouts.** `bundle`
+quotes like anything else; `offer` deliberately CANNOT be quoted — the price is
+already agreed between the two of them, so asking the server to price it is the
+wrong question and the route refuses. `isQuotable()` makes that a rule rather
+than a special case scattered through the sheet.
+
+Proved with money, not screenshots: an offer at $38 → countered $42 → accepted →
+paid moved **$42.00 out and $41.58 in** (the 42¢ is Atwe's own 1% fee), and the
+same `clientId` replays the SAME order with no second charge. A bundle quoted
+$80 subtotal / $10 discount / $70 total and charged exactly that.
+
+### Running the business
+
+**Reach** (who is looking, as distinct from Sales — what they bought), with a
+30-day bar chart drawn as thirty rectangles rather than a chart library to carry
+forever, and the one figure anybody can act on today: how well they answer
+people, said as "usually within 12 min". **Team** with per-permission ticks and
+the other side of it (businesses that have invited YOU). **Auto-messages**.
+**Cart reminders**, with sent and recovered always together — sent alone is a
+business messaging people with no idea whether it works. **Shipping labels**,
+gated on the provider being configured.
+
+### Beam's rarer corners
+
+A ⋯ tools menu, because six rarely-used destinations in a header is six icons
+nobody can tell apart: **search messages · starred · scheduled · broadcast lists
+· labels · locked chats**. Plus a per-chat sheet for the three things that
+belong to ONE conversation — disappearing messages, labels, and locking it.
+
+**View-once** photos, and both halves proved against the server: the sender's
+own copy carries the image, the RECIPIENT's copy has `image: absent`, opening
+returns it once, and a second attempt is a 410 — which the screen reports as
+"you have already opened this one", because that is the feature working.
+
+### The social gaps
+
+**Polls** (results hidden until you have voted or it has closed — showing counts
+to somebody who has not voted is how you get a poll that measures the first
+answer), **quote posts**, **lists**, **close friends**, **story highlights**,
+and **translate**.
+
+### What the guards caught, and what was wrong with the guards
+
+Between them the four checkers caught, in these four batches alone:
+
+- **`AppConfig` declared TWICE**, in two files, with nothing importing the
+  `types.ts` one — so the type checker was faithfully verifying a shape the app
+  never used while the real one quietly drifted.
+- **The type checker could not see `export interface X extends Y {`** at all. It
+  reported "no such interface" and SKIPPED it, which reads exactly like a type
+  that legitimately has no example. `TeamMember` was being silently ignored.
+- **The haptics guard followed `onPress={named}` but not `onPress={() =>
+  named(x)}`** — which is what you write the moment a choice takes an argument,
+  i.e. most of the time. It flagged CORRECT code, and the "fix" would have been
+  to add a second buzz. Both widened, both self-tested by re-breaking them.
+
+And three wrong guesses about the server, all found by driving it:
+
+1. `POST /api/social/lists/:id/members/:uid` does not exist — adding takes the
+   id in the BODY as `uid`, only removing takes it in the path.
+2. `GET /api/highlights/:id` does not exist — the LIST route already returns
+   each highlight with its items. Every highlight opened as "not available".
+3. `POST /api/highlights` answers `{ok, highlightId}`, not `{highlight}`.
+
+Plus two field names that fail SILENTLY rather than erroring, both now written
+into the modules so they cannot be re-guessed: the team routes take
+`permissions` as an **object** (the wrong name falls back to the role's
+defaults, so somebody gets different access from the one that was ticked), and a
+broadcast list takes `members`, not `memberIds` (the wrong name creates the list
+empty and nobody finds out until they send to it).
+
+**Final state: 86 interfaces checked against live payloads with 0 failures, 186
+files under the haptics guard, 50 design tokens matching the web, all 106
+notification verbs named. 51 screens swept in both themes and again as a
+brand-new account — 153 loads, zero errors, nothing blank.**
+
 ## The night run — money, the post menu, the profile, Beam and notifications
 
 Five batches after the Engine was finished, all against a real Postgres and all
@@ -1174,15 +1271,36 @@ bugs makes it fail by name.
 - **Phase 6 — Profile & money:** ~~storefront management~~ ✅ ~~appointments~~ ✅
   ~~business profile~~ ✅ ~~gift cards, invoices, quotes, rewards, referrals,
   splits, pools, scheduled payments, payment links, Subscribe & Save~~ ✅
-  ~~the tabbed profile with About~~ ✅ done. **Business analytics** (the reach
-  dashboard, as distinct from the sales one) remains.
-- **Notifications:** every verb the server sends is now named, and consecutive
+  ~~the tabbed profile with About~~ ✅ ~~business reach analytics~~ ✅ DONE.
+- **Notifications:** every verb the server sends is named, and consecutive
   duplicates group. What is NOT built: the web's in-overlay detail page for a
   sign-in alert, and the Atwe brand mark in place of the shield glyph on that
-  row (the app icon has no alpha channel, so it cannot be tinted as a mask —
-  it would need a transparent mark exported alongside it).
-- **Stories:** a video story still shows a placeholder rather than playing. It
-  needs `expo-video`; everything else about a story works.
+  row — the app icon has no alpha channel, so it cannot be tinted as a mask; it
+  needs a transparent mark exported alongside it.
+- ~~**Stories:** video~~ — CORRECTION, this note was stale for several
+  sessions. Video stories PLAY (`expo-video`, `app/story/[userId].tsx`). It was
+  true once, was fixed, and the note was never updated; it was repeated to the
+  founder as fact. Worth remembering: a "known gap" is only worth as much as the
+  last time somebody checked it.
+
+### What is genuinely left, as of the finishing pass
+
+- **Calls in Beam.** Needs `react-native-webrtc`. The blocker is not writing it
+  — it is that a call cannot be TESTED here at all: no device, no second party.
+  It would ship as several hundred lines nobody has watched work. The founder's
+  call, and it should be made knowingly.
+- **Live location.** Needs `expo-location`, a position watch and map links, with
+  no GPS here to exercise any of it. Same shape of problem as calls, smaller.
+- **Paying by card.** Stripe Checkout is a browser flow; in-app you top the
+  balance up first. Apple Pay is the real answer and is Phase 7.
+- **Buying a shipping label** is built but UNTESTED — no provider is configured
+  in this environment, so `shippingLabelsEnabled` is false, the routes 503 and
+  the button never appears. That is also its behaviour on the live server until
+  the founder configures one, and the manual carrier + tracking entry is
+  untouched.
+- **Android release** — configured and buildable, needs a Play developer account.
+- **Home-screen widgets** — genuinely blocked in managed Expo: a widget is a
+  separate WidgetKit target in Swift. Not a matter of more effort here.
 - **Phase 7 — App Store:** Apple Pay; the public listing needs Apple to approve
   the developer account.
 - **Android release:** configured and buildable; needs a Play developer account.
