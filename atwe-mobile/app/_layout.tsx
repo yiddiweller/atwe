@@ -125,6 +125,7 @@ function RootNavigator() {
           <Stack.Screen name="wallet-requests" />
           <Stack.Screen name="orders" />
           <Stack.Screen name="addresses" />
+          <Stack.Screen name="cart" />
           <Stack.Screen name="order/[id]" />
           <Stack.Screen name="search" />
           <Stack.Screen name="story/[userId]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />

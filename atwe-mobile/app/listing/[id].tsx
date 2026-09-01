@@ -5,6 +5,7 @@ import {
   Pressable,
   ActivityIndicator,
   useWindowDimensions,
+  Alert,
   StyleSheet,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -21,6 +22,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useListing, listingPrice, saveListing, KIND_LABEL } from '@/api/marketplace';
 import { CheckoutSheet } from '@/components/CheckoutSheet';
+import { useCart, setCartQty } from '@/api/cart';
 import { mediaUri } from '@/lib/media';
 import { useAuth } from '@/auth/AuthProvider';
 
@@ -50,6 +52,24 @@ export default function ListingDetail() {
   // A listing with size or colour options needs the picker that is not built
   // yet; sending no variant would be refused, so it goes to chat instead.
   const buyable = !!listing && !mine && listing.active && !listing.soldOut && !listing.hasVariants;
+  const cartQ = useCart();
+  const [addingToCart, setAddingToCart] = useState(false);
+  const inCart = !!listing && (cartQ.data?.carts ?? [])
+    .some((g) => g.items.some((i) => i.productId === listing.id));
+
+  const addToCart = async () => {
+    if (!listing || addingToCart) return;
+    setAddingToCart(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    try {
+      await setCartQty(listing.id, qty);
+      await cartQ.refetch();
+    } catch (e) {
+      Alert.alert('Cart', (e as Error).message);
+    } finally {
+      setAddingToCart(false);
+    }
+  };
 
   const toggleSave = async () => {
     if (!listing) return;
@@ -207,7 +227,16 @@ export default function ListingDetail() {
             {/* Actions */}
             <View style={{ marginTop: 22, gap: 10 }}>
               {buyable && (
-                <Button title="Buy now" kind="primary" onPress={() => setCheckingOut(true)} />
+                <>
+                  <Button title="Buy now" kind="primary" onPress={() => setCheckingOut(true)} />
+                  <Button
+                    title={inCart ? 'In your cart' : 'Add to cart'}
+                    kind="secondary"
+                    loading={addingToCart}
+                    disabled={inCart}
+                    onPress={addToCart}
+                  />
+                </>
               )}
               {listing.hasVariants && !mine && (
                 <Text variant="caption" tone="t3" style={{ textAlign: 'center' }}>
@@ -247,8 +276,10 @@ export default function ListingDetail() {
         <CheckoutSheet
           visible={checkingOut}
           onClose={() => setCheckingOut(false)}
-          listing={listing}
-          qty={qty}
+          target={{ kind: 'buy', productId: listing.id, qty }}
+          title={listing.name}
+          sub={qty > 1 ? `${qty} × ${listingPrice(listing)}` : `from ${listing.seller.name}`}
+          needsShipping={listing.kind === 'physical' && !listing.pickup}
         />
       )}
     </Screen>

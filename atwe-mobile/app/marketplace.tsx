@@ -17,6 +17,7 @@ import { ListingCard } from '@/components/ListingCard';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useMarketplace, KIND_LABEL, type ListingKind } from '@/api/marketplace';
+import { useCart, cartCount } from '@/api/cart';
 
 const KINDS: (ListingKind | null)[] = [null, 'physical', 'digital', 'service', 'rental'];
 
@@ -39,6 +40,7 @@ export default function Marketplace() {
 
   const { data, isLoading, isError, refetch, isRefetching } = useMarketplace(dq, kind);
   const listings = data?.listings ?? [];
+  const count = cartCount(useCart().data?.carts);
 
   return (
     <Screen edges={['top']}>
@@ -48,7 +50,18 @@ export default function Marketplace() {
           <Ionicons name="chevron-back" size={26} color={c.text} />
         </Pressable>
         <Text variant="headline">Marketplace</Text>
-        <View style={styles.back} />
+        <Pressable onPress={() => router.push('/cart')} hitSlop={10} style={styles.back}
+          accessibilityRole="button"
+          accessibilityLabel={count ? `Cart, ${count} item${count === 1 ? '' : 's'}` : 'Cart'}>
+          <Ionicons name="bag-outline" size={23} color={c.text} />
+          {count > 0 && (
+            <View style={[styles.badge, { backgroundColor: c.accent }]}>
+              <Text variant="micro" style={{ color: c.accentTint }}>
+                {count > 99 ? '99+' : count}
+              </Text>
+            </View>
+          )}
+        </Pressable>
       </View>
 
       {/* Search */}
@@ -140,6 +153,11 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   back: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  badge: {
+    position: 'absolute', top: 4, right: 2,
+    minWidth: 17, height: 17, borderRadius: 9, paddingHorizontal: 4,
+    alignItems: 'center', justifyContent: 'center',
+  },
   search: {
     flexDirection: 'row',
     alignItems: 'center',

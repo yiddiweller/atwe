@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Modal, View, ScrollView, Pressable, ActivityIndicator, Alert, StyleSheet,
 } from 'react-native';
@@ -11,11 +11,11 @@ import { AddressForm } from './AddressForm';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import {
-  useAddresses, addressLine, quoteBuy, buyNow, useAfterPurchase, etaLabel,
-  type Address, type Quote, type PayWith,
+  useAddresses, addressLine, quote as quoteFor, pay, useAfterPurchase, etaLabel,
+  type Address, type Quote, type PayWith, type Target,
 } from '@/api/checkout';
 import { useWallet, money } from '@/api/wallet';
-import type { Listing } from '@/api/marketplace';
+import { useCart } from '@/api/cart';
 
 /**
  * Checkout for one listing.
@@ -34,17 +34,25 @@ import type { Listing } from '@/api/marketplace';
  * the phone yet; rather than half-build it, the sheet says plainly that you top
  * the balance up first, and offers the way there.
  */
-export function CheckoutSheet({ visible, onClose, listing, qty, variantId }: {
+export function CheckoutSheet({
+  visible, onClose, target, title, sub, needsShipping,
+}: {
   visible: boolean;
   onClose: () => void;
-  listing: Listing;
-  qty: number;
-  variantId?: number | null;
+  /** One listing, or a seller's whole cart. */
+  target: Target;
+  /** What is being bought, in the buyer's words. */
+  title: string;
+  sub?: string;
+  /** Whether a delivery address is needed. The caller knows — a listing knows
+   *  its own kind, and a cart group is told by the server. */
+  needsShipping: boolean;
 }) {
   const { c } = useTheme();
   const router = useRouter();
   const addrQ = useAddresses();
   const walletQ = useWallet();
+  const cartQ = useCart();
   const afterPurchase = useAfterPurchase();
 
   const [addressId, setAddressId] = useState<number | null>(null);
@@ -52,14 +60,13 @@ export function CheckoutSheet({ visible, onClose, listing, qty, variantId }: {
   const [quote, setQuote] = useState<Quote | null>(null);
   const [quoting, setQuoting] = useState(false);
   const [rateId, setRateId] = useState<string | null>(null);
-  const [pay, setPay] = useState<PayWith>('protected');
+  const [payMethod, setPayMethod] = useState<PayWith>('protected');
   const [paying, setPaying] = useState(false);
   // ONE id for this purchase, kept across retries — a fresh one per attempt is
   // exactly how a network hiccup turns into two orders.
   const [clientId] = useState(() => `buy-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
   const addresses = addrQ.data?.addresses ?? [];
-  const needsShipping = listing.kind === 'physical' && !listing.pickup;
   const chosen = addresses.find((a) => a.id === addressId) ?? null;
 
   // Default to the address already marked default, once they load.
@@ -69,14 +76,15 @@ export function CheckoutSheet({ visible, onClose, listing, qty, variantId }: {
     }
   }, [addresses, addressId]);
 
+  // The target is an object built inline by the caller, so a plain dependency on
+  // it would re-run this on every render. Its identity is fully described by
+  // these few values.
+  const targetKey = JSON.stringify(target);
   const refreshQuote = useCallback(async () => {
     if (!visible) return;
     setQuoting(true);
     try {
-      const q = await quoteBuy({
-        productId: listing.id, qty, variantId,
-        addressId, shipRateId: rateId,
-      });
+      const q = await quoteFor(JSON.parse(targetKey) as Target, { addressId, shipRateId: rateId });
       setQuote(q);
       if (!rateId && q.selectedRateId) setRateId(q.selectedRateId);
     } catch (e) {
@@ -85,7 +93,7 @@ export function CheckoutSheet({ visible, onClose, listing, qty, variantId }: {
     } finally {
       setQuoting(false);
     }
-  }, [visible, listing.id, qty, variantId, addressId, rateId]);
+  }, [visible, targetKey, addressId, rateId]);
 
   useEffect(() => { refreshQuote(); }, [refreshQuote]);
 
@@ -99,10 +107,7 @@ export function CheckoutSheet({ visible, onClose, listing, qty, variantId }: {
     setPaying(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
-      const r = await buyNow({
-        productId: listing.id, qty, variantId,
-        addressId, shipRateId: rateId, payWith: pay, clientId,
-      });
+      const r = await pay(target, { addressId, shipRateId: rateId, payWith: payMethod, clientId });
       afterPurchase();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       onClose();
@@ -114,13 +119,32 @@ export function CheckoutSheet({ visible, onClose, listing, qty, variantId }: {
         [{ text: 'View order', onPress: () => router.push('/orders') }, { text: 'Done' }],
       );
     } catch (e) {
+      // A cart checkout that fails AFTER the order went through is a real state,
+      // and it has a tell. The server empties the cart for a seller only on a
+      // successful payment, and its "cart is empty" guard runs BEFORE the
+      // idempotency claim — so a retry after a dropped response cannot replay
+      // the first result, it just refuses. If the cart is now gone, the money
+      // moved: say so and point at the order, rather than showing a failure for
+      // something that worked.
+      if (target.kind === 'cart') {
+        const fresh = await cartQ.refetch();
+        const stillThere = (fresh.data?.carts ?? []).some((g) => g.seller.id === target.sellerId);
+        if (!stillThere) {
+          afterPurchase();
+          onClose();
+          Alert.alert(
+            'Already ordered',
+            'This one had already gone through. You can see it in your orders.',
+            [{ text: 'View orders', onPress: () => router.push('/orders') }, { text: 'Done' }],
+          );
+          return;
+        }
+      }
       Alert.alert('Checkout', (e as Error).message);
     } finally {
       setPaying(false);
     }
   };
-
-  const unit = useMemo(() => (quote ? quote.subtotalCents / Math.max(1, qty) : 0), [quote, qty]);
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -148,10 +172,10 @@ export function CheckoutSheet({ visible, onClose, listing, qty, variantId }: {
             <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
               {/* What */}
               <View style={[styles.card, { backgroundColor: c.s1 }]}>
-                <Text variant="headline" numberOfLines={2}>{listing.name}</Text>
-                <Text variant="caption" tone="t3" style={{ marginTop: 3 }}>
-                  {qty > 1 ? `${qty} × ${money(unit)}` : `from ${listing.seller.name}`}
-                </Text>
+                <Text variant="headline" numberOfLines={2}>{title}</Text>
+                {!!sub && (
+                  <Text variant="caption" tone="t3" style={{ marginTop: 3 }}>{sub}</Text>
+                )}
               </View>
 
               {/* Where */}
@@ -255,13 +279,13 @@ export function CheckoutSheet({ visible, onClose, listing, qty, variantId }: {
                 title="Buy with protection"
                 sub="Held until you confirm it arrived"
                 icon="shield-checkmark-outline"
-                on={pay === 'protected'} onPress={() => setPay('protected')}
+                on={payMethod === 'protected'} onPress={() => setPayMethod('protected')}
               />
               <PayOption
                 title="Pay now"
                 sub="The seller is paid straight away"
                 icon="flash-outline"
-                on={pay === 'balance'} onPress={() => setPay('balance')}
+                on={payMethod === 'balance'} onPress={() => setPayMethod('balance')}
               />
               <Text variant="caption" tone="t3" style={{ marginTop: 8 }}>
                 Atwe balance: {money(balance)}

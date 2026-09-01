@@ -91,6 +91,7 @@ export default function Settings() {
         {/* Shopping */}
         <GroupLabel>SHOPPING</GroupLabel>
         <View style={[styles.card, { backgroundColor: c.s1, borderRadius: radius.lg }]}>
+          <LinkRow label="Cart" c={c} onPress={() => router.push('/cart')} />
           <LinkRow label="Delivery addresses" c={c} onPress={() => router.push('/addresses')} />
           <LinkRow label="Orders" c={c} onPress={() => router.push('/orders')} last />
         </View>

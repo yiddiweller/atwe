@@ -111,19 +111,33 @@ export interface Quote {
   ratesConfigured: boolean;
 }
 
+/** What is being bought. One listing, or everything in the cart from one
+ *  seller — an order always goes to a single business, so those are the only
+ *  two shapes there are. */
+export type Target =
+  | { kind: 'buy'; productId: number; qty: number; variantId?: number | null }
+  | { kind: 'cart'; sellerId: number };
+
 export interface QuoteInput {
-  productId: number;
-  qty: number;
-  variantId?: number | null;
   addressId?: number | null;
   couponCode?: string;
   shipRateId?: string | null;
   pickup?: boolean;
 }
 
-/** Price a single-item purchase. Read-only — it commits to nothing. */
-export async function quoteBuy(q: QuoteInput): Promise<Quote> {
-  return api.post<Quote>('/api/checkout/quote', { mode: 'buy', ...q });
+/** The body both the quote and the buy want, from a target. Kept in ONE place
+ *  so a quote can never be priced against different arguments than the purchase
+ *  that follows it — which is exactly how a shown total stops matching a
+ *  charged one. */
+function targetBody(t: Target): Record<string, unknown> {
+  return t.kind === 'cart'
+    ? { mode: 'cart', sellerId: t.sellerId }
+    : { mode: 'buy', productId: t.productId, qty: t.qty, variantId: t.variantId ?? undefined };
+}
+
+/** Price it. Read-only — it commits to nothing. */
+export async function quote(t: Target, q: QuoteInput = {}): Promise<Quote> {
+  return api.post<Quote>('/api/checkout/quote', { ...targetBody(t), ...q });
 }
 
 /* ── Paying ─────────────────────────────────────────────────────────────────── */
@@ -148,15 +162,20 @@ export interface BuyResult {
   deduped?: boolean;
 }
 
-export async function buyNow(input: BuyInput): Promise<BuyResult> {
+/** Pay. A single listing goes to /api/orders/buy; a seller's cart goes to
+ *  /api/orders — different routes, same money rules on both. */
+export async function pay(t: Target, input: BuyInput): Promise<BuyResult> {
   const { payWith, ...rest } = input;
-  return api.post<BuyResult>('/api/orders/buy', {
+  const body = {
+    ...targetBody(t),
     ...rest,
     // "Protected" IS a balance payment — it just parks the money in escrow until
     // the buyer confirms, rather than handing it straight to the seller.
     payWith: 'balance',
     protected: payWith === 'protected',
-  });
+  };
+  delete (body as { mode?: unknown }).mode;   // only the quote route wants it
+  return api.post<BuyResult>(t.kind === 'cart' ? '/api/orders' : '/api/orders/buy', body);
 }
 
 /** Everything the checkout needs to invalidate after a successful purchase. */
@@ -167,5 +186,7 @@ export function useAfterPurchase() {
     qc.invalidateQueries({ queryKey: ['wallet'] });
     qc.invalidateQueries({ queryKey: ['listing'] });
     qc.invalidateQueries({ queryKey: ['marketplace'] });
+    // Paying for a cart empties it server-side; the badge has to follow.
+    qc.invalidateQueries({ queryKey: ['cart'] });
   };
 }
