@@ -764,6 +764,48 @@ bugs makes it fail by name.
   separate WidgetKit target written in Swift, which needs prebuild + a config
   plugin. Not a matter of more effort in this codebase.
 
+## Universal links are OFF, deliberately — and here is how to put them back
+
+`ios.associatedDomains` (`applinks:atwe.com`, `applinks:www.atwe.com`) is
+**removed from app.json**. It is the one thing that failed the first real 0.2.0
+build, and it is worth knowing exactly why because nothing about it is a code
+problem:
+
+```
+Provisioning profile "*[expo] com.atwe.app AppStore 2026-07-10T15:37:01.685Z"
+doesn't support the Associated Domains capability. (in target 'Atwe')
+...doesn't include the com.apple.developer.associated-domains entitlement.
+```
+
+The profile Apple issued on **10 July** predates the capability, so Xcode refuses
+to sign. The generated entitlements file asks for exactly two things and only one
+of them is a problem — `aps-environment` (push) is already on the profile and has
+worked since 0.1.0; `com.apple.developer.associated-domains` is not.
+
+**What is actually lost:** tapping an `atwe.com` link in Messages or Safari opens
+the WEBSITE rather than the app. That is all. `src/lib/deeplinks.ts` still parses
+both shapes (`atwe://user/sam` and `https://atwe.com/sam`), the app's own scheme
+still works, and a tapped push notification still routes correctly — those use the
+notification payload, not universal links. Android's `intentFilters` are untouched,
+because Android app links need no Apple profile.
+
+**To restore it** (a five-minute job, needing the Apple Developer portal):
+1. developer.apple.com → Certificates, Identifiers & Profiles → **Identifiers** →
+   `com.atwe.app` → tick **Associated Domains** → Save.
+2. Force EAS to mint a fresh profile that includes it:
+   `npx eas credentials -p ios` → production → **Build Credentials** → remove the
+   existing provisioning profile so the next build generates one.
+3. Put the key back in `app.json`:
+   `"associatedDomains": ["applinks:atwe.com", "applinks:www.atwe.com"]`
+4. Serve `/.well-known/apple-app-site-association` from atwe.com — **this is the
+   half people forget.** Without it iOS silently declines to open the app even
+   with a correct profile, and it must be served as `application/json` with no
+   file extension and no redirect.
+
+Left undone on purpose: it needs Apple-portal access, it is a convenience rather
+than a feature, and it was standing between the founder and having the app on
+their phone at 2am.
+
 ## 🚢 THE SHIP SWITCH — how a new version reaches the founder's phone
 
 **Push the working branch to `ship`. That is the whole thing.**

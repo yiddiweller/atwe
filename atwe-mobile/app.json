@@ -32,11 +32,7 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSUserTrackingUsageDescription": "Atwe does not track you across other apps or websites.",
         "NSContactsUsageDescription": "Atwe can find people you already know, only if you ask it to."
-      },
-      "associatedDomains": [
-        "applinks:atwe.com",
-        "applinks:www.atwe.com"
-      ]
+      }
     },
     "android": {
       "package": "com.atwe.app",
