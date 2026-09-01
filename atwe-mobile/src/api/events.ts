@@ -173,6 +173,13 @@ export function whenLabel(iso: string): string {
   });
 }
 
+/** Just the clock, for a card that already sits under a day heading. */
+export function timeLabel(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
 /** Just the day, for grouping a list: "Sat 4 Oct". */
 export function dayLabel(iso: string): string {
   const d = new Date(iso);

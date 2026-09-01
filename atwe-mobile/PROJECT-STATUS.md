@@ -602,6 +602,46 @@ assume the CLI is the route until somebody connects it.
 Then: Apple processes the build (usually 5–20 minutes) and it appears in
 TestFlight as **Atwe 0.2.0**.
 
+## Three Engine worlds: Events, Services, Businesses
+
+The website offers eleven things to discover; the phone offered three. It now
+offers six, and these are complete features rather than surfaces:
+
+**Events** (`app/events.tsx`, `app/event/[id].tsx`, `app/new-event.tsx`,
+`EventCard`) — four shelves (Upcoming · Going · Hosting · Past), the list
+**grouped by day**, and a detail that answers the only question on the screen:
+am I going. All three RSVP answers the server can give are handled — done, a
+Stripe URL for a ticketed event (paying is a browser step), and a 400 with
+`full` + `canWaitlist` when the seat cap is reached, which turns the button into
+"Join the waiting list". Hosting: put one up in a minute, see who is coming,
+cancel it (attendees are told) or delete it.
+
+**Services** (`app/services.tsx`, `app/service/[id].tsx`, `app/offer-service.tsx`)
+— with no category chosen this is the **local hub** (`/api/local`): one search
+across services, businesses, open roles and what's on, because somebody typing
+"plumber" does not care which of our tables the answer is in. Choosing a category
+narrows to services proper. No checkout on a service detail on purpose — a
+service is arranged by talking to somebody, so the one white action is Message.
+
+**Businesses** (`app/businesses.tsx`) — the directory, verified-first, with a
+verified-only filter and a distance chip when the viewer has shared a location.
+
+Wired into Engine (3 tiles → 6) and into a new **Discover** group in Settings.
+
+### The checker earned its keep again
+
+`check-api-types.js` failed with *"Service: required but never sent → name,
+durationMin, depositCents"* — a **name collision**, not a wire mismatch:
+`appointments.ts` already exports `Service` for a BOOKABLE service, and the new
+services-marketplace type had taken the same name. Two concepts under one name is
+how a silent bug starts, so the new one is `ServiceListing`. Four new interfaces
+now verified against live payloads; 50 in total, 0 failures.
+
+**A grouped list should not say the date twice.** "Tomorrow" as a heading with
+"Wed, Sep 2, 4:23 PM" under it is the same fact twice, so `EventCard` takes
+`underDayHeading` and shows the clock alone there. Everywhere else — the local
+hub, a profile — there is no heading, so it carries the whole date.
+
 ## The nav bar's INSET is the founder's number, not the web's
 
 Matching `--nav-inset` 23 exactly made the bar visibly narrower than the one they

@@ -118,6 +118,13 @@ const CASES = [
   ['Applicant',      null,                                   null],  // needs a job of my own
   ['WorkerListing',  '/api/worker-listings',                 (j) => j.workers[0]],
   ['JobMatch',       null,                                   null],  // a POST; see below
+  ['ServiceListing', '/api/services',                        (j) => j.services[0]],
+  ['ServiceProvider','/api/services',                        (j) => j.services[0].provider],
+  ['LocalResults',   '/api/local',                           (j) => j],
+  ['DirectoryBusiness', '/api/businesses/directory',         (j) => j.businesses[0]],
+  ['AtweEvent',      '/api/events?scope=upcoming',           (j) => j.events[0]],
+  ['EventHost',      '/api/events?scope=upcoming',           (j) => j.events[0].host],
+  ['Attendee',       null,                                   null],  // needs an event id
   ['User',           '/api/auth/me',                         (j) => j.user],
   ['AppConfig',      '/api/config',                          (j) => j],
 ];
@@ -163,6 +170,17 @@ const get = async (p) => {
       CASES[mi][1] = `/api/business/${bid}/reviews`; CASES[mi][2] = (j) => j.summary;
     }
   } catch { /* leave them skipped */ }
+
+  // An attendee list hangs off an event this account can see.
+  try {
+    const evs = await get('/api/events?scope=upcoming');
+    const ev = (evs.events || []).find((e) => e.going > 0) || evs.events?.[0];
+    if (ev) {
+      const i = CASES.findIndex(([n]) => n === 'Attendee');
+      CASES[i][1] = `/api/events/${ev.id}/attendees`;
+      CASES[i][2] = (j) => j.attendees[0];
+    }
+  } catch { /* leave it skipped */ }
 
   /* Jobs: a screening question only exists on a job that asks one, an applicant
      only on a job I posted, and the match score is a POST. All three are found

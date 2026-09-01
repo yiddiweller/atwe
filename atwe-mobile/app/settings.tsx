@@ -108,6 +108,15 @@ export default function Settings() {
           <LinkRow label="Open to work" c={c} onPress={() => router.push('/workers')} last />
         </View>
 
+        {/* Discover */}
+        <GroupLabel>DISCOVER</GroupLabel>
+        <View style={[styles.card, { backgroundColor: c.s1, borderRadius: radius.card }]}>
+          <LinkRow label="Events" c={c} onPress={() => router.push('/events')} />
+          <LinkRow label="Services" c={c} onPress={() => router.push('/services')} />
+          <LinkRow label="Businesses" c={c} onPress={() => router.push('/businesses')} />
+          <LinkRow label="Marketplace" c={c} onPress={() => router.push('/marketplace')} last />
+        </View>
+
         {/* Selling */}
         <GroupLabel>SELLING</GroupLabel>
         <View style={[styles.card, { backgroundColor: c.s1, borderRadius: radius.card }]}>

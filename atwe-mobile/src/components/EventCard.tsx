@@ -7,7 +7,7 @@ import { Avatar } from './Avatar';
 import { VerifiedBadge } from './VerifiedBadge';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
-import { whenLabel, crowdLabel, ticketLabel, type AtweEvent } from '@/api/events';
+import { whenLabel, timeLabel, crowdLabel, ticketLabel, type AtweEvent } from '@/api/events';
 import { mediaUri } from '@/lib/media';
 
 /**
@@ -16,7 +16,14 @@ import { mediaUri } from '@/lib/media';
  * that order. The cover photo leads only when there is one; an event without a
  * picture should not get a grey rectangle where a picture would be.
  */
-export function EventCard({ event }: { event: AtweEvent }) {
+export function EventCard({ event, underDayHeading }: {
+  event: AtweEvent;
+  /** True in the Events list, which groups by day — so the card shows the CLOCK
+   *  only. "Tomorrow" as a heading with "Wed, Sep 2, 4:23 PM" under it says the
+   *  same thing twice. Elsewhere (the local hub, a profile) there is no heading,
+   *  so the card carries the whole date. */
+  underDayHeading?: boolean;
+}) {
   const { c, radius } = useTheme();
   const router = useRouter();
   const h = event.host;
@@ -47,7 +54,7 @@ export function EventCard({ event }: { event: AtweEvent }) {
         {/* When — the single most useful line, so it leads and it's accent-coloured */}
         <View style={styles.whenRow}>
           <Text variant="callout" weight="700" style={{ color: c.accent }}>
-            {whenLabel(event.startsAt)}
+            {underDayHeading ? timeLabel(event.startsAt) : whenLabel(event.startsAt)}
           </Text>
           {event.cancelled && (
             <View style={[styles.pill, { backgroundColor: c.s2 }]}>

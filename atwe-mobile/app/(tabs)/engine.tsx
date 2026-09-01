@@ -214,6 +214,24 @@ function Explore({ spacing }: { spacing: ReturnType<typeof useTheme>['spacing'] 
             sub="People open to work"
             onPress={() => router.push('/workers')}
           />
+          <DiscoverTile
+            icon="calendar-outline"
+            label="Events"
+            sub="What's on near you"
+            onPress={() => router.push('/events')}
+          />
+          <DiscoverTile
+            icon="construct-outline"
+            label="Services"
+            sub="Find anyone, for anything"
+            onPress={() => router.push('/services')}
+          />
+          <DiscoverTile
+            icon="business-outline"
+            label="Businesses"
+            sub="The directory"
+            onPress={() => router.push('/businesses')}
+          />
         </ScrollView>
       </View>
 

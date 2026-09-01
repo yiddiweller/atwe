@@ -155,6 +155,13 @@ function RootNavigator() {
           <Stack.Screen name="applicants/[id]" />
           <Stack.Screen name="post-job" options={{ presentation: 'modal' }} />
           <Stack.Screen name="workers" />
+          <Stack.Screen name="events" />
+          <Stack.Screen name="event/[id]" />
+          <Stack.Screen name="new-event" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="services" />
+          <Stack.Screen name="service/[id]" />
+          <Stack.Screen name="offer-service" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="businesses" />
           <Stack.Screen name="reviews/[id]" />
           <Stack.Screen name="shop/[id]" />
           <Stack.Screen name="edit-profile" options={{ presentation: 'modal' }} />
