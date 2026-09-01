@@ -1,10 +1,13 @@
 import { View, FlatList, Pressable, ActivityIndicator, RefreshControl, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import { haptics } from '@/lib/haptics';
 import {
   useConversations, conversationPreview, type Conversation,
   useGroups, groupPreview, type Group,
@@ -13,6 +16,7 @@ import { timeAgo } from '@/lib/format';
 import { useRealtimeInvalidate } from '@/lib/useRealtime';
 import { useState } from 'react';
 import { FeedTab } from '@/components/FeedTab';
+import { NewChatSheet } from '@/components/NewChatSheet';
 import { RowDivider } from '@/components/RowDivider';
 
 /**
@@ -26,6 +30,7 @@ type Tab = 'chats' | 'groups';
 export default function Beam() {
   const { c } = useTheme();
   const [tab, setTab] = useState<Tab>('chats');
+  const [newChat, setNewChat] = useState(false);
   const { data, isLoading, isError, refetch, isRefetching } = useConversations();
   const convos = data?.conversations ?? [];
   const groupsQ = useGroups();
@@ -38,7 +43,20 @@ export default function Beam() {
   return (
     <Screen edges={['top']}>
       <View style={[styles.head, { borderBottomColor: c.border }]}>
-        <Text variant="title">Beam</Text>
+        {/* Starting a conversation used to require finding somebody's PROFILE
+            first — the empty state said so out loud — which means you had to
+            already know where they were. This is the way in. */}
+        <View style={styles.titleRow}>
+          <Text variant="title" style={{ flex: 1 }}>Beam</Text>
+          <Pressable
+            onPress={() => { haptics.tap(); setNewChat(true); }}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="New chat"
+          >
+            <Ionicons name="create-outline" size={24} color={c.text} />
+          </Pressable>
+        </View>
         <View style={styles.tabs}>
           {(['chats', 'groups'] as Tab[]).map((t) => (
             <FeedTab
@@ -96,12 +114,15 @@ export default function Beam() {
                 No messages yet
               </Text>
               <Text variant="body" tone="t3" style={{ marginTop: 6, textAlign: 'center' }}>
-                Start a conversation from someone's profile.
+                Message anybody on Atwe.
               </Text>
+              <View style={{ height: 18 }} />
+              <Button title="Start a conversation" onPress={() => setNewChat(true)} />
             </View>
           }
         />
       )}
+      <NewChatSheet visible={newChat} onClose={() => setNewChat(false)} />
     </Screen>
   );
 }
@@ -220,6 +241,7 @@ function ConvoRow({ convo }: { convo: Conversation }) {
 const styles = StyleSheet.create({
   tabs: { flexDirection: 'row', gap: 22, marginTop: 10 },
   head: { paddingHorizontal: spacing.gutter, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  titleRow: { flexDirection: 'row', alignItems: 'center' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyWrap: { flexGrow: 1 },
   row: {

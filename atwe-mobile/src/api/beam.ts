@@ -294,3 +294,37 @@ export function reactionChips(
   }
   return [...by.values()];
 }
+
+/* ── Who to talk to ───────────────────────────────────────────────────────── */
+
+/** The shared person stub both the contacts list and the search return. */
+export interface Person {
+  id: number;
+  name: string;
+  username: string | null;
+  avatar: string | null;
+  verified: boolean;
+  accountType: 'personal' | 'business';
+}
+
+/** People you have saved. The Contacts tab, and the New-chat sheet's resting state. */
+export function useContacts() {
+  return useQuery({
+    queryKey: ['contacts'],
+    queryFn: () => api.get<{ contacts: Person[] }>('/api/contacts'),
+  });
+}
+
+/**
+ * Find somebody to message. Reuses the mention search the composer uses — one
+ * ranking, prefix-first and blocks-excluded, rather than a second one that would
+ * drift from it.
+ */
+export function useFindPeople(q: string) {
+  const term = q.trim();
+  return useQuery({
+    queryKey: ['find-people', term],
+    queryFn: () => api.get<{ users: Person[] }>(`/api/social/mention-search?q=${encodeURIComponent(term)}`),
+    enabled: term.length >= 1,
+  });
+}
