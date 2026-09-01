@@ -129,6 +129,26 @@ for (const f of WORLDS) {
   if (looped) problems.push('Chrome.tsx builds its blur in a loop — that is the stepped stack coming back');
 }
 
+/**
+ * The chrome menu is NOT inside a Modal.
+ *
+ * A React Native `Modal` presents its own view controller, so a `GlassView`
+ * inside one has nothing of the app behind it to sample and collapses to a
+ * flat, dull pane — the founder's "it looks fake". Apple's own context menus
+ * are overlays in the same window, not modals. `GlassMenu` is an in-tree
+ * overlay for exactly that reason; putting it back in a Modal would undo it
+ * silently, since nothing else would break.
+ */
+{
+  const src = fs.readFileSync('src/components/GlassMenu.tsx', 'utf8');
+  if (/<Modal\b/.test(src)) {
+    problems.push('GlassMenu is inside a <Modal> — real glass cannot sample the app from there');
+  }
+  if (!/right:\s*Math\.max\([^)]*anchor\.x \+ anchor\.width/.test(src)) {
+    problems.push("GlassMenu no longer pins its right edge to the button's — it will unfold from the screen corner");
+  }
+}
+
 if (problems.length) {
   console.error(`chrome: ${problems.length} problem(s) across ${checked} screens\n`);
   for (const p of problems) console.error('  ' + p);

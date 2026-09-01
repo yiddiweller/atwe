@@ -33,12 +33,13 @@ PAIRS = [('home', 'home'), ('beam', 'chat'), ('engine', 'search'),
          ('notifs', 'notifs'), ('profile', 'profile')]
 
 # The VISIBLE MARK is what matters, not the canvas: UIKit draws a tab-bar image
-# at its own point size, and the mark sits inside `INK` of that. 30 x 0.90 put a
-# 27pt mark on screen and the founder asked for "24 or 25" — the size the web's
-# bar reads at. 27 x 0.90 = 24.3, which is that, and the canvas stays comfortably
-# bigger than the ink so nothing clips at 1x.
-PT = 27          # the canvas the tab bar gets
-INK = 0.90       # how much of it the mark fills -> 24.3pt on screen
+# at its own point size, and the mark sits inside `INK` of that. it went 30x0.90 (a 27pt mark), then
+# 27x0.90 (24.3) when the founder asked for "24 or 25", and they then wanted it
+# back up "in between the web app and the previous iOS app — do it at 28".
+# 31 x 0.90 = 27.9. The canvas stays comfortably bigger than the ink so nothing
+# clips at 1x.
+PT = 31          # the canvas the tab bar gets
+INK = 0.90       # how much of it the mark fills -> 27.9pt on screen
 SCALES = [(1, ''), (2, '@2x'), (3, '@3x')]
 
 

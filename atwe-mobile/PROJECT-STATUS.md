@@ -2353,3 +2353,56 @@ it pushed was written to a list nobody read again. **A checker that has not been
 watched to fail is not a checker**; this one now fails by name and passes when
 fixed back.
 
+### Round fifteen — the menu was in a Modal, and it grew from the corner
+
+The founder, on the top-right account menu: *"it really doesn't look like the
+Apple liquid glass design, that looks fake… it needs to start on the profile
+icon."* Two separate faults, both real.
+
+**1. It was inside a React Native `Modal`.** A Modal presents its own view
+controller, so a `GlassView` in one has nothing of the app behind it to sample
+and collapses to a flat, dull pane — which is exactly what "looks fake" means
+for a material whose whole job is to show what is behind it. Apple's own context
+menus are not modals; they are overlays in the same window. `GlassMenu` is now
+an in-tree overlay, so the material picks up the feed scrolling underneath it.
+
+Rendering in-tree means laying out in WINDOW space, which the bar is not in — it
+is inset by the notch and the gutter. `BrandBar` measures its own row
+(`hostRef`) and passes it as `origin`; the overlay cancels that offset, so the
+anchor rect from `measureInWindow` can be used exactly as measured.
+
+**2. It was pinned to the screen's gutter, not to its button.** `right: 0`
+against a field inset by 14, so every menu unfolded from the same corner
+whichever button opened it. It is `right: win.width - (anchor.x + anchor.width)`
+now — the card's right edge on the BUTTON's right edge. Measured on all three
+top-bar buttons: **delta 0, gap 8** for ＋, ⋯ and the account picture.
+
+**3. A stacking bug that only appeared once it left the Modal.** The feed-tab
+strip painted straight over the menu's rows — visible in the first screenshot as
+"Circles / Collections" sitting on top of "New post". A zIndex on the overlay
+cannot fix that: **zIndex orders siblings**, and the overlay is a CHILD of the
+brand row while the tab strip is the row's SIBLING. The row itself lifts
+(`rowAbove`) while a menu is open, and only then.
+
+Nav icons went 24 → **28pt** at the founder's request ("in between the web app
+and the previous iOS app"). `PT = 31, INK = 0.90`; measured 28.0 × 27.3.
+
+**The minimised tab bar cannot be moved to the right.** They asked. UIKit
+exposes `UITabBarMinimizeBehavior` with four values — automatic / never /
+onScrollDown / onScrollUp — and nothing about which side the pill sits on;
+neither does react-native-screens or expo-router. iOS puts it on the leading
+edge. The only way to move it is to abandon `UITabBarController` for a
+hand-built bar, which is the opposite of wanting the real thing.
+
+**Known and deliberately not changed:** `MessageActions` (the tapback bar) and
+three form sheets still render glass inside a `Modal`. The tapback bar is the
+one that would benefit; converting it is a structural change to a core
+messaging surface that the web preview cannot verify at all, so it was not done
+on a shipping pass. Flagged rather than risked.
+
+**A probe lesson worth keeping.** Three runs reported the ⋯ menu as broken. It
+was not: a post card's ⋯ also carries `aria-label="More"`, and since the world
+files now render their list BEFORE the chrome bar (so the tab bar can find a
+scroller to minimise against), a post's ⋯ comes FIRST in the DOM. `.first()`
+was clicking a post. Pick chrome buttons by position, not by order.
+

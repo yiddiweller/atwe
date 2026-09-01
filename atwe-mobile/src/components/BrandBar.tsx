@@ -67,6 +67,11 @@ export function BrandBar({ world, onPlus, onMore, plusMenu, moreMenu }: {
      on screen when it is tapped. */
   const [open, setOpen] = useState<null | 'plus' | 'more' | 'me'>(null);
   const [rect, setRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  /* The row's OWN window position. The menu is an in-tree overlay (never a
+     Modal — see GlassMenu), so it has to cancel this offset to lay out in the
+     same window space `measureInWindow` reports the button in. */
+  const [origin, setOrigin] = useState<{ x: number; y: number } | null>(null);
+  const hostRef = useRef<View>(null);
   const plusRef = useRef<View>(null);
   const moreRef = useRef<View>(null);
   const meRef = useRef<View>(null);
@@ -75,9 +80,12 @@ export function BrandBar({ world, onPlus, onMore, plusMenu, moreMenu }: {
     which: 'plus' | 'more' | 'me',
   ) => {
     haptics.tap();
-    ref.current?.measureInWindow((x, y, width, height) => {
-      setRect({ x, y, width, height });
-      setOpen(which);
+    hostRef.current?.measureInWindow((hx, hy) => {
+      ref.current?.measureInWindow((x, y, width, height) => {
+        setOrigin({ x: hx, y: hy });
+        setRect({ x, y, width, height });
+        setOpen(which);
+      });
     });
   };
 
@@ -117,7 +125,15 @@ export function BrandBar({ world, onPlus, onMore, plusMenu, moreMenu }: {
   }));
 
   return (
-    <View style={styles.row}>
+    /* While a menu is open the ROW has to out-rank its siblings inside the
+       chrome bar — the feed-tab strip is one of them and it painted straight
+       over the menu's items. A zIndex on the menu's own overlay cannot fix
+       that: zIndex only orders siblings, and the overlay is a child here. */
+    <View
+      style={[styles.row, open !== null && styles.rowAbove]}
+      ref={hostRef}
+      collapsable={false}
+    >
       <Pressable
         style={styles.lockup}
         onPress={() => { haptics.tap(); router.push('/'); }}
@@ -176,6 +192,7 @@ export function BrandBar({ world, onPlus, onMore, plusMenu, moreMenu }: {
         visible={open !== null}
         onClose={() => setOpen(null)}
         anchor={rect}
+        origin={origin}
         items={open === 'plus' ? (plusMenu ?? []) : open === 'more' ? (moreMenu ?? []) : meMenu}
       />
     </View>
@@ -215,6 +232,8 @@ function Circle({ children, label, onPress, bare }: {
 }
 
 const styles = StyleSheet.create({
+  /* Only while a menu is open, so nothing about the resting bar changes. */
+  rowAbove: { zIndex: 40 },
   row: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingTop: TOP_PAD, paddingHorizontal: spacing.gutter, paddingBottom: 12,
