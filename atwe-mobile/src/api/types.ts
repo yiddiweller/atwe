@@ -42,6 +42,16 @@ export interface User {
   twoFactorEnabled?: boolean;
   businessVerifyStatus?: 'none' | 'pending' | 'verified';
   onboarded?: boolean;
+  /* Automatic replies, business accounts only. They live on the USER row rather
+     than a settings table, which is why they arrive here and are saved through
+     the profile route — see `saveAutoMessages`, and the warning attached to it. */
+  greetingEnabled?: boolean;
+  greetingMessage?: string | null;
+  awayEnabled?: boolean;
+  awayMessage?: string | null;
+  awaySchedule?: 'always' | 'outside_hours';
+  cartRecoveryEnabled?: boolean;
+  cartRecoveryDelayHours?: number;
   // …extend as screens are built.
 }
 
@@ -56,11 +66,10 @@ export interface TwoFactorChallenge {
 }
 
 /** `/api/config` feature flags. */
-export interface AppConfig {
-  billingEnabled: boolean;
-  emailEnabled: boolean;
-  pushEnabled?: boolean;
-  vapidPublicKey?: string;
-  demoMode?: boolean;
-  features?: Record<string, boolean>;
-}
+/* AppConfig lives in `config-query.ts`, beside the hook that fetches it.
+
+   There used to be a SECOND copy here, and nothing imported it — so the type
+   checker was faithfully verifying a shape the app never used, while the real
+   one quietly drifted. Re-exported rather than redeclared so that cannot
+   happen again. */
+export type { AppConfig } from './config-query';

@@ -11,6 +11,8 @@ import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { ShipSheet } from '@/components/ShipSheet';
+import { LabelSheet } from '@/components/LabelSheet';
+import { useConfig } from '@/api/config-query';
 import { ReasonSheet } from '@/components/ReasonSheet';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
@@ -40,10 +42,15 @@ export default function OrderDetail() {
   const qc = useQueryClient();
   const { id } = useLocalSearchParams<{ id: string }>();
   const oid = Number(id);
-  const { data, isLoading, isError } = useOrder(Number.isFinite(oid) ? oid : undefined);
+  const { data, isLoading, isError, refetch } = useOrder(Number.isFinite(oid) ? oid : undefined);
   const order = data?.order;
   const [busy, setBusy] = useState(false);
   const [shipping, setShipping] = useState(false);
+  const [buyingLabel, setBuyingLabel] = useState(false);
+  /* Labels are an optional integration. Without a provider the routes 503, so
+     the button stays hidden and the manual entry below is the only path — which
+     is exactly how it worked before. */
+  const labelsOn = !!useConfig().data?.shippingLabelsEnabled;
   const [disputing, setDisputing] = useState(false);
 
   // The seller marking it sent, or the carrier reporting it delivered, arrives
@@ -248,7 +255,17 @@ export default function OrderDetail() {
             )}
             {order.mine && !order.shippedAt && order.needsShipping
               && ['paid', 'escrow'].includes(order.status) && (
-              <Button title="Mark as sent" kind="primary" onPress={() => setShipping(true)} />
+              <>
+                {labelsOn && (
+                  <Button title="Buy a shipping label" kind="primary"
+                    onPress={() => setBuyingLabel(true)} />
+                )}
+                <Button
+                  title={labelsOn ? 'Or enter tracking yourself' : 'Mark as sent'}
+                  kind={labelsOn ? 'secondary' : 'primary'}
+                  onPress={() => setShipping(true)}
+                />
+              </>
             )}
             {!!order.shippedAt && !order.deliveredAt && (
               <Button
@@ -263,6 +280,13 @@ export default function OrderDetail() {
           </View>
         </ScrollView>
       )}
+
+      <LabelSheet
+        visible={buyingLabel}
+        orderId={oid}
+        onClose={() => setBuyingLabel(false)}
+        onBought={() => refetch()}
+      />
 
       <ShipSheet
         visible={shipping}

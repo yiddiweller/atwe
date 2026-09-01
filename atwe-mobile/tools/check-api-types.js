@@ -50,7 +50,15 @@ const TYPES = fs.readFileSync(path.join(API, 'types.ts'), 'utf8');
 
 /** The top-level `name: T;` / `name?: T;` fields of one exported interface. */
 function declared(iface) {
-  const m = new RegExp(`export interface ${iface}\\s*{`, 'm').exec(SRC + TYPES);
+  /* `extends` has to be allowed through. An interface written
+     `export interface TeamMember extends Party {` did not match a pattern that
+     went straight from the name to the brace, so the checker reported it as
+     "no such interface" and SKIPPED it — a silent hole that looks identical to
+     a type that genuinely has no example to check against.
+
+     Only the interface's OWN fields are read; anything it inherits belongs to
+     the parent, which is checked under its own name. */
+  const m = new RegExp(`export interface ${iface}(?:\\s+extends\\s+[^{]+)?\\s*{`, 'm').exec(SRC + TYPES);
   if (!m) return null;
   const src = SRC + TYPES;
   let i = m.index + m[0].length, depth = 1, body = '';
@@ -151,6 +159,12 @@ const CASES = [
   ['Offer',          '/api/offers',                          (j) => j.offers[0]],
   ['QaQuestion',     null,                                   null],  // needs a product id
   ['QaAnswer',       null,                                   null],  // needs a product id
+  ['BizAnalytics',   '/api/business/analytics',              (j) => j],
+  ['TeamResponse',   '/api/business/team',                   (j) => j],
+  ['TeamMember',     '/api/business/team',                   (j) => j.members[0]],
+  ['CartRecovery',   '/api/cart-recovery/settings',          (j) => j],
+  ['Membership',     null,                                   null],  // needs an invite to me
+  ['ShipRate',       null,                                   null],  // needs a shipping provider
   // The profile's About tab.
   ['Experience',     '/api/social/profile/' + UN_ABOUT,      (j) => j.experiences[0]],
   ['Education',      '/api/social/profile/' + UN_ABOUT,      (j) => j.education[0]],

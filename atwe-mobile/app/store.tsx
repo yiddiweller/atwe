@@ -53,8 +53,26 @@ export default function Store() {
             onPress={() => router.push('/orders?tab=seller')} />
           <Row icon="swap-horizontal-outline" label="Offers" sub="Prices people have proposed"
             onPress={() => router.push('/offers')} />
-          <Row icon="stats-chart-outline" label="Sales" onPress={() => router.push('/sales')} last />
+          <Row icon="stats-chart-outline" label="Sales" sub="What you have sold and earned"
+            onPress={() => router.push('/sales')} />
+          {isBiz && (
+            <Row icon="eye-outline" label="Reach" sub="Who is looking, and how well you answer"
+              onPress={() => router.push('/business-analytics')} />
+          )}
+          <Row icon="people-outline" label="Team" sub="People who help you run it"
+            onPress={() => router.push('/team')} last />
         </Group>
+
+        {isBiz && (
+          <Group label="TALKING TO CUSTOMERS">
+            <Row icon="chatbubble-ellipses-outline" label="Auto-messages"
+              sub="A greeting, and a reply when you are away"
+              onPress={() => router.push('/auto-messages')} />
+            <Row icon="bag-handle-outline" label="Cart reminders"
+              sub="Win back a basket somebody left behind"
+              onPress={() => router.push('/cart-recovery')} last />
+          </Group>
+        )}
 
         {isBiz && (
           <Group label="YOUR STOREFRONT">

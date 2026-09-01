@@ -193,6 +193,10 @@ function RootNavigator() {
           <Stack.Screen name="bundle/[id]" />
           <Stack.Screen name="offers" />
           <Stack.Screen name="offer/[id]" />
+          <Stack.Screen name="business-analytics" />
+          <Stack.Screen name="team" />
+          <Stack.Screen name="auto-messages" />
+          <Stack.Screen name="cart-recovery" />
           <Stack.Screen name="reviews/[id]" />
           <Stack.Screen name="shop/[id]" />
           <Stack.Screen name="edit-profile" options={{ presentation: 'modal' }} />

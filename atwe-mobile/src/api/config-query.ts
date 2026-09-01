@@ -17,6 +17,11 @@ export interface AppConfig {
   appleClientId?: string | null;
   taxEnabled?: boolean;
   shippingRatesEnabled?: boolean;
+  /** Real, paid-for shipping labels. Off unless a provider is configured, and
+   *  then the seller keeps entering carrier + tracking by hand. */
+  shippingLabelsEnabled?: boolean;
+  features?: Record<string, boolean>;
+  vapidPublicKey?: string;
 }
 
 export function useConfig() {
