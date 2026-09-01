@@ -2406,3 +2406,36 @@ files now render their list BEFORE the chrome bar (so the tab bar can find a
 scroller to minimise against), a post's ⋯ comes FIRST in the DOM. `.first()`
 was clicking a post. Pick chrome buttons by position, not by order.
 
+### Round sixteen — depth is part of the material
+
+The founder sent a photograph of two glass buttons from another app and said
+some of ours "still isn't real Apple liquid glass". Comparing them, the visible
+difference was not the blur: **theirs cast a soft shadow and ours cast none.**
+
+That is not decoration. Apple's floating glass controls sit ABOVE the page and
+say so, and without the shadow a glass disc reads as a grey circle painted onto
+the background — which is exactly what "not real" looks like in a photograph
+next to a real one. `GlassIcon` now wraps its disc in a lifted view
+(`glassStyles.lift`: 22% black, 10 radius, 4 down). The shadow has to go on the
+OUTER view — the glass clips its own contents, so a shadow declared on it is cut
+off at its own edge. `raised={false}` turns it off for a disc that sits INSIDE
+something (both quantity steppers), where a shadow reads as a sticker on the
+card rather than a control over the page.
+
+**The thing that would explain every round of this, and can still only be
+settled from the phone.** `isLiquidGlassAvailable()` is not merely "is this iOS
+26" — reading `GlassEffectModule.swift`, it is
+`#if compiler(>=6.2)` (**built with Xcode 26**) AND iOS 26 at runtime AND
+`UIDesignRequiresCompatibility` not set. Miss any one and it returns false and
+the WHOLE APP falls back everywhere — bars, buttons, menus — with nothing on
+screen to say so. Expo's own changelog says an SDK 54 project with no `image`
+in `eas.json` defaults to Xcode 26, which is our case, so it should be on; the
+`infoPlist` sets no `UIDesignRequiresCompatibility`. **Not pinned an image** —
+naming a stale one would break the build for a guess.
+
+So the About row was widened from "Nav bar" to **"Liquid Glass: On / Off —
+needs iOS 26"**, because that one flag governs every glass surface in the app
+and there is no way to tell from a photograph which side of it you are looking
+at. Several rounds have been spent guessing. One screenshot of that row settles
+it permanently.
+

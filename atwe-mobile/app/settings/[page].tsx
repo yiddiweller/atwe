@@ -238,8 +238,14 @@ function AboutPage() {
             always will be. Without this on screen there is no way to tell the
             two apart from a photograph, and a whole round of "the bar still
             isn't right" was spent not knowing which one was being looked at. */}
-        <MeFactRow label="Nav bar"
-          value={isLiquidGlassAvailable() ? 'Liquid Glass' : 'Chrome (needs iOS 26)'} />
+        {/* It is not just the nav bar — this ONE flag governs every glass
+            surface in the app: the bars, every round button, the menus. If it
+            reads "off", nothing anywhere is drawing real glass and no amount of
+            styling will change that; the app needs iOS 26 and a build compiled
+            with Xcode 26. Rounds have been spent guessing at this from
+            photographs. */}
+        <MeFactRow label="Liquid Glass"
+          value={isLiquidGlassAvailable() ? 'On' : 'Off — needs iOS 26'} />
         <MeFactRow label="Made by" value="Atwe Inc" last />
       </MeGroup>
       <MeGroup>

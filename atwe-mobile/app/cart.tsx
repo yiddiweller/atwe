@@ -120,14 +120,14 @@ export default function CartScreen() {
                         <Text variant="caption" tone="danger">Sold out — remove it to check out</Text>
                       )}
                       <View style={styles.qtyRow}>
-                        <GlassIcon onPress={() => change(i, i.qty - 1)} size={28}
+                        <GlassIcon onPress={() => change(i, i.qty - 1)} size={28} raised={false}
                           disabled={busy === key(i)}
                           label={i.qty > 1 ? 'One fewer' : 'Remove'}>
                           <Ionicons name={i.qty > 1 ? 'remove' : 'trash-outline'} size={15}
                             color={i.qty > 1 ? c.text : c.danger} />
                         </GlassIcon>
                         <Text variant="callout" style={styles.qtyN}>{i.qty}</Text>
-                        <GlassIcon onPress={() => change(i, i.qty + 1)} size={28}
+                        <GlassIcon onPress={() => change(i, i.qty + 1)} size={28} raised={false}
                           disabled={busy === key(i)} label="One more">
                           <Ionicons name="add" size={15} color={c.text} />
                         </GlassIcon>

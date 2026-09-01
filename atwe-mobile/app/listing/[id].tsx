@@ -222,12 +222,12 @@ export default function ListingDetail() {
             {buyable && (
               <View style={styles.qtyRow}>
                 <Text variant="callout" tone="t2" style={{ flex: 1 }}>Quantity</Text>
-                <GlassIcon onPress={() => setQty((n) => Math.max(1, n - 1))} size={34}
+                <GlassIcon onPress={() => setQty((n) => Math.max(1, n - 1))} size={34} raised={false}
                   label="One fewer">
                   <Ionicons name="remove" size={18} color={qty > 1 ? c.text : c.t4} />
                 </GlassIcon>
                 <Text variant="headline" style={styles.qtyN}>{qty}</Text>
-                <GlassIcon size={34} label="One more"
+                <GlassIcon size={34} label="One more" raised={false}
                   onPress={() => setQty((n) => Math.min(
                     99, typeof listing.stock === 'number' ? Math.max(1, listing.stock) : 99, n + 1,
                   ))}>

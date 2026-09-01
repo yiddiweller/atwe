@@ -153,7 +153,7 @@ export function GlassSurface({ children, onPress, label, radius, prominent, disa
  * its glass but its icon is forced white, because the material there is
  * sampling a photograph and a theme-coloured glyph can land on anything.
  */
-export function GlassIcon({ children, onPress, label, size = 38, prominent, disabled, overContent, style }: {
+export function GlassIcon({ children, onPress, label, size = 38, prominent, disabled, overContent, raised, style }: {
   children: React.ReactNode;
   onPress: () => void;
   label: string;
@@ -162,16 +162,35 @@ export function GlassIcon({ children, onPress, label, size = 38, prominent, disa
   disabled?: boolean;
   /** See `GlassSurface` — a control sitting on a story or a photo. */
   overContent?: boolean;
+  /** Off for a disc that sits INSIDE something (a stepper in a card). */
+  raised?: boolean;
   style?: ViewStyle;
 }) {
-  return (
+  /* DEPTH IS PART OF THE MATERIAL, not decoration. Apple's floating glass
+     controls cast a soft shadow — that is what separates a lens hovering over
+     the page from a grey circle painted on it, and its absence is most of what
+     "it still isn't real glass" looks like in a photograph next to a real one.
+     The shadow goes on the OUTER view: the glass itself clips its own contents,
+     so a shadow declared on it is cut off at its own edge. */
+  const disc = (
     <GlassSurface radius={size / 2} onPress={onPress} label={label} prominent={prominent}
       disabled={disabled} overContent={overContent} style={[{ width: size, height: size }, style]}>
       {children}
     </GlassSurface>
   );
+  if (raised === false) return disc;
+  return <View style={[glassStyles.lift, { borderRadius: size / 2 }]}>{disc}</View>;
 }
 
 export const glassStyles = StyleSheet.create({
   fill: { ...StyleSheet.absoluteFillObject },
+  /* Soft and low — a control resting just above the page, not a card thrown
+     onto it. Deliberately quieter than the menu's own shadow, which has a whole
+     card's weight to carry. */
+  lift: {
+    shadowColor: '#000',
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
 });
