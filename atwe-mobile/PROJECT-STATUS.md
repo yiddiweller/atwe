@@ -2479,3 +2479,26 @@ the component declaration" put it **inside the props type** in the two files
 whose component destructures a typed object; find the enclosing function of the
 line that USES the value, then insert after the `}) {`.
 
+### Round eighteen — the ＋ is gone from the top bar (NOT SHIPPED)
+
+The founder asked for the top-right ＋ removed entirely. It is, on both worlds
+that had one — and **nothing it reached went with it**, which is the whole care
+in this change:
+
+- **Home** — its four destinations (New post · New story · Sell an item · Post a
+  job) moved into the ⋯ menu and LEAD it, because making something is what
+  people come to Home to do. Saved / Settings / Help follow. The tab row's quiet
+  "Add" still goes straight to the composer.
+- **Beam** — the ＋ was Beam's **only** door to New chat. The row of buttons it
+  looks like it duplicates (`styles.hiddenRow`) has been `display:none` for a
+  long time, so removing the ＋ without noticing that would have made starting a
+  conversation impossible. New chat now leads the tools sheet.
+
+Verified by driving both worlds: **0 ＋ buttons in either top bar, 7/7 Home
+destinations and 1/1 Beam destination still reachable from ⋯, 0 page errors.**
+
+**This is committed and pushed to the working branch but deliberately NOT
+shipped.** The founder is near the end of their free EAS builds and asked to
+hold. `ship` is one commit behind on purpose. Do not push to `ship` until they
+say so.
+

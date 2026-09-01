@@ -205,9 +205,12 @@ export default function Beam() {
           controls — ＋ starts a conversation, ⋯ opens the tools. The bespoke
           title row it replaces had the buttons but no brand and no name. */}
       <ChromeBar retract={chrome.hidden}>
+      {/* No ＋ here — the founder asked for it gone. New chat leads the tools
+          sheet instead, which is also where it belonged: the row of buttons it
+          used to sit in has been display:none for a long time, so this was the
+          only door to it. */}
       <BrandBar
         world="beam"
-        onPlus={() => setNewChat(true)}
         onMore={() => setTools(true)}
       />
       <View style={styles.head}>
@@ -232,7 +235,8 @@ export default function Beam() {
 
 
       <NewChatSheet visible={newChat} onClose={() => setNewChat(false)} />
-      <BeamToolsMenu visible={tools} onClose={() => setTools(false)} />
+      <BeamToolsMenu visible={tools} onClose={() => setTools(false)}
+        onNewChat={() => setNewChat(true)} />
     </Screen>
   );
 }

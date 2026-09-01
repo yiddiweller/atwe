@@ -21,7 +21,14 @@ const TOOLS: { icon: IconName; label: string; sub: string; to: string }[] = [
  * too many for a header, and each is used rarely — a menu is where rarely-used
  * things belong, rather than a row of icons nobody can tell apart.
  */
-export function BeamToolsMenu({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+export function BeamToolsMenu({ visible, onClose, onNewChat }: {
+  visible: boolean;
+  onClose: () => void;
+  /* Beam's ONLY way to start a conversation now that the top bar's ＋ is gone
+     (the founder asked for it removed). It leads the sheet rather than sitting
+     among the six tools: it is the thing you came here to do. */
+  onNewChat?: () => void;
+}) {
   const { c, radius } = useTheme();
   const router = useRouter();
 
@@ -33,6 +40,21 @@ export function BeamToolsMenu({ visible, onClose }: { visible: boolean; onClose:
       }]}>
         <View style={[styles.grab, { backgroundColor: c.t4 }]} />
         <ScrollView bounces={false}>
+          {!!onNewChat && (
+            <Pressable
+              onPress={() => { haptics.tap(); onClose(); onNewChat(); }}
+              style={({ pressed }) => [styles.row, pressed && { backgroundColor: c.s2 }]}
+              accessibilityRole="button"
+              accessibilityLabel="New chat"
+            >
+              <Ionicons name="create-outline" size={20} color={c.t2} />
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <Text variant="body">New chat</Text>
+                <Text variant="micro" tone="t3" style={{ marginTop: 2 }}>Message someone</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={17} color={c.t4} />
+            </Pressable>
+          )}
           {TOOLS.map((t) => (
             <Pressable
               key={t.to}

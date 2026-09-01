@@ -148,15 +148,17 @@ export default function Home() {
       <ChromeBar retract={chrome.hidden}>
       <BrandBar
         world="home"
-        plusMenu={[
+        /* No ＋ here — the founder asked for it gone. Its four destinations
+           moved into the ⋯ menu rather than disappearing with it, and they lead
+           because making something is what people come to Home to do. The tab
+           row's quiet "Add" still goes straight to the composer. */
+        moreMenu={[
           { label: 'New post', icon: 'create-outline', onPress: () => router.push('/compose') },
           { label: 'New story', icon: 'add-circle-outline', onPress: () => router.push('/add-story') },
           { label: 'Sell an item', icon: 'pricetag-outline', onPress: () => router.push('/sell') },
           { label: 'Post a job', icon: 'briefcase-outline', onPress: () => router.push('/post-job') },
-        ]}
-        moreMenu={[
-          { label: 'Settings', icon: 'settings-outline', onPress: () => router.push('/settings') },
           { label: 'Saved', icon: 'bookmark-outline', onPress: () => router.push('/starred') },
+          { label: 'Settings', icon: 'settings-outline', onPress: () => router.push('/settings') },
           { label: 'Help & feedback', icon: 'help-circle-outline', onPress: () => router.push('/feedback') },
         ]}
       />
