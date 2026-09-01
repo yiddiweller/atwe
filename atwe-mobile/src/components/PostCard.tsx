@@ -13,6 +13,7 @@ import { spacing, post as card, type Palette } from '@/theme/tokens';
 import { compact, timeAgo } from '@/lib/format';
 import { likePost, repostPost, bookmarkPost, type Post } from '@/api/social';
 import { mediaUri } from '@/lib/media';
+import { PostMenu } from './PostMenu';
 import { haptics } from '@/lib/haptics';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -35,6 +36,8 @@ export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDeta
   const [reposted, setReposted] = useState(!!post.reposted);
   const [reposts, setReposts] = useState(post.reposts || 0);
   const [bookmarked, setBookmarked] = useState(!!post.bookmarked);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [gone, setGone] = useState(false);
   const biz = post.author?.accountType === 'business';
   const img = post.images?.[0] || post.image || null;
 
@@ -84,6 +87,12 @@ export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDeta
     }
   };
 
+
+  /* "Not interested", a mute, a block and a delete all promise the post goes
+     away, so it has to actually go — the list itself is not refetched, and
+     leaving the card sitting there makes every one of those actions look like
+     it failed. Collapsing it here is what keeps the promise. */
+  if (gone) return null;
   return (
     <Pressable
       onPress={openDetail}
@@ -103,8 +112,8 @@ export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDeta
 
       {/* Header: avatar + id-column (name line, then @handle underneath) */}
       <View style={styles.top}>
-        <Pressable onPress={goProfile} hitSlop={6}>
-          <Avatar name={post.author?.name} avatar={post.author?.avatar} biz={biz} size={44} />
+        <Pressable onPress={goProfile} hitSlop={6} style={styles.avatar}>
+          <Avatar name={post.author?.name} avatar={post.author?.avatar} biz={biz} size={card.shape} />
         </Pressable>
         <View style={styles.idcol}>
           <View style={styles.headLine}>
@@ -112,15 +121,33 @@ export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDeta
               {post.author?.name || 'Someone'}
             </Text>
             {post.author?.verified && <VerifiedBadge />}
-            <Text tone="t3" numberOfLines={1} style={styles.time}>
-              {timeAgo(post.created_at)}
-            </Text>
           </View>
           {!!post.author?.username && (
             <Text tone="t3" numberOfLines={1} style={styles.handle} onPress={goProfile}>
               @{post.author.username}
             </Text>
           )}
+        </View>
+
+        {/* Time and ⋯ are ONE cluster, and it is its own box the picture's height
+            rather than a pair sitting inside the (fixed-height, centred) name
+            column. That is what puts them on one line by construction: the ⋯ has
+            to sit at the card's padding edge for its corner to be concentric,
+            and the name rides the centre of the column, so anything sharing the
+            column with the dots ends up several pixels off. */}
+        <View style={styles.meta}>
+          <Text tone="t3" numberOfLines={1} style={styles.time}>
+            {timeAgo(post.created_at)}
+          </Text>
+          <Pressable
+            onPress={() => { haptics.tap(); setMenuOpen(true); }}
+            hitSlop={6}
+            style={styles.dots}
+            accessibilityRole="button"
+            accessibilityLabel="More"
+          >
+            <Ionicons name="ellipsis-horizontal" size={17} color={c.t3} />
+          </Pressable>
         </View>
       </View>
 
@@ -162,6 +189,14 @@ export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDeta
             onColor={c.accent} onPress={toggleBookmark} label="Save" />
         </View>
       </View>
+
+      <PostMenu
+        post={post}
+        mine={!!post.mine}
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onGone={() => setGone(true)}
+      />
     </Pressable>
   );
 }
@@ -203,12 +238,27 @@ const styles = StyleSheet.create({
     padding: card.pad,
     borderRadius: card.cardRadius,
   },
-  top: { flexDirection: 'row', alignItems: 'center', gap: 11 },
-  idcol: { flex: 1 },
+  /* The picture is `card.shape` (36) — the size at which its own radius is 18,
+     the same as the photo's, so it nests in the card's top-left corner. Pinned
+     to flex-start, so its inset is the card's padding on BOTH sides and its
+     centre lands on the corner arc's centre.
+
+     The text column is then given EXACTLY the picture's height and centred
+     inside it. That is what makes the two goals true at once: pinning the
+     picture to the padding edge while a taller text column set the row height
+     left the name sitting ~4px lower than the face, which is what the founder
+     photographed on the web. Fixing the column's height removes the problem by
+     construction rather than by a nudge. The handle's line-height is spelled
+     out for the same reason — the body's own 1.6 pushed the two lines past 36. */
+  top: { flexDirection: 'row', alignItems: 'flex-start', gap: 11 },
+  avatar: { alignSelf: 'flex-start' },
+  idcol: { flex: 1, height: card.shape, justifyContent: 'center' },
   headLine: { flexDirection: 'row', alignItems: 'center' },
-  name: { fontSize: 15, fontWeight: '700', flexShrink: 1 },
-  time: { marginLeft: 'auto', paddingLeft: 8, fontSize: 13, flexShrink: 0 },
-  handle: { fontSize: 13.5, marginTop: 1 },
+  meta: { height: card.shape, flexDirection: 'row', alignItems: 'center', gap: 2 },
+  dots: { width: card.shape, height: card.shape, alignItems: 'center', justifyContent: 'center' },
+  name: { fontSize: 15, fontWeight: '700', flexShrink: 1, lineHeight: 19 },
+  time: { fontSize: 13, flexShrink: 0 },
+  handle: { fontSize: 13.5, lineHeight: 16 },
   body: { marginTop: 9 },
   media: {
     marginTop: 10,

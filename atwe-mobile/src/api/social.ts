@@ -241,3 +241,61 @@ export function useSearchPeople(q: string) {
     staleTime: 30_000,
   });
 }
+
+/* ── What you can do ABOUT a post ─────────────────────────────────────────── */
+
+/**
+ * Tell the feed you do not want to see this. It hides the post outright and
+ * down-ranks that author for you — it is not a block and it never tells them.
+ */
+export async function notInterested(id: number): Promise<void> {
+  await api.post(`/api/social/posts/${id}/not-interested`, {});
+}
+
+/** Mute an account: their posts leave your feeds, silently. Not a block. */
+export async function muteUser(id: number, on: boolean): Promise<void> {
+  if (on) await api.post(`/api/social/mute/${id}`, {});
+  else await api.del(`/api/social/mute/${id}`);
+}
+
+/** Block: cuts contact in BOTH directions, everywhere. */
+export async function blockUser(id: number, on: boolean): Promise<void> {
+  if (on) await api.post(`/api/social/block/${id}`, {});
+  else await api.del(`/api/social/block/${id}`);
+}
+
+/**
+ * The reasons the server will accept. Anything else is filed as `other`, so the
+ * list here is the server's own `REPORT_REASONS`, not a friendlier invention.
+ */
+export const REPORT_REASONS = [
+  { key: 'harassment', label: 'Harassment or hate' },
+  { key: 'spam', label: 'Spam' },
+  { key: 'scam', label: 'A scam' },
+  { key: 'sensitive', label: 'Sensitive or graphic content' },
+  { key: 'illegal', label: 'Something illegal' },
+  { key: 'privacy', label: 'It shares private information' },
+  { key: 'fake', label: 'It is fake or misleading' },
+  { key: 'other', label: 'Something else' },
+] as const;
+
+export type ReportReason = (typeof REPORT_REASONS)[number]['key'];
+
+export async function reportThing(
+  targetType: 'post' | 'user' | 'job' | 'listing' | 'feedpost',
+  targetId: number,
+  reason: ReportReason,
+  note?: string,
+): Promise<void> {
+  await api.post('/api/reports', { targetType, targetId, reason, note });
+}
+
+export async function deletePost(id: number): Promise<void> {
+  await api.del(`/api/social/posts/${id}`);
+}
+
+/** Pin one of your own top-level posts to the top of your profile. */
+export async function pinPost(id: number, on: boolean): Promise<void> {
+  if (on) await api.post(`/api/social/posts/${id}/pin`, {});
+  else await api.del(`/api/social/posts/${id}/pin`);
+}

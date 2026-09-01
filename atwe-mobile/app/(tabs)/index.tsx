@@ -3,7 +3,6 @@ import { View, FlatList, RefreshControl, ActivityIndicator, Pressable, StyleShee
 import { withTiming } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
@@ -107,6 +106,21 @@ export default function Home() {
               onPress={() => setScope(t.key)}
             />
           ))}
+          {/* The row ends with the WORD "Add", not a "+" icon — the web's own
+              rule, and it is not decoration. A pinned + on the right sat on top
+              of the last tab and chopped "Collections" mid-word. As the row's
+              last scrolling child it clears the tabs instead, and it is one step
+              quieter than a tab label (t3, not t2) so it reads as an extra
+              action rather than as a fifth tab. Its accessible name starts with
+              the visible word, which is what WCAG "Label in Name" asks for. */}
+          <Pressable
+            onPress={() => { haptics.tap(); router.push('/compose'); }}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Add a new post"
+          >
+            <Text tone="t3" style={styles.addWord}>Add</Text>
+          </Pressable>
         </ScrollView>
         <LinearGradient
           pointerEvents="none"
@@ -115,23 +129,6 @@ export default function Home() {
           end={{ x: 1, y: 0 }}
           style={styles.tabsFade}
         />
-        </View>
-        {/* Right actions: the compose "+" (a clean plus, X/web-style).
-            The notifications BELL used to sit here — it was the only way in before
-            Notifications had a seat in the tab bar. It has one now, and it carries the
-            unread dot, so a bell here would be the same thing on screen twice. */}
-        <View style={styles.headActions}>
-          <Pressable
-            onPress={() => {
-              haptics.tap();
-              router.push('/compose');
-            }}
-            hitSlop={8}
-            style={styles.headBtn}
-            accessibilityLabel="Create a post"
-          >
-            <Ionicons name="add" size={30} color={c.text} />
-          </Pressable>
         </View>
       </View>
 
@@ -201,9 +198,10 @@ const styles = StyleSheet.create({
   tabsFade: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 40 },
   /* The web's tab row is roomy (gap 34 on a phone) and the last word must be
      able to scroll clear of the + rather than sit permanently half-eaten. */
-  tabs: { flexDirection: 'row', gap: 30, alignItems: 'center', paddingRight: 34 },
-  headActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headBtn: { padding: 2 },
+  tabs: { flexDirection: 'row', gap: 30, alignItems: 'center', paddingRight: 8 },
+  /* Same size and weight as a tab label, so the row stays even; the colour is
+     what makes it quieter. */
+  addWord: { fontSize: 15, fontWeight: '600' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyWrap: { flexGrow: 1 },
 });
