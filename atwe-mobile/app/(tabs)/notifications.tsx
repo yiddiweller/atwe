@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { ChromeBar, chromePad, ALERTS_HEAD_H } from '@/components/Chrome';
+import { useChromeRetract } from '@/lib/chromeRetract';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -24,6 +25,7 @@ import { timeAgo } from '@/lib/format';
  * the post / profile / chat. Marks everything read on open.
  */
 export default function Notifications() {
+  const chrome = useChromeRetract();
   const { c } = useTheme();
   const qc = useQueryClient();
   const { data, isLoading, isError, refetch, isRefetching } = useNotifications();
@@ -47,6 +49,8 @@ export default function Notifications() {
           renderItem={({ item }) => <NotifRow n={item.head} count={item.count} />}
           contentContainerStyle={[notifs.length ? undefined : styles.emptyWrap, chromePad.alerts]}
           showsVerticalScrollIndicator={false}
+          onScroll={chrome.onScroll}
+          scrollEventThrottle={16}
           refreshControl={
             <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.t3} />
           }
@@ -68,7 +72,7 @@ export default function Notifications() {
 
       {/* No back arrow: this is one of the five worlds now, not a page opened
           from somewhere, and an arrow with nothing behind it is a dead control. */}
-      <ChromeBar>
+      <ChromeBar retract={chrome.hidden}>
         <View style={styles.head}>
           <Text variant="title">Notifications</Text>
         </View>

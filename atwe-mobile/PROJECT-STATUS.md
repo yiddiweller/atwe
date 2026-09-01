@@ -1803,6 +1803,45 @@ able to write something with the bar gone. A ＋ INSIDE the minimised pill is no
 possible — UIKit draws the active tab's icon there, and react-native-screens
 exposes no accessory API.
 
+### 0.10.0 — the top chrome leaves too
+
+*"When I scroll up, it goes up entirely on the whole entire app screen. You
+shouldn't have this black bar on top."* Sent with a shot of Home on 0.9.0: the
+story tray sliced in half by a band that never moves.
+
+**The bar now retracts.** `useChromeRetract()` watches a world's scroll and
+`ChromeBar` slides itself out of the way — down and it goes, up and it comes
+back, pinned open at the top where there is nothing above to reveal. It is the
+counterpart to iOS 26 taking the tab bar away at the bottom, and the same thing
+the web's own top bar has always done.
+
+**What slides is the bar's CONTENT, not the bar.** `ChromeBar` measures itself
+and travels by its height LESS the safe-area strip, so a fully retracted bar
+still leaves that strip covering the clock — a screen that lets a photo run
+under the time is not tidier, it is unreadable. The screen only has to hand over
+its scroll events; the arithmetic lives in one place.
+
+The thresholds are 6pt rather than 0 on purpose: a finger is never perfectly
+still, and a bar that flips on a 1pt wobble reads as a fault.
+
+**The scrim behind the chrome is now two numbers, and the difference is the
+point.** Where the blur runs, IT is what keeps a label legible over a white
+photo — the tint only has to take the edge off, and a heavy one turns the glass
+back into the black band the whole thing exists to remove. So iOS gets 0.42;
+the browser and Android, which have no blur at all, keep 0.86 because there the
+tint is the only thing between a label and the photo. The single 0.86 that
+shipped a build ago was the browser's number applied to the phone.
+
+Verified by measuring the bar's real position through a scroll on all four
+worlds: Home 0 → −98 → 0, Beam 0 → −110 → 0, Engine 0 → −105 → 0, Alerts
+0 → −35 → 0. `tools/check-chrome.js` now also fails a world whose chrome has no
+`retract` — self-tested by taking Beam's off.
+
+**A note for next time: none of the last five rounds has been on a phone.**
+0.10.0 carries the dissolving chrome, the fully rounded bubbles and fields, the
+floating controls, the bigger tab icons, the glass menus, the minimise fix and
+this — and every screenshot the founder has sent since was taken on 0.9.0.
+
 ### Built, not yet shipped — the cards inside a conversation
 
 Beam's own pitch is *"send money in the chat: pay, request or split a bill

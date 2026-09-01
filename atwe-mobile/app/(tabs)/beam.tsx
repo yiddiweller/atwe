@@ -22,6 +22,7 @@ import { NewChatSheet } from '@/components/NewChatSheet';
 import { BeamToolsMenu } from '@/components/BeamToolsMenu';
 import { BrandBar } from '@/components/BrandBar';
 import { ComposeFab } from '@/components/ComposeFab';
+import { useChromeRetract } from '@/lib/chromeRetract';
 import { ChromeButton, ChromeBar, chromePad, BEAM_TABS_H } from '@/components/Chrome';
 import { RowDivider } from '@/components/RowDivider';
 
@@ -53,6 +54,7 @@ type AnyRow =
 
 export default function Beam() {
   const { c } = useTheme();
+  const chrome = useChromeRetract();
   const [tab, setTab] = useState<Tab>('all');
   const [newChat, setNewChat] = useState(false);
   const [tools, setTools] = useState(false);
@@ -186,6 +188,8 @@ export default function Beam() {
         renderItem={pane.row}
         contentContainerStyle={[pane.rows.length ? { paddingBottom: 24 } : styles.emptyWrap, chromePad.beam]}
         showsVerticalScrollIndicator={false}
+        onScroll={chrome.onScroll}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl refreshing={pane.refreshing} onRefresh={pane.refresh} tintColor={c.t3} />
         }
@@ -201,7 +205,7 @@ export default function Beam() {
       {/* The world's own brand row: the mark, the word "Beam", and the three
           controls — ＋ starts a conversation, ⋯ opens the tools. The bespoke
           title row it replaces had the buttons but no brand and no name. */}
-      <ChromeBar>
+      <ChromeBar retract={chrome.hidden}>
       <BrandBar
         world="beam"
         onPlus={() => setNewChat(true)}

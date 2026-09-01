@@ -22,6 +22,10 @@ import { spacing, radius, post as card } from '@/theme/tokens';
 import { haptics } from '@/lib/haptics';
 import { BrandBar } from '@/components/BrandBar';
 import { ChromeBar, chromePad, ENGINE_SEARCH_H } from '@/components/Chrome';
+import { useChromeRetract } from '@/lib/chromeRetract';
+
+/** What a pane hands back up so the world's chrome can get out of the way. */
+type ScrollHandler = ReturnType<typeof useChromeRetract>['onScroll'];
 import {
   useTrending,
   useSuggestions,
@@ -40,6 +44,7 @@ import { HapticInput } from '@/components/HapticInput';
  */
 export default function Engine() {
   const { c, spacing } = useTheme();
+  const chrome = useChromeRetract();
   const [q, setQ] = useState('');
   const [dq, setDq] = useState(''); // debounced
   useEffect(() => {
@@ -51,9 +56,11 @@ export default function Engine() {
     <Screen edges={[]}>
       {/* No ＋ here: Engine is discovery, there is nothing to compose. The web
           hides it on this world too. */}
-      {dq.trim() ? <SearchResults q={dq} /> : <Explore spacing={spacing} />}
+      {dq.trim()
+        ? <SearchResults q={dq} onScroll={chrome.onScroll} />
+        : <Explore spacing={spacing} onScroll={chrome.onScroll} />}
 
-      <ChromeBar>
+      <ChromeBar retract={chrome.hidden}>
       <BrandBar
         world="engine"
         moreMenu={[
@@ -90,7 +97,7 @@ export default function Engine() {
   );
 }
 
-function SearchResults({ q }: { q: string }) {
+function SearchResults({ q, onScroll }: { q: string; onScroll: ScrollHandler }) {
   const { c } = useTheme();
   const { data, isLoading, isError } = useSearchPeople(q);
   const users = data?.users ?? [];
@@ -117,6 +124,8 @@ function SearchResults({ q }: { q: string }) {
       keyExtractor={(u) => String(u.id)}
       renderItem={({ item }) => <PersonRow user={item} />}
       keyboardShouldPersistTaps="handled"
+      onScroll={onScroll}
+      scrollEventThrottle={16}
       contentContainerStyle={[users.length ? { paddingBottom: 120 } : styles.emptyWrap, chromePad.engine]}
       ListEmptyComponent={
         <View style={styles.center}>
@@ -165,7 +174,10 @@ function PersonRow({ user }: { user: SearchUser }) {
   );
 }
 
-function Explore({ spacing }: { spacing: ReturnType<typeof useTheme>['spacing'] }) {
+function Explore({ spacing, onScroll }: {
+  spacing: ReturnType<typeof useTheme>['spacing'];
+  onScroll: ScrollHandler;
+}) {
   const { c } = useTheme();
   const router = useRouter();
   const trending = useTrending();
@@ -184,6 +196,8 @@ function Explore({ spacing }: { spacing: ReturnType<typeof useTheme>['spacing'] 
   return (
     <ScrollView
       contentContainerStyle={[{ paddingBottom: 120 }, chromePad.engine]}
+      onScroll={onScroll}
+      scrollEventThrottle={16}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       refreshControl={

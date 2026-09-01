@@ -13,6 +13,7 @@ import { spacing } from '@/theme/tokens';
 import { useInfiniteFeed, type FeedScope, type Post } from '@/api/social';
 import { useAppReady } from '@/lib/appReady';
 import { useNavMorph } from '@/lib/navMorph';
+import { useChromeRetract } from '@/lib/chromeRetract';
 import { haptics } from '@/lib/haptics';
 import { FeedTab } from '@/components/FeedTab';
 import { BrandBar } from '@/components/BrandBar';
@@ -69,10 +70,14 @@ export default function Home() {
   }, [isLoading, markFeedReady]);
 
   // Scroll-morph: drive the bottom tab bar (bar ⇄ "+" ball) by scroll direction.
+  /* The top chrome gets out of the way as you scroll, so the feed gets the
+     whole screen — the counterpart to iOS taking the tab bar at the bottom. */
+  const chrome = useChromeRetract();
   const morph = useNavMorph();
   const lastY = useRef(0);
   const ballRef = useRef(false);
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    chrome.onScroll(e);
     if (!morph) return;
     const y = e.nativeEvent.contentOffset.y;
     const dy = y - lastY.current;
@@ -141,7 +146,7 @@ export default function Home() {
       {/* The bar FLOATS over the feed and the posts travel under it, showing
           through blurred — see `Chrome.tsx`. The brand row sits ABOVE the tabs, exactly as the web has it: the mark
           and the wordmark on the left, ＋ · ⋯ · your photo on the right. */}
-      <ChromeBar>
+      <ChromeBar retract={chrome.hidden}>
       <BrandBar
         world="home"
         plusMenu={[

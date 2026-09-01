@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Platform, Pressable, StyleSheet, View, type LayoutChangeEvent, type ViewStyle } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated';
 import { initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -54,9 +55,18 @@ const BLUR_STEP = 16;
  *  the controls sit, so they would be left standing on nothing. */
 const FADE_TAIL = 30;
 
-/** How much of the page colour sits behind a control. High enough that a white
- *  photo scrolling under it cannot swallow a label. */
-const SCRIM = 0.86;
+/**
+ * How much of the page colour sits behind a control.
+ *
+ * TWO VALUES, and the difference is the point. Where the blur runs, IT is what
+ * makes a label legible over a white photo — the tint only has to take the edge
+ * off, and a heavy one turns the glass back into the black band the whole thing
+ * exists to remove. Where there is no blur at all (the browser, Android) the
+ * tint is the only thing standing between a label and the photo behind it, so
+ * it carries the whole job.
+ */
+const SCRIM_BLURRED = 0.42;
+const SCRIM_FLAT = 0.86;
 
 /** `#rrggbb` at an opacity. The fade has to be the page colour exactly, or the
  *  dissolve ends on a different black than the page it lands on. */
@@ -180,6 +190,9 @@ interface Props {
   /** Off when the CONTENT already carries the safe-area inset itself — the chat
    *  composer does, and adding a second one lifts it off the bottom. */
   inset?: boolean;
+  /** From `useChromeRetract()`. The bar slides out of the way as the page
+   *  scrolls down, and comes back on the way up. */
+  retract?: SharedValue<number>;
 }
 
 /**
@@ -188,10 +201,19 @@ interface Props {
  * a near-opaque fill everywhere else, since a blur nobody can render reads as a
  * smear rather than as glass.
  */
-export function ChromeBar({ children, style, edge = 'top', onLayout, inset = true }: Props) {
+export function ChromeBar({ children, style, edge = 'top', onLayout, inset = true, retract }: Props) {
   const insets = useSafeAreaInsets();
   const { c, name } = useTheme();
   const top = edge === 'top';
+
+  /* What slides is the bar's CONTENT — its own height less the safe-area strip
+     — so a fully retracted bar still leaves that strip covering the clock. */
+  const travel = useSharedValue(0);
+  const slide = useAnimatedStyle(() => {
+    if (!retract) return {};
+    const d = travel.value * retract.value;
+    return { transform: [{ translateY: top ? -d : d }] };
+  });
 
   /* Held high across the whole bar so a control is legible over ANY content —
      a white photo included — and only then let go, over a short tail that
@@ -199,12 +221,18 @@ export function ChromeBar({ children, style, edge = 'top', onLayout, inset = tru
      because a single one has to place its stops as FRACTIONS, and the bars in
      this app run from 35pt to 190pt: the same fractions would leave a tall bar's
      controls sitting on almost nothing. */
-  const scrim = [alpha(c.bg, 0.97), alpha(c.bg, SCRIM), alpha(c.bg, SCRIM)] as const;
+  const blurs = Platform.OS === 'ios';
+  const scrimTo = blurs ? SCRIM_BLURRED : SCRIM_FLAT;
+  const scrim = [alpha(c.bg, blurs ? 0.9 : 0.97), alpha(c.bg, scrimTo), alpha(c.bg, scrimTo)] as const;
   const scrimStops = [0, 0.35, 1] as const;
-  const tail = [alpha(c.bg, SCRIM), alpha(c.bg, 0)] as const;
+  const tail = [alpha(c.bg, scrimTo), alpha(c.bg, 0)] as const;
 
   return (
-    <View
+    <Animated.View
+      onLayout={(e) => {
+        const h = e.nativeEvent.layout.height;
+        travel.value = Math.max(0, h - (top ? insets.top : insets.bottom));
+      }}
       style={[
         {
           position: 'absolute',
@@ -215,11 +243,12 @@ export function ChromeBar({ children, style, edge = 'top', onLayout, inset = tru
           ...(inset ? (top ? { paddingTop: insets.top } : { paddingBottom: insets.bottom }) : null),
         },
         style,
+        slide,
       ]}
     >
       {/* The blur reaches past the bar too, so its own outer edge lands in the
           tail where the fade has already hidden it. */}
-      {Platform.OS === 'ios' && (
+      {blurs && (
         <View
           style={{ position: 'absolute', left: 0, right: 0, ...(top ? { top: 0, bottom: -FADE_TAIL } : { bottom: 0, top: -FADE_TAIL }) }}
           pointerEvents="none"
@@ -258,7 +287,7 @@ export function ChromeBar({ children, style, edge = 'top', onLayout, inset = tru
         pointerEvents="none"
       />
       {onLayout ? <View onLayout={onLayout}>{children}</View> : children}
-    </View>
+    </Animated.View>
   );
 }
 

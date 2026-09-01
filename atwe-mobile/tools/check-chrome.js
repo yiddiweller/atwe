@@ -87,6 +87,12 @@ for (const root of ROOTS) {
 for (const f of WORLDS) {
   const s = fs.readFileSync(f, 'utf8');
   const body = s.slice(s.indexOf('<Screen'));
+  /* The top chrome has to get out of the way as the page scrolls, or the screen
+     never gives its whole height to the content — the founder's own complaint,
+     twice. Account has no chrome to retract, so it is the one exception. */
+  if (/<ChromeBar/.test(body) && !/retract=\{/.test(body)) {
+    problems.push(`${f}: its chrome never retracts — pass useChromeRetract()'s value`);
+  }
   // a scroller behind a loading/error ternary is a scroller iOS cannot find
   if (/\{\s*(isLoading|loading)[\s\S]{0,400}?\?[\s\S]{0,600}?<(FlatList|ScrollView|SectionList)/.test(body)) {
     problems.push(`${f}: its list is behind a loading branch — the tab bar cannot minimise against a scroller that is not mounted`);
