@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Image, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -11,6 +11,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useAuth } from '@/auth/AuthProvider';
 import { haptics } from '@/lib/haptics';
+import { GlassMenu, type GlassMenuItem } from './GlassMenu';
 
 /* The web's own numbers, from `.topbar.tb-solo .tb-brandrow`:
      --tb-brand-h      22  the wordmark's height
@@ -48,15 +49,47 @@ const WORD: Record<Exclude<World, 'home'>, string> = {
  * same flourish the web plays. It fires on ARRIVAL only, never on a re-render,
  * or it twitches every time the screen updates.
  */
-export function BrandBar({ world, onPlus, onMore }: {
+export function BrandBar({ world, onPlus, onMore, plusMenu, moreMenu }: {
   world: World;
   /** Omitted where there is nothing to compose — Engine and the AI page. */
   onPlus?: () => void;
   onMore?: () => void;
+  /** Given instead of `onPlus`/`onMore`, the button opens a menu rather than
+   *  going straight somewhere — which is what three dots actually promise. */
+  plusMenu?: GlassMenuItem[];
+  moreMenu?: GlassMenuItem[];
 }) {
   const { c } = useTheme();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+
+  /* A menu has to GROW OUT OF its button, so each one hands over its own rect
+     on screen when it is tapped. */
+  const [open, setOpen] = useState<null | 'plus' | 'more' | 'me'>(null);
+  const [rect, setRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const plusRef = useRef<View>(null);
+  const moreRef = useRef<View>(null);
+  const meRef = useRef<View>(null);
+  const openFrom = (
+    ref: React.RefObject<View | null>,
+    which: 'plus' | 'more' | 'me',
+  ) => {
+    haptics.tap();
+    ref.current?.measureInWindow((x, y, width, height) => {
+      setRect({ x, y, width, height });
+      setOpen(which);
+    });
+  };
+
+  /* Your own account. The web's top-right avatar opens exactly this rather than
+     jumping somewhere, and on the phone it was the one button with no menu at
+     all behind it. */
+  const meMenu: GlassMenuItem[] = [
+    { label: 'View profile', icon: 'person-outline', onPress: () => router.push('/profile') },
+    { label: 'Wallet', icon: 'wallet-outline', onPress: () => router.push('/wallet') },
+    { label: 'Settings', icon: 'settings-outline', onPress: () => router.push('/settings') },
+    { label: 'Log out', icon: 'log-out-outline', onPress: () => { void logout(); }, destructive: true },
+  ];
 
   const spin = useSharedValue(0);
   const wordX = useSharedValue(0);
@@ -113,29 +146,38 @@ export function BrandBar({ world, onPlus, onMore }: {
       </Pressable>
 
       <View style={styles.actions}>
-        {!!onPlus && (
-          <Circle label="New" onPress={onPlus}>
-            <Ionicons name="add" size={22} color={c.text} />
-          </Circle>
+        {(!!onPlus || !!plusMenu) && (
+          <View ref={plusRef} collapsable={false}>
+            <Circle label="New" onPress={plusMenu ? () => openFrom(plusRef, 'plus') : onPlus!}>
+              <Ionicons name="add" size={22} color={c.text} />
+            </Circle>
+          </View>
         )}
-        {!!onMore && (
-          <Circle label="More" onPress={onMore}>
-            <Ionicons name="ellipsis-horizontal" size={19} color={c.text} />
-          </Circle>
+        {(!!onMore || !!moreMenu) && (
+          <View ref={moreRef} collapsable={false}>
+            <Circle label="More" onPress={moreMenu ? () => openFrom(moreRef, 'more') : onMore!}>
+              <Ionicons name="ellipsis-horizontal" size={19} color={c.text} />
+            </Circle>
+          </View>
         )}
-        <Circle
-          label="Your account"
-          onPress={() => { haptics.tap(); router.push('/profile'); }}
-          bare
-        >
-          <Avatar
-            name={user?.name}
-            avatar={user?.avatar}
-            biz={user?.accountType === 'business'}
-            size={CIRCLE}
-          />
-        </Circle>
+        <View ref={meRef} collapsable={false}>
+          <Circle label="Your account" onPress={() => openFrom(meRef, 'me')} bare>
+            <Avatar
+              name={user?.name}
+              avatar={user?.avatar}
+              biz={user?.accountType === 'business'}
+              size={CIRCLE}
+            />
+          </Circle>
+        </View>
       </View>
+
+      <GlassMenu
+        visible={open !== null}
+        onClose={() => setOpen(null)}
+        anchor={rect}
+        items={open === 'plus' ? (plusMenu ?? []) : open === 'more' ? (moreMenu ?? []) : meMenu}
+      />
     </View>
   );
 }

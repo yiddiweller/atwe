@@ -95,8 +95,17 @@ export default function Home() {
       <ChromeBar>
       <BrandBar
         world="home"
-        onPlus={() => router.push('/compose')}
-        onMore={() => router.push('/settings')}
+        plusMenu={[
+          { label: 'New post', icon: 'create-outline', onPress: () => router.push('/compose') },
+          { label: 'New story', icon: 'add-circle-outline', onPress: () => router.push('/add-story') },
+          { label: 'Sell an item', icon: 'pricetag-outline', onPress: () => router.push('/sell') },
+          { label: 'Post a job', icon: 'briefcase-outline', onPress: () => router.push('/post-job') },
+        ]}
+        moreMenu={[
+          { label: 'Settings', icon: 'settings-outline', onPress: () => router.push('/settings') },
+          { label: 'Saved', icon: 'bookmark-outline', onPress: () => router.push('/starred') },
+          { label: 'Help & feedback', icon: 'help-circle-outline', onPress: () => router.push('/feedback') },
+        ]}
       />
 
       {/* Header: feed tabs */}

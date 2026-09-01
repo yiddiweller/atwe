@@ -89,7 +89,13 @@ export default function AI() {
           brand row on the web, and its ⋯ is the only way to Settings from here.
           No ＋: you write to it in the composer below, not in a sheet. */}
       <ChromeBar>
-        <BrandBar world="ai" onMore={() => router.push('/settings')} />
+        <BrandBar
+          world="ai"
+          moreMenu={[
+            { label: 'Settings', icon: 'settings-outline', onPress: () => router.push('/settings') },
+            { label: 'Help & feedback', icon: 'help-circle-outline', onPress: () => router.push('/feedback') },
+          ]}
+        />
       </ChromeBar>
       <View style={[styles.head, styles.hiddenHead, { borderBottomColor: c.border }]}>
         <Ionicons name="sparkles" size={18} color={c.accent} />

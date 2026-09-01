@@ -37,6 +37,13 @@ export default function TabsLayout() {
        that the bar minimizes itself, but the provider is cheap and removing it
        would mean editing the feed for no gain. */
     <NavMorphProvider>
+      {/* `onScrollDown` IS iOS 26's own shrink-as-you-scroll, and it is the only
+          lever there is: `automatic` / `never` / `onScrollDown` / `onScrollUp`
+          are the whole list. There is deliberately no "slide the bar off the
+          screen" — Apple's behaviour is to MINIMISE it into a small pill in
+          place, and hand-rolling the slide is exactly the trade that cost this
+          app the real material three times over. It needs iOS 26; on 18–25
+          react-native-screens logs a warning and leaves the bar alone. */}
       <NativeTabs minimizeBehavior="onScrollDown">
         <NativeTabs.Trigger name="index">
           {/* No labels — the web's bar has none, and the founder's artwork is

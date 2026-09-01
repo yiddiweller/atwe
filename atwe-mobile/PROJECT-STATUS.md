@@ -1728,6 +1728,41 @@ content ghosting through and dissolving at both edges, no boundary line
 anywhere, chrome legible over a white photo. What the preview still cannot show
 is the blur — on the web only the fade renders.
 
+### 0.10.0 — the tab icons, and menus that actually open
+
+**The tab icons were 19pt of ink in a 26pt box.** UIKit does not resize a
+tab-bar image — it draws it at the image's own point size — so the 72% of the
+canvas the glyph filled WAS the size on screen, noticeably smaller than the SF
+Symbols in any Apple tab bar. `tools/build-nav-icons.py` crops the shared
+padding off the founder's 160pt masters and writes a 30pt canvas with a 27pt
+mark: 40% bigger, nothing redrawn. It crops the FAMILY with one box rather than
+each icon to its own — the bell is narrower than the four rings on purpose, and
+normalising each glyph would inflate it against its neighbours.
+
+**The ＋, the ⋯ and your own photo now open a menu.** Three dots PROMISE a list
+and were silently a shortcut to one thing; the avatar went straight to the
+profile with nothing behind it. `GlassMenu` is that list, drawn the way iOS 26
+draws a context menu: Apple's real Liquid Glass (`GlassView`), label left and
+icon right — Apple's order, and the web's glide menu's. It **grows out of the
+button**, which is the part that makes it read as native: the caller hands over
+the button's own on-screen rect (`measureInWindow`) and the card's transform
+origin is the corner nearest it. A card that scales from its own middle reads as
+a dialog. There is no dim behind it, because an iOS context menu darkens
+nothing — the glass and the shadow are what separate it.
+
+Home's ＋ is New post · New story · Sell an item · Post a job; its ⋯ is
+Settings · Saved · Help & feedback; your photo is View profile · Wallet ·
+Settings · Log out on every world. Beam keeps its own two sheets — they are
+purpose-built and already open something.
+
+**The bottom bar's shrink-on-scroll is already on, and cannot be a slide.**
+`minimizeBehavior="onScrollDown"` is set, and `automatic` / `never` /
+`onScrollDown` / `onScrollUp` is the entire list react-native-screens exposes.
+Apple's behaviour is to MINIMISE the bar into a small pill in place, not to
+slide it off the bottom; hand-rolling the slide is precisely the trade that cost
+this app the real material three times over. It needs iOS 26 — on 18–25 the
+native side logs a warning and leaves the bar alone.
+
 ### Built, not yet shipped — the cards inside a conversation
 
 Beam's own pitch is *"send money in the chat: pay, request or split a bill

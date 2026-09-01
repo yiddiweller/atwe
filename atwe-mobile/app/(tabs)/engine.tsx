@@ -52,7 +52,14 @@ export default function Engine() {
       {/* No ＋ here: Engine is discovery, there is nothing to compose. The web
           hides it on this world too. */}
       <ChromeBar>
-      <BrandBar world="engine" onMore={() => router.push('/settings')} />
+      <BrandBar
+        world="engine"
+        moreMenu={[
+          { label: 'Settings', icon: 'settings-outline', onPress: () => router.push('/settings') },
+          { label: 'Saved', icon: 'bookmark-outline', onPress: () => router.push('/starred') },
+          { label: 'Help & feedback', icon: 'help-circle-outline', onPress: () => router.push('/feedback') },
+        ]}
+      />
       {/* Search bar */}
       <View style={styles.searchWrap}>
         <View style={[styles.search, { backgroundColor: c.s2 }]}>
