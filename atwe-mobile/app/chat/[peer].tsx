@@ -37,6 +37,7 @@ import { ChatSettingsSheet } from '@/components/ChatSettingsSheet';
 import { ReactionChips } from '@/components/ReactionChips';
 import { ReplyQuote, ReplyStrip } from '@/components/ReplyQuote';
 import * as Clipboard from 'expo-clipboard';
+import { radius } from '@/theme/tokens';
 import { haptics } from '@/lib/haptics';
 
 /**
@@ -431,9 +432,10 @@ function Bubble({ msg, myId, answering, peerName, onLongPress }: {
         accessibilityHint="Press and hold for message options"
         style={[
           styles.bubble,
-          mine
-            ? { backgroundColor: c.accent, borderBottomRightRadius: 4 }
-            : { backgroundColor: c.s2, borderBottomLeftRadius: 4 },
+          /* No squared-off tail corner. A bubble is round on ALL FOUR corners,
+             the way iOS 26 Messages draws them — one flat 4pt corner is exactly
+             what stopped these reading as fully rounded. */
+          { backgroundColor: mine ? c.accent : c.s2 },
           /* A card brings its own surface, so the bubble gets out of its way —
              the same reason a sticker has no bubble. A blue pill wrapped round
              a grey card is two backgrounds arguing. */
@@ -523,14 +525,17 @@ const styles = StyleSheet.create({
   peer: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   bubbleRow: { flexDirection: 'row', marginVertical: 3 },
-  bubble: { borderRadius: 20, paddingVertical: 8, paddingHorizontal: 13 },
+  /* `radius.bubble` is past half the height of a bubble up to four lines
+     long, so those are true capsules; the padding is what keeps a longer
+     one's first line clear of the curve (see the token). */
+  bubble: { borderRadius: radius.bubble, paddingVertical: 10, paddingHorizontal: 16 },
   bubbleCard: { backgroundColor: 'transparent', padding: 0 },
   onceBox: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 14, paddingVertical: 12,
     borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderStyle: 'dashed',
   },
-  bubbleImg: { width: 200, height: 200, borderRadius: 12, marginBottom: 4 },
+  bubbleImg: { width: 200, height: 200, borderRadius: radius.bubble - 10, marginBottom: 4 },
   composer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -543,8 +548,8 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 40,
     maxHeight: 120,
-    borderRadius: 20,
-    paddingHorizontal: 14,
+    borderRadius: radius.bubble,
+    paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 10,
     fontSize: 16,

@@ -55,7 +55,7 @@ export default function WalletCashOut() {
   };
 
   const input = {
-    backgroundColor: c.s2, color: c.text, borderRadius: radius.md,
+    backgroundColor: c.s2, color: c.text, borderRadius: radius.pill,
     paddingHorizontal: spacing.gutter, height: 56, fontSize: 22, fontWeight: '700' as const,
   };
 

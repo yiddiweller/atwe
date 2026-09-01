@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   toggle: { paddingHorizontal: 10, height: 30, borderRadius: radius.pill, justifyContent: 'center' },
   time: {
-    width: 66, borderRadius: radius.md, paddingHorizontal: 10, paddingVertical: 7,
+    width: 66, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 7,
     fontSize: 15, textAlign: 'center',
   },
 });

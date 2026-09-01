@@ -199,6 +199,22 @@ export const radius = {
    *  corner: a sheet is an overlay, not a card sitting on a page. It used to be
    *  an alias for `card`, which made every sheet 30. */
   xl: 24,
+  /**
+   * As round as a box you can READ can be.
+   *
+   * iOS clamps a corner to half the shorter side, so any radius past that is
+   * simply a capsule — which is what a short message bubble or a one-line field
+   * should be. The number only matters once the box grows TALLER than it is
+   * round, and then it decides whether the curve starts eating the first line of
+   * text. With 10pt of padding above the text and 16 beside it, the curve clears
+   * the first line up to r = 44: solving `r - sqrt(20r - 100) <= 16` gives
+   * r <= 43.9. So a bubble is a true capsule up to four lines and stays
+   * handsomely round after that, and the text never runs into the corner.
+   *
+   * Use it for message bubbles and for anything multi-line you type into.
+   * A single-line field is `pill` — it can never be too round.
+   */
+  bubble: 44,
   pill: 999,
 } as const;
 

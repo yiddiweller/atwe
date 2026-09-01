@@ -495,8 +495,8 @@ const styles = StyleSheet.create({
   },
   sheetHead: { flexDirection: 'row', alignItems: 'center' },
   lbl: { marginTop: 16, marginBottom: 8 },
-  input: { borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 },
-  textarea: { minHeight: 100, textAlignVertical: 'top' },
+  input: { borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16 },
+  textarea: { minHeight: 100, textAlignVertical: 'top', borderRadius: radius.bubble },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { paddingHorizontal: 14, height: 38, borderRadius: radius.pill, justifyContent: 'center' },
 });

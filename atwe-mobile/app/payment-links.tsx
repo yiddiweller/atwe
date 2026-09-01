@@ -149,7 +149,7 @@ function NewLink({ visible, onClose, onDone }: { visible: boolean; onClose: () =
             placeholderTextColor={c.t4}
             keyboardType="decimal-pad"
             accessibilityLabel="Amount in dollars"
-            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
+            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill }]}
           />
           <Text variant="caption" tone="t3" style={styles.lbl}>WHAT IT IS FOR</Text>
           <TextInput
@@ -157,7 +157,7 @@ function NewLink({ visible, onClose, onDone }: { visible: boolean; onClose: () =
             placeholder="Workshop deposit"
             placeholderTextColor={c.t4}
             accessibilityLabel="Note"
-            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
+            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill }]}
           />
           <View style={{ height: 20 }} />
           <Button title="Make the link" onPress={go} loading={busy} />

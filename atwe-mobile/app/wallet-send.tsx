@@ -81,7 +81,7 @@ export default function WalletSend() {
         <View style={{ padding: spacing.lg }}>
           <Field label="To (@username)">
             <HapticInput
-              style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
+              style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill }]}
               placeholder="@username"
               placeholderTextColor={c.t3}
               value={to}
@@ -114,7 +114,7 @@ export default function WalletSend() {
 
           <Field label="Note (optional)">
             <HapticInput
-              style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
+              style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill }]}
               placeholder="What's it for?"
               placeholderTextColor={c.t3}
               value={note}

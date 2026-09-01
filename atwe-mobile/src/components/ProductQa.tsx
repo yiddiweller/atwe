@@ -162,7 +162,7 @@ function Question({ q, isSeller, onDone }: { q: QaQuestion; isSeller: boolean; o
             value={a} onChangeText={setA}
             placeholder="Your answer…" placeholderTextColor={c.t4} multiline autoFocus
             accessibilityLabel="Your answer"
-            style={[styles.askInput, { color: c.text, backgroundColor: c.s2, borderRadius: radius.md, paddingHorizontal: 12 }]}
+            style={[styles.askInput, { color: c.text, backgroundColor: c.s2, borderRadius: radius.bubble, paddingHorizontal: 16 }]}
           />
           <Button title="Post the answer" onPress={send} loading={busy} disabled={!a.trim()}
             style={{ minHeight: 38, marginTop: 8 }} />

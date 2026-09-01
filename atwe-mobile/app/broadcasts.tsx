@@ -140,7 +140,7 @@ function NewList({ visible, onClose, onDone }: { visible: boolean; onClose: () =
             value={name} onChangeText={setName}
             placeholder="What is this list?" placeholderTextColor={c.t4}
             accessibilityLabel="List name"
-            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
+            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill }]}
           />
           <Text variant="caption" tone="t3" style={{ marginTop: 14, letterSpacing: 0.6 }}>
             WHO IS ON IT ({picked.length})

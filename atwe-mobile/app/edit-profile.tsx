@@ -205,7 +205,7 @@ function Field({ label, value, set, c, ...rest }: {
         style={[
           styles.input,
           { backgroundColor: c.s1, color: c.text },
-          rest.multiline ? { minHeight: 92, textAlignVertical: 'top' } : null,
+          rest.multiline ? { minHeight: 92, textAlignVertical: 'top', borderRadius: radius.bubble } : null,
         ]}
         accessibilityLabel={label}
         {...rest}
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
   },
   fields: { paddingHorizontal: spacing.gutter },
   hint: { marginTop: -6, marginBottom: 14 },
-  input: { borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 },
+  input: { borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16 },
   foot: {
     padding: spacing.gutter, paddingBottom: 26,
     borderTopWidth: StyleSheet.hairlineWidth,

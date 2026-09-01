@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   chips: { flexDirection: 'row', gap: 8 },
   chip: { paddingHorizontal: 20, height: 38, borderRadius: radius.pill, justifyContent: 'center' },
-  input: { borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 },
+  input: { borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16 },
   noteBox: { minHeight: 110, textAlignVertical: 'top' },
   noteHead: { flexDirection: 'row', alignItems: 'center', marginTop: 20, marginBottom: 8, gap: 10 },
   ai: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill, minWidth: 108, alignItems: 'center' },

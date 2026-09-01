@@ -114,7 +114,7 @@ export default function AiShop() {
 
 const styles = StyleSheet.create({
   input: {
-    borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 12,
+    borderRadius: radius.bubble, paddingHorizontal: 16, paddingVertical: 12,
     fontSize: 16, minHeight: 88, textAlignVertical: 'top',
   },
   example: { paddingVertical: 7 },

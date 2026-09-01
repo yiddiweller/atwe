@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
   },
   controls: { paddingHorizontal: spacing.gutter, paddingTop: 16, flex: 1 },
   input: {
-    borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 12,
+    borderRadius: radius.bubble, paddingHorizontal: 16, paddingVertical: 12,
     fontSize: 16, minHeight: 74, textAlignVertical: 'top',
   },
   lbl: { marginTop: 14, marginBottom: 7 },

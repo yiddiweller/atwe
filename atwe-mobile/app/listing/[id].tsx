@@ -377,8 +377,8 @@ function OfferSheet({ visible, onClose, productId, name, asking }: {
             autoFocus
             accessibilityLabel="Your offer in dollars"
             style={{
-              backgroundColor: c.s2, color: c.text, borderRadius: radius.md,
-              paddingHorizontal: 14, paddingVertical: 12, fontSize: 16,
+              backgroundColor: c.s2, color: c.text, borderRadius: radius.pill,
+              paddingHorizontal: 16, paddingVertical: 12, fontSize: 16,
             }}
           />
           <Text variant="caption" tone="t3" style={{ marginTop: 10 }}>

@@ -110,7 +110,7 @@ function NewLabel({ visible, onClose, onDone }: { visible: boolean; onClose: () 
             value={name} onChangeText={setName}
             placeholder="To ship" placeholderTextColor={c.t4} autoFocus
             accessibilityLabel="Label name"
-            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
+            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill }]}
           />
           <View style={{ height: 18 }} />
           <Button title="Make the label" onPress={go} loading={busy} disabled={name.trim().length < 1} />

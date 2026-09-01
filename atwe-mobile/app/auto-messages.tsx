@@ -104,7 +104,7 @@ export default function AutoMessages() {
               placeholderTextColor={c.t4}
               multiline
               accessibilityLabel="Your greeting"
-              style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
+              style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill }]}
             />
           )}
         </View>
@@ -133,7 +133,7 @@ export default function AutoMessages() {
                 placeholderTextColor={c.t4}
                 multiline
                 accessibilityLabel="Your away reply"
-                style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
+                style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill }]}
               />
               <Text variant="caption" tone="t3" style={{ marginTop: 14, marginBottom: 8, letterSpacing: 0.6 }}>
                 WHEN TO SEND IT

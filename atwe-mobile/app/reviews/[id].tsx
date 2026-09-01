@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
   card: { borderRadius: radius.card, padding: 14 },
   picker: { flexDirection: 'row', gap: 8, marginTop: 10, marginBottom: 10 },
   input: {
-    borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10,
+    borderRadius: radius.bubble, paddingHorizontal: 16, paddingVertical: 10,
     fontSize: 15, minHeight: 74, textAlignVertical: 'top',
   },
   who: { flexDirection: 'row', alignItems: 'center' },

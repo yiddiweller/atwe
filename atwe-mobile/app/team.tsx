@@ -279,7 +279,7 @@ function InviteSheet({ visible, perms, onClose, onDone }: {
             placeholder="@username" placeholderTextColor={c.t4}
             autoCapitalize="none" autoCorrect={false}
             accessibilityLabel="Their username"
-            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
+            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill }]}
           />
 
           <Text variant="caption" tone="t3" style={styles.lbl}>WHAT THEY ARE</Text>

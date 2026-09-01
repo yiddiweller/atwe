@@ -178,7 +178,7 @@ function NewCoupon({ visible, onClose, onDone }: { visible: boolean; onClose: ()
             autoCapitalize="characters"
             autoCorrect={false}
             accessibilityLabel="Discount code"
-            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md, letterSpacing: 1 }]}
+            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill, letterSpacing: 1 }]}
           />
           <Text variant="micro" tone="t3" style={{ marginTop: 6 }}>
             Letters and numbers, 3 to 24 characters.
@@ -208,7 +208,7 @@ function NewCoupon({ visible, onClose, onDone }: { visible: boolean; onClose: ()
             placeholderTextColor={c.t4}
             keyboardType="decimal-pad"
             accessibilityLabel={kind === 'percent' ? 'Percent off' : 'Dollars off'}
-            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md, marginTop: 10 }]}
+            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill, marginTop: 10 }]}
           />
 
           <Text variant="caption" tone="t3" style={styles.lbl}>ONLY ON ORDERS OVER (OPTIONAL)</Text>
@@ -216,7 +216,7 @@ function NewCoupon({ visible, onClose, onDone }: { visible: boolean; onClose: ()
             value={minOrder} onChangeText={setMinOrder}
             placeholder="20" placeholderTextColor={c.t4} keyboardType="decimal-pad"
             accessibilityLabel="Minimum order in dollars"
-            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
+            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill }]}
           />
 
           <Text variant="caption" tone="t3" style={styles.lbl}>HOW MANY TIMES (OPTIONAL)</Text>
@@ -224,7 +224,7 @@ function NewCoupon({ visible, onClose, onDone }: { visible: boolean; onClose: ()
             value={maxUses} onChangeText={setMaxUses}
             placeholder="Leave empty for unlimited" placeholderTextColor={c.t4} keyboardType="number-pad"
             accessibilityLabel="Maximum uses"
-            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
+            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill }]}
           />
 
           <View style={{ height: 20 }} />

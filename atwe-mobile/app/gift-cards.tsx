@@ -247,7 +247,7 @@ function BuyPane({ onDone }: { onDone: () => void }) {
         autoCapitalize="none"
         autoCorrect={false}
         accessibilityLabel="Recipient username"
-        style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
+        style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill }]}
       />
 
       <Text variant="caption" tone="t3" style={styles.lbl}>A NOTE</Text>
@@ -258,7 +258,7 @@ function BuyPane({ onDone }: { onDone: () => void }) {
         placeholderTextColor={c.t4}
         multiline
         accessibilityLabel="Message"
-        style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md, minHeight: 84, textAlignVertical: 'top' }]}
+        style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.bubble, minHeight: 84, textAlignVertical: 'top' }]}
       />
 
       <Text variant="caption" tone="t3" style={{ marginTop: 14, marginBottom: 14 }}>
@@ -297,7 +297,7 @@ function RedeemPane({ onDone }: { onDone: () => void }) {
         autoCapitalize="characters"
         autoCorrect={false}
         accessibilityLabel="Gift card code"
-        style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md, letterSpacing: 1 }]}
+        style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill, letterSpacing: 1 }]}
       />
       <View style={{ height: 16 }} />
       <Button title="Redeem" onPress={go} loading={busy} disabled={code.trim().length < 4} />

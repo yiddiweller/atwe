@@ -237,7 +237,7 @@ function fmtSec(sec: number): string {
 }
 
 const styles = StyleSheet.create({
-  wrap: { borderRadius: 26 },
+  wrap: { borderRadius: 34 },
   recRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 2 },
   recX: { width: 34, height: 38, alignItems: 'center', justifyContent: 'center' },
   recDot: { width: 9, height: 9, borderRadius: 5 },
@@ -248,8 +248,15 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: 4,
     minHeight: 52,
-    borderRadius: 26,
-    paddingHorizontal: 8,
+    /* Fully rounded at rest (iOS clamps a corner to half the shorter side, so
+       52 tall reads as a true capsule) and STAYS round as it grows to two or
+       three lines. It cannot simply be `pill`: the ＋ and the mic sit in the
+       bottom corners under `overflow:'hidden'`, so too big a corner clips them.
+       With 14pt of side padding and 7 above/below, a 34x38 button stays inside
+       the curve up to r = 35 — solving (r-14)^2 + (r-7)^2 <= r^2. 34 is that,
+       with a pixel to spare. Widen the padding before raising this. */
+    borderRadius: 34,
+    paddingHorizontal: 14,
     paddingVertical: 7,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',

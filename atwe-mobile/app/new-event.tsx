@@ -212,8 +212,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8, paddingBottom: 8,
   },
   icon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  input: { borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 },
-  textarea: { minHeight: 120, textAlignVertical: 'top' },
+  input: { borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16 },
+  textarea: { minHeight: 120, textAlignVertical: 'top', borderRadius: radius.bubble },
   row: { flexDirection: 'row', gap: 10 },
   toggle: {
     flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start',

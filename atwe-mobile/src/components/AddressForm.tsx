@@ -87,8 +87,8 @@ const styles = StyleSheet.create({
   wrap: { flex: 1 },
   body: { padding: spacing.gutter, paddingBottom: 24 },
   input: {
-    borderRadius: radius.md,
-    paddingHorizontal: 14,
+    borderRadius: radius.pill,
+    paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
   },

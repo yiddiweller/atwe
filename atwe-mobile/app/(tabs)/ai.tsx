@@ -16,7 +16,7 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
 import { BrandBar } from '@/components/BrandBar';
 import { ChromeBar, chromePad, chromeTop } from '@/components/Chrome';
-import { spacing } from '@/theme/tokens';
+import { radius, spacing } from '@/theme/tokens';
 import { sendChat, askAgent, runAgentAction, agentSummary, type ChatMessage, type AgentAction } from '@/api/ai';
 import { haptics } from '@/lib/haptics';
 
@@ -198,8 +198,9 @@ function Msg({ msg }: { msg: ChatMessage }) {
         style={[
           styles.bubble,
           mine
-            ? { backgroundColor: c.accent, maxWidth: '82%', borderBottomRightRadius: 4 }
-            : { backgroundColor: c.s2, maxWidth: '92%', borderBottomLeftRadius: 4 },
+            /* Round on all four corners — see the 1:1 thread. */
+            ? { backgroundColor: c.accent, maxWidth: '82%' }
+            : { backgroundColor: c.s2, maxWidth: '92%' },
         ]}
       >
         <Text variant="body" style={{ color: mine ? '#fff' : c.text }}>
@@ -231,7 +232,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   row: { flexDirection: 'row', marginVertical: 4 },
-  bubble: { borderRadius: 20, paddingVertical: 9, paddingHorizontal: 14 },
+  bubble: { borderRadius: radius.bubble, paddingVertical: 10, paddingHorizontal: 16 },
   typing: { paddingHorizontal: 14, paddingVertical: 8 },
   composer: {
     flexDirection: 'row',
@@ -245,8 +246,11 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 40,
     maxHeight: 120,
-    borderRadius: 20,
-    paddingHorizontal: 14,
+    /* Nothing sits in this box's corners — the send button is beside it, not
+       inside — so it can take the full bubble corner and stay round however
+       long the question gets. */
+    borderRadius: radius.bubble,
+    paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 10,
     fontSize: 16,

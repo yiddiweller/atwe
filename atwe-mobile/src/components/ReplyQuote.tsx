@@ -2,7 +2,7 @@ import { View, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from './Text';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing } from '@/theme/tokens';
+import { radius, spacing } from '@/theme/tokens';
 
 /**
  * The message being answered, quoted INSIDE the reply's own bubble: a coloured
@@ -65,7 +65,9 @@ export function ReplyStrip({ name, preview, onCancel }: {
 const styles = StyleSheet.create({
   quote: {
     flexDirection: 'row',
-    borderRadius: 10,
+    /* It sits INSIDE a fully-rounded bubble, so a 10pt box read as a square
+       pasted into a capsule. */
+    borderRadius: radius.lg,
     overflow: 'hidden',
     marginBottom: 6,
     paddingRight: 8,
@@ -75,7 +77,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: spacing.gutter,
     marginBottom: 6,
-    borderRadius: 14,
+    /* A capsule, like the composer it sits on top of. */
+    borderRadius: radius.pill,
     overflow: 'hidden',
   },
   spine: { width: 3, alignSelf: 'stretch' },

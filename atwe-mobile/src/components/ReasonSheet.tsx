@@ -76,7 +76,7 @@ const styles = StyleSheet.create({
   },
   head: { flexDirection: 'row', alignItems: 'center' },
   input: {
-    borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 12,
+    borderRadius: radius.bubble, paddingHorizontal: 16, paddingVertical: 12,
     fontSize: 16, minHeight: 96, textAlignVertical: 'top',
     marginTop: 14, marginBottom: 18,
   },

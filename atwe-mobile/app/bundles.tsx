@@ -151,7 +151,7 @@ function NewBundle({ visible, onClose, onDone }: { visible: boolean; onClose: ()
             value={name} onChangeText={setName}
             placeholder="Starter set" placeholderTextColor={c.t4}
             accessibilityLabel="Bundle name"
-            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
+            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill }]}
           />
 
           <Text variant="caption" tone="t3" style={styles.lbl}>WHAT IS IN IT (PICK AT LEAST TWO)</Text>
@@ -204,7 +204,7 @@ function NewBundle({ visible, onClose, onDone }: { visible: boolean; onClose: ()
             value={price} onChangeText={setPrice}
             placeholder="70" placeholderTextColor={c.t4} keyboardType="decimal-pad"
             accessibilityLabel="Bundle price in dollars"
-            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
+            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill }]}
           />
           {retail > 0 && (
             <Text variant="caption" tone={saving > 0 ? 'success' : 't3'} style={{ marginTop: 8 }}>
@@ -219,7 +219,7 @@ function NewBundle({ visible, onClose, onDone }: { visible: boolean; onClose: ()
             value={desc} onChangeText={setDesc}
             placeholder="Why they go well together" placeholderTextColor={c.t4} multiline
             accessibilityLabel="Description"
-            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md, minHeight: 84, textAlignVertical: 'top' }]}
+            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.bubble, minHeight: 84, textAlignVertical: 'top' }]}
           />
 
           <View style={{ height: 20 }} />

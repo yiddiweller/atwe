@@ -1621,6 +1621,58 @@ headers and a `styles.center` with no `flex: 1` were found. What the preview
 CANNOT show is the blur itself — on the web the bar is the opaque fallback, and
 the shots prove only the geometry: content ghosting through it as you scroll.
 
+### 0.10.0 — fully rounded: no squared corner, anywhere
+
+*"The text bar as well as the text bubbles should be fully rounded on both
+sides. It should look very cool like liquid similar to the iMessage. I am
+talking about the whole entire app."*
+
+**Every bubble carried one squared-off corner and that was the whole problem.**
+`borderBottomRightRadius: 4` on a sent message, `borderBottomLeftRadius: 4` on a
+received one — the old chat "tail". Three corners round, one nearly square, in
+the 1:1 thread, in groups and on the Atwe AI page. iOS 26 Messages dropped that
+years-old shape; the tails are gone here too, and a bubble is now round on all
+four corners.
+
+**`radius.bubble` (44) is the new token, and the number is derived, not picked.**
+iOS clamps a corner to half the shorter side, so any radius past that is simply a
+capsule — which is what a short bubble or a one-line field should be. The number
+only matters once a box is TALLER than it is round, and then it decides whether
+the curve starts eating the first line of text. With 10pt above the text and 16
+beside it, solving `r - sqrt(20r - 100) <= 16` gives r <= 43.9. So a bubble is a
+true capsule up to four lines and stays handsomely round after that, and the text
+never runs into the corner. Bubble padding went 8/13 -> 10/16 to buy that.
+
+**The chat composer cannot simply be `pill`, and the reason is worth keeping.**
+The ＋ and the mic sit in its bottom corners under `overflow: 'hidden'`, so too
+big a corner CLIPS them. Solving `(r-padH)^2 + (r-padV)^2 <= r^2` for the button's
+own corner gives r <= 35 at 14pt of side padding; it ships at 34 with 14. It is a
+true capsule at rest (52pt tall) and stays one through two and three lines.
+Widen the padding before raising the radius.
+
+**The law, applied to the whole app:** anything you type into is a capsule
+(`radius.pill`) if it is one line, and `radius.bubble` if it can grow — 32 named
+fields across 155 files: every form field, every search bar, the reply boxes, the
+Q&A ask box, the story caption, the bio, the offer and counter-offer amounts, the
+password field. A photo inside a bubble takes the bubble's corner minus its
+padding, so the two nest instead of arguing. The cards inside a conversation
+(money, invoice, order) moved from a 14pt box to the app's own card corner — a
+tight rectangle beside a capsule reads as a different app.
+
+**Two things deliberately NOT rounded, so they are not "fixed" later:** the
+six-digit code boxes at signup are exact squares and would become six circles,
+and a bottom SHEET is round on top and flush to the screen at the bottom — those
+files are listed by name in the checker.
+
+`tools/check-rounding.js` holds the line: nothing that draws a message may set a
+per-corner radius, and a field may only be `pill` or `bubble`. Self-tested by
+putting the tail corner back, which it catches by name.
+
+**The web still uses a 22px bubble and a 24px composer** — this is the phone
+going first, so the two are deliberately out of step until the founder says to
+mirror it. The web's composer radius is load-bearing there (its inner cards are
+derived from it), so that is a change to make on purpose, not by sweep.
+
 ### Built, not yet shipped — the cards inside a conversation
 
 Beam's own pitch is *"send money in the chat: pay, request or split a bill

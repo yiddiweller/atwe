@@ -112,7 +112,7 @@ function NewList({ visible, onClose, onDone }: { visible: boolean; onClose: () =
             placeholder="Makers, suppliers, people I learn from…"
             placeholderTextColor={c.t4} autoFocus
             accessibilityLabel="List name"
-            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
+            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill }]}
           />
           <Text variant="caption" tone="t3" style={{ marginTop: 10 }}>
             Add people to it from their profile.

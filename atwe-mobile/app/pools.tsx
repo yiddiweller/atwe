@@ -132,7 +132,7 @@ function NewPool({ visible, onClose, onDone }: { visible: boolean; onClose: () =
             placeholder="A new kiln for the studio"
             placeholderTextColor={c.t4}
             accessibilityLabel="Pool title"
-            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
+            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill }]}
           />
           <Text variant="caption" tone="t3" style={styles.lbl}>A LITTLE MORE (OPTIONAL)</Text>
           <TextInput
@@ -141,7 +141,7 @@ function NewPool({ visible, onClose, onDone }: { visible: boolean; onClose: () =
             placeholderTextColor={c.t4}
             multiline
             accessibilityLabel="Description"
-            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md, minHeight: 84, textAlignVertical: 'top' }]}
+            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.bubble, minHeight: 84, textAlignVertical: 'top' }]}
           />
           <Text variant="caption" tone="t3" style={styles.lbl}>GOAL (OPTIONAL)</Text>
           <TextInput
@@ -150,7 +150,7 @@ function NewPool({ visible, onClose, onDone }: { visible: boolean; onClose: () =
             placeholderTextColor={c.t4}
             keyboardType="decimal-pad"
             accessibilityLabel="Goal amount in dollars"
-            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
+            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill }]}
           />
           <View style={{ height: 20 }} />
           <Button title="Start it" onPress={go} loading={busy} disabled={title.trim().length < 2} />

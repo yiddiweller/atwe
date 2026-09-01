@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
   times: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   time: { paddingHorizontal: 14, height: 40, borderRadius: radius.pill, justifyContent: 'center' },
   input: {
-    borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 12,
+    borderRadius: radius.bubble, paddingHorizontal: 16, paddingVertical: 12,
     fontSize: 16, minHeight: 76, textAlignVertical: 'top',
   },
   foot: { padding: spacing.gutter, paddingBottom: 26, borderTopWidth: StyleSheet.hairlineWidth },

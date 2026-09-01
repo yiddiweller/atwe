@@ -156,5 +156,5 @@ const styles = StyleSheet.create({
   },
   lbl: { marginBottom: 5 },
   pair: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  input: { borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 },
+  input: { borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16 },
 });

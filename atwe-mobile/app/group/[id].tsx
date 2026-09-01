@@ -18,7 +18,7 @@ import { ReactionChips } from '@/components/ReactionChips';
 import { ReplyQuote, ReplyStrip } from '@/components/ReplyQuote';
 import { VoiceNote } from '@/components/VoiceNote';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing } from '@/theme/tokens';
+import { radius, spacing } from '@/theme/tokens';
 import {
   useGroupThread, sendGroupMessage, react, deleteMessage,
   type Attachment, type GroupMessage, type GroupThreadData,
@@ -378,8 +378,8 @@ function GroupBubble({ msg, startsRun, myId, answering, onLongPress }: {
           onLongPress={msg.deleted ? undefined : onLongPress}
           delayLongPress={280}
           style={[styles.bubble,
-            mine ? { backgroundColor: c.accent, borderBottomRightRadius: 4 }
-                 : { backgroundColor: c.s2, borderBottomLeftRadius: 4 }]}
+            /* Round on all four corners — see the 1:1 thread. */
+            { backgroundColor: mine ? c.accent : c.s2 }]}
           accessibilityRole="button"
           accessibilityHint="Press and hold for message options"
         >
@@ -422,6 +422,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row' },
   avaSlot: { width: 26, marginRight: 8, justifyContent: 'flex-end' },
   sender: { marginLeft: 4, marginBottom: 3 },
-  bubble: { borderRadius: 20, paddingVertical: 8, paddingHorizontal: 13 },
-  img: { width: 200, height: 200, borderRadius: 12, marginBottom: 4 },
+  bubble: { borderRadius: radius.bubble, paddingVertical: 10, paddingHorizontal: 16 },
+  img: { width: 200, height: 200, borderRadius: radius.bubble - 10, marginBottom: 4 },
 });

@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: 10 },
   input: { flex: 1, fontSize: 17, lineHeight: 23, paddingTop: 8, minHeight: 110, textAlignVertical: 'top' },
   pollRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  pollInput: { flex: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },
+  pollInput: { flex: 1, borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15 },
   pollFoot: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   days: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999 },
   photoWrap: { marginTop: 12, marginLeft: 50 },
@@ -271,8 +271,8 @@ const styles = StyleSheet.create({
     width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
   },
   alt: {
-    marginTop: 8, borderRadius: radius.md,
-    paddingHorizontal: 12, paddingVertical: 10, fontSize: 14,
+    marginTop: 8, borderRadius: radius.pill,
+    paddingHorizontal: 16, paddingVertical: 10, fontSize: 14,
   },
   foot: {
     flexDirection: 'row',

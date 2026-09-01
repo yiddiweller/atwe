@@ -166,7 +166,7 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
         onChangeText={onChange}
         keyboardType="decimal-pad"
         accessibilityLabel={label}
-        style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
+        style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill }]}
       />
     </View>
   );

@@ -208,7 +208,7 @@ function Field({ label, value, set, c, ...rest }: {
         style={[
           styles.input,
           { backgroundColor: c.s1, color: c.text },
-          rest.multiline ? { minHeight: 96, textAlignVertical: 'top' } : null,
+          rest.multiline ? { minHeight: 96, textAlignVertical: 'top', borderRadius: radius.bubble } : null,
         ]}
         accessibilityLabel={label}
         {...rest}
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
   lbl: { marginBottom: 6 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
   chip: { paddingHorizontal: 14, height: 38, borderRadius: radius.pill, justifyContent: 'center' },
-  input: { borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 },
+  input: { borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16 },
   foot: {
     padding: spacing.gutter, paddingBottom: 26, gap: 10,
     borderTopWidth: StyleSheet.hairlineWidth,

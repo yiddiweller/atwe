@@ -16,7 +16,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { PostCard } from '@/components/PostCard';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing } from '@/theme/tokens';
+import { radius, spacing } from '@/theme/tokens';
 import { usePost, createPost } from '@/api/social';
 import { HapticInput } from '@/components/HapticInput';
 import { haptics } from '@/lib/haptics';
@@ -180,8 +180,8 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 40,
     maxHeight: 120,
-    borderRadius: 20,
-    paddingHorizontal: 14,
+    borderRadius: radius.bubble,
+    paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 10,
     fontSize: 15,

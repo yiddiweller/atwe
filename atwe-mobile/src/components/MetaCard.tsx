@@ -369,7 +369,10 @@ function Row({ icon, tint, title, titleTone, sub, amount, amountTone, onPress }:
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: radius.md, overflow: 'hidden', minWidth: 232 },
+  /* A card sits INSIDE a fully-rounded bubble, so it takes the app's own
+     card corner rather than a tighter one — a 14pt box beside a capsule
+     reads as a different app. */
+  card: { borderRadius: radius.card, overflow: 'hidden', minWidth: 232 },
   rowCard: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 11 },
   disc: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   main: { flex: 1, minWidth: 0 },

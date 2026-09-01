@@ -79,7 +79,7 @@ export default function BroadcastDetail() {
             placeholderTextColor={c.t4}
             multiline
             accessibilityLabel="Your message"
-            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.card }]}
+            style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.bubble }]}
           />
 
           <Button

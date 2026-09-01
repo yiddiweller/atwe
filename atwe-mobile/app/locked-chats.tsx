@@ -85,7 +85,7 @@ export default function LockedChats() {
                 secureTextEntry
                 keyboardType="number-pad"
                 accessibilityLabel="Your passcode"
-                style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
+                style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill }]}
               />
               <View style={{ height: 12 }} />
               <Button title="Unlock" onPress={unlock} loading={busy} disabled={current.length < 4} />
@@ -107,7 +107,7 @@ export default function LockedChats() {
                 secureTextEntry
                 keyboardType="number-pad"
                 accessibilityLabel="New passcode"
-                style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
+                style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill }]}
               />
               <Text variant="micro" tone="t3" style={{ marginTop: 8 }}>
                 Enter your current one above first.
@@ -127,7 +127,7 @@ export default function LockedChats() {
                 secureTextEntry
                 keyboardType="number-pad"
                 accessibilityLabel="Passcode"
-                style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
+                style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill }]}
               />
               <Text variant="micro" tone="t3" style={{ marginTop: 8 }}>
                 There is no way to recover this. If you forget it, the chats stay

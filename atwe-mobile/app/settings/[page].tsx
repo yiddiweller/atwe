@@ -460,6 +460,6 @@ const styles = StyleSheet.create({
   },
   swatch: { width: 30, height: 30, borderRadius: radius.sm, borderWidth: 1 },
   deact: { padding: 15 },
-  pwIn: { marginTop: 14, borderRadius: radius.md, paddingHorizontal: 14, height: 46, fontSize: 16 },
+  pwIn: { marginTop: 14, borderRadius: radius.pill, paddingHorizontal: 16, height: 46, fontSize: 16 },
   pickLbl: { flex: 1, fontSize: 15.5, fontWeight: '600', letterSpacing: -0.155 },
 });

@@ -108,7 +108,7 @@ export default function PoolDetail() {
                 placeholderTextColor={c.t4}
                 keyboardType="decimal-pad"
                 accessibilityLabel="Amount in dollars"
-                style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
+                style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.pill }]}
               />
               <View style={{ height: 12 }} />
               <Button title="Put it in" onPress={give} loading={busy} />
