@@ -96,6 +96,13 @@ export default function Settings() {
           <LinkRow label="Orders" c={c} onPress={() => router.push('/orders')} last />
         </View>
 
+        {/* Selling */}
+        <GroupLabel>SELLING</GroupLabel>
+        <View style={[styles.card, { backgroundColor: c.s1, borderRadius: radius.lg }]}>
+          <LinkRow label="Your listings" c={c} onPress={() => router.push('/sell')} />
+          <LinkRow label="Sales" c={c} onPress={() => router.push('/sales')} last />
+        </View>
+
         <View style={{ height: spacing.xxl }} />
         <Button title="Log out" kind="danger" onPress={logout} />
 
