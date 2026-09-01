@@ -8,6 +8,7 @@ import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, row } from '@/theme/tokens';
 import { useAuth } from '@/auth/AuthProvider';
+import { useCart, cartCount } from '@/api/cart';
 import { money } from '@/api/wallet';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -21,6 +22,7 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 export default function Profile() {
   const { c, radius, spacing } = useTheme();
   const { user } = useAuth();
+  const cartN = cartCount(useCart().data?.carts);
   const router = useRouter();
   if (!user) return null;
 
@@ -57,15 +59,8 @@ export default function Profile() {
 
         {/* Account group */}
         <Group label="ACCOUNT">
-          <NavRow icon="person-outline" label="Edit profile" onPress={openProfile} c={c} />
-          <NavRow
-            icon="star-outline"
-            label={user.plan === 'pro' ? 'Manage plan' : 'Upgrade to Pro'}
-            value={user.plan === 'pro' ? 'Pro' : undefined}
-            onPress={openProfile}
-            c={c}
-            last
-          />
+          <NavRow icon="person-outline" label="Edit profile"
+            onPress={() => router.push('/edit-profile')} c={c} last />
         </Group>
 
         {/* Money group */}
@@ -104,8 +99,21 @@ export default function Profile() {
           />
         </Group>
 
-        {/* What you have bought and sold */}
+        {/* What you have bought */}
         <Group label="SHOPPING">
+          <NavRow
+            icon="storefront-outline"
+            label="Marketplace"
+            onPress={() => router.push('/marketplace')}
+            c={c}
+          />
+          <NavRow
+            icon="bag-outline"
+            label="Cart"
+            value={cartN ? String(cartN) : undefined}
+            onPress={() => router.push('/cart')}
+            c={c}
+          />
           <NavRow
             icon="receipt-outline"
             label="Orders"
@@ -113,9 +121,26 @@ export default function Profile() {
             c={c}
           />
           <NavRow
-            icon="storefront-outline"
-            label="Marketplace"
-            onPress={() => router.push('/marketplace')}
+            icon="location-outline"
+            label="Delivery addresses"
+            onPress={() => router.push('/addresses')}
+            c={c}
+            last
+          />
+        </Group>
+
+        {/* What you sell */}
+        <Group label="SELLING">
+          <NavRow
+            icon="pricetag-outline"
+            label="Your listings"
+            onPress={() => router.push('/sell')}
+            c={c}
+          />
+          <NavRow
+            icon="stats-chart-outline"
+            label="Sales"
+            onPress={() => router.push('/sales')}
             c={c}
             last
           />

@@ -128,6 +128,7 @@ function RootNavigator() {
           <Stack.Screen name="cart" />
           <Stack.Screen name="sell" />
           <Stack.Screen name="sales" />
+          <Stack.Screen name="edit-profile" options={{ presentation: 'modal' }} />
           <Stack.Screen name="order/[id]" />
           <Stack.Screen name="search" />
           <Stack.Screen name="story/[userId]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />

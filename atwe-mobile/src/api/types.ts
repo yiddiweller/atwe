@@ -30,6 +30,11 @@ export interface User {
   banner?: string | null;
   headline?: string | null;
   bio?: string | null;
+  /* These two matter more than they look: the profile editor prefills from
+     them, and a field it cannot read starts blank and is then SAVED as blank —
+     silently wiping whatever was there. */
+  location?: string | null;
+  website?: string | null;
   balanceCents?: number;
   twoFactorEnabled?: boolean;
   businessVerifyStatus?: 'none' | 'pending' | 'verified';

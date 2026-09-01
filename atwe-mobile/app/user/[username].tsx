@@ -110,6 +110,16 @@ function ProfileHeader({ data }: { data: Profile }) {
         <View style={[styles.avatarRing, { borderColor: c.bg, backgroundColor: c.bg }]}>
           <Avatar name={user.name} avatar={user.avatar} biz={biz} size={80} />
         </View>
+        {isMe && (
+          <View style={styles.followWrap}>
+            <Button
+              title="Edit profile"
+              kind="secondary"
+              onPress={() => router.push('/edit-profile')}
+              style={styles.followBtn}
+            />
+          </View>
+        )}
         {!isMe && (
           <View style={styles.followWrap}>
             <Pressable
