@@ -144,6 +144,13 @@ const CASES = [
   ['AtweEvent',      '/api/events?scope=upcoming',           (j) => j.events[0]],
   ['EventHost',      '/api/events?scope=upcoming',           (j) => j.events[0].host],
   ['Attendee',       null,                                   null],  // needs an event id
+  // Selling: coupons, bundles, offers, product Q&A.
+  ['Coupon',         '/api/coupons',                         (j) => j.coupons[0]],
+  ['Bundle',         '/api/my-bundles',                      (j) => j.bundles[0]],
+  ['BundleItem',     '/api/my-bundles',                      (j) => j.bundles[0].items[0]],
+  ['Offer',          '/api/offers',                          (j) => j.offers[0]],
+  ['QaQuestion',     null,                                   null],  // needs a product id
+  ['QaAnswer',       null,                                   null],  // needs a product id
   // The profile's About tab.
   ['Experience',     '/api/social/profile/' + UN_ABOUT,      (j) => j.experiences[0]],
   ['Education',      '/api/social/profile/' + UN_ABOUT,      (j) => j.education[0]],

@@ -25,6 +25,9 @@ import { useCart, setCartQty } from '@/api/cart';
 import { mediaUri } from '@/lib/media';
 import { useAuth } from '@/auth/AuthProvider';
 import { haptics } from '@/lib/haptics';
+import { ProductQa } from '@/components/ProductQa';
+import { makeOffer } from '@/api/seller';
+import { Modal, TextInput } from 'react-native';
 
 /**
  * Listing detail (`GET /api/listings/:id`) — gallery, title, price, seller,
@@ -46,6 +49,7 @@ export default function ListingDetail() {
   const isSaved = saved ?? listing?.saved ?? false;
   const [qty, setQty] = useState(1);
   const [checkingOut, setCheckingOut] = useState(false);
+  const [offering, setOffering] = useState(false);
   // You cannot buy your own listing, and the server says so with a 400 — better
   // to not offer the button than to offer it and refuse.
   /* The listing DETAIL does carry a seller (the server maps it with the join),
@@ -249,6 +253,13 @@ export default function ListingDetail() {
                   This one comes in options — message the seller to choose.
                 </Text>
               )}
+              {buyable && (
+                <Button
+                  title="Make an offer"
+                  kind="secondary"
+                  onPress={() => { haptics.tap(); setOffering(true); }}
+                />
+              )}
               {!!seller && (
                 <Button
                   title="Message seller"
@@ -266,6 +277,11 @@ export default function ListingDetail() {
             </View>
           </View>
 
+          {/* Questions buyers asked, answered in public. */}
+          <View style={{ paddingHorizontal: spacing.lg }}>
+            <ProductQa productId={listing.id} />
+          </View>
+
           {/* More from this seller */}
           {!!listing.moreFromSeller?.length && (
             <View style={{ marginTop: 8 }}>
@@ -281,6 +297,16 @@ export default function ListingDetail() {
       )}
 
       {!!listing && (
+        <OfferSheet
+          visible={offering}
+          onClose={() => setOffering(false)}
+          productId={listing.id}
+          name={listing.name}
+          asking={listing.priceCents}
+        />
+      )}
+
+      {!!listing && (
         <CheckoutSheet
           visible={checkingOut}
           onClose={() => setCheckingOut(false)}
@@ -291,6 +317,74 @@ export default function ListingDetail() {
         />
       )}
     </Screen>
+  );
+}
+
+/**
+ * Propose a price. Deliberately shows the asking price above the field — an
+ * offer with no anchor is a guess, and a wild one just wastes both their time.
+ */
+function OfferSheet({ visible, onClose, productId, name, asking }: {
+  visible: boolean; onClose: () => void; productId: number; name: string; asking: number;
+}) {
+  const { c, radius, spacing } = useTheme();
+  const router = useRouter();
+  const [v, setV] = useState('');
+  const [busy, setBusy] = useState(false);
+  const cents = Math.round(parseFloat(v.replace(/[^0-9.]/g, '')) * 100);
+  const ok = Number.isFinite(cents) && cents > 0;
+
+  const send = async () => {
+    setBusy(true);
+    try {
+      const r = await makeOffer(productId, cents);
+      haptics.success();
+      setV('');
+      onClose();
+      router.push(`/offer/${r.offer.id}`);
+    } catch (e) { haptics.error(); Alert.alert('Offer', (e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <Screen edges={['top']}>
+        <View style={[styles.head, { paddingHorizontal: spacing.gutter }]}>
+          <Pressable onPress={onClose} hitSlop={10} style={styles.back} accessibilityLabel="Close">
+            <Ionicons name="chevron-down" size={24} color={c.text} />
+          </Pressable>
+          <Text variant="headline" style={{ flex: 1, textAlign: 'center' }}>Make an offer</Text>
+          <View style={styles.back} />
+        </View>
+        <View style={{ padding: spacing.gutter }}>
+          <Text variant="body" tone="t2" numberOfLines={2}>{name}</Text>
+          <Text variant="caption" tone="t3" style={{ marginTop: 4 }}>
+            Asking {'$'}{(asking / 100).toFixed(2)}
+          </Text>
+          <Text variant="caption" tone="t3" style={{ marginTop: 20, marginBottom: 8, letterSpacing: 0.6 }}>
+            YOUR OFFER
+          </Text>
+          <TextInput
+            value={v} onChangeText={setV}
+            placeholder={(asking / 100).toFixed(0)}
+            placeholderTextColor={c.t4}
+            keyboardType="decimal-pad"
+            autoFocus
+            accessibilityLabel="Your offer in dollars"
+            style={{
+              backgroundColor: c.s2, color: c.text, borderRadius: radius.md,
+              paddingHorizontal: 14, paddingVertical: 12, fontSize: 16,
+            }}
+          />
+          <Text variant="caption" tone="t3" style={{ marginTop: 10 }}>
+            The seller can accept, decline, or come back with their own price.
+            Nothing is charged until you both agree.
+          </Text>
+          <View style={{ height: 20 }} />
+          <Button title="Send the offer" onPress={send} loading={busy} disabled={!ok} />
+        </View>
+      </Screen>
+    </Modal>
   );
 }
 

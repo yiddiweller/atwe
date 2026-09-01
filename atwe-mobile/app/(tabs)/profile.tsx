@@ -205,22 +205,24 @@ export default function Profile() {
           />
         </Group>
 
-        {/* What you sell */}
+        {/* What you sell. One row, because everything a seller runs their
+            business from now lives behind it — listings, bundles, discount
+            codes, orders, offers and sales were scattered across the page and
+            an icon inside another screen. */}
         <Group label="SELLING">
           <NavRow
-            icon="pricetag-outline"
-            label="Your listings"
-            onPress={() => router.push('/sell')}
+            icon="storefront-outline"
+            label="Manage store"
+            onPress={() => router.push('/store')}
             c={c}
           />
           <NavRow
-            icon="stats-chart-outline"
-            label="Sales"
-            onPress={() => router.push('/sales')}
+            icon="swap-horizontal-outline"
+            label="Offers"
+            onPress={() => router.push('/offers')}
             c={c}
             last
           />
-
         </Group>
 
         {/* App group */}

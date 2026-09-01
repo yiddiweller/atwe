@@ -10,7 +10,7 @@ import { AddressForm } from './AddressForm';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import {
-  useAddresses, addressLine, quote as quoteFor, pay, useAfterPurchase, etaLabel,
+  useAddresses, addressLine, quote as quoteFor, pay, useAfterPurchase, etaLabel, isQuotable,
   type Address, type Quote, type PayWith, type Target,
 } from '@/api/checkout';
 import { useWallet, money } from '@/api/wallet';
@@ -82,6 +82,10 @@ export function CheckoutSheet({
   const targetKey = JSON.stringify(target);
   const refreshQuote = useCallback(async () => {
     if (!visible) return;
+    /* An accepted offer is already priced — the two of them agreed it — so
+       there is nothing to quote and the route would refuse the attempt. The
+       sheet shows the agreed number instead of a server-computed one. */
+    if (!isQuotable(JSON.parse(targetKey) as Target)) return;
     setQuoting(true);
     try {
       const q = await quoteFor(JSON.parse(targetKey) as Target, { addressId, shipRateId: rateId });
@@ -98,12 +102,13 @@ export function CheckoutSheet({
   useEffect(() => { refreshQuote(); }, [refreshQuote]);
 
   const balance = walletQ.data?.balanceCents ?? 0;
-  const total = quote?.totalCents ?? 0;
+  const agreed = target.kind === 'offer' ? target.amountCents : null;
+  const total = agreed ?? quote?.totalCents ?? 0;
   const short = total > balance;
   const blocked = needsShipping && !chosen;
 
   const doPay = async () => {
-    if (paying || !quote) return;
+    if (paying || (!quote && agreed == null)) return;
     setPaying(true);
     try {
       const r = await pay(target, { addressId, shipRateId: rateId, payWith: payMethod, clientId });
@@ -246,7 +251,14 @@ export function CheckoutSheet({
               {/* What it costs */}
               <Text variant="callout" tone="t2" style={styles.label}>Total</Text>
               <View style={[styles.card, { backgroundColor: c.s1 }]}>
-                {quoting && !quote ? (
+                {agreed != null ? (
+                  <>
+                    <Line label="The price you agreed" value={money(agreed)} big />
+                    <Text variant="caption" tone="t3" style={{ marginTop: 6 }}>
+                      Shipping, if any, is added by the seller.
+                    </Text>
+                  </>
+                ) : quoting && !quote ? (
                   <ActivityIndicator color={c.accent} />
                 ) : quote ? (
                   <>

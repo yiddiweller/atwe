@@ -187,6 +187,12 @@ function RootNavigator() {
           <Stack.Screen name="scheduled-payments" />
           <Stack.Screen name="payment-links" />
           <Stack.Screen name="subscriptions" />
+          <Stack.Screen name="store" />
+          <Stack.Screen name="coupons" />
+          <Stack.Screen name="bundles" />
+          <Stack.Screen name="bundle/[id]" />
+          <Stack.Screen name="offers" />
+          <Stack.Screen name="offer/[id]" />
           <Stack.Screen name="reviews/[id]" />
           <Stack.Screen name="shop/[id]" />
           <Stack.Screen name="edit-profile" options={{ presentation: 'modal' }} />

@@ -128,7 +128,13 @@ export interface Quote {
  *  two shapes there are. */
 export type Target =
   | { kind: 'buy'; productId: number; qty: number; variantId?: number | null }
-  | { kind: 'cart'; sellerId: number };
+  | { kind: 'cart'; sellerId: number }
+  | { kind: 'bundle'; bundleId: number }
+  /* An accepted offer is checked out at the AGREED price, so it has its own
+     route and cannot be quoted — the amount is already settled between the two
+     of them and re-pricing it would be the wrong question. `amountCents` is
+     carried only so the sheet can show the total it is about to charge. */
+  | { kind: 'offer'; offerId: number; amountCents: number };
 
 export interface QuoteInput {
   addressId?: number | null;
@@ -142,9 +148,24 @@ export interface QuoteInput {
  *  that follows it — which is exactly how a shown total stops matching a
  *  charged one. */
 function targetBody(t: Target): Record<string, unknown> {
-  return t.kind === 'cart'
-    ? { mode: 'cart', sellerId: t.sellerId }
-    : { mode: 'buy', productId: t.productId, qty: t.qty, variantId: t.variantId ?? undefined };
+  if (t.kind === 'cart') return { mode: 'cart', sellerId: t.sellerId };
+  if (t.kind === 'bundle') return { mode: 'bundle', bundleId: t.bundleId };
+  if (t.kind === 'offer') return {};   // never quoted; see the Target comment
+  return { mode: 'buy', productId: t.productId, qty: t.qty, variantId: t.variantId ?? undefined };
+}
+
+/** Where a target's purchase actually POSTs. */
+function payPath(t: Target): string {
+  if (t.kind === 'cart') return '/api/orders';
+  if (t.kind === 'bundle') return `/api/bundles/${t.bundleId}/buy`;
+  if (t.kind === 'offer') return `/api/offers/${t.offerId}/checkout`;
+  return '/api/orders/buy';
+}
+
+/** An offer's price is already agreed, so asking the server to quote it would
+ *  be asking the wrong question — and the route does not accept it. */
+export function isQuotable(t: Target): boolean {
+  return t.kind !== 'offer';
 }
 
 /** Price it. Read-only — it commits to nothing. */
@@ -187,7 +208,7 @@ export async function pay(t: Target, input: BuyInput): Promise<BuyResult> {
     protected: payWith === 'protected',
   };
   delete (body as { mode?: unknown }).mode;   // only the quote route wants it
-  return api.post<BuyResult>(t.kind === 'cart' ? '/api/orders' : '/api/orders/buy', body);
+  return api.post<BuyResult>(payPath(t), body);
 }
 
 /** Everything the checkout needs to invalidate after a successful purchase. */
