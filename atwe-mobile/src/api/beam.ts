@@ -49,6 +49,10 @@ export function conversationPreview(c: Conversation): string {
   return s;
 }
 
+/** userId -> emoji. The server keeps one reaction per person, so this is a map
+ *  rather than a list; counting is `Object.values(...)` grouped by emoji. */
+export type Reactions = Record<string, string>;
+
 export interface DmMessage {
   id: number;
   body: string | null;
@@ -66,6 +70,9 @@ export interface DmMessage {
   clientId: string | null;
   deleted: boolean;
   hidden: boolean;
+  edited?: boolean;
+  reply_to: number | null;
+  reactions: Reactions;
   meta: unknown | null;
 }
 export interface DmThreadData {
@@ -100,6 +107,8 @@ export interface Attachment {
   mediaKind?: 'audio' | 'video' | 'image' | 'file';
   /** Seconds — only meaningful for audio and video. */
   durationSec?: number;
+  /** The id of the message this one answers. */
+  replyTo?: number;
 }
 
 /** Send a message to a peer (idempotent via clientId). */
@@ -162,20 +171,38 @@ export function groupPreview(g: Group): string {
   return who ? `${who}: ${s}` : s;
 }
 
+/** Who wrote a group message. It is a nested object on the wire — NOT the flat
+ *  sender_id / sender_name / sender_avatar this once assumed. Getting that wrong
+ *  is silent: names and faces simply never render, and run-grouping compares
+ *  undefined to undefined, so a whole group reads as one unbroken run. */
+export interface GroupSender {
+  id: number;
+  name: string | null;
+  username: string | null;
+  avatar: string | null;
+  verified: boolean;
+}
+
 export interface GroupMessage {
   id: number;
   body: string | null;
   image: string | null;
+  images: string[];
   media: string | null;
   media_kind: string | null;
   media_name: string | null;
   duration_sec: number | null;
   created_at: string;
   mine: boolean;
-  sender_id: number;
-  sender_name: string | null;
-  sender_avatar: string | null;
-  deleted_all?: boolean;
+  sender: GroupSender;
+  deleted: boolean;
+  hidden: boolean;
+  edited: boolean;
+  /** The message this one answers, by id. */
+  reply_to: number | null;
+  /** userId -> emoji. One reaction per person, as the server enforces. */
+  reactions: Reactions;
+  clientId: string | null;
 }
 
 export interface GroupMember {
@@ -217,4 +244,53 @@ export async function sendGroupMessage(
   att: Attachment = {},
 ): Promise<void> {
   await api.post(`/api/atchat/groups/${groupId}/messages`, { body, clientId, ...att });
+}
+
+/* ── Acting on one message ────────────────────────────────────────────────────
+ * React, and delete. Both exist for DMs and for groups against different URLs
+ * but identical semantics, so the screens call one pair of functions and pass a
+ * groupId when they have one — rather than each screen learning two APIs.
+ */
+
+/** The six a phone keyboard reaches for. Sending the emoji already on a message
+ *  clears it, which is what makes a tap on your own reaction remove it. */
+export const REACTIONS = ['❤️', '👍', '😂', '😮', '😢', '🙏'] as const;
+
+/** Send an emoji (or '' to clear). Returns the whole updated map. */
+export async function react(
+  target: { messageId: number; groupId?: number }, emoji: string,
+): Promise<Reactions> {
+  const path = target.groupId
+    ? `/api/atchat/groups/${target.groupId}/messages/${target.messageId}/react`
+    : `/api/atchat/message/${target.messageId}/react`;
+  const r = await api.post<{ reactions: Reactions }>(path, { emoji });
+  return r.reactions || {};
+}
+
+/** `everyone` leaves a tombstone both sides see and is sender-only (a group
+ *  admin may also do it); `me` just hides it from your own copy. */
+export async function deleteMessage(
+  target: { messageId: number; groupId?: number }, scope: 'me' | 'everyone',
+): Promise<void> {
+  const path = target.groupId
+    ? `/api/atchat/groups/${target.groupId}/messages/${target.messageId}?scope=${scope}`
+    : `/api/atchat/message/${target.messageId}?scope=${scope}`;
+  await api.del(path);
+}
+
+/** Fold a reactions map into what actually gets drawn: one chip per distinct
+ *  emoji with a count, and whether YOU are in it. */
+export function reactionChips(
+  reactions: Reactions | undefined, myId: number | undefined,
+): { emoji: string; count: number; mine: boolean }[] {
+  if (!reactions) return [];
+  const by = new Map<string, { emoji: string; count: number; mine: boolean }>();
+  for (const [uid, emoji] of Object.entries(reactions)) {
+    if (!emoji) continue;
+    const cur = by.get(emoji) || { emoji, count: 0, mine: false };
+    cur.count += 1;
+    if (myId != null && String(myId) === uid) cur.mine = true;
+    by.set(emoji, cur);
+  }
+  return [...by.values()];
 }

@@ -20,13 +20,21 @@ import { Screen } from '@/components/Screen';
 import { Avatar } from '@/components/Avatar';
 import { GlassComposer } from '@/components/GlassComposer';
 import { useTheme } from '@/theme/ThemeProvider';
-import { useThread, sendDm, type Attachment, type DmMessage, type DmThreadData } from '@/api/beam';
+import {
+  useThread, sendDm, react, deleteMessage,
+  type Attachment, type DmMessage, type DmThreadData,
+} from '@/api/beam';
+import { useAuth } from '@/auth/AuthProvider';
 import { useRealtime } from '@/lib/useRealtime';
 import { pickPhoto, pickPhotoMessage } from '@/lib/pickPhoto';
 import { useCallback, useEffect } from 'react';
 import { mediaUri } from '@/lib/media';
 import { VoiceNote } from '@/components/VoiceNote';
 import { useVoiceRecorder, voiceFailMessage, VOICE_MAX_SEC } from '@/lib/voice';
+import { MessageActions, type MessageAction } from '@/components/MessageActions';
+import { ReactionChips } from '@/components/ReactionChips';
+import { ReplyQuote, ReplyStrip } from '@/components/ReplyQuote';
+import * as Clipboard from 'expo-clipboard';
 
 /**
  * A live 1:1 DM thread — reads GET /api/atchat/with/:id (polled) and sends via
@@ -38,6 +46,7 @@ export default function ChatThread() {
   const { c, spacing } = useTheme();
   const router = useRouter();
   const qc = useQueryClient();
+  const { user } = useAuth();
   const { peer } = useLocalSearchParams<{ peer: string }>();
   const peerId = Number(peer);
 
@@ -60,11 +69,16 @@ export default function ChatThread() {
   useRealtime('read', onLiveState);
   useRealtime('dm_deleted', onLiveState);
   useRealtime('dm_edited', onLiveState);
+  useRealtime('dm_reaction', onLiveState);
   const { data, isLoading } = useThread(Number.isFinite(peerId) ? peerId : undefined);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   // A photo waiting to go with (or instead of) the next message.
   const [photo, setPhoto] = useState<string | null>(null);
+  // The message a long-press opened the sheet on, and the one being answered.
+  // Held as ids so a refetch can never leave either pointing at a stale copy.
+  const [actingOn, setActingOn] = useState<number | null>(null);
+  const [replyTo, setReplyTo] = useState<number | null>(null);
 
   const voice = useVoiceRecorder();
 
@@ -99,6 +113,8 @@ export default function ChatThread() {
 
   const messages = data?.messages ?? [];
   const canMessage = data?.canMessage !== false;
+  const byId = (mid: number | null) => (mid == null ? undefined : messages.find((m) => m.id === mid));
+  const acting = byId(actingOn);
 
   const scrollEnd = () => setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
 
@@ -109,11 +125,14 @@ export default function ChatThread() {
     const image = photo ?? undefined;
     if ((!body && !image && !att.media) || sending) return;
     const clientId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const answering = replyTo;
     const optimistic: DmMessage = {
       id: -Date.now(),
       body,
       image: photo,
       images: [],
+      reply_to: answering,
+      reactions: {},
       // The optimistic bubble shows the LOCAL recording, so a voice note is
       // playable the instant it is sent rather than after a round trip.
       media: localMedia ?? null,
@@ -133,10 +152,11 @@ export default function ChatThread() {
     );
     setText('');
     setPhoto(null);
+    setReplyTo(null);
     setSending(true);
     scrollEnd();
     try {
-      await sendDm(peerId, body, clientId, { image, ...att });
+      await sendDm(peerId, body, clientId, { image, ...att, ...(answering ? { replyTo: answering } : {}) });
     } catch {
       // leave the optimistic bubble; the reconcile below will drop it if it failed
     } finally {
@@ -145,6 +165,62 @@ export default function ChatThread() {
       qc.invalidateQueries({ queryKey: ['conversations'] });
       scrollEnd();
     }
+  };
+
+  const patchMessage = (mid: number, patch: Partial<DmMessage>) => {
+    qc.setQueryData<DmThreadData>(['thread', peerId], (old) =>
+      old ? { ...old, messages: old.messages.map((m) => (m.id === mid ? { ...m, ...patch } : m)) } : old,
+    );
+  };
+
+  const onReact = async (emoji: string) => {
+    const m = acting;
+    if (!m || m.id < 0) return;   // an optimistic bubble has no server id yet
+    const myId = user?.id;
+    // Show it immediately, and put it back if the server disagrees.
+    const before = m.reactions;
+    const next = { ...before };
+    if (myId != null) {
+      if (next[String(myId)] === emoji) delete next[String(myId)];
+      else next[String(myId)] = emoji;
+    }
+    patchMessage(m.id, { reactions: next });
+    try {
+      const server = await react({ messageId: m.id }, emoji);
+      patchMessage(m.id, { reactions: server });
+    } catch {
+      patchMessage(m.id, { reactions: before });
+    }
+  };
+
+  const onAction = async (a: MessageAction) => {
+    const m = acting;
+    if (!m) return;
+    if (a === 'reply') { setReplyTo(m.id); return; }
+    if (a === 'copy') { await Clipboard.setStringAsync(m.body || ''); return; }
+    const everyone = a === 'delete-all';
+    Alert.alert(
+      everyone ? 'Delete for everyone?' : 'Delete for me?',
+      everyone
+        ? 'It will be replaced with "Message deleted" on both sides.'
+        : 'It stays in their copy of the conversation.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteMessage({ messageId: m.id }, everyone ? 'everyone' : 'me');
+            } catch (e) {
+              Alert.alert('Delete', (e as Error).message);
+            } finally {
+              qc.invalidateQueries({ queryKey: ['thread', peerId] });
+              qc.invalidateQueries({ queryKey: ['conversations'] });
+            }
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -180,7 +256,15 @@ export default function ChatThread() {
             ref={listRef}
             data={messages}
             keyExtractor={(m) => String(m.id)}
-            renderItem={({ item }) => <Bubble msg={item} />}
+            renderItem={({ item }) => (
+              <Bubble
+                msg={item}
+                myId={user?.id}
+                answering={byId(item.reply_to)}
+                peerName={data?.peer.name}
+                onLongPress={() => setActingOn(item.id)}
+              />
+            )}
             contentContainerStyle={{ paddingVertical: 12, paddingHorizontal: 12 }}
             showsVerticalScrollIndicator={false}
             onContentSizeChange={scrollEnd}
@@ -192,6 +276,14 @@ export default function ChatThread() {
               </View>
             }
           />
+
+          {replyTo != null && (
+            <ReplyStrip
+              name={byId(replyTo)?.mine ? 'yourself' : data?.peer.name ?? null}
+              preview={previewOf(byId(replyTo))}
+              onCancel={() => setReplyTo(null)}
+            />
+          )}
 
           {/* Composer — floating Liquid Glass pill (ChatGPT-style, Atwe design) */}
           <GlassComposer
@@ -212,11 +304,39 @@ export default function ChatThread() {
           />
         </KeyboardAvoidingView>
       )}
+
+      <MessageActions
+        visible={actingOn != null}
+        onClose={() => setActingOn(null)}
+        onReact={onReact}
+        onAction={onAction}
+        myReaction={user?.id != null ? acting?.reactions?.[String(user.id)] : undefined}
+        canDeleteForEveryone={!!acting?.mine}
+        canCopy={!!acting?.body}
+      />
     </Screen>
   );
 }
 
-function Bubble({ msg }: { msg: DmMessage }) {
+/** One line describing a message, for a reply strip or a quote. */
+function previewOf(m?: DmMessage): string {
+  if (!m) return '';
+  if (m.deleted) return 'Message deleted';
+  if (m.media_kind === 'audio') return '🎤 Voice message';
+  if (m.media_kind === 'video') return '🎬 Video';
+  if (m.image || m.images?.length) return '📷 Photo';
+  return m.body || '';
+}
+
+function Bubble({ msg, myId, answering, peerName, onLongPress }: {
+  msg: DmMessage;
+  myId?: number;
+  answering?: DmMessage;
+  /** Who the other side is — a DM bubble has no sender on it, so the quote of
+   *  a message you are answering has to be told whose it was. */
+  peerName?: string | null;
+  onLongPress: () => void;
+}) {
   const { c } = useTheme();
   const mine = msg.mine;
   const img = msg.images?.[0] || msg.image || null;
@@ -236,7 +356,12 @@ function Bubble({ msg }: { msg: DmMessage }) {
 
   return (
     <View style={[styles.bubbleRow, { justifyContent: mine ? 'flex-end' : 'flex-start' }]}>
-      <View
+      <View style={{ maxWidth: '78%' }}>
+      <Pressable
+        onLongPress={msg.deleted ? undefined : onLongPress}
+        delayLongPress={280}
+        accessibilityRole="button"
+        accessibilityHint="Press and hold for message options"
         style={[
           styles.bubble,
           mine
@@ -244,6 +369,13 @@ function Bubble({ msg }: { msg: DmMessage }) {
             : { backgroundColor: c.s2, borderBottomLeftRadius: 4 },
         ]}
       >
+        {!!answering && (
+          <ReplyQuote
+            name={answering.mine ? 'You' : peerName ?? null}
+            preview={previewOf(answering)}
+            mine={mine}
+          />
+        )}
         {img && (
           <Image
             source={{ uri: mediaUri(img) }}
@@ -269,6 +401,8 @@ function Bubble({ msg }: { msg: DmMessage }) {
             </Text>
           )
         )}
+      </Pressable>
+      <ReactionChips reactions={msg.reactions} myId={myId} align={mine ? 'right' : 'left'} />
       </View>
     </View>
   );
@@ -287,7 +421,7 @@ const styles = StyleSheet.create({
   peer: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   bubbleRow: { flexDirection: 'row', marginVertical: 3 },
-  bubble: { maxWidth: '78%', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 13 },
+  bubble: { borderRadius: 20, paddingVertical: 8, paddingHorizontal: 13 },
   bubbleImg: { width: 200, height: 200, borderRadius: 12, marginBottom: 4 },
   composer: {
     flexDirection: 'row',

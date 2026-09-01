@@ -1,27 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, FlatList, Pressable, KeyboardAvoidingView, Platform,
-  ActivityIndicator, StyleSheet,
+  ActivityIndicator, StyleSheet, Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { Alert } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Avatar } from '@/components/Avatar';
 import { GlassComposer } from '@/components/GlassComposer';
+import { MessageActions, type MessageAction } from '@/components/MessageActions';
+import { ReactionChips } from '@/components/ReactionChips';
+import { ReplyQuote, ReplyStrip } from '@/components/ReplyQuote';
+import { VoiceNote } from '@/components/VoiceNote';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import {
-  useGroupThread, sendGroupMessage,
+  useGroupThread, sendGroupMessage, react, deleteMessage,
   type Attachment, type GroupMessage, type GroupThreadData,
 } from '@/api/beam';
+import { useAuth } from '@/auth/AuthProvider';
 import { useRealtime } from '@/lib/useRealtime';
 import { pickPhoto, pickPhotoMessage } from '@/lib/pickPhoto';
 import { mediaUri } from '@/lib/media';
-import { VoiceNote } from '@/components/VoiceNote';
 import { useVoiceRecorder, voiceFailMessage, VOICE_MAX_SEC } from '@/lib/voice';
 
 /**
@@ -42,6 +46,7 @@ export default function GroupThread() {
   const { c } = useTheme();
   const router = useRouter();
   const qc = useQueryClient();
+  const { user } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
   const gid = Number(id);
 
@@ -57,25 +62,34 @@ export default function GroupThread() {
   useRealtime('msg', onLive);
   useRealtime('dm_deleted', onLive);
   useRealtime('dm_edited', onLive);
+  useRealtime('dm_reaction', onLive);
 
   const { data, isLoading, isError } = useGroupThread(Number.isFinite(gid) ? gid : undefined);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   // A photo waiting to go with (or instead of) the next message.
   const [photo, setPhoto] = useState<string | null>(null);
+  // The message a long-press opened the actions sheet on, and the one being
+  // answered. Held as ids, not objects, so a refetch can never leave either
+  // pointing at a stale copy of a message that has since changed.
+  const [actingOn, setActingOn] = useState<number | null>(null);
+  const [replyTo, setReplyTo] = useState<number | null>(null);
 
   const attachPhoto = async () => {
     const r = await pickPhoto();
     if (r.ok) { setPhoto(r.dataUrl); return; }
     const msg = pickPhotoMessage(r.reason);
-    if (msg) Alert.alert('Photo', msg);   // a cancel says nothing — it was deliberate
+    if (msg) Alert.alert('Photo', msg);
   };
+
   const listRef = useRef<FlatList<GroupMessage>>(null);
 
   const messages = data?.messages ?? [];
   const group = data?.group;
   // A channel takes posts from admins only — say so instead of failing on send.
   const canPost = !group?.broadcast || !!group?.iAmAdmin;
+  const byId = (mid: number | null) => (mid == null ? undefined : messages.find((m) => m.id === mid));
+  const acting = byId(actingOn);
 
   const scrollEnd = () => setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
 
@@ -107,10 +121,12 @@ export default function GroupThread() {
     const image = photo ?? undefined;
     if ((!body && !image && !att.media) || sending || !canPost) return;
     const clientId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const answering = replyTo;
     const optimistic: GroupMessage = {
       id: -Date.now(),
       body,
       image: photo,
+      images: [],
       // The local recording, so the note is playable before the round trip.
       media: localMedia ?? null,
       media_kind: att.mediaKind ?? null,
@@ -118,19 +134,32 @@ export default function GroupThread() {
       duration_sec: att.durationSec ?? null,
       created_at: new Date().toISOString(),
       mine: true,
-      sender_id: -1,
-      sender_name: null,
-      sender_avatar: null,
+      sender: {
+        id: user?.id ?? -1,
+        name: user?.name ?? null,
+        username: user?.username ?? null,
+        avatar: user?.avatar ?? null,
+        verified: !!user?.verified,
+      },
+      deleted: false,
+      hidden: false,
+      edited: false,
+      reply_to: answering,
+      reactions: {},
+      clientId,
     };
     qc.setQueryData<GroupThreadData>(['group', gid], (old) =>
       old ? { ...old, messages: [...old.messages, optimistic] } : old,
     );
     setText('');
     setPhoto(null);
+    setReplyTo(null);
     setSending(true);
     scrollEnd();
     try {
-      await sendGroupMessage(gid, body, clientId, { image, ...att });
+      await sendGroupMessage(gid, body, clientId, {
+        image, ...att, ...(answering ? { replyTo: answering } : {}),
+      });
     } catch {
       // leave the optimistic bubble; the refetch below reconciles it away if it failed
     } finally {
@@ -139,6 +168,62 @@ export default function GroupThread() {
       qc.invalidateQueries({ queryKey: ['groups'] });
       scrollEnd();
     }
+  };
+
+  const onReact = async (emoji: string) => {
+    const m = acting;
+    if (!m || m.id < 0) return;   // an optimistic bubble has no server id yet
+    const myId = user?.id;
+    // Show it immediately, and put it back if the server disagrees.
+    const before = m.reactions;
+    const next = { ...before };
+    if (myId != null) {
+      if (next[String(myId)] === emoji) delete next[String(myId)];
+      else next[String(myId)] = emoji;
+    }
+    patchMessage(m.id, { reactions: next });
+    try {
+      const server = await react({ messageId: m.id, groupId: gid }, emoji);
+      patchMessage(m.id, { reactions: server });
+    } catch {
+      patchMessage(m.id, { reactions: before });
+    }
+  };
+
+  const patchMessage = (mid: number, patch: Partial<GroupMessage>) => {
+    qc.setQueryData<GroupThreadData>(['group', gid], (old) =>
+      old ? { ...old, messages: old.messages.map((m) => (m.id === mid ? { ...m, ...patch } : m)) } : old,
+    );
+  };
+
+  const onAction = async (a: MessageAction) => {
+    const m = acting;
+    if (!m) return;
+    if (a === 'reply') { setReplyTo(m.id); return; }
+    if (a === 'copy') { await Clipboard.setStringAsync(m.body || ''); return; }
+    const everyone = a === 'delete-all';
+    Alert.alert(
+      everyone ? 'Delete for everyone?' : 'Delete for me?',
+      everyone
+        ? 'It will be replaced with "Message deleted" for everyone in this group.'
+        : 'It stays for everyone else.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteMessage({ messageId: m.id, groupId: gid }, everyone ? 'everyone' : 'me');
+            } catch (e) {
+              Alert.alert('Delete', (e as Error).message);
+            } finally {
+              qc.invalidateQueries({ queryKey: ['group', gid] });
+              qc.invalidateQueries({ queryKey: ['groups'] });
+            }
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -182,10 +267,13 @@ export default function GroupThread() {
             renderItem={({ item, index }) => (
               <GroupBubble
                 msg={item}
+                myId={user?.id}
+                answering={byId(item.reply_to)}
+                onLongPress={() => setActingOn(item.id)}
                 /* the sender's name and face show only on the FIRST message of a run
                    from that person — repeating them on every line is what makes a
                    group read like a log rather than a conversation */
-                startsRun={index === 0 || messages[index - 1]?.sender_id !== item.sender_id}
+                startsRun={index === 0 || messages[index - 1]?.sender?.id !== item.sender?.id}
               />
             )}
             contentContainerStyle={{ paddingVertical: 12, paddingHorizontal: 12 }}
@@ -197,6 +285,14 @@ export default function GroupThread() {
               </View>
             }
           />
+
+          {replyTo != null && (
+            <ReplyStrip
+              name={byId(replyTo)?.mine ? 'yourself' : byId(replyTo)?.sender?.name ?? null}
+              preview={previewOf(byId(replyTo))}
+              onCancel={() => setReplyTo(null)}
+            />
+          )}
 
           <GlassComposer
             value={text}
@@ -216,15 +312,41 @@ export default function GroupThread() {
           />
         </KeyboardAvoidingView>
       )}
+
+      <MessageActions
+        visible={actingOn != null}
+        onClose={() => setActingOn(null)}
+        onReact={onReact}
+        onAction={onAction}
+        myReaction={user?.id != null ? acting?.reactions?.[String(user.id)] : undefined}
+        canDeleteForEveryone={!!acting?.mine || !!group?.iAmAdmin}
+        canCopy={!!acting?.body}
+      />
     </Screen>
   );
 }
 
-function GroupBubble({ msg, startsRun }: { msg: GroupMessage; startsRun: boolean }) {
+/** One line describing a message, for a reply strip or a quote. */
+function previewOf(m?: GroupMessage): string {
+  if (!m) return '';
+  if (m.deleted) return 'Message deleted';
+  if (m.media_kind === 'audio') return '🎤 Voice message';
+  if (m.media_kind === 'video') return '🎬 Video';
+  if (m.image) return '📷 Photo';
+  return m.body || '';
+}
+
+function GroupBubble({ msg, startsRun, myId, answering, onLongPress }: {
+  msg: GroupMessage;
+  startsRun: boolean;
+  myId?: number;
+  answering?: GroupMessage;
+  onLongPress: () => void;
+}) {
   const { c } = useTheme();
   const mine = msg.mine;
-  const voice = !msg.deleted_all && msg.media_kind === 'audio' && msg.media ? msg.media : null;
-  const label = msg.deleted_all
+  const voice = !msg.deleted && msg.media_kind === 'audio' && msg.media ? msg.media : null;
+  const label = msg.deleted
     ? 'Message deleted'
     : voice ? null
     : msg.media_kind === 'audio' ? '🎤 Voice message'
@@ -238,33 +360,45 @@ function GroupBubble({ msg, startsRun }: { msg: GroupMessage; startsRun: boolean
           bubbles in a run stay on one line rather than stepping left and right */}
       {!mine && (
         <View style={styles.avaSlot}>
-          {startsRun && <Avatar name={msg.sender_name ?? undefined} avatar={msg.sender_avatar} size={26} />}
+          {startsRun && <Avatar name={msg.sender?.name ?? undefined} avatar={msg.sender?.avatar} size={26} />}
         </View>
       )}
       <View style={{ maxWidth: '78%' }}>
-        {!mine && startsRun && !!msg.sender_name && (
+        {!mine && startsRun && !!msg.sender?.name && (
           <Text variant="caption" tone="t3" style={styles.sender} numberOfLines={1}>
-            {msg.sender_name}
+            {msg.sender.name}
           </Text>
         )}
-        <View style={[styles.bubble,
-          mine ? { backgroundColor: c.accent, borderBottomRightRadius: 4 }
-               : { backgroundColor: c.s2, borderBottomLeftRadius: 4 }]}>
+        <Pressable
+          onLongPress={msg.deleted ? undefined : onLongPress}
+          delayLongPress={280}
+          style={[styles.bubble,
+            mine ? { backgroundColor: c.accent, borderBottomRightRadius: 4 }
+                 : { backgroundColor: c.s2, borderBottomLeftRadius: 4 }]}
+          accessibilityRole="button"
+          accessibilityHint="Press and hold for message options"
+        >
+          {!!answering && (
+            <ReplyQuote
+              name={answering.mine ? 'You' : answering.sender?.name ?? null}
+              preview={previewOf(answering)}
+              mine={mine}
+            />
+          )}
           {!!msg.image && (
             <Image source={{ uri: mediaUri(msg.image) }} style={styles.img} contentFit="cover" transition={120} />
           )}
-          {voice && (
-            <VoiceNote uri={voice} durationSec={msg.duration_sec} mine={mine} />
-          )}
+          {voice && <VoiceNote uri={voice} durationSec={msg.duration_sec} mine={mine} />}
           {label ? (
             <Text variant="body" style={{ color: mine ? '#fff' : c.t2,
-              fontStyle: msg.deleted_all ? 'italic' : 'normal' }}>{label}</Text>
+              fontStyle: msg.deleted ? 'italic' : 'normal' }}>{label}</Text>
           ) : (
             !!msg.body && (
               <Text variant="body" style={{ color: mine ? '#fff' : c.text }}>{msg.body}</Text>
             )
           )}
-        </View>
+        </Pressable>
+        <ReactionChips reactions={msg.reactions} myId={myId} align={mine ? 'right' : 'left'} />
       </View>
     </View>
   );
@@ -280,9 +414,9 @@ const styles = StyleSheet.create({
   },
   back: { width: 34, alignItems: 'flex-start' },
   peer: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  row: { flexDirection: 'row', alignItems: 'flex-end' },
-  avaSlot: { width: 26, marginRight: 6 },
-  sender: { marginLeft: 10, marginBottom: 2 },
-  bubble: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: 18 },
-  img: { width: 220, height: 150, borderRadius: 12, marginBottom: 6 },
+  row: { flexDirection: 'row' },
+  avaSlot: { width: 26, marginRight: 8, justifyContent: 'flex-end' },
+  sender: { marginLeft: 4, marginBottom: 3 },
+  bubble: { borderRadius: 20, paddingVertical: 8, paddingHorizontal: 13 },
+  img: { width: 200, height: 200, borderRadius: 12, marginBottom: 4 },
 });
