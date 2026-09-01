@@ -8,6 +8,7 @@ import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
+import { BookSheet } from '@/components/BookSheet';
 import { PostCard } from '@/components/PostCard';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -79,6 +80,7 @@ function ProfileHeader({ data }: { data: Profile }) {
 
   const [following, setFollowing] = useState(!!data.isFollowing);
   const [followers, setFollowers] = useState(counts.followers || 0);
+  const [booking, setBooking] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const toggleFollow = async () => {
@@ -122,6 +124,16 @@ function ProfileHeader({ data }: { data: Profile }) {
         )}
         {!isMe && (
           <View style={styles.followWrap}>
+            {biz && (
+              <Pressable
+                onPress={() => setBooking(true)}
+                style={[styles.msgBtn, { borderColor: c.border }]}
+                accessibilityRole="button"
+                accessibilityLabel={`Book ${user.name}`}
+              >
+                <Ionicons name="calendar-outline" size={20} color={c.text} />
+              </Pressable>
+            )}
             <Pressable
               onPress={() => router.push(`/chat/${user.id}`)}
               style={[styles.msgBtn, { borderColor: c.border }]}
@@ -193,6 +205,13 @@ function ProfileHeader({ data }: { data: Profile }) {
       </View>
 
       <View style={[styles.divider, { backgroundColor: c.border }]} />
+
+      <BookSheet
+        visible={booking}
+        onClose={() => setBooking(false)}
+        businessId={user.id}
+        businessName={user.name}
+      />
     </View>
   );
 }

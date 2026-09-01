@@ -125,6 +125,12 @@ export default function Profile() {
             label="Delivery addresses"
             onPress={() => router.push('/addresses')}
             c={c}
+          />
+          <NavRow
+            icon="calendar-outline"
+            label="Appointments"
+            onPress={() => router.push('/appointments')}
+            c={c}
             last
           />
         </Group>
@@ -144,6 +150,7 @@ export default function Profile() {
             c={c}
             last
           />
+
         </Group>
 
         {/* App group */}

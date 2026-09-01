@@ -93,7 +93,8 @@ export default function Settings() {
         <View style={[styles.card, { backgroundColor: c.s1, borderRadius: radius.card }]}>
           <LinkRow label="Cart" c={c} onPress={() => router.push('/cart')} />
           <LinkRow label="Delivery addresses" c={c} onPress={() => router.push('/addresses')} />
-          <LinkRow label="Orders" c={c} onPress={() => router.push('/orders')} last />
+          <LinkRow label="Orders" c={c} onPress={() => router.push('/orders')} />
+          <LinkRow label="Appointments" c={c} onPress={() => router.push('/appointments')} last />
         </View>
 
         {/* Selling */}

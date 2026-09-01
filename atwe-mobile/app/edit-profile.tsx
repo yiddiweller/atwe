@@ -15,6 +15,7 @@ import { radius, spacing } from '@/theme/tokens';
 import { useAuth } from '@/auth/AuthProvider';
 import { saveProfile } from '@/api/profile';
 import { pickPhoto, pickPhotoMessage } from '@/lib/pickPhoto';
+import { HoursEditor, DEFAULT_HOURS, type BusinessHours } from '@/components/HoursEditor';
 import { mediaUri } from '@/lib/media';
 
 /**
@@ -34,6 +35,7 @@ export default function EditProfile() {
   const router = useRouter();
   const qc = useQueryClient();
   const { user, setUser } = useAuth();
+  const biz = user?.accountType === 'business';
 
   const [name, setName] = useState(user?.name ?? '');
   const [username, setUsername] = useState(user?.username ?? '');
@@ -45,6 +47,13 @@ export default function EditProfile() {
   const [website, setWebsite] = useState(user?.website ?? '');
   const [avatar, setAvatar] = useState<string | null>(user?.avatar ?? null);
   const [banner, setBanner] = useState<string | null>(user?.banner ?? null);
+  // Business hours: seven days from Monday. Editing them here is what makes the
+  // Book sheet's "they haven't put up their hours" a solvable problem rather
+  // than a dead end.
+  const [hours, setHours] = useState<BusinessHours>(
+    (Array.isArray(user?.businessHours) ? (user!.businessHours as BusinessHours) : null) ?? DEFAULT_HOURS,
+  );
+  const [hoursChanged, setHoursChanged] = useState(false);
   const [avatarChanged, setAvatarChanged] = useState(false);
   const [bannerChanged, setBannerChanged] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -80,6 +89,9 @@ export default function EditProfile() {
         website: website.trim(),
         ...(avatarChanged ? { avatar: avatar ?? '' } : {}),
         ...(bannerChanged ? { banner: banner ?? '' } : {}),
+        // Only when touched: sending them unchanged would write a default over
+        // hours set anywhere else.
+        ...(biz && hoursChanged ? { businessHours: hours } : {}),
       });
       setUser(next);
       // Your name and face are on posts, chats and search results all over the
@@ -92,8 +104,6 @@ export default function EditProfile() {
       setSaving(false);
     }
   };
-
-  const biz = user?.accountType === 'business';
 
   return (
     <Screen edges={['top']}>
@@ -151,6 +161,16 @@ export default function EditProfile() {
         <Field label="Website" value={website} set={setWebsite} c={c}
           autoCapitalize="none" autoCorrect={false} keyboardType="url"
           maxLength={120} placeholder="yoursite.com" />
+
+        {biz && (
+          <View style={{ marginTop: 10 }}>
+            <Text variant="headline" style={{ marginBottom: 10 }}>Opening hours</Text>
+            <HoursEditor
+              value={hours}
+              onChange={(h) => { setHours(h); setHoursChanged(true); }}
+            />
+          </View>
+        )}
         </View>
       </ScrollView>
 

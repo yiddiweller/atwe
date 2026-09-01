@@ -25,6 +25,9 @@ export interface ProfileInput {
   /** Omit to leave unchanged; '' to remove; a data URL to set. */
   avatar?: string | null;
   banner?: string | null;
+  /** Business accounts only: seven days from Monday. Bookable times are cut
+   *  from this, so it is not decoration. */
+  businessHours?: unknown[];
 }
 
 export async function saveProfile(v: ProfileInput): Promise<User> {

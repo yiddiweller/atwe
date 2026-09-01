@@ -35,6 +35,9 @@ export interface User {
      silently wiping whatever was there. */
   location?: string | null;
   website?: string | null;
+  /** Business accounts: seven days from Monday, each `{closed:true}` or
+   *  `{open,close}`. The bookable times are cut from this. */
+  businessHours?: unknown[] | null;
   balanceCents?: number;
   twoFactorEnabled?: boolean;
   businessVerifyStatus?: 'none' | 'pending' | 'verified';

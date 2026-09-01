@@ -103,6 +103,10 @@ const CASES = [
   ['Profile',        `/api/social/profile/${UN}`,            (j) => j],
   ['ProfileUser',    `/api/social/profile/${UN}`,            (j) => j.user],
   ['Address',        '/api/addresses',                       (j) => j.addresses[0]],
+  ['Appointment',    '/api/appointments?scope=mine',         (j) => j.appointments[0]],
+  ['ApptParty',      '/api/appointments?scope=mine',         (j) => j.appointments[0].business],
+  ['Service',        null,                                   null],  // needs a business id
+  ['SlotsResult',    null,                                   null],
   ['Quote',          null,                                   null],  // a POST; see below
   ['Eta',            null,                                   null],
   ['User',           '/api/auth/me',                         (j) => j.user],
@@ -131,6 +135,19 @@ const get = async (p) => {
     const su = tray.tray?.[0]?.user?.id;
     if (su) { CASES[8][1] = `/api/stories/${su}`; CASES[8][2] = (j) => j.stories[0]; }
   } catch { /* leave those three skipped */ }
+
+  // Services and slots hang off a business id, which comes from an appointment
+  // this account already has — the only business it is certain to be able to see.
+  try {
+    const appts = await get('/api/appointments?scope=mine');
+    const bid = appts.appointments?.[0]?.business?.id;
+    if (bid) {
+      const si = CASES.findIndex(([n]) => n === 'Service');
+      CASES[si][1] = `/api/business/${bid}/services`; CASES[si][2] = (j) => j.services[0];
+      const li = CASES.findIndex(([n]) => n === 'SlotsResult');
+      CASES[li][1] = `/api/business/${bid}/slots?days=7`; CASES[li][2] = (j) => j;
+    }
+  } catch { /* leave them skipped */ }
 
   // The checkout quote is a POST, so it needs its own little request rather than
   // the shared GET. Priced against a real listing and a real saved address, or
