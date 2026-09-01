@@ -288,6 +288,142 @@ is one number rather than a sweep:
 - **Not yet:** voice notes (needs an audio library), reactions, replies-in-thread, and
   calls.
 
+## Recently added (Beam finished, buying works, and a check that catches silent drift)
+
+Five slices, all verified against a real server and Postgres rather than by
+reading the code. Two of them started as bug hunts and turned into the most
+valuable thing in the batch.
+
+### 1. Every photo in the app was invisible, and had been all along
+
+The backend does **not** ship stored photos inline. Anything over 2KB — which is
+every real photo — is rewritten by `mediaRef()` into a signed **relative** path,
+`/api/media/<kind>/<id>/<idx>/<sig>`. That is exactly right in a browser and
+completely wrong here: React Native has no document origin, so
+`<Image source={{ uri: '/api/media/…' }} />` resolves to nothing and renders
+blank. Avatars, post images, DM and group photos, story media, listing covers,
+profile banners — all of them. Confirmed against a real payload before touching
+anything, then confirmed the same path with the API base in front serves the
+bytes with no auth header.
+
+**`src/lib/media.ts` → `mediaUri()`** joins a relative path to the API base and
+passes `data:`, `http(s):` and `//host` through untouched. **Every image site in
+the app goes through it.** Add a new one and it must too.
+
+### 2. Voice notes in Beam
+
+The server has taken them since long before this app — `media` as a base64 data
+URL, `mediaKind: 'audio'`, `durationSec` — so this was only ever the missing
+half. Tap the mic where the send arrow sits when nothing is typed; the pill
+becomes a recording bar (breathing red dot, running timer, bin, send). In the
+thread a note is a real player on both sides, in DMs and groups.
+
+- **Mono AAC at 48kbps**, deliberately neither of `expo-audio`'s presets:
+  HIGH_QUALITY is stereo 128k (four times the bytes for speech nobody can tell
+  apart) and LOW_QUALITY drops iOS to `AudioQuality.MIN`, which is audibly rough.
+- **Five-minute ceiling, and hitting it SENDS** rather than discarding — the
+  recorder has already stopped taking audio, so holding it hostage only loses
+  what was said. Under a second is a mis-tap.
+- The bubble you just sent plays the **file still on disk**, not the data URL
+  going up: iOS will not reliably open a `data:` URI, and a megabytes-long
+  string does not belong in a render tree.
+- New deps: `expo-audio ~1.1.1`, `expo-file-system ~19.0.23` (pinned explicitly,
+  it was only a transitive), `expo-clipboard ~8.0.8`. Versions read from
+  `node_modules/expo/bundledNativeModules.json`, never guessed — `npx expo
+  install` cannot reach Expo's API through the egress proxy.
+
+### 3. Group messages had no sender, and a check so that cannot happen again
+
+Typing the group message shape against the **live payload** instead of against
+what a DM looks like turned up a bug that had been shipping since groups landed.
+The server sends a nested `sender` object and a `deleted` flag; the app declared
+flat `sender_id` / `sender_name` / `sender_avatar` and `deleted_all`. Nothing
+errored — TypeScript was told the wrong shape, so it agreed. On a phone: no name
+and no face on anyone's message ever, a deleted message never said so, and
+run-grouping compared `undefined` to `undefined`, so a whole group read as one
+unbroken run from nobody.
+
+**`tools/check-api-types.js`** is the check that class of bug needed:
+
+```
+TOK=<bearer> UN=<username> BASE=http://localhost:3000 node tools/check-api-types.js
+```
+
+It fetches every endpoint the app calls and verifies each field each interface
+names is genuinely there. A **required** field never sent is a failure; an
+**optional** one is reported to eyeball, because absence can be legitimate
+(`ppvCents` rides only on a locked post) or a bug. An empty list is **skipped,
+never passed** — nothing to compare proves nothing. **Run it against a populated
+account after touching any `src/api/*.ts` type.**
+
+It found three more on its first runs:
+- `Order.buyerName`/`sellerName` — the server sends `buyer`/`seller` OBJECTS, so
+  every order row silently dropped its "from …" line.
+- `User.emailVerified` — the wire says **`email_verified`**, and `is_admin`
+  likewise. Not a server slip: `publicUser` has always sent those two in
+  snake_case. Settings therefore told every account its email was "Not verified".
+  **Do not "tidy" those two names back to camelCase.**
+- `Quote.eta` is a **range** (`{minAt, maxAt, handleDays, transitDays}`), not a
+  date string. Rendered as one it reads "Invalid Date" under every total in the
+  shop.
+
+30 interfaces now check clean.
+
+### 4. Message actions: react, reply, copy, delete
+
+Press and hold a bubble for a frosted sheet — the phone's reading of the web's
+Glide menu, label left, icon right — with six reactions above it. One emoji per
+person, and picking the one already there clears it (which is what the server
+does with a repeat). Optimistic, reverting if the server disagrees; your own
+reaction chip is outlined in the accent. Reply shows a strip above the composer
+and a quoted spine inside the sent bubble. Delete for me, or — your own message,
+or any message if you run the group — for everyone.
+
+Two things to keep: the sheet's actions fire ~180ms **after** it closes (an
+Alert raised from inside a closing modal is a known iOS deadlock), and the
+message being acted on is held as an **id**, never an object, so a refetch
+mid-gesture cannot leave the sheet acting on a stale copy.
+
+### 5. Buying, and the order afterwards
+
+Engine could show a listing and open a chat about it; it could not take money.
+Now: quote first, then buy, on exactly the endpoints the web uses — so what the
+buyer is shown is what they are charged and no arithmetic happens on the phone.
+
+- **Where** — pick a saved address or add one. Only name, street and city are
+  required; that is the server's rule and a deliberate one, since much of the
+  world has no postcode or state.
+- **What** — subtotal, discount, shipping, tax, total from
+  `POST /api/checkout/quote`; each line only appears when the server has it, a
+  shipping choice only when there is more than one, and the expected arrival is
+  shown **before** paying.
+- **How** — both from the Atwe balance. **Buy with protection** (escrow, the
+  default) holds the money until the buyer confirms; **Pay now** credits the
+  seller immediately. Short of the total, the button becomes Top up.
+- **One `clientId` per purchase, kept across retries** — that is what makes a
+  double-tap or a dropped connection charge once. Verified: the same id twice
+  returned the same order and moved no further money.
+- **Order detail** (`app/order/[id].tsx`) — a walked timeline, items, totals,
+  who it is with, ship-to, tracking with a real carrier link. Buyer confirms
+  (behind a dialog naming the amount) or disputes; seller marks sent (carrier
+  from the accepted list, tracking optional — small sellers often have none);
+  either side marks it arrived, which deliberately does **not** release money.
+- Plus the address book at Settings → Shopping, since an address saved wrong had
+  nowhere to be fixed.
+
+Verified by driving both sides: ship → buyer sees the tracking → mark delivered
+(still escrow, money still held) → confirm → released, 9000 landing in the
+seller's balance, confirming again refused. On a second order: a dispute sticks
+and shows to both sides, an empty reason is refused, and a disputed order can no
+longer be confirmed.
+
+**Not built: paying by card.** That goes through Stripe Checkout on the web and
+is real work; rather than half-wire it, the sheet says plainly that you top the
+balance up first and offers the way there.
+
+**Gotcha worth keeping:** `Alert.prompt` is **iOS-only**. On Android it is
+undefined, so a guarded call is a button that does nothing. Use a sheet.
+
 ## Next up (phases 3, 4, 6, 7 remain partial)
 1. ~~Profile navigation from feed/detail~~ ✅ done (`app/user/[username].tsx`).
    ~~Stories tray + viewer~~ ✅ done (`StoriesTray` + `app/story/[userId].tsx`).
@@ -298,8 +434,11 @@ is one number rather than a sweep:
    money · App Store polish.
 
 ### What is genuinely left
-- **Phase 3 — Beam:** groups, media/voice, reactions, calls.
-- **Phase 4 — Engine:** buying inside the app (address + wallet/escrow checkout).
+- **Phase 3 — Beam:** ~~groups, media/voice, reactions~~ ✅ done. **Calls** remain
+  (WebRTC over the existing SSE signalling — a real slice of work on its own).
+- **Phase 4 — Engine:** ~~buying inside the app~~ ✅ done (address + quote +
+  wallet/escrow + the order afterwards). **Cart** (several items from one seller)
+  and **paying by card** remain.
 - **Phase 6 — Profile & money:** managing a storefront, business analytics.
 - **Phase 7 — App Store:** Apple Pay; the public listing needs Apple to approve
   the developer account.
