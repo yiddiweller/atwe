@@ -88,6 +88,13 @@ export default function Settings() {
           />
         </View>
 
+        {/* Shopping */}
+        <GroupLabel>SHOPPING</GroupLabel>
+        <View style={[styles.card, { backgroundColor: c.s1, borderRadius: radius.lg }]}>
+          <LinkRow label="Delivery addresses" c={c} onPress={() => router.push('/addresses')} />
+          <LinkRow label="Orders" c={c} onPress={() => router.push('/orders')} last />
+        </View>
+
         <View style={{ height: spacing.xxl }} />
         <Button title="Log out" kind="danger" onPress={logout} />
 
@@ -105,6 +112,30 @@ function GroupLabel({ children }: { children: string }) {
     <Text variant="micro" tone="t3" style={{ marginTop: spacing.lg, marginBottom: 8, marginLeft: 4, letterSpacing: 0.4 }}>
       {children}
     </Text>
+  );
+}
+
+/** A row that goes somewhere, rather than just reporting a value. */
+function LinkRow({ label, c, onPress, last }: {
+  label: string;
+  c: ReturnType<typeof useTheme>['c'];
+  onPress: () => void;
+  last?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.row,
+        { borderBottomColor: c.bg, borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth },
+        pressed && { opacity: 0.6 },
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Text variant="body" style={{ flex: 1 }}>{label}</Text>
+      <Ionicons name="chevron-forward" size={18} color={c.t3} />
+    </Pressable>
   );
 }
 

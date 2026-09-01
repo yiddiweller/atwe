@@ -102,6 +102,9 @@ const CASES = [
   ['SearchUser',     '/api/search?scope=people&q=a',         (j) => j.users[0]],
   ['Profile',        `/api/social/profile/${UN}`,            (j) => j],
   ['ProfileUser',    `/api/social/profile/${UN}`,            (j) => j.user],
+  ['Address',        '/api/addresses',                       (j) => j.addresses[0]],
+  ['Quote',          null,                                   null],  // a POST; see below
+  ['Eta',            null,                                   null],
   ['User',           '/api/auth/me',                         (j) => j.user],
   ['AppConfig',      '/api/config',                          (j) => j],
 ];
@@ -129,14 +132,38 @@ const get = async (p) => {
     if (su) { CASES[8][1] = `/api/stories/${su}`; CASES[8][2] = (j) => j.stories[0]; }
   } catch { /* leave those three skipped */ }
 
+  // The checkout quote is a POST, so it needs its own little request rather than
+  // the shared GET. Priced against a real listing and a real saved address, or
+  // it proves nothing.
+  let quote = null;
+  try {
+    const [addrs, market] = await Promise.all([get('/api/addresses'), get('/api/marketplace')]);
+    const addr = addrs.addresses?.[0];
+    const p = (market.listings || []).find((l) => !l.soldOut && !l.hasVariants);
+    if (addr && p) {
+      const r = await fetch(B + '/api/checkout/quote', {
+        method: 'POST',
+        headers: { ...H, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'buy', productId: p.id, qty: 1, addressId: addr.id }),
+      });
+      if (r.ok) quote = await r.json();
+    }
+  } catch { /* leave Quote / Eta skipped */ }
+
   let bad = 0, soft = 0, checked = 0;
   const skipped = [];
+  if (quote) {
+    const qi = CASES.findIndex(([n]) => n === 'Quote');
+    CASES[qi][1] = '__quote'; CASES[qi][2] = () => quote;
+    const ei = CASES.findIndex(([n]) => n === 'Eta');
+    if (quote.eta) { CASES[ei][1] = '__quote'; CASES[ei][2] = () => quote.eta; }
+  }
   for (const [iface, url, pick] of CASES) {
     const want = declared(iface);
     if (!want) { skipped.push(`${iface} (no such interface)`); continue; }
     if (!url) { skipped.push(`${iface} (no example in this account)`); continue; }
     let live;
-    try { live = pick(await get(url)); }
+    try { live = url === '__quote' ? pick(null) : pick(await get(url)); }
     catch (e) { skipped.push(`${iface} (${e.message})`); continue; }
     if (!live || typeof live !== 'object') { skipped.push(`${iface} (nothing to compare)`); continue; }
     checked++;

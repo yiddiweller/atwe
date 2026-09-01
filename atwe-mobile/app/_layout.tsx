@@ -124,6 +124,7 @@ function RootNavigator() {
           <Stack.Screen name="wallet-cashout" options={{ presentation: 'modal' }} />
           <Stack.Screen name="wallet-requests" />
           <Stack.Screen name="orders" />
+          <Stack.Screen name="addresses" />
           <Stack.Screen name="search" />
           <Stack.Screen name="story/[userId]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
           <Stack.Screen name="compose" options={{ presentation: 'modal' }} />

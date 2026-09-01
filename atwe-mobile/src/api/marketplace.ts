@@ -36,6 +36,13 @@ export interface Listing {
   reviewCount: number;
   category: string | null;
   saved?: boolean;
+  /** Collect in person instead of posting it — a pickup listing needs no
+   *  delivery address, so checkout must know before it asks for one. */
+  pickup?: boolean;
+  pickupLocation?: string | null;
+  shipFree?: boolean;
+  shipFeeCents?: number | null;
+  needsShipping?: boolean;
   seller: ListingSeller;
   createdAt?: string;
   moreFromSeller?: Listing[];

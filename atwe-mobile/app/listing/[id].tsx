@@ -20,13 +20,16 @@ import { ListingCard } from '@/components/ListingCard';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useListing, listingPrice, saveListing, KIND_LABEL } from '@/api/marketplace';
+import { CheckoutSheet } from '@/components/CheckoutSheet';
 import { mediaUri } from '@/lib/media';
+import { useAuth } from '@/auth/AuthProvider';
 
 /**
  * Listing detail (`GET /api/listings/:id`) — gallery, title, price, seller,
- * description, rating, save-to-wishlist, and a Message-seller CTA (Atwe is
- * chat-coordinated commerce). "Visit store" deep-links a business storefront.
- * A full in-app checkout (address + wallet/escrow) is a later slice.
+ * description, rating, save-to-wishlist, and buying it: quantity, then a real
+ * checkout (delivery address, live totals from the server, wallet or escrow).
+ * "Message seller" stays right beside it, because Atwe is chat-coordinated
+ * commerce and plenty of purchases still start with a question.
  */
 export default function ListingDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -36,8 +39,17 @@ export default function ListingDetail() {
   const { data, isLoading, isError, refetch } = useListing(id);
   const listing = data?.listing;
 
+  const { user } = useAuth();
   const [saved, setSaved] = useState<boolean | null>(null);
   const isSaved = saved ?? listing?.saved ?? false;
+  const [qty, setQty] = useState(1);
+  const [checkingOut, setCheckingOut] = useState(false);
+  // You cannot buy your own listing, and the server says so with a 400 — better
+  // to not offer the button than to offer it and refuse.
+  const mine = !!listing && !!user && listing.seller.id === user.id;
+  // A listing with size or colour options needs the picker that is not built
+  // yet; sending no variant would be refused, so it goes to chat instead.
+  const buyable = !!listing && !mine && listing.active && !listing.soldOut && !listing.hasVariants;
 
   const toggleSave = async () => {
     if (!listing) return;
@@ -170,11 +182,41 @@ export default function ListingDetail() {
               </Text>
             )}
 
+            {/* How many */}
+            {buyable && (
+              <View style={styles.qtyRow}>
+                <Text variant="callout" tone="t2" style={{ flex: 1 }}>Quantity</Text>
+                <Pressable onPress={() => setQty((n) => Math.max(1, n - 1))} hitSlop={8}
+                  style={[styles.qtyBtn, { backgroundColor: c.s1 }]}
+                  accessibilityRole="button" accessibilityLabel="One fewer">
+                  <Ionicons name="remove" size={18} color={qty > 1 ? c.text : c.t4} />
+                </Pressable>
+                <Text variant="headline" style={styles.qtyN}>{qty}</Text>
+                <Pressable
+                  onPress={() => setQty((n) => Math.min(
+                    99, typeof listing.stock === 'number' ? Math.max(1, listing.stock) : 99, n + 1,
+                  ))}
+                  hitSlop={8}
+                  style={[styles.qtyBtn, { backgroundColor: c.s1 }]}
+                  accessibilityRole="button" accessibilityLabel="One more">
+                  <Ionicons name="add" size={18} color={c.text} />
+                </Pressable>
+              </View>
+            )}
+
             {/* Actions */}
             <View style={{ marginTop: 22, gap: 10 }}>
+              {buyable && (
+                <Button title="Buy now" kind="primary" onPress={() => setCheckingOut(true)} />
+              )}
+              {listing.hasVariants && !mine && (
+                <Text variant="caption" tone="t3" style={{ textAlign: 'center' }}>
+                  This one comes in options — message the seller to choose.
+                </Text>
+              )}
               <Button
                 title="Message seller"
-                kind="primary"
+                kind={buyable ? 'secondary' : 'primary'}
                 onPress={() => router.push(`/chat/${listing.seller.id}`)}
               />
               {listing.seller.accountType === 'business' && listing.seller.username && (
@@ -200,11 +242,23 @@ export default function ListingDetail() {
           )}
         </ScrollView>
       )}
+
+      {!!listing && (
+        <CheckoutSheet
+          visible={checkingOut}
+          onClose={() => setCheckingOut(false)}
+          listing={listing}
+          qty={qty}
+        />
+      )}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  qtyRow: { flexDirection: 'row', alignItems: 'center', marginTop: 18, gap: 10 },
+  qtyBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  qtyN: { minWidth: 26, textAlign: 'center' },
   head: {
     flexDirection: 'row',
     alignItems: 'center',
