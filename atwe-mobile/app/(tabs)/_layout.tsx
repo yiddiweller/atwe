@@ -1,6 +1,9 @@
+import { useEffect, useRef } from 'react';
 import { Badge, Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
+import { useSegments } from 'expo-router';
 import { NavMorphProvider } from '@/lib/navMorph';
 import { useNotifCount } from '@/api/notifications';
+import { haptics } from '@/lib/haptics';
 
 /**
  * The five worlds, drawn by the SYSTEM.
@@ -31,6 +34,22 @@ import { useNotifCount } from '@/api/notifications';
 export default function TabsLayout() {
   const { data } = useNotifCount();
   const unread = data?.unread ?? 0;
+
+  /* The one place in the app that did not tick. Every other choice in Atwe
+     answers under the finger, and switching world — the most-used control there
+     is — was silent, because the bar is drawn by UIKit and its press is not
+     ours to hook. So the tick follows the RESULT instead: the focused tab
+     changed, therefore something was chosen.
+     Only while a tab IS what is on screen — pushing /wallet out of a tab also
+     changes the segments, and buzzing for that would be a tick with no tap. */
+  const segments = useSegments() as string[];
+  const tab = segments[0] === '(tabs)' ? (segments[1] ?? 'index') : null;
+  const lastTab = useRef<string | null>(null);
+  useEffect(() => {
+    if (!tab) return;
+    if (lastTab.current !== null && lastTab.current !== tab) haptics.select();
+    lastTab.current = tab;
+  }, [tab]);
 
   return (
     /* Home still reports its scroll through this; nothing draws from it now
