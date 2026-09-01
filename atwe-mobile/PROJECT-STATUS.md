@@ -642,6 +642,159 @@ now verified against live payloads; 50 in total, 0 failures.
 `underDayHeading` and shows the clock alone there. Everywhere else — the local
 hub, a profile — there is no heading, so it carries the whole date.
 
+## The night run — money, the post menu, the profile, Beam and notifications
+
+Five batches after the Engine was finished, all against a real Postgres and all
+shot in both themes with zero page errors.
+
+### The money the wallet did not already cover
+
+Ten surfaces on one `src/api/money.ts`: **gift cards** (a SEPARATE balance from
+the wallet, Apple's model — a card holds its money until it is spent or moved
+across), **invoices**, **quotes**, **rewards**, **invite friends**, **split a
+bill**, **pools**, **scheduled payments**, **payment links**, **Subscribe &
+Save**. Wired into the Account page as MONEY / GETTING PAID / TOGETHER.
+
+Driven end to end, not just rendered: paying a split twice moves the money ONCE
+and is zero-sum ($60 out, $60 in, the second call answers `alreadyPaid`);
+accepting a quote produced a real invoice with the same lines and paid it; 400
+points redeemed to $4; a gift card claimed by its recipient and $10 moved across.
+
+**Three problems, each found by a guard rather than by eye:**
+
+1. **The pool contributor is FLAT** — `{name, username, avatar, amountCents,
+   at}` — not a nested `user` with `createdAt`. Declared the nested way it
+   typechecked perfectly and would have rendered a list of blank names and blank
+   times.
+2. **`Quote` was already taken by `checkout.ts`** (a checkout price preview).
+   Two concepts under one name — and worse, the type checker reads every api
+   file concatenated, so it would have silently verified the WRONG one. Renamed
+   `WorkQuote`, exactly as `Service` → `ServiceListing` before it.
+3. **Paying an invoice is Stripe-or-nothing, not wallet balance.** The first
+   version sent `payWith:'balance'` and a `clientId`; the route reads neither.
+   Code that claims a behaviour the server has not got is a lie waiting to be
+   believed.
+
+### The post ⋯ menu — a safety hole, not a missing convenience
+
+There was no way, anywhere on the phone, to **report** a post, **mute**
+somebody, **block** them, or get a post **out of your feed**. `PostMenu` is a
+real bottom sheet (Report needs a second page for the reason, and two stacked
+system alerts read as an error rather than as a menu), and the reasons are the
+server's own `REPORT_REASONS` — inventing friendlier labels would just mean every
+report arriving mislabelled.
+
+A hidden, muted, blocked or deleted post now actually LEAVES the list. The feed
+is not refetched, so leaving the card sitting there made every one of those
+actions look like it had failed. Proved by driving it: 24 posts, tap Not
+interested, 23 posts.
+
+No Unpin row, deliberately: `mapPost` carries no pinned flag, so a feed card
+genuinely does not know, and saying "Unpin" on a guess is worse than not
+offering it.
+
+### The post header, on the web's actual numbers
+
+- the picture is **36** (`card.shape`), the size at which its own radius is 18 —
+  the same as the photo's — so it nests in the card's corner. It was 44.
+- pinned to `flex-start`, so its inset is the card's padding on BOTH sides and
+  its centre lands on the corner arc's centre.
+- **the text column is given exactly the picture's height and centred in it.**
+  Pinning the picture to the padding edge while a taller text column set the row
+  height is what left the name ~4px below the face on the web, and the same
+  thing was happening here. Fixing the column's height removes it by
+  construction rather than by a nudge.
+- the time and the ⋯ are ONE cluster in their own box, not a pair inside that
+  fixed-height centred column — which is what puts them on one line, and lets
+  the ⋯ sit at the padding edge where its corner is concentric.
+
+**The tab row ends with the word "Add", not a pinned "+".** The web's own rule,
+and not decoration: the pinned + sat on top of the last tab and chopped
+"Collections" mid-word. As the row's last scrolling child it clears them, one
+step quieter than a tab label so it reads as an extra action rather than a fifth
+tab.
+
+### The profile is tabbed — Posts · Replies · Media · Likes · About
+
+Replies and Media came free (the payload already carried `replies`; Media is the
+posts with a photo). **Likes is lazy** — most visits never open it, and loading
+it with the profile would slow every visit for the few that do. **About** is new:
+the trust score with the real dealings count, experience, education, licences,
+skills (with the assessed tick and the endorsement count), recommendations. Each
+block renders only when it has something, so a personal account shows one honest
+line rather than five empty headings. A **pinned post** shows with its label and
+is dropped from the timeline below it. **"Follows you"** beside the handle, and
+**"Followed by Alice, Bob and 3 others"** with their faces.
+
+**Word-only tabs, not pills** — the web's own `.ac-prof-tabs`, and for a measured
+reason: five pills are ~700px of content in a 390px row, so "About" sat half
+off-screen WHILE WHITE, i.e. the one indicator that says where you are was the
+one being clipped. Five words fit inside the gutter.
+
+The About types were written from the docs and were wrong; a real payload put
+them right before a pixel rendered. An experience carries no `location` and no
+`description` on the profile (edit-form fields), so two lines would have been
+permanently blank; a certification has `credentialId`; a skill has `endorsed`
+(did I endorse it), a different question from `endorsements` (how many did).
+
+### Engine leads with the Ask Atwe AI hero
+
+The web's `.xp-ai`, and it is the colour law working as intended: blue is
+IDENTITY here (the assistant's own colour), so the gradient may be the accent
+while the pill inside it stays white, which keeps "white acts" true even on a
+coloured ground. There is no `--accent-mid` token, so the gradient's midpoint is
+named explicitly rather than invented on the palette.
+
+### You can start a conversation from Beam
+
+Until now the only way to message somebody was to find their **profile** first —
+and the empty Beam screen said so out loud, which means you had to already know
+where they were before you could talk to them. A compose button (and a real
+button in the empty state, not an instruction) opens a person picker: saved
+contacts at rest, a search over everybody the moment you type, reusing the same
+mention-search the composer uses rather than adding a second ranking.
+
+### Notifications that say what happened, and stop repeating themselves
+
+**The app knew 21 verbs. The server sends 106.** Everything else fell through to
+"interacted with you" — a job application, a split request, an accepted quote, a
+shipped order, a frozen wallet. It looks deliberate, it tells the reader nothing,
+and nothing ever errored. The map is now GENERATED from the server's own
+`PUSH_VERBS`, and **`tools/check-notif-verbs.js`** fails when the server grows
+one the app has not got.
+
+`app_<status>` (reviewed/shortlisted/rejected/hired) is built at the moment a
+hiring status changes, so it is not in `PUSH_VERBS` and the generator cannot see
+it — those four are named by hand with the reason recorded beside them.
+
+**Consecutive** notifications of the same kind, from the same person, about the
+same thing collapse into one row with a count. Every sign-in writes a `login`
+row, and a test account had eighteen identical lines pushing everything real off
+the bottom; 56 became 3. Only consecutive ones group — gathering scattered
+events would reorder the timeline and lose the thread of what happened when —
+and only when nothing is lost by it, so two likes on DIFFERENT posts stay two
+events.
+
+### The guards, and what each one is for
+
+| tool | what it stops |
+|---|---|
+| `check-haptics.js` | one vocabulary; no double-buzz; every choice ticks |
+| `check-design-tokens.js` | 50 colours + geometry + motion drifting from the web |
+| `check-api-types.js` | a declared field the server never sends |
+| `check-notif-verbs.js` | a notification the app cannot name |
+
+Every one is self-tested by reintroducing the bug it exists to catch. Between
+them they caught, in this run alone: two double-haptics in code written the same
+session, a nested type that was flat, a name collision that would have made the
+type checker verify the wrong interface, and 89 unnameable notifications.
+
+### A brand-new account was walked through all 29 screens
+
+Because empty states and first-run flows are where a new person actually lands.
+Every screen rendered, every empty state was a human sentence with a way forward,
+and there were zero page errors.
+
 ## The Engine is COMPLETE: eleven worlds, same as the web
 
 The website's Discover row has eleven destinations. The phone had six. The
@@ -1019,8 +1172,17 @@ bugs makes it fail by name.
   — it goes through Stripe Checkout, a browser flow; the sheet currently says
   plainly that you top the balance up first.
 - **Phase 6 — Profile & money:** ~~storefront management~~ ✅ ~~appointments~~ ✅
-  ~~business profile~~ ✅ done. **Business analytics** (the reach dashboard, as
-  distinct from the sales one) remains.
+  ~~business profile~~ ✅ ~~gift cards, invoices, quotes, rewards, referrals,
+  splits, pools, scheduled payments, payment links, Subscribe & Save~~ ✅
+  ~~the tabbed profile with About~~ ✅ done. **Business analytics** (the reach
+  dashboard, as distinct from the sales one) remains.
+- **Notifications:** every verb the server sends is now named, and consecutive
+  duplicates group. What is NOT built: the web's in-overlay detail page for a
+  sign-in alert, and the Atwe brand mark in place of the shield glyph on that
+  row (the app icon has no alpha channel, so it cannot be tinted as a mask —
+  it would need a transparent mark exported alongside it).
+- **Stories:** a video story still shows a placeholder rather than playing. It
+  needs `expo-video`; everything else about a story works.
 - **Phase 7 — App Store:** Apple Pay; the public listing needs Apple to approve
   the developer account.
 - **Android release:** configured and buildable; needs a Play developer account.
