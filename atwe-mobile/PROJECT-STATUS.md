@@ -540,6 +540,68 @@ camelCase**), the `eta` range, and two more. A required field the server never
 sends is a failure; an optional one is reported to eyeball, because absence can
 be legitimate. An empty list is skipped, never passed.
 
+## SHIPPING 0.2.0 — the pre-flight is DONE, the build is yours to fire
+
+Everything that can be checked without an Expo login has been checked, because a
+build that fails still costs a credit. State as of this commit:
+
+| | |
+|---|---|
+| version | **0.2.0** (was 0.1.0) — build number is remote + auto-incremented |
+| iOS bundle id | `com.atwe.app` |
+| API the build talks to | `https://atwe.com` — set in `eas.json` **and** as the fallback in `app.json`, and confirmed **baked into the compiled bundle** |
+| TestFlight app | ascAppId `6789639912` |
+| fresh clone | `npm ci` → 941 packages clean; `expo export --platform ios` bundles (5.27 MB) |
+| expo-doctor | 16/18 — the two failures are network fetches this container's proxy blocks (Expo's config schema, the RN Directory), not the project |
+| typecheck · haptics guard · API types | all green |
+
+**The one real problem found, and it is the kind that ships and then crashes.**
+`expo-asset` was **not a direct dependency** — only pulled in sideways by
+`expo-audio` and `expo`. expo-doctor is blunt about it: *"Your app may crash
+outside of Expo Go without this dependency. Native module peer dependencies must
+be installed directly."* Outside Expo Go **is** a TestFlight build. Pinned to the
+SDK-54 version (`~12.0.13`).
+
+**Two things that looked like problems and were not** — checked rather than
+assumed, so nobody re-opens them:
+- The app icon carries an alpha channel, which App Store Connect rejects. Every
+  pixel measures **alpha 255** — the channel exists but nothing is transparent —
+  and Expo flattens the iOS icon onto white anyway (`removeTransparency` in
+  `withIosIcons`). Safe.
+- Two `localhost` strings appear in the compiled bundle. They come from
+  `@expo/metro-runtime`'s own dev-server plumbing, inert in a release build. Our
+  source has none.
+
+Also removed `ios.config.usesNonExemptEncryption`, which Expo prints a warning
+about and **ignores** whenever `ios.infoPlist.ITSAppUsesNonExemptEncryption` is
+present — and that is the one App Store Connect actually reads.
+
+### To fire it
+
+This container has **no Expo login**, so the build cannot be started from here —
+that needs the account password and 2FA. From a machine that has the repo:
+
+```bash
+cd atwe-mobile
+npx eas-cli login          # once per machine
+npx eas workflow:run build-ios.yml
+```
+
+That workflow builds the production profile **and submits to TestFlight** in one
+go (`.eas/workflows/build-ios.yml`). Or the two steps by hand:
+
+```bash
+npx eas build -p ios --profile production
+npx eas submit -p ios --latest
+```
+
+**The Expo dashboard's "Run workflow" button needs the GitHub repo connected to
+the Expo project first** — PROJECT-STATUS has that listed as not yet done, so
+assume the CLI is the route until somebody connects it.
+
+Then: Apple processes the build (usually 5–20 minutes) and it appears in
+TestFlight as **Atwe 0.2.0**.
+
 ## Recently added (Jobs — the half of Atwe that was missing from the phone)
 
 Atwe is a business super-app and its two-sided **jobs marketplace** was not on

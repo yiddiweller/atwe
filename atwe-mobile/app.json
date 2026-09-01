@@ -20,9 +20,6 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.atwe.app",
       "buildNumber": "1",
-      "config": {
-        "usesNonExemptEncryption": false
-      },
       "infoPlist": {
         "UIBackgroundModes": [
           "remote-notification"
