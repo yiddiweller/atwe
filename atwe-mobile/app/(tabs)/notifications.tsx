@@ -55,9 +55,9 @@ export default function Notifications() {
         </View>
       ) : (
         <FlatList
-          data={notifs}
-          keyExtractor={(n) => String(n.id)}
-          renderItem={({ item }) => <NotifRow n={item} />}
+          data={groupNotifs(notifs)}
+          keyExtractor={(g) => String(g.head.id)}
+          renderItem={({ item }) => <NotifRow n={item.head} count={item.count} />}
           contentContainerStyle={notifs.length ? undefined : styles.emptyWrap}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -77,6 +77,43 @@ export default function Notifications() {
   );
 }
 
+
+/**
+ * CONSECUTIVE notifications of the same kind, from the same person, collapse
+ * into one row with a count — the same thing the web's list does. It is not a
+ * nicety: every sign-in writes a `login` row, so an account that opens the app a
+ * few times a day ends up with a screen of identical "New sign-in" lines pushing
+ * the real notifications off the bottom. Twelve in a row was the state on a test
+ * account after one afternoon.
+ *
+ * Only CONSECUTIVE ones group, deliberately: reordering somebody's timeline to
+ * gather scattered events would lose the thread of what happened when.
+ */
+interface Grouped {
+  /** The newest of the run — the one whose time and target are used. */
+  head: Notification;
+  /** How many were folded in, 1 when nothing was. */
+  count: number;
+}
+
+function groupNotifs(list: Notification[]): Grouped[] {
+  const out: Grouped[] = [];
+  for (const n of list) {
+    const prev = out[out.length - 1];
+    const same = prev
+      && prev.head.type === n.type
+      && (prev.head.actor?.id ?? null) === (n.actor?.id ?? null)
+      /* A run only groups when the individual ones carry nothing that would be
+         lost: two likes on DIFFERENT posts are two different events. */
+      && (prev.head.postId ?? null) === (n.postId ?? null)
+      && (prev.head.groupId ?? null) === (n.groupId ?? null)
+      && (prev.head.productId ?? null) === (n.productId ?? null);
+    if (same) prev.count += 1;
+    else out.push({ head: n, count: 1 });
+  }
+  return out;
+}
+
 /* Anything about a purchase belongs in Orders. The server names these exactly;
    they are listed rather than pattern-matched so a new verb has to be added
    deliberately instead of being swept in by a prefix. */
@@ -91,7 +128,7 @@ const MONEY_TYPES = new Set([
   'tip', 'payment', 'referral', 'affiliate', 'loyalty',
 ]);
 
-function NotifRow({ n }: { n: Notification }) {
+function NotifRow({ n, count }: { n: Notification; count: number }) {
   const { c } = useTheme();
   const router = useRouter();
   const isLogin = n.type === 'login';
@@ -146,6 +183,9 @@ function NotifRow({ n }: { n: Notification }) {
           <Text variant="body" tone="t2">
             {isLogin ? notifText(n) : ` ${notifText(n)}`}
           </Text>
+          {count > 1 && (
+            <Text variant="body" tone="t3">{`  ·  ${count} times`}</Text>
+          )}
         </Text>
         {detail && (
           <Text variant="caption" tone="t3" numberOfLines={1} style={{ marginTop: 2 }}>
