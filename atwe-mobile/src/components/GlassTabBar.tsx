@@ -16,6 +16,7 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useNavMorph } from '@/lib/navMorph';
 import { haptics } from '@/lib/haptics';
+import { nav as navToken } from '@/theme/tokens';
 
 /**
  * The five-world tab bar — a custom REAL Apple Liquid Glass bar (expo-glass-effect)
@@ -24,9 +25,38 @@ import { haptics } from '@/lib/haptics';
  * the `navMorph` shared value the Home screen updates on scroll. Degrades to a blur
  * bar on iOS < 26. Routing is standard expo-router Tabs (this only draws the bar).
  */
-const GUTTER = 14;
-const BAR_H = 56;
-const BALL = 56;
+/* Every number here is the web's, because "look exactly like the Web app style"
+   is the brief. From public/index.html:
+     .bottom-nav  left/right/bottom: var(--nav-inset) = 23,  padding: 4,  radius: 999
+     .bn-tab      height: 50            → shell height = 50 + 4 + 4 = 58
+     --nv-size    34px                  → the icon, not the 26 this was drawing
+   The bar was inset 14 (the CONTENT gutter), which is the one thing the web is
+   explicit should NOT match: the bar sits deliberately INSIDE the cards. */
+const GUTTER = navToken.inset;   // 23
+const TAB_H = 50;
+const PAD = 4;
+const BAR_H = TAB_H + PAD * 2;   // 58
+const BALL = BAR_H;
+const ICON = 34;
+
+/* The material.
+
+   It was real Liquid Glass with NO tint, and untinted glass takes its colour from
+   whatever is behind it — so scrolling an orange photo under the bar turned the
+   bar orange and muddy, which is exactly what the founder photographed. Apple's
+   own bars are tinted; clear glass is for a bar over a controlled background.
+
+   So: still `regular` Liquid Glass (Apple's real material, as asked), tinted with
+   the web's own near-black so it reads as the same dark pill. The web is
+   rgba(18,18,21,.90) with a 2px blur — nearly solid on purpose — so the tint is
+   heavy enough to kill the colour bleed while the material still lives. */
+const GLASS_TINT_DARK = 'rgba(18,18,21,0.72)';
+const GLASS_TINT_LIGHT = 'rgba(255,255,255,0.66)';
+/* The iOS < 26 fallback has no Liquid Glass to tint, so it uses the web's exact
+   values: a heavy near-black at .90 and only a whisper of blur. */
+const FALLBACK_DARK = 'rgba(18,18,21,0.90)';
+const FALLBACK_LIGHT = 'rgba(255,255,255,0.82)';
+const HAIRLINE = 'rgba(255,255,255,0.05)';
 
 // `require` on an image returns a number at runtime under Metro, but its type
 // is unknown — which the Image source prop rightly refuses. Typed explicitly so
@@ -97,19 +127,22 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
       style={[styles.outer, { paddingBottom: Math.max(insets.bottom, 10), paddingHorizontal: GUTTER }]}
       pointerEvents="box-none"
     >
-      <Animated.View style={[styles.shell, shellStyle]}>
+      <Animated.View style={[styles.shell, { borderColor: light ? 'rgba(0,0,0,0.06)' : HAIRLINE }, shellStyle]}>
         {/* Real glass background (blur fallback on iOS < 26) */}
         {glass ? (
           <GlassView
             style={StyleSheet.absoluteFill}
             glassEffectStyle="regular"
+            tintColor={light ? GLASS_TINT_LIGHT : GLASS_TINT_DARK}
             colorScheme={light ? 'light' : 'dark'}
           />
         ) : (
           <BlurView
-            intensity={40}
+            intensity={12}
             tint={light ? 'light' : 'dark'}
-            style={[StyleSheet.absoluteFill, { backgroundColor: c.s1 + 'cc' }]}
+            style={[StyleSheet.absoluteFill, {
+              backgroundColor: light ? FALLBACK_LIGHT : FALLBACK_DARK,
+            }]}
           />
         )}
         {/* White fill that fades in as it becomes the ball */}
@@ -181,20 +214,27 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
+    // the web's `border:1px solid rgba(255,255,255,.05)`
+    borderWidth: StyleSheet.hairlineWidth,
   },
   white: { backgroundColor: '#fff', borderRadius: BAR_H / 2 },
-  row: { flexDirection: 'row', alignItems: 'center', height: BAR_H, paddingHorizontal: 4 },
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  pill: { width: 46, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  row: { flexDirection: 'row', alignItems: 'center', height: BAR_H, paddingHorizontal: PAD },
+  tab: { flex: 1, alignItems: 'stretch', justifyContent: 'center' },
+  /* The web's .bn-indicator is sized to the WHOLE tab and fully round —
+     rgba(255,255,255,.14) on dark, rgba(0,0,0,.06) on light, both of which this
+     already matched. Only its shape was different: a 46x40 rounded rect where the
+     web has a full-tab capsule. */
+  pill: {
+    alignSelf: 'stretch', height: TAB_H, borderRadius: TAB_H / 2,
+    alignItems: 'center', justifyContent: 'center',
+  },
   badge: {
     position: 'absolute', top: 6, right: 12,
     width: 9, height: 9, borderRadius: 5, borderWidth: 1.5,
   },
-  /* 26, which is BOTH the size these were exported for (26/52/78 = @1x/@2x/@3x, so a
-     phone picks the exact pixels and never resamples) and the web's own proportion: the
-     web draws a 34px icon in a 50px tab, 68%; 26 in this 40pt pill is 65%. They were
-     rendering at 21 — 52% — which is why they read small next to the web's bar. */
-  icon: { width: 26, height: 26 },
+  /* The web's --nv-size, exactly: 34 in a 50pt tab. This drew 26, which is 24%
+     smaller than the website's and is what the founder meant by "much bigger". */
+  icon: { width: ICON, height: ICON },
   plusWrap: { alignItems: 'center', justifyContent: 'center' },
   plusInner: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });

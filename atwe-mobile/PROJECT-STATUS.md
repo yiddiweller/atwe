@@ -602,6 +602,41 @@ assume the CLI is the route until somebody connects it.
 Then: Apple processes the build (usually 5–20 minutes) and it appears in
 TestFlight as **Atwe 0.2.0**.
 
+## The nav bar: why it went muddy, and the web's actual recipe
+
+The founder photographed the bar going orange over an orange photo, and called it
+"really bad". They were right, and the cause is specific: it was **real Liquid
+Glass with NO tint**, and untinted glass takes its colour from whatever is behind
+it. Apple's own bars are tinted; clear glass is for a bar over a controlled
+background, not over a scrolling feed of other people's photos.
+
+It is still `glassEffectStyle="regular"` — Apple's real material, which is what
+was asked for — now tinted with the web's own near-black.
+
+Four numbers were also simply wrong, all of them the web's and all of them
+checkable in `public/index.html`:
+
+| | web | phone was |
+|---|---|---|
+| icon (`--nv-size`) | **34** | 26 — 24% smaller, hence "much bigger" |
+| inset (`--nav-inset`) | **23** | 14, the CONTENT gutter |
+| height | 50 tab + 4+4 padding = **58** | 56 |
+| border | `1px rgba(255,255,255,.05)` | none |
+| active pill (`.bn-indicator`) | the whole tab, fully round | a 46×40 rounded rect |
+
+**The inset is the one worth understanding.** 14 is `--feed-gutter`, the content
+margin — and the web is explicit that the bar must NOT share it: it sits
+deliberately INSIDE the cards, so the two lines read as deliberate rather than as
+a near-miss. That is why `nav.inset` is its own token and not derived.
+
+The pill's colour was already right (`rgba(255,255,255,.14)` dark,
+`rgba(0,0,0,.06)` light) — only its shape was wrong.
+
+**A caveat when reviewing this in the web preview:** `isLiquidGlassAvailable()`
+is false there, so the preview shows the iOS < 26 fallback (the web's
+`rgba(18,18,21,.90)` + a whisper of blur). The real Liquid Glass only appears on
+the device. Do not judge the material from a screenshot taken here.
+
 ## Design parity — the phone's values ARE the web's now, and a check that keeps them there
 
 The tokens were "ported 1:1 from the web" once, and then the web moved on. Nobody
