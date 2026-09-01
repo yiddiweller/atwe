@@ -19718,7 +19718,11 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 
 <!-- Profile popover (bottom of the sidebar) -->
 <div class="brand-menu hidden" id="profileMenu">
-  <div class="pm-head" onclick="openProfileEdit()">
+  <!-- Goes to your own PROFILE, not straight into the editor. The chevron promises a
+       destination and the editor is a form — landing in it meant the only way to simply
+       LOOK at your own profile from here was to back out of a half-open edit. Editing is
+       one tap further on, from the "Edit profile" button that profile page already has. -->
+  <div class="pm-head" onclick="closeProfileMenu();acGoProfile()">
     <div class="user-avatar no-img" id="pmAvatar"><svg class="ava-person" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8.6" r="4.15"/><path d="M12 14.1c-5.6 0-10.2 4.4-10.2 9.9V24h20.4v-.1c0-5.5-4.6-9.9-10.2-9.9z"/></svg></div>
     <div style="min-width:0;flex:1;">
       <div class="pm-name" id="pmName">—</div>
@@ -20922,7 +20926,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1768'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1769'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;

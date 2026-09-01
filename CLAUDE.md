@@ -6091,6 +6091,24 @@ Covered by `scratchpad/postcard.js` (both themes: concentric corners, the card a
 44pt targets, all three contrast steps, counts, header untouched) and `scratchpad/cardsweep.js`
 (home, profile, bookmarks, hashtag, search). Reverting the design fails 8 of them.
 
+### The top-right account menu opens your PROFILE, not the editor
+
+`.pm-head` — the row in `#profileMenu` showing your photo, name and plan — called
+`openProfileEdit()` directly, so tapping your own account dropped you into a half-open
+edit FORM. The row carries a chevron, which promises a destination, and the only way to
+simply look at your own profile from there was to back out of the editor. It calls
+`closeProfileMenu(); acGoProfile()` now — the same own-profile page the Me-hub hero opens
+— and editing is one tap further on, from the **Edit profile** button that page already
+carries.
+
+`scratchpad/profilemenu.js` **taps the real avatar and the real row** rather than calling
+the openers, because the failure is about where a tap lands; it then taps Edit profile to
+prove the editor is still reachable, so the fix cannot quietly remove the route. It must
+click `#tbBrandProf` itself and never synthesise the event — `_hideMenuSrcBtn` sets
+`opacity:0` on whatever is handed to it as the trigger, and passing `document.body` blanks
+the entire screen (the same trap `menutrim.js` records). Self-tested: restoring
+`openProfileEdit()` fails three of its eight checks.
+
 ### Solid, never hollow — the buttons that were breaking the app's own rule 3
 
 The founder photographed five screens and said the buttons looked thin, naming the profile
