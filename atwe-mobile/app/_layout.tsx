@@ -133,6 +133,7 @@ function RootNavigator() {
           <Stack.Screen name="search" />
           <Stack.Screen name="story/[userId]" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
           <Stack.Screen name="compose" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="add-story" options={{ presentation: 'modal' }} />
         </Stack>
       )}
       <OfflineBanner />

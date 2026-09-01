@@ -123,10 +123,18 @@ export function usePost(id: string | number) {
 export async function createPost(input: {
   body: string;
   parentId?: number;
+  /** A photo, as a data URL. A post with a picture and no words is a real post
+   *  — requiring text as well would mean attaching one and then not being
+   *  allowed to send it. */
+  image?: string;
+  /** What is in the picture, for anyone who cannot see it. */
+  imageAlt?: string;
 }): Promise<{ post: Post }> {
   return api.post<{ post: Post }>('/api/social/posts', {
     body: input.body,
     ...(input.parentId != null ? { parentId: input.parentId } : {}),
+    ...(input.image ? { image: input.image } : {}),
+    ...(input.imageAlt ? { imageAlt: input.imageAlt } : {}),
   });
 }
 

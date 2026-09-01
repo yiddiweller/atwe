@@ -4,19 +4,20 @@ import { Image } from 'expo-image';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '@/components/Text';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useUserStories, markStorySeen, type Story } from '@/api/stories';
 import { mediaUri } from '@/lib/media';
+import { storyGradient } from '@/lib/storyBg';
 
 const STORY_DUR = 5000; // ms per story, matching the web STORY_DUR
 
-/** Only trust a real hex color as a background; the web `bg` can be a preset id. */
-function safeBg(bg: string | null): string {
-  return bg && /^#([0-9a-fA-F]{3,8})$/.test(bg) ? bg : '#000';
-}
+/* The `bg` on a story is usually a PRESET ID ('g1'…'g6'), not a hex — that is
+   what the web writes. Trusting only a hex painted every text story posted from
+   a browser plain black; storyGradient() resolves both. */
 
 /**
  * Full-screen story viewer — mirrors the web `acStoryShow`: segmented progress
@@ -90,7 +91,12 @@ export default function StoryViewer() {
   }
 
   return (
-    <View style={[styles.fill, { backgroundColor: safeBg(current.bg) }]}>
+    <LinearGradient
+      colors={storyGradient(current.bg)}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.fill}
+    >
       <StatusBar style="light" />
 
       {/* Media */}
@@ -136,7 +142,7 @@ export default function StoryViewer() {
           </Text>
         </SafeAreaView>
       )}
-    </View>
+    </LinearGradient>
   );
 }
 

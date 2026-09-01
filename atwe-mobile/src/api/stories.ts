@@ -63,3 +63,33 @@ export async function markStorySeen(id: number): Promise<void> {
     // best-effort — a missed seen mark is not worth surfacing
   }
 }
+
+/* ── Adding to your story ────────────────────────────────────────────────────
+ * A photo, or words on a colour. Both expire on their own after 24 hours, which
+ * is the whole point of a story and the reason nothing here is undoable.
+ */
+
+export type StoryAudience = 'all' | 'close';
+
+export async function postStory(input: {
+  kind: 'image' | 'text';
+  /** A data URL, for an image story. */
+  media?: string;
+  caption?: string;
+  /** One of the six preset ids ('g1'…'g6') — see src/lib/storyBg.ts. */
+  bg?: string;
+  audience?: StoryAudience;
+}): Promise<void> {
+  await api.post('/api/stories', {
+    kind: input.kind,
+    ...(input.media ? { media: input.media } : {}),
+    ...(input.caption ? { caption: input.caption } : {}),
+    ...(input.bg ? { bg: input.bg } : {}),
+    audience: input.audience ?? 'all',
+  });
+}
+
+/** Take one of yours down before it expires. */
+export async function deleteStory(id: number): Promise<void> {
+  await api.del(`/api/stories/${id}`);
+}
