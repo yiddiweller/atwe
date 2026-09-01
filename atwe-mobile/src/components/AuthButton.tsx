@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming, Easing } from 'react-native-reanimated';
 import { haptics } from '@/lib/haptics';
 import { Text } from './Text';
+import { Glass, hasGlass } from './Glass';
 import { useTheme } from '@/theme/ThemeProvider';
 
 /** The web's own press-hold curve — the same one the bottom nav uses. */
@@ -20,16 +21,23 @@ const HOLD_EASE = Easing.bezier(0.4, 0.02, 0.28, 1);
  * translucent fill with a half-pixel inset hairline, never an outline-only
  * button, which rule 3 forbids.
  *
- * PRESSING IT DOES TWO THINGS, both of which the web does and neither of which
- * this had:
+ * ON iOS 26 IT IS MADE OF REAL LIQUID GLASS. Apple ships exactly the two kinds
+ * this button already had: `.glass` for a secondary action — translucent, no
+ * tint, the content showing through — and `.glassProminent` for the one loud
+ * one, which is the same material carrying a tint. So `primary` is prominent
+ * glass tinted with the brand's own `--primary`, and everything beside it is
+ * plain glass. Below iOS 26 it paints what it always painted.
  *
- *  1. It GROWS (`scale 1.04`, the web's `.auth-hold`) on the same slow curve as
- *     the bottom nav, and eases back on release. A hold that never becomes a tap
- *     still eases back — the grow is feedback, not a commitment.
- *  2. It LIGHTS UP AT THE FINGER — the web's `.tap-lit` radial wash, white at
- *     the centre falling through a blue tint to nothing. There is no radial
- *     gradient in React Native, so it is three concentric circles at the touch
- *     point: white, then the blue, then the fade. Clipped to the pill.
+ * PRESSING IT GROWS IT (`scale 1.04`, the web's `.auth-hold`) on the same slow
+ * curve as the bottom nav, easing back on release. A hold that never becomes a
+ * tap still eases back — the grow is feedback, not a commitment.
+ *
+ * THE HAND-PAINTED WASH ONLY RUNS ON THE FALLBACK. The web lights the button up
+ * under the finger (`.tap-lit`), and with no radial gradient in React Native
+ * that was three concentric circles at the touch point. Real glass does this
+ * itself — `isInteractive` bends and catches the light where the finger is —
+ * and painting our circles over it would be covering the material with our own
+ * paint, which is the whole mistake this file is correcting.
  */
 export function AuthButton({ label, icon, primary, onPress, disabled, style }: {
   label: string;
@@ -64,6 +72,12 @@ export function AuthButton({ label, icon, primary, onPress, disabled, style }: {
     lit.value = withTiming(0, { duration: 350 });
   };
 
+  const real = hasGlass();
+  /* On real glass the label sits on the MATERIAL, not on a fill, so a prominent
+     button reads as its tint and a plain one as whatever is behind it. The
+     fallback keeps the solid-white primary the colour law asks for. */
+  const ink = primary ? c.onPrimary : c.text;
+
   return (
     <Animated.View style={[grow, style]}>
       <Pressable
@@ -77,17 +91,24 @@ export function AuthButton({ label, icon, primary, onPress, disabled, style }: {
         accessibilityLabel={label}
         accessibilityState={{ disabled: !!disabled }}
         style={({ pressed }) => [
-          styles.btn,
-          primary
-            ? { backgroundColor: c.primary }
-            : { backgroundColor: glass,
-                borderWidth: StyleSheet.hairlineWidth, borderColor: c.border },
           disabled && { opacity: 0.4 },
-          pressed && !disabled && { opacity: 0.94 },
+          /* Real glass dims itself under a finger; dimming it again on top is
+             the same double-paint the wash was. */
+          pressed && !disabled && !real && { opacity: 0.94 },
         ]}
       >
-        {/* The wash, under the label so it never dims the text. */}
-        {!!touch && !disabled && (
+       <Glass
+        prominent={primary}
+        tint={c.primary}
+        radius={30}
+        style={styles.btn}
+        fallback={primary
+          ? { backgroundColor: c.primary }
+          : { backgroundColor: glass,
+              borderWidth: StyleSheet.hairlineWidth, borderColor: c.border }}
+       >
+        {/* The wash, under the label so it never dims the text — fallback only. */}
+        {!real && !!touch && !disabled && (
           <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, glow]}>
             <View style={[styles.ring, {
               left: touch.x - 90, top: touch.y - 90, width: 180, height: 180, borderRadius: 90,
@@ -104,7 +125,8 @@ export function AuthButton({ label, icon, primary, onPress, disabled, style }: {
           </Animated.View>
         )}
         {!!icon && <View style={styles.ic}>{icon}</View>}
-        <Text style={[styles.label, { color: primary ? c.onPrimary : c.text }]}>{label}</Text>
+        <Text style={[styles.label, { color: ink }]}>{label}</Text>
+       </Glass>
       </Pressable>
     </Animated.View>
   );
@@ -121,9 +143,10 @@ export function AuthIcon({ name, color }: {
 const styles = StyleSheet.create({
   btn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 11, height: 56, borderRadius: 30,
-    /* Clips the wash to the pill — without it the circles spill past the
-       corners and the button reads as a square of light. */
+    gap: 11, height: 56,
+    /* Clips the fallback's wash to the pill — without it the circles spill past
+       the corners and the button reads as a square of light. Glass cuts itself
+       to the same radius, which Glass sets. */
     overflow: 'hidden',
   },
   ring: { position: 'absolute' },

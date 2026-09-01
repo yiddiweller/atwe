@@ -1,5 +1,6 @@
 import { Pressable, ActivityIndicator, StyleSheet, type ViewStyle } from 'react-native';
 import { haptics } from '@/lib/haptics';
+import { Glass, hasGlass } from './Glass';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from './Text';
 
@@ -16,9 +17,15 @@ interface Props {
 
 /**
  * The Atwe button system — "white acts, blue identifies":
- *   primary   → the single WHITE call-to-action per screen (label = onPrimary)
- *   secondary → grey-glass surface
- *   danger    → destructive red text on a tinted surface
+ *   primary   → the single call-to-action per screen. On iOS 26 this is
+ *                Apple's `.glassProminent` — real Liquid Glass carrying the
+ *                brand's own `--primary` as its tint, which is what makes it
+ *                the loud one; below 26 it is the solid white pill.
+ *   secondary → `.glass`: the same material with NO tint, so what shows through
+ *                is the content behind it. A grey fill on the fallback.
+ *   danger    → destructive red text. Deliberately NOT glass: a destructive
+ *                button has to be unmistakable, and a see-through one is the
+ *                opposite of that.
  *
  * THE BUTTON OWNS ITS OWN HAPTIC, and it fires as the finger goes DOWN — a real
  * button clicks on the way in, not when you let go, and the difference between
@@ -51,6 +58,10 @@ export function Button({ title, onPress, kind = 'primary', loading, disabled, st
     else haptics.tap();
   };
 
+  /* Real glass dims and bends under the finger by itself, so the fallback's own
+     press treatment would be painting over the material. */
+  const real = hasGlass() && kind !== 'danger';
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -59,13 +70,24 @@ export function Button({ title, onPress, kind = 'primary', loading, disabled, st
       onPress={() => { if (!disabled && !loading) onPress(); }}
       disabled={disabled || loading}
       style={({ pressed }) => [
-        styles.base,
-        { backgroundColor: bg, borderRadius: radius.pill, opacity: disabled ? 0.5 : 1 },
-        pressed && styles.pressed,
+        { opacity: disabled ? 0.5 : 1 },
+        pressed && !real && styles.pressed,
         style,
       ]}
       hitSlop={6}
     >
+     <Glass
+      /* `real` already excludes danger; passing the flag through keeps the
+         decision in one place rather than two that can disagree. */
+      prominent={kind === 'primary'}
+      tint={c.primary}
+      /* Never glass, on any iOS — see the note on `plain`. */
+      plain={kind === 'danger'}
+      radius={radius.pill}
+      style={styles.base}
+      /* `danger` never gets glass, so its fallback is what it always draws. */
+      fallback={{ backgroundColor: bg }}
+     >
       {loading ? (
         <ActivityIndicator color={fg} />
       ) : (
@@ -73,6 +95,7 @@ export function Button({ title, onPress, kind = 'primary', loading, disabled, st
           {title}
         </Text>
       )}
+     </Glass>
     </Pressable>
   );
 }
