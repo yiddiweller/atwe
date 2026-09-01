@@ -4,8 +4,6 @@ import {
   FlatList,
   TextInput,
   Pressable,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
   StyleSheet,
 } from 'react-native';
@@ -40,6 +38,7 @@ import * as Clipboard from 'expo-clipboard';
 import { radius } from '@/theme/tokens';
 import { useBubbleRadius } from '@/lib/bubbleShape';
 import { haptics } from '@/lib/haptics';
+import { useKeyboardHeight } from '@/lib/keyboard';
 
 /**
  * A live 1:1 DM thread — reads GET /api/atchat/with/:id (polled) and sends via
@@ -120,6 +119,8 @@ export default function ChatThread() {
   /* The composer floats over the conversation, so the list has to reserve
      its height — measured, because a reply strip or a photo makes it grow. */
   const foot = useFloatingFoot(96);
+  /* How far the keyboard has pushed the screen up, in points. */
+  const kb = useKeyboardHeight();
   // Re-pin to the bottom once the composer's real height lands.
   useEffect(() => { scrollEnd(); }, [foot.height]);  // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -275,11 +276,7 @@ export default function ChatThread() {
           <ActivityIndicator color={c.accent} />
         </View>
       ) : (
-        <KeyboardAvoidingView
-          style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={8}
-        >
+        <>
           <FlatList
             ref={listRef}
             data={messages}
@@ -293,7 +290,7 @@ export default function ChatThread() {
                 onLongPress={() => setActingOn(item.id)}
               />
             )}
-            contentContainerStyle={[{ paddingVertical: 12, paddingHorizontal: 12 }, chromePad.chat, foot.pad]}
+            contentContainerStyle={[{ paddingVertical: 12, paddingHorizontal: 12 }, chromePad.chat, foot.pad, { paddingBottom: foot.height + kb }]}
             showsVerticalScrollIndicator={false}
             onContentSizeChange={scrollEnd}
             ListEmptyComponent={
@@ -308,7 +305,15 @@ export default function ChatThread() {
           {/* The foot floats: messages travel UNDER it and dissolve into the
               bottom of the screen rather than stopping at a bar. It carries its
               own safe-area inset, so the fade must not add a second one. */}
-          <ChromeBar edge="bottom" inset={false} onLayout={foot.onLayout}>
+          {/* NOT KeyboardAvoidingView. `src/lib/keyboard.ts` records why: KAV
+              works out its own lift by measuring its frame against the
+              keyboard's, and inside a safe-area view that already claims the
+              bottom inset the two disagree — it left the signup button
+              half-covered and the founder photographed it. The same bug was
+              still here, in the one place people type most: the composer sat
+              behind the keyboard. Read the keyboard's height and lift by
+              exactly that; there is no measurement to get wrong. */}
+          <ChromeBar edge="bottom" inset={false} onLayout={foot.onLayout} lift={kb}>
           {replyTo != null && (
             <ReplyStrip
               name={byId(replyTo)?.mine ? 'yourself' : data?.peer.name ?? null}
@@ -337,7 +342,7 @@ export default function ChatThread() {
             onSendRecord={sendVoice}
           />
           </ChromeBar>
-        </KeyboardAvoidingView>
+        </>
       )}
 
       {!!data?.peer && (

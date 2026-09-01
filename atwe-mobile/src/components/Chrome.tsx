@@ -69,8 +69,19 @@ import { SHELF_H } from './Shelf';
  * is either `.hard` — a crisp edge — or `.soft`, which is a genuinely smooth
  * native mask that no arrangement of views can reproduce. Since the smooth one
  * is out of reach, the honest choice is the other real one: a single uniform
- * material ending on a clean line. On iOS 26 that material is `GlassView`, the
- * same `UIGlassEffect` the tab bar and every button in this app already use.
+ * material ending on a clean line.
+ *
+ * AND THAT MATERIAL IS THE STANDARD BLUR, NOT LIQUID GLASS. This bar did use
+ * `GlassView`, and the founder photographed the result in a conversation: the
+ * blue bubbles bloomed into a bright smeared haze above and below, "layers of
+ * blurry and darkness". That is `UIGlassEffect` behaving correctly — it LENSES,
+ * bending and brightening what is near its edges, which is wonderful on a 38pt
+ * disc and wrong stretched 390pt across a field of saturated blue.
+ *
+ * It is also Apple's own division, not a retreat: iOS 26 puts Liquid Glass on
+ * CONTROLS — buttons, the tab bar, floating pills — while Messages and Mail
+ * back their nav bars with the plain material. So the bars are a uniform
+ * `BlurView` and every BUTTON on them stays real glass.
  */
 const BLUR_INTENSITY = 55;
 
@@ -213,6 +224,8 @@ interface Props {
   /** From `useChromeRetract()`. The bar slides out of the way as the page
    *  scrolls down, and comes back on the way up. */
   retract?: SharedValue<number>;
+  /** Bottom bars only: how far the keyboard has pushed it up. */
+  lift?: number;
 }
 
 /**
@@ -221,7 +234,7 @@ interface Props {
  * a near-opaque fill everywhere else, since a blur nobody can render reads as a
  * smear rather than as glass.
  */
-export function ChromeBar({ children, style, edge = 'top', onLayout, inset = true, retract }: Props) {
+export function ChromeBar({ children, style, edge = 'top', onLayout, inset = true, retract, lift = 0 }: Props) {
   const insets = useSafeAreaInsets();
   const { c, name } = useTheme();
   const top = edge === 'top';
@@ -239,9 +252,8 @@ export function ChromeBar({ children, style, edge = 'top', onLayout, inset = tru
      one read as a smear; the material is uniform, so the tint over it has to be
      uniform too. How much of it there is depends on what is underneath doing
      the legibility work — see the three constants. */
-  const glass = Platform.OS === 'ios' && isLiquidGlassAvailable();
   const blurs = Platform.OS === 'ios';
-  const tint = alpha(c.bg, glass ? SCRIM_GLASS : blurs ? SCRIM_BLURRED : SCRIM_FLAT);
+  const tint = alpha(c.bg, blurs ? SCRIM_BLURRED : SCRIM_FLAT);
 
   return (
     <Animated.View
@@ -255,24 +267,16 @@ export function ChromeBar({ children, style, edge = 'top', onLayout, inset = tru
           left: 0,
           right: 0,
           zIndex: 20,
-          ...(top ? { top: 0 } : { bottom: 0 }),
+          ...(top ? { top: 0 } : { bottom: lift }),
           ...(inset ? (top ? { paddingTop: insets.top } : { paddingBottom: insets.bottom }) : null),
         },
         style,
         slide,
       ]}
     >
-      {/* ONE layer, filling the bar exactly. Real glass where the phone has it,
-          one uniform blur below that, nothing at all on web/Android where the
-          flat tint carries it alone. */}
-      {glass ? (
-        <GlassView
-          style={StyleSheet.absoluteFill}
-          glassEffectStyle="regular"
-          colorScheme={name === 'light' ? 'light' : 'dark'}
-          pointerEvents="none"
-        />
-      ) : blurs ? (
+      {/* ONE uniform blur, filling the bar exactly — the STANDARD material, not
+          Liquid Glass. See the note on BLUR_INTENSITY for why. */}
+      {blurs ? (
         <BlurView
           intensity={BLUR_INTENSITY}
           tint={name === 'light' ? 'light' : 'dark'}

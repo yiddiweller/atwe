@@ -4,8 +4,6 @@ import {
   FlatList,
   Pressable,
   TextInput,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
   StyleSheet,
 } from 'react-native';
@@ -21,6 +19,7 @@ import { radius, spacing } from '@/theme/tokens';
 import { usePost, createPost } from '@/api/social';
 import { HapticInput } from '@/components/HapticInput';
 import { haptics } from '@/lib/haptics';
+import { useKeyboardHeight } from '@/lib/keyboard';
 
 /**
  * Post detail — the reading surface: the post in full, then its replies as
@@ -28,6 +27,7 @@ import { haptics } from '@/lib/haptics';
  * reply; the create route enforces it authoritatively).
  */
 export default function PostDetail() {
+  const kb = useKeyboardHeight();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { c } = useTheme();
   const router = useRouter();
@@ -85,11 +85,7 @@ export default function PostDetail() {
           </Pressable>
         </View>
       ) : (
-        <KeyboardAvoidingView
-          style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={8}
-        >
+        <View style={[styles.flex, { paddingBottom: kb }]}>
           <FlatList
             data={replies}
             keyExtractor={(r) => String(r.id)}
@@ -142,7 +138,7 @@ export default function PostDetail() {
               </Pressable>
             </View>
           )}
-        </KeyboardAvoidingView>
+        </View>
       )}
     </Screen>
   );

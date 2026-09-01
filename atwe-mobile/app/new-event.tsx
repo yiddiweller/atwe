@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  View, ScrollView, Pressable, Alert, KeyboardAvoidingView, Platform, StyleSheet,
+  View, ScrollView, Pressable, Alert, StyleSheet,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +13,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { createEvent } from '@/api/events';
 import { haptics } from '@/lib/haptics';
+import { useKeyboardHeight } from '@/lib/keyboard';
 
 /**
  * Hosting an event.
@@ -24,6 +25,7 @@ import { haptics } from '@/lib/haptics';
  * quicker than spinning to it.
  */
 export default function NewEvent() {
+  const kb = useKeyboardHeight();
   const { c } = useTheme();
   const router = useRouter();
 
@@ -90,7 +92,7 @@ export default function NewEvent() {
         </View>
       </ChromeBar>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={[{ flex: 1 }, { paddingBottom: kb }]}>
         <ScrollView
           contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 60 }, chrome.pad]}
           keyboardShouldPersistTaps="handled"
@@ -188,7 +190,7 @@ export default function NewEvent() {
           <View style={{ height: 10 }} />
           <Button title="Put it up" kind="primary" loading={busy} onPress={submit} />
         </ScrollView>
-      </KeyboardAvoidingView>
+      </View>
     </Screen>
   );
 }

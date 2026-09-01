@@ -149,6 +149,26 @@ for (const f of WORLDS) {
   }
 }
 
+/**
+ * Nothing uses `KeyboardAvoidingView`.
+ *
+ * `src/lib/keyboard.ts` records why: KAV works out its own lift by measuring
+ * its frame against the keyboard's, and inside a safe-area view that already
+ * claims the bottom inset the two measurements disagree. It left the signup
+ * button half-covered, was replaced there — and was still sitting in the three
+ * screens people actually type in, where it hid the composer behind the
+ * keyboard. Read the keyboard's height (`useKeyboardHeight`) and lift by
+ * exactly that; there is no measurement to get wrong.
+ */
+for (const file of walk('app').concat(walk('src'))) {
+  const src = fs.readFileSync(file, 'utf8');
+  /* Only real usage — the three messaging screens name it in a comment
+     explaining why they do NOT use it, and matching that would be absurd. */
+  if (/<KeyboardAvoidingView\b/.test(src) || /^\s*KeyboardAvoidingView,/m.test(src)) {
+    problems.push(`${file}: uses KeyboardAvoidingView — use useKeyboardHeight instead`);
+  }
+}
+
 if (problems.length) {
   console.error(`chrome: ${problems.length} problem(s) across ${checked} screens\n`);
   for (const p of problems) console.error('  ' + p);

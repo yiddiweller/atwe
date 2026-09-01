@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View, FlatList, Pressable, KeyboardAvoidingView, Platform,
+  View, FlatList, Pressable,
   ActivityIndicator, StyleSheet, Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -30,6 +30,7 @@ import { pickPhoto, pickPhotoMessage } from '@/lib/pickPhoto';
 import { mediaUri } from '@/lib/media';
 import { useVoiceRecorder, voiceFailMessage, VOICE_MAX_SEC } from '@/lib/voice';
 import { haptics } from '@/lib/haptics';
+import { useKeyboardHeight } from '@/lib/keyboard';
 
 /**
  * A live group thread — GET /api/atchat/groups/:id, sending via
@@ -88,6 +89,8 @@ export default function GroupThread() {
   const listRef = useRef<FlatList<GroupMessage>>(null);
   /* The composer floats over the conversation — see the 1:1 thread. */
   const foot = useFloatingFoot(96);
+  /* How far the keyboard has pushed the screen up, in points. */
+  const kb = useKeyboardHeight();
   // Re-pin to the bottom once the composer's real height lands.
   useEffect(() => { scrollEnd(); }, [foot.height]);  // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -266,11 +269,7 @@ export default function GroupThread() {
           <Text variant="body" tone="t2">Couldn't open this group.</Text>
         </View>
       ) : (
-        <KeyboardAvoidingView
-          style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={8}
-        >
+        <>
           <FlatList
             ref={listRef}
             data={messages}
@@ -298,7 +297,15 @@ export default function GroupThread() {
           />
 
           {/* The foot floats — see the 1:1 thread. */}
-          <ChromeBar edge="bottom" inset={false} onLayout={foot.onLayout}>
+          {/* NOT KeyboardAvoidingView. `src/lib/keyboard.ts` records why: KAV
+              works out its own lift by measuring its frame against the
+              keyboard's, and inside a safe-area view that already claims the
+              bottom inset the two disagree — it left the signup button
+              half-covered and the founder photographed it. The same bug was
+              still here, in the one place people type most: the composer sat
+              behind the keyboard. Read the keyboard's height and lift by
+              exactly that; there is no measurement to get wrong. */}
+          <ChromeBar edge="bottom" inset={false} onLayout={foot.onLayout} lift={kb}>
           {replyTo != null && (
             <ReplyStrip
               name={byId(replyTo)?.mine ? 'yourself' : byId(replyTo)?.sender?.name ?? null}
@@ -324,7 +331,7 @@ export default function GroupThread() {
             onSendRecord={sendVoice}
           />
           </ChromeBar>
-        </KeyboardAvoidingView>
+        </>
       )}
 
       <MessageActions

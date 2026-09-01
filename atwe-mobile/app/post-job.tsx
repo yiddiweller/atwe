@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  View, ScrollView, Pressable, Alert, KeyboardAvoidingView, Platform, StyleSheet,
+  View, ScrollView, Pressable, Alert, StyleSheet,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +14,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { postJob, JOB_TYPES, type SalaryPeriod } from '@/api/jobs';
 import { haptics } from '@/lib/haptics';
+import { useKeyboardHeight } from '@/lib/keyboard';
 import { useAuth } from '@/auth/AuthProvider';
 
 const PERIODS: { key: SalaryPeriod; label: string }[] = [
@@ -37,6 +38,7 @@ const PERIODS: { key: SalaryPeriod; label: string }[] = [
  * on the server without this screen going stale.
  */
 export default function PostJob() {
+  const kb = useKeyboardHeight();
   const { c } = useTheme();
   const router = useRouter();
   const { user } = useAuth();
@@ -102,11 +104,7 @@ export default function PostJob() {
         </View>
       </ChromeBar>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={8}
-      >
+      <View style={[{ flex: 1 }, { paddingBottom: kb }]}>
         <ScrollView
           contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 60 }, chrome.pad]}
           keyboardShouldPersistTaps="handled"
@@ -220,7 +218,7 @@ export default function PostJob() {
           <View style={{ height: 10 }} />
           <Button title="Post the job" kind="primary" loading={busy} onPress={submit} />
         </ScrollView>
-      </KeyboardAvoidingView>
+      </View>
     </Screen>
   );
 }

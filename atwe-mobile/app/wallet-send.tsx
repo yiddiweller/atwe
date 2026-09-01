@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { View, TextInput, KeyboardAvoidingView, Platform, Pressable, StyleSheet } from 'react-native';
+import { View, TextInput, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -8,6 +8,7 @@ import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import { useKeyboardHeight } from '@/lib/keyboard';
 import { sendMoney } from '@/api/wallet';
 import { HapticInput } from '@/components/HapticInput';
 
@@ -16,6 +17,7 @@ import { HapticInput } from '@/components/HapticInput';
  * $1–$2,000 range, blocks, velocity caps and clientId idempotency).
  */
 export default function WalletSend() {
+  const kb = useKeyboardHeight();
   const { c, radius, spacing } = useTheme();
   const router = useRouter();
   const qc = useQueryClient();
@@ -74,10 +76,7 @@ export default function WalletSend() {
         <View style={{ width: 54 }} />
       </View>
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <View style={[styles.flex, { paddingBottom: kb }]}>
         <View style={{ padding: spacing.lg }}>
           <Field label="To (@username)">
             <HapticInput
@@ -138,7 +137,7 @@ export default function WalletSend() {
             disabled={!canSend}
           />
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Screen>
   );
 }

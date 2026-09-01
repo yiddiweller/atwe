@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  View, TextInput, Pressable, KeyboardAvoidingView, Platform, Alert, StyleSheet,
+  View, TextInput, Pressable, Alert, StyleSheet,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +20,7 @@ import { STORY_BGS, storyGradient } from '@/lib/storyBg';
 import { pickPhoto, pickPhotoMessage } from '@/lib/pickPhoto';
 import { HapticInput } from '@/components/HapticInput';
 import { haptics } from '@/lib/haptics';
+import { useKeyboardHeight } from '@/lib/keyboard';
 
 /**
  * Add to your story.
@@ -34,6 +35,7 @@ import { haptics } from '@/lib/haptics';
  * people most want to be sure of before posting one.
  */
 export default function AddStory() {
+  const kb = useKeyboardHeight();
   const { c } = useTheme();
   const router = useRouter();
   const qc = useQueryClient();
@@ -76,8 +78,7 @@ export default function AddStory() {
 
   return (
     <Screen edges={['top', 'bottom']} raised>
-      <KeyboardAvoidingView style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={[styles.flex, { paddingBottom: kb }]}>
         {/* The same pair as the composer — see Apple's Voicemail. */}
         <View style={styles.head}>
           <ChromePill text="Cancel" onPress={() => router.back()} />
@@ -169,7 +170,7 @@ export default function AddStory() {
           <Button title="Add to your story" kind="primary"
             loading={busy} disabled={!canPost} onPress={submit} />
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Screen>
   );
 }

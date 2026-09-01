@@ -2439,3 +2439,43 @@ and there is no way to tell from a photograph which side of it you are looking
 at. Several rounds have been spent guessing. One screenshot of that row settles
 it permanently.
 
+### Round seventeen — the smear was Liquid Glass on a BAR, and the keyboard bug we already knew about
+
+The founder photographed a conversation: the blue bubbles bloomed into a bright
+smeared haze above and below the chrome — *"layers of blurry and darkness"* —
+and separately, *"the bottom text bar is hiding behind the keyboard"*.
+
+**The smear was `UIGlassEffect` doing its job in the wrong place.** Liquid Glass
+LENSES: it bends and brightens what is near its edges. That is wonderful on a
+38pt disc and wrong stretched 390pt across a field of saturated blue, where the
+lensing blooms into exactly the haze photographed. **Apple's own division is the
+fix, not a retreat:** iOS 26 puts Liquid Glass on CONTROLS — buttons, the tab
+bar, floating pills — while Messages and Mail back their nav bars with the plain
+material. `ChromeBar` is a uniform `BlurView` now; every BUTTON on it stays real
+glass. **Do not put `GlassView` back on a full-bleed bar.**
+
+**The keyboard bug was one this codebase had already diagnosed and never
+finished.** `src/lib/keyboard.ts` says it plainly: `KeyboardAvoidingView` works
+out its own lift by measuring its frame against the keyboard's, and inside a
+safe-area view that already claims the bottom inset **the two measurements
+disagree**. It left the signup button half-covered, the founder photographed it,
+`useKeyboardHeight` was written to replace it — and KAV was still sitting in
+**twelve** other screens, including all three you type in most. The composer sat
+behind the keyboard because of a bug whose fix was already in the repo.
+
+All twelve converted: chat, group, Atwe AI, compose, add-story, post detail,
+post-job, offer-service, new-event, workers, wallet-send, ApplySheet.
+`ChromeBar` gained `lift` so a bottom bar rides the keyboard, and the message
+lists pad by `foot.height + kb` so the newest message is not tucked under it.
+**`check-chrome.js` now fails on any `<KeyboardAvoidingView>`** — matching the
+TAG, not the word, since the messaging screens name it in a comment explaining
+why they do not use it.
+
+Two process notes from this round. A bulk transform of nine files broke four of
+them (an apostrophe inside a generated JSX comment, and a `>` inside an arrow
+function ending the opening tag early) — reverted with `git checkout` and redone
+with a brace-depth scan and no generated comments. And inserting a hook "after
+the component declaration" put it **inside the props type** in the two files
+whose component destructures a typed object; find the enclosing function of the
+line that USES the value, then insert after the `}) {`.
+

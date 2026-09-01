@@ -4,8 +4,6 @@ import {
   FlatList,
   TextInput,
   Pressable,
-  KeyboardAvoidingView,
-  Platform,
   StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +18,7 @@ import { ChromeBar, chromePad, chromeTop } from '@/components/Chrome';
 import { radius, spacing } from '@/theme/tokens';
 import { sendChat, askAgent, runAgentAction, agentSummary, type ChatMessage, type AgentAction } from '@/api/ai';
 import { haptics } from '@/lib/haptics';
+import { useKeyboardHeight } from '@/lib/keyboard';
 
 const EXAMPLES = [
   'Draft a friendly reply to a customer asking for a refund',
@@ -37,6 +36,8 @@ const DOING = /\b(create|make|schedule|set up|book|send|invoice|remind|post)\b/i
  * saved history, the agent action-cards and streaming come in later slices.
  */
 export default function AI() {
+  /* How far the keyboard has pushed the screen up, in points. */
+  const kb = useKeyboardHeight();
   const router = useRouter();
   const { c, spacing } = useTheme();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -105,11 +106,9 @@ export default function AI() {
         </Text>
       </View>
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={8}
-      >
+      {/* Padded by the keyboard's measured height rather than wrapped in a
+          KeyboardAvoidingView — see `src/lib/keyboard.ts`. */}
+      <View style={[styles.flex, { paddingBottom: kb }]}>
         {empty ? (
           <View style={[styles.hero, { paddingTop: chromeTop.brand }]}>
             <View style={[styles.orb, { backgroundColor: c.accentDim ?? c.s2 }]}>
@@ -191,7 +190,7 @@ export default function AI() {
           placeholder="Message Atwe AI"
           sending={busy}
         />
-      </KeyboardAvoidingView>
+      </View>
     </Screen>
   );
 }

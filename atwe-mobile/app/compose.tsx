@@ -3,8 +3,6 @@ import {
   View,
   TextInput,
   Pressable,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   Alert,
   StyleSheet,
@@ -28,6 +26,7 @@ import { pickPhoto, pickPhotoMessage } from '@/lib/pickPhoto';
 import { radius } from '@/theme/tokens';
 import { HapticInput } from '@/components/HapticInput';
 import { haptics } from '@/lib/haptics';
+import { useKeyboardHeight } from '@/lib/keyboard';
 
 const MAX = 5000;
 
@@ -43,6 +42,7 @@ const MAX = 5000;
  * never.
  */
 export default function Compose() {
+  const kb = useKeyboardHeight();
   const { c, spacing } = useTheme();
   const router = useRouter();
   /* `?quote=<id>` turns the composer into a quote post — the same screen, with
@@ -100,10 +100,7 @@ export default function Compose() {
 
   return (
     <Screen edges={['top', 'bottom']} raised>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <View style={[styles.flex, { paddingBottom: kb }]}>
         {/* header */}
         {/* Apple's own pair, from Voicemail and Photos: a quiet glass capsule
             beside the one lighter, prominent one the screen is actually for. */}
@@ -246,7 +243,7 @@ export default function Compose() {
             {body.length > MAX ? `${MAX - body.length}` : `${body.length}/${MAX}`}
           </Text>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Screen>
   );
 }

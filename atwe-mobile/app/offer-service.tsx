@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  View, ScrollView, Alert, KeyboardAvoidingView, Platform, StyleSheet,
+  View, ScrollView, Alert, StyleSheet,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,9 +14,11 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { offerService, SERVICE_CATEGORIES } from '@/api/services';
 import { haptics } from '@/lib/haptics';
+import { useKeyboardHeight } from '@/lib/keyboard';
 
 /** Putting up what you do. Only a title is required, same as the server. */
 export default function OfferService() {
+  const kb = useKeyboardHeight();
   const { c } = useTheme();
   const router = useRouter();
   const [title, setTitle] = useState('');
@@ -63,7 +65,7 @@ export default function OfferService() {
         </View>
       </ChromeBar>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={[{ flex: 1 }, { paddingBottom: kb }]}>
         <ScrollView contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 60 }, chrome.pad]}
           keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <Field label="What do you do?" required>
@@ -125,7 +127,7 @@ export default function OfferService() {
           <View style={{ height: 10 }} />
           <Button title="Put it up" kind="primary" loading={busy} onPress={submit} />
         </ScrollView>
-      </KeyboardAvoidingView>
+      </View>
     </Screen>
   );
 }

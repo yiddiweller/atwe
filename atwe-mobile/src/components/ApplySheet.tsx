@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
-  Modal, View, ScrollView, Pressable, Alert, ActivityIndicator,
-  KeyboardAvoidingView, Platform, StyleSheet,
+  Modal, View, ScrollView, Pressable, Alert, ActivityIndicator, StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from './Text';
@@ -12,6 +11,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { applyToJob, aiCoverNote, type Job } from '@/api/jobs';
 import { haptics } from '@/lib/haptics';
+import { useKeyboardHeight } from '@/lib/keyboard';
 
 /**
  * Easy Apply.
@@ -31,6 +31,7 @@ export function ApplySheet({ visible, job, onClose, onApplied }: {
   onClose: () => void;
   onApplied: () => void;
 }) {
+  const kb = useKeyboardHeight();
   const { c } = useTheme();
   const [note, setNote] = useState('');
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -83,10 +84,7 @@ export function ApplySheet({ visible, job, onClose, onApplied }: {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <View style={[{ flex: 1 }, { paddingBottom: kb }]}>
         <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close">
           <Pressable style={[styles.card, { backgroundColor: c.bg }]} onPress={() => {}}>
             <View style={styles.head}>
@@ -172,7 +170,7 @@ export function ApplySheet({ visible, job, onClose, onApplied }: {
             </View>
           </Pressable>
         </Pressable>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
