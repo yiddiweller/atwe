@@ -764,7 +764,53 @@ bugs makes it fail by name.
   separate WidgetKit target written in Swift, which needs prebuild + a config
   plugin. Not a matter of more effort in this codebase.
 
-## ⚠️ SHIPPING COSTS A BUILD CREDIT — build in batches, ship once
+## 🚢 THE SHIP SWITCH — how a new version reaches the founder's phone
+
+**Push the working branch to `ship`. That is the whole thing.**
+
+```bash
+git push origin claude/claude-md-docs-cajkf9:ship --force
+```
+
+`.eas/workflows/build-ios.yml` fires on a push to **`ship` and nothing else**,
+builds the production profile, and submits to TestFlight by itself. The founder
+does nothing — they get a TestFlight notification about 20 minutes later.
+
+**Why a dedicated branch rather than either extreme.** It used to fire on EVERY
+push, and that emptied the account's monthly iOS build credits twice — every
+colour tweak, one credit. Removing the trigger fixed the cost and created a worse
+problem: shipping became six clicks in a web page that a non-technical founder had
+to perform by hand, and on 1 Sep it took most of an hour of their evening with me
+talking them through each click. The `ship` branch is the middle ground: **work is
+free, shipping is one push, and WHEN to ship is still their call** — they say "ship
+it", we push.
+
+`ship` is a **pointer, not a place work accumulates** — force-push it, its history
+is deliberately disposable.
+
+**A push trigger only fires when the workflow file exists ON the branch pushed**,
+so `ship` must be made from a branch that already has it. Pushing the working
+branch to `ship` does exactly that, which is why that is the documented move.
+
+**Running it by hand still works** (Expo dashboard → Workflows → Run workflow →
+enter the git ref → Load → pick the file → Confirm, or
+`npx eas workflow:run build-ios.yml`). Note the dashboard's git-ref box defaults
+to `main`, **and `main` has no `atwe-mobile/` in it at all** — so it reports "no
+workflow files found" until you type the working branch. That cost real confusion.
+
+### What was learned about the cost, and it is not what this file used to say
+
+**A FAILED build costs nothing.** The build page says so outright: *"This build
+does not count towards your EAS Build usage."* Only a build that succeeds spends
+a credit. This file's old advice — be cautious, a failure is expensive — was
+wrong, and it made a careful debugging session out of something that should have
+been "press the button and read the error". Press the button.
+
+Historical note: every workflow run in the account has failed, back to July, all
+triggered by "GitHub push". The three successful TestFlight submissions (0.1.0,
+one month before 0.2.0) were done another way.
+
+## ⚠️ Build in batches — one SUCCESSFUL build is one credit
 
 `.eas/workflows/build-ios.yml` used to run **on every push that touched
 `atwe-mobile/**`**. Each run is one of the account's monthly **iOS build credits**, so

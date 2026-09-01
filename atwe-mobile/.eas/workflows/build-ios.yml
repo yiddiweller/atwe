@@ -1,21 +1,46 @@
 # Atwe iOS — build in the cloud and ship to TestFlight, no Mac required.
 #
-# ── MANUAL ONLY. THIS IS DELIBERATE, DO NOT PUT THE PUSH TRIGGER BACK. ──
-# It used to run on every push that touched atwe-mobile/**, which meant every single
-# change — a colour, an icon, a one-line fix — spent one of the account's monthly iOS
-# BUILD CREDITS. That is what ran the credits out in an earlier run, and it happened
-# again before anyone noticed: three ordinary commits in one afternoon cost three builds.
+# ── THE SHIP SWITCH ────────────────────────────────────────────────────────
+# This fires on a push to ONE branch, `ship`, and nothing else.
 #
-# The founder's instruction is the right one: build and build and build, then ship ONCE.
-# So there is no `on:` trigger here at all. Pushing changes nothing; a build happens only
-# when a person asks for one:
+# Why not on every push: it used to be exactly that, and it emptied the account's
+# monthly iOS build credits — every colour tweak, every one-line fix, one credit.
+# It happened twice. The trigger was removed, which fixed the cost and created a
+# new problem: shipping became six clicks in a web page that the founder (who is
+# not technical) had to perform by hand every single time.
 #
-#     Expo dashboard → Workflows → "Build and submit iOS" → Run workflow
-#     or:  cd atwe-mobile && npx eas workflow:run build-ios.yml
+# A dedicated branch is the middle ground, and it is the whole design:
 #
-# Ship at the END of a batch of work, not after each piece of it.
+#   • work all week on the working branch  → nothing builds, nothing is spent
+#   • the founder says "ship it"           → push that branch to `ship`
+#   • this fires by itself                 → TestFlight, ~20 min later
+#
+# So it is automatic for them and deliberate for us. WHEN to ship stays their
+# decision; they simply no longer have to perform it.
+#
+#   git push origin claude/claude-md-docs-cajkf9:ship --force
+#
+# (force, because `ship` is not a place work accumulates — it is a pointer at
+# whatever was last shipped. Its history is deliberately disposable.)
+#
+# Running it by hand still works and always will:
+#   Expo dashboard → Workflows → Run workflow → git ref → pick this file
+#   or:  cd atwe-mobile && npx eas workflow:run build-ios.yml
+#
+# NB a push trigger only fires when this file exists ON the branch being pushed,
+# so `ship` must be made FROM a branch that already has it. Pushing the working
+# branch to `ship` does exactly that, which is why that is the documented move.
 
 name: Build and submit iOS
+
+# NB if you ever validate this file with PYTHON: PyYAML is YAML 1.1, where a
+# bare `on:` is the BOOLEAN true, not the string — so a Python check reports the
+# trigger as missing on a perfectly good file. EAS and GitHub both parse with JS
+# yaml (YAML 1.2), where it is the plain string "on". Leave it unquoted; it is
+# the convention every workflow file uses.
+on:
+  push:
+    branches: ['ship']
 
 jobs:
   build:
