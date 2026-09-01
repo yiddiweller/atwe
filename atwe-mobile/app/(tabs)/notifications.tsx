@@ -24,7 +24,6 @@ import { timeAgo } from '@/lib/format';
  */
 export default function Notifications() {
   const { c } = useTheme();
-  const router = useRouter();
   const qc = useQueryClient();
   const { data, isLoading, isError, refetch, isRefetching } = useNotifications();
   const notifs = data?.notifications ?? [];
@@ -38,12 +37,10 @@ export default function Notifications() {
 
   return (
     <Screen edges={['top']}>
+      {/* No back arrow: this is one of the five worlds now, not a page opened
+          from somewhere, and an arrow with nothing behind it is a dead control. */}
       <View style={[styles.head, { borderBottomColor: c.border }]}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}>
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
         <Text variant="title">Notifications</Text>
-        <View style={styles.back} />
       </View>
 
       {isLoading ? (
@@ -80,15 +77,38 @@ export default function Notifications() {
   );
 }
 
+/* Anything about a purchase belongs in Orders. The server names these exactly;
+   they are listed rather than pattern-matched so a new verb has to be added
+   deliberately instead of being swept in by a prefix. */
+const ORDER_TYPES = new Set([
+  'order', 'order_fulfilled', 'order_shipped', 'order_delivered', 'order_disputed',
+  'escrow_released', 'escrow_refunded', 'return_requested', 'return_approved',
+  'return_declined', 'return_label_ready', 'digital_ready',
+]);
+/* Money that is not about an order lands in the wallet. */
+const MONEY_TYPES = new Set([
+  'money_received', 'money_request', 'money_request_paid', 'money_request_declined',
+  'tip', 'payment', 'referral', 'affiliate', 'loyalty',
+]);
+
 function NotifRow({ n }: { n: Notification }) {
   const { c } = useTheme();
   const router = useRouter();
   const isLogin = n.type === 'login';
 
+  /* Every notification should land on the THING it is about, not on whoever
+     happened to trigger it. The ids the server attaches are the answer, and the
+     order matters: a message about a group is a group, a sale is the order, a
+     restock is the listing. Falling through to the actor's profile is the last
+     resort, not the plan. */
   const go = () => {
     if (isLogin) return;
-    if (n.type === 'message') router.push(`/chat/${n.actor.id}`);
+    if (n.groupId) router.push(`/group/${n.groupId}`);
+    else if (n.type === 'message') router.push(`/chat/${n.actor.id}`);
+    else if (ORDER_TYPES.has(n.type)) router.push('/orders');
     else if (n.postId) router.push(`/post/${n.postId}`);
+    else if (n.productId) router.push(`/listing/${n.productId}`);
+    else if (MONEY_TYPES.has(n.type)) router.push('/wallet');
     else if (n.actor.username) router.push(`/user/${n.actor.username}`);
   };
 
@@ -138,10 +158,9 @@ function NotifRow({ n }: { n: Notification }) {
 
 const styles = StyleSheet.create({
   head: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
+    // The arrow is gone, so the title sits on the page's own gutter rather than
+    // where a 40pt button used to hold it in.
+    paddingHorizontal: spacing.gutter,
     paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },

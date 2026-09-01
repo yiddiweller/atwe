@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { View, FlatList, Pressable, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -19,7 +20,9 @@ export default function Orders() {
     <Screen edges={['top']}>
       <View style={[styles.head, { paddingHorizontal: spacing.lg, borderBottomColor: c.border }]}>
         <Pressable onPress={() => router.back()} hitSlop={10} accessibilityRole="button">
-          <Text variant="callout" tone="accent">Back</Text>
+          {/* A chevron, like every other screen — the word "Back" was the only
+              one of its kind in the app. */}
+          <Ionicons name="chevron-back" size={26} color={c.text} />
         </Pressable>
         <Text variant="headline">Orders</Text>
         <View style={{ width: 44 }} />
@@ -66,7 +69,7 @@ function OrderRow({ order, scope }: { order: Order; scope: 'buyer' | 'seller' })
       onPress={() => router.push(`/order/${order.id}`)}
       style={({ pressed }) => [
         styles.row,
-        { backgroundColor: c.s1, borderRadius: radius.lg },
+        { backgroundColor: c.s1, borderRadius: radius.card },
         pressed && { opacity: 0.7 },
       ]}
       accessibilityRole="button"

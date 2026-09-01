@@ -254,7 +254,7 @@ function ActionCard({
   const { c, radius, spacing } = useTheme();
   const s = agentSummary(action);
   return (
-    <View style={[cardStyles.wrap, { backgroundColor: c.s1, borderRadius: radius.lg, marginHorizontal: spacing.md }]}>
+    <View style={[cardStyles.wrap, { backgroundColor: c.s1, borderRadius: radius.card, marginHorizontal: spacing.md }]}>
       <Text variant="headline">{s.title}</Text>
       {s.lines.map((l, i) => (
         <Text key={i} variant="callout" tone="t2" style={{ marginTop: 4 }}>{l}</Text>

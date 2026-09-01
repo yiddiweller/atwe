@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
   back: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30 },
   body: { padding: spacing.gutter, paddingBottom: 40 },
-  card: { borderRadius: radius.lg, padding: 14, gap: 8 },
+  card: { borderRadius: radius.card, padding: 14, gap: 8 },
   line: { flexDirection: 'row', alignItems: 'center' },
   rule: { height: StyleSheet.hairlineWidth, marginVertical: 4 },
   who: { flexDirection: 'row', alignItems: 'center' },

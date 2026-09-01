@@ -67,7 +67,7 @@ export default function Signup() {
 
   const card = (active: boolean) => ({
     backgroundColor: c.s1,
-    borderRadius: radius.lg,
+    borderRadius: radius.card,
     padding: 18,
     borderWidth: 2,
     borderColor: active ? c.accent : 'transparent',

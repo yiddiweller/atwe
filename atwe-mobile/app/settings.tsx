@@ -36,7 +36,7 @@ export default function Settings() {
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 60 }}>
         {/* Appearance */}
         <GroupLabel>APPEARANCE</GroupLabel>
-        <View style={[styles.card, { backgroundColor: c.s1, borderRadius: radius.lg }]}>
+        <View style={[styles.card, { backgroundColor: c.s1, borderRadius: radius.card }]}>
           <View style={styles.segRow}>
             <Text variant="body" style={{ flex: 1 }}>Theme</Text>
           </View>
@@ -69,7 +69,7 @@ export default function Settings() {
 
         {/* Account */}
         <GroupLabel>ACCOUNT</GroupLabel>
-        <View style={[styles.card, { backgroundColor: c.s1, borderRadius: radius.lg }]}>
+        <View style={[styles.card, { backgroundColor: c.s1, borderRadius: radius.card }]}>
           <Row label="Name" value={user.name} c={c} />
           {user.username && <Row label="Username" value={`@${user.username}`} c={c} />}
           <Row label="Email" value={user.email} c={c} />
@@ -90,7 +90,7 @@ export default function Settings() {
 
         {/* Shopping */}
         <GroupLabel>SHOPPING</GroupLabel>
-        <View style={[styles.card, { backgroundColor: c.s1, borderRadius: radius.lg }]}>
+        <View style={[styles.card, { backgroundColor: c.s1, borderRadius: radius.card }]}>
           <LinkRow label="Cart" c={c} onPress={() => router.push('/cart')} />
           <LinkRow label="Delivery addresses" c={c} onPress={() => router.push('/addresses')} />
           <LinkRow label="Orders" c={c} onPress={() => router.push('/orders')} last />
@@ -98,7 +98,7 @@ export default function Settings() {
 
         {/* Selling */}
         <GroupLabel>SELLING</GroupLabel>
-        <View style={[styles.card, { backgroundColor: c.s1, borderRadius: radius.lg }]}>
+        <View style={[styles.card, { backgroundColor: c.s1, borderRadius: radius.card }]}>
           <LinkRow label="Your listings" c={c} onPress={() => router.push('/sell')} />
           <LinkRow label="Sales" c={c} onPress={() => router.push('/sales')} last />
         </View>

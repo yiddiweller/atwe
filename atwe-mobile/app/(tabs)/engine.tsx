@@ -17,7 +17,7 @@ import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing } from '@/theme/tokens';
+import { spacing, radius } from '@/theme/tokens';
 import {
   useTrending,
   useSuggestions,
@@ -324,7 +324,7 @@ function DiscoverTile({
       onPress={onPress}
       style={({ pressed }) => [
         styles.tile,
-        { backgroundColor: c.s1, borderRadius: radius.lg },
+        { backgroundColor: c.s1, borderRadius: radius.card },
         pressed && { opacity: 0.85 },
       ]}
     >
@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
   search: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: radius.pill,
     paddingHorizontal: 12,
     height: 40,
     gap: 8,

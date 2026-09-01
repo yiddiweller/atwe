@@ -174,7 +174,7 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
       <Text variant="micro" tone="t3" style={{ marginTop: spacing.xl, marginBottom: 8, marginLeft: 4, letterSpacing: 0.4 }}>
         {label}
       </Text>
-      <View style={[styles.card, { backgroundColor: c.s1, borderRadius: radius.lg }]}>{children}</View>
+      <View style={[styles.card, { backgroundColor: c.s1, borderRadius: radius.card }]}>{children}</View>
     </>
   );
 }

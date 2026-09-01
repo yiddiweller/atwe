@@ -91,10 +91,23 @@ function RootNavigator() {
     SplashScreen.hideAsync().catch(() => {});
   }, []);
 
-  // The mark holds on black until the app is truly ready — auth resolved AND, for
-  // a signed-in user, the Home feed's first page has settled — then it zoom-reveals
-  // straight into the posts. Signed-out users reveal to login as soon as auth resolves.
-  const appReady = !loading && (!signedIn || feedReady);
+  /* The mark holds on black until the app is truly ready — auth resolved AND, for
+     a signed-in user, the Home feed's first page has settled — then it zoom-reveals
+     straight into the posts. Signed-out users reveal as soon as auth resolves.
+
+     But `feedReady` is set by the HOME SCREEN, and Home does not always mount:
+     open the app on a push notification about an order, or a shared listing
+     link, and the router lands on that screen instead — so nothing ever says the
+     feed is ready and the splash sits over the app for good. Caught by looking
+     at the screens rather than by any test. So the wait is capped: after
+     SPLASH_MAX_WAIT the reveal happens regardless. The normal launch is
+     unchanged, because the feed settles long before that. */
+  const [waited, setWaited] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setWaited(true), SPLASH_MAX_WAIT);
+    return () => clearTimeout(t);
+  }, []);
+  const appReady = !loading && (!signedIn || feedReady || waited);
   const showSplash = !splashDone;
 
   return (
@@ -141,6 +154,11 @@ function RootNavigator() {
     </>
   );
 }
+
+/** How long the opening mark may wait for the feed before revealing anyway.
+ *  Long enough that a normal launch always reveals on the feed settling, short
+ *  enough that a deep link into another screen is not left staring at a logo. */
+const SPLASH_MAX_WAIT = 2500;
 
 export default function RootLayout() {
   return (

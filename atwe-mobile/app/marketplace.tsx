@@ -15,7 +15,7 @@ import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { ListingCard } from '@/components/ListingCard';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing } from '@/theme/tokens';
+import { spacing, radius } from '@/theme/tokens';
 import { useMarketplace, KIND_LABEL, type ListingKind } from '@/api/marketplace';
 import { useCart, cartCount } from '@/api/cart';
 
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderRadius: 12,
+    borderRadius: radius.pill,
     paddingHorizontal: 12,
     height: 42,
   },

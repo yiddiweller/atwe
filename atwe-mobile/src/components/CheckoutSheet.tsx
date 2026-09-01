@@ -375,10 +375,10 @@ const styles = StyleSheet.create({
   x: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   body: { padding: spacing.gutter, paddingBottom: 28 },
   label: { marginTop: 18, marginBottom: 8 },
-  card: { borderRadius: radius.lg, padding: 14 },
+  card: { borderRadius: radius.card, padding: 14 },
   pick: {
     flexDirection: 'row', alignItems: 'center',
-    borderRadius: radius.lg, padding: 14, marginBottom: 8,
+    borderRadius: radius.card, padding: 14, marginBottom: 8,
     borderWidth: 1.5, borderColor: 'transparent',
   },
   addRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 4 },

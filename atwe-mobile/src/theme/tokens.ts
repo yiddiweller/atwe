@@ -141,8 +141,17 @@ export const row = { height: 55 } as const;
 export const radius = {
   sm: 10,
   md: 14,
+  /** Media and previews INSIDE something — a photo in a form, a story preview.
+   *  Not a card corner; see `card` below. */
   lg: 20,
-  /** The one card corner: post cards, settings cards, the Account page. Was 26. */
+  /**
+   * THE card corner, and there is only one. The web settled this — post cards,
+   * settings-shaped cards, the Account page and the nav bar all turn on the same
+   * number, and four near-misses on one screen is exactly what the founder kept
+   * spotting and could not name. `card` is the semantic name; `xl` is kept as
+   * its alias so nothing that already used it has to change.
+   */
+  card: 30,
   xl: 30,
   pill: 999,
 } as const;

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, FlatList, RefreshControl, ActivityIndicator, Pressable, StyleSheet, type NativeSyntheticEvent, type NativeScrollEvent, ScrollView } from 'react-native';
 import { withTiming } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/Text';
@@ -88,11 +89,14 @@ export default function Home() {
     <Screen edges={['top']}>
       {/* Header: feed tabs + notifications bell */}
       <View style={[styles.headerRow, { borderBottomColor: c.border }]}>
+        {/* The row scrolls, so at rest the last label is CUT — and a word chopped
+            mid-letter reads as broken rather than as "there is more". The web
+            solves it with a soft fade at the edge; so does this. */}
+        <View style={styles.tabsWrap}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.tabs}
-          style={styles.tabsWrap}
         >
           {TABS.map((t) => {
             const active = scope === t.key;
@@ -106,6 +110,14 @@ export default function Home() {
             );
           })}
         </ScrollView>
+        <LinearGradient
+          pointerEvents="none"
+          colors={[c.bg + '00', c.bg]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.tabsFade}
+        />
+        </View>
         {/* Right actions: the compose "+" (a clean plus, X/web-style).
             The notifications BELL used to sit here — it was the only way in before
             Notifications had a seat in the tab bar. It has one now, and it carries the
@@ -187,7 +199,8 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  tabsWrap: { flexShrink: 1 },
+  tabsWrap: { flexShrink: 1, position: 'relative' },
+  tabsFade: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 26 },
   tabs: { flexDirection: 'row', gap: 24, alignItems: 'flex-end', paddingRight: 8 },
   tab: { alignItems: 'center' },
   headActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },

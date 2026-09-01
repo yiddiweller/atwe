@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyWrap: { flexGrow: 1 },
   body: { padding: spacing.gutter, paddingBottom: 40, gap: 14 },
-  group: { borderRadius: radius.lg, padding: 14 },
+  group: { borderRadius: radius.card, padding: 14 },
   sellerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   item: { flexDirection: 'row', marginBottom: 12 },
   thumb: { width: 58, height: 58, borderRadius: radius.sm },

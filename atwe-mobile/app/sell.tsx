@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyWrap: { flexGrow: 1 },
   body: { padding: spacing.gutter, paddingBottom: 40, gap: 12 },
-  card: { borderRadius: radius.lg, padding: 12 },
+  card: { borderRadius: radius.card, padding: 12 },
   row: { flexDirection: 'row' },
   thumb: { width: 62, height: 62, borderRadius: radius.sm },
   tags: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },

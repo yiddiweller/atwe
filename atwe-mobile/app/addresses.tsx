@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
   back: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   body: { padding: spacing.gutter, paddingBottom: 32, gap: 12 },
-  card: { borderRadius: radius.lg, padding: 14 },
+  card: { borderRadius: radius.card, padding: 14 },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   tag: { paddingHorizontal: 8, height: 20, borderRadius: 10, justifyContent: 'center' },
   actions: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },

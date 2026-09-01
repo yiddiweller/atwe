@@ -22,3 +22,6 @@ expo-env.d.ts
 .DS_Store
 *.log
 npm-debug.*
+
+# The web build used only to LOOK at the screens during development.
+dist-web/

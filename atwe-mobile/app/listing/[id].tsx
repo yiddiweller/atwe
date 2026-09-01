@@ -175,7 +175,7 @@ export default function ListingDetail() {
             {/* Seller */}
             <Pressable
               onPress={() => listing.seller.username && router.push(`/user/${listing.seller.username}`)}
-              style={[styles.seller, { backgroundColor: c.s1, borderRadius: radius.lg }]}
+              style={[styles.seller, { backgroundColor: c.s1, borderRadius: radius.card }]}
             >
               <Avatar
                 name={listing.seller.name}

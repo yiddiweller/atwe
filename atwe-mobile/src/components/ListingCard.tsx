@@ -25,7 +25,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
       onPress={() => router.push(`/listing/${listing.id}`)}
       style={({ pressed }) => [
         styles.card,
-        { backgroundColor: c.s1, borderRadius: radius.lg, borderColor: c.border },
+        { backgroundColor: c.s1, borderRadius: radius.card, borderColor: c.border },
         pressed && { opacity: 0.9 },
       ]}
     >
