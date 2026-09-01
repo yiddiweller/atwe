@@ -9,6 +9,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { GlassSurface } from '@/components/Glass';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { GlassComposer } from '@/components/GlassComposer';
@@ -239,28 +240,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', marginVertical: 4 },
   bubble: { borderRadius: radius.bubble, paddingVertical: 10, paddingHorizontal: 16 },
   typing: { paddingHorizontal: 14, paddingVertical: 8 },
-  composer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 10,
-    paddingTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 8,
-  },
-  input: {
-    flex: 1,
-    minHeight: 40,
-    maxHeight: 120,
-    /* Nothing sits in this box's corners — the send button is beside it, not
-       inside — so it can take the full bubble corner and stay round however
-       long the question gets. */
-    borderRadius: radius.bubble,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 10,
-    fontSize: 16,
-  },
-  sendBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
 });
 
 /**
@@ -280,12 +259,10 @@ function ActionCard({
         <Text key={i} variant="callout" tone="t2" style={{ marginTop: 4 }}>{l}</Text>
       ))}
       <View style={cardStyles.row}>
-        <Pressable
-          onPress={onCancel}
-          style={[cardStyles.btn, { backgroundColor: c.s2, borderRadius: radius.pill }]}
-          accessibilityRole="button"
-        >
-          <Text variant="callout" tone="t2">Not now</Text>
+        <Pressable onPress={onCancel} accessibilityRole="button" style={{ flex: 1 }}>
+          <GlassSurface radius={radius.pill} style={cardStyles.btn}>
+            <Text variant="callout" tone="t2">Not now</Text>
+          </GlassSurface>
         </Pressable>
         <Pressable
           onPress={() => { void haptics.press(); onConfirm(); }}
@@ -301,7 +278,7 @@ function ActionCard({
 }
 
 const cardStyles = StyleSheet.create({
-  wrap: { padding: 16, marginBottom: 10 },
+  wrap: { padding: 14, marginTop: 10 },
   row: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  btn: { flex: 1, alignItems: 'center', paddingVertical: 11 },
+  btn: { flex: 1, height: 40, alignItems: 'center', justifyContent: 'center' },
 });

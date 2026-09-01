@@ -538,7 +538,6 @@ const styles = StyleSheet.create({
   },
   peer: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', height: 38, paddingLeft: 4, paddingRight: 14 },
   peerName: { marginLeft: 8, flexShrink: 1 },
-  headSpacer: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   bubbleRow: { flexDirection: 'row', marginVertical: 3 },
   /* `radius.bubble` is past half the height of a bubble up to four lines
@@ -552,23 +551,4 @@ const styles = StyleSheet.create({
     borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderStyle: 'dashed',
   },
   bubbleImg: { width: 200, height: 200, borderRadius: radius.bubble - 10, marginBottom: 4 },
-  composer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 10,
-    paddingTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 8,
-  },
-  input: {
-    flex: 1,
-    minHeight: 40,
-    maxHeight: 120,
-    borderRadius: radius.bubble,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 10,
-    fontSize: 16,
-  },
-  sendBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
 });

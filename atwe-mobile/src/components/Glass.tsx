@@ -1,5 +1,6 @@
-import { View, StyleSheet, type ViewStyle, type StyleProp } from 'react-native';
+import { View, Pressable, StyleSheet, type ViewStyle, type StyleProp } from 'react-native';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
+import { useTheme } from '@/theme/ThemeProvider';
 
 /**
  * A surface made of Apple's real Liquid Glass, with an honest fallback.
@@ -65,6 +66,99 @@ export function Glass({
 /** True when the phone can actually draw it — so a caller can pick a label
  *  colour, or skip an effect that only makes sense on the fallback. */
 export const hasGlass = isLiquidGlassAvailable;
+
+/**
+ * A round-cornered pane of real glass, pressable — THE round icon button of
+ * this app, and the shape the founder photographed: a translucent disc floating
+ * over the content with a faint rim, the content visible through it.
+ *
+ * It lives here rather than in `Chrome.tsx` because a glass button is not
+ * chrome. A story viewer's close, a composer's +, a quantity stepper and a
+ * bar's back arrow are all the same object, and there must be exactly one
+ * implementation of it — `ChromeSurface`/`ChromeButton` are now this.
+ *
+ * The fallback matters as much as the glass, because most phones in the wild
+ * are not on iOS 26: a near-opaque dark disc with a 1px rim, which is what the
+ * material collapses to when there is nothing to sample. Never a flat brand
+ * fill — that is the thing that reads as "not Apple".
+ */
+export function GlassSurface({ children, onPress, label, radius, prominent, disabled, style }: {
+  children: React.ReactNode;
+  onPress?: () => void;
+  label?: string;
+  radius: number;
+  /** Greys out and stops responding — a stepper mid-request, say. Without this
+   *  a converted button silently loses the guard its Pressable used to carry,
+   *  which is a double-tap firing the same change twice. */
+  disabled?: boolean;
+  /** Apple's `.glassProminent`: the lighter one, for the single action a screen
+   *  is for. Never two on a screen. */
+  prominent?: boolean;
+  style?: ViewStyle | (ViewStyle | false | undefined)[];
+}) {
+  const { c, name } = useTheme();
+  const light = name === 'light';
+  const body = (
+    <Glass
+      radius={radius}
+      prominent={prominent}
+      /* Neutral, not the brand colour: in Apple's own bars the prominent pill is
+         a lighter GLASS, and what tints it is whatever is scrolling behind. */
+      tint={light ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.22)'}
+      fallback={{
+        backgroundColor: prominent
+          ? (light ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.20)')
+          : (light ? 'rgba(255,255,255,0.82)' : 'rgba(28,28,30,0.92)'),
+        borderWidth: 1,
+        borderColor: light ? c.border : 'rgba(255,255,255,0.06)',
+      }}
+      style={[{ alignItems: 'center', justifyContent: 'center' }, style]}
+    >
+      {children}
+    </Glass>
+  );
+  if (!onPress) return body;
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !!disabled }}
+      style={({ pressed }) => ({ opacity: disabled ? 0.5 : pressed ? 0.7 : 1 })}
+    >
+      {body}
+    </Pressable>
+  );
+}
+
+/**
+ * The same thing cut to a circle. `size` is the diameter and the radius is
+ * derived from it, so a caller can never hand it a corner that does not close —
+ * iOS clamps a radius to half the shorter side anyway, and a hand-typed 17 next
+ * to a 34 is one edit away from an oval.
+ *
+ * On a FULL-BLEED surface (a story, a photo) pass `overContent`: the disc keeps
+ * its glass but its icon is forced white, because the material there is
+ * sampling a photograph and a theme-coloured glyph can land on anything.
+ */
+export function GlassIcon({ children, onPress, label, size = 38, prominent, disabled, style }: {
+  children: React.ReactNode;
+  onPress: () => void;
+  label: string;
+  size?: number;
+  prominent?: boolean;
+  disabled?: boolean;
+  style?: ViewStyle;
+}) {
+  return (
+    <GlassSurface radius={size / 2} onPress={onPress} label={label} prominent={prominent}
+      disabled={disabled} style={[{ width: size, height: size }, style]}>
+      {children}
+    </GlassSurface>
+  );
+}
 
 export const glassStyles = StyleSheet.create({
   fill: { ...StyleSheet.absoluteFillObject },

@@ -9,6 +9,7 @@ import Animated, {
   Extrapolation,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import { Glass, GlassIcon, GlassSurface } from './Glass';
 import { Image } from 'expo-image';
 import { BlurView } from 'expo-blur';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
@@ -101,10 +102,9 @@ export function GlassComposer({
 
   const recBar = (
     <View style={styles.recRow}>
-      <Pressable onPress={onCancelRecord} hitSlop={8} style={styles.recX}
-        accessibilityRole="button" accessibilityLabel="Cancel recording">
-        <Ionicons name="trash-outline" size={20} color={c.danger} />
-      </Pressable>
+      <GlassIcon onPress={() => onCancelRecord?.()} label="Cancel recording" size={34} style={styles.recX}>
+        <Ionicons name="trash-outline" size={18} color={c.danger} />
+      </GlassIcon>
       <RecDot color={c.danger} />
       <Text style={[styles.recTime, { color: c.text }]}>{fmtSec(recordSeconds)}</Text>
       <Text style={[styles.recHint, { color: c.t3 }]} numberOfLines={1}>Recording…</Text>
@@ -125,11 +125,10 @@ export function GlassComposer({
         <View style={styles.attachWrap}>
           <Image source={{ uri: attachment }} style={styles.attachImg} contentFit="cover" />
           {!!onRemoveAttachment && (
-            <Pressable onPress={onRemoveAttachment} hitSlop={8}
-              style={[styles.attachX, { backgroundColor: c.bg }]}
-              accessibilityRole="button" accessibilityLabel="Remove photo">
+            <GlassIcon onPress={onRemoveAttachment} label="Remove photo"
+              size={20} style={styles.attachX}>
               <Ionicons name="close" size={14} color={c.text} />
-            </Pressable>
+            </GlassIcon>
           )}
           {/* View-once. A "1" on the photo, the way every app that has this
               marks it — and it sits ON the photo because it is a property of
@@ -138,25 +137,30 @@ export function GlassComposer({
             <Pressable
               onPress={onToggleViewOnce}
               hitSlop={8}
-              style={[styles.attachOne, { backgroundColor: viewOnce ? c.accent : c.bg }]}
+              style={styles.attachOne}
               accessibilityRole="switch"
               accessibilityState={{ checked: !!viewOnce }}
               accessibilityLabel="Send it as view once"
             >
-              <Text style={{ fontSize: 11, fontWeight: '800', color: viewOnce ? '#fff' : c.t2 }}>1</Text>
+              {/* ON it fills with the accent — that is the state showing, and a
+                  see-through toggle cannot show a state. OFF it is glass over
+                  the photo. */}
+              <Glass radius={10} plain={!!viewOnce}
+                fallback={{ backgroundColor: viewOnce ? c.accent : c.bg }}
+                style={styles.attachOneFill}>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: viewOnce ? '#fff' : c.t2 }}>1</Text>
+              </Glass>
             </Pressable>
           )}
         </View>
       )}
+      {/* Real glass, the quiet grade. It sits ON the glass bar, so the one thing
+          it must NOT be is a painted grey disc — that reads as a sticker stuck
+          to a window. */}
       {!!onPlus && (
-        <Pressable
-          onPress={onPlus}
-          hitSlop={8}
-          style={({ pressed }) => [styles.plus, { backgroundColor: c.s2 }, pressed && { opacity: 0.7 }]}
-          accessibilityLabel="Add attachment"
-        >
+        <GlassIcon onPress={onPlus} label="Add attachment" size={38}>
           <Ionicons name="add" size={24} color={c.t2} />
-        </Pressable>
+        </GlassIcon>
       )}
       <HapticInput
         style={[styles.input, { color: c.text }]}
@@ -187,15 +191,21 @@ export function GlassComposer({
           onSend();
         }}
         disabled={!canSend && !micMode}
-        style={[styles.send, { backgroundColor: canSend ? c.accent : c.s2 }]}
+        /* ARMED it stays a solid accent circle — that is iMessage's own send
+           button and the blue IS the affordance; a see-through one would be the
+           quietest thing on the bar at the moment it matters most. Idle, it is
+           the quiet glass grade like every other neutral control. */
+        style={[styles.send, canSend ? { backgroundColor: c.accent } : null]}
         accessibilityRole="button"
         accessibilityLabel={micMode ? 'Record a voice note' : 'Send'}
       >
-        <Ionicons
-          name={micMode ? 'mic' : 'arrow-up'}
-          size={20}
-          color={canSend ? '#fff' : micMode ? c.t2 : c.t3}
-        />
+        {canSend ? (
+          <Ionicons name="arrow-up" size={20} color="#fff" />
+        ) : (
+          <GlassSurface radius={19} style={styles.sendGlass}>
+            <Ionicons name={micMode ? 'mic' : 'arrow-up'} size={20} color={micMode ? c.t2 : c.t3} />
+          </GlassSurface>
+        )}
       </Pressable>
     </>
   );
@@ -284,7 +294,6 @@ const styles = StyleSheet.create({
      pill's edge and the left one floated 6pt further in, one was a shape
      and the other was not, and the composer read as lopsided. Two identical
      discs at identical insets is the only way the two ends can match. */
-  plus: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   input: {
     flex: 1,
     fontSize: 16,
@@ -294,4 +303,8 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 10 : 6,
   },
   send: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  /* Fills the send button's own box, so glass and the solid accent circle are
+     the exact same disc and swapping between them never moves anything. */
+  attachOneFill: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  sendGlass: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
 });

@@ -451,7 +451,6 @@ function Cap({ children }: { children: React.ReactNode }) {
 const styles = StyleSheet.create({
   page: { paddingHorizontal: spacing.gutter, paddingTop: 2, paddingBottom: 80 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingBottom: 14 },
-  back: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', marginLeft: -9 },
   title: { fontSize: 24, fontWeight: '800', letterSpacing: -0.48, flex: 1, minWidth: 0, lineHeight: 29},
   cap: { fontSize: 12.5, lineHeight: 17, marginTop: -2, marginBottom: 12, paddingHorizontal: 15 },
   pick: {

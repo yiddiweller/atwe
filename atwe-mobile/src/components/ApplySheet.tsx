@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from './Text';
+import { GlassChip } from './GlassChip';
 import { Button } from './Button';
 import { HapticInput } from './HapticInput';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -116,19 +117,9 @@ export function ApplySheet({ visible, job, onClose, onApplied }: {
                       {['yes', 'no'].map((v) => {
                         const on = (answers[q.id] ?? '') === v;
                         return (
-                          <Pressable
-                            key={v}
-                            onPress={() => { haptics.select(); setAnswer(q.id, v); }}
-                            style={[styles.chip, { backgroundColor: on ? c.accent : c.s1 }]}
-                            accessibilityRole="radio"
-                            accessibilityState={{ selected: on }}
-                            accessibilityLabel={v === 'yes' ? 'Yes' : 'No'}
-                          >
-                            <Text variant="callout" weight="600"
-                              style={{ color: on ? c.accentTint : c.text }}>
-                              {v === 'yes' ? 'Yes' : 'No'}
-                            </Text>
-                          </Pressable>
+                          <GlassChip key={v} on={on} fill={c.accent} ink={c.accentTint}
+                            label={v === 'yes' ? 'Yes' : 'No'}
+                            onPress={() => setAnswer(q.id, v)} />
                         );
                       })}
                     </View>
@@ -194,7 +185,6 @@ const styles = StyleSheet.create({
   },
   head: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   chips: { flexDirection: 'row', gap: 8 },
-  chip: { paddingHorizontal: 20, height: 38, borderRadius: radius.pill, justifyContent: 'center' },
   input: { borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16 },
   noteBox: { minHeight: 110, textAlignVertical: 'top' },
   noteHead: { flexDirection: 'row', alignItems: 'center', marginTop: 20, marginBottom: 8, gap: 10 },

@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { GlassIcon } from '@/components/Glass';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
@@ -119,21 +120,17 @@ export default function CartScreen() {
                         <Text variant="caption" tone="danger">Sold out — remove it to check out</Text>
                       )}
                       <View style={styles.qtyRow}>
-                        <Pressable onPress={() => change(i, i.qty - 1)} hitSlop={8}
+                        <GlassIcon onPress={() => change(i, i.qty - 1)} size={28}
                           disabled={busy === key(i)}
-                          style={[styles.qtyBtn, { backgroundColor: c.s2 }]}
-                          accessibilityRole="button"
-                          accessibilityLabel={i.qty > 1 ? 'One fewer' : 'Remove'}>
+                          label={i.qty > 1 ? 'One fewer' : 'Remove'}>
                           <Ionicons name={i.qty > 1 ? 'remove' : 'trash-outline'} size={15}
                             color={i.qty > 1 ? c.text : c.danger} />
-                        </Pressable>
+                        </GlassIcon>
                         <Text variant="callout" style={styles.qtyN}>{i.qty}</Text>
-                        <Pressable onPress={() => change(i, i.qty + 1)} hitSlop={8}
-                          disabled={busy === key(i)}
-                          style={[styles.qtyBtn, { backgroundColor: c.s2 }]}
-                          accessibilityRole="button" accessibilityLabel="One more">
+                        <GlassIcon onPress={() => change(i, i.qty + 1)} size={28}
+                          disabled={busy === key(i)} label="One more">
                           <Ionicons name="add" size={15} color={c.text} />
-                        </Pressable>
+                        </GlassIcon>
                         <View style={{ flex: 1 }} />
                         <Text variant="callout" weight="700">{money(i.priceCents * i.qty)}</Text>
                       </View>
@@ -202,7 +199,6 @@ const styles = StyleSheet.create({
   item: { flexDirection: 'row', marginBottom: 12 },
   thumb: { width: 58, height: 58, borderRadius: radius.sm },
   qtyRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
-  qtyBtn: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   qtyN: { minWidth: 20, textAlign: 'center' },
   rule: { height: StyleSheet.hairlineWidth, marginVertical: 8 },
   totalRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 2 },

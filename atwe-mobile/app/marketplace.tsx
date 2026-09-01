@@ -11,6 +11,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
+import { GlassChip } from '@/components/GlassChip';
 import { Screen } from '@/components/Screen';
 import { ChromeButton, ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
@@ -106,17 +107,11 @@ export default function Marketplace() {
           renderItem={({ item }) => {
             const active = kind === item;
             return (
-              <Pressable
+              <GlassChip
+                label={item ? KIND_LABEL[item] : 'All'}
+                on={active}
                 onPress={() => setKind(item)}
-                style={[
-                  styles.chip,
-                  { backgroundColor: active ? c.primary : c.s2 },
-                ]}
-              >
-                <Text variant="callout" style={{ color: active ? c.onPrimary : c.t2 }}>
-                  {item ? KIND_LABEL[item] : 'All'}
-                </Text>
-              </Pressable>
+              />
             );
           }}
         />
@@ -162,7 +157,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingBottom: 8,
   },
-  back: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   badge: {
     position: 'absolute', top: 4, right: 2,
     minWidth: 17, height: 17, borderRadius: 9, paddingHorizontal: 4,
@@ -182,7 +176,6 @@ const styles = StyleSheet.create({
      the space: the chips' own 8px padding was squashed away and two stacked
      rows visibly overlapped. Measured 24.3px tall against 35px of content. */
   rowStrip: { flexGrow: 0, flexShrink: 0 },
-  chip: { paddingHorizontal: spacing.gutter, paddingVertical: 8, borderRadius: 999 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyWrap: { flexGrow: 1 },
 });

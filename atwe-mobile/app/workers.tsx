@@ -6,6 +6,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
+import { GlassChip } from '@/components/GlassChip';
 import { Screen } from '@/components/Screen';
 import { ChromeButton, ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
@@ -211,16 +212,9 @@ function MyListing({ listing, visibility, onEdit, onVisibility, onRemoved }: {
         {VIS.map((v) => {
           const on = visibility === v.key;
           return (
-            <Pressable
-              key={v.key}
-              onPress={() => { haptics.select(); void onVisibility(v.key); }}
-              style={[styles.chip, { backgroundColor: on ? c.accent : c.s2 }]}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: on }}
-              accessibilityLabel={v.label}
-            >
-              <Text variant="callout" style={{ color: on ? c.accentTint : c.t2 }}>{v.label}</Text>
-            </Pressable>
+            <GlassChip key={v.key} label={v.label} on={on}
+              fill={c.accent} ink={c.accentTint}
+              onPress={() => { void onVisibility(v.key); }} />
           );
         })}
       </View>
@@ -425,18 +419,8 @@ function ListingEditor({ visible, current, onClose, onSaved }: {
                 {PERIODS.map((p) => {
                   const on = period === p.key;
                   return (
-                    <Pressable
-                      key={p.key}
-                      onPress={() => { haptics.select(); setPeriod(p.key); }}
-                      style={[styles.chip, { backgroundColor: on ? c.accent : c.s1 }]}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: on }}
-                      accessibilityLabel={p.label}
-                    >
-                      <Text variant="callout" style={{ color: on ? c.accentTint : c.t2 }}>
-                        {p.label}
-                      </Text>
-                    </Pressable>
+                    <GlassChip key={p.key} label={p.label} on={on} fill={c.accent}
+                      ink={c.accentTint} onPress={() => setPeriod(p.key)} />
                   );
                 })}
               </View>
@@ -498,5 +482,4 @@ const styles = StyleSheet.create({
   input: { borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16 },
   textarea: { minHeight: 100, textAlignVertical: 'top', borderRadius: radius.bubble },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingHorizontal: 14, height: 38, borderRadius: radius.pill, justifyContent: 'center' },
 });

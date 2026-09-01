@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, FlatList, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { GlassIcon } from '@/components/Glass';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
@@ -203,22 +204,15 @@ function ProfileHeader({ data }: { data: Profile }) {
         {!isMe && (
           <View style={styles.followWrap}>
             {biz && (
-              <Pressable
-                onPress={() => setBooking(true)}
-                style={[styles.msgBtn, { borderColor: c.border }]}
-                accessibilityRole="button"
-                accessibilityLabel={`Book ${user.name}`}
-              >
+              <GlassIcon onPress={() => setBooking(true)} label={`Book ${user.name}`} size={38}>
                 <Ionicons name="calendar-outline" size={20} color={c.text} />
-              </Pressable>
+              </GlassIcon>
             )}
-            <Pressable
-              onPress={() => router.push(`/chat/${user.id}`)}
-              style={[styles.msgBtn, { borderColor: c.border }]}
-              accessibilityLabel="Message"
-            >
+            {/* Was a hollow outlined circle — the one thing the design law
+                forbids. Real glass instead: solid material, no outline. */}
+            <GlassIcon onPress={() => router.push(`/chat/${user.id}`)} label="Message" size={38}>
               <Ionicons name="mail-outline" size={20} color={c.text} />
-            </Pressable>
+            </GlassIcon>
             <Button
               title={following ? 'Following' : 'Follow'}
               kind={following ? 'secondary' : 'primary'}
@@ -615,14 +609,6 @@ const styles = StyleSheet.create({
   avatarRing: { borderWidth: AVA_RING, padding: 0 },
   followWrap: { paddingBottom: 6, flexDirection: 'row', alignItems: 'center', gap: 8 },
   followBtn: { minHeight: 38, paddingHorizontal: 22 },
-  msgBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   nameLine: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10, gap: 14 },
   metaItem: { flexDirection: 'row', alignItems: 'center' },

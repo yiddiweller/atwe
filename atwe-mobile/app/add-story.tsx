@@ -4,6 +4,8 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { GlassIcon } from '@/components/Glass';
+import { GlassChip } from '@/components/GlassChip';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -88,11 +90,10 @@ export default function AddStory() {
           {photo ? (
             <View style={styles.preview}>
               <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} contentFit="cover" />
-              <Pressable onPress={() => setPhoto(null)} hitSlop={8}
-                style={[styles.x, { backgroundColor: c.bg }]}
-                accessibilityRole="button" accessibilityLabel="Remove photo">
+              <GlassIcon onPress={() => setPhoto(null)} label="Remove photo"
+                size={26} style={styles.x}>
                 <Ionicons name="close" size={16} color={c.text} />
-              </Pressable>
+              </GlassIcon>
               {!!caption.trim() && (
                 <View style={styles.capWrap}>
                   <Text variant="body" style={styles.capText} numberOfLines={3}>{caption}</Text>
@@ -146,14 +147,9 @@ export default function AddStory() {
           <Text variant="caption" tone="t3" style={styles.lbl}>Who sees it</Text>
           <View style={styles.chips}>
             {(['all', 'close'] as StoryAudience[]).map((a) => (
-              <Pressable key={a} onPress={() => { haptics.select(); setAudience(a); }}
-                style={[styles.chip, { backgroundColor: audience === a ? c.accent : c.s1 }]}
-                accessibilityRole="radio" accessibilityState={{ selected: audience === a }}>
-                <Text variant="callout" weight="600"
-                  style={{ color: audience === a ? c.accentTint : c.text }}>
-                  {a === 'all' ? 'Everyone following you' : 'Close friends'}
-                </Text>
-              </Pressable>
+              <GlassChip key={a} on={audience === a} fill={c.accent} ink={c.accentTint}
+                label={a === 'all' ? 'Everyone following you' : 'Close friends'}
+                onPress={() => setAudience(a)} />
             ))}
           </View>
 
@@ -192,10 +188,7 @@ const styles = StyleSheet.create({
   bigText: { color: '#fff', textAlign: 'center' },
   capWrap: { position: 'absolute', left: 8, right: 8, bottom: 10 },
   capText: { color: '#fff', textAlign: 'center' },
-  x: {
-    position: 'absolute', top: 6, right: 6,
-    width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center',
-  },
+  x: { position: 'absolute', top: 6, right: 6 },
   controls: { paddingHorizontal: spacing.gutter, paddingTop: 16, flex: 1 },
   input: {
     borderRadius: radius.bubble, paddingHorizontal: 16, paddingVertical: 12,
@@ -205,7 +198,6 @@ const styles = StyleSheet.create({
   swatches: { flexDirection: 'row', gap: 10 },
   swatch: { width: 38, height: 38, borderRadius: 19, borderColor: 'transparent', borderWidth: 2 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingHorizontal: 14, height: 38, borderRadius: radius.pill, justifyContent: 'center' },
   photoRow: { flexDirection: 'row', alignItems: 'center', marginTop: 18 },
   foot: {
     padding: spacing.gutter, paddingBottom: 20,

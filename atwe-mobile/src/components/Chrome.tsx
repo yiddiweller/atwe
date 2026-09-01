@@ -1,11 +1,11 @@
 import { useCallback, useState } from 'react';
-import { Platform, Pressable, StyleSheet, View, type LayoutChangeEvent, type ViewStyle } from 'react-native';
+import { Platform, StyleSheet, View, type LayoutChangeEvent, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated';
 import { initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/theme/ThemeProvider';
-import { Glass } from './Glass';
+import { GlassSurface, GlassIcon } from './Glass';
 import { Text } from './Text';
 import { SHELF_H } from './Shelf';
 
@@ -291,38 +291,17 @@ export function ChromeBar({ children, style, edge = 'top', onLayout, inset = tru
     </Animated.View>
   );
 }
-
 /**
- * A control that floats ON the chrome rather than sitting in a bar.
+ * A bar's own surfaces and buttons ARE the app's glass surfaces — the same
+ * object, cut to the same shapes. They keep these names because someone
+ * reading a chrome bar is thinking about chrome, but there is exactly ONE
+ * implementation of each and it lives in `Glass.tsx`.
  *
- * Once the bar is gone there is nothing behind a bare glyph but the page's own
- * scrolling content, and a chevron over a photo is unreadable. So every chrome
- * control gets its own surface: Liquid Glass on iOS 26, a dark (or light)
- * tinted disc below that. It is the same material `BrandBar`'s ＋ · ⋯ · photo
- * already use, so the top of every screen reads as one family.
- *
- * TWO GRADES, which is Apple's own split and the thing these were missing.
- * Photos puts a quiet dark circle next to a lighter "Select" capsule; Voicemail
- * puts "Edit" beside a lighter "Greeting". The lighter one is `.glassProminent`
- * — the same material carrying a tint — and it marks the ONE action a screen is
- * actually for. Everything else is the quiet one. A screen with two prominent
- * buttons has none.
+ * Do not re-implement either here. Two copies of a glass disc is how a back
+ * arrow ends up a visibly different button from a composer's +.
  */
-export function ChromeButton({ children, onPress, label, size = 38, prominent, style }: {
-  children: React.ReactNode;
-  onPress: () => void;
-  label: string;
-  size?: number;
-  prominent?: boolean;
-  style?: ViewStyle;
-}) {
-  return (
-    <ChromeSurface radius={size / 2} onPress={onPress} label={label} prominent={prominent}
-      style={[{ width: size, height: size }, style]}>
-      {children}
-    </ChromeSurface>
-  );
-}
+export const ChromeSurface = GlassSurface;
+export const ChromeButton = GlassIcon;
 
 /**
  * The same control with a WORD in it. Apple names a chrome action wherever the
@@ -350,51 +329,5 @@ export function ChromePill({ text, onPress, prominent, disabled, style }: {
         {text}
       </Text>
     </ChromeSurface>
-  );
-}
-
-/** The same surface, any shape — a title pill, a segmented control, a disc. */
-export function ChromeSurface({ children, onPress, label, radius, prominent, style }: {
-  children: React.ReactNode;
-  onPress?: () => void;
-  label?: string;
-  radius: number;
-  /** Apple's `.glassProminent`: the lighter one, for the single action a screen
-   *  is for. Never two on a screen. */
-  prominent?: boolean;
-  style?: ViewStyle | (ViewStyle | false | undefined)[];
-}) {
-  const { c, name } = useTheme();
-  const light = name === 'light';
-  const body = (
-    <Glass
-      radius={radius}
-      prominent={prominent}
-      /* Neutral, not the brand colour: in Apple's own bars the prominent pill is
-         a lighter GLASS, and what tints it is whatever is scrolling behind. */
-      tint={light ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.22)'}
-      fallback={{
-        backgroundColor: prominent
-          ? (light ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.20)')
-          : (light ? 'rgba(255,255,255,0.82)' : 'rgba(28,28,30,0.92)'),
-        borderWidth: 1,
-        borderColor: light ? c.border : 'rgba(255,255,255,0.06)',
-      }}
-      style={[{ alignItems: 'center', justifyContent: 'center' }, style]}
-    >
-      {children}
-    </Glass>
-  );
-  if (!onPress) return body;
-  return (
-    <Pressable
-      onPress={onPress}
-      hitSlop={6}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      style={({ pressed }) => (pressed ? { opacity: 0.7 } : null)}
-    >
-      {body}
-    </Pressable>
   );
 }

@@ -68,7 +68,6 @@ export default function MeSectionPage() {
 const styles = StyleSheet.create({
   page: { paddingHorizontal: spacing.gutter, paddingTop: 2, paddingBottom: 120 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingBottom: 14 },
-  back: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', marginLeft: -9 },
   /* `.me-sectitle` */
   title: { fontSize: 24, fontWeight: '800', letterSpacing: -0.48, flex: 1, minWidth: 0, lineHeight: 29},
 });

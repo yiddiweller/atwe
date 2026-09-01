@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, Pressable, StyleSheet, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { GlassIcon } from '@/components/Glass';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
@@ -38,13 +39,13 @@ export default function HighlightViewer() {
   return (
     <Screen edges={['top', 'bottom']}>
       <View style={styles.head}>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="Close">
-          <Ionicons name="close" size={26} color={c.text} />
-        </Pressable>
+        <GlassIcon onPress={() => router.back()} label="Close" size={38}>
+          <Ionicons name="close" size={22} color={c.text} />
+        </GlassIcon>
         <Text variant="headline" numberOfLines={1} style={{ flex: 1, textAlign: 'center' }}>
           {highlight?.title ?? 'Highlight'}
         </Text>
-        <View style={{ width: 26 }} />
+        <View style={{ width: 38 }} />
       </View>
 
       {/* Where you are in it, before anything else — a viewer with no progress

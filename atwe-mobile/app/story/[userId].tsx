@@ -3,6 +3,7 @@ import { View, Pressable, Animated, ActivityIndicator, StyleSheet } from 'react-
 import { Image } from 'expo-image';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
+import { GlassIcon } from '@/components/Glass';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -129,9 +130,15 @@ export default function StoryViewer() {
             </View>
           ))}
         </View>
-        <Pressable onPress={close} hitSlop={12} style={styles.close}>
-          <Ionicons name="close" size={26} color="#fff" />
-        </Pressable>
+        {/* Real glass, over a photograph — the disc Apple floats on a full-bleed
+            viewer. Its glyph is forced white rather than themed: the material is
+            sampling whatever the story happens to be, so a theme colour could
+            land on anything. */}
+        <View style={styles.close}>
+          <GlassIcon onPress={close} label="Close" size={38}>
+            <Ionicons name="close" size={22} color="#fff" />
+          </GlassIcon>
+        </View>
       </SafeAreaView>
 
       {/* Caption */}
@@ -210,7 +217,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   barFill: { height: '100%', backgroundColor: '#fff', borderRadius: 2 },
-  close: { alignSelf: 'flex-end', marginTop: 10, marginRight: 4 },
+  close: { alignSelf: 'flex-end', marginTop: 10, marginRight: 12 },
   textStory: { color: '#fff', fontSize: 26, lineHeight: 34, textAlign: 'center', fontWeight: '700' },
   captionWrap: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20 },
   caption: {

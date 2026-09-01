@@ -12,6 +12,7 @@ import { radius, spacing } from '@/theme/tokens';
 import { money, useWallet } from '@/api/wallet';
 import { useServices, useSlots, bookAppointment, type Service } from '@/api/appointments';
 import { HapticInput } from '@/components/HapticInput';
+import { GlassChip } from '@/components/GlassChip';
 import { haptics } from '@/lib/haptics';
 
 /**
@@ -162,15 +163,10 @@ export function BookSheet({ visible, onClose, businessId, businessName }: {
                       {times.map((iso) => {
                         const on = slot === iso;
                         return (
-                          <Pressable key={iso} onPress={() => { haptics.select(); setSlot(iso); }}
-                            style={[styles.time, { backgroundColor: on ? c.accent : c.s1 }]}
-                            accessibilityRole="radio" accessibilityState={{ selected: on }}>
-                            <Text variant="callout" weight="600"
-                              style={{ color: on ? c.accentTint : c.text }}>
-                              {new Date(iso).toLocaleTimeString(undefined,
-                                { hour: 'numeric', minute: '2-digit' })}
-                            </Text>
-                          </Pressable>
+                          <GlassChip key={iso} on={on} fill={c.accent} ink={c.accentTint}
+                            onPress={() => setSlot(iso)}
+                            label={new Date(iso).toLocaleTimeString(undefined,
+                              { hour: 'numeric', minute: '2-digit' })} />
                         );
                       })}
                     </View>
@@ -226,7 +222,6 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: radius.card },
   times: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  time: { paddingHorizontal: 14, height: 40, borderRadius: radius.pill, justifyContent: 'center' },
   input: {
     borderRadius: radius.bubble, paddingHorizontal: 16, paddingVertical: 12,
     fontSize: 16, minHeight: 76, textAlignVertical: 'top',

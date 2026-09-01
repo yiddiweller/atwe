@@ -6,6 +6,7 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
+import { GlassChip } from '@/components/GlassChip';
 import { Screen } from '@/components/Screen';
 import { ChromeButton, ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
@@ -16,7 +17,6 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { useServices, useLocal, SERVICE_CATEGORIES, type ServiceListing } from '@/api/services';
 import { mediaUri } from '@/lib/media';
-import { haptics } from '@/lib/haptics';
 import { whenLabel } from '@/api/events';
 
 /**
@@ -82,18 +82,8 @@ export default function Services() {
           {[null, ...SERVICE_CATEGORIES].map((k) => {
             const on = cat === k;
             return (
-              <Pressable
-                key={k ?? 'all'}
-                onPress={() => { haptics.select(); setCat(k); }}
-                style={[styles.chip, { backgroundColor: on ? c.primary : c.s2 }]}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: on }}
-                accessibilityLabel={k ?? 'Everything'}
-              >
-                <Text variant="callout" style={{ color: on ? c.onPrimary : c.t2 }}>
-                  {k ?? 'Everything'}
-                </Text>
-              </Pressable>
+              <GlassChip key={k ?? 'all'} label={k ?? 'Everything'} on={on}
+                onPress={() => setCat(k)} />
             );
           })}
         </ScrollView>
@@ -277,7 +267,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 8, paddingBottom: 8,
   },
-  icon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   search: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     borderRadius: radius.pill, paddingHorizontal: 12, height: 42,
@@ -285,7 +274,6 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 15, paddingVertical: 0 },
   strip: { flexGrow: 0, flexShrink: 0 },
   chipRow: { paddingHorizontal: spacing.gutter, gap: 8, paddingVertical: 12 },
-  chip: { paddingHorizontal: spacing.gutter, paddingVertical: 8, borderRadius: 999 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   sectionTitle: { paddingHorizontal: spacing.gutter, marginBottom: 8, marginTop: 8 },
   card: {

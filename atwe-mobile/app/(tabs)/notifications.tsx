@@ -214,7 +214,6 @@ const styles = StyleSheet.create({
     height: ALERTS_HEAD_H,
     /* No hairline: chrome has no edge — the content dissolves under it. */
   },
-  back: { width: 40, alignItems: 'center' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyWrap: { flexGrow: 1 },
   row: {

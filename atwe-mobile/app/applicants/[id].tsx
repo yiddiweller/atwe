@@ -4,6 +4,8 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { GlassSurface } from '@/components/Glass';
+import { GlassChip } from '@/components/GlassChip';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { ChromeButton, ChromeBar, useFloatingChrome } from '@/components/Chrome';
@@ -113,18 +115,8 @@ export default function Applicants() {
                   {shelves.map((s) => {
                     const on = filter === s.key;
                     return (
-                      <Pressable
-                        key={String(s.key)}
-                        onPress={() => { haptics.select(); setFilter(s.key); }}
-                        style={[styles.chip, { backgroundColor: on ? c.primary : c.s2 }]}
-                        accessibilityRole="radio"
-                        accessibilityState={{ selected: on }}
-                        accessibilityLabel={s.label}
-                      >
-                        <Text variant="callout" style={{ color: on ? c.onPrimary : c.t2 }}>
-                          {s.label}
-                        </Text>
-                      </Pressable>
+                      <GlassChip key={String(s.key)} label={s.label} on={on}
+                        onPress={() => setFilter(s.key)} />
                     );
                   })}
                 </ScrollView>
@@ -234,24 +226,27 @@ function ApplicantCard({ a, onMove }: { a: Applicant; onMove: (s: ApplicantStatu
               key={s}
               onPress={go(s)}
               disabled={busy}
-              style={[styles.move, { backgroundColor: c.s2, opacity: busy ? 0.5 : 1 }]}
+              style={{ opacity: busy ? 0.5 : 1 }}
               accessibilityRole="button"
               accessibilityLabel={STATUS_LABEL[s]}
             >
-              <Text variant="caption" style={{
-                color: s === 'hired' ? c.success : s === 'rejected' ? c.danger : c.accent,
-              }}>
-                {STATUS_LABEL[s]}
-              </Text>
+              <GlassSurface radius={999} style={styles.move}>
+                <Text variant="caption" style={{
+                  color: s === 'hired' ? c.success : s === 'rejected' ? c.danger : c.accent,
+                }}>
+                  {STATUS_LABEL[s]}
+                </Text>
+              </GlassSurface>
             </Pressable>
           ))}
         <Pressable
           onPress={() => { haptics.tap(); router.push(`/chat/${a.id}`); }}
-          style={[styles.move, { backgroundColor: c.s2 }]}
           accessibilityRole="button"
           accessibilityLabel={`Message ${a.name}`}
         >
-          <Text variant="caption" tone="t2">Message</Text>
+          <GlassSurface radius={999} style={styles.move}>
+            <Text variant="caption" tone="t2">Message</Text>
+          </GlassSurface>
         </Pressable>
       </View>
     </View>
@@ -264,7 +259,6 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyWrap: { flexGrow: 1 },
   chipRow: { paddingHorizontal: spacing.gutter, gap: 8, paddingBottom: 12 },
-  chip: { paddingHorizontal: spacing.gutter, paddingVertical: 8, borderRadius: 999 },
   card: { marginHorizontal: spacing.gutter, marginBottom: 14, padding: 14 },
   who: { flexDirection: 'row', alignItems: 'center' },
   nameLine: { flexDirection: 'row', alignItems: 'center' },

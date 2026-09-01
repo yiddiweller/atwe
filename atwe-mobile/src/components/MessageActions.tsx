@@ -1,5 +1,6 @@
 import { Modal, View, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { GlassSurface } from './Glass';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from './Text';
@@ -48,7 +49,10 @@ export function MessageActions({
       <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close">
         {/* The card stops the press so a tap INSIDE it never dismisses. */}
         <Pressable style={[styles.dock, { paddingBottom: insets.bottom + 12 }]} onPress={() => {}}>
-          <View style={[styles.reacts, { backgroundColor: c.s1 }]}>
+          {/* The tapback bar floats over the conversation, so it is real glass
+              rather than a grey slab — iMessage's own material. The emoji
+              discs inside it stay transparent; only the chosen one fills. */}
+          <GlassSurface radius={radius.pill} style={styles.reacts}>
             {REACTIONS.map((e) => {
               const on = myReaction === e;
               return (
@@ -63,7 +67,7 @@ export function MessageActions({
                 </Pressable>
               );
             })}
-          </View>
+          </GlassSurface>
 
           <BlurView
             intensity={40}
@@ -119,7 +123,8 @@ const styles = StyleSheet.create({
   reacts: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    borderRadius: radius.pill,
+    /* Glass sizes itself to its children, so the row must still stretch. */
+    alignSelf: 'stretch',
     padding: 6,
   },
   react: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },

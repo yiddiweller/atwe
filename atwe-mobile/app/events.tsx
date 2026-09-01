@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import {
-  View, FlatList, ScrollView, Pressable, ActivityIndicator, RefreshControl, StyleSheet,
+  View, FlatList, ScrollView, ActivityIndicator, RefreshControl, StyleSheet,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
+import { GlassChip } from '@/components/GlassChip';
 import { Screen } from '@/components/Screen';
 import { ChromeButton, ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
@@ -12,7 +13,6 @@ import { EventCard } from '@/components/EventCard';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useEvents, dayLabel, type EventScope, type AtweEvent } from '@/api/events';
-import { haptics } from '@/lib/haptics';
 
 const SCOPES: { key: EventScope; label: string }[] = [
   { key: 'upcoming', label: 'Upcoming' },
@@ -67,16 +67,8 @@ export default function Events() {
           {SCOPES.map((s) => {
             const on = scope === s.key;
             return (
-              <Pressable
-                key={s.key}
-                onPress={() => { haptics.select(); setScope(s.key); }}
-                style={[styles.chip, { backgroundColor: on ? c.primary : c.s2 }]}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: on }}
-                accessibilityLabel={s.label}
-              >
-                <Text variant="callout" style={{ color: on ? c.onPrimary : c.t2 }}>{s.label}</Text>
-              </Pressable>
+              <GlassChip key={s.key} label={s.label} on={on}
+                onPress={() => setScope(s.key)} />
             );
           })}
         </ScrollView>
@@ -138,10 +130,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 8, paddingBottom: 8,
   },
-  icon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   strip: { flexGrow: 0, flexShrink: 0 },
   chipRow: { paddingHorizontal: spacing.gutter, gap: 8, paddingBottom: 12 },
-  chip: { paddingHorizontal: spacing.gutter, paddingVertical: 8, borderRadius: 999 },
   day: { paddingHorizontal: spacing.gutter, marginBottom: 8, marginTop: 4 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyWrap: { flexGrow: 1 },

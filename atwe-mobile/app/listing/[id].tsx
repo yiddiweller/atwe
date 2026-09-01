@@ -11,6 +11,7 @@ import {
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { GlassIcon } from '@/components/Glass';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { ChromeButton, ChromeBar, useFloatingChrome } from '@/components/Chrome';
@@ -221,21 +222,17 @@ export default function ListingDetail() {
             {buyable && (
               <View style={styles.qtyRow}>
                 <Text variant="callout" tone="t2" style={{ flex: 1 }}>Quantity</Text>
-                <Pressable onPress={() => setQty((n) => Math.max(1, n - 1))} hitSlop={8}
-                  style={[styles.qtyBtn, { backgroundColor: c.s1 }]}
-                  accessibilityRole="button" accessibilityLabel="One fewer">
+                <GlassIcon onPress={() => setQty((n) => Math.max(1, n - 1))} size={34}
+                  label="One fewer">
                   <Ionicons name="remove" size={18} color={qty > 1 ? c.text : c.t4} />
-                </Pressable>
+                </GlassIcon>
                 <Text variant="headline" style={styles.qtyN}>{qty}</Text>
-                <Pressable
+                <GlassIcon size={34} label="One more"
                   onPress={() => setQty((n) => Math.min(
                     99, typeof listing.stock === 'number' ? Math.max(1, listing.stock) : 99, n + 1,
-                  ))}
-                  hitSlop={8}
-                  style={[styles.qtyBtn, { backgroundColor: c.s1 }]}
-                  accessibilityRole="button" accessibilityLabel="One more">
+                  ))}>
                   <Ionicons name="add" size={18} color={c.text} />
-                </Pressable>
+                </GlassIcon>
               </View>
             )}
 
@@ -395,7 +392,6 @@ function OfferSheet({ visible, onClose, productId, name, asking }: {
 
 const styles = StyleSheet.create({
   qtyRow: { flexDirection: 'row', alignItems: 'center', marginTop: 18, gap: 10 },
-  qtyBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   qtyN: { minWidth: 26, textAlign: 'center' },
   head: {
     flexDirection: 'row',

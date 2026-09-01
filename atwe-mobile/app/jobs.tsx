@@ -5,6 +5,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
+import { GlassChip } from '@/components/GlassChip';
 import { Screen } from '@/components/Screen';
 import { ChromeButton, ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
@@ -13,7 +14,6 @@ import { HapticInput } from '@/components/HapticInput';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, radius } from '@/theme/tokens';
 import { useJobs, JOB_TYPES, type JobFilters } from '@/api/jobs';
-import { haptics } from '@/lib/haptics';
 import { useAuth } from '@/auth/AuthProvider';
 
 type Scope = NonNullable<JobFilters['scope']>;
@@ -205,16 +205,14 @@ function Chip({ label, active, onPress, icon, tone = 'shelf' }: {
   /* The chip owns its tick, the way Button owns its click — so a new filter can
      never be added without one, and no caller has to remember. */
   return (
-    <Pressable
-      onPress={() => { haptics.select(); onPress(); }}
-      style={[styles.chip, { backgroundColor: active ? on : c.s2 }]}
-      accessibilityRole="radio"
-      accessibilityState={{ selected: active }}
-      accessibilityLabel={label}
-    >
-      {!!icon && <Ionicons name={icon} size={14} color={active ? ink : c.t2} />}
-      <Text variant="callout" style={{ color: active ? ink : c.t2 }}>{label}</Text>
-    </Pressable>
+    <GlassChip
+      label={label}
+      on={active}
+      onPress={onPress}
+      fill={on}
+      ink={ink}
+      icon={icon ? <Ionicons name={icon} size={14} color={active ? ink : c.t2} /> : undefined}
+    />
   );
 }
 
@@ -223,7 +221,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 8, paddingBottom: 8,
   },
-  icon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   search: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     borderRadius: radius.pill, paddingHorizontal: 12, height: 42,
@@ -236,10 +233,6 @@ const styles = StyleSheet.create({
   rowStrip: { flexGrow: 0, flexShrink: 0 },
   shelfRow: { paddingHorizontal: spacing.gutter, gap: 8, paddingTop: 12, paddingBottom: 8 },
   filterRow: { paddingHorizontal: spacing.gutter, gap: 8, paddingBottom: 12 },
-  chip: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: spacing.gutter, paddingVertical: 8, borderRadius: 999,
-  },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyWrap: { flexGrow: 1 },
 });

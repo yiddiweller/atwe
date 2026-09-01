@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import {
-  View, ScrollView, Pressable, Alert, KeyboardAvoidingView, Platform, StyleSheet,
+  View, ScrollView, Alert, KeyboardAvoidingView, Platform, StyleSheet,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
+import { GlassChip } from '@/components/GlassChip';
 import { Screen } from '@/components/Screen';
 import { ChromeButton, ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
@@ -80,16 +81,8 @@ export default function OfferService() {
               {SERVICE_CATEGORIES.map((k) => {
                 const on = category === k;
                 return (
-                  <Pressable
-                    key={k}
-                    onPress={() => { haptics.select(); setCategory(on ? null : k); }}
-                    style={[styles.chip, { backgroundColor: on ? c.accent : c.s1 }]}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: on }}
-                    accessibilityLabel={k}
-                  >
-                    <Text variant="callout" style={{ color: on ? c.accentTint : c.text }}>{k}</Text>
-                  </Pressable>
+                  <GlassChip key={k} label={k} on={on} fill={c.accent} ink={c.accentTint}
+                    onPress={() => setCategory(on ? null : k)} />
                 );
               })}
             </View>
@@ -159,5 +152,4 @@ const styles = StyleSheet.create({
   input: { borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16 },
   textarea: { minHeight: 120, textAlignVertical: 'top', borderRadius: radius.bubble },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingHorizontal: 14, height: 38, borderRadius: radius.pill, justifyContent: 'center' },
 });

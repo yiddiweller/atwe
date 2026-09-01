@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { GlassIcon } from '@/components/Glass';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text } from '@/components/Text';
@@ -132,11 +133,13 @@ export default function Compose() {
           {!!photo && (
             <View style={styles.photoWrap}>
               <Image source={{ uri: photo }} style={styles.photo} contentFit="cover" />
-              <Pressable onPress={() => { setPhoto(null); setAlt(''); }} hitSlop={8}
-                style={[styles.photoX, { backgroundColor: c.bg }]}
-                accessibilityRole="button" accessibilityLabel="Remove photo">
+              {/* A control sitting ON a photograph — glass, never a painted
+                  black dot, because the material is what lets the picture
+                  read through it. */}
+              <GlassIcon onPress={() => { setPhoto(null); setAlt(''); }}
+                label="Remove photo" size={28} style={styles.photoX}>
                 <Ionicons name="close" size={16} color={c.text} />
-              </Pressable>
+              </GlassIcon>
               <HapticInput
                 value={alt}
                 onChangeText={setAlt}
@@ -264,10 +267,7 @@ const styles = StyleSheet.create({
   days: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999 },
   photoWrap: { marginTop: 12, marginLeft: 50 },
   photo: { width: '100%', aspectRatio: 1.4, borderRadius: radius.lg },
-  photoX: {
-    position: 'absolute', top: 8, right: 8,
-    width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
-  },
+  photoX: { position: 'absolute', top: 8, right: 8 },
   alt: {
     marginTop: 8, borderRadius: radius.pill,
     paddingHorizontal: 16, paddingVertical: 10, fontSize: 14,

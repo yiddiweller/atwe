@@ -2145,3 +2145,76 @@ rows so the missed / silenced / answered states were each seen rendering.
   working SDK-54 set (expo ~54, react-native 0.81.5, react-native-worklets 0.5.1)
   and a fresh clone now installs and bundles cleanly — verified with a real
   `expo export`. `expo-video` was added on the same pass.
+
+### Round eleven — every button is real glass, not paint
+
+The founder sent a photograph of a floating circular back button over content —
+translucent, content showing through, a faint rim — and said *"all the buttons
+should have this Apple liquid glass button, and it should be real"*.
+
+The problem was never the material, it was that there were **two of it**. `Glass`
+(real `UIGlassEffect` via `expo-glass-effect`) existed and `Button`/`ChromeButton`
+used it; everything else hand-rolled its own disc:
+
+    <Pressable style={[styles.disc, { backgroundColor: c.s2 }]}>
+
+which is a painted grey circle. Next to real glass it looks nearly right. **On top
+of it — a chip inside a chrome bar, a ✕ on a photo — it reads as a sticker stuck
+to a window**, which is most of what "it doesn't look like an Apple app" means.
+
+**One primitive now, in `Glass.tsx`:** `GlassSurface` (a pressable pane) and
+`GlassIcon` (the same cut to a circle, `size` in, radius derived — iOS clamps a
+radius to half the shorter side anyway, and a hand-typed 17 beside a 34 is one
+edit from an oval). `Chrome.tsx`'s `ChromeSurface`/`ChromeButton` are now literally
+`= GlassSurface` / `= GlassIcon`: two copies of a glass disc is how a back arrow
+ends up a visibly different button from a composer's ＋.
+
+**Converted** (23 sites): the story + highlight viewers' close, the compose ＋
+(now `.glassProminent` carrying `--primary`, the same treatment `Button` gives its
+primary, so the app's loudest control is not made of a different substance
+depending on which file drew it), the Beam composer's ＋ and idle send, the
+recording cancel, the attachment ✕ and view-once "1", the iMessage tapback bar, a
+profile's Book/Message discs (which were **hollow outlined circles** — the one
+thing design rule 3 forbids), both quantity steppers, the applicant stage
+capsules, and every filter chip: the shared `Shelf` plus a new shared `GlassChip`
+replacing six near-identical hand-rolled copies across Jobs / Marketplace /
+Events / Services / Workers / post-job / offer-service / add-story / ApplySheet /
+BookSheet.
+
+**What deliberately stays a solid fill, because a colour is doing a job:**
+- **The armed send button.** That blue circle IS iMessage's send and IS the
+  affordance; a see-through one would be the quietest thing on the bar at the
+  moment it matters most.
+- **A chosen chip.** The fill is the answer to "which one am I on"; a
+  see-through selected state cannot say that.
+- **Destructive buttons** (`Button kind="danger"`, already `plain`) — a
+  destructive action has to be unmistakable and translucency is the opposite.
+- **Decorative discs that are not buttons** — a wallet transaction's icon, a
+  notification's brand mark, a meta-card's glyph, a colour swatch. Glass on a
+  `<View>` would be the material pretending.
+- **The voice-note play control**, which lives INSIDE a message bubble and is
+  tinted BY that bubble; glass there would sample the bubble it already sits on.
+  It is the checker's one exemption, named in the file.
+
+**`tools/check-glass-buttons.js`** is the guard: a circular or capsule style used
+as a Pressable's own background may not carry a NEUTRAL fill (`s1`/`s2`/`s3`/`bg`
+or a hand-mixed white alpha). A SEMANTIC fill — accent, primary, danger — passes,
+because the rule is about grey, which is glass pretending. Self-tested: putting
+`backgroundColor: c.s2` back on the composer's ＋ fails it by name; it caught
+three sites the manual sweep missed (`applicants` move, the attachment ✕, the
+view-once toggle).
+
+**One real regression the sweep introduced and the type-checker caught:**
+converting the cart's steppers dropped their `disabled={busy === key(i)}` guard,
+because `GlassIcon` had no such prop — a double-tap would have fired the same
+quantity change twice. `GlassSurface`/`GlassIcon` take `disabled` now (0.5
+opacity, `accessibilityState`), and it is documented on the prop as exactly this
+failure. **Any future conversion has to carry the guards the Pressable was
+carrying.**
+
+Verified: `tsc` clean, all 7 runnable checkers green, and 15 screens driven in a
+real browser against a real database — every one renders, **0 page errors**. The
+composer's two discs measure 38×38 at the same y with 31pt of inset on each side.
+The web preview cannot draw Liquid Glass at all, so what it proves is the
+FALLBACK (a near-opaque disc with a rim) and the geometry; the material itself
+only exists on the phone.
