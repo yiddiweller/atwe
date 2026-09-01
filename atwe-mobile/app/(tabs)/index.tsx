@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, FlatList, RefreshControl, ActivityIndicator, Pressable, StyleSheet, type NativeSyntheticEvent, type NativeScrollEvent, ScrollView } from 'react-native';
 import { withTiming } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Text } from '@/components/Text';
+import { Sidebar } from '@/components/Sidebar';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { PostCard } from '@/components/PostCard';
@@ -72,6 +74,7 @@ export default function Home() {
   /* The top chrome gets out of the way as you scroll, so the feed gets the
      whole screen — the counterpart to iOS taking the tab bar at the bottom. */
   const chrome = useChromeRetract();
+  const [menu, setMenu] = useState(false);
   const morph = useNavMorph();
   const lastY = useRef(0);
   const ballRef = useRef(false);
@@ -169,6 +172,19 @@ export default function Home() {
             mid-letter reads as broken rather than as "there is more". The web
             solves it with a soft fade at the edge; so does this. */}
         <View style={styles.tabsWrap}>
+          {/* The web's own mobile pattern: the tab row LEADS with the menu.
+              Here rather than as a third button beside the ⋯ and the photo —
+              the founder has just had the ＋ removed from that cluster and
+              putting another one back would undo the point of it. */}
+          <Pressable
+            onPress={() => { haptics.tap(); setMenu(true); }}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Menu"
+            style={styles.menuBtn}
+          >
+            <Ionicons name="menu" size={24} color={c.text} />
+          </Pressable>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -211,6 +227,7 @@ export default function Home() {
       </View>
       </ChromeBar>
 
+      <Sidebar visible={menu} onClose={() => setMenu(false)} />
     </Screen>
   );
 }
@@ -227,7 +244,11 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     /* No hairline: chrome has no edge — the content dissolves under it. */
   },
-  tabsWrap: { flexShrink: 1, position: 'relative' },
+  menuBtn: { paddingLeft: spacing.gutter, paddingRight: 10 },
+  /* A ROW: the ≡ leads it and the scrolling tabs take the rest. It was
+     `position:relative` only, so the ≡ stacked above the tabs instead of
+     sitting beside them and landed mid-screen. */
+  tabsWrap: { flexShrink: 1, position: 'relative', flexDirection: 'row', alignItems: 'center' },
   tabsFade: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 40 },
   /* The web's tab row is roomy (gap 34 on a phone) and the last word must be
      able to scroll clear of the + rather than sit permanently half-eaten. */

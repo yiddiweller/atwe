@@ -2534,3 +2534,43 @@ the founder kept describing were never only the blur — half of it was this
 collision, which no amount of material work would have touched. When someone
 says "layers", measure WHERE THINGS ARE before changing what they are made of.
 
+### Round twenty — the sidebar (NOT SHIPPED)
+
+The founder sent the Claude app's drawer and asked for the same idea, carrying
+**the web's own rows**. `src/components/Sidebar.tsx` is that, and the rows are
+lifted from `renderSidebarNav()` in `public/index.html` rather than invented:
+the five worlds (Home · Beam · Engine · Alerts · Account), a divider, the hub
+group (Collections · Communities · Circles · Marketplace), a divider, **Pro
+while there is something to upgrade to**, then Settings and Help & feedback.
+The footer is the reference's own shape: a round account button on the left and
+one white primary pill.
+
+**THE PANEL IS SOLID, and that is deliberate.** It shipped translucent twice
+and both were wrong — at 0.82 the feed read straight through it, and even at
+0.97 the post headlines were still legible behind the rows. A drawer is a PLACE
+you have moved to, not a window onto the page behind. The founder's own
+reference is a solid panel carrying glass CONTROLS, which is also the division
+this app settled on in round seventeen: **Liquid Glass on controls, plain
+material behind a panel.** So the account button is real glass and the panel is
+not, and there is no `BlurView` under it doing invisible work.
+
+**Opened by a ≡ leading the tab row**, which is the web's own mobile pattern
+(`#sbToggle` sits at the head of the feed-tab row there). NOT a third button
+beside the ⋯ and the photo: the founder had just had the ＋ removed from that
+cluster, and putting another one back would undo the point of it.
+
+`zIndex: 25` — above every screen's chrome (20), so the top bar cannot paint
+over the drawer's first rows, and below the root `StatusScrim` (30), so the
+clock stays legible over everything.
+
+**Two probe lessons, both the same lesson.** Home's ≡ reported at x=174 because
+`tabsWrap` was `position:relative` with no `flexDirection`, so the button
+stacked above the tabs instead of leading them. And Beam's drawer was reported
+broken three times over: a **tab navigator keeps its sibling screens mounted**,
+so Home's ≡ is still in the tree with zero bounds at 0,0 while Beam is showing,
+and `.find()` was clicking that. **Pick chrome by geometry, never by document
+order** — this is the third time that has bitten in this app.
+
+Verified: `scratchpad/drawer.js` opens it on both worlds and checks every row —
+**13/13 on Home, 13/13 on Beam, 0 errors**, in both themes.
+

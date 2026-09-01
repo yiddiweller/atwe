@@ -2,6 +2,7 @@ import { View, FlatList, Pressable, ActivityIndicator, RefreshControl, StyleShee
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
+import { Sidebar } from '@/components/Sidebar';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
@@ -54,6 +55,7 @@ type AnyRow =
 export default function Beam() {
   const { c } = useTheme();
   const chrome = useChromeRetract();
+  const [menu, setMenu] = useState(false);
   const [tab, setTab] = useState<Tab>('all');
   const [newChat, setNewChat] = useState(false);
   const [tools, setTools] = useState(false);
@@ -226,6 +228,19 @@ export default function Beam() {
           </ChromeButton>
         </View>
         <View style={styles.tabs}>
+          {/* The web's own mobile pattern: the tab row LEADS with the menu.
+              Here rather than as a third button beside the ⋯ and the photo —
+              the founder has just had the ＋ removed from that cluster and
+              putting another one back would undo the point of it. */}
+          <Pressable
+            onPress={() => { haptics.tap(); setMenu(true); }}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Menu"
+            style={styles.menuBtn}
+          >
+            <Ionicons name="menu" size={24} color={c.text} />
+          </Pressable>
           {TABS.map((t) => (
             <FeedTab key={t.key} label={t.label} active={tab === t.key} onPress={() => setTab(t.key)} />
           ))}
@@ -237,6 +252,7 @@ export default function Beam() {
       <NewChatSheet visible={newChat} onClose={() => setNewChat(false)} />
       <BeamToolsMenu visible={tools} onClose={() => setTools(false)}
         onNewChat={() => setNewChat(true)} />
+      <Sidebar visible={menu} onClose={() => setMenu(false)} />
     </Screen>
   );
 }
@@ -426,7 +442,8 @@ function ContactRow({ person }: { person: Person }) {
 }
 
 const styles = StyleSheet.create({
-  tabs: { flexDirection: 'row', gap: 22, marginTop: 10 },
+  menuBtn: { paddingRight: 14 },
+  tabs: { flexDirection: 'row', gap: 22, marginTop: 10, alignItems: 'center' },
   head: { paddingHorizontal: spacing.gutter, paddingBottom: 12, height: BEAM_TABS_H },
   titleRow: { flexDirection: 'row', alignItems: 'center' },
   /* The old title row's controls moved into BrandBar; the row itself is kept
