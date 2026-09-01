@@ -21,7 +21,13 @@ export function Avatar({
   size?: number;
 }) {
   const { c } = useTheme();
-  const r = biz ? size * 0.28 : size / 2;
+  /* EVERY avatar is a full circle, business or person. Business accounts used
+     to be an app-shaped rounded square (28%) — that was the web's rule and the
+     phone copied it faithfully, but the web dropped it: `.user-avatar.biz` is
+     `border-radius:50%` now, at the founder's decision, with a new business
+     tell coming separately. `biz` stays on the prop because the shape is not
+     the only thing it will ever drive. */
+  const r = size / 2;
   const initial = (name || '?').trim().charAt(0).toUpperCase() || '?';
   return (
     <View

@@ -15,6 +15,7 @@ import { useAppReady } from '@/lib/appReady';
 import { useNavMorph } from '@/lib/navMorph';
 import { haptics } from '@/lib/haptics';
 import { FeedTab } from '@/components/FeedTab';
+import { BrandBar } from '@/components/BrandBar';
 
 // The same four the web Home has, in the same order.
 const TABS: { key: FeedScope; label: string }[] = [
@@ -87,7 +88,15 @@ export default function Home() {
 
   return (
     <Screen edges={['top']}>
-      {/* Header: feed tabs + notifications bell */}
+      {/* The brand row sits ABOVE the tabs, exactly as the web has it: the mark
+          and the wordmark on the left, ＋ · ⋯ · your photo on the right. */}
+      <BrandBar
+        world="home"
+        onPlus={() => router.push('/compose')}
+        onMore={() => router.push('/settings')}
+      />
+
+      {/* Header: feed tabs */}
       <View style={[styles.headerRow, { borderBottomColor: c.border }]}>
         {/* The row scrolls, so at rest the last label is CUT — and a word chopped
             mid-letter reads as broken rather than as "there is more". The web

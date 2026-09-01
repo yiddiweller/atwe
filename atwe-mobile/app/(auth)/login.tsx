@@ -285,7 +285,14 @@ export default function Login() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  landing: { flex: 1, paddingHorizontal: spacing.gutter, justifyContent: 'center' },
+  /* The web's own panel: 28px of padding inside a 430px cap, centred. It was
+     on the 14px feed gutter, which is the CONTENT gutter — right for a post
+     card, wrong for a form, and it made every button run nearly edge to edge.
+     On a 390 phone this is 334 wide against the 362 it was. */
+  landing: {
+    flex: 1, justifyContent: 'center',
+    paddingHorizontal: 28, maxWidth: 430, width: '100%', alignSelf: 'center',
+  },
   mark: { alignItems: 'center', marginBottom: 44 },
   // The web's landing sits its buttons a drop closer together than a step's.
   actions: { gap: 12.5 },
@@ -293,7 +300,10 @@ const styles = StyleSheet.create({
     position: 'absolute', left: spacing.gutter, right: spacing.gutter, bottom: 12,
     textAlign: 'center', fontSize: 10.5, lineHeight: 16,
   },
-  step: { flexGrow: 1, paddingHorizontal: spacing.gutter, paddingBottom: 26 },
+  step: {
+    flexGrow: 1, paddingHorizontal: 28, paddingBottom: 26,
+    maxWidth: 430, width: '100%', alignSelf: 'center',
+  },
   stepbar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     height: 50, marginBottom: 24,

@@ -105,7 +105,9 @@ const RING = AVA + RING_GAP * 2;
 
 /** A circle for a person; the app shape, grown by the gap, for a business. */
 function ringRadius(biz: boolean): number {
-  return biz ? AVA * 0.28 + RING_GAP : RING / 2;
+  /* The ring follows the avatar, and the avatar is a circle now for everybody
+     — see Avatar. It used to bend around the business square. */
+  return RING / 2;
 }
 
 function Ring({ entry }: { entry: StoryTrayEntry }) {

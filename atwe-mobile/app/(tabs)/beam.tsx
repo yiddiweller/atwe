@@ -18,6 +18,7 @@ import { useState } from 'react';
 import { FeedTab } from '@/components/FeedTab';
 import { NewChatSheet } from '@/components/NewChatSheet';
 import { BeamToolsMenu } from '@/components/BeamToolsMenu';
+import { BrandBar } from '@/components/BrandBar';
 import { RowDivider } from '@/components/RowDivider';
 
 /**
@@ -44,11 +45,16 @@ export default function Beam() {
 
   return (
     <Screen edges={['top']}>
+      {/* The world's own brand row: the mark, the word "Beam", and the three
+          controls — ＋ starts a conversation, ⋯ opens the tools. The bespoke
+          title row it replaces had the buttons but no brand and no name. */}
+      <BrandBar
+        world="beam"
+        onPlus={() => setNewChat(true)}
+        onMore={() => setTools(true)}
+      />
       <View style={[styles.head, { borderBottomColor: c.border }]}>
-        {/* Starting a conversation used to require finding somebody's PROFILE
-            first — the empty state said so out loud — which means you had to
-            already know where they were. This is the way in. */}
-        <View style={styles.titleRow}>
+        <View style={[styles.titleRow, styles.hiddenRow]}>
           <Text variant="title" style={{ flex: 1 }}>Beam</Text>
           <Pressable
             onPress={() => { haptics.tap(); setNewChat(true); }}
@@ -256,6 +262,10 @@ const styles = StyleSheet.create({
   tabs: { flexDirection: 'row', gap: 22, marginTop: 10 },
   head: { paddingHorizontal: spacing.gutter, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   titleRow: { flexDirection: 'row', alignItems: 'center' },
+  /* The old title row's controls moved into BrandBar; the row itself is kept
+     out of the layout rather than deleted so the tabs below keep their
+     spacing. */
+  hiddenRow: { display: 'none' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyWrap: { flexGrow: 1 },
   row: {

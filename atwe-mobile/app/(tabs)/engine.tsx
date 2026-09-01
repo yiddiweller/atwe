@@ -20,6 +20,7 @@ import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, radius, post as card } from '@/theme/tokens';
 import { haptics } from '@/lib/haptics';
+import { BrandBar } from '@/components/BrandBar';
 import {
   useTrending,
   useSuggestions,
@@ -47,6 +48,9 @@ export default function Engine() {
 
   return (
     <Screen edges={['top']}>
+      {/* No ＋ here: Engine is discovery, there is nothing to compose. The web
+          hides it on this world too. */}
+      <BrandBar world="engine" onMore={() => router.push('/settings')} />
       {/* Search bar */}
       <View style={styles.searchWrap}>
         <View style={[styles.search, { backgroundColor: c.s2 }]}>

@@ -185,7 +185,8 @@ function ProfileHeader({ data }: { data: Profile }) {
         <View style={[styles.avatarRing, {
           borderColor: c.bg,
           backgroundColor: c.bg,
-          borderRadius: biz ? AVA_SIZE * 0.28 + AVA_RING : (AVA_SIZE + AVA_RING * 2) / 2,
+          /* Circle for everybody now — the web dropped the business square. */
+          borderRadius: (AVA_SIZE + AVA_RING * 2) / 2,
         }]}>
           <Avatar name={user.name} avatar={user.avatar} biz={biz} size={AVA_SIZE} />
         </View>

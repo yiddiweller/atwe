@@ -13,40 +13,60 @@ import Animated, {
 } from 'react-native-reanimated';
 
 /**
- * The opening reveal — X-style. A small centered Atwe mark fades in on pure black
- * and gently "breathes" while the app boots + the Home feed loads underneath.
- * The moment the app is ready, the mark ZOOMS IN (scales up fast) as the black
- * lifts, revealing the feed behind it — so boot feels like one smooth "zoom
- * straight into the posts," never a logo followed by a second blank home screen.
+ * The opening reveal. The Atwe mark ROLLS on black while the app boots, then the
+ * black lifts to the feed behind it.
+ *
+ * It used to fade in and "breathe", then ZOOM past the screen — and the founder
+ * spotted it straight away as the old animation: the web's own splash spins the
+ * mark (`splashSpin`, 2.4s, cubic-bezier(.7,0,.3,1), continuous) while it
+ * pulses, and the welcome-on-login moment rolls it a full turn on that same
+ * curve. Three places showing the brand, and one of them was doing something
+ * else. They all roll now, on the same curve.
+ *
+ * The pulse is the web's `splashPulse` too — the mark dims and brightens as it
+ * turns, rather than growing and shrinking, so the ONLY movement is rotation.
  *
  * @param appReady  flips true once auth resolved AND the Home feed's first page
  *                  settled (or immediately, for signed-out → login).
  */
 const MIN_MS = 700;   // show the mark at least this long, even if data is instant
 const MAX_MS = 5000;  // safety: never hang on splash if a signal never arrives
+/** The web's `splashSpin` curve, and the same one the welcome roll uses. */
+const SPLASH_EASE = Easing.bezier(0.7, 0, 0.3, 1);
 
 export function AnimatedSplash({ appReady, onDone }: { appReady: boolean; onDone: () => void }) {
   const logoOpacity = useSharedValue(0);
   const scale = useSharedValue(0.82);
+  const spin = useSharedValue(0);
+  const pulse = useSharedValue(1);
   const container = useSharedValue(1);
 
   const [minPassed, setMinPassed] = useState(false);
   const [forced, setForced] = useState(false);
   const revealed = useRef(false);
 
-  // Intro + breathing (runs until the reveal cancels it).
+  // The roll, and the pulse that rides on it. Both run until the reveal cancels.
   useEffect(() => {
     logoOpacity.value = withTiming(1, { duration: 460, easing: Easing.out(Easing.cubic) });
-    scale.value = withSequence(
-      withTiming(1, { duration: 460, easing: Easing.out(Easing.cubic) }),
-      withRepeat(
-        withSequence(
-          withTiming(1.05, { duration: 900, easing: Easing.inOut(Easing.quad) }),
-          withTiming(1.0, { duration: 900, easing: Easing.inOut(Easing.quad) }),
-        ),
-        -1,
-        false,
+    scale.value = withTiming(1, { duration: 460, easing: Easing.out(Easing.cubic) });
+    /* One full turn every 2.4s, forever, on the web's own splash curve — fast
+       through the middle and easing at each end, which is what makes it read as
+       a roll rather than a motor. */
+    spin.value = withRepeat(
+      withTiming(360, { duration: 2400, easing: SPLASH_EASE }),
+      -1,
+      false,
+    );
+    /* The web pulses opacity as it turns. Kept because a mark that only rotates
+       at a constant rate looks like a loading spinner; the pulse is what makes
+       it the brand waiting rather than the app thinking. */
+    pulse.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1000, easing: Easing.inOut(Easing.quad) }),
+        withTiming(0.85, { duration: 1000, easing: Easing.inOut(Easing.quad) }),
       ),
+      -1,
+      false,
     );
     const t1 = setTimeout(() => setMinPassed(true), MIN_MS);
     const t2 = setTimeout(() => setForced(true), MAX_MS);
@@ -63,14 +83,19 @@ export function AnimatedSplash({ appReady, onDone }: { appReady: boolean; onDone
     if (!((appReady && minPassed) || forced)) return;
     revealed.current = true;
 
-    cancelAnimation(scale);
-    // Tiny settle to 1, then the fast X-style zoom-in.
-    scale.value = withSequence(
-      withTiming(1, { duration: 90, easing: Easing.out(Easing.quad) }),
-      withTiming(11, { duration: 520, easing: Easing.in(Easing.cubic) }),
-    );
-    // The mark fades out as it grows past the screen…
-    logoOpacity.value = withDelay(230, withTiming(0, { duration: 340, easing: Easing.in(Easing.quad) }));
+    cancelAnimation(spin);
+    cancelAnimation(pulse);
+    /* Finish the turn it is in rather than stopping dead — a roll that halts
+       mid-rotation reads as a hang, which is the last thing boot should look
+       like. It carries on to the next whole turn and eases out of it. */
+    const from = spin.value % 360;
+    spin.value = from;
+    spin.value = withTiming(360, { duration: 420, easing: Easing.out(Easing.cubic) });
+    pulse.value = withTiming(1, { duration: 200 });
+    /* A small lift as the black goes, so it recedes INTO the app rather than
+       being switched off. Nothing like the old 11x zoom past the screen. */
+    scale.value = withTiming(1.08, { duration: 460, easing: Easing.in(Easing.quad) });
+    logoOpacity.value = withDelay(180, withTiming(0, { duration: 340, easing: Easing.in(Easing.quad) }));
     // …while the black lifts to reveal the feed behind it.
     container.value = withDelay(
       120,
@@ -83,8 +108,8 @@ export function AnimatedSplash({ appReady, onDone }: { appReady: boolean; onDone
 
   const containerStyle = useAnimatedStyle(() => ({ opacity: container.value }));
   const logoStyle = useAnimatedStyle(() => ({
-    opacity: logoOpacity.value,
-    transform: [{ scale: scale.value }],
+    opacity: logoOpacity.value * pulse.value,
+    transform: [{ rotate: `${spin.value}deg` }, { scale: scale.value }],
   }));
 
   return (

@@ -12,7 +12,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { GlassComposer } from '@/components/GlassComposer';
+import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
+import { BrandBar } from '@/components/BrandBar';
 import { spacing } from '@/theme/tokens';
 import { sendChat, askAgent, runAgentAction, agentSummary, type ChatMessage, type AgentAction } from '@/api/ai';
 import { haptics } from '@/lib/haptics';
@@ -33,6 +35,7 @@ const DOING = /\b(create|make|schedule|set up|book|send|invoice|remind|post)\b/i
  * saved history, the agent action-cards and streaming come in later slices.
  */
 export default function AI() {
+  const router = useRouter();
   const { c, spacing } = useTheme();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState('');
@@ -81,7 +84,11 @@ export default function AI() {
 
   return (
     <Screen edges={['top']}>
-      <View style={[styles.head, { borderBottomColor: c.border }]}>
+      {/* The AI page carries the lockup too — it is the fourth world with a
+          brand row on the web, and its ⋯ is the only way to Settings from here.
+          No ＋: you write to it in the composer below, not in a sheet. */}
+      <BrandBar world="ai" onMore={() => router.push('/settings')} />
+      <View style={[styles.head, styles.hiddenHead, { borderBottomColor: c.border }]}>
         <Ionicons name="sparkles" size={18} color={c.accent} />
         <Text variant="title" style={{ marginLeft: 8 }}>
           Atwe AI
@@ -202,6 +209,7 @@ function Msg({ msg }: { msg: ChatMessage }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  hiddenHead: { display: 'none' },
   head: {
     flexDirection: 'row',
     alignItems: 'center',

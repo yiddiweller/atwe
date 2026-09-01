@@ -12,6 +12,8 @@ import { radius, spacing } from '@/theme/tokens';
 import { useAuth } from '@/auth/AuthProvider';
 import { startSignup, checkSignupCode, resendSignupCode } from '@/api/signup';
 import { HapticInput } from '@/components/HapticInput';
+import { OtpBoxes } from '@/components/OtpBoxes';
+import { DateWheels } from '@/components/DateWheels';
 import { haptics } from '@/lib/haptics';
 
 /**
@@ -51,6 +53,18 @@ export default function Signup() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const field = useRef<TextInput>(null);
+
+  /* 30 seconds, the web's number, restarted whenever the code step is entered
+     or a new code is asked for. `tick` is what re-arms it on a resend — the
+     step has not changed, so the step effect alone would never fire again. */
+  const [left, setLeft] = useState(0);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (step !== 'code') return;
+    setLeft(30);
+    const t = setInterval(() => setLeft((n) => (n <= 1 ? 0 : n - 1)), 1000);
+    return () => clearInterval(t);
+  }, [step, tick]);
 
   useEffect(() => {
     if (step === 'kind') return;
@@ -104,25 +118,26 @@ export default function Signup() {
   };
 
   const resend = async () => {
-    try { await resendSignupCode(email.trim()); setError('A new code is on its way.'); }
+    try { await resendSignupCode(email.trim()); setTick((n) => n + 1); setError('A new code is on its way.'); }
     catch (e) { setError((e as Error).message); }
   };
 
   const title =
     step === 'kind' ? 'What kind of account?'
     : step === 'email' ? "What's your email?"
-    : step === 'code' ? 'Check your email'
+    : step === 'code' ? 'Enter the code we sent you'
     : step === 'dob' ? "When's your birthday?"
     : step === 'name' ? (accountType === 'business' ? "What's the business called?" : "What's your name?")
     : step === 'password' ? 'Pick a password'
-    : 'Choose your @username';
+    : 'Pick your @username';
 
   const sub =
     step === 'email' ? "We'll send you a code to check it's yours."
-    : step === 'code' ? `We sent a six-digit code to ${email.trim()}.`
-    : step === 'dob' ? 'This is never shown on your profile.'
-    : step === 'password' ? 'At least 8 characters.'
-    : step === 'username' ? 'People find you at atwe.com/yourname. You can change it later.'
+    /* The web's own words, step for step. */
+    : step === 'code' ? 'We sent it to your email to verify.'
+    : step === 'dob' ? "We only use this to check if you're old enough."
+    : step === 'password' ? 'Password must be at least 8 characters long.'
+    : step === 'username' ? 'Your unique name on Atwe. You can change it any time.'
     : null;
 
   return (
@@ -135,12 +150,6 @@ export default function Signup() {
               accessibilityRole="button" accessibilityLabel="Back">
               <Ionicons name="chevron-back" size={30} color={c.text} />
             </Pressable>
-            {step === 'code' && (
-              <Pressable onPress={resend} hitSlop={10}
-                accessibilityRole="button" accessibilityLabel="Send a new code">
-                <Text style={[styles.alt, { color: c.t2 }]}>Send again</Text>
-              </Pressable>
-            )}
           </View>
 
           <Text style={styles.title}>{title}</Text>
@@ -178,44 +187,98 @@ export default function Signup() {
                 </Pressable>
               ))}
             </View>
+          ) : step === 'code' ? (
+            <>
+              <OtpBoxes value={code} onChange={setCode} state={error ? 'bad' : 'idle'} />
+              {/* `.auth-resend` — a code that never arrived is the single most
+                  common way a signup dies, so the way to ask for another one is
+                  on the screen, counting down, rather than hidden. */}
+              <Text style={[styles.resend, { color: c.t3 }]}>
+                Don't see it?{' '}
+                {left > 0 ? (
+                  <Text style={[styles.resendOn, { color: c.text }]}>
+                    Retry in {left} second{left === 1 ? '' : 's'}
+                  </Text>
+                ) : (
+                  <Text onPress={resend} style={[styles.resendOn, { color: c.text }]}
+                    accessibilityRole="button">Resend code</Text>
+                )}
+              </Text>
+            </>
+          ) : step === 'dob' ? (
+            <>
+              {/* The web opens the wheels at ~25 and says the floor underneath
+                  rather than starting there — 18 is where the server refuses,
+                  not where a typical person's birthday is. */}
+              <DateWheels value={dob} onChange={setDob} defaultAge={25} />
+              <Text style={[styles.agehint, { color: c.t3 }]}>
+                You must be 18 or older to use Atwe.
+              </Text>
+            </>
           ) : (
             <View style={styles.bigField}>
               {step === 'username' && <Text style={styles.at}>@</Text>}
               <HapticInput
+                /* A FRESH native input per step, and this is the whole reason
+                   nobody could create an account.
+
+                   One shared TextInput answered all seven questions, so one
+                   native UITextField carried the previous step's state across.
+                   Coming off the birthday step it held TWO stale things: a
+                   `maxLength` of 10 (iOS skips an undefined prop in the diff,
+                   so a cap is never cleared, only replaced) and the delegate's
+                   predicted text, still the ten characters of "2008-01-01".
+                   Every keystroke on "What's your name?" was then measured as
+                   10 + 1 against a cap of 10 and refused before it could be
+                   drawn. You could type and type and nothing appeared.
+
+                   NB this is native-only — on the web each step renders a
+                   fresh DOM <input> and the flow works with or without the
+                   key, so a browser preview cannot prove or disprove it.
+
+                   It cannot recur for two independent reasons now: the
+                   birthday has its own control, so no maxLength is ever set on
+                   this field at all, and the key throws the native view away
+                   between questions.
+
+                   Keying it by step throws the native view away and builds a
+                   new one, which resets maxLength, keyboardType,
+                   secureTextEntry, autoComplete and the buffer together. These
+                   are different questions; they should not share a field. */
+                key={step}
                 ref={field}
+                /* Code and birthday have their own controls now, so this field
+                   only ever answers four of the questions. TypeScript proved
+                   the other branches were dead the moment they moved out. */
                 value={
-                  step === 'email' ? email : step === 'code' ? code : step === 'dob' ? dob
-                  : step === 'name' ? name : step === 'password' ? password : username
+                  step === 'email' ? email
+                  : step === 'name' ? name
+                  : step === 'password' ? password
+                  : username
                 }
                 onChangeText={
-                  step === 'email' ? setEmail : step === 'code' ? setCode : step === 'dob' ? setDob
-                  : step === 'name' ? setName : step === 'password' ? setPassword : setUsername
+                  step === 'email' ? setEmail
+                  : step === 'name' ? setName
+                  : step === 'password' ? setPassword
+                  : setUsername
                 }
                 placeholder={
                   step === 'email' ? 'you@example.com'
-                  : step === 'code' ? '123456'
-                  : step === 'dob' ? 'YYYY-MM-DD'
                   : step === 'name' ? (accountType === 'business' ? 'Fern & Fold' : 'Your name')
                   : step === 'password' ? 'Password'
                   : 'username'
                 }
                 placeholderTextColor={c.t3}
                 secureTextEntry={step === 'password' && !showPw}
-                keyboardType={
-                  step === 'email' ? 'email-address'
-                  : step === 'code' ? 'number-pad'
-                  : 'default'
-                }
-                maxLength={step === 'code' ? 6 : step === 'dob' ? 10 : undefined}
+                keyboardType={step === 'email' ? 'email-address' : 'default'}
                 autoCapitalize={step === 'name' ? 'words' : 'none'}
                 autoCorrect={false}
+                autoFocus
                 autoComplete={
                   step === 'email' ? 'email'
-                  : step === 'code' ? 'one-time-code'
                   : step === 'name' ? 'name'
                   : step === 'password' ? 'new-password'
-                  : step === 'username' ? 'username'
-                  : 'off'
+                  : 'username'
                 }
                 style={[styles.bigInput, { color: c.text }]}
                 onSubmitEditing={next}
@@ -248,13 +311,16 @@ export default function Signup() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  step: { flexGrow: 1, paddingHorizontal: spacing.gutter, paddingBottom: 26 },
+  /* Same panel as the login steps — 28px inside a 430 cap. */
+  step: {
+    flexGrow: 1, paddingHorizontal: 28, paddingBottom: 26,
+    maxWidth: 430, width: '100%', alignSelf: 'center',
+  },
   stepbar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     height: 50, marginBottom: 24,
   },
   backArrow: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', marginLeft: -14 },
-  alt: { fontSize: 15, fontWeight: '600' },
   title: { fontSize: 30, fontWeight: '800', letterSpacing: -0.9, lineHeight: 35, marginBottom: 30 },
   sub: { fontSize: 15, lineHeight: 22, marginTop: -18, marginBottom: 26 },
   bigField: {
@@ -268,5 +334,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.card, padding: 16, borderWidth: 1.5,
   },
   err: { fontSize: 13.5, fontWeight: '600', lineHeight: 19, marginTop: 4 },
+  /* `.su-agehint` */
+  agehint: { fontSize: 12, textAlign: 'center', marginTop: 12 },
+  /* `.auth-resend` + its bolded `b` */
+  resend: { fontSize: 14, marginBottom: 6 },
+  resendOn: { fontWeight: '700' },
   grow: { flex: 1, minHeight: 24 },
 });

@@ -8,7 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useNotifCount } from '@/api/notifications';
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
+import { GlassView, GlassContainer, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -65,8 +65,12 @@ const ICON = 34;
    the web's own near-black so it reads as the same dark pill. The web is
    rgba(18,18,21,.90) with a 2px blur — nearly solid on purpose — so the tint is
    heavy enough to kill the colour bleed while the material still lives. */
-const GLASS_TINT_DARK = 'rgba(18,18,21,0.72)';
-const GLASS_TINT_LIGHT = 'rgba(255,255,255,0.66)';
+/* Liquid Glass is a LENS, and a tint is meant to colour it, not fill it. These
+   were .72 and .66 — heavy enough that what came through was our own paint
+   rather than the wallpaper, which is exactly why it read as "our design but
+   not Apple's". Apple's own bars sit around .2-.3. */
+const GLASS_TINT_DARK = 'rgba(18,18,21,0.28)';
+const GLASS_TINT_LIGHT = 'rgba(255,255,255,0.30)';
 /* The iOS < 26 fallback has no Liquid Glass to tint, so it uses the web's exact
    values: a heavy near-black at .90 and only a whisper of blur. */
 const FALLBACK_DARK = 'rgba(18,18,21,0.90)';
@@ -143,11 +147,31 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
       pointerEvents="box-none"
     >
       <Animated.View style={[styles.shell, { borderColor: light ? 'rgba(0,0,0,0.06)' : HAIRLINE }, shellStyle]}>
-        {/* Real glass background (blur fallback on iOS < 26) */}
+       {/* Everything glass lives INSIDE one container, and that is the point of
+           it: `spacing` is "the distance at which glass elements start
+           affecting each other", so two GlassViews only merge when they are
+           siblings in the same container. Wrapping just the background — which
+           is what this did at first — puts the pill outside it and nothing
+           merges at all. `box-none` so the container is purely a coordinator
+           and never eats a tap meant for a tab. */}
+       <GlassOrPlain glass={glass} light={light}>
+        {/* Real glass background (blur fallback on iOS < 26).
+
+            Three things were missing, and together they are most of what makes
+            iOS 26 glass look like iOS 26 glass rather than a blurred rectangle:
+
+            · isInteractive — the glass bends and highlights UNDER THE FINGER.
+              It is off by default, and without it the bar is a static pane.
+            · GlassContainer — Apple's GlassEffectContainer. Glass elements
+              inside one MERGE into each other as they move; separate GlassViews
+              just sit side by side. The bar and its active pill are one piece
+              of glass now, which is the signature of the material.
+            · a tint light enough to see through (see the constants above). */}
         {glass ? (
           <GlassView
             style={StyleSheet.absoluteFill}
             glassEffectStyle="regular"
+            isInteractive
             tintColor={light ? GLASS_TINT_LIGHT : GLASS_TINT_DARK}
             colorScheme={light ? 'light' : 'dark'}
           />
@@ -185,7 +209,24 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
                 accessibilityState={{ selected: focused }}
                 accessibilityLabel={LABEL[route.name] ?? route.name}
               >
-                <View style={[styles.pill, focused && { backgroundColor: activeBg }]}>
+                <View style={styles.pill}>
+                  {/* The selected tab is its own piece of glass, which is what
+                      lets it MERGE with the bar behind it rather than sitting
+                      on it as a grey lozenge. Without real glass it falls back
+                      to the flat fill it always had. */}
+                  {focused && (glass ? (
+                    <GlassView
+                      style={[StyleSheet.absoluteFill, { borderRadius: TAB_H / 2 }]}
+                      glassEffectStyle="regular"
+                      isInteractive
+                      tintColor={light ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.16)'}
+                      colorScheme={light ? 'light' : 'dark'}
+                    />
+                  ) : (
+                    <View style={[StyleSheet.absoluteFill, {
+                      backgroundColor: activeBg, borderRadius: TAB_H / 2,
+                    }]} />
+                  ))}
                   <Image
                     source={IMG[route.name][focused ? 'on' : 'off']}
                     resizeMode="contain"
@@ -216,8 +257,22 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
             </View>
           </Pressable>
         </Animated.View>
+       </GlassOrPlain>
       </Animated.View>
     </View>
+  );
+}
+
+/** One container when the glass is real, and nothing at all when it is not —
+ *  a GlassContainer on iOS < 26 is a plain View that only adds a layer. */
+function GlassOrPlain({ glass, light, children }: {
+  glass: boolean; light: boolean; children: React.ReactNode;
+}) {
+  if (!glass) return <>{children}</>;
+  return (
+    <GlassContainer style={StyleSheet.absoluteFill} spacing={12} pointerEvents="box-none">
+      {children}
+    </GlassContainer>
   );
 }
 
