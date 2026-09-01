@@ -1498,6 +1498,59 @@ what is honestly incomplete is said so below rather than counted.
    (`src/me/sections.ts`, `src/settings/pages.ts`) that drives the hub, the pages
    AND the search, so a row lands in all three in one edit.
 
+### 0.7.0 — what the founder found on a real phone
+
+Creating an account **works** — confirmed on their iPhone, which is the one thing
+the browser preview could never prove. Three things they marked, and all three
+were real:
+
+**1. The terms line rendered at two sizes.** "By continuing, you agree to our"
+came out at the right 10.5px and the *Terms* / *Privacy Policy* links beside it
+at 15. The cause was not that line: `components/Text` defaulted `variant` to
+`body` on EVERY Text, so any Text nested inside another was stamped with body's
+15px/21 and blew out of whatever it was sitting in. Fixed at the root with a
+nesting context — a Text inside a Text now takes no base style unless it asks
+for a variant, which is the rule CSS has, and it fixes every nesting in the app
+at once rather than this one. Measured after: all three runs on that line are
+10.5px.
+
+**2. Opening the app blinked a bigger logo.** iOS draws its own launch screen
+first and the animated one mounts over it, so the two have to agree — and they
+did not: the launch screen drew **splash.png at 104** while the animation faded
+**logo-mark.png in from nothing at 62**, starting dark grey. A big white mark,
+a gap, then a smaller dim one growing in. Now: the same file at the same size,
+and the animation *starts* at the launch screen's exact end state (full white,
+full opacity, full scale) and moves away from it rather than toward it. The
+pulse runs white→grey→white rather than grey→white→grey for that reason.
+**`tools/check-splash.js`** keeps the two files in step, because two numbers in
+two files is exactly the pair that drifts; it is self-tested against both
+failures.
+
+**3. The nav bar still did not read as Liquid Glass** — their third complaint
+about it, beside a screenshot of Apple's own Phone tab bar, which you can plainly
+see the call list through. Two things were wrong and one is still unknown:
+  - The tint was **.28**, which is our own paint rather than a lens. It is .10
+    now, and the colour-bleed it was fighting (an orange photo turning the bar
+    orange) is left to `regular` glass, which is Apple's ADAPTIVE material and
+    already solves it — the heavy tint was fixing a problem the material fixes
+    better.
+  - A **1px border was drawn on top of the glass**, which turns any glass
+    surface into an outlined pill. Gone on the glass path; the fallback keeps
+    its hairline, since a blur has no rim of its own.
+  - **The fallback was a solid pill with extra steps** — a hand-rolled blur at
+    intensity 12 under a near-opaque `rgba(18,18,21,.90)` fill. It now uses
+    `systemChromeMaterial`, the exact UIKit material a native tab bar uses, at
+    full strength with nothing painted over it.
+
+**The unknown, and it decides everything:** Liquid Glass needs **iOS 26**. Below
+that the bar draws the chrome fallback and always will, and there is no way to
+tell the two apart from a photograph. So **Settings → About now reports the iOS
+version and which material the bar is actually drawing** — "Liquid Glass" or
+"Chrome (needs iOS 26)". One screenshot of that page settles it.
+
+**Checked:** 162 screen loads (54 × dark, light, business), a full new-account
+signup end to end, and all five checkers.
+
 ### Finishing it off (0.6.0)
 
 The three gaps named above were closed, and one real bug turned up doing it.

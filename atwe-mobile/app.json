@@ -3,7 +3,7 @@
     "name": "Atwe",
     "slug": "atwe",
     "scheme": "atwe",
-    "version": "0.6.0",
+    "version": "0.7.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -88,8 +88,8 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#000000",
-          "image": "./assets/splash.png",
-          "imageWidth": 104
+          "image": "./assets/logo-mark.png",
+          "imageWidth": 62
         }
       ],
       "expo-video",

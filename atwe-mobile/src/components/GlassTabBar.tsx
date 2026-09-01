@@ -54,27 +54,43 @@ const BAR_H = TAB_H + PAD * 2;   // 58
 const BALL = BAR_H;
 const ICON = 34;
 
-/* The material.
+/* THE MATERIAL, and its history, because it has been wrong three times in three
+   different ways and each fix caused the next.
 
-   It was real Liquid Glass with NO tint, and untinted glass takes its colour from
-   whatever is behind it — so scrolling an orange photo under the bar turned the
-   bar orange and muddy, which is exactly what the founder photographed. Apple's
-   own bars are tinted; clear glass is for a bar over a controlled background.
+   1. Real Liquid Glass with NO tint. Untinted glass takes its colour from
+      whatever is behind it, so scrolling an orange photo under the bar turned
+      the bar orange and muddy. The founder photographed it.
+   2. So it was tinted hard — .72 dark / .66 light. That killed the bleed and
+      also killed the glass: what came through was our own paint, and it read as
+      "our design, but not Apple's".
+   3. Backed off to .28 / .30. Still too much: the founder's verdict on the
+      shipped build was "still far from good, it doesn't look like the real
+      Apple liquid glass", beside a screenshot of Apple's own Phone tab bar —
+      which you can plainly SEE the call list through.
 
-   So: still `regular` Liquid Glass (Apple's real material, as asked), tinted with
-   the web's own near-black so it reads as the same dark pill. The web is
-   rgba(18,18,21,.90) with a 2px blur — nearly solid on purpose — so the tint is
-   heavy enough to kill the colour bleed while the material still lives. */
-/* Liquid Glass is a LENS, and a tint is meant to colour it, not fill it. These
-   were .72 and .66 — heavy enough that what came through was our own paint
-   rather than the wallpaper, which is exactly why it read as "our design but
-   not Apple's". Apple's own bars sit around .2-.3. */
-const GLASS_TINT_DARK = 'rgba(18,18,21,0.28)';
-const GLASS_TINT_LIGHT = 'rgba(255,255,255,0.30)';
-/* The iOS < 26 fallback has no Liquid Glass to tint, so it uses the web's exact
-   values: a heavy near-black at .90 and only a whisper of blur. */
-const FALLBACK_DARK = 'rgba(18,18,21,0.90)';
-const FALLBACK_LIGHT = 'rgba(255,255,255,0.82)';
+   So the tint is now a whisper (.10), and the colour-bleed problem it was
+   fighting is handled by the thing designed for it instead: `regular` Liquid
+   Glass is Apple's ADAPTIVE material — it already reads what is behind it and
+   holds its own contrast, which is why Apple's bars do not go orange over a
+   photo. The heavy tint was solving a problem the material solves better.
+
+   THE DRAWN BORDER IS GONE from the glass path. Liquid Glass renders its own
+   specular rim; a 1px line painted on top of it turns the whole thing into an
+   outlined pill, which is the single most "not glass" thing a glass surface can
+   do. The fallback keeps its hairline, because a blur has no rim of its own. */
+const GLASS_TINT_DARK = 'rgba(18,18,21,0.10)';
+const GLASS_TINT_LIGHT = 'rgba(255,255,255,0.12)';
+/* The iOS < 26 fallback is NOT Liquid Glass and never will be — it is what
+   every iPhone below 26 sees, so it has to be good on its own terms.
+
+   It used to be a hand-rolled blur (intensity 12) under a near-opaque
+   rgba(18,18,21,.90) fill, which is a solid dark pill with extra steps: nothing
+   showed through it at all. It now uses `systemChromeMaterial`, which is the
+   exact material UIKit gives a real tab bar — translucent, adaptive, and
+   already correct over a photo. No overlay on top of it: the material IS the
+   look, and painting over it is what made the old one opaque. */
+const FALLBACK_TINT_DARK = 'systemChromeMaterialDark' as const;
+const FALLBACK_TINT_LIGHT = 'systemChromeMaterialLight' as const;
 const HAIRLINE = 'rgba(255,255,255,0.05)';
 
 // `require` on an image returns a number at runtime under Metro, but its type
@@ -146,7 +162,14 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
       style={[styles.outer, { paddingBottom: Math.max(insets.bottom, 10), paddingHorizontal: GUTTER }]}
       pointerEvents="box-none"
     >
-      <Animated.View style={[styles.shell, { borderColor: light ? 'rgba(0,0,0,0.06)' : HAIRLINE }, shellStyle]}>
+      <Animated.View style={[
+        styles.shell,
+        /* Only the fallback draws an edge — see the note on the material. */
+        glass
+          ? { borderWidth: 0 }
+          : { borderWidth: StyleSheet.hairlineWidth, borderColor: light ? 'rgba(0,0,0,0.06)' : HAIRLINE },
+        shellStyle,
+      ]}>
        {/* Everything glass lives INSIDE one container, and that is the point of
            it: `spacing` is "the distance at which glass elements start
            affecting each other", so two GlassViews only merge when they are
@@ -177,11 +200,13 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
           />
         ) : (
           <BlurView
-            intensity={12}
-            tint={light ? 'light' : 'dark'}
-            style={[StyleSheet.absoluteFill, {
-              backgroundColor: light ? FALLBACK_LIGHT : FALLBACK_DARK,
-            }]}
+            /* Full strength. `systemChromeMaterial` is a named UIKit material,
+               not a blur radius — the intensity is how much of it to apply, and
+               anything less than all of it is a weaker version of the thing a
+               real tab bar uses. */
+            intensity={100}
+            tint={light ? FALLBACK_TINT_LIGHT : FALLBACK_TINT_DARK}
+            style={StyleSheet.absoluteFill}
           />
         )}
         {/* White fill that fades in as it becomes the ball */}
@@ -219,7 +244,11 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
                       style={[StyleSheet.absoluteFill, { borderRadius: TAB_H / 2 }]}
                       glassEffectStyle="regular"
                       isInteractive
-                      tintColor={light ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.16)'}
+                      /* Bright enough to read as the selected world, light
+                         enough to still be glass — it MERGES with the bar
+                         behind it (that is what GlassContainer is for), and a
+                         heavy fill would just be a lozenge sitting on top. */
+                      tintColor={light ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.22)'}
                       colorScheme={light ? 'light' : 'dark'}
                     />
                   ) : (
@@ -284,8 +313,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
-    // the web's `border:1px solid rgba(255,255,255,.05)`
-    borderWidth: StyleSheet.hairlineWidth,
+    /* No border here — the glass and the fallback each decide their own, above.
+       The web's `border:1px solid rgba(255,255,255,.05)` is the fallback's. */
   },
   white: { backgroundColor: '#fff', borderRadius: BAR_H / 2 },
   row: { flexDirection: 'row', alignItems: 'center', height: BAR_H, paddingHorizontal: PAD },

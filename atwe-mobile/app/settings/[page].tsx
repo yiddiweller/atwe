@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import {
-  View, ScrollView, Pressable, StyleSheet, Linking, ActivityIndicator, Alert, Share,
+  View, ScrollView, Pressable, StyleSheet, Linking, ActivityIndicator, Alert, Share, Platform,
 } from 'react-native';
+import { isLiquidGlassAvailable } from 'expo-glass-effect';
 import { File, Paths } from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -229,6 +230,16 @@ function AboutPage() {
     <>
       <MeGroup>
         <MeFactRow label="Version" value={APP_VERSION} />
+        <MeFactRow label="iOS" value={String(Platform.Version)} />
+        {/* Which material the nav bar is actually drawing.
+
+            Liquid Glass needs iOS 26; below it the bar falls back to the same
+            chrome material a native tab bar uses, which is a different look and
+            always will be. Without this on screen there is no way to tell the
+            two apart from a photograph, and a whole round of "the bar still
+            isn't right" was spent not knowing which one was being looked at. */}
+        <MeFactRow label="Nav bar"
+          value={isLiquidGlassAvailable() ? 'Liquid Glass' : 'Chrome (needs iOS 26)'} />
         <MeFactRow label="Made by" value="Atwe Inc" last />
       </MeGroup>
       <MeGroup>

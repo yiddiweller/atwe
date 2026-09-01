@@ -93,9 +93,12 @@ function RootNavigator() {
   useProtectedRoute(signedIn, loading);
   useSignedInEffects(signedIn);
 
-  // Hand off from the native splash to our animated one immediately on mount:
-  // both are the same white logo on pure black, so the swap is invisible and the
-  // animated mark takes over while auth + the feed bootstrap underneath.
+  /* Hand off from the native splash to our animated one immediately on mount.
+     The swap is invisible ONLY because the two are made to agree: same file,
+     same size, same colour, same opacity, both centred on pure black — see the
+     note at the top of AnimatedSplash, and app.json's expo-splash-screen block,
+     which carries the other half of the numbers. They drifted apart once and the
+     result was a bigger, brighter logo blinking to a smaller, dimmer one. */
   useEffect(() => {
     SplashScreen.hideAsync().catch(() => {});
   }, []);

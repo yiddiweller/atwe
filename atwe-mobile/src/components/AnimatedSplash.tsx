@@ -17,6 +17,20 @@ import Animated, {
  * The opening reveal. The Atwe mark ROLLS on black while the app boots, then the
  * black lifts to the feed behind it.
  *
+ * IT MUST START EXACTLY WHERE THE NATIVE LAUNCH SCREEN ENDS, and that is the
+ * whole reason the numbers here are what they are. iOS draws its own launch
+ * screen first, and this mounts over it — so if the two disagree about which
+ * file, what size, what colour or what opacity, the handoff is a visible blink.
+ * It did: the launch screen drew splash.png at 104 while this faded logo-mark.png
+ * in from NOTHING at 62, starting dark grey. A big white mark, then a gap, then a
+ * smaller dim one growing in. The founder saw it immediately and called it
+ * unprofessional, which it was.
+ *
+ * So: same file (assets/logo-mark.png), same size (MARK, mirrored in app.json's
+ * expo-splash-screen imageWidth), and this begins at FULL white, full opacity,
+ * full scale — the launch screen's exact end state — and animates away from it
+ * rather than toward it. Change one of those four and change the other.
+ *
  * It used to fade in and "breathe", then ZOOM past the screen — and the founder
  * spotted it straight away as the old animation: the web's own splash spins the
  * mark (`splashSpin`, 2.4s, cubic-bezier(.7,0,.3,1), continuous) while it
@@ -49,12 +63,14 @@ const REST = '#303034';
 const PEAK = '#ffffff';
 
 export function AnimatedSplash({ appReady, onDone }: { appReady: boolean; onDone: () => void }) {
-  const logoOpacity = useSharedValue(0);
-  const scale = useSharedValue(0.82);
+  /* All three start at the launch screen's end state — see the note above. */
+  const logoOpacity = useSharedValue(1);
+  const scale = useSharedValue(1);
   const spin = useSharedValue(0);
   /** 0 at the resting grey, 1 at the white peak — drives colour, opacity and
-      the breath together, so they can never fall out of step. */
-  const pulse = useSharedValue(0);
+      the breath together, so they can never fall out of step. Starts at the
+      peak, because that is what iOS just finished drawing. */
+  const pulse = useSharedValue(1);
   const container = useSharedValue(1);
 
   const [minPassed, setMinPassed] = useState(false);
@@ -63,8 +79,8 @@ export function AnimatedSplash({ appReady, onDone }: { appReady: boolean; onDone
 
   // The roll, and the pulse that rides on it. Both run until the reveal cancels.
   useEffect(() => {
-    logoOpacity.value = withTiming(1, { duration: 460, easing: Easing.out(Easing.cubic) });
-    scale.value = withTiming(1, { duration: 460, easing: Easing.out(Easing.cubic) });
+    /* Nothing fades or grows IN. The mark is already exactly where the launch
+       screen left it; the only thing that happens is that it starts moving. */
     /* One full turn every 2.4s, forever, on the web's own splash curve — fast
        through the middle and easing at each end, which is what makes it read as
        a roll rather than a motor. */
@@ -73,13 +89,17 @@ export function AnimatedSplash({ appReady, onDone }: { appReady: boolean; onDone
       -1,
       false,
     );
-    /* Grey → white → grey across each 2s, easing at both ends. A mark that only
+    /* White → grey → white across each 2s, easing at both ends. A mark that only
        rotates at a constant rate looks like a loading spinner; this is what
-       makes it the brand waiting rather than the app thinking. */
+       makes it the brand waiting rather than the app thinking.
+
+       It DIMS first and brightens second, which is the opposite way round from
+       the web's keyframes and is deliberate: starting on the bright half is
+       what lets it begin on the launch screen's own white without a hold. */
     pulse.value = withRepeat(
       withSequence(
-        withTiming(1, { duration: PULSE_MS / 2, easing: Easing.inOut(Easing.quad) }),
         withTiming(0, { duration: PULSE_MS / 2, easing: Easing.inOut(Easing.quad) }),
+        withTiming(1, { duration: PULSE_MS / 2, easing: Easing.inOut(Easing.quad) }),
       ),
       -1,
       false,
