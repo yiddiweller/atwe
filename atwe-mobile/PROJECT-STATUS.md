@@ -270,6 +270,27 @@ is one number rather than a sweep:
   separate WidgetKit target written in Swift, which needs prebuild + a config
   plugin. Not a matter of more effort in this codebase.
 
+## ⚠️ SHIPPING COSTS A BUILD CREDIT — build in batches, ship once
+
+`.eas/workflows/build-ios.yml` used to run **on every push that touched
+`atwe-mobile/**`**. Each run is one of the account's monthly **iOS build credits**, so
+every ordinary change — a colour, an icon, a one-line fix — spent one. That is what ran
+the credits out in an earlier run, and it quietly happened again: **three routine commits
+in one afternoon cost three builds** before anyone noticed.
+
+**The push trigger is now REMOVED. Pushing changes nothing.** A build happens only when a
+person asks for one:
+
+```
+Expo dashboard → Workflows → "Build and submit iOS" → Run workflow
+# or
+cd atwe-mobile && npx eas workflow:run build-ios.yml
+```
+
+**So: commit and push freely while working — that is free — and run ONE build at the end
+of a batch.** Do not restore the trigger, however convenient auto-shipping looks; the
+founder asked for exactly this and the reason is a real, recurring cost.
+
 **Delivery note:** new native code reaches the founder's phone only via a rebuild
 (`eas build -p ios --profile production` → `eas submit`). Before the next build,
 **sync the repo `package.json` to the founder's working SDK-54 set + worklets**
