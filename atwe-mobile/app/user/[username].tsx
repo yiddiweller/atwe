@@ -111,8 +111,17 @@ function ProfileHeader({ data }: { data: Profile }) {
 
       {/* Avatar + action row */}
       <View style={styles.identityRow}>
-        <View style={[styles.avatarRing, { borderColor: c.bg, backgroundColor: c.bg }]}>
-          <Avatar name={user.name} avatar={user.avatar} biz={biz} size={80} />
+        {/* The ring takes the SHAPE of the avatar. A business avatar is an
+            app-shaped rounded square, so a circular ring around one is a box
+            inside a circle — the corners collide and it reads as a mistake.
+            Radius = the avatar's own radius PLUS the ring's width, which is the
+            concentric rule; equal radii leave the gap 1.41× wider at a corner. */}
+        <View style={[styles.avatarRing, {
+          borderColor: c.bg,
+          backgroundColor: c.bg,
+          borderRadius: biz ? AVA_SIZE * 0.28 + AVA_RING : (AVA_SIZE + AVA_RING * 2) / 2,
+        }]}>
+          <Avatar name={user.name} avatar={user.avatar} biz={biz} size={AVA_SIZE} />
         </View>
         {isMe && (
           <View style={styles.followWrap}>
@@ -331,6 +340,11 @@ function Count({
   );
 }
 
+/** The profile avatar and the ring the banner cuts around it. Both the size and
+ *  the ring's width are named because the ring's CORNER is derived from them. */
+const AVA_SIZE = 80;
+const AVA_RING = 4;
+
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   empty: { padding: 32, alignItems: 'center' },
@@ -350,7 +364,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.gutter,
     marginTop: -40,
   },
-  avatarRing: { borderRadius: 48, borderWidth: 4, padding: 0 },
+  avatarRing: { borderWidth: AVA_RING, padding: 0 },
   followWrap: { paddingBottom: 6, flexDirection: 'row', alignItems: 'center', gap: 8 },
   followBtn: { minHeight: 38, paddingHorizontal: 22 },
   msgBtn: {

@@ -10,11 +10,17 @@ interface LoginArgs {
   code?: string; // TOTP / recovery code for the 2FA challenge
 }
 
+/** Everything `/api/auth/signup/finish` needs. The code is what proves the email
+ *  is theirs, and the date of birth is required — its absence is what made every
+ *  signup from the phone fail. */
 interface SignupArgs {
-  name: string;
-  username: string;
   email: string;
+  code: string;
+  name: string;
   password: string;
+  /** YYYY-MM-DD. */
+  dob: string;
+  username?: string;
   accountType: 'personal' | 'business';
 }
 
@@ -93,8 +99,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  /**
+   * Finish a signup whose code is already verified.
+   *
+   * It used to POST `/api/auth/signup` and expect a token back, and NOBODY could
+   * make an account on the phone: that route requires a DATE OF BIRTH, which was
+   * never sent, so every attempt came back "Please enter your date of birth" —
+   * and it no longer returns a token anyway, it returns `{pending:true}` and
+   * emails a six-digit code. The real flow is start → check → finish, which is
+   * what the web uses.
+   */
   const signup = useCallback<AuthContextValue['signup']>(async (args) => {
-    const res = await api.post<AuthResponse>('/api/auth/signup', args, { noAuth: true });
+    const res = await api.post<AuthResponse>('/api/auth/signup/finish', args, { noAuth: true });
     tokenRef.current = res.token;
     await saveToken(res.token);
     setUserState(res.user);

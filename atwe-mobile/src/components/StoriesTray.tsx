@@ -65,8 +65,9 @@ function YourStory({ mine }: { mine?: StoryTrayEntry }) {
         <View style={[styles.ring, {
           borderColor: mine?.hasUnseen ? c.accent : mine ? c.border : 'transparent',
           backgroundColor: c.bg,
+          borderRadius: ringRadius(biz),
         }]}>
-          <Avatar name={user.name} avatar={user.avatar} biz={biz} size={58} />
+          <Avatar name={user.name} avatar={user.avatar} biz={biz} size={AVA} />
         </View>
         <Pressable
           onPress={() => router.push('/add-story')}
@@ -83,6 +84,30 @@ function YourStory({ mine }: { mine?: StoryTrayEntry }) {
   );
 }
 
+/**
+ * The ring takes the SHAPE of what it is ringing.
+ *
+ * A business avatar is an app-shaped rounded square — the one visual tell that
+ * an account is a business, and it holds everywhere the avatar appears. Drawing
+ * a circle around it put a box inside a circle, which the founder spotted at
+ * once: the corners collide and it reads as a mistake rather than as a
+ * deliberate shape. So the ring is a circle for a person and the same rounded
+ * square for a business.
+ *
+ * The numbers are derived, not picked: the ring is the avatar plus its own gap
+ * on each side, and its radius is the avatar's radius PLUS that gap — the same
+ * concentric rule the web's card corners follow. Equal radii would leave the
+ * gap 1.41× wider at the corner than along the sides.
+ */
+const AVA = 58;
+const RING_GAP = 5;          // between the avatar and the ring, all the way round
+const RING = AVA + RING_GAP * 2;
+
+/** A circle for a person; the app shape, grown by the gap, for a business. */
+function ringRadius(biz: boolean): number {
+  return biz ? AVA * 0.28 + RING_GAP : RING / 2;
+}
+
 function Ring({ entry }: { entry: StoryTrayEntry }) {
   const { c } = useTheme();
   const router = useRouter();
@@ -96,8 +121,10 @@ function Ring({ entry }: { entry: StoryTrayEntry }) {
       accessibilityRole="button"
       accessibilityLabel={`${entry.mine ? 'Your' : entry.user.name + '’s'} story`}
     >
-      <View style={[styles.ring, { borderColor: ringColor, backgroundColor: c.bg }]}>
-        <Avatar name={entry.user.name} avatar={entry.user.avatar} biz={biz} size={58} />
+      <View style={[styles.ring, {
+        borderColor: ringColor, backgroundColor: c.bg, borderRadius: ringRadius(biz),
+      }]}>
+        <Avatar name={entry.user.name} avatar={entry.user.avatar} biz={biz} size={AVA} />
       </View>
       <Text variant="micro" tone="t2" numberOfLines={1} style={styles.label}>
         {entry.mine ? 'You' : entry.user.name}
@@ -111,14 +138,14 @@ const styles = StyleSheet.create({
   row: { paddingHorizontal: 12, paddingVertical: 10, gap: 6 },
   item: { alignItems: 'center', width: 72 },
   ring: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    // Size and corner come from the avatar it holds — see ringRadius above.
+    width: RING,
+    height: RING,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  label: { marginTop: 4, maxWidth: 68, textAlign: 'center' },
+  label: { marginTop: 4, maxWidth: RING, textAlign: 'center' },
   plus: {
     position: 'absolute', right: 0, bottom: 0,
     width: 22, height: 22, borderRadius: 11, borderWidth: 2,
