@@ -8,6 +8,7 @@ import Animated, {
   withSequence,
   withDelay,
   cancelAnimation,
+  interpolateColor,
   runOnJS,
   Easing,
 } from 'react-native-reanimated';
@@ -23,8 +24,13 @@ import Animated, {
  * curve. Three places showing the brand, and one of them was doing something
  * else. They all roll now, on the same curve.
  *
- * The pulse is the web's `splashPulse` too — the mark dims and brightens as it
- * turns, rather than growing and shrinking, so the ONLY movement is rotation.
+ * The pulse is the web's `splashPulse` too, and it is a COLOUR sweep, not a
+ * dim: the mark's fill runs from a resting dark grey up to full white at the
+ * peak of each turn and back down, breathing very slightly (.94 → 1.06) as it
+ * goes. It is what makes the mark look like it lights up as it rolls rather
+ * than like a spinner. It works here because `logo-mark.png` is white on
+ * transparent, so `tintColor` repaints it — the same trick the web's CSS mask
+ * pulls with `background-color`.
  *
  * @param appReady  flips true once auth resolved AND the Home feed's first page
  *                  settled (or immediately, for signed-out → login).
@@ -33,12 +39,22 @@ const MIN_MS = 700;   // show the mark at least this long, even if data is insta
 const MAX_MS = 5000;  // safety: never hang on splash if a signal never arrives
 /** The web's `splashSpin` curve, and the same one the welcome roll uses. */
 const SPLASH_EASE = Easing.bezier(0.7, 0, 0.3, 1);
+/** `.splash-mark` — 62px, and 2.4s a turn against a 2s pulse, so the two drift
+    against each other instead of locking into one beat. */
+const MARK = 62;
+const SPIN_MS = 2400;
+const PULSE_MS = 2000;
+/** `@keyframes splashPulse` — resting grey at the ends, full white at the peak. */
+const REST = '#303034';
+const PEAK = '#ffffff';
 
 export function AnimatedSplash({ appReady, onDone }: { appReady: boolean; onDone: () => void }) {
   const logoOpacity = useSharedValue(0);
   const scale = useSharedValue(0.82);
   const spin = useSharedValue(0);
-  const pulse = useSharedValue(1);
+  /** 0 at the resting grey, 1 at the white peak — drives colour, opacity and
+      the breath together, so they can never fall out of step. */
+  const pulse = useSharedValue(0);
   const container = useSharedValue(1);
 
   const [minPassed, setMinPassed] = useState(false);
@@ -53,17 +69,17 @@ export function AnimatedSplash({ appReady, onDone }: { appReady: boolean; onDone
        through the middle and easing at each end, which is what makes it read as
        a roll rather than a motor. */
     spin.value = withRepeat(
-      withTiming(360, { duration: 2400, easing: SPLASH_EASE }),
+      withTiming(360, { duration: SPIN_MS, easing: SPLASH_EASE }),
       -1,
       false,
     );
-    /* The web pulses opacity as it turns. Kept because a mark that only rotates
-       at a constant rate looks like a loading spinner; the pulse is what makes
-       it the brand waiting rather than the app thinking. */
+    /* Grey → white → grey across each 2s, easing at both ends. A mark that only
+       rotates at a constant rate looks like a loading spinner; this is what
+       makes it the brand waiting rather than the app thinking. */
     pulse.value = withRepeat(
       withSequence(
-        withTiming(1, { duration: 1000, easing: Easing.inOut(Easing.quad) }),
-        withTiming(0.85, { duration: 1000, easing: Easing.inOut(Easing.quad) }),
+        withTiming(1, { duration: PULSE_MS / 2, easing: Easing.inOut(Easing.quad) }),
+        withTiming(0, { duration: PULSE_MS / 2, easing: Easing.inOut(Easing.quad) }),
       ),
       -1,
       false,
@@ -91,6 +107,8 @@ export function AnimatedSplash({ appReady, onDone }: { appReady: boolean; onDone
     const from = spin.value % 360;
     spin.value = from;
     spin.value = withTiming(360, { duration: 420, easing: Easing.out(Easing.cubic) });
+    /* Leave on the white peak, never mid-grey — the last thing seen should be
+       the mark at full strength. */
     pulse.value = withTiming(1, { duration: 200 });
     /* A small lift as the black goes, so it recedes INTO the app rather than
        being switched off. Nothing like the old 11x zoom past the screen. */
@@ -108,15 +126,20 @@ export function AnimatedSplash({ appReady, onDone }: { appReady: boolean; onDone
 
   const containerStyle = useAnimatedStyle(() => ({ opacity: container.value }));
   const logoStyle = useAnimatedStyle(() => ({
-    opacity: logoOpacity.value * pulse.value,
-    transform: [{ rotate: `${spin.value}deg` }, { scale: scale.value }],
+    // .85 → 1 and .94 → 1.06, the keyframes' own numbers.
+    opacity: logoOpacity.value * (0.85 + pulse.value * 0.15),
+    tintColor: interpolateColor(pulse.value, [0, 1], [REST, PEAK]),
+    transform: [
+      { rotate: `${spin.value}deg` },
+      { scale: scale.value * (0.94 + pulse.value * 0.12) },
+    ],
   }));
 
   return (
     <Animated.View style={[styles.fill, containerStyle]} pointerEvents="none">
       <View style={styles.center}>
         <Animated.Image
-          source={require('../../assets/splash.png')}
+          source={require('../../assets/logo-mark.png')}
           style={[styles.logo, logoStyle]}
           resizeMode="contain"
         />
@@ -128,5 +151,5 @@ export function AnimatedSplash({ appReady, onDone }: { appReady: boolean; onDone
 const styles = StyleSheet.create({
   fill: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000000', zIndex: 100 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  logo: { width: 104, height: 104 },
+  logo: { width: MARK, height: MARK },
 });

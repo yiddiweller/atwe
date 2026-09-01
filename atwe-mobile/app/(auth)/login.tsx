@@ -107,7 +107,12 @@ export default function Login() {
   if (step === 'landing') {
     return (
       <Screen edges={['top', 'bottom']}>
+       <View style={styles.landingPage}>
         <View style={styles.landing}>
+          {/* `.auth-main` takes the slack, so the mark + buttons sit in the
+              middle and the terms rest at the bottom rather than tucking in
+              under the last button. */}
+          <View style={styles.landingMain}>
           <View style={styles.mark}><AtweMark /></View>
           <View style={styles.actions}>
             <AuthButton
@@ -132,6 +137,7 @@ export default function Login() {
             />
             {!!error && <Text style={[styles.err, { color: c.danger }]}>{error}</Text>}
           </View>
+          </View>
           <Text style={[styles.terms, { color: c.t3 }]}>
             By continuing, you agree to our{' '}
             <Text style={{ color: c.t2 }} onPress={() => Linking.openURL('https://atwe.com/terms.html')}>Terms</Text>,{' '}
@@ -139,6 +145,7 @@ export default function Login() {
             and Cookie Use.
           </Text>
         </View>
+       </View>
       </Screen>
     );
   }
@@ -285,24 +292,39 @@ export default function Login() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  /* The web's own panel: 28px of padding inside a 430px cap, centred. It was
-     on the 14px feed gutter, which is the CONTENT gutter — right for a post
-     card, wrong for a form, and it made every button run nearly edge to edge.
-     On a 390 phone this is 334 wide against the 362 it was. */
+  /* The start screen is TWO nested boxes on the web and it has to be two here,
+     because the numbers are not the same as a wizard step's:
+
+       the overlay          padding 20      (the one page in the app that
+                                             deliberately keeps 20 — CLAUDE.md)
+       .auth-inner          padding 20, max-width 440
+
+     which is 40 a side, i.e. a 310px button on a 390 phone. Measured against
+     the live web: 310 at x=40. It shipped at 28/430 (334 wide) and before that
+     on the 14px CONTENT gutter (362) — the founder saw both and said the
+     buttons were very wide. */
+  landingPage: { flex: 1, paddingHorizontal: 20 },
   landing: {
-    flex: 1, justifyContent: 'center',
-    paddingHorizontal: 28, maxWidth: 430, width: '100%', alignSelf: 'center',
+    flex: 1, paddingHorizontal: 20, maxWidth: 440, width: '100%', alignSelf: 'center',
+    /* `.auth-inner`'s own vertical padding — 8 above, 26 below. Without the
+       26 the terms line ran into the home indicator. */
+    paddingTop: 8, paddingBottom: 26,
   },
-  mark: { alignItems: 'center', marginBottom: 44 },
+  /* `.auth-main` */
+  landingMain: { flex: 1, justifyContent: 'center' },
+  /* `.auth-logo` */
+  mark: { alignItems: 'center', marginBottom: 84 },
   // The web's landing sits its buttons a drop closer together than a step's.
   actions: { gap: 12.5 },
-  terms: {
-    position: 'absolute', left: spacing.gutter, right: spacing.gutter, bottom: 12,
-    textAlign: 'center', fontSize: 10.5, lineHeight: 16,
-  },
+  /* `.auth-terms` — in the flow under the buttons, not pinned to the bottom of
+     the screen, so it travels with them instead of stranding itself. */
+  terms: { textAlign: 'center', fontSize: 10.5, lineHeight: 16.3, marginTop: 20 },
+  /* A wizard step is the app's ONE margin — overlay 0 + `.auth-step`'s own
+     `var(--feed-gutter)`. A step is not the start screen; they differ on the
+     web too. */
   step: {
-    flexGrow: 1, paddingHorizontal: 28, paddingBottom: 26,
-    maxWidth: 430, width: '100%', alignSelf: 'center',
+    flexGrow: 1, paddingHorizontal: spacing.gutter, paddingBottom: 26,
+    maxWidth: 440, width: '100%', alignSelf: 'center',
   },
   stepbar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

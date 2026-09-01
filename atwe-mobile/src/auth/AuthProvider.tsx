@@ -34,6 +34,10 @@ interface AuthContextValue {
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   setUser: (u: User) => void;
+  /** Set for one moment after a sign-in or a finished signup, so the app can
+   *  play the welcome-back splash. Cleared by `clearWelcome` when it ends. */
+  welcome: User | null;
+  clearWelcome: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -59,6 +63,7 @@ async function fetchMe(): Promise<User> {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUserState] = useState<User | null>(null);
+  const [welcome, setWelcome] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const tokenRef = useRef<string | null>(null);
 
@@ -106,6 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       tokenRef.current = res.token;
       await saveToken(res.token);
       setUserState(res.user);
+      setWelcome(res.user);
       realtime.connect();
       return {};
     } catch (err) {
@@ -132,6 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     tokenRef.current = res.token;
     await saveToken(res.token);
     setUserState(res.user);
+    setWelcome(res.user);
     realtime.connect();
   }, []);
 
@@ -153,6 +160,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout,
     refresh,
     setUser: setUserState,
+    welcome,
+    clearWelcome: () => setWelcome(null),
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

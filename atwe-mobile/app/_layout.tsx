@@ -11,6 +11,7 @@ import { queryClient } from '@/lib/queryClient';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { AuthProvider, useAuth } from '@/auth/AuthProvider';
 import { AnimatedSplash } from '@/components/AnimatedSplash';
+import { WelcomeSplash } from '@/components/WelcomeSplash';
 import { AppReadyProvider, useAppReady } from '@/lib/appReady';
 import { ConnectionProvider } from '@/lib/connection';
 import { OfflineBanner } from '@/components/OfflineBanner';
@@ -84,7 +85,7 @@ function useSignedInEffects(signedIn: boolean) {
 }
 
 function RootNavigator() {
-  const { loading, signedIn } = useAuth();
+  const { loading, signedIn, welcome, clearWelcome } = useAuth();
   const { c, name } = useTheme();
   const { feedReady } = useAppReady();
   const [splashDone, setSplashDone] = useState(false);
@@ -219,6 +220,12 @@ function RootNavigator() {
         </Stack>
       )}
       <OfflineBanner />
+      {/* Never both at once: the boot splash owns the screen until it clears,
+          and a sign-in that happens under it would otherwise play its welcome
+          behind a black sheet and be missed entirely. */}
+      {!showSplash && !!welcome && (
+        <WelcomeSplash avatar={welcome.avatar} onDone={clearWelcome} />
+      )}
       {showSplash && <AnimatedSplash appReady={appReady} onDone={() => setSplashDone(true)} />}
     </>
   );
