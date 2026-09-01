@@ -1498,6 +1498,75 @@ what is honestly incomplete is said so below rather than counted.
    (`src/me/sections.ts`, `src/settings/pages.ts`) that drives the hub, the pages
    AND the search, so a row lands in all three in one edit.
 
+### 0.9.0 — Liquid Glass, done the way it actually works
+
+**Three attempts at the nav bar were wrong, and the mistake was never a number.**
+Each time the approach was: draw our own pill, put a glass texture inside it,
+argue about the tint. Apple's own line, from the iOS 26 guidance, is *"if your
+app already uses native controls, you get Liquid Glass automatically"*. It is
+not a material you paint on. It is what the SYSTEM draws — the tint derived from
+the content behind it, its own specular rim, its own scroll-edge state, its own
+morph. A custom view with a `GlassView` in it can imitate that and will never be
+it, which is exactly what the founder kept seeing and saying.
+
+The old comment in `(tabs)/_layout.tsx` stated the error outright: the system bar
+*"can't be reshaped, and we need it to morph into a + ball on scroll"*. That
+trade — our effect over Apple's material — is what made Liquid Glass impossible.
+And it bought nothing: **iOS 26 ships the morph itself**;
+`minimizeBehavior="onScrollDown"` IS the shrink-on-scroll that was being
+hand-rolled at the cost of the material.
+
+**THE TWO CASES ARE DIFFERENT, and knowing which is which is the whole thing:**
+
+| | what it is | what to do |
+|---|---|---|
+| tab bar, nav bar, toolbar, sheet | a **component** — behaviours no view can imitate | hand it to the system |
+| button, card, any surface | a **material** — `GlassView` IS `UIGlassEffect` | apply it yourself |
+
+So the five worlds are now expo-router's `NativeTabs`, a real
+`UITabBarController`; and buttons go through `src/components/Glass`, which maps
+onto Apple's own two styles:
+
+- **`.glass`** — secondary. Translucent, **no tint**, content shows through.
+- **`.glassProminent`** — primary. The same material carrying a tint, which is
+  what makes it read as the loud one.
+
+The colour law survives: still one loud action per screen, made of glass rather
+than paint. **TINT IS FOR PROMINENCE, NEVER FOR COLOUR** — a tint heavy enough
+to become the surface's colour has replaced the material with paint and it stops
+being glass. That rule is in the file, because it is the one that was broken
+three times. `isInteractive` is on everywhere: it is what makes glass bend and
+catch light under the finger, it is **off by default**, and without it a glass
+surface is a static pane — which is most of what "it doesn't look like Apple's"
+means.
+
+Consequences worth remembering:
+- The founder's own nav artwork is **kept**: `Icon src={{default, selected}}`,
+  and UIKit renders a tab image as a template, so the outline/solid pair still
+  reads as off/on. Labels stay hidden, matching the web.
+- The hand-painted press wash (three circles faking the web's radial `.tap-lit`)
+  now runs **only on the fallback**. Real glass lights itself; painting over it
+  is the covering-the-material mistake in miniature.
+- A **destructive button is never glass**, on any iOS. It has to be
+  unmistakable, and translucency is the opposite of that. `Glass` takes a
+  `plain` flag so that decision lives in one place.
+- `GlassTabBar` is **deleted**, not left dead. git has it if this needs undoing.
+
+**WHAT COULD NOT BE VERIFIED, and it is not small.** `NativeTabs` is an **alpha**
+API in SDK 54, and neither a `UITabBarController` nor `UIGlassEffect` can be
+rendered in the browser preview this app is otherwise checked in — the web
+fallback draws a stand-in tab bar at the TOP of the screen, so tab navigation
+could not be exercised here at all, and every glass surface falls back to paint.
+What is proven: it typechecks, it bundles, the fallback is unchanged, all 54
+screens load and a full new-account signup still works end to end. Whether the
+tab bar runs on a real iPhone is unproven, and **a navigation shell that fails is
+an app that does not open** — if it does, revert `89d104c` alone.
+
+**Still not glass, and deliberately for now:** every screen draws its own header
+as a plain view, so headers, sheets and menus are not Liquid Glass. Handing
+those to the system too is the same move one layer up and a much bigger job.
+Worth doing after the tab bar is proven on a phone.
+
 ### Built, not yet shipped — the cards inside a conversation
 
 Beam's own pitch is *"send money in the chat: pay, request or split a bill
