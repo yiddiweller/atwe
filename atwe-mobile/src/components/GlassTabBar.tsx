@@ -7,6 +7,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import { useNotifCount } from '@/api/notifications';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,15 +31,32 @@ const BALL = 56;
 // `require` on an image returns a number at runtime under Metro, but its type
 // is unknown — which the Image source prop rightly refuses. Typed explicitly so
 // a build does not fail on what is really a bundler detail.
-const IMG: Record<string, ImageSourcePropType> = {
-  index: require('../../assets/nav/home.png'),
-  beam: require('../../assets/nav/beam.png'),
-  engine: require('../../assets/nav/engine.png'),
-  ai: require('../../assets/nav/ai.png'),
+// OUTLINE when the world is not the one you are in, SOLID when it is — the founder's
+// own artwork, the same masks the web bar uses, at the three phone densities. Never
+// hand-redraw these: they come out of tools/nav-icons/build.js.
+const IMG: Record<string, { off: ImageSourcePropType; on: ImageSourcePropType }> = {
+  index:         { off: require('../../assets/nav/home-off.png'),    on: require('../../assets/nav/home-on.png') },
+  beam:          { off: require('../../assets/nav/beam-off.png'),    on: require('../../assets/nav/beam-on.png') },
+  engine:        { off: require('../../assets/nav/engine-off.png'),  on: require('../../assets/nav/engine-on.png') },
+  notifications: { off: require('../../assets/nav/notifs-off.png'),  on: require('../../assets/nav/notifs-on.png') },
+  profile:       { off: require('../../assets/nav/profile-off.png'), on: require('../../assets/nav/profile-on.png') },
+};
+// The five worlds, in order. Anything else in the (tabs) group — Atwe AI, which left
+// the bar — is simply not drawn, whatever the navigator reports, so a hidden route can
+// never leak a seat back into the bar.
+const TABS = ['index', 'beam', 'engine', 'notifications', 'profile'] as const;
+// A route name is not a label a person would recognise ("index").
+const LABEL: Record<string, string> = {
+  index: 'Home', beam: 'Beam', engine: 'Engine', notifications: 'Notifications', profile: 'Account',
 };
 
 export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
   const { c, name } = useTheme();
+  // The unread dot moved off the Home header's bell and onto the Notifications tab —
+  // the bell WAS the way in before there was a tab for it, and keeping both would have
+  // put the same thing on screen twice.
+  const { data: notifCount } = useNotifCount();
+  const unread = notifCount?.unread ?? 0;
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -99,7 +117,11 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
 
         {/* The five tabs (fixed width so they don't squish; clipped as the shell shrinks) */}
         <Animated.View style={[styles.row, { width: fullW }, rowStyle]} pointerEvents={isBall ? 'none' : 'auto'}>
-          {state.routes.map((route, i) => {
+          {state.routes
+            .map((route, i) => ({ route, i }))
+            .filter(({ route }) => TABS.includes(route.name as typeof TABS[number]))
+            .sort((a, b) => TABS.indexOf(a.route.name as any) - TABS.indexOf(b.route.name as any))
+            .map(({ route, i }) => {
             const focused = state.index === i;
             const onPress = () => {
               Haptics.selectionAsync().catch(() => {});
@@ -113,13 +135,16 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
                 style={styles.tab}
                 accessibilityRole="button"
                 accessibilityState={{ selected: focused }}
-                accessibilityLabel={route.name}
+                accessibilityLabel={LABEL[route.name] ?? route.name}
               >
                 <View style={[styles.pill, focused && { backgroundColor: activeBg }]}>
-                  {route.name === 'profile' ? (
-                    <Ionicons name="person" size={22} color={c.text} />
-                  ) : (
-                    <Image source={IMG[route.name]} resizeMode="contain" style={[styles.icon, { tintColor: c.text }]} />
+                  <Image
+                    source={IMG[route.name][focused ? 'on' : 'off']}
+                    resizeMode="contain"
+                    style={[styles.icon, { tintColor: c.text }]}
+                  />
+                  {route.name === 'notifications' && unread > 0 && (
+                    <View style={[styles.badge, { backgroundColor: c.accent, borderColor: c.bg }]} />
                   )}
                 </View>
               </Pressable>
@@ -161,6 +186,10 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', height: BAR_H, paddingHorizontal: 4 },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   pill: { width: 46, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  badge: {
+    position: 'absolute', top: 6, right: 12,
+    width: 9, height: 9, borderRadius: 5, borderWidth: 1.5,
+  },
   icon: { width: 21, height: 21 },
   plusWrap: { alignItems: 'center', justifyContent: 'center' },
   plusInner: { flex: 1, alignItems: 'center', justifyContent: 'center' },

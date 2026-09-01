@@ -114,7 +114,6 @@ function RootNavigator() {
           <Stack.Screen name="post/[id]" />
           <Stack.Screen name="user/[username]" />
           <Stack.Screen name="chat/[peer]" />
-          <Stack.Screen name="notifications" />
           <Stack.Screen name="settings" />
           <Stack.Screen name="marketplace" />
           <Stack.Screen name="listing/[id]" />

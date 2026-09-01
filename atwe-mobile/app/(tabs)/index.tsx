@@ -108,18 +108,11 @@ export default function Home() {
             );
           })}
         </ScrollView>
-        {/* Right actions: notifications bell + top-right compose "+" (replaces the
-            old floating FAB; a clean plus, X/web-style). */}
+        {/* Right actions: the compose "+" (a clean plus, X/web-style).
+            The notifications BELL used to sit here — it was the only way in before
+            Notifications had a seat in the tab bar. It has one now, and it carries the
+            unread dot, so a bell here would be the same thing on screen twice. */}
         <View style={styles.headActions}>
-          <Pressable
-            onPress={() => router.push('/notifications')}
-            hitSlop={8}
-            style={styles.headBtn}
-            accessibilityLabel="Notifications"
-          >
-            <Ionicons name="notifications-outline" size={24} color={c.text} />
-            {unread > 0 && <View style={[styles.bellDot, { backgroundColor: c.accent, borderColor: c.bg }]} />}
-          </Pressable>
           <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});

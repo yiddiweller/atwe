@@ -176,6 +176,40 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
   Also fixed two PRE-EXISTING type errors that would have failed a build (a tone
   the Text component did not have, and an untyped `require()` image source).
 
+## Recently added (this run — brand + navigation caught up with the web)
+- **The app carried the OLD logo.** Every brand asset is regenerated from the web's
+  current mark (`public/logo-mark.png` — the swirl; the app still had the trefoil
+  knot): `assets/icon.png` (iOS, opaque — an iOS icon may not have alpha),
+  `assets/adaptive-icon.png` (Android foreground) and `assets/splash.png`, which is
+  also the mark `AnimatedSplash` fades in on launch. Each output keeps the **exact
+  ink-to-frame proportion measured off the file it replaces** (61.9% for the icons,
+  79.9% for the splash) rather than a guessed padding, so nothing shifts on a home
+  screen. Generator: `/tmp/mkicons.js` pattern — scale by the mark's INK bounds, not
+  by the file, because the source has its own margin.
+- **The tab bar was the old layout AND the old artwork.** It is now the web's:
+  **Home · Beam · Engine · Notifications · Account**, each icon the founder's own
+  drawing in two states — **outline when you are not in that world, solid when you
+  are** — taken from `tools/nav-icons/*.png` at 26/52/78 (@1x/@2x/@3x). Never
+  hand-redraw these; they come out of `tools/nav-icons/build.js`.
+  - **Atwe AI left the bar**, exactly as it did on the web. `href: null` keeps `/ai`
+    a real routable screen — the Me hub, deep links and anything that pushes to it
+    still work — it simply has no seat.
+  - **Notifications took its seat**: `app/notifications.tsx` moved into `(tabs)`, and
+    the **unread dot moved off the Home header's bell onto the tab**. The bell was the
+    only way in before there was a tab; keeping both would put the same thing on
+    screen twice, so the bell is gone.
+  - `GlassTabBar` draws from a fixed `TABS` list and filters the navigator's routes
+    through it, so a hidden route can never leak a seat back into the bar.
+  - The **Account tab used an Ionicons person**, not the founder's artwork. It does now.
+- **`src/constants/worlds.ts` was stale and is imported by nothing** — the old five
+  worlds with the old icons. Updated rather than left, because a list describing a bar
+  that no longer exists is a trap: the next person edits it, sees no change, and hunts
+  a bug that is not there. `GlassTabBar` remains the single source of truth.
+- **Verified:** `npx tsc --noEmit` clean (it caught one real error — the unread hook
+  returns `{unread}`, not `{count}`, which would have failed a build), and
+  `npx expo export --platform ios` produces a **4.84 MB** bundle with all **ten** new
+  nav icons at three densities each plus the new splash listed in its asset manifest.
+
 ## Next up (phases 3, 4, 6, 7 remain partial)
 1. ~~Profile navigation from feed/detail~~ ✅ done (`app/user/[username].tsx`).
    ~~Stories tray + viewer~~ ✅ done (`StoriesTray` + `app/story/[userId].tsx`).

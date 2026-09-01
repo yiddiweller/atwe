@@ -20,7 +20,11 @@ export default function TabsLayout() {
         <Tabs.Screen name="index" />
         <Tabs.Screen name="beam" />
         <Tabs.Screen name="engine" />
-        <Tabs.Screen name="ai" />
+        <Tabs.Screen name="notifications" />
+        {/* Atwe AI is no longer one of the five worlds — the same move the web made.
+            href:null keeps /ai a real, routable screen (the Me hub, deep links and
+            anything that pushes to it still work); it just has no seat in the bar. */}
+        <Tabs.Screen name="ai" options={{ href: null }} />
         <Tabs.Screen name="profile" />
       </Tabs>
     </NavMorphProvider>
