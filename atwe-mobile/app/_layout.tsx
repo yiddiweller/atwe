@@ -142,6 +142,8 @@ function RootNavigator() {
           <Stack.Screen name="sell" />
           <Stack.Screen name="sales" />
           <Stack.Screen name="appointments" />
+          <Stack.Screen name="reviews/[id]" />
+          <Stack.Screen name="shop/[id]" />
           <Stack.Screen name="edit-profile" options={{ presentation: 'modal' }} />
           <Stack.Screen name="order/[id]" />
           <Stack.Screen name="search" />

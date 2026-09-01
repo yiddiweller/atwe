@@ -157,9 +157,14 @@ export interface ProfileUser {
   verified: boolean;
   accountType: 'personal' | 'business';
   joinedAt: string | null;
+  /** Seven days from Monday; each `{closed:true}` or `{open,close}`. */
+  businessHours?: unknown[] | null;
 }
 export interface Profile {
   user: ProfileUser;
+  /** Business accounts: the star rating, so the profile can show it without a
+   *  second request. */
+  reviewSummary?: { count: number; average: number } | null;
   counts: { followers: number; following: number; posts: number; connections: number | null };
   connectionState: 'self' | 'connected' | 'pending_out' | 'pending_in' | 'none';
   isFollowing: boolean;

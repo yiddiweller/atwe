@@ -107,6 +107,9 @@ const CASES = [
   ['ApptParty',      '/api/appointments?scope=mine',         (j) => j.appointments[0].business],
   ['Service',        null,                                   null],  // needs a business id
   ['SlotsResult',    null,                                   null],
+  ['Review',         null,                                   null],
+  ['Reviewer',       null,                                   null],
+  ['ReviewSummary',  null,                                   null],
   ['Quote',          null,                                   null],  // a POST; see below
   ['Eta',            null,                                   null],
   ['User',           '/api/auth/me',                         (j) => j.user],
@@ -146,6 +149,12 @@ const get = async (p) => {
       CASES[si][1] = `/api/business/${bid}/services`; CASES[si][2] = (j) => j.services[0];
       const li = CASES.findIndex(([n]) => n === 'SlotsResult');
       CASES[li][1] = `/api/business/${bid}/slots?days=7`; CASES[li][2] = (j) => j;
+      const ri = CASES.findIndex(([n]) => n === 'Review');
+      CASES[ri][1] = `/api/business/${bid}/reviews`; CASES[ri][2] = (j) => j.reviews[0];
+      const wi = CASES.findIndex(([n]) => n === 'Reviewer');
+      CASES[wi][1] = `/api/business/${bid}/reviews`; CASES[wi][2] = (j) => j.reviews[0].reviewer;
+      const mi = CASES.findIndex(([n]) => n === 'ReviewSummary');
+      CASES[mi][1] = `/api/business/${bid}/reviews`; CASES[mi][2] = (j) => j.summary;
     }
   } catch { /* leave them skipped */ }
 

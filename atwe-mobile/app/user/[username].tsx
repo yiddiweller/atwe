@@ -9,9 +9,11 @@ import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { BookSheet } from '@/components/BookSheet';
+import { Stars } from '@/components/Stars';
+import { openNow, hoursLabel, todayIndex, DAY_NAMES, type DayHours } from '@/api/business';
 import { PostCard } from '@/components/PostCard';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing } from '@/theme/tokens';
+import { spacing, radius } from '@/theme/tokens';
 import { useProfile, followUser, type Profile } from '@/api/social';
 import { compact, monthYear } from '@/lib/format';
 import { mediaUri } from '@/lib/media';
@@ -196,6 +198,58 @@ function ProfileHeader({ data }: { data: Profile }) {
           )}
         </View>
 
+        {/* What a business is, beyond a name: whether it is open, what people
+            said, and what it sells. All three were missing — a business profile
+            on the phone showed exactly what a personal one did. */}
+        {biz && (
+          <View style={styles.bizRows}>
+            {!!data.reviewSummary?.count && (
+              <Pressable
+                style={[styles.bizRow, { backgroundColor: c.s1 }]}
+                onPress={() => router.push(
+                  `/reviews/${user.id}?name=${encodeURIComponent(user.name)}`,
+                )}
+                accessibilityRole="button"
+                accessibilityLabel={`Reviews, ${data.reviewSummary.average.toFixed(1)} out of 5`}
+              >
+                <Stars n={Math.round(data.reviewSummary.average)} size={15} />
+                <Text variant="callout" style={{ marginLeft: 8, flex: 1 }}>
+                  {data.reviewSummary.average.toFixed(1)} · {data.reviewSummary.count} review
+                  {data.reviewSummary.count === 1 ? '' : 's'}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={c.t3} />
+              </Pressable>
+            )}
+            {!data.reviewSummary?.count && !isMe && (
+              <Pressable
+                style={[styles.bizRow, { backgroundColor: c.s1 }]}
+                onPress={() => router.push(
+                  `/reviews/${user.id}?name=${encodeURIComponent(user.name)}`,
+                )}
+                accessibilityRole="button" accessibilityLabel="Write a review"
+              >
+                <Ionicons name="star-outline" size={17} color={c.t2} />
+                <Text variant="callout" tone="t2" style={{ marginLeft: 8, flex: 1 }}>
+                  No reviews yet — be the first
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={c.t3} />
+              </Pressable>
+            )}
+            <Hours hours={user.businessHours as DayHours[] | null | undefined} />
+            <Pressable
+              style={[styles.bizRow, { backgroundColor: c.s1 }]}
+              onPress={() => router.push(`/shop/${user.id}?name=${encodeURIComponent(user.name)}`)}
+              accessibilityRole="button" accessibilityLabel={`${user.name}'s shop`}
+            >
+              <Ionicons name="storefront-outline" size={17} color={c.t2} />
+              <Text variant="callout" style={{ marginLeft: 8, flex: 1 }}>
+                {isMe ? 'Your shop' : 'Shop'}
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={c.t3} />
+            </Pressable>
+          </View>
+        )}
+
         {/* Counts */}
         <View style={styles.counts}>
           <Count n={counts.following} label="Following" c={c} />
@@ -212,6 +266,48 @@ function ProfileHeader({ data }: { data: Profile }) {
         businessId={user.id}
         businessName={user.name}
       />
+    </View>
+  );
+}
+
+/** Open or closed right now, and the week underneath when you tap it. Business
+ *  hours are stored as plain wall-clock times, so "now" means the reader's own
+ *  clock — the only honest reading available. */
+function Hours({ hours }: { hours?: DayHours[] | null }) {
+  const { c } = useTheme();
+  const [open, setOpen] = useState(false);
+  const isOpen = openNow(hours);
+  if (isOpen === null) return null;
+  const today = todayIndex();
+  return (
+    <View>
+      <Pressable
+        style={[styles.bizRow, { backgroundColor: c.s1 }]}
+        onPress={() => setOpen((v) => !v)}
+        accessibilityRole="button"
+        accessibilityLabel={isOpen ? 'Open now, see hours' : 'Closed now, see hours'}
+      >
+        <View style={[styles.dot, { backgroundColor: isOpen ? c.repost : c.t4 }]} />
+        <Text variant="callout" style={{ marginLeft: 8, flex: 1, color: isOpen ? c.repost : c.t2 }}>
+          {isOpen ? 'Open now' : 'Closed now'}
+        </Text>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={c.t3} />
+      </Pressable>
+      {open && (
+        <View style={[styles.hoursBox, { backgroundColor: c.s1 }]}>
+          {DAY_NAMES.map((d, i) => (
+            <View key={d} style={styles.hoursRow}>
+              <Text variant="body" tone={i === today ? undefined : 't2'}
+                style={{ flex: 1, fontWeight: i === today ? '700' : '400' }}>
+                {d}
+              </Text>
+              <Text variant="body" tone={i === today ? undefined : 't2'}>
+                {hoursLabel(hours?.[i])}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -268,6 +364,14 @@ const styles = StyleSheet.create({
   nameLine: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10, gap: 14 },
   metaItem: { flexDirection: 'row', alignItems: 'center' },
+  bizRows: { marginTop: 14, gap: 8 },
+  bizRow: {
+    flexDirection: 'row', alignItems: 'center',
+    borderRadius: radius.card, paddingHorizontal: 14, paddingVertical: 12,
+  },
+  dot: { width: 9, height: 9, borderRadius: 5 },
+  hoursBox: { borderRadius: radius.card, padding: 14, marginTop: 8 },
+  hoursRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 3 },
   counts: { flexDirection: 'row', marginTop: 12, gap: 20 },
   count: { flexDirection: 'row', alignItems: 'baseline' },
   divider: { height: StyleSheet.hairlineWidth, marginTop: 16 },
