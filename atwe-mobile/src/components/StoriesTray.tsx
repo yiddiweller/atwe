@@ -32,7 +32,7 @@ export function StoriesTray() {
   if (!others.length && !mine && !user?.username) return null;
 
   return (
-    <View style={[styles.wrap, { borderBottomColor: c.border }]}>
+    <View style={styles.wrap}>
       <FlatList
         data={others}
         keyExtractor={(t) => String(t.user.id)}
@@ -134,7 +134,10 @@ function Ring({ entry }: { entry: StoryTrayEntry }) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { borderBottomWidth: StyleSheet.hairlineWidth },
+  /* NO line under the Dailies. The web removed it at the founder's request —
+     the gap and the post card's own fill are the separation now, the same
+     reason the divider between posts went when the card arrived. */
+  wrap: {},
   row: { paddingHorizontal: 12, paddingVertical: 10, gap: 6 },
   item: { alignItems: 'center', width: 72 },
   ring: {

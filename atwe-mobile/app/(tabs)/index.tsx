@@ -15,6 +15,7 @@ import { useInfiniteFeed, type FeedScope, type Post } from '@/api/social';
 import { useAppReady } from '@/lib/appReady';
 import { useNavMorph } from '@/lib/navMorph';
 import { haptics } from '@/lib/haptics';
+import { FeedTab } from '@/components/FeedTab';
 
 // The same four the web Home has, in the same order.
 const TABS: { key: FeedScope; label: string }[] = [
@@ -98,17 +99,14 @@ export default function Home() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.tabs}
         >
-          {TABS.map((t) => {
-            const active = scope === t.key;
-            return (
-              <Pressable key={t.key} onPress={() => setScope(t.key)} style={styles.tab} hitSlop={8}>
-                <Text variant="headline" style={{ color: active ? c.text : c.t3 }}>
-                  {t.label}
-                </Text>
-                {active && <View style={[styles.underline, { backgroundColor: c.accent }]} />}
-              </Pressable>
-            );
-          })}
+          {TABS.map((t) => (
+            <FeedTab
+              key={t.key}
+              label={t.label}
+              active={scope === t.key}
+              onPress={() => setScope(t.key)}
+            />
+          ))}
         </ScrollView>
         <LinearGradient
           pointerEvents="none"
@@ -200,17 +198,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   tabsWrap: { flexShrink: 1, position: 'relative' },
-  tabsFade: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 26 },
-  tabs: { flexDirection: 'row', gap: 24, alignItems: 'flex-end', paddingRight: 8 },
-  tab: { alignItems: 'center' },
+  tabsFade: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 40 },
+  /* The web's tab row is roomy (gap 34 on a phone) and the last word must be
+     able to scroll clear of the + rather than sit permanently half-eaten. */
+  tabs: { flexDirection: 'row', gap: 30, alignItems: 'center', paddingRight: 34 },
   headActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headBtn: { padding: 2 },
-  underline: {
-    height: 3,
-    borderRadius: 2,
-    alignSelf: 'stretch',
-    marginTop: 8,
-  },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyWrap: { flexGrow: 1 },
 });

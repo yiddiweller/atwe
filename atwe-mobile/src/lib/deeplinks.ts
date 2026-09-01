@@ -17,12 +17,23 @@ const WEB_HOSTS = ['atwe.com', 'www.atwe.com', 'atwe.ai', 'www.atwe.ai'];
 export function routeForUrl(url: string): string | null {
   let parsed: Linking.ParsedURL;
   try { parsed = Linking.parse(url); } catch { return null; }
+  const scheme = (parsed.scheme || '').toLowerCase();
   const host = (parsed.hostname || '').toLowerCase();
-  // For a web link the path is the path; for atwe://user/sam the hostname is
-  // the first segment, which Linking splits differently.
-  const isWeb = WEB_HOSTS.includes(host);
+  const isHttp = scheme === 'http' || scheme === 'https';
+
+  /* An http(s) link from a host that isn't ours is not ours to route.
+     This used to fall through to "treat the hostname as the first path segment",
+     which is right for `atwe://user/sam` (Linking puts `user` in hostname) and
+     badly wrong for a web address: opening the app at `http://localhost/` parsed
+     `localhost` as a handle and redirected the HOME SCREEN to /user/localhost.
+     On a phone that path is normally dormant — a cold launch has no initial URL —
+     but it is live on any build served over http, and it would send a shortened
+     or wrapped link to a nonsense profile. */
+  if (isHttp && host && !WEB_HOSTS.includes(host)) return null;
+
   const segs = [
-    ...(isWeb || !host ? [] : [host]),
+    // Only the app's OWN scheme puts a meaningful segment in `hostname`.
+    ...(!isHttp && host ? [host] : []),
     ...String(parsed.path || '').split('/').filter(Boolean),
   ];
   if (!segs.length) return null;

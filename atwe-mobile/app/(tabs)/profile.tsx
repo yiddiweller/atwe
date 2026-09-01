@@ -39,7 +39,7 @@ export default function Profile() {
           onPress={openProfile}
           style={({ pressed }) => [
             styles.hero,
-            { backgroundColor: c.s1, borderRadius: radius.xl },
+            { backgroundColor: c.s1, borderRadius: radius.card },
             pressed && { opacity: 0.85 },
           ]}
         >

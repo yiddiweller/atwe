@@ -602,6 +602,82 @@ assume the CLI is the route until somebody connects it.
 Then: Apple processes the build (usually 5–20 minutes) and it appears in
 TestFlight as **Atwe 0.2.0**.
 
+## Design parity — the phone's values ARE the web's now, and a check that keeps them there
+
+The tokens were "ported 1:1 from the web" once, and then the web moved on. Nobody
+could see it, because the drift is invisible in a diff of either file alone. Read
+out of `public/index.html` and compared, value by value:
+
+| | web | phone was |
+|---|---|---|
+| the hairline (`--b2`) | `rgba(255,255,255,0.08)` | `#242830` — opaque, lighter, and visibly **blue** |
+| a LIKED post | `--rose` = **#0088FF** | `#F91880` — **X's pink** |
+| a REPOSTED post | `--accent` = **#0088FF** | `#00BA7C` — **X's green** |
+| every bottom sheet (`--r-xl`) | 24 | 30 (aliased to the card corner) |
+| `--r-sm` / `--r-lg` | 11 / 18 | 10 / 20 |
+| motion | 120 / 200 / 350 | 160 / 220 / 320 |
+| `--accent-dim` | `0.10` | `0.14` |
+| missing entirely | `--s3`, `--b1`, `--post-skel`, `--on-green`, `--purple`, `--nav-inset` | — |
+
+**`--rose` being blue is the one worth remembering.** It reads like a pink, and it
+is #0088FF. So on the web a lit action is blue — which is the colour law working as
+written (blue is the selected/toggle-on colour), not an exception to it. The app was
+carrying two colours from X's palette that appear nowhere in Atwe.
+
+Also split what the web keeps separate and the phone had conflated: `--green` is the
+FILL (#88FF00, both themes, dark ink via `--on-green`), `--green-txt` is green TEXT
+(darkened on Light, where lime on white is unreadable). The phone's
+`success`/`danger`/`warning` are the TEXT tokens; `green`/`red`/`amber` are the fills.
+
+### Two near-misses, recorded so nobody repeats them
+
+- **`body.light` matched loosely also catches `body.light .sf-look-warm`**, whose
+  cream `#faf4ec` / `#f3e9dc` are a **storefront look option**, not the Light theme.
+  A first pass "fixed" the phone's Light surfaces to cream on the strength of it.
+  The real Light palette is `#F5F5F7`, which the phone already had. Match the
+  selector EXACTLY.
+- **`--feed-gutter` is 16 in `:root` and 14 inside the phone media query.** 14 is
+  right for the phone; a naive read of `:root` alone says otherwise.
+
+### `tools/check-design-tokens.js`
+
+```bash
+node tools/check-design-tokens.js
+```
+
+Reads the real values out of `public/index.html` and asserts the phone matches —
+50 colours across both themes, plus gutter, nav inset, post geometry, five radii
+and three durations. Self-tested: reintroducing each of the four drifts above fails
+it by name. Two of its own bugs are baked in as comments, because both passed on
+broken input: CSS writes `.04` and `0.04` for the same number, and a lazy match to
+the first `}` truncates the `post` object at its getters.
+
+## The homepage, against the web's own rules
+
+Looking at it rather than assuming, three things did not match:
+
+1. **A 3px blue underline under the active feed tab.** The web has none — it draws
+   one in its non-solo top bar and then explicitly turns it off for these rows
+   (`.tb-feedtab.active::after{display:none}`). It was also blue, which the colour
+   law reserves for identity.
+2. **The tab words were the wrong size and weight** — 17px/700 against the web's
+   **15px/600, active 700 white**. The web is emphatic that Home's and Beam's tab
+   words must be identical across worlds, so there is now one `FeedTab` component
+   rather than a copy per screen, and the size never changes between states.
+3. **A hairline under the Dailies.** The web removed it at the founder's request;
+   the phone still drew one.
+
+## And a real bug the design pass turned up: `/` redirected to a profile
+
+Opening the app at the root landed on **"Couldn't load this profile"**. The
+deep-link parser treats an unrecognised hostname as the first path segment — right
+for `atwe://user/sam`, where Linking puts `user` in the hostname, and badly wrong
+for a web address: `http://localhost/` parsed `localhost` as a handle and sent the
+HOME SCREEN to `/user/localhost`. An http(s) link from a host that is not ours now
+returns null. On a phone this path is normally dormant (a cold launch has no
+initial URL), but it is live on anything served over http and would send a
+shortened or wrapped link to a nonsense profile.
+
 ## Recently added (Jobs — the half of Atwe that was missing from the phone)
 
 Atwe is a business super-app and its two-sided **jobs marketplace** was not on
