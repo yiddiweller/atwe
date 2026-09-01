@@ -29,6 +29,7 @@ import { pickPhoto, pickPhotoMessage } from '@/lib/pickPhoto';
 import { useCallback, useEffect } from 'react';
 import { mediaUri } from '@/lib/media';
 import { VoiceNote } from '@/components/VoiceNote';
+import { MetaCard, type Meta } from '@/components/MetaCard';
 import { useVoiceRecorder, voiceFailMessage, VOICE_MAX_SEC } from '@/lib/voice';
 import { MessageActions, type MessageAction } from '@/components/MessageActions';
 import { ChatSettingsSheet } from '@/components/ChatSettingsSheet';
@@ -398,21 +399,28 @@ function Bubble({ msg, myId, answering, peerName, onLongPress }: {
   };
 
   const voice = !msg.deleted && msg.media_kind === 'audio' && msg.media ? msg.media : null;
+  /* A rich card — money, an invoice, an order, a call that happened. Every one
+     of these used to render as the words "📎 Attachment", which is the whole
+     of Beam's own pitch reduced to a paperclip. */
+  const meta = !msg.deleted && msg.meta && typeof msg.meta === 'object'
+    ? (msg.meta as Meta) : null;
   const label = msg.deleted
     ? 'Message deleted'
-    : voice
+    : voice || meta
       ? null
       : msg.media_kind === 'audio'
         ? '🎤 Voice message'
         : msg.media_kind === 'video'
           ? '🎬 Video'
-          : msg.meta
-            ? '📎 Attachment'
-            : null;
+          : null;
 
   return (
     <View style={[styles.bubbleRow, { justifyContent: mine ? 'flex-end' : 'flex-start' }]}>
-      <View style={{ maxWidth: '78%' }}>
+      {/* A text bubble is capped at 78% so a wall of text does not run edge to
+          edge. A CARD is a fixed layout — an icon, a title, a line of context
+          and an amount — and at 78% the titles truncated ("You received m…")
+          and every subtitle wrapped to three lines. It gets the wider cap. */}
+      <View style={{ maxWidth: meta ? '90%' : '78%' }}>
       <Pressable
         onLongPress={msg.deleted ? undefined : onLongPress}
         delayLongPress={280}
@@ -423,6 +431,10 @@ function Bubble({ msg, myId, answering, peerName, onLongPress }: {
           mine
             ? { backgroundColor: c.accent, borderBottomRightRadius: 4 }
             : { backgroundColor: c.s2, borderBottomLeftRadius: 4 },
+          /* A card brings its own surface, so the bubble gets out of its way —
+             the same reason a sticker has no bubble. A blue pill wrapped round
+             a grey card is two backgrounds arguing. */
+          meta && styles.bubbleCard,
         ]}
       >
         {!!answering && (
@@ -467,6 +479,7 @@ function Bubble({ msg, myId, answering, peerName, onLongPress }: {
         {voice && (
           <VoiceNote uri={voice} durationSec={msg.duration_sec} mine={mine} />
         )}
+        {meta && <MetaCard meta={meta} mine={mine} body={msg.body} />}
         {label ? (
           <Text
             variant="body"
@@ -475,7 +488,12 @@ function Bubble({ msg, myId, answering, peerName, onLongPress }: {
             {label}
           </Text>
         ) : (
-          !!msg.body && (
+          /* A card carries its own words. The server sends a body alongside it
+             for the chat list's preview and for anything that cannot draw the
+             card — printing it under the card as well says everything twice.
+             A Daily reply is the exception the other way: the card IS the
+             reply, so it renders the body itself. */
+          !meta && !!msg.body && (
             <Text variant="body" style={{ color: mine ? '#fff' : c.text }}>
               {msg.body}
             </Text>
@@ -502,6 +520,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   bubbleRow: { flexDirection: 'row', marginVertical: 3 },
   bubble: { borderRadius: 20, paddingVertical: 8, paddingHorizontal: 13 },
+  bubbleCard: { backgroundColor: 'transparent', padding: 0 },
   onceBox: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 14, paddingVertical: 12,

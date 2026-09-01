@@ -37,10 +37,42 @@ export function useConversations() {
 }
 
 /** A one-line preview of a conversation's last message for the list row. */
+/**
+ * What a rich card is called in the chat list — the web's `acMetaLabel`.
+ *
+ * Every one of these used to read "📎 Attachment", so a list of conversations
+ * could not tell you whether somebody had sent you money, an invoice, or a
+ * photo of their cat. The label is the whole reason the list is scannable.
+ */
+export function metaLabel(raw: string | null): string {
+  if (!raw) return '📎 Attachment';
+  /* The conversations query selects `lm.meta->>'t'`, so this arrives as the bare
+     TYPE — "money", "invoice" — not as JSON. Checked against the server rather
+     than assumed: parsing it as JSON would throw on every real value and fall
+     through to the paperclip this exists to replace. The object branch is there
+     only in case a future caller hands over the whole meta. */
+  let t = raw;
+  if (raw.startsWith('{')) {
+    try { t = (JSON.parse(raw) as { t?: string }).t || ''; } catch { t = ''; }
+  }
+  const L: Record<string, string> = {
+    money: '💸 Money', moneyrequest: '💰 Money request', moneydrop: '🧧 Money drop',
+    invoice: '🧾 Invoice', quote: '📋 Quote', order: '🛍️ Order', product: '🛍️ Product',
+    split: '🧮 Split request', pool: '🫙 Money pool', offer: '🏷️ Offer',
+    gift: '🎁 Gift card', digital: '⚡ Download', cartrecovery: '🛍️ Your cart is waiting',
+    call: '📞 Call', location: '📍 Location', livelocation: '📍 Live location',
+    contact: '👤 Contact', poll: '📊 Poll', event: '📅 Event', sticker: '🌟 Sticker',
+    storyreply: '↩ Daily reply', doc: '📄 Document', form: '📋 Form',
+    formreply: '📋 Form answers', buttons: '💬 Quick question',
+    shopcampaign: '📣 News from a shop',
+  };
+  return L[t] || '📎 Attachment';
+}
+
 export function conversationPreview(c: Conversation): string {
   let s: string;
   if (c.last_deleted) s = 'Message deleted';
-  else if (c.last_meta) s = '📎 Attachment';
+  else if (c.last_meta) s = metaLabel(c.last_meta);
   else if (c.last_media_kind === 'audio') s = '🎤 Voice message';
   else if (c.last_media_kind === 'video') s = '🎬 Video';
   else if (c.last_image) s = '📷 Photo';
@@ -169,7 +201,7 @@ export function useGroups() {
  *  "Photo" without a name tells you nothing about who you are hearing from. */
 export function groupPreview(g: Group): string {
   let s: string;
-  if (g.last_meta) s = '📎 Attachment';
+  if (g.last_meta) s = metaLabel(g.last_meta);
   else if (g.last_media_kind === 'audio') s = '🎤 Voice message';
   else if (g.last_media_kind === 'video') s = '🎬 Video';
   else if (g.last_image) s = '📷 Photo';

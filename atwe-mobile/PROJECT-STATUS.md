@@ -1498,6 +1498,55 @@ what is honestly incomplete is said so below rather than counted.
    (`src/me/sections.ts`, `src/settings/pages.ts`) that drives the hub, the pages
    AND the search, so a row lands in all three in one edit.
 
+### Built, not yet shipped — the cards inside a conversation
+
+Beam's own pitch is *"send money in the chat: pay, request or split a bill
+without leaving the conversation"*, and on the phone every one of those rendered
+as the literal text **"📎 Attachment"**. Somebody sent you $50 and you saw a
+paperclip. An invoice arrived with no way to pay it. An order, a split, a quote,
+a shared listing, a call that had just happened — all the same dead paperclip,
+in the thread AND in the chat list, so a list of conversations could not tell you
+whether somebody had sent you money or a photo of their cat.
+
+`components/MetaCard` draws them now — the web's `acMetaCard`, ported. Nineteen
+kinds: money, money request, invoice, quote, split, order, offer, pool, gift
+card, digital delivery, product, cart reminder, call log, location, live
+location, contact, Daily reply and sticker. **Most share one shape** and that is
+deliberate rather than lazy — the web's `mc-invoice`: a tinted disc, a title, a
+line of context, an amount, the whole thing tapping through. Money, calls,
+places, contacts, products and Daily replies each get their own, because each is
+saying something a row cannot.
+
+The point is that **the phone already had every destination** — `invoice/[id]`,
+`quote/[id]`, `split/[id]`, `order/[id]`, `listing/[id]`, `pool/[id]`,
+`offer/[id]`. The card was the missing link between a conversation and them.
+
+Four things worth keeping:
+- **A card IS the bubble.** No coloured pill behind it — the same reason a
+  sticker has none. A blue bubble wrapped round a grey card is two backgrounds
+  arguing.
+- **The body is not printed twice.** The server sends text alongside a card for
+  the chat-list preview and for anything that cannot draw one; under the card it
+  just says everything again. A Daily reply is the exception the other way — the
+  card IS the reply, so it renders the body itself.
+- **A card gets a wider bubble** (90% against a text bubble's 78%). At 78% every
+  title truncated — "You received m…" — and every subtitle wrapped to three
+  lines. And the amount never shrinks or wraps: a figure broken across two lines
+  is unreadable and a truncated one is worse. The title gives way instead.
+- **`last_meta` is the bare TYPE, not JSON.** The conversations query selects
+  `lm.meta->>'t'`, so `metaLabel` reads it directly. Checked against the server
+  rather than assumed — parsing it as JSON would have thrown on every real value
+  and fallen straight back to the paperclip this exists to replace.
+
+**Not built:** `buttons`, `inboxmenu`, `askhuman`, `form`, `formreply`, `doc`,
+`deal`, `moneydrop`, `shopcampaign`, `callschedule` — business-inbox and
+automation cards whose surrounding surfaces the phone does not have. They fall
+through to nothing rather than to a paperclip.
+
+**Checked** against nineteen real seeded cards in a live thread, both themes:
+every one draws, none says "Attachment", and the chat list names them. Plus the
+usual 162 screen loads and all five checkers.
+
 ### 0.8.0 — the chopped text
 
 The founder photographed three screens with the bottom of the letters sliced
