@@ -190,7 +190,11 @@ const styles = StyleSheet.create({
     position: 'absolute', top: 6, right: 12,
     width: 9, height: 9, borderRadius: 5, borderWidth: 1.5,
   },
-  icon: { width: 21, height: 21 },
+  /* 26, which is BOTH the size these were exported for (26/52/78 = @1x/@2x/@3x, so a
+     phone picks the exact pixels and never resamples) and the web's own proportion: the
+     web draws a 34px icon in a 50px tab, 68%; 26 in this 40pt pill is 65%. They were
+     rendering at 21 — 52% — which is why they read small next to the web's bar. */
+  icon: { width: 26, height: 26 },
   plusWrap: { alignItems: 'center', justifyContent: 'center' },
   plusInner: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });

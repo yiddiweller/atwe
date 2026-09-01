@@ -205,6 +205,16 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
   worlds with the old icons. Updated rather than left, because a list describing a bar
   that no longer exists is a trap: the next person edits it, sees no change, and hunts
   a bug that is not there. `GlassTabBar` remains the single source of truth.
+- **Nav icon SIZE was wrong even after the artwork was right.** They were rendering at
+  **21pt**. The files are exported at 26/52/78 — i.e. for a **26pt** box, so at 21 a phone
+  was resampling them instead of picking exact pixels — and the web's own proportion is a
+  34px icon in a 50px tab (68%); 21 in this 40pt pill is 52%, which is why they read small.
+  Now 26 (65%). Checked by rendering a contact sheet of all ten at @3x on black and looking
+  at it, not by trusting the file swap.
+- **Every image the app references was enumerated, not assumed:** `app.json` has six
+  icon-ish keys (app icon, splash ×2, Android adaptive foreground, Android notification
+  icon) and all six point at the three regenerated files; the code references exactly the
+  ten new nav icons and the splash mark. No stale path anywhere.
 - **Verified:** `npx tsc --noEmit` clean (it caught one real error — the unread hook
   returns `{unread}`, not `{count}`, which would have failed a build), and
   `npx expo export --platform ios` produces a **4.84 MB** bundle with all **ten** new
