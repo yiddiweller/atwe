@@ -112,6 +112,12 @@ const CASES = [
   ['ReviewSummary',  null,                                   null],
   ['Quote',          null,                                   null],  // a POST; see below
   ['Eta',            null,                                   null],
+  ['Job',            '/api/jobs',                            (j) => j.jobs[0]],
+  ['JobPoster',      '/api/jobs',                            (j) => j.jobs[0].poster],
+  ['ScreeningQuestion', null,                                null],  // needs a job that asks
+  ['Applicant',      null,                                   null],  // needs a job of my own
+  ['WorkerListing',  '/api/worker-listings',                 (j) => j.workers[0]],
+  ['JobMatch',       null,                                   null],  // a POST; see below
   ['User',           '/api/auth/me',                         (j) => j.user],
   ['AppConfig',      '/api/config',                          (j) => j],
 ];
@@ -158,6 +164,34 @@ const get = async (p) => {
     }
   } catch { /* leave them skipped */ }
 
+  /* Jobs: a screening question only exists on a job that asks one, an applicant
+     only on a job I posted, and the match score is a POST. All three are found
+     from the live board rather than hard-coded, so this keeps working on any
+     account. */
+  let jobMatch = null;
+  try {
+    const board = await get('/api/jobs');
+    const withScreening = (board.jobs || []).find((j) => (j.screening || []).length);
+    if (withScreening) {
+      const si = CASES.findIndex(([n]) => n === 'ScreeningQuestion');
+      CASES[si][1] = `/api/jobs/${withScreening.id}`;
+      CASES[si][2] = (j) => j.job.screening[0];
+    }
+    const mine = (board.jobs || []).find((j) => j.mine && j.applicants);
+    if (mine) {
+      const ai = CASES.findIndex(([n]) => n === 'Applicant');
+      CASES[ai][1] = `/api/jobs/${mine.id}/applicants`;
+      CASES[ai][2] = (j) => j.applicants[0];
+    }
+    const other = (board.jobs || []).find((j) => !j.mine);
+    if (other) {
+      const r = await fetch(B + `/api/jobs/${other.id}/match`, {
+        method: 'POST', headers: { ...H, 'Content-Type': 'application/json' }, body: '{}',
+      });
+      if (r.ok) jobMatch = await r.json();
+    }
+  } catch { /* leave them skipped */ }
+
   // The checkout quote is a POST, so it needs its own little request rather than
   // the shared GET. Priced against a real listing and a real saved address, or
   // it proves nothing.
@@ -178,6 +212,10 @@ const get = async (p) => {
 
   let bad = 0, soft = 0, checked = 0;
   const skipped = [];
+  if (jobMatch) {
+    const mi = CASES.findIndex(([n]) => n === 'JobMatch');
+    CASES[mi][1] = '__jobmatch'; CASES[mi][2] = () => jobMatch;
+  }
   if (quote) {
     const qi = CASES.findIndex(([n]) => n === 'Quote');
     CASES[qi][1] = '__quote'; CASES[qi][2] = () => quote;
@@ -189,7 +227,7 @@ const get = async (p) => {
     if (!want) { skipped.push(`${iface} (no such interface)`); continue; }
     if (!url) { skipped.push(`${iface} (no example in this account)`); continue; }
     let live;
-    try { live = url === '__quote' ? pick(null) : pick(await get(url)); }
+    try { live = (url === '__quote' || url === '__jobmatch') ? pick(null) : pick(await get(url)); }
     catch (e) { skipped.push(`${iface} (${e.message})`); continue; }
     if (!live || typeof live !== 'object') { skipped.push(`${iface} (nothing to compare)`); continue; }
     checked++;

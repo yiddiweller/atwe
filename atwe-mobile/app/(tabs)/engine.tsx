@@ -188,14 +188,33 @@ function Explore({ spacing }: { spacing: ReturnType<typeof useTheme>['spacing'] 
         <Text variant="headline" style={styles.sectionTitle}>
           Discover
         </Text>
-        <View style={styles.tileRow}>
+        {/* Engine is discovery only — every personal surface lives on Account.
+            The tiles scroll sideways so the row can grow without shrinking each
+            one to a stamp. */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tileRow}
+        >
           <DiscoverTile
             icon="storefront-outline"
             label="Marketplace"
             sub="Shop goods & services"
             onPress={() => router.push('/marketplace')}
           />
-        </View>
+          <DiscoverTile
+            icon="briefcase-outline"
+            label="Jobs"
+            sub="Roles open now"
+            onPress={() => router.push('/jobs')}
+          />
+          <DiscoverTile
+            icon="people-outline"
+            label="Find workers"
+            sub="People open to work"
+            onPress={() => router.push('/workers')}
+          />
+        </ScrollView>
       </View>
 
       {trends.length > 0 && (
@@ -340,8 +359,8 @@ function DiscoverTile({
 
 const styles = StyleSheet.create({
   searchWrap: { paddingHorizontal: 12, paddingBottom: 10 },
-  tileRow: { flexDirection: 'row', paddingHorizontal: spacing.gutter, gap: 12 },
-  tile: { flex: 1, padding: 14 },
+  tileRow: { paddingHorizontal: spacing.gutter, gap: 12 },
+  tile: { width: 176, padding: 14 },
   tileIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   search: {
     flexDirection: 'row',

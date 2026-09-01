@@ -94,7 +94,7 @@ export default function Marketplace() {
         keyExtractor={(k) => k ?? 'all'}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: spacing.gutter, gap: 8, paddingVertical: 12 }}
-        style={{ flexGrow: 0 }}
+        style={styles.rowStrip}
         renderItem={({ item }) => {
           const active = kind === item;
           return (
@@ -168,6 +168,11 @@ const styles = StyleSheet.create({
     height: 42,
   },
   searchInput: { flex: 1, fontSize: 15, paddingVertical: 0 },
+  /* A horizontal strip in a flex column must be told NOT to shrink. `flexGrow:0`
+     alone leaves flex-shrink at 1 on the web build, and the list below it took
+     the space: the chips' own 8px padding was squashed away and two stacked
+     rows visibly overlapped. Measured 24.3px tall against 35px of content. */
+  rowStrip: { flexGrow: 0, flexShrink: 0 },
   chip: { paddingHorizontal: spacing.gutter, paddingVertical: 8, borderRadius: 999 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyWrap: { flexGrow: 1 },

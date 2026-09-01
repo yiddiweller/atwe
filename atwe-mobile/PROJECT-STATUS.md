@@ -540,6 +540,71 @@ camelCase**), the `eta` range, and two more. A required field the server never
 sends is a failure; an optional one is reported to eyeball, because absence can
 be legitimate. An empty list is skipped, never passed.
 
+## Recently added (Jobs — the half of Atwe that was missing from the phone)
+
+Atwe is a business super-app and its two-sided **jobs marketplace** was not on
+the phone at all. It is now, both sides of it.
+
+**Looking for work** (`app/jobs.tsx`, `app/job/[id].tsx`, `src/components/JobCard.tsx`)
+— search by title, company or keyword; four shelves (All · Saved · Applied ·
+Posted) and filters for remote and contract type. A role opens to who is hiring,
+what it pays, where it is, the description, and **How you match**: a 0–100 score
+with the skills that carried it and the ones worth adding. **Easy Apply**
+(`ApplySheet`) answers the employer's screening questions and writes a cover
+note, with **"✦ Write it for me"** drafting one from your own profile and résumé.
+Saved roles, withdraw, and a **status tracker** — every application shows
+Applied / Reviewed / Shortlisted / Hired / Not selected, in colour.
+
+**Hiring** (`app/post-job.tsx`, `app/applicants/[id].tsx`) — post a role in
+under a minute (only the title is required, same as the server), then work the
+pipeline: every applicant is a card with their note, their answers, whether they
+**meet the requirements**, and one tap to shortlist, hire, decline or message
+them. Close a role or delete it.
+
+**Open to work** (`app/workers.tsx`) — browse people looking, and list yourself.
+
+**The bug that mattered most is one nobody would have reported.** Being *listed*
+and being *visible* are two different switches on the server: `worker_listings`
+holds what you do, `users.otw_visibility` decides who may see it — **and it
+defaults to `off`**. Posting a listing without touching it puts you on a board
+nobody can search, silently. Proved it live: two real listings in the database,
+board returned zero. The app now sets both together (a first listing goes
+`everyone`), shows who can currently find you, and puts the three-way choice on
+your own card. An amber dot and "Listed, but nobody can see it" if it is ever off.
+
+**Also found and fixed while looking at the screens:**
+- **A horizontal strip in a flex column must be told `flexShrink: 0`.**
+  `flexGrow: 0` alone leaves flex-shrink at 1 on the web build, so the list below
+  took the space: the chips' own 8px padding was squashed away entirely and two
+  stacked filter rows **visibly overlapped**. Measured 24.3px tall against 35px
+  of content. It was already latent on the Marketplace's kind tabs, where one row
+  hid it. `styles.rowStrip` is the shared fix.
+- Employers type "Remote" into the location box **and** tick the remote flag, so
+  cards read "Remote · Remote". One helper (`showsPlace`) now decides, shared by
+  the card and the detail so they cannot disagree.
+- Your own listing appeared twice on the workers board — once as your card, once
+  as a row. The server has no reason to exclude you (an employer wants everyone),
+  so the screen does.
+- The detail repeated the role's name in the header bar directly above the same
+  name in Display type. The bar is back-arrow and heart now, nothing in between.
+- "0 applicants · be an early one" reads badly at zero; it is "Be the first to
+  apply" now, everywhere, in one voice.
+- A match card from the no-AI heuristic with no skills matched was a bare number
+  and nothing else. It now says what would make it sharper.
+
+**Verified against the real server + Postgres, not by reading code:** posted
+three roles as one account, applied from another with screening answers,
+shortlisted them, watched the status appear on the candidate's side, saved a
+role, confirmed a **non-poster gets 403** on the applicant list, and listed
+somebody open to work. Every screen shot in **both themes, 0 page errors**.
+
+**Six new interfaces are in `tools/check-api-types.js`** — Job, JobPoster,
+ScreeningQuestion, Applicant, WorkerListing, JobMatch — all checked against live
+payloads (Job alone is 25 fields). The three that need particular data (a job
+that asks a screening question, a job of your own with an applicant, the match
+POST) are **found from the live board** rather than hard-coded, so the check
+keeps working on any account.
+
 ## Recently added (how the app FEELS — system-wide haptics)
 
 Every tap, tick and confirmation in Atwe now goes through **one module**,
@@ -623,7 +688,8 @@ bugs makes it fail by name.
   here at all: no device, no second party. Building it means handing over several
   hundred lines nobody has watched work. Flagged to the founder as a decision
   rather than assumed either way.
-- **Phase 4 — Engine:** ~~buying~~ ✅ ~~cart~~ ✅ done. **Paying by card** remains
+- **Phase 4 — Engine:** ~~buying~~ ✅ ~~cart~~ ✅ ~~jobs + hiring + open-to-work~~ ✅
+  done. **Paying by card** remains
   — it goes through Stripe Checkout, a browser flow; the sheet currently says
   plainly that you top the balance up first.
 - **Phase 6 — Profile & money:** ~~storefront management~~ ✅ ~~appointments~~ ✅
