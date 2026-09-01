@@ -10,6 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Glass, GlassIcon, GlassSurface } from './Glass';
+import { useComposerRadius } from '@/lib/bubbleShape';
 import { Image } from 'expo-image';
 import { BlurView } from 'expo-blur';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
@@ -210,12 +211,22 @@ export function GlassComposer({
     </>
   );
 
+  /* Capsule on one line, squarer once the typing wraps — the same law the
+     bubbles follow, and it has to be measured rather than declared: the pill's
+     `minHeight` is 52 but its real box is 64, so the old fixed 26 was a
+     rounded rectangle at every height it ever had. */
+  const shape = useComposerRadius();
+
   return (
     <Animated.View style={padStyle}>
-      <Animated.View style={[styles.wrap, wrapStyle]}>
+      {/* The radius lives on BOTH the clipping wrapper and the pill itself.
+          The wrapper is what actually cuts the glass; leaving it at a fixed
+          corner would square off the capsule the pill is drawing inside it. */}
+      <Animated.View style={[styles.wrap, wrapStyle, { borderRadius: shape.borderRadius }]}>
         {glass ? (
           <GlassView
-            style={[styles.pill, { borderColor: c.border }]}
+            style={[styles.pill, { borderColor: c.border, borderRadius: shape.borderRadius }]}
+            onLayout={shape.onLayout}
             glassEffectStyle="regular"
             colorScheme={name === 'light' ? 'light' : 'dark'}
           >
@@ -225,7 +236,8 @@ export function GlassComposer({
           <BlurView
             intensity={40}
             tint={name === 'light' ? 'light' : 'dark'}
-            style={[styles.pill, styles.fallback, { borderColor: c.border, backgroundColor: c.s1 + 'cc' }]}
+            style={[styles.pill, styles.fallback, { borderColor: c.border, borderRadius: shape.borderRadius }]}
+            onLayout={shape.onLayout}
           >
             {inner}
           </BlurView>

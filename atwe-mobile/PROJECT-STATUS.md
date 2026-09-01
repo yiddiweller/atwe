@@ -2244,3 +2244,49 @@ live server + browser), 25 screens driven in both themes with **0 page errors an
 clipped elements**, and the top-bar retraction re-measured unchanged — Home 0→−98→0,
 Beam 0→−110→0, Engine 0→−105→0, Alerts 0→−35→0.
 
+### Round twelve — the text bar was never a capsule, and the ＋ was paint
+
+Three things the founder called, all correct.
+
+**1. "The text bar should be fully rounded on both sides, except if it starts a
+second row."** It never was. The pill declared `minHeight: 52` with
+`borderRadius: 26` — which LOOKS like a capsule in the stylesheet, half of 52 —
+but `minHeight` is a floor, and the real box measures **64pt**: a 38pt button
+with 7 of padding either side, plus its border. A corner has to be half the BOX
+(32) to close, so the bar has been a rounded rectangle at every height it ever
+had, and my earlier claim that it was a capsule was wrong.
+
+`useComposerRadius` (in `bubbleShape.ts`, beside the bubbles' own) drives it off
+the measured height like everything else here: `radius.pill` while under 74,
+`radius.bubble` (18) once the typing wraps. **NEVER derive a capsule's radius
+from `minHeight`** — let `radius.pill` clamp itself. The radius has to go on
+BOTH the clipping wrapper and the pill: the wrapper is what actually cuts the
+glass, and a fixed corner there squares off the capsule drawn inside it.
+
+Measured: 64pt → `999px` (clamps to 32, a true capsule); forced to 76pt → `18px`.
+The browser's `<textarea>` does not grow the way RN's multiline `TextInput`
+does, so the wrap case is proved by forcing the box taller — RN Web drives
+`onLayout` from a ResizeObserver, so that exercises the real code path.
+
+**2. Nav icons 30pt → 24pt.** `build-nav-icons.py` went `PT = 27, INK = 0.90`,
+putting a **24.3pt mark** on screen. The number that matters is the VISIBLE
+MARK, not the canvas: UIKit draws a tab-bar image at its own point size and the
+glyph sits inside `INK` of it. Regenerated all 30 files; never hand-redraw them.
+
+**3. The compose ＋ was a white ball.** It shipped white under the colour law's
+"white is the one primary action per screen", and the founder rejected it on
+sight — rightly. When you scroll, iOS shrinks the tab bar into its little glass
+pill on the left, and a solid white disc opposite it is the one thing on screen
+made of paint. Two floating controls on the same line have to be the same
+substance. It is `GlassIcon` now — the app's one glass button, the same material
+as the chrome buttons and the minimised tab pill.
+
+**On "we lost the real Liquid Glass":** we did not, and it is worth writing down
+because it will come up again. The grey blob at the top of every preview
+screenshot is `expo-router/…/NativeTabsView.**web**.js` — the router's own
+web-only stand-in for a tab bar, since a browser has no `UITabBarController`. It
+appears in zero lines of our source, the glass work touched neither
+`app/(tabs)/_layout.tsx` nor `assets/nav/` (**zero commits**), and the iOS build
+uses `NativeTabsView.js` (react-native-screens, the real controller). The
+preview server now hides it, so a screenshot represents the phone.
+

@@ -32,8 +32,13 @@ OUT = os.path.join(ROOT, 'atwe-mobile', 'assets', 'nav')
 PAIRS = [('home', 'home'), ('beam', 'chat'), ('engine', 'search'),
          ('notifs', 'notifs'), ('profile', 'profile')]
 
-PT = 30          # the canvas the tab bar gets
-INK = 0.90       # how much of it the mark fills -> 27pt on screen
+# The VISIBLE MARK is what matters, not the canvas: UIKit draws a tab-bar image
+# at its own point size, and the mark sits inside `INK` of that. 30 x 0.90 put a
+# 27pt mark on screen and the founder asked for "24 or 25" — the size the web's
+# bar reads at. 27 x 0.90 = 24.3, which is that, and the canvas stays comfortably
+# bigger than the ink so nothing clips at 1x.
+PT = 27          # the canvas the tab bar gets
+INK = 0.90       # how much of it the mark fills -> 24.3pt on screen
 SCALES = [(1, ''), (2, '@2x'), (3, '@3x')]
 
 

@@ -29,3 +29,29 @@ export function useBubbleRadius(text: string | null | undefined) {
   }, []);
   return { borderRadius: multi ? radius.bubble : radius.pill, onLayout };
 }
+
+/**
+ * The composer's own pill, same law: a capsule until the typing wraps.
+ *
+ * It needs its own threshold because it is not a bubble. Measured on a 390pt
+ * phone the bar is **64pt** on one line — a 38pt button with 7 of padding
+ * either side, plus its border — and about 85 on two. So "one line" here is
+ * anything under 74, not the bubble's 50.
+ *
+ * A FIXED 26 WAS THE BUG, and it is worth naming: 26 is half of the pill's
+ * declared `minHeight: 52`, so it LOOKS like a capsule in the stylesheet — but
+ * `minHeight` is a floor, the real box is 64, and a corner has to be half the
+ * box (32) to close. The bar was therefore a rounded rectangle at every height
+ * it ever had. Never derive a capsule's radius from `minHeight`; let
+ * `radius.pill` clamp itself, which is what this does.
+ */
+const COMPOSER_ONE_LINE_MAX = 74;
+
+export function useComposerRadius() {
+  const [multi, setMulti] = useState(false);
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
+    const tall = e.nativeEvent.layout.height > COMPOSER_ONE_LINE_MAX;
+    setMulti((cur) => (cur === tall ? cur : tall));
+  }, []);
+  return { borderRadius: multi ? radius.bubble : radius.pill, onLayout };
+}
