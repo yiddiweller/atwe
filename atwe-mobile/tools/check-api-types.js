@@ -141,6 +141,25 @@ const CASES = [
   ['AtweEvent',      '/api/events?scope=upcoming',           (j) => j.events[0]],
   ['EventHost',      '/api/events?scope=upcoming',           (j) => j.events[0].host],
   ['Attendee',       null,                                   null],  // needs an event id
+  // Money. Several need a seeded example, so they are checked from whichever
+  // list the account genuinely has; a bare `null` is reported as skipped, never
+  // as a pass.
+  ['GiftCard',       '/api/gift-cards',                      (j) => j.cards[0]],
+  ['Invoice',        '/api/invoices?scope=received',         (j) => j.invoices[0]],
+  ['LineItem',       '/api/quotes?scope=received',           (j) => j.quotes[0].items[0]],
+  ['WorkQuote',      '/api/quotes?scope=received',           (j) => j.quotes[0]],
+  ['Party',          '/api/invoices?scope=received',         (j) => j.invoices[0].issuer],
+  ['Loyalty',        '/api/loyalty',                         (j) => j],
+  ['LoyaltyTx',      '/api/loyalty',                         (j) => j.transactions[0]],
+  ['Referrals',      '/api/referrals',                       (j) => j],
+  ['ReferralMilestone', '/api/referrals',                    (j) => j.milestones[0]],
+  ['Split',          '/api/splits?scope=owed',               (j) => j.splits[0]],
+  ['SplitShare',     '/api/splits?scope=owed',               (j) => j.splits[0].shares[0]],
+  ['Pool',           '/api/pools?scope=mine',                (j) => j.pools[0]],
+  ['PoolContribution', null,                                 null],  // detail-only; needs a pool id
+  ['ScheduledPayment', '/api/scheduled-payments?scope=outgoing', (j) => j.payments[0]],
+  ['PaymentLink',    '/api/payment-links',                   (j) => j.links[0]],
+  ['ProductSubscription', '/api/product-subscriptions',      (j) => j.subscriptions[0]],
   ['User',           '/api/auth/me',                         (j) => j.user],
   ['AppConfig',      '/api/config',                          (j) => j],
 ];

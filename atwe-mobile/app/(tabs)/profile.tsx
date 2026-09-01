@@ -95,6 +95,70 @@ export default function Profile() {
             label="Cash out to a bank"
             onPress={() => router.push('/wallet-cashout')}
             c={c}
+          />
+          <NavRow
+            icon="gift-outline"
+            label="Gift cards"
+            onPress={() => router.push('/gift-cards')}
+            c={c}
+          />
+          <NavRow
+            icon="ribbon-outline"
+            label="Rewards"
+            onPress={() => router.push('/rewards')}
+            c={c}
+          />
+          <NavRow
+            icon="person-add-outline"
+            label="Invite friends"
+            onPress={() => router.push('/referrals')}
+            c={c}
+            last
+          />
+        </Group>
+
+        {/* Billing somebody, and being billed */}
+        <Group label="GETTING PAID">
+          <NavRow
+            icon="receipt-outline"
+            label="Invoices"
+            onPress={() => router.push('/invoices')}
+            c={c}
+          />
+          <NavRow
+            icon="document-text-outline"
+            label="Quotes"
+            onPress={() => router.push('/quotes')}
+            c={c}
+          />
+          <NavRow
+            icon="link-outline"
+            label="Payment links"
+            onPress={() => router.push('/payment-links')}
+            c={c}
+            last
+          />
+        </Group>
+
+        {/* Money with other people in it */}
+        <Group label="TOGETHER">
+          <NavRow
+            icon="pie-chart-outline"
+            label="Split a bill"
+            onPress={() => router.push('/splits')}
+            c={c}
+          />
+          <NavRow
+            icon="people-circle-outline"
+            label="Pools"
+            onPress={() => router.push('/pools')}
+            c={c}
+          />
+          <NavRow
+            icon="calendar-outline"
+            label="Scheduled payments"
+            onPress={() => router.push('/scheduled-payments')}
+            c={c}
             last
           />
         </Group>
@@ -127,7 +191,13 @@ export default function Profile() {
             c={c}
           />
           <NavRow
-            icon="calendar-outline"
+            icon="repeat-outline"
+            label="Subscriptions"
+            onPress={() => router.push('/subscriptions')}
+            c={c}
+          />
+          <NavRow
+            icon="calendar-number-outline"
             label="Appointments"
             onPress={() => router.push('/appointments')}
             c={c}

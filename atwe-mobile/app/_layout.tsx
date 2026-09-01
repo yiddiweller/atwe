@@ -173,6 +173,20 @@ function RootNavigator() {
           <Stack.Screen name="course/[id]" />
           <Stack.Screen name="course/lesson/[id]" />
           <Stack.Screen name="ai-shop" />
+          <Stack.Screen name="gift-cards" />
+          <Stack.Screen name="invoices" />
+          <Stack.Screen name="invoice/[id]" />
+          <Stack.Screen name="quotes" />
+          <Stack.Screen name="quote/[id]" />
+          <Stack.Screen name="rewards" />
+          <Stack.Screen name="referrals" />
+          <Stack.Screen name="splits" />
+          <Stack.Screen name="split/[id]" />
+          <Stack.Screen name="pools" />
+          <Stack.Screen name="pool/[id]" />
+          <Stack.Screen name="scheduled-payments" />
+          <Stack.Screen name="payment-links" />
+          <Stack.Screen name="subscriptions" />
           <Stack.Screen name="reviews/[id]" />
           <Stack.Screen name="shop/[id]" />
           <Stack.Screen name="edit-profile" options={{ presentation: 'modal' }} />
