@@ -232,6 +232,36 @@ function Explore({ spacing }: { spacing: ReturnType<typeof useTheme>['spacing'] 
             sub="The directory"
             onPress={() => router.push('/businesses')}
           />
+          <DiscoverTile
+            icon="sparkles-outline"
+            label="Shop with AI"
+            sub="Say what you want"
+            onPress={() => router.push('/ai-shop')}
+          />
+          <DiscoverTile
+            icon="school-outline"
+            label="Courses"
+            sub="Learn something"
+            onPress={() => router.push('/courses')}
+          />
+          <DiscoverTile
+            icon="people-circle-outline"
+            label="Communities"
+            sub="Rooms to join"
+            onPress={() => router.push('/communities')}
+          />
+          <DiscoverTile
+            icon="mail-outline"
+            label="Newsletters"
+            sub="Worth reading"
+            onPress={() => router.push('/newsletters')}
+          />
+          <DiscoverTile
+            icon="color-palette-outline"
+            label="Showcase"
+            sub="Work worth seeing"
+            onPress={() => router.push('/showcase')}
+          />
         </ScrollView>
       </View>
 

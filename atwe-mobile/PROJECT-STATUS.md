@@ -642,6 +642,92 @@ now verified against live payloads; 50 in total, 0 failures.
 `underDayHeading` and shows the clock alone there. Everywhere else — the local
 hub, a profile — there is no heading, so it carries the whole date.
 
+## The Engine is COMPLETE: eleven worlds, same as the web
+
+The website's Discover row has eleven destinations. The phone had six. The
+remaining five landed together, all backed by one new `src/api/discover.ts` that
+mirrors the server's `mapShowcase` / `mapNewsletter` / `mapCommunity` /
+`mapCourse` / `mapLesson` shapes exactly:
+
+**Showcase** (`app/showcase.tsx`, `app/showcase/[id].tsx`) — the "show off
+anything" surface. Discover ranks by popularity; a detail is the image gallery,
+the description, an **appreciate** heart, comments (post + delete your own, and
+the owner can moderate any comment on their own item), and — when the creator
+attached one of their own listings — a product card that goes straight to buying
+it. Deliberately distinct from Featured, which only pins an existing post.
+
+**Newsletters** (`app/newsletters.tsx`, `app/newsletter/[id].tsx`,
+`app/newsletter/issue/[id].tsx`) — Discover / Subscribed / Mine, subscribe and
+unsubscribe, the issue list, and a reader. **A paid newsletter is honest about
+it**: the server answers `402 {locked:true}` on an issue you have not paid for,
+so the reader shows the lock and the price rather than an error, and the
+Subscribe button carries the amount. Paying is a browser step (Stripe Checkout),
+same as a ticketed event.
+
+**Communities** (`app/communities.tsx`, `app/community/[id].tsx`) — Mine /
+Discover, join and leave, the announcement channel called out at the top (it is
+a real broadcast group and joining the community joins it), and the sub-groups
+underneath, each joinable. The owner cannot leave their own community and the
+button says so instead of failing.
+
+**Courses** (`app/courses.tsx`, `app/course/[id].tsx`,
+`app/course/lesson/[id].tsx`) — Discover / Learning / Teaching, a detail with the
+teacher, the price, a progress bar, and the curriculum **grouped by module** the
+way the server sends it. Enrolling is free-instant or wallet-funded; the lesson
+viewer has the notes, the video, prev/next, and mark-complete, which updates the
+progress bar without a reload. **The content gate is the server's, not ours** —
+an unenrolled viewer gets the outline with `locked:true` and no body, which is
+exactly what the screen renders, so there is nothing to leak.
+
+**Shop with Atwe AI** (`app/ai-shop.tsx`) — plain-language product search over
+`POST /api/ai/shop`, with the one-line reason the assistant gives for each pick.
+It degrades: with no API key the server still returns plain retrieval and
+`ai:false`, and the screen simply drops the reasons rather than showing an error.
+
+Two shared pieces came out of building five screens at once, because writing the
+same header six times is how six headers drift apart:
+- **`PageHeader`** — back arrow, title, optional trailing action. One place.
+- **`Shelf`** — the horizontal chip row every one of these worlds uses to switch
+  scope. It owns its own select tick, so the haptics guard is satisfied by
+  construction rather than by remembering.
+
+Engine went 6 tiles → **11**, and the Settings **Discover** group lists all of
+them.
+
+### `flexGrow: 0` is not enough — a strip needs `flexShrink: 0` too
+
+The two chip rows overlapped: measured **24.3px tall against 35px of content**.
+In a flex column a child with `flexGrow: 0` will still be SHRUNK below its own
+content height by whatever sits under it. Both properties, every time — it is now
+one shared `rowStrip` style so it cannot be half-remembered.
+
+### The type checker was verifying a fraction of what it claimed
+
+`check-api-types.js` reported `ShowcaseAuthor` as **2 fields** when the interface
+declares six. It read one field per LINE, so anything written `{ a: string; b:
+number }` lost everything after the first semicolon — and it had been quietly
+under-checking every compact interface in the file since it was written.
+
+The obvious fix — split on every `;` — was **worse**: it tore inline object
+literals apart mid-brace and produced three confident FAILs on types that were
+completely correct (MoneyRequest, Profile, Applicant). A checker that cries wolf
+is worse than no checker, because the next real failure gets waved through.
+
+The right split is **at brace depth 0 only**:
+
+```js
+const lines = []; let d = 0, cur = '';
+for (const ch of body) {
+  if (ch === '{') d++; else if (ch === '}') d--;
+  if ((ch === '\n' || ch === ';') && d === 0) { lines.push(cur); cur = ''; }
+  else if (ch !== '\n') cur += ch;
+}
+```
+
+**56 interfaces · 0 with a required field the server never sends.** Twelve of
+those are new this run and every one was checked against a real payload from a
+real Postgres, not against the docs.
+
 ## The nav bar's INSET is the founder's number, not the web's
 
 Matching `--nav-inset` 23 exactly made the bar visibly narrower than the one they

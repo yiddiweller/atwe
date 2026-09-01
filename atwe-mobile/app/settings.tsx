@@ -114,7 +114,11 @@ export default function Settings() {
           <LinkRow label="Events" c={c} onPress={() => router.push('/events')} />
           <LinkRow label="Services" c={c} onPress={() => router.push('/services')} />
           <LinkRow label="Businesses" c={c} onPress={() => router.push('/businesses')} />
-          <LinkRow label="Marketplace" c={c} onPress={() => router.push('/marketplace')} last />
+          <LinkRow label="Marketplace" c={c} onPress={() => router.push('/marketplace')} />
+          <LinkRow label="Courses" c={c} onPress={() => router.push('/courses')} />
+          <LinkRow label="Communities" c={c} onPress={() => router.push('/communities')} />
+          <LinkRow label="Newsletters" c={c} onPress={() => router.push('/newsletters')} />
+          <LinkRow label="Showcase" c={c} onPress={() => router.push('/showcase')} last />
         </View>
 
         {/* Selling */}

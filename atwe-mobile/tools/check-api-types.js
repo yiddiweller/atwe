@@ -59,11 +59,21 @@ function declared(iface) {
   }
   // Only depth-0 lines: a field nested inside an inline object literal type is
   // that object's, not this interface's.
+  /* Break on a newline OR a semicolon, but ONLY at depth 0.
+     Two lessons are baked in here, each of which broke this parser once:
+     - a line can declare SEVERAL fields (`id: number; name: string;`), and
+       reading only the first made the checker quietly verify a fraction of what
+       it claimed — ShowcaseAuthor reported "2 fields" for an interface with six;
+     - splitting on every semicolon then tore INLINE OBJECT LITERALS apart, so
+       `requester?: { id: number; name: string }` reported `name` and `username`
+       as missing top-level fields. They are nested, and nested fields belong to
+       their own object, not to this interface. Depth is what tells them apart. */
   const lines = []; let d = 0, cur = '';
   for (const ch of body) {
     if (ch === '{') d++;
     else if (ch === '}') d--;
-    if (ch === '\n') { if (d === 0) lines.push(cur); cur = ''; } else cur += ch;
+    if ((ch === '\n' || ch === ';') && d === 0) { lines.push(cur); cur = ''; }
+    else if (ch !== '\n') cur += ch;
   }
   lines.push(cur);
   return lines
@@ -118,6 +128,12 @@ const CASES = [
   ['Applicant',      null,                                   null],  // needs a job of my own
   ['WorkerListing',  '/api/worker-listings',                 (j) => j.workers[0]],
   ['JobMatch',       null,                                   null],  // a POST; see below
+  ['Showcase',       '/api/showcases?scope=discover',        (j) => j.showcases[0]],
+  ['ShowcaseAuthor', '/api/showcases?scope=discover',        (j) => j.showcases[0].author],
+  ['Newsletter',     '/api/newsletters?scope=discover',      (j) => j.newsletters[0]],
+  ['Community',      '/api/communities?scope=discover',      (j) => j.communities[0]],
+  ['Course',         '/api/courses?scope=discover',          (j) => j.courses[0]],
+  ['Lesson',         null,                                   null],  // needs a course with lessons
   ['ServiceListing', '/api/services',                        (j) => j.services[0]],
   ['ServiceProvider','/api/services',                        (j) => j.services[0].provider],
   ['LocalResults',   '/api/local',                           (j) => j],
@@ -170,6 +186,17 @@ const get = async (p) => {
       CASES[mi][1] = `/api/business/${bid}/reviews`; CASES[mi][2] = (j) => j.summary;
     }
   } catch { /* leave them skipped */ }
+
+  // A lesson only exists inside a course that has one.
+  try {
+    const cs = await get('/api/courses?scope=discover');
+    const withLessons = (cs.courses || []).find((c) => c.lessonCount > 0) || cs.courses?.[0];
+    if (withLessons) {
+      const i = CASES.findIndex(([n]) => n === 'Lesson');
+      CASES[i][1] = `/api/courses/${withLessons.id}`;
+      CASES[i][2] = (j) => j.course.lessons?.[0];
+    }
+  } catch { /* leave it skipped */ }
 
   // An attendee list hangs off an event this account can see.
   try {

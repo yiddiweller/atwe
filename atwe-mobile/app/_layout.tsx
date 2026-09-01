@@ -162,6 +162,17 @@ function RootNavigator() {
           <Stack.Screen name="service/[id]" />
           <Stack.Screen name="offer-service" options={{ presentation: 'modal' }} />
           <Stack.Screen name="businesses" />
+          <Stack.Screen name="showcase" />
+          <Stack.Screen name="showcase/[id]" />
+          <Stack.Screen name="newsletters" />
+          <Stack.Screen name="newsletter/[id]" />
+          <Stack.Screen name="newsletter/issue/[id]" />
+          <Stack.Screen name="communities" />
+          <Stack.Screen name="community/[id]" />
+          <Stack.Screen name="courses" />
+          <Stack.Screen name="course/[id]" />
+          <Stack.Screen name="course/lesson/[id]" />
+          <Stack.Screen name="ai-shop" />
           <Stack.Screen name="reviews/[id]" />
           <Stack.Screen name="shop/[id]" />
           <Stack.Screen name="edit-profile" options={{ presentation: 'modal' }} />
