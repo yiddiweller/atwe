@@ -1634,14 +1634,21 @@ the 1:1 thread, in groups and on the Atwe AI page. iOS 26 Messages dropped that
 years-old shape; the tails are gone here too, and a bubble is now round on all
 four corners.
 
-**`radius.bubble` (44) is the new token, and the number is derived, not picked.**
-iOS clamps a corner to half the shorter side, so any radius past that is simply a
-capsule — which is what a short bubble or a one-line field should be. The number
-only matters once a box is TALLER than it is round, and then it decides whether
-the curve starts eating the first line of text. With 10pt above the text and 16
-beside it, solving `r - sqrt(20r - 100) <= 16` gives r <= 43.9. So a bubble is a
-true capsule up to four lines and stays handsomely round after that, and the text
-never runs into the corner. Bubble padding went 8/13 -> 10/16 to buy that.
+**`radius.bubble` is 22, and the number is derived, not picked.** iOS clamps a
+corner to half the shorter side, and that one fact does all the work. A one-line
+bubble is 41pt tall, so anything at or above 20.5 renders it as a perfect
+capsule; a two-line bubble is 62pt tall, so anything WELL BELOW 31 renders it as
+a rounded rectangle instead of a lozenge with semicircular ends. 22 sits just
+above the first bound and well under the second. It is also the web's own
+`.msg-bubble` number, so the two products agree.
+
+**It shipped once at 44 and that was wrong.** 44 was the largest radius whose
+curve still clears the first line of text — a real constraint, but not the
+binding one. The founder saw it and said so: *"if it's more than one line it
+should be equal, only rounded corners, instead of the whole rounded sides."* The
+question is never how large a corner CAN be; it is where a box stops reading as
+a rectangle. The composer follows the same rule at 26 — exactly half its 52pt
+resting height, so one line is a capsule and two lines are not.
 
 **The chat composer cannot simply be `pill`, and the reason is worth keeping.**
 The ＋ and the mic sit in its bottom corners under `overflow: 'hidden'`, so too

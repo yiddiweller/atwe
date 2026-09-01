@@ -200,21 +200,29 @@ export const radius = {
    *  an alias for `card`, which made every sheet 30. */
   xl: 24,
   /**
-   * As round as a box you can READ can be.
+   * A bubble corner: a capsule when there is one line, and EQUAL ROUNDED
+   * CORNERS the moment there are two.
    *
-   * iOS clamps a corner to half the shorter side, so any radius past that is
-   * simply a capsule — which is what a short message bubble or a one-line field
-   * should be. The number only matters once the box grows TALLER than it is
-   * round, and then it decides whether the curve starts eating the first line of
-   * text. With 10pt of padding above the text and 16 beside it, the curve clears
-   * the first line up to r = 44: solving `r - sqrt(20r - 100) <= 16` gives
-   * r <= 43.9. So a bubble is a true capsule up to four lines and stays
-   * handsomely round after that, and the text never runs into the corner.
+   * iOS clamps a corner to half the shorter side, and that one fact does all
+   * the work here. A one-line bubble is 41pt tall, so anything at or above
+   * 20.5 renders it as a perfect capsule. A two-line bubble is 62pt tall, so
+   * anything WELL BELOW 31 renders it as a rounded rectangle instead of a
+   * lozenge with semicircular ends.
+   *
+   * 22 sits just above the first bound and well under the second, which is
+   * exactly the behaviour asked for: *"if it's more than one line it should be
+   * equal, only rounded corners, instead of the whole rounded sides."* It is
+   * also the web's own `.msg-bubble` number, so the two products agree.
+   *
+   * It shipped once at 44 — chosen as the largest radius whose curve still
+   * clears the first line of text — and that made every multi-line bubble a
+   * stadium. The constraint that matters is not how large it CAN be; it is
+   * where a bubble stops reading as a rectangle.
    *
    * Use it for message bubbles and for anything multi-line you type into.
    * A single-line field is `pill` — it can never be too round.
    */
-  bubble: 44,
+  bubble: 22,
   pill: 999,
 } as const;
 
