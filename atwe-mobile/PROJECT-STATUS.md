@@ -1634,21 +1634,25 @@ the 1:1 thread, in groups and on the Atwe AI page. iOS 26 Messages dropped that
 years-old shape; the tails are gone here too, and a bubble is now round on all
 four corners.
 
-**`radius.bubble` is 22, and the number is derived, not picked.** iOS clamps a
-corner to half the shorter side, and that one fact does all the work. A one-line
-bubble is 41pt tall, so anything at or above 20.5 renders it as a perfect
-capsule; a two-line bubble is 62pt tall, so anything WELL BELOW 31 renders it as
-a rounded rectangle instead of a lozenge with semicircular ends. 22 sits just
-above the first bound and well under the second. It is also the web's own
-`.msg-bubble` number, so the two products agree.
+**No single radius can do both, and that is the whole lesson.** iOS clamps a
+corner to half the shorter side, so anything that keeps a 41pt one-line bubble
+circular (20.5 and up) also turns a 62pt two-line one into a lozenge. Two goes
+at picking one number both failed for that reason — 44, then 22 — and the
+founder rejected each on sight.
 
-**It shipped once at 44 and that was wrong.** 44 was the largest radius whose
-curve still clears the first line of text — a real constraint, but not the
-binding one. The founder saw it and said so: *"if it's more than one line it
-should be equal, only rounded corners, instead of the whole rounded sides."* The
-question is never how large a corner CAN be; it is where a box stops reading as
-a rectangle. The composer follows the same rule at 26 — exactly half its 52pt
-resting height, so one line is a capsule and two lines are not.
+So the shape follows the BOX. `useBubbleRadius` watches the bubble's own height:
+a capsule while it is one line, `radius.bubble` (18 — iMessage's own corner) the
+moment it is two. The first render guesses from the text's length rather than
+starting wrong and correcting, because a bubble that visibly pops from capsule
+to rectangle as a thread paints is worse than either shape; `onLayout` settles
+anything the guess got wrong on the same frame.
+
+**The composer's two ends were not the same object.** The ＋ was a bare 34pt
+glyph and the mic a 38pt filled disc, so the right end hugged the pill's edge
+while the left floated 6pt further in — one was a shape and the other was not,
+and it read as lopsided. Two identical discs at identical insets is the only way
+two ends can match: measured, 38x38 both, 11pt in from each side and 8pt up from
+the bottom on both.
 
 **The chat composer cannot simply be `pill`, and the reason is worth keeping.**
 The ＋ and the mic sit in its bottom corners under `overflow: 'hidden'`, so too

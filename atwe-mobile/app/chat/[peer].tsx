@@ -38,6 +38,7 @@ import { ReactionChips } from '@/components/ReactionChips';
 import { ReplyQuote, ReplyStrip } from '@/components/ReplyQuote';
 import * as Clipboard from 'expo-clipboard';
 import { radius } from '@/theme/tokens';
+import { useBubbleRadius } from '@/lib/bubbleShape';
 import { haptics } from '@/lib/haptics';
 
 /**
@@ -384,6 +385,8 @@ function Bubble({ msg, myId, answering, peerName, onLongPress }: {
   const { c } = useTheme();
   const mine = msg.mine;
   const img = msg.images?.[0] || msg.image || null;
+  /* Capsule on one line, squarer on two — the shape follows the box. */
+  const shape = useBubbleRadius(msg.body);
 
   /* View-once. The thread payload carries NO bytes for one of these, so there
      is nothing to render until it is opened — and opening it is a one-way door,
@@ -439,12 +442,13 @@ function Bubble({ msg, myId, answering, peerName, onLongPress }: {
         delayLongPress={280}
         accessibilityRole="button"
         accessibilityHint="Press and hold for message options"
+        onLayout={shape.onLayout}
         style={[
           styles.bubble,
           /* No squared-off tail corner. A bubble is round on ALL FOUR corners,
              the way iOS 26 Messages draws them — one flat 4pt corner is exactly
              what stopped these reading as fully rounded. */
-          { backgroundColor: mine ? c.accent : c.s2 },
+          { backgroundColor: mine ? c.accent : c.s2, borderRadius: shape.borderRadius },
           /* A card brings its own surface, so the bubble gets out of its way —
              the same reason a sticker has no bubble. A blue pill wrapped round
              a grey card is two backgrounds arguing. */

@@ -149,8 +149,13 @@ export function GlassComposer({
         </View>
       )}
       {!!onPlus && (
-        <Pressable onPress={onPlus} hitSlop={8} style={styles.plus} accessibilityLabel="Add attachment">
-          <Ionicons name="add" size={26} color={c.t2} />
+        <Pressable
+          onPress={onPlus}
+          hitSlop={8}
+          style={({ pressed }) => [styles.plus, { backgroundColor: c.s2 }, pressed && { opacity: 0.7 }]}
+          accessibilityLabel="Add attachment"
+        >
+          <Ionicons name="add" size={24} color={c.t2} />
         </Pressable>
       )}
       <HapticInput
@@ -274,7 +279,12 @@ const styles = StyleSheet.create({
     position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10,
     alignItems: 'center', justifyContent: 'center',
   },
-  plus: { width: 34, height: 38, alignItems: 'center', justifyContent: 'center' },
+  /* THE SAME DISC AS THE SEND BUTTON, and that is the whole fix. It was a
+     bare 34pt glyph facing a 38pt filled circle: the right end hugged the
+     pill's edge and the left one floated 6pt further in, one was a shape
+     and the other was not, and the composer read as lopsided. Two identical
+     discs at identical insets is the only way the two ends can match. */
+  plus: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   input: {
     flex: 1,
     fontSize: 16,

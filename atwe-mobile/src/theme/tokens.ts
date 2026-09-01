@@ -200,29 +200,22 @@ export const radius = {
    *  an alias for `card`, which made every sheet 30. */
   xl: 24,
   /**
-   * A bubble corner: a capsule when there is one line, and EQUAL ROUNDED
-   * CORNERS the moment there are two.
+   * A bubble corner ONCE IT IS MORE THAN ONE LINE.
    *
-   * iOS clamps a corner to half the shorter side, and that one fact does all
-   * the work here. A one-line bubble is 41pt tall, so anything at or above
-   * 20.5 renders it as a perfect capsule. A two-line bubble is 62pt tall, so
-   * anything WELL BELOW 31 renders it as a rounded rectangle instead of a
-   * lozenge with semicircular ends.
+   * A one-line bubble is a capsule and does not use this at all — see
+   * `useBubbleRadius`, which switches on the box's own height, because no
+   * single radius can be both. iOS clamps a corner to half the shorter side, so
+   * anything that keeps a 41pt one-liner circular (20.5 and up) also makes a
+   * 62pt two-liner a lozenge, and that lozenge was rejected twice.
    *
-   * 22 sits just above the first bound and well under the second, which is
-   * exactly the behaviour asked for: *"if it's more than one line it should be
-   * equal, only rounded corners, instead of the whole rounded sides."* It is
-   * also the web's own `.msg-bubble` number, so the two products agree.
+   * 18 is iMessage's own corner, which is the shape the founder pointed at:
+   * *"once it happens a second line it should start being less round, similar
+   * as you see in iMessage."*
    *
-   * It shipped once at 44 — chosen as the largest radius whose curve still
-   * clears the first line of text — and that made every multi-line bubble a
-   * stadium. The constraint that matters is not how large it CAN be; it is
-   * where a bubble stops reading as a rectangle.
-   *
-   * Use it for message bubbles and for anything multi-line you type into.
-   * A single-line field is `pill` — it can never be too round.
+   * Also used for anything multi-line you type into. A single-line field is
+   * `pill` — it can never be too round.
    */
-  bubble: 22,
+  bubble: 18,
   pill: 999,
 } as const;
 

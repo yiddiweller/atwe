@@ -19,6 +19,7 @@ import { ReplyQuote, ReplyStrip } from '@/components/ReplyQuote';
 import { VoiceNote } from '@/components/VoiceNote';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
+import { useBubbleRadius } from '@/lib/bubbleShape';
 import {
   useGroupThread, sendGroupMessage, react, deleteMessage,
   type Attachment, type GroupMessage, type GroupThreadData,
@@ -358,6 +359,7 @@ function GroupBubble({ msg, startsRun, myId, answering, onLongPress }: {
 }) {
   const { c } = useTheme();
   const mine = msg.mine;
+  const shape = useBubbleRadius(msg.body);
   const voice = !msg.deleted && msg.media_kind === 'audio' && msg.media ? msg.media : null;
   const label = msg.deleted
     ? 'Message deleted'
@@ -387,7 +389,8 @@ function GroupBubble({ msg, startsRun, myId, answering, onLongPress }: {
           delayLongPress={280}
           style={[styles.bubble,
             /* Round on all four corners — see the 1:1 thread. */
-            { backgroundColor: mine ? c.accent : c.s2 }]}
+            { backgroundColor: mine ? c.accent : c.s2, borderRadius: shape.borderRadius }]}
+          onLayout={shape.onLayout}
           accessibilityRole="button"
           accessibilityHint="Press and hold for message options"
         >
