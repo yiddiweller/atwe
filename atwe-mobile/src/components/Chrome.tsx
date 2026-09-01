@@ -6,6 +6,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Glass } from './Glass';
+import { Text } from './Text';
 import { SHELF_H } from './Shelf';
 
 /**
@@ -299,28 +300,68 @@ export function ChromeBar({ children, style, edge = 'top', onLayout, inset = tru
  * control gets its own surface: Liquid Glass on iOS 26, a dark (or light)
  * tinted disc below that. It is the same material `BrandBar`'s ＋ · ⋯ · photo
  * already use, so the top of every screen reads as one family.
+ *
+ * TWO GRADES, which is Apple's own split and the thing these were missing.
+ * Photos puts a quiet dark circle next to a lighter "Select" capsule; Voicemail
+ * puts "Edit" beside a lighter "Greeting". The lighter one is `.glassProminent`
+ * — the same material carrying a tint — and it marks the ONE action a screen is
+ * actually for. Everything else is the quiet one. A screen with two prominent
+ * buttons has none.
  */
-export function ChromeButton({ children, onPress, label, size = 38, style }: {
+export function ChromeButton({ children, onPress, label, size = 38, prominent, style }: {
   children: React.ReactNode;
   onPress: () => void;
   label: string;
   size?: number;
+  prominent?: boolean;
   style?: ViewStyle;
 }) {
   return (
-    <ChromeSurface radius={size / 2} onPress={onPress} label={label}
+    <ChromeSurface radius={size / 2} onPress={onPress} label={label} prominent={prominent}
       style={[{ width: size, height: size }, style]}>
       {children}
     </ChromeSurface>
   );
 }
 
+/**
+ * The same control with a WORD in it. Apple names a chrome action wherever the
+ * word is shorter than the explanation an icon would need — Select, Edit,
+ * Greeting, Cancel, Post — and it becomes a capsule sized to its own label
+ * rather than a glyph squeezed into a circle.
+ */
+export function ChromePill({ text, onPress, prominent, disabled, style }: {
+  text: string;
+  onPress: () => void;
+  prominent?: boolean;
+  disabled?: boolean;
+  style?: ViewStyle;
+}) {
+  const { c } = useTheme();
+  return (
+    <ChromeSurface
+      radius={19}
+      onPress={disabled ? undefined : onPress}
+      label={text}
+      prominent={prominent}
+      style={[{ height: 38, paddingHorizontal: 18 }, disabled ? { opacity: 0.45 } : undefined, style]}
+    >
+      <Text variant="callout" weight="700" style={{ fontSize: 16, color: c.text }} numberOfLines={1}>
+        {text}
+      </Text>
+    </ChromeSurface>
+  );
+}
+
 /** The same surface, any shape — a title pill, a segmented control, a disc. */
-export function ChromeSurface({ children, onPress, label, radius, style }: {
+export function ChromeSurface({ children, onPress, label, radius, prominent, style }: {
   children: React.ReactNode;
   onPress?: () => void;
   label?: string;
   radius: number;
+  /** Apple's `.glassProminent`: the lighter one, for the single action a screen
+   *  is for. Never two on a screen. */
+  prominent?: boolean;
   style?: ViewStyle | (ViewStyle | false | undefined)[];
 }) {
   const { c, name } = useTheme();
@@ -328,8 +369,14 @@ export function ChromeSurface({ children, onPress, label, radius, style }: {
   const body = (
     <Glass
       radius={radius}
+      prominent={prominent}
+      /* Neutral, not the brand colour: in Apple's own bars the prominent pill is
+         a lighter GLASS, and what tints it is whatever is scrolling behind. */
+      tint={light ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.22)'}
       fallback={{
-        backgroundColor: light ? 'rgba(255,255,255,0.82)' : 'rgba(28,28,30,0.92)',
+        backgroundColor: prominent
+          ? (light ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.20)')
+          : (light ? 'rgba(255,255,255,0.82)' : 'rgba(28,28,30,0.92)'),
         borderWidth: 1,
         borderColor: light ? c.border : 'rgba(255,255,255,0.06)',
       }}

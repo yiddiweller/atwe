@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromePill } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
@@ -75,13 +76,11 @@ export default function AddStory() {
     <Screen edges={['top', 'bottom']} raised>
       <KeyboardAvoidingView style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* The same pair as the composer — see Apple's Voicemail. */}
         <View style={styles.head}>
-          <Pressable onPress={() => router.back()} hitSlop={10}
-            accessibilityRole="button" accessibilityLabel="Cancel">
-            <Text variant="headline" tone="t2">Cancel</Text>
-          </Pressable>
+          <ChromePill text="Cancel" onPress={() => router.back()} />
           <Text variant="headline">Your story</Text>
-          <View style={{ width: 56 }} />
+          <View style={{ width: 84 }} />
         </View>
 
         {/* What it will look like */}

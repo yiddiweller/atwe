@@ -15,6 +15,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromePill } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -103,13 +104,11 @@ export default function Compose() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         {/* header */}
+        {/* Apple's own pair, from Voicemail and Photos: a quiet glass capsule
+            beside the one lighter, prominent one the screen is actually for. */}
         <View style={styles.head}>
-          <Pressable onPress={() => router.back()} hitSlop={10}>
-            <Text variant="headline" tone="t2">
-              Cancel
-            </Text>
-          </Pressable>
-          <Button title="Post" onPress={submit} loading={busy} disabled={!canPost} style={styles.postBtn} />
+          <ChromePill text="Cancel" onPress={() => router.back()} />
+          <ChromePill text={busy ? 'Posting…' : 'Post'} prominent disabled={!canPost || busy} onPress={submit} />
         </View>
 
         {/* body */}
@@ -257,7 +256,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.gutter,
     paddingBottom: 10,
   },
-  postBtn: { minHeight: 38, paddingHorizontal: 20 },
   row: { flexDirection: 'row', gap: 10 },
   input: { flex: 1, fontSize: 17, lineHeight: 23, paddingTop: 8, minHeight: 110, textAlignVertical: 'top' },
   pollRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },

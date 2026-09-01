@@ -1842,6 +1842,28 @@ worlds: Home 0 → −98 → 0, Beam 0 → −110 → 0, Engine 0 → −105 →
 floating controls, the bigger tab icons, the glass menus, the minimise fix and
 this — and every screenshot the founder has sent since was taken on 0.9.0.
 
+### 0.10.0 — two grades of chrome button, which is Apple's own split
+
+Four more references — Photos, Voicemail, the Phone keypad — and read together
+they say one thing the app was missing. Apple's floating chrome has **two**
+grades, not one:
+
+- a **quiet** dark circle or capsule: the filter button, `Edit`, a bare ＋;
+- one **prominent** lighter capsule that the screen is actually FOR: `Select`,
+  `Greeting`. It is `.glassProminent` — the same material carrying a tint — and
+  in the Photos shot you can watch a green message bubble tint it as it scrolls
+  behind, which is the giveaway that it is glass and not paint.
+
+`ChromeSurface` now takes `prominent`, and `ChromePill` is the same control with
+a WORD in it — Apple names a chrome action wherever the word is shorter than the
+explanation an icon would need, and it becomes a capsule sized to its label
+rather than a glyph squeezed into a circle. The tint is NEUTRAL, not the brand
+colour: what colours Apple's prominent pill is whatever is scrolling behind it.
+
+Applied where the app already had a bare word floating in a header row: the
+composer (`Cancel` quiet, `Post` prominent), Add story, Add money and Cash out.
+**One prominent button per screen** — a screen with two has none.
+
 ### Built, not yet shipped — the cards inside a conversation
 
 Beam's own pitch is *"send money in the chat: pay, request or split a bill

@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromePill } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -62,11 +63,9 @@ export default function WalletCashOut() {
   return (
     <Screen edges={['top', 'bottom']}>
       <View style={[styles.head, { paddingHorizontal: spacing.lg }]}>
-        <Pressable onPress={() => router.back()} hitSlop={10} accessibilityRole="button">
-          <Text variant="callout" tone="t2">Cancel</Text>
-        </Pressable>
+        <ChromePill text="Cancel" onPress={() => router.back()} />
         <Text variant="headline">Cash out</Text>
-        <View style={{ width: 50 }} />
+        <View style={{ width: 84 }} />
       </View>
 
       <View style={{ paddingHorizontal: spacing.lg }}>
