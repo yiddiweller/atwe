@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
-import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
+import { ChromeButton, ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Avatar } from '@/components/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -25,10 +25,10 @@ export default function Wallet() {
   return (
     <Screen edges={[]}>
       <ChromeBar onLayout={chrome.onLayout}>
-        <View style={[styles.head, { borderBottomColor: c.border }]}>
-          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}>
-            <Ionicons name="chevron-back" size={26} color={c.text} />
-          </Pressable>
+        <View style={styles.head}>
+          <ChromeButton onPress={() => router.back()} label="Back">
+            <Ionicons name="chevron-back" size={22} color={c.text} />
+          </ChromeButton>
           <Text variant="title">Wallet</Text>
           <View style={styles.back} />
         </View>
@@ -154,7 +154,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 8,
     paddingBottom: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   back: { width: 40, alignItems: 'center' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },

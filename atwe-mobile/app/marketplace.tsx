@@ -12,7 +12,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
-import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
+import { ChromeButton, ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { ListingCard } from '@/components/ListingCard';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -51,22 +51,27 @@ export default function Marketplace() {
       {/* Header */}
       <ChromeBar onLayout={chrome.onLayout}>
         <View style={styles.head}>
-          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back} accessibilityLabel="Back">
-            <Ionicons name="chevron-back" size={26} color={c.text} />
-          </Pressable>
+          <ChromeButton onPress={() => router.back()} label="Back">
+            <Ionicons name="chevron-back" size={22} color={c.text} />
+          </ChromeButton>
           <Text variant="headline">Marketplace</Text>
-          <Pressable onPress={() => router.push('/cart')} hitSlop={10} style={styles.back}
-            accessibilityRole="button"
-            accessibilityLabel={count ? `Cart, ${count} item${count === 1 ? '' : 's'}` : 'Cart'}>
-            <Ionicons name="bag-outline" size={23} color={c.text} />
+          {/* The badge has to sit OUTSIDE the disc, or the disc's own clip cuts
+              its corner off — so the button is a wrapper with the disc inside. */}
+          <View>
+            <ChromeButton
+              onPress={() => router.push('/cart')}
+              label={count ? `Cart, ${count} item${count === 1 ? '' : 's'}` : 'Cart'}
+            >
+              <Ionicons name="bag-outline" size={21} color={c.text} />
+            </ChromeButton>
             {count > 0 && (
-              <View style={[styles.badge, { backgroundColor: c.accent }]}>
+              <View style={[styles.badge, { backgroundColor: c.accent }]} pointerEvents="none">
                 <Text variant="micro" style={{ color: c.accentTint }}>
                   {count > 99 ? '99+' : count}
                 </Text>
               </View>
             )}
-          </Pressable>
+          </View>
         </View>
 
         {/* Search */}

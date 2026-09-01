@@ -219,7 +219,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.gutter,
     paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   hero: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   orb: { width: 68, height: 68, borderRadius: 34, alignItems: 'center', justifyContent: 'center' },

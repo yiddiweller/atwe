@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
-import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
+import { ChromeButton, ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { PostCard } from '@/components/PostCard';
@@ -40,9 +40,9 @@ export default function Search() {
     <Screen edges={[]}>
       <ChromeBar onLayout={chrome.onLayout}>
         <View style={[styles.head, { paddingHorizontal: spacing.lg }]}>
-          <Pressable onPress={() => router.back()} hitSlop={10} accessibilityRole="button">
-            <Ionicons name="chevron-back" size={26} color={c.text} />
-          </Pressable>
+          <ChromeButton onPress={() => router.back()} label="Back">
+            <Ionicons name="chevron-back" size={22} color={c.text} />
+          </ChromeButton>
           <View style={[styles.field, { backgroundColor: c.s2, borderRadius: radius.pill }]}>
             <Ionicons name="search" size={17} color={c.t3} />
             <HapticInput

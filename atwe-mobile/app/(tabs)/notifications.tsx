@@ -41,7 +41,7 @@ export default function Notifications() {
       {/* No back arrow: this is one of the five worlds now, not a page opened
           from somewhere, and an arrow with nothing behind it is a dead control. */}
       <ChromeBar>
-        <View style={[styles.head, { borderBottomColor: c.border }]}>
+        <View style={styles.head}>
           <Text variant="title">Notifications</Text>
         </View>
       </ChromeBar>
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.gutter,
     paddingBottom: 10,
     height: ALERTS_HEAD_H,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    /* No hairline: chrome has no edge — the content dissolves under it. */
   },
   back: { width: 40, alignItems: 'center' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },

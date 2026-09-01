@@ -26,7 +26,7 @@ export default function Orders() {
   return (
     <Screen edges={[]}>
       <ChromeBar onLayout={chrome.onLayout}>
-        <View style={[styles.head, { paddingHorizontal: spacing.lg, borderBottomColor: c.border }]}>
+        <View style={[styles.head, { paddingHorizontal: spacing.lg }]}>
           <Pressable onPress={() => router.back()} hitSlop={10} accessibilityRole="button">
             {/* A chevron, like every other screen — the word "Back" was the only
                 one of its kind in the app. */}
@@ -104,7 +104,7 @@ function OrderRow({ order, scope }: { order: Order; scope: 'buyer' | 'seller' })
 }
 
 const styles = StyleSheet.create({
-  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, },
   tabs: { flexDirection: 'row', gap: 24, paddingVertical: 10 },
   tab: { alignItems: 'center' },
   underline: { height: 3, borderRadius: 2, width: '100%', marginTop: 5 },

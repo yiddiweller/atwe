@@ -21,7 +21,7 @@ import { FeedTab } from '@/components/FeedTab';
 import { NewChatSheet } from '@/components/NewChatSheet';
 import { BeamToolsMenu } from '@/components/BeamToolsMenu';
 import { BrandBar } from '@/components/BrandBar';
-import { ChromeBar, chromePad, BEAM_TABS_H } from '@/components/Chrome';
+import { ChromeButton, ChromeBar, chromePad, BEAM_TABS_H } from '@/components/Chrome';
 import { RowDivider } from '@/components/RowDivider';
 
 /**
@@ -87,28 +87,17 @@ export default function Beam() {
         onPlus={() => setNewChat(true)}
         onMore={() => setTools(true)}
       />
-      <View style={[styles.head, { borderBottomColor: c.border }]}>
+      <View style={styles.head}>
         <View style={[styles.titleRow, styles.hiddenRow]}>
           <Text variant="title" style={{ flex: 1 }}>Beam</Text>
-          <Pressable
-            onPress={() => { haptics.tap(); setNewChat(true); }}
-            hitSlop={10}
-            style={{ marginRight: 18 }}
-            accessibilityRole="button"
-            accessibilityLabel="New chat"
-          >
-            <Ionicons name="create-outline" size={24} color={c.text} />
-          </Pressable>
+          <ChromeButton onPress={() => { haptics.tap(); setNewChat(true); }} label="New chat">
+            <Ionicons name="create-outline" size={22} color={c.text} />
+          </ChromeButton>
           {/* Six rarely-used destinations. A menu is where those belong — a row
               of six icons is six things nobody can tell apart at a glance. */}
-          <Pressable
-            onPress={() => { haptics.tap(); setTools(true); }}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="More"
-          >
+          <ChromeButton onPress={() => { haptics.tap(); setTools(true); }} label="More">
             <Ionicons name="ellipsis-horizontal" size={22} color={c.text} />
-          </Pressable>
+          </ChromeButton>
         </View>
         <View style={styles.tabs}>
           {TABS.map((t) => (
@@ -416,7 +405,7 @@ function ContactRow({ person }: { person: Person }) {
 
 const styles = StyleSheet.create({
   tabs: { flexDirection: 'row', gap: 22, marginTop: 10 },
-  head: { paddingHorizontal: spacing.gutter, paddingBottom: 12, height: BEAM_TABS_H, borderBottomWidth: StyleSheet.hairlineWidth },
+  head: { paddingHorizontal: spacing.gutter, paddingBottom: 12, height: BEAM_TABS_H },
   titleRow: { flexDirection: 'row', alignItems: 'center' },
   /* The old title row's controls moved into BrandBar; the row itself is kept
      out of the layout rather than deleted so the tabs below keep their

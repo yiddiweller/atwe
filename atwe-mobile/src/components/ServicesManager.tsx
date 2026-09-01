@@ -3,6 +3,7 @@ import {
   View, ScrollView, TextInput, Pressable, ActivityIndicator, Alert, StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { ChromeButton } from './Chrome';
 import { Text } from './Text';
 import { Button } from './Button';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -71,10 +72,9 @@ export function ServicesManager({ onDone }: { onDone: () => void }) {
   return (
     <View style={styles.wrap}>
       <View style={styles.head}>
-        <Pressable onPress={onDone} hitSlop={10} style={styles.back}
-          accessibilityRole="button" accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
+        <ChromeButton onPress={onDone} label="Back">
+          <Ionicons name="chevron-back" size={22} color={c.text} />
+        </ChromeButton>
         <Text variant="headline">What you offer</Text>
         <View style={styles.back} />
       </View>

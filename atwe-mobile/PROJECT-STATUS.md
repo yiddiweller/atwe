@@ -1673,6 +1673,61 @@ going first, so the two are deliberately out of step until the founder says to
 mirror it. The web's composer radius is load-bearing there (its inner cards are
 derived from it), so that is a change to make on purpose, not by sweep.
 
+### 0.10.0 — the edge, not a bar
+
+*"When I scroll up and down there's no black bar on top, and on the bottom it
+goes in the background and it gets blurry and darker as you go down. I want this
+idea in the whole entire app."* Three reference shots, all of the same thing: a
+screen with no chrome boundary anywhere.
+
+**A translucent bar is still a bar.** It has an edge, and an edge is a line
+across the screen saying "the app stops here". What a modern phone does instead
+is DISSOLVE the content at the top and bottom: it goes behind, blurs, darkens,
+and is gone, with the controls floating on top as their own rounded pieces.
+
+`ChromeBar` therefore draws no fill and no hairline. It draws three things:
+- **A progressive blur** — `BLUR_LAYERS` blur views stacked at the edge, each
+  shorter than the last, so they overlap most at the very edge and taper to one
+  thin layer. Stacked blurs compound (each samples what is already drawn beneath
+  it), which is how you ramp a blur without a native masked view — the only
+  other way, and a new native dependency. iOS only; Android's blur is unreliable
+  and the browser has none, so both fall through to the fade.
+- **A scrim held at `SCRIM` (0.86) across the whole bar**, so a control is
+  legible over ANY content — a white photo included. This is not a gradient from
+  strong to nothing: the first attempt was, and on Home the feed tabs sat in the
+  weak end of it and were washed out by a photo passing behind. Two elements,
+  not one gradient, because a single one places its stops as FRACTIONS and the
+  bars here run from 35pt to 190pt — the same fractions leave a tall bar's
+  controls standing on almost nothing.
+- **A `FADE_TAIL` (30pt) that reaches PAST the chrome into the page**, where the
+  scrim lets go and the blur's own outer edge is hidden. Without it the fade
+  would have to be gone by the bottom of the bar, which is exactly where the
+  controls are.
+
+`useFloatingFoot` adds the tail to its padding and `chromePad` does not, and
+that asymmetry is deliberate: a conversation RESTS against the bottom, so
+without it the newest message would sit permanently half-dissolved. A feed does
+not rest against the top, so 30pt of dead space there would be a gap.
+
+**Every chrome control now floats on its own surface.** Once the bar is gone
+there is nothing behind a bare glyph but the page's own scrolling content, and a
+chevron over a photo is unreadable. `ChromeButton` / `ChromeSurface` are Liquid
+Glass on iOS 26 and a tinted disc below it — the same material `BrandBar`'s
+＋ · ⋯ · photo already used, so the top of every screen reads as one family. The
+back arrow and the one action on all 45 `PageHeader` pages, plus 30 bespoke
+headers found by codemod, and in a conversation the person or group became a
+PILL beside them rather than a label on a bar.
+
+**The composer floats too.** Messages travel under it and dissolve into the
+bottom of the screen. Its `ChromeBar` takes `inset={false}`, because
+`GlassComposer` already carries the safe-area inset itself and a second one
+lifts it off the bottom of the screen.
+
+Verified in both themes against a real 17-message thread and a photo-heavy feed:
+content ghosting through and dissolving at both edges, no boundary line
+anywhere, chrome legible over a white photo. What the preview still cannot show
+is the blur — on the web only the fade renders.
+
 ### Built, not yet shipped — the cards inside a conversation
 
 Beam's own pitch is *"send money in the chat: pay, request or split a bill

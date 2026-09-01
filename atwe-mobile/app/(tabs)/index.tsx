@@ -100,7 +100,7 @@ export default function Home() {
       />
 
       {/* Header: feed tabs */}
-      <View style={[styles.headerRow, { borderBottomColor: c.border }]}>
+      <View style={styles.headerRow}>
         {/* The row scrolls, so at rest the last label is CUT — and a word chopped
             mid-letter reads as broken rather than as "there is more". The web
             solves it with a soft fade at the edge; so does this. */}
@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
     // the app's ONE margin, so the tab row starts on the same line as the cards below
     paddingHorizontal: spacing.gutter,
     paddingBottom: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    /* No hairline: chrome has no edge — the content dissolves under it. */
   },
   tabsWrap: { flexShrink: 1, position: 'relative' },
   tabsFade: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 40 },

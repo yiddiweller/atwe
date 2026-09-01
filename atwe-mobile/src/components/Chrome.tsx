@@ -1,27 +1,40 @@
 import { useCallback, useState } from 'react';
-import { Platform, View, type LayoutChangeEvent, type ViewStyle } from 'react-native';
+import { Platform, Pressable, StyleSheet, View, type LayoutChangeEvent, type ViewStyle } from 'react-native';
 import { initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/theme/ThemeProvider';
+import { Glass } from './Glass';
 import { SHELF_H } from './Shelf';
 
 /**
- * Floating chrome — the bar the content slides UNDER.
+ * The edge, not a bar.
  *
- * Every bar in this app used to be a solid row sitting ABOVE the scroll view,
- * so the screen read as three stacked blocks: a black slab, the content, a
- * black slab. A modern iOS app has one continuous surface with translucent
- * chrome floating over it — content passes beneath the bar and shows through
- * it blurred, which is the whole reason the bar reads as glass rather than as
- * paint. Messages, Mail and Photos all work this way, and on iOS 26 the
- * material is Liquid Glass.
+ * A bar — even a translucent one — still has an edge, and an edge is a line
+ * across the screen that says "the app stops here". What a modern phone does
+ * instead is DISSOLVE the content at the top and bottom of the screen: it goes
+ * behind, blurs, darkens, and is gone, with no boundary anywhere. The controls
+ * then float on top of that as their own rounded pieces.
+ *
+ * So `ChromeBar` draws no fill and no hairline. It draws two things:
+ *
+ *   1. **A progressive blur.** `BLUR_LAYERS` blur views stacked at the edge,
+ *      each shorter than the last, so they overlap most at the very edge and
+ *      taper to one thin layer at the inner boundary. Stacked blurs compound —
+ *      each samples what is already drawn beneath it — which is how you get a
+ *      blur that RAMPS without a native masked view (the only other way, and a
+ *      new native dependency). iOS only: Android's blur is unreliable and the
+ *      browser has none, so both fall through to the gradient alone.
+ *   2. **A fade to the page colour**, opaque enough at the very edge that the
+ *      status bar clock stays legible over anything, and gone by the inner
+ *      boundary — which is exactly where the content underneath begins, so
+ *      nothing is ever dimmed at rest.
  *
  * Two halves, and BOTH are needed or the effect is wrong:
- *   1. `ChromeBar` — the bar itself, absolutely positioned, carrying its own
+ *   1. `ChromeBar` — the edge, absolutely positioned, carrying its own
  *      safe-area inset (the screen no longer insets for it).
  *   2. `chromePad` — the top padding the scrolling surface underneath needs,
- *      so its content STARTS below the bar and then travels under it.
+ *      so its content STARTS below the chrome and then travels under it.
  *
  * The pad is a plain constant rather than a hook so a list can reserve exactly
  * the right space on its first render — a measured height arrives a frame late
@@ -29,6 +42,33 @@ import { SHELF_H } from './Shelf';
  * portrait-locked (`app.json` `orientation: "portrait"`), so the top inset
  * never changes after launch.
  */
+
+/** How many blur layers make the ramp, and how much each one adds. More layers
+ *  is a smoother ramp and more work per frame; four is where it stops reading
+ *  as steps. */
+const BLUR_LAYERS = 4;
+const BLUR_STEP = 16;
+
+/** How far the dissolve reaches PAST the chrome, into the page. Without it the
+ *  fade would have to be gone by the bottom of the bar — which is exactly where
+ *  the controls sit, so they would be left standing on nothing. */
+const FADE_TAIL = 30;
+
+/** How much of the page colour sits behind a control. High enough that a white
+ *  photo scrolling under it cannot swallow a label. */
+const SCRIM = 0.86;
+
+/** `#rrggbb` at an opacity. The fade has to be the page colour exactly, or the
+ *  dissolve ends on a different black than the page it lands on. */
+function alpha(hex: string, a: number): string {
+  const h = hex.replace('#', '');
+  const n = h.length === 3 ? h.split('').map((x) => x + x).join('') : h;
+  const r = parseInt(n.slice(0, 2), 16);
+  const g = parseInt(n.slice(2, 4), 16);
+  const b = parseInt(n.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
+
 
 /**
  * Every bar's height BELOW its safe-area inset. Each is a fixed row of
@@ -41,7 +81,8 @@ export const FEED_TABS_H = 43;     // a 33pt tab + 10 bottom padding
 export const BEAM_TABS_H = 55;     // 12 bottom + a 10 gap + a 33pt tab
 export const ENGINE_SEARCH_H = 50; // a 40pt field + 10 bottom padding
 export const ALERTS_HEAD_H = 35;   // a 25pt title + 10 bottom padding
-export const CHAT_HEAD_H = 44;     // a 34pt avatar row + 10 bottom padding
+export const CHAT_HEAD_H = 48;     // a 38pt floating control + 10 bottom padding
+export const GROUP_HEAD_H = 56;    // its pill carries a second line (the member count)
 export const SEARCH_ROW_H = 52;    // a 42pt search field + a 10 gap under it
 
 const TOP = initialWindowMetrics?.insets.top ?? 0;
@@ -64,8 +105,10 @@ const BARS = {
   engine: BRAND_BAR_H + ENGINE_SEARCH_H,
   /** Alerts: its own title row. */
   alerts: ALERTS_HEAD_H,
-  /** An open conversation, DM or group. */
+  /** An open 1:1 conversation. */
   chat: CHAT_HEAD_H,
+  /** An open group — its pill is a line taller. */
+  group: GROUP_HEAD_H,
 };
 
 type Bar = keyof typeof BARS;
@@ -89,14 +132,42 @@ export const chromePad = Object.fromEntries(
  * all the same height. The bar measures itself and hands the surface underneath
  * the padding it needs; `estimate` is what the first frame uses, so a right
  * guess means nothing moves at all.
+ *
+ * What is measured is the bar's CONTENT, not the bar — the safe-area inset is
+ * added here. `ChromeBar` puts `onLayout` on a plain wrapper INSIDE its own
+ * padding for exactly that reason: measuring the bar would mean trusting a
+ * native blur wrapper to forward the prop, and one that quietly drops it leaves
+ * every bespoke page hidden behind its own header.
  */
 export function useFloatingChrome(estimate: number = PAGE_HEADER_H) {
-  const [h, setH] = useState(TOP + estimate);
+  const [h, setH] = useState(estimate);
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     const n = Math.round(e.nativeEvent.layout.height);
     setH((cur) => (Math.abs(cur - n) > 0.5 ? n : cur));
   }, []);
-  return { pad: { paddingTop: h } as ViewStyle, onLayout };
+  return { pad: { paddingTop: TOP + h } as ViewStyle, onLayout };
+}
+
+/**
+ * The same idea at the bottom, for a composer. It measures the WHOLE foot —
+ * safe-area inset included, because a composer carries its own — and hands back
+ * the bottom padding the conversation needs, so the last message clears the
+ * pill and everything above it travels underneath.
+ */
+export function useFloatingFoot(estimate: number) {
+  const [h, setH] = useState(estimate);
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
+    const n = Math.round(e.nativeEvent.layout.height);
+    setH((cur) => (Math.abs(cur - n) > 0.5 ? n : cur));
+  }, []);
+  /* Plus the tail: a conversation rests AGAINST the bottom, so without it the
+     newest message would sit permanently half-dissolved. The dissolve should
+     only be something you see while scrolling.
+     `height` is handed back so the thread can scroll to the end AGAIN once the
+     measurement lands — a list already sitting at the bottom does not re-scroll
+     by itself when its padding grows, and the newest message ends up tucked
+     under the composer by exactly the difference. */
+  return { pad: { paddingBottom: h + FADE_TAIL } as ViewStyle, onLayout, height: h };
 }
 
 interface Props {
@@ -106,6 +177,9 @@ interface Props {
   edge?: 'top' | 'bottom';
   /** Paired with `useFloatingChrome` when the bar's height isn't a constant. */
   onLayout?: (e: LayoutChangeEvent) => void;
+  /** Off when the CONTENT already carries the safe-area inset itself — the chat
+   *  composer does, and adding a second one lifts it off the bottom. */
+  inset?: boolean;
 }
 
 /**
@@ -114,46 +188,137 @@ interface Props {
  * a near-opaque fill everywhere else, since a blur nobody can render reads as a
  * smear rather than as glass.
  */
-export function ChromeBar({ children, style, edge = 'top', onLayout }: Props) {
+export function ChromeBar({ children, style, edge = 'top', onLayout, inset = true }: Props) {
   const insets = useSafeAreaInsets();
-  const { name } = useTheme();
-  const body = onLayout ? <View onLayout={onLayout}>{children}</View> : children;
-  const box: ViewStyle = {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    zIndex: 20,
-    ...(edge === 'top' ? { top: 0 } : { bottom: 0 }),
-    ...(edge === 'top' ? { paddingTop: insets.top } : { paddingBottom: insets.bottom }),
-  };
+  const { c, name } = useTheme();
+  const top = edge === 'top';
 
-  if (isLiquidGlassAvailable()) {
-    return (
-      <GlassView glassEffectStyle="regular" style={[box, style]}>
-        {body}
-      </GlassView>
-    );
-  }
-  if (Platform.OS === 'ios') {
-    return (
-      <BlurView
-        intensity={72}
-        tint={name === 'light' ? 'systemChromeMaterialLight' : 'systemChromeMaterialDark'}
-        style={[box, style]}
-      >
-        {body}
-      </BlurView>
-    );
-  }
+  /* Held high across the whole bar so a control is legible over ANY content —
+     a white photo included — and only then let go, over a short tail that
+     reaches past the bar into the page. Two elements rather than one gradient
+     because a single one has to place its stops as FRACTIONS, and the bars in
+     this app run from 35pt to 190pt: the same fractions would leave a tall bar's
+     controls sitting on almost nothing. */
+  const scrim = [alpha(c.bg, 0.97), alpha(c.bg, SCRIM), alpha(c.bg, SCRIM)] as const;
+  const scrimStops = [0, 0.35, 1] as const;
+  const tail = [alpha(c.bg, SCRIM), alpha(c.bg, 0)] as const;
+
   return (
     <View
       style={[
-        box,
-        { backgroundColor: name === 'light' ? 'rgba(255,255,255,0.88)' : 'rgba(0,0,0,0.84)' },
+        {
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          zIndex: 20,
+          ...(top ? { top: 0 } : { bottom: 0 }),
+          ...(inset ? (top ? { paddingTop: insets.top } : { paddingBottom: insets.bottom }) : null),
+        },
         style,
       ]}
     >
-      {body}
+      {/* The blur reaches past the bar too, so its own outer edge lands in the
+          tail where the fade has already hidden it. */}
+      {Platform.OS === 'ios' && (
+        <View
+          style={{ position: 'absolute', left: 0, right: 0, ...(top ? { top: 0, bottom: -FADE_TAIL } : { bottom: 0, top: -FADE_TAIL }) }}
+          pointerEvents="none"
+        >
+          {Array.from({ length: BLUR_LAYERS }, (_, i) => (
+            <BlurView
+              key={i}
+              intensity={BLUR_STEP}
+              tint={name === 'light' ? 'light' : 'dark'}
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                ...(top ? { top: 0 } : { bottom: 0 }),
+                height: `${100 - (i * 100) / BLUR_LAYERS}%`,
+              }}
+            />
+          ))}
+        </View>
+      )}
+      <LinearGradient
+        colors={top ? scrim : ([...scrim].reverse() as unknown as typeof scrim)}
+        locations={scrimStops}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      <LinearGradient
+        colors={top ? tail : ([...tail].reverse() as unknown as typeof tail)}
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          height: FADE_TAIL,
+          ...(top ? { top: '100%' } : { bottom: '100%' }),
+        }}
+        pointerEvents="none"
+      />
+      {onLayout ? <View onLayout={onLayout}>{children}</View> : children}
     </View>
+  );
+}
+
+/**
+ * A control that floats ON the chrome rather than sitting in a bar.
+ *
+ * Once the bar is gone there is nothing behind a bare glyph but the page's own
+ * scrolling content, and a chevron over a photo is unreadable. So every chrome
+ * control gets its own surface: Liquid Glass on iOS 26, a dark (or light)
+ * tinted disc below that. It is the same material `BrandBar`'s ＋ · ⋯ · photo
+ * already use, so the top of every screen reads as one family.
+ */
+export function ChromeButton({ children, onPress, label, size = 38, style }: {
+  children: React.ReactNode;
+  onPress: () => void;
+  label: string;
+  size?: number;
+  style?: ViewStyle;
+}) {
+  return (
+    <ChromeSurface radius={size / 2} onPress={onPress} label={label}
+      style={[{ width: size, height: size }, style]}>
+      {children}
+    </ChromeSurface>
+  );
+}
+
+/** The same surface, any shape — a title pill, a segmented control, a disc. */
+export function ChromeSurface({ children, onPress, label, radius, style }: {
+  children: React.ReactNode;
+  onPress?: () => void;
+  label?: string;
+  radius: number;
+  style?: ViewStyle | (ViewStyle | false | undefined)[];
+}) {
+  const { c, name } = useTheme();
+  const light = name === 'light';
+  const body = (
+    <Glass
+      radius={radius}
+      fallback={{
+        backgroundColor: light ? 'rgba(255,255,255,0.82)' : 'rgba(28,28,30,0.92)',
+        borderWidth: 1,
+        borderColor: light ? c.border : 'rgba(255,255,255,0.06)',
+      }}
+      style={[{ alignItems: 'center', justifyContent: 'center' }, style]}
+    >
+      {children}
+    </Glass>
+  );
+  if (!onPress) return body;
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => (pressed ? { opacity: 0.7 } : null)}
+    >
+      {body}
+    </Pressable>
   );
 }

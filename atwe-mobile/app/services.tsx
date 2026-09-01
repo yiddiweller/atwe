@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
-import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
+import { ChromeButton, ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
@@ -50,14 +50,13 @@ export default function Services() {
     <Screen edges={[]}>
       <ChromeBar onLayout={chrome.onLayout}>
         <View style={styles.head}>
-          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.icon} accessibilityLabel="Back">
-            <Ionicons name="chevron-back" size={26} color={c.text} />
-          </Pressable>
+          <ChromeButton onPress={() => router.back()} label="Back">
+            <Ionicons name="chevron-back" size={22} color={c.text} />
+          </ChromeButton>
           <Text variant="headline">Services</Text>
-          <Pressable onPress={() => router.push('/offer-service')} hitSlop={10} style={styles.icon}
-            accessibilityRole="button" accessibilityLabel="Offer a service">
-            <Ionicons name="add" size={26} color={c.text} />
-          </Pressable>
+          <ChromeButton onPress={() => router.push('/offer-service')} label="Offer a service">
+            <Ionicons name="add" size={22} color={c.text} />
+          </ChromeButton>
         </View>
 
         <View style={{ paddingHorizontal: spacing.gutter }}>

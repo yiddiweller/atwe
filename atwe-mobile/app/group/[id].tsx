@@ -10,7 +10,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
-import { ChromeBar, chromePad, CHAT_HEAD_H } from '@/components/Chrome';
+import { ChromeBar, ChromeButton, ChromeSurface, chromePad, useFloatingFoot, GROUP_HEAD_H } from '@/components/Chrome';
 import { Avatar } from '@/components/Avatar';
 import { GlassComposer } from '@/components/GlassComposer';
 import { MessageActions, type MessageAction } from '@/components/MessageActions';
@@ -85,6 +85,10 @@ export default function GroupThread() {
   };
 
   const listRef = useRef<FlatList<GroupMessage>>(null);
+  /* The composer floats over the conversation — see the 1:1 thread. */
+  const foot = useFloatingFoot(96);
+  // Re-pin to the bottom once the composer's real height lands.
+  useEffect(() => { scrollEnd(); }, [foot.height]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const messages = data?.messages ?? [];
   const group = data?.group;
@@ -232,14 +236,15 @@ export default function GroupThread() {
   return (
     <Screen edges={[]}>
       <ChromeBar>
-        <View style={[styles.header, { borderBottomColor: c.border }]}>
-          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}
-            accessibilityRole="button" accessibilityLabel="Back">
-            <Ionicons name="chevron-back" size={26} color={c.accent} />
-          </Pressable>
-          <View style={styles.peer}>
-            <Avatar name={group?.name} avatar={group?.avatar} size={34} />
-            <View style={{ marginLeft: 8, flex: 1 }}>
+        <View style={styles.header}>
+          <ChromeButton onPress={() => router.back()} label="Back">
+            <Ionicons name="chevron-back" size={22} color={c.text} />
+          </ChromeButton>
+          {/* The group is its own floating pill, the same shape as the back
+              button beside it — see the 1:1 thread. */}
+          <ChromeSurface radius={23} style={styles.peer}>
+            <Avatar name={group?.name} avatar={group?.avatar} size={30} />
+            <View style={{ marginLeft: 8, flexShrink: 1 }}>
               <Text variant="headline" numberOfLines={1}>{group?.name ?? '…'}</Text>
               {!!data?.members?.length && (
                 <Text variant="caption" tone="t3" numberOfLines={1}>
@@ -248,8 +253,8 @@ export default function GroupThread() {
                 </Text>
               )}
             </View>
-          </View>
-          <View style={styles.back} />
+          </ChromeSurface>
+          <View style={styles.headSpacer} />
         </View>
       </ChromeBar>
 
@@ -281,7 +286,7 @@ export default function GroupThread() {
                 startsRun={index === 0 || messages[index - 1]?.sender?.id !== item.sender?.id}
               />
             )}
-            contentContainerStyle={[{ paddingVertical: 12, paddingHorizontal: 12 }, chromePad.chat]}
+            contentContainerStyle={[{ paddingVertical: 12, paddingHorizontal: 12 }, chromePad.group, foot.pad]}
             showsVerticalScrollIndicator={false}
             onContentSizeChange={scrollEnd}
             ListEmptyComponent={
@@ -291,6 +296,8 @@ export default function GroupThread() {
             }
           />
 
+          {/* The foot floats — see the 1:1 thread. */}
+          <ChromeBar edge="bottom" inset={false} onLayout={foot.onLayout}>
           {replyTo != null && (
             <ReplyStrip
               name={byId(replyTo)?.mine ? 'yourself' : byId(replyTo)?.sender?.name ?? null}
@@ -315,6 +322,7 @@ export default function GroupThread() {
             onCancelRecord={voice.cancel}
             onSendRecord={sendVoice}
           />
+          </ChromeBar>
         </KeyboardAvoidingView>
       )}
 
@@ -413,12 +421,12 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: spacing.gutter, paddingBottom: 10, height: CHAT_HEAD_H,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+    paddingHorizontal: 12, paddingBottom: 10, height: GROUP_HEAD_H,
+    /* No hairline: chrome has no edge — the content dissolves under it. */
   },
-  back: { width: 34, alignItems: 'flex-start' },
-  peer: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  peer: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', minHeight: 46, paddingLeft: 4, paddingRight: 14, paddingVertical: 4 },
+  headSpacer: { width: 38 },
   row: { flexDirection: 'row' },
   avaSlot: { width: 26, marginRight: 8, justifyContent: 'flex-end' },
   sender: { marginLeft: 4, marginBottom: 3 },

@@ -1,8 +1,8 @@
-import { View, Pressable, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Text } from './Text';
-import { ChromeBar } from './Chrome';
+import { ChromeBar, ChromeButton } from './Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 
 /**
@@ -35,15 +35,14 @@ export function PageHeader({ title, action, below }: {
   return (
     <ChromeBar>
       <View style={styles.head}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.icon} accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
+        <ChromeButton onPress={() => router.back()} label="Back">
+          <Ionicons name="chevron-back" size={22} color={c.text} />
+        </ChromeButton>
         <Text variant="headline" numberOfLines={1} style={styles.title}>{title}</Text>
         {action ? (
-          <Pressable onPress={action.onPress} hitSlop={10} style={styles.icon}
-            accessibilityRole="button" accessibilityLabel={action.label}>
-            <Ionicons name={action.icon} size={26} color={c.text} />
-          </Pressable>
+          <ChromeButton onPress={action.onPress} label={action.label}>
+            <Ionicons name={action.icon} size={22} color={c.text} />
+          </ChromeButton>
         ) : <View style={styles.icon} />}
       </View>
       {below}
@@ -52,7 +51,8 @@ export function PageHeader({ title, action, below }: {
 }
 
 const styles = StyleSheet.create({
-  head: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingBottom: 8 },
-  icon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingBottom: 10 },
+  /* Keeps the title genuinely centred when there is no action. */
+  icon: { width: 38, height: 38 },
   title: { flex: 1, textAlign: 'center' },
 });

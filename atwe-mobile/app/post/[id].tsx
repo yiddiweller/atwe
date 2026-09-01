@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeButton } from '@/components/Chrome';
 import { PostCard } from '@/components/PostCard';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
@@ -61,9 +62,9 @@ export default function PostDetail() {
     <Screen edges={['top', 'bottom']}>
       {/* header */}
       <View style={[styles.head, { borderBottomColor: c.border }]}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}>
-          <Ionicons name="chevron-back" size={24} color={c.text} />
-        </Pressable>
+        <ChromeButton onPress={() => router.back()} label="Back">
+          <Ionicons name="chevron-back" size={22} color={c.text} />
+        </ChromeButton>
         <Text variant="headline">Post</Text>
         <View style={styles.back} />
       </View>

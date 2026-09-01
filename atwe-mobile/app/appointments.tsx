@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
-import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
+import { ChromeButton, ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { ServicesManager } from '@/components/ServicesManager';
@@ -76,16 +76,14 @@ export default function Appointments() {
     <Screen edges={[]}>
       <ChromeBar onLayout={chrome.onLayout}>
         <View style={styles.head}>
-          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}
-            accessibilityRole="button" accessibilityLabel="Back">
-            <Ionicons name="chevron-back" size={26} color={c.text} />
-          </Pressable>
+          <ChromeButton onPress={() => router.back()} label="Back">
+            <Ionicons name="chevron-back" size={22} color={c.text} />
+          </ChromeButton>
           <Text variant="headline">Appointments</Text>
           {biz ? (
-            <Pressable onPress={() => setManaging(true)} hitSlop={10} style={styles.back}
-              accessibilityRole="button" accessibilityLabel="What you offer">
+            <ChromeButton onPress={() => setManaging(true)} label="What you offer">
               <Ionicons name="options-outline" size={22} color={c.text} />
-            </Pressable>
+            </ChromeButton>
           ) : <View style={styles.back} />}
         </View>
       </ChromeBar>

@@ -6,7 +6,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
-import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
+import { ChromeButton, ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
@@ -69,9 +69,9 @@ export default function Applicants() {
     <Screen edges={[]}>
       <ChromeBar onLayout={chrome.onLayout}>
         <View style={styles.head}>
-          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.icon} accessibilityLabel="Back">
-            <Ionicons name="chevron-back" size={26} color={c.text} />
-          </Pressable>
+          <ChromeButton onPress={() => router.back()} label="Back">
+            <Ionicons name="chevron-back" size={22} color={c.text} />
+          </ChromeButton>
           <Text variant="headline" numberOfLines={1} style={{ flex: 1, textAlign: 'center' }}>
             {q.data?.title ?? 'Applicants'}
           </Text>

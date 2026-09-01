@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeButton } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { HapticInput } from '@/components/HapticInput';
 import { MeGroup } from '@/components/MeRow';
@@ -66,10 +67,9 @@ export default function Feedback() {
     <Screen edges={['top']}>
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
         <View style={styles.head}>
-          <Pressable onPress={() => { haptics.tap(); router.back(); }} hitSlop={8}
-            accessibilityRole="button" accessibilityLabel="Back" style={styles.back}>
-            <Ionicons name="chevron-back" size={26} color={c.text} />
-          </Pressable>
+          <ChromeButton onPress={() => { haptics.tap(); router.back(); }} label="Back">
+            <Ionicons name="chevron-back" size={22} color={c.text} />
+          </ChromeButton>
           <Text style={styles.title}>Send feedback</Text>
         </View>
 

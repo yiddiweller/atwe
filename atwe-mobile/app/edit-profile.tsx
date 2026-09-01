@@ -8,7 +8,7 @@ import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
-import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
+import { ChromeButton, ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -115,10 +115,9 @@ export default function EditProfile() {
     <Screen edges={[]}>
       <ChromeBar onLayout={chrome.onLayout}>
         <View style={styles.head}>
-          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}
-            accessibilityRole="button" accessibilityLabel="Cancel">
-            <Ionicons name="close" size={24} color={c.text} />
-          </Pressable>
+          <ChromeButton onPress={() => router.back()} label="Cancel">
+            <Ionicons name="close" size={22} color={c.text} />
+          </ChromeButton>
           <Text variant="headline">Edit profile</Text>
           <View style={styles.back} />
         </View>

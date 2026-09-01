@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeButton } from '@/components/Chrome';
 import { MeGroup, MeRow } from '@/components/MeRow';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -35,10 +36,9 @@ export default function MeSectionPage() {
         {/* `.me-sechead` — this page has no top bar either, so the back arrow
             lives in the header beside the title. */}
         <View style={styles.head}>
-          <Pressable onPress={() => { haptics.tap(); router.back(); }} hitSlop={8}
-            accessibilityRole="button" accessibilityLabel="Back" style={styles.back}>
-            <Ionicons name="chevron-back" size={26} color={c.text} />
-          </Pressable>
+          <ChromeButton onPress={() => { haptics.tap(); router.back(); }} label="Back">
+            <Ionicons name="chevron-back" size={22} color={c.text} />
+          </ChromeButton>
           <Text style={styles.title} numberOfLines={1}>{s.title}</Text>
         </View>
 

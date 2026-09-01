@@ -16,7 +16,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Alert } from 'react-native';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
-import { ChromeBar, chromePad, CHAT_HEAD_H } from '@/components/Chrome';
+import { ChromeBar, ChromeButton, ChromeSurface, chromePad, useFloatingFoot, CHAT_HEAD_H } from '@/components/Chrome';
 import { Avatar } from '@/components/Avatar';
 import { GlassComposer } from '@/components/GlassComposer';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -116,6 +116,11 @@ export default function ChatThread() {
     if (msg) Alert.alert('Photo', msg);   // a cancel says nothing — it was deliberate
   };
   const listRef = useRef<FlatList<DmMessage>>(null);
+  /* The composer floats over the conversation, so the list has to reserve
+     its height — measured, because a reply strip or a photo makes it grow. */
+  const foot = useFloatingFoot(96);
+  // Re-pin to the bottom once the composer's real height lands.
+  useEffect(() => { scrollEnd(); }, [foot.height]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const messages = data?.messages ?? [];
   const canMessage = data?.canMessage !== false;
@@ -240,28 +245,27 @@ export default function ChatThread() {
     <Screen edges={[]}>
       {/* Header */}
       <ChromeBar>
-        <View style={[styles.header, { borderBottomColor: c.border }]}>
-          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}>
-            <Ionicons name="chevron-back" size={26} color={c.accent} />
-          </Pressable>
-          <Pressable
-            style={styles.peer}
+        <View style={styles.header}>
+          <ChromeButton onPress={() => router.back()} label="Back">
+            <Ionicons name="chevron-back" size={22} color={c.text} />
+          </ChromeButton>
+          {/* Who you are talking to is its own floating pill, not a label on a
+              bar — the same shape the ＋ and the ⋯ are, so the row reads as
+              three pieces over the conversation rather than as a header. */}
+          <ChromeSurface
+            radius={19}
+            label={data?.peer.name ?? 'Profile'}
             onPress={() => data?.peer.username && router.push(`/user/${data.peer.username}`)}
+            style={styles.peer}
           >
-            <Avatar name={data?.peer.name} avatar={data?.peer.avatar} size={34} />
-            <Text variant="headline" numberOfLines={1} style={{ marginLeft: 8 }}>
+            <Avatar name={data?.peer.name} avatar={data?.peer.avatar} size={30} />
+            <Text variant="headline" numberOfLines={1} style={styles.peerName}>
               {data?.peer.name ?? '…'}
             </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => { haptics.tap(); setSettings(true); }}
-            hitSlop={10}
-            style={styles.back}
-            accessibilityRole="button"
-            accessibilityLabel="Chat settings"
-          >
-            <Ionicons name="ellipsis-horizontal" size={21} color={c.text} />
-          </Pressable>
+          </ChromeSurface>
+          <ChromeButton onPress={() => { haptics.tap(); setSettings(true); }} label="Chat settings">
+            <Ionicons name="ellipsis-horizontal" size={20} color={c.text} />
+          </ChromeButton>
         </View>
       </ChromeBar>
 
@@ -288,7 +292,7 @@ export default function ChatThread() {
                 onLongPress={() => setActingOn(item.id)}
               />
             )}
-            contentContainerStyle={[{ paddingVertical: 12, paddingHorizontal: 12 }, chromePad.chat]}
+            contentContainerStyle={[{ paddingVertical: 12, paddingHorizontal: 12 }, chromePad.chat, foot.pad]}
             showsVerticalScrollIndicator={false}
             onContentSizeChange={scrollEnd}
             ListEmptyComponent={
@@ -300,6 +304,10 @@ export default function ChatThread() {
             }
           />
 
+          {/* The foot floats: messages travel UNDER it and dissolve into the
+              bottom of the screen rather than stopping at a bar. It carries its
+              own safe-area inset, so the fade must not add a second one. */}
+          <ChromeBar edge="bottom" inset={false} onLayout={foot.onLayout}>
           {replyTo != null && (
             <ReplyStrip
               name={byId(replyTo)?.mine ? 'yourself' : data?.peer.name ?? null}
@@ -327,6 +335,7 @@ export default function ChatThread() {
             onCancelRecord={voice.cancel}
             onSendRecord={sendVoice}
           />
+          </ChromeBar>
         </KeyboardAvoidingView>
       )}
 
@@ -516,13 +525,16 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
+    justifyContent: 'space-between',
+    gap: 10,
+    paddingHorizontal: 12,
     paddingBottom: 10,
     height: CHAT_HEAD_H,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    /* No hairline: chrome has no edge — the content dissolves under it. */
   },
-  back: { width: 40, alignItems: 'flex-start' },
-  peer: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  peer: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', height: 38, paddingLeft: 4, paddingRight: 14 },
+  peerName: { marginLeft: 8, flexShrink: 1 },
+  headSpacer: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   bubbleRow: { flexDirection: 'row', marginVertical: 3 },
   /* `radius.bubble` is past half the height of a bubble up to four lines
