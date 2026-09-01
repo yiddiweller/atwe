@@ -102,9 +102,37 @@ for (const f of WORLDS) {
   }
 }
 
+/**
+ * The chrome draws ONE material layer, never a stack.
+ *
+ * It used to fake a progressive blur with four `BlurView`s at 100/75/50/25% of
+ * the bar's height. Each ends on a hard line, so the bar carried three visible
+ * seams — plus a fourth where a 30pt gradient tail ended below it. The founder
+ * called it "not professional" and that was exactly right.
+ *
+ * A stack is also the expensive way to be wrong: a blur per layer, recomposited
+ * every frame while the feed scrolls, on the one platform this app has already
+ * been burned by for repeated blurs.
+ *
+ * So: at most one `BlurView` and one `GlassView` in `Chrome.tsx` (the glass and
+ * blur branches of a single ternary), and no `.map`/`Array.from` producing
+ * them. Self-test: restore the four-layer loop and this fails.
+ */
+{
+  const src = fs.readFileSync('src/components/Chrome.tsx', 'utf8');
+  const blurs = (src.match(/<BlurView\b/g) || []).length;
+  const glasses = (src.match(/<GlassView\b/g) || []).length;
+  const looped = /Array\.from\([^)]*\)[\s\S]{0,120}<(BlurView|GlassView)\b/.test(src)
+    || /\.map\([^)]*\)[\s\S]{0,120}<(BlurView|GlassView)\b/.test(src);
+  if (blurs > 1) problems.push(`Chrome.tsx draws ${blurs} BlurViews — the bar is one material, not a stack`);
+  if (glasses > 1) problems.push(`Chrome.tsx draws ${glasses} GlassViews — the bar is one material, not a stack`);
+  if (looped) problems.push('Chrome.tsx builds its blur in a loop — that is the stepped stack coming back');
+}
+
 if (problems.length) {
   console.error(`chrome: ${problems.length} problem(s) across ${checked} screens\n`);
   for (const p of problems) console.error('  ' + p);
   process.exit(1);
 }
+
 console.log(`chrome: ok — ${checked} screens float their bar and reserve its height, and all ${WORLDS.length} worlds keep a scroller mounted for the bar to minimise against`);

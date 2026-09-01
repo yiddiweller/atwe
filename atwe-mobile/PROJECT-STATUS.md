@@ -2312,3 +2312,44 @@ not floating over the feed**, and the phone now matches that.
 `spacing.gutter` and the safe-area maths it needed went with it; nothing else
 referenced the component. tsc clean, eight source checkers green.
 
+### Round fourteen — the smeared edge was four blurs with hard seams
+
+The founder: *"0.10 worked and it looks very good, just when I scroll the blurry
+on top and bottom is really not professional."* They were describing a real
+artifact, not a preference.
+
+**The cause.** `ChromeBar` faked a progressive blur by stacking **four
+`BlurView`s** at 100/75/50/25% of the bar's height, each at intensity 16. A
+`BlurView` ends on a HARD line, so stacking them put four different blur
+strengths in four bands with **three visible seams** across the bar — plus a
+fourth boundary where the 30pt `FADE_TAIL` gradient ended below it. Over a
+white photo scrolling underneath, that reads as a dirty smear.
+
+**Why not just add more layers.** Smaller steps would hide the banding and cost
+a stacked blur per frame while the feed scrolls — the exact thing this app has
+already been burned by on iOS (see the notes on repeated per-item blurs). And it
+would still be an imitation.
+
+**What Apple actually does, and what it is now.** A nav bar has ONE material.
+Its scroll-edge effect is either `.hard` (a crisp edge) or `.soft` — and `.soft`
+is a genuinely smooth native mask that no arrangement of RN views can
+reproduce. Since the smooth one is out of reach, the honest choice is the other
+real one: **a single uniform material ending on a clean line.** On iOS 26 that
+material is `GlassView`, the same `UIGlassEffect` the tab bar and every button
+already use; below 26 it is one `BlurView` at intensity 55; on web/Android
+there is none and a flat tint carries it alone.
+
+The scrim became a **flat tint** rather than a gradient — a gradient across the
+bar was half of what made it read as a smear — and it steps down to
+`SCRIM_GLASS` 0.16 where real glass is doing the legibility work.
+`BLUR_LAYERS`, `BLUR_STEP` and `FADE_TAIL` are all gone, and `useFloatingFoot`
+no longer pads for a tail that does not exist.
+
+**`check-chrome.js` now fails on more than one `BlurView`/`GlassView` in
+`Chrome.tsx`, or on either being built in a loop.** Its own first version was
+worthless and passed with the four-layer stack restored — the block had been
+inserted AFTER the `if (problems.length) process.exit(1)` report, so everything
+it pushed was written to a list nobody read again. **A checker that has not been
+watched to fail is not a checker**; this one now fails by name and passes when
+fixed back.
+

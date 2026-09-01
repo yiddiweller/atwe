@@ -3,7 +3,7 @@ import { Platform, StyleSheet, View, type LayoutChangeEvent, type ViewStyle } fr
 import Animated, { useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated';
 import { initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { useTheme } from '@/theme/ThemeProvider';
 import { GlassSurface, GlassIcon } from './Glass';
 import { Text } from './Text';
@@ -48,13 +48,31 @@ import { SHELF_H } from './Shelf';
 /** How many blur layers make the ramp, and how much each one adds. More layers
  *  is a smoother ramp and more work per frame; four is where it stops reading
  *  as steps. */
-const BLUR_LAYERS = 4;
-const BLUR_STEP = 16;
-
-/** How far the dissolve reaches PAST the chrome, into the page. Without it the
- *  fade would have to be gone by the bottom of the bar — which is exactly where
- *  the controls sit, so they would be left standing on nothing. */
-const FADE_TAIL = 30;
+/**
+ * ONE material, with a crisp edge. There is no stack of blurs any more, and
+ * that removal is the whole point of this pass.
+ *
+ * WHAT WAS WRONG. The bar used to draw four `BlurView`s at 100/75/50/25% of its
+ * height to fake a progressive blur. Every one of them ends at a HARD
+ * horizontal line, so stacking them put four different blur strengths in four
+ * bands with three visible seams across the top and bottom of every screen —
+ * plus a fourth boundary where a 30pt gradient tail ended below the bar. The
+ * founder called it "not professional" and that is exactly right: it reads as a
+ * dirty smear, not as glass.
+ *
+ * WHY NOT JUST ADD MORE LAYERS. Smaller steps would hide the banding and cost a
+ * stacked blur per frame while the feed scrolls — the one thing this app has
+ * already been burned by on iOS (see the memory notes on repeated per-item
+ * blurs). And it would still be an imitation.
+ *
+ * WHAT APPLE ACTUALLY DOES. A nav bar has ONE material. Its scroll-edge effect
+ * is either `.hard` — a crisp edge — or `.soft`, which is a genuinely smooth
+ * native mask that no arrangement of views can reproduce. Since the smooth one
+ * is out of reach, the honest choice is the other real one: a single uniform
+ * material ending on a clean line. On iOS 26 that material is `GlassView`, the
+ * same `UIGlassEffect` the tab bar and every button in this app already use.
+ */
+const BLUR_INTENSITY = 55;
 
 /**
  * How much of the page colour sits behind a control.
@@ -66,6 +84,8 @@ const FADE_TAIL = 30;
  * tint is the only thing standing between a label and the photo behind it, so
  * it carries the whole job.
  */
+/** Real glass already frosts and adapts, so the tint is only a whisper. */
+const SCRIM_GLASS = 0.16;
 const SCRIM_BLURRED = 0.42;
 const SCRIM_FLAT = 0.86;
 
@@ -171,14 +191,13 @@ export function useFloatingFoot(estimate: number) {
     const n = Math.round(e.nativeEvent.layout.height);
     setH((cur) => (Math.abs(cur - n) > 0.5 ? n : cur));
   }, []);
-  /* Plus the tail: a conversation rests AGAINST the bottom, so without it the
-     newest message would sit permanently half-dissolved. The dissolve should
-     only be something you see while scrolling.
+  /* The bar's own height and nothing more — there is no tail to clear now that
+     the material ends on a clean line.
      `height` is handed back so the thread can scroll to the end AGAIN once the
      measurement lands — a list already sitting at the bottom does not re-scroll
      by itself when its padding grows, and the newest message ends up tucked
      under the composer by exactly the difference. */
-  return { pad: { paddingBottom: h + FADE_TAIL } as ViewStyle, onLayout, height: h };
+  return { pad: { paddingBottom: h } as ViewStyle, onLayout, height: h };
 }
 
 interface Props {
@@ -216,17 +235,13 @@ export function ChromeBar({ children, style, edge = 'top', onLayout, inset = tru
     return { transform: [{ translateY: top ? -d : d }] };
   });
 
-  /* Held high across the whole bar so a control is legible over ANY content —
-     a white photo included — and only then let go, over a short tail that
-     reaches past the bar into the page. Two elements rather than one gradient
-     because a single one has to place its stops as FRACTIONS, and the bars in
-     this app run from 35pt to 190pt: the same fractions would leave a tall bar's
-     controls sitting on almost nothing. */
+  /* A FLAT tint, not a gradient. A gradient across the bar is what made the old
+     one read as a smear; the material is uniform, so the tint over it has to be
+     uniform too. How much of it there is depends on what is underneath doing
+     the legibility work — see the three constants. */
+  const glass = Platform.OS === 'ios' && isLiquidGlassAvailable();
   const blurs = Platform.OS === 'ios';
-  const scrimTo = blurs ? SCRIM_BLURRED : SCRIM_FLAT;
-  const scrim = [alpha(c.bg, blurs ? 0.9 : 0.97), alpha(c.bg, scrimTo), alpha(c.bg, scrimTo)] as const;
-  const scrimStops = [0, 0.35, 1] as const;
-  const tail = [alpha(c.bg, scrimTo), alpha(c.bg, 0)] as const;
+  const tint = alpha(c.bg, glass ? SCRIM_GLASS : blurs ? SCRIM_BLURRED : SCRIM_FLAT);
 
   return (
     <Animated.View
@@ -247,46 +262,25 @@ export function ChromeBar({ children, style, edge = 'top', onLayout, inset = tru
         slide,
       ]}
     >
-      {/* The blur reaches past the bar too, so its own outer edge lands in the
-          tail where the fade has already hidden it. */}
-      {blurs && (
-        <View
-          style={{ position: 'absolute', left: 0, right: 0, ...(top ? { top: 0, bottom: -FADE_TAIL } : { bottom: 0, top: -FADE_TAIL }) }}
+      {/* ONE layer, filling the bar exactly. Real glass where the phone has it,
+          one uniform blur below that, nothing at all on web/Android where the
+          flat tint carries it alone. */}
+      {glass ? (
+        <GlassView
+          style={StyleSheet.absoluteFill}
+          glassEffectStyle="regular"
+          colorScheme={name === 'light' ? 'light' : 'dark'}
           pointerEvents="none"
-        >
-          {Array.from({ length: BLUR_LAYERS }, (_, i) => (
-            <BlurView
-              key={i}
-              intensity={BLUR_STEP}
-              tint={name === 'light' ? 'light' : 'dark'}
-              style={{
-                position: 'absolute',
-                left: 0,
-                right: 0,
-                ...(top ? { top: 0 } : { bottom: 0 }),
-                height: `${100 - (i * 100) / BLUR_LAYERS}%`,
-              }}
-            />
-          ))}
-        </View>
-      )}
-      <LinearGradient
-        colors={top ? scrim : ([...scrim].reverse() as unknown as typeof scrim)}
-        locations={scrimStops}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
-      <LinearGradient
-        colors={top ? tail : ([...tail].reverse() as unknown as typeof tail)}
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          height: FADE_TAIL,
-          ...(top ? { top: '100%' } : { bottom: '100%' }),
-        }}
-        pointerEvents="none"
-      />
+        />
+      ) : blurs ? (
+        <BlurView
+          intensity={BLUR_INTENSITY}
+          tint={name === 'light' ? 'light' : 'dark'}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+      ) : null}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: tint }]} pointerEvents="none" />
       {onLayout ? <View onLayout={onLayout}>{children}</View> : children}
     </Animated.View>
   );
