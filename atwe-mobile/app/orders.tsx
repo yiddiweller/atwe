@@ -62,7 +62,16 @@ function OrderRow({ order, scope }: { order: Order; scope: 'buyer' | 'seller' })
   const who = (scope === 'buyer' ? order.seller : order.buyer)?.name;
   const what = (order.items ?? []).map((i) => `${i.qty > 1 ? i.qty + '× ' : ''}${i.name}`).join(', ');
   return (
-    <View style={[styles.row, { backgroundColor: c.s1, borderRadius: radius.lg }]}>
+    <Pressable
+      onPress={() => router.push(`/order/${order.id}`)}
+      style={({ pressed }) => [
+        styles.row,
+        { backgroundColor: c.s1, borderRadius: radius.lg },
+        pressed && { opacity: 0.7 },
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={`Order ${order.id}`}
+    >
       <View style={styles.rowTop}>
         <Text variant="callout" weight="600" style={{ flex: 1 }} numberOfLines={1}>
           {what || `Order #${order.id}`}
@@ -77,7 +86,7 @@ function OrderRow({ order, scope }: { order: Order; scope: 'buyer' | 'seller' })
         {who ? `${scope === 'buyer' ? 'from' : 'to'} ${who} · ` : ''}{timeAgo(order.createdAt)}
         {order.tracking ? ` · ${order.carrier ?? 'tracked'} ${order.tracking}` : ''}
       </Text>
-    </View>
+    </Pressable>
   );
 }
 
