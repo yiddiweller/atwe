@@ -160,6 +160,60 @@ export interface ProfileUser {
   /** Seven days from Monday; each `{closed:true}` or `{open,close}`. */
   businessHours?: unknown[] | null;
 }
+/**
+ * One line of somebody's work history. NB the list carries NO location and NO
+ * description — those live on the edit form, not on the profile payload, and
+ * declaring them would have rendered two permanently empty lines. Checked
+ * against a real payload rather than assumed.
+ */
+export interface Experience {
+  id: number;
+  title: string;
+  company: string | null;
+  startYear: number | null;
+  endYear: number | null;
+  /** Set when the company is itself an Atwe business account. */
+  companyUserId?: number | null;
+  companyUserUsername?: string | null;
+}
+
+export interface Education {
+  id: number;
+  school: string;
+  degree: string | null;
+  field: string | null;
+  startYear: number | null;
+  endYear: number | null;
+}
+
+export interface Certification {
+  id: number;
+  name: string;
+  issuer: string | null;
+  issueYear: number | null;
+  expireYear: number | null;
+  credentialId: string | null;
+  url: string | null;
+}
+
+export interface Skill {
+  id: number;
+  name: string;
+  endorsements: number;
+  /** True when the VIEWER has endorsed it. */
+  endorsed: boolean;
+  /** Passed the skill assessment — the small tick. */
+  assessed: boolean;
+}
+
+export interface Recommendation {
+  id: number;
+  body: string;
+  relationship: string | null;
+  createdAt: string;
+  author: PostAuthor;
+}
+
 export interface Profile {
   user: ProfileUser;
   /** Business accounts: the star rating, so the profile can show it without a
@@ -171,6 +225,34 @@ export interface Profile {
   isMe: boolean;
   posts: Post[];
   replies: Post[];
+  /** Sits above the timeline with a "Pinned" label, de-duped from the list. */
+  pinnedPost?: Post | null;
+  /** They follow YOU — the chip beside the handle. */
+  followsYou?: boolean;
+  /** Up to three people you follow who follow them, plus the total. */
+  followedBy?: PostAuthor[];
+  followedByCount?: number;
+  /** 0-100 marketplace credibility, computed on read. The payload carries a
+   *  great deal more (certification progress, per-kind rating breakdowns); only
+   *  what is actually shown is named here. */
+  trustScore?: { score: number; tier: string; dealings?: number; ratingAvg?: number | null } | null;
+  experiences?: Experience[];
+  education?: Education[];
+  certifications?: Certification[];
+  skills?: Skill[];
+  recommendations?: Recommendation[];
+}
+
+/**
+ * Posts this account has publicly liked — the Likes tab, lazy-loaded on the
+ * first tap rather than with the profile, because most visits never open it.
+ */
+export function useLikes(username: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ['profile-likes', username],
+    queryFn: () => api.get<{ posts: Post[] }>(`/api/social/likes/${username}`),
+    enabled: !!username && enabled,
+  });
 }
 
 /** Load a user's profile by @handle (React Query cached; keyed by username). */
