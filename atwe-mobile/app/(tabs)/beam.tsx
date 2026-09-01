@@ -17,6 +17,7 @@ import { useRealtimeInvalidate } from '@/lib/useRealtime';
 import { useState } from 'react';
 import { FeedTab } from '@/components/FeedTab';
 import { NewChatSheet } from '@/components/NewChatSheet';
+import { BeamToolsMenu } from '@/components/BeamToolsMenu';
 import { RowDivider } from '@/components/RowDivider';
 
 /**
@@ -31,6 +32,7 @@ export default function Beam() {
   const { c } = useTheme();
   const [tab, setTab] = useState<Tab>('chats');
   const [newChat, setNewChat] = useState(false);
+  const [tools, setTools] = useState(false);
   const { data, isLoading, isError, refetch, isRefetching } = useConversations();
   const convos = data?.conversations ?? [];
   const groupsQ = useGroups();
@@ -51,10 +53,21 @@ export default function Beam() {
           <Pressable
             onPress={() => { haptics.tap(); setNewChat(true); }}
             hitSlop={10}
+            style={{ marginRight: 18 }}
             accessibilityRole="button"
             accessibilityLabel="New chat"
           >
             <Ionicons name="create-outline" size={24} color={c.text} />
+          </Pressable>
+          {/* Six rarely-used destinations. A menu is where those belong — a row
+              of six icons is six things nobody can tell apart at a glance. */}
+          <Pressable
+            onPress={() => { haptics.tap(); setTools(true); }}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="More"
+          >
+            <Ionicons name="ellipsis-horizontal" size={22} color={c.text} />
           </Pressable>
         </View>
         <View style={styles.tabs}>
@@ -123,6 +136,7 @@ export default function Beam() {
         />
       )}
       <NewChatSheet visible={newChat} onClose={() => setNewChat(false)} />
+      <BeamToolsMenu visible={tools} onClose={() => setTools(false)} />
     </Screen>
   );
 }

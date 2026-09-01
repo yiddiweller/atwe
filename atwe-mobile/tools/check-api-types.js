@@ -152,6 +152,14 @@ const CASES = [
   ['AtweEvent',      '/api/events?scope=upcoming',           (j) => j.events[0]],
   ['EventHost',      '/api/events?scope=upcoming',           (j) => j.events[0].host],
   ['Attendee',       null,                                   null],  // needs an event id
+  // Beam's rarer corners.
+  ['StarredItem',    '/api/atchat/starred',                  (j) => j.items[0]],
+  ['ChatPrefs',      '/api/atchat/prefs',                    (j) => j],
+  ['ChatLabel',      '/api/atchat/labels',                   (j) => j.labels[0]],
+  ['ScheduledMessage', '/api/atchat/scheduled',              (j) => j.scheduled[0]],
+  ['BroadcastList',  '/api/atchat/broadcasts',               (j) => j.lists[0]],
+  ['MessageHit',     '/api/atchat/messages/search?q=oak',    (j) => j.items[0]],
+  ['BroadcastDetail', null,                                  null],  // needs a list id
   // Selling: coupons, bundles, offers, product Q&A.
   ['Coupon',         '/api/coupons',                         (j) => j.coupons[0]],
   ['Bundle',         '/api/my-bundles',                      (j) => j.bundles[0]],

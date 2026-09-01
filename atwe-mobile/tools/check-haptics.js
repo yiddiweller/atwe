@@ -82,7 +82,15 @@ for (const abs of files) {
       // the tick may be in the tag, or in the named handler the tag points at
       let ok = /haptics\.(select|tap)\(\)/.test(tag);
       if (!ok) {
-        const named = tag.match(/onPress=\{(\w+)\}/)?.[1];
+        /* Follow the handler. Two shapes count, and BOTH are ordinary:
+             onPress={pick}              — a named handler
+             onPress={() => pick(x)}     — an arrow calling one, which is what
+                                           you write the moment the choice has
+                                           an argument, i.e. most of the time.
+           Only the second was invisible, so a correct control was reported as
+           missing its tick and the fix would have been to add a SECOND one. */
+        const named = tag.match(/onPress=\{(\w+)\}/)?.[1]
+          ?? tag.match(/onPress=\{\s*\(\)\s*=>\s*(\w+)\s*\(/)?.[1];
         if (named) {
           const body = src.match(new RegExp(`const ${named}\\s*=[\\s\\S]{0,400}`))?.[0];
           ok = !!body && /haptics\.(select|tap)\(\)/.test(body);

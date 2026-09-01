@@ -74,6 +74,13 @@ export interface DmMessage {
   reply_to: number | null;
   reactions: Reactions;
   meta: unknown | null;
+  /* View-once. The BYTES are deliberately absent from the thread payload — a
+     placeholder is all that is sent, and `POST /api/atchat/message/:id/view`
+     hands them over exactly once. So a view-once photo cannot be recovered by
+     re-reading the thread, which is the whole point of it. */
+  viewOnce?: boolean;
+  /** True once the recipient has opened it. Both sides see this. */
+  viewed?: boolean;
 }
 export interface DmThreadData {
   peer: { id: number; name: string; username: string | null; avatar: string | null };
@@ -109,6 +116,8 @@ export interface Attachment {
   durationSec?: number;
   /** The id of the message this one answers. */
   replyTo?: number;
+  /** Send it so the recipient can open it exactly once. */
+  viewOnce?: boolean;
 }
 
 /** Send a message to a peer (idempotent via clientId). */
@@ -327,4 +336,253 @@ export function useFindPeople(q: string) {
     queryFn: () => api.get<{ users: Person[] }>(`/api/social/mention-search?q=${encodeURIComponent(term)}`),
     enabled: term.length >= 1,
   });
+}
+
+/* ── Disappearing messages ────────────────────────────────────────────────── */
+
+/**
+ * Off / 24h / 7d / 90d — the server's own `DISAPPEAR_OPTS`, and it validates
+ * against exactly this list, so offering a fifth would just produce a refusal.
+ */
+export const DISAPPEAR_OPTS = [
+  { seconds: 0, label: 'Off' },
+  { seconds: 86400, label: '24 hours' },
+  { seconds: 604800, label: '7 days' },
+  { seconds: 7776000, label: '90 days' },
+] as const;
+
+export function disappearLabel(seconds: number): string {
+  return DISAPPEAR_OPTS.find((o) => o.seconds === seconds)?.label ?? 'Off';
+}
+
+function disappearPath(kind: 'dm' | 'group', id: number) {
+  return kind === 'group'
+    ? `/api/atchat/groups/${id}/disappearing`
+    : `/api/atchat/with/${id}/disappearing`;
+}
+
+export function useDisappearing(kind: 'dm' | 'group', id: number | undefined) {
+  return useQuery({
+    queryKey: ['disappearing', kind, id],
+    queryFn: () => api.get<{ seconds: number }>(disappearPath(kind, id!)),
+    enabled: id != null,
+  });
+}
+export function setDisappearing(kind: 'dm' | 'group', id: number, seconds: number) {
+  return api.put<{ ok: true; seconds: number }>(disappearPath(kind, id), { seconds });
+}
+
+/* ── Starred, and searching what was said ─────────────────────────────────── */
+
+/** One hit — from a DM or a group, which is what `scope` says. */
+export interface MessageHit {
+  id: number;
+  scope: 'dm' | 'group';
+  body: string | null;
+  created_at: string;
+  mine: boolean;
+  threadId: number | null;
+  /** On a DM hit. */
+  peer?: { id: number; name: string; username: string | null; avatar: string | null };
+  /** On a group hit. */
+  group?: { id: number; name: string; avatar?: string | null };
+}
+
+export interface StarredItem extends MessageHit {
+  /** Starred rows say whether there WAS an image, not what it was. */
+  image: boolean;
+  mediaKind: string | null;
+  meta: unknown | null;
+}
+
+export function useStarred() {
+  return useQuery({
+    queryKey: ['starred'],
+    queryFn: () => api.get<{ items: StarredItem[] }>('/api/atchat/starred'),
+  });
+}
+
+/**
+ * Search the TEXT of your own messages. Mirrors the read routes' visibility
+ * rules server-side, so a deleted, cleared or expired message can never come
+ * back through here.
+ */
+export function useMessageSearch(q: string, scope?: { peer?: number; group?: number }) {
+  const term = q.trim();
+  const qs = new URLSearchParams({ q: term });
+  if (scope?.peer) qs.set('peer', String(scope.peer));
+  if (scope?.group) qs.set('group', String(scope.group));
+  return useQuery({
+    queryKey: ['msg-search', term, scope?.peer ?? 0, scope?.group ?? 0],
+    queryFn: () => api.get<{ items: MessageHit[] }>(`/api/atchat/messages/search?${qs}`),
+    enabled: term.length >= 2,
+  });
+}
+
+export function starMessage(kind: 'dm' | 'group', id: number, messageId: number) {
+  return api.post<{ ok: true }>(
+    kind === 'group'
+      ? `/api/atchat/groups/${id}/messages/${messageId}/star`
+      : `/api/atchat/message/${messageId}/star`,
+    {},
+  );
+}
+
+/* ── Labels (folders) ─────────────────────────────────────────────────────── */
+
+export interface ChatLabel {
+  id: number;
+  name: string;
+  color: string;
+  position: number;
+  items: { kind: 'dm' | 'group'; targetId: number }[];
+  count: number;
+}
+
+export function useChatLabels() {
+  return useQuery({
+    queryKey: ['chat-labels'],
+    queryFn: () => api.get<{ labels: ChatLabel[] }>('/api/atchat/labels'),
+  });
+}
+export function createChatLabel(name: string, color?: string) {
+  return api.post<{ label: ChatLabel }>('/api/atchat/labels', { name, color });
+}
+export function deleteChatLabel(id: number) {
+  return api.del(`/api/atchat/labels/${id}`);
+}
+export function assignChatLabel(labelId: number, kind: 'dm' | 'group', targetId: number, on: boolean) {
+  return api.post<{ ok: true }>(`/api/atchat/labels/${labelId}/assign`, { kind, targetId, on });
+}
+
+/* ── Scheduled messages ───────────────────────────────────────────────────── */
+
+export interface ScheduledMessage {
+  id: number;
+  kind: 'dm' | 'group';
+  body: string;
+  sendAt: string;
+  peer: { id: number; name: string; username: string | null; avatar: string | null } | null;
+  group: { id: number; name: string } | null;
+}
+
+export function useScheduledMessages() {
+  return useQuery({
+    queryKey: ['scheduled-messages'],
+    queryFn: () => api.get<{ scheduled: ScheduledMessage[] }>('/api/atchat/scheduled'),
+  });
+}
+export function scheduleMessage(body: { kind: 'dm' | 'group'; to: number; body: string; sendAt: string }) {
+  return api.post<{ ok: true; id: number; sendAt: string }>('/api/atchat/schedule', body);
+}
+export function cancelScheduledMessage(id: number) {
+  return api.del(`/api/atchat/scheduled/${id}`);
+}
+
+/* ── Broadcast lists ──────────────────────────────────────────────────────── */
+
+/**
+ * One message, sent to many people as SEPARATE private DMs — each replies to you
+ * alone and nobody sees anybody else. Not a group.
+ *
+ * NB creating one takes `members`, NOT `memberIds`. The wrong name does not
+ * fail; the list is simply created empty.
+ */
+export interface BroadcastList {
+  id: number;
+  name: string;
+  count: number;
+}
+
+export interface BroadcastDetail {
+  id: number;
+  name: string;
+  members: Person[];
+}
+
+export function useBroadcasts() {
+  return useQuery({
+    queryKey: ['broadcasts'],
+    queryFn: () => api.get<{ lists: BroadcastList[] }>('/api/atchat/broadcasts'),
+  });
+}
+export function useBroadcast(id: number | undefined) {
+  return useQuery({
+    queryKey: ['broadcast', id],
+    queryFn: () => api.get<BroadcastDetail>(`/api/atchat/broadcasts/${id}`),
+    enabled: id != null,
+  });
+}
+export function createBroadcast(name: string, members: number[]) {
+  return api.post<{ id: number; name: string; count: number }>('/api/atchat/broadcasts', { name, members });
+}
+export function updateBroadcast(id: number, body: { name?: string; members?: number[] }) {
+  return api.patch(`/api/atchat/broadcasts/${id}`, body);
+}
+export function deleteBroadcast(id: number) {
+  return api.del(`/api/atchat/broadcasts/${id}`);
+}
+export function sendBroadcast(id: number, body: string) {
+  return api.post<{ ok: true; sent: number }>(`/api/atchat/broadcasts/${id}/send`, { body });
+}
+
+/* ── Locked chats ─────────────────────────────────────────────────────────── */
+
+/**
+ * Chats hidden behind a passcode. They are absent from the list until the
+ * passcode is entered, and the server decides that — the phone never filters a
+ * locked chat out of a list it was given, because then the list would have
+ * contained it.
+ */
+export interface ChatPrefs {
+  pins: string[];
+  archived: string[];
+  muted: string[];
+  muteUntil: Record<string, string>;
+  unreadOnly: boolean;
+  locked: string[];
+  hasLockPin: boolean;
+  themes: Record<string, string>;
+  noExport: string[];
+}
+
+export function useChatPrefs() {
+  return useQuery({
+    queryKey: ['chat-prefs'],
+    queryFn: () => api.get<ChatPrefs>('/api/atchat/prefs'),
+  });
+}
+export function setLockPin(pin: string, current?: string) {
+  return api.post<{ ok: true; hasPin: boolean }>('/api/atchat/lock/pin', { pin, current });
+}
+export function unlockChats(pin: string) {
+  return api.post<{ ok: true; locked: string[] }>('/api/atchat/lock/unlock', { pin });
+}
+export function setChatLocked(key: string, lock: boolean) {
+  return api.post<{ ok: true }>('/api/atchat/lock/thread', { key, lock });
+}
+
+/** The key a thread is known by in every one of these lists. */
+export function threadKey(kind: 'dm' | 'group', id: number): string {
+  return `${kind === 'group' ? 'g' : 'd'}${id}`;
+}
+
+
+/* ── View-once media ──────────────────────────────────────────────────────── */
+
+export interface ViewOnceMedia {
+  id: number;
+  image: string | null;
+  images: string[];
+  media: string | null;
+  media_kind: string | null;
+  media_name: string | null;
+}
+
+/**
+ * Open a view-once photo. It answers ONCE — a second call is a 410, which is
+ * not an error to hide but the thing working, so the caller says so plainly.
+ */
+export function openViewOnce(messageId: number) {
+  return api.post<ViewOnceMedia>(`/api/atchat/message/${messageId}/view`, {});
 }

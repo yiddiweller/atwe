@@ -20,7 +20,7 @@ import { Avatar } from '@/components/Avatar';
 import { GlassComposer } from '@/components/GlassComposer';
 import { useTheme } from '@/theme/ThemeProvider';
 import {
-  useThread, sendDm, react, deleteMessage,
+  useThread, sendDm, react, deleteMessage, openViewOnce,
   type Attachment, type DmMessage, type DmThreadData,
 } from '@/api/beam';
 import { useAuth } from '@/auth/AuthProvider';
@@ -31,6 +31,7 @@ import { mediaUri } from '@/lib/media';
 import { VoiceNote } from '@/components/VoiceNote';
 import { useVoiceRecorder, voiceFailMessage, VOICE_MAX_SEC } from '@/lib/voice';
 import { MessageActions, type MessageAction } from '@/components/MessageActions';
+import { ChatSettingsSheet } from '@/components/ChatSettingsSheet';
 import { ReactionChips } from '@/components/ReactionChips';
 import { ReplyQuote, ReplyStrip } from '@/components/ReplyQuote';
 import * as Clipboard from 'expo-clipboard';
@@ -75,10 +76,12 @@ export default function ChatThread() {
   const [sending, setSending] = useState(false);
   // A photo waiting to go with (or instead of) the next message.
   const [photo, setPhoto] = useState<string | null>(null);
+  const [viewOnce, setViewOnce] = useState(false);
   // The message a long-press opened the sheet on, and the one being answered.
   // Held as ids so a refetch can never leave either pointing at a stale copy.
   const [actingOn, setActingOn] = useState<number | null>(null);
   const [replyTo, setReplyTo] = useState<number | null>(null);
+  const [settings, setSettings] = useState(false);
 
   const voice = useVoiceRecorder();
 
@@ -156,7 +159,13 @@ export default function ChatThread() {
     setSending(true);
     scrollEnd();
     try {
-      await sendDm(peerId, body, clientId, { image, ...att, ...(answering ? { replyTo: answering } : {}) });
+      await sendDm(peerId, body, clientId, {
+        image, ...att,
+        /* Only ever with a photo — a view-once text message is not a thing, and
+           the flag would just sit on the row confusing the next reader. */
+        ...(image && viewOnce ? { viewOnce: true } : {}),
+        ...(answering ? { replyTo: answering } : {}),
+      });
     } catch {
       // leave the optimistic bubble; the reconcile below will drop it if it failed
     } finally {
@@ -240,7 +249,15 @@ export default function ChatThread() {
             {data?.peer.name ?? '…'}
           </Text>
         </Pressable>
-        <View style={styles.back} />
+        <Pressable
+          onPress={() => { haptics.tap(); setSettings(true); }}
+          hitSlop={10}
+          style={styles.back}
+          accessibilityRole="button"
+          accessibilityLabel="Chat settings"
+        >
+          <Ionicons name="ellipsis-horizontal" size={21} color={c.text} />
+        </Pressable>
       </View>
 
       {isLoading ? (
@@ -295,7 +312,9 @@ export default function ChatThread() {
             sending={sending}
             onPlus={attachPhoto}
             attachment={photo}
-            onRemoveAttachment={() => setPhoto(null)}
+            onRemoveAttachment={() => { setPhoto(null); setViewOnce(false); }}
+            viewOnce={viewOnce}
+            onToggleViewOnce={photo ? () => { haptics.select(); setViewOnce((v) => !v); } : undefined}
             editable={canMessage}
             recording={voice.recording}
             recordSeconds={voice.seconds}
@@ -304,6 +323,16 @@ export default function ChatThread() {
             onSendRecord={sendVoice}
           />
         </KeyboardAvoidingView>
+      )}
+
+      {!!data?.peer && (
+        <ChatSettingsSheet
+          visible={settings}
+          kind="dm"
+          id={data.peer.id}
+          name={data.peer.name}
+          onClose={() => setSettings(false)}
+        />
       )}
 
       <MessageActions
@@ -342,6 +371,32 @@ function Bubble({ msg, myId, answering, peerName, onLongPress }: {
   const mine = msg.mine;
   const img = msg.images?.[0] || msg.image || null;
 
+  /* View-once. The thread payload carries NO bytes for one of these, so there
+     is nothing to render until it is opened — and opening it is a one-way door,
+     which is why it is its own tap rather than something that happens on
+     scroll. Once opened, the bytes are held in state for as long as the screen
+     lives and never fetched again: a second request is a 410 by design. */
+  const [once, setOnce] = useState<string | null>(null);
+  const [opening, setOpening] = useState(false);
+  const viewOnce = !msg.deleted && !!msg.viewOnce;
+  const openedAlready = viewOnce && !!msg.viewed;
+
+  const openOnce = async () => {
+    if (opening || once) return;
+    setOpening(true);
+    try {
+      const r = await openViewOnce(msg.id);
+      haptics.tap();
+      setOnce(r.image ?? r.images?.[0] ?? r.media ?? null);
+    } catch (e) {
+      haptics.error();
+      /* A 410 is the feature working, not a failure — say so plainly rather
+         than showing it as an error. */
+      const gone = (e as { status?: number }).status === 410;
+      Alert.alert('View once', gone ? 'You have already opened this one.' : (e as Error).message);
+    } finally { setOpening(false); }
+  };
+
   const voice = !msg.deleted && msg.media_kind === 'audio' && msg.media ? msg.media : null;
   const label = msg.deleted
     ? 'Message deleted'
@@ -377,14 +432,38 @@ function Bubble({ msg, myId, answering, peerName, onLongPress }: {
             mine={mine}
           />
         )}
-        {img && (
+        {viewOnce ? (
+          once ? (
+            <Image source={{ uri: mediaUri(once) }} style={styles.bubbleImg}
+              contentFit="cover" transition={120} />
+          ) : (
+            <Pressable
+              onPress={mine || openedAlready ? undefined : openOnce}
+              disabled={mine || openedAlready}
+              style={[styles.onceBox, { borderColor: mine ? 'rgba(255,255,255,0.3)' : c.border }]}
+              accessibilityRole="button"
+              accessibilityLabel={mine ? 'View once photo you sent' : 'Tap to view once'}
+            >
+              <Ionicons
+                name={openedAlready ? 'eye-off-outline' : 'flame-outline'}
+                size={19}
+                color={mine ? '#fff' : c.t2}
+              />
+              <Text variant="caption" style={{ marginLeft: 8, color: mine ? '#fff' : c.t2 }}>
+                {opening ? 'Opening…'
+                  : mine ? (openedAlready ? 'Opened' : 'View once')
+                  : openedAlready ? 'Opened' : 'Tap to view once'}
+              </Text>
+            </Pressable>
+          )
+        ) : img ? (
           <Image
             source={{ uri: mediaUri(img) }}
             style={styles.bubbleImg}
             contentFit="cover"
             transition={120}
           />
-        )}
+        ) : null}
         {voice && (
           <VoiceNote uri={voice} durationSec={msg.duration_sec} mine={mine} />
         )}
@@ -423,6 +502,11 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   bubbleRow: { flexDirection: 'row', marginVertical: 3 },
   bubble: { borderRadius: 20, paddingVertical: 8, paddingHorizontal: 13 },
+  onceBox: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 14, paddingVertical: 12,
+    borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderStyle: 'dashed',
+  },
   bubbleImg: { width: 200, height: 200, borderRadius: 12, marginBottom: 4 },
   composer: {
     flexDirection: 'row',

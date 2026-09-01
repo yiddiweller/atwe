@@ -197,6 +197,13 @@ function RootNavigator() {
           <Stack.Screen name="team" />
           <Stack.Screen name="auto-messages" />
           <Stack.Screen name="cart-recovery" />
+          <Stack.Screen name="starred" />
+          <Stack.Screen name="message-search" />
+          <Stack.Screen name="broadcasts" />
+          <Stack.Screen name="broadcast/[id]" />
+          <Stack.Screen name="scheduled-messages" />
+          <Stack.Screen name="chat-labels" />
+          <Stack.Screen name="locked-chats" />
           <Stack.Screen name="reviews/[id]" />
           <Stack.Screen name="shop/[id]" />
           <Stack.Screen name="edit-profile" options={{ presentation: 'modal' }} />

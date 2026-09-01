@@ -46,6 +46,8 @@ export function GlassComposer({
   editable = true,
   attachment,
   onRemoveAttachment,
+  viewOnce,
+  onToggleViewOnce,
   recording,
   recordSeconds = 0,
   onStartRecord,
@@ -63,6 +65,9 @@ export function GlassComposer({
   /** A photo waiting to be sent, as a data URL. Shown above the input. */
   attachment?: string | null;
   onRemoveAttachment?: () => void;
+  /** Only meaningful with a photo attached; hidden otherwise. */
+  viewOnce?: boolean;
+  onToggleViewOnce?: () => void;
   /** Voice notes. Passing `onStartRecord` is what turns the send button into a
    *  mic when there is nothing typed — a composer without it is unchanged. */
   recording?: boolean;
@@ -124,6 +129,21 @@ export function GlassComposer({
               style={[styles.attachX, { backgroundColor: c.bg }]}
               accessibilityRole="button" accessibilityLabel="Remove photo">
               <Ionicons name="close" size={14} color={c.text} />
+            </Pressable>
+          )}
+          {/* View-once. A "1" on the photo, the way every app that has this
+              marks it — and it sits ON the photo because it is a property of
+              THAT photo, not of the message. */}
+          {!!onToggleViewOnce && (
+            <Pressable
+              onPress={onToggleViewOnce}
+              hitSlop={8}
+              style={[styles.attachOne, { backgroundColor: viewOnce ? c.accent : c.bg }]}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: !!viewOnce }}
+              accessibilityLabel="Send it as view once"
+            >
+              <Text style={{ fontSize: 11, fontWeight: '800', color: viewOnce ? '#fff' : c.t2 }}>1</Text>
             </Pressable>
           )}
         </View>
@@ -237,6 +257,11 @@ const styles = StyleSheet.create({
   fallback: {},
   attachWrap: { position: 'relative', marginRight: 8 },
   attachImg: { width: 40, height: 40, borderRadius: 10 },
+  attachOne: {
+    position: 'absolute', left: 4, bottom: 4,
+    width: 20, height: 20, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
+  },
   attachX: {
     position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10,
     alignItems: 'center', justifyContent: 'center',
