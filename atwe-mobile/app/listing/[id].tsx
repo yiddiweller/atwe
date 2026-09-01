@@ -20,6 +20,7 @@ import { ListingCard } from '@/components/ListingCard';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useListing, listingPrice, saveListing, KIND_LABEL } from '@/api/marketplace';
+import { mediaUri } from '@/lib/media';
 
 /**
  * Listing detail (`GET /api/listings/:id`) — gallery, title, price, seller,
@@ -92,7 +93,7 @@ export default function ListingDetail() {
               {listing.images.map((src, i) => (
                 <Image
                   key={i}
-                  source={{ uri: src }}
+                  source={{ uri: mediaUri(src) }}
                   style={{ width, aspectRatio: 1 }}
                   contentFit="cover"
                   transition={120}

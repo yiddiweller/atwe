@@ -8,6 +8,7 @@ import { VerifiedBadge } from './VerifiedBadge';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { listingPrice, type Listing } from '@/api/marketplace';
+import { mediaUri } from '@/lib/media';
 
 /**
  * Marketplace listing card — post-style (seller header, photo, title, price),
@@ -47,7 +48,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
       {/* Cover */}
       {cover && (
         <Image
-          source={{ uri: cover }}
+          source={{ uri: mediaUri(cover) }}
           style={[styles.cover, { backgroundColor: c.s2 }]}
           contentFit="cover"
           transition={120}

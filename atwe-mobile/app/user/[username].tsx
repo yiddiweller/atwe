@@ -13,6 +13,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useProfile, followUser, type Profile } from '@/api/social';
 import { compact, monthYear } from '@/lib/format';
+import { mediaUri } from '@/lib/media';
 
 /**
  * A user's X-style profile — banner, overlapping avatar, identity, follow,
@@ -100,7 +101,7 @@ function ProfileHeader({ data }: { data: Profile }) {
       {/* Banner */}
       <View style={[styles.banner, { backgroundColor: c.s2 }]}>
         {user.banner ? (
-          <Image source={{ uri: user.banner }} style={StyleSheet.absoluteFill} contentFit="cover" />
+          <Image source={{ uri: mediaUri(user.banner) }} style={StyleSheet.absoluteFill} contentFit="cover" />
         ) : null}
       </View>
 

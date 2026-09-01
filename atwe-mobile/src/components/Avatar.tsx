@@ -2,6 +2,7 @@ import { View } from 'react-native';
 import { Image } from 'expo-image';
 import { Text } from './Text';
 import { useTheme } from '@/theme/ThemeProvider';
+import { mediaUri } from '@/lib/media';
 
 /**
  * Account avatar. Falls back to the first initial on a flat tint (Atwe's single
@@ -36,7 +37,7 @@ export function Avatar({
     >
       {avatar ? (
         <Image
-          source={{ uri: avatar }}
+          source={{ uri: mediaUri(avatar) }}
           style={{ width: size, height: size }}
           contentFit="cover"
           transition={120}

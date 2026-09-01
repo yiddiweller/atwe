@@ -54,7 +54,12 @@ export interface DmMessage {
   body: string | null;
   image: string | null;
   images: string[];
+  /** A voice note / video / file, as a signed media path (see mediaUri). */
+  media: string | null;
   media_kind: string | null;
+  media_name: string | null;
+  /** Length of a voice note, as the sender's recorder measured it. */
+  duration_sec: number | null;
   created_at: string;
   mine: boolean;
   read_at: string | null;
@@ -83,11 +88,25 @@ export function useThread(peerId: number | undefined) {
   });
 }
 
-/** Send a text message to a peer (idempotent via clientId). */
+/** Anything that can ride along with (or instead of) the text of a message.
+ *  An options object rather than more positional arguments: `send(id, '', cid,
+ *  undefined, undefined, 12)` is exactly how a photo ends up sent as a voice
+ *  note. */
+export interface Attachment {
+  /** A photo, as a data URL. */
+  image?: string;
+  /** A voice note / video / file, as a data URL. */
+  media?: string;
+  mediaKind?: 'audio' | 'video' | 'image' | 'file';
+  /** Seconds — only meaningful for audio and video. */
+  durationSec?: number;
+}
+
+/** Send a message to a peer (idempotent via clientId). */
 export async function sendDm(
-  peerId: number, body: string, clientId: string, image?: string,
+  peerId: number, body: string, clientId: string, att: Attachment = {},
 ): Promise<void> {
-  await api.post(`/api/atchat/with/${peerId}`, { body, clientId, image });
+  await api.post(`/api/atchat/with/${peerId}`, { body, clientId, ...att });
 }
 
 /* ── Groups ───────────────────────────────────────────────────────────────────
@@ -147,7 +166,10 @@ export interface GroupMessage {
   id: number;
   body: string | null;
   image: string | null;
+  media: string | null;
   media_kind: string | null;
+  media_name: string | null;
+  duration_sec: number | null;
   created_at: string;
   mine: boolean;
   sender_id: number;
@@ -192,7 +214,7 @@ export async function sendGroupMessage(
   groupId: number,
   body: string,
   clientId: string,
-  image?: string,
+  att: Attachment = {},
 ): Promise<void> {
-  await api.post(`/api/atchat/groups/${groupId}/messages`, { body, clientId, image });
+  await api.post(`/api/atchat/groups/${groupId}/messages`, { body, clientId, ...att });
 }

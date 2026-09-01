@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, FlatList, Pressable, KeyboardAvoidingView, Platform,
   ActivityIndicator, StyleSheet,
@@ -15,10 +15,14 @@ import { GlassComposer } from '@/components/GlassComposer';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import {
-  useGroupThread, sendGroupMessage, type GroupMessage, type GroupThreadData,
+  useGroupThread, sendGroupMessage,
+  type Attachment, type GroupMessage, type GroupThreadData,
 } from '@/api/beam';
 import { useRealtime } from '@/lib/useRealtime';
 import { pickPhoto, pickPhotoMessage } from '@/lib/pickPhoto';
+import { mediaUri } from '@/lib/media';
+import { VoiceNote } from '@/components/VoiceNote';
+import { useVoiceRecorder, voiceFailMessage, VOICE_MAX_SEC } from '@/lib/voice';
 
 /**
  * A live group thread — GET /api/atchat/groups/:id, sending via
@@ -75,15 +79,43 @@ export default function GroupThread() {
 
   const scrollEnd = () => setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
 
-  const send = async () => {
+  const voice = useVoiceRecorder();
+  const startVoice = async () => {
+    const ok = await voice.start();
+    if (!ok) Alert.alert('Voice note', voiceFailMessage('denied')!);
+  };
+  const sendVoice = async () => {
+    const r = await voice.stop();
+    if ('fail' in r) {
+      const m = voiceFailMessage(r.fail);
+      if (m) Alert.alert('Voice note', m);
+      return;
+    }
+    send({ media: r.dataUrl, mediaKind: 'audio', durationSec: r.durationSec }, r.fileUri);
+  };
+  // At the ceiling the recorder has already stopped taking audio, so the note is
+  // sent rather than discarded.
+  useEffect(() => {
+    if (voice.recording && voice.seconds >= VOICE_MAX_SEC) sendVoice();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voice.recording, voice.seconds]);
+
+  /** `localMedia`: the recording on disk, for the optimistic bubble to play
+   *  while the data URL being sent is still in flight. */
+  const send = async (att: Attachment = {}, localMedia?: string) => {
     const body = text.trim();
-    if ((!body && !photo) || sending || !canPost) return;
+    const image = photo ?? undefined;
+    if ((!body && !image && !att.media) || sending || !canPost) return;
     const clientId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const optimistic: GroupMessage = {
       id: -Date.now(),
       body,
       image: photo,
-      media_kind: null,
+      // The local recording, so the note is playable before the round trip.
+      media: localMedia ?? null,
+      media_kind: att.mediaKind ?? null,
+      media_name: null,
+      duration_sec: att.durationSec ?? null,
       created_at: new Date().toISOString(),
       mine: true,
       sender_id: -1,
@@ -98,7 +130,7 @@ export default function GroupThread() {
     setSending(true);
     scrollEnd();
     try {
-      await sendGroupMessage(gid, body, clientId, photo ?? undefined);
+      await sendGroupMessage(gid, body, clientId, { image, ...att });
     } catch {
       // leave the optimistic bubble; the refetch below reconciles it away if it failed
     } finally {
@@ -169,13 +201,18 @@ export default function GroupThread() {
           <GlassComposer
             value={text}
             onChangeText={setText}
-            onSend={send}
+            onSend={() => send()}
             placeholder={canPost ? 'Message' : 'Only admins can post here'}
             sending={sending}
             onPlus={attachPhoto}
             attachment={photo}
             onRemoveAttachment={() => setPhoto(null)}
             editable={canPost}
+            recording={voice.recording}
+            recordSeconds={voice.seconds}
+            onStartRecord={startVoice}
+            onCancelRecord={voice.cancel}
+            onSendRecord={sendVoice}
           />
         </KeyboardAvoidingView>
       )}
@@ -186,8 +223,10 @@ export default function GroupThread() {
 function GroupBubble({ msg, startsRun }: { msg: GroupMessage; startsRun: boolean }) {
   const { c } = useTheme();
   const mine = msg.mine;
+  const voice = !msg.deleted_all && msg.media_kind === 'audio' && msg.media ? msg.media : null;
   const label = msg.deleted_all
     ? 'Message deleted'
+    : voice ? null
     : msg.media_kind === 'audio' ? '🎤 Voice message'
     : msg.media_kind === 'video' ? '🎬 Video'
     : null;
@@ -212,7 +251,10 @@ function GroupBubble({ msg, startsRun }: { msg: GroupMessage; startsRun: boolean
           mine ? { backgroundColor: c.accent, borderBottomRightRadius: 4 }
                : { backgroundColor: c.s2, borderBottomLeftRadius: 4 }]}>
           {!!msg.image && (
-            <Image source={{ uri: msg.image }} style={styles.img} contentFit="cover" transition={120} />
+            <Image source={{ uri: mediaUri(msg.image) }} style={styles.img} contentFit="cover" transition={120} />
+          )}
+          {voice && (
+            <VoiceNote uri={voice} durationSec={msg.duration_sec} mine={mine} />
           )}
           {label ? (
             <Text variant="body" style={{ color: mine ? '#fff' : c.t2,

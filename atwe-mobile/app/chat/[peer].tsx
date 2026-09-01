@@ -20,10 +20,13 @@ import { Screen } from '@/components/Screen';
 import { Avatar } from '@/components/Avatar';
 import { GlassComposer } from '@/components/GlassComposer';
 import { useTheme } from '@/theme/ThemeProvider';
-import { useThread, sendDm, type DmMessage, type DmThreadData } from '@/api/beam';
+import { useThread, sendDm, type Attachment, type DmMessage, type DmThreadData } from '@/api/beam';
 import { useRealtime } from '@/lib/useRealtime';
 import { pickPhoto, pickPhotoMessage } from '@/lib/pickPhoto';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
+import { mediaUri } from '@/lib/media';
+import { VoiceNote } from '@/components/VoiceNote';
+import { useVoiceRecorder, voiceFailMessage, VOICE_MAX_SEC } from '@/lib/voice';
 
 /**
  * A live 1:1 DM thread — reads GET /api/atchat/with/:id (polled) and sends via
@@ -63,6 +66,29 @@ export default function ChatThread() {
   // A photo waiting to go with (or instead of) the next message.
   const [photo, setPhoto] = useState<string | null>(null);
 
+  const voice = useVoiceRecorder();
+
+  const startVoice = async () => {
+    const ok = await voice.start();
+    if (!ok) Alert.alert('Voice note', voiceFailMessage('denied')!);
+  };
+  const sendVoice = async () => {
+    const r = await voice.stop();
+    if ('fail' in r) {
+      const m = voiceFailMessage(r.fail);
+      if (m) Alert.alert('Voice note', m);
+      return;
+    }
+    send({ media: r.dataUrl, mediaKind: 'audio', durationSec: r.durationSec }, r.fileUri);
+  };
+  // A note that reaches the ceiling is SENT, not thrown away — the recorder has
+  // already stopped taking audio by then, so holding it hostage would only lose
+  // what was said.
+  useEffect(() => {
+    if (voice.recording && voice.seconds >= VOICE_MAX_SEC) sendVoice();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voice.recording, voice.seconds]);
+
   const attachPhoto = async () => {
     const r = await pickPhoto();
     if (r.ok) { setPhoto(r.dataUrl); return; }
@@ -76,16 +102,24 @@ export default function ChatThread() {
 
   const scrollEnd = () => setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
 
-  const send = async () => {
+  /** `localMedia` is what the optimistic bubble plays while the real message is
+   *  in flight — a file on disk, never the multi-megabyte data URL being sent. */
+  const send = async (att: Attachment = {}, localMedia?: string) => {
     const body = text.trim();
-    if ((!body && !photo) || sending) return;
+    const image = photo ?? undefined;
+    if ((!body && !image && !att.media) || sending) return;
     const clientId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const optimistic: DmMessage = {
       id: -Date.now(),
       body,
       image: photo,
       images: [],
-      media_kind: null,
+      // The optimistic bubble shows the LOCAL recording, so a voice note is
+      // playable the instant it is sent rather than after a round trip.
+      media: localMedia ?? null,
+      media_kind: att.mediaKind ?? null,
+      media_name: null,
+      duration_sec: att.durationSec ?? null,
       created_at: new Date().toISOString(),
       mine: true,
       read_at: null,
@@ -102,7 +136,7 @@ export default function ChatThread() {
     setSending(true);
     scrollEnd();
     try {
-      await sendDm(peerId, body, clientId, photo ?? undefined);
+      await sendDm(peerId, body, clientId, { image, ...att });
     } catch {
       // leave the optimistic bubble; the reconcile below will drop it if it failed
     } finally {
@@ -163,13 +197,18 @@ export default function ChatThread() {
           <GlassComposer
             value={text}
             onChangeText={setText}
-            onSend={send}
+            onSend={() => send()}
             placeholder={canMessage ? 'Message' : "You can't message this account"}
             sending={sending}
             onPlus={attachPhoto}
             attachment={photo}
             onRemoveAttachment={() => setPhoto(null)}
             editable={canMessage}
+            recording={voice.recording}
+            recordSeconds={voice.seconds}
+            onStartRecord={startVoice}
+            onCancelRecord={voice.cancel}
+            onSendRecord={sendVoice}
           />
         </KeyboardAvoidingView>
       )}
@@ -182,15 +221,18 @@ function Bubble({ msg }: { msg: DmMessage }) {
   const mine = msg.mine;
   const img = msg.images?.[0] || msg.image || null;
 
+  const voice = !msg.deleted && msg.media_kind === 'audio' && msg.media ? msg.media : null;
   const label = msg.deleted
     ? 'Message deleted'
-    : msg.media_kind === 'audio'
-      ? '🎤 Voice message'
-      : msg.media_kind === 'video'
-        ? '🎬 Video'
-        : msg.meta
-          ? '📎 Attachment'
-          : null;
+    : voice
+      ? null
+      : msg.media_kind === 'audio'
+        ? '🎤 Voice message'
+        : msg.media_kind === 'video'
+          ? '🎬 Video'
+          : msg.meta
+            ? '📎 Attachment'
+            : null;
 
   return (
     <View style={[styles.bubbleRow, { justifyContent: mine ? 'flex-end' : 'flex-start' }]}>
@@ -204,11 +246,14 @@ function Bubble({ msg }: { msg: DmMessage }) {
       >
         {img && (
           <Image
-            source={{ uri: img }}
+            source={{ uri: mediaUri(img) }}
             style={styles.bubbleImg}
             contentFit="cover"
             transition={120}
           />
+        )}
+        {voice && (
+          <VoiceNote uri={voice} durationSec={msg.duration_sec} mine={mine} />
         )}
         {label ? (
           <Text

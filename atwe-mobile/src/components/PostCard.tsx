@@ -13,6 +13,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, post as card, type Palette } from '@/theme/tokens';
 import { compact, timeAgo } from '@/lib/format';
 import { likePost, repostPost, bookmarkPost, type Post } from '@/api/social';
+import { mediaUri } from '@/lib/media';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -137,7 +138,7 @@ export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDeta
             {!!post.body && <Text variant="body">{post.body}</Text>}
             {img && (
               <Image
-                source={{ uri: img }}
+                source={{ uri: mediaUri(img) }}
                 style={[styles.media, { backgroundColor: c.s2 }]}
                 contentFit="cover"
                 transition={150}

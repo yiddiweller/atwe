@@ -99,7 +99,13 @@
           "imageWidth": 104
         }
       ],
-      "expo-video"
+      "expo-video",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Atwe uses the microphone for voice notes and calls."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

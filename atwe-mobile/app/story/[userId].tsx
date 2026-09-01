@@ -9,6 +9,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '@/components/Text';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useUserStories, markStorySeen, type Story } from '@/api/stories';
+import { mediaUri } from '@/lib/media';
 
 const STORY_DUR = 5000; // ms per story, matching the web STORY_DUR
 
@@ -141,7 +142,7 @@ export default function StoryViewer() {
 
 function StoryMedia({ story }: { story: Story }) {
   if (story.kind === 'image' && story.media) {
-    return <Image source={{ uri: story.media }} style={styles.fill} contentFit="contain" />;
+    return <Image source={{ uri: mediaUri(story.media) }} style={styles.fill} contentFit="contain" />;
   }
   if (story.kind === 'text') {
     return (
@@ -152,7 +153,7 @@ function StoryMedia({ story }: { story: Story }) {
       </View>
     );
   }
-  if (story.kind === 'video' && story.media) return <StoryVideo uri={story.media} />;
+  if (story.kind === 'video' && story.media) return <StoryVideo uri={mediaUri(story.media)!} />;
   // Nothing to show — a story whose media has gone.
   return (
     <View style={[styles.fill, styles.center]}>
