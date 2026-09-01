@@ -18,6 +18,7 @@ import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { ListingCard } from '@/components/ListingCard';
 import { useTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/tokens';
 import { useListing, listingPrice, saveListing, KIND_LABEL } from '@/api/marketplace';
 
 /**
@@ -188,7 +189,7 @@ export default function ListingDetail() {
           {/* More from this seller */}
           {!!listing.moreFromSeller?.length && (
             <View style={{ marginTop: 8 }}>
-              <Text variant="headline" style={{ marginHorizontal: 16, marginBottom: 10 }}>
+              <Text variant="headline" style={{ marginHorizontal: spacing.gutter, marginBottom: 10 }}>
                 More from {listing.seller.name}
               </Text>
               {listing.moreFromSeller.map((l) => (

@@ -14,6 +14,7 @@ import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/tokens';
 import { useAuth } from '@/auth/AuthProvider';
 import { createPost } from '@/api/social';
 
@@ -106,7 +107,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.gutter,
     paddingBottom: 10,
   },
   postBtn: { minHeight: 38, paddingHorizontal: 20 },
@@ -114,7 +115,7 @@ const styles = StyleSheet.create({
   input: { flex: 1, fontSize: 17, lineHeight: 23, paddingTop: 8, textAlignVertical: 'top' },
   foot: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.gutter,
     paddingVertical: 10,
     alignItems: 'flex-end',
   },

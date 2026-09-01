@@ -5,6 +5,7 @@ import { Text } from '@/components/Text';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
 import { useTheme } from '@/theme/ThemeProvider';
+import { spacing, row } from '@/theme/tokens';
 import { useAuth } from '@/auth/AuthProvider';
 
 /**
@@ -144,12 +145,13 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   back: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  card: { paddingHorizontal: 16 },
+  card: { paddingHorizontal: spacing.gutter },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 14,
+    minHeight: row.height,
   },
   segRow: { flexDirection: 'row', alignItems: 'center', paddingTop: 14, paddingBottom: 10 },
   segment: { flexDirection: 'row', padding: 4, marginBottom: 4 },

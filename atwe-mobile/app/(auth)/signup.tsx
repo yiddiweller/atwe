@@ -5,6 +5,7 @@ import { Text } from '@/components/Text';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
 import { useTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/tokens';
 import { useAuth } from '@/auth/AuthProvider';
 
 /**
@@ -34,7 +35,7 @@ export default function Signup() {
     backgroundColor: c.s2,
     color: c.text,
     borderRadius: radius.md,
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.gutter,
     height: 52,
     fontSize: 16,
   } as const;

@@ -10,8 +10,8 @@ import { Button } from '@/components/Button';
 import { PostCard } from '@/components/PostCard';
 import { StoriesTray } from '@/components/StoriesTray';
 import { useTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/tokens';
 import { useInfiniteFeed, type FeedScope, type Post } from '@/api/social';
-import { useNotifCount } from '@/api/notifications';
 import { useAppReady } from '@/lib/appReady';
 import { useNavMorph } from '@/lib/navMorph';
 
@@ -56,8 +56,6 @@ export default function Home() {
     }
     return out;
   }, [data]);
-  const { data: nc } = useNotifCount();
-  const unread = nc?.unread ?? 0;
 
   // Tell the opening splash the feed is ready the moment the first page settles
   // (success or error), so it zoom-reveals straight into the posts.
@@ -184,7 +182,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    // the app's ONE margin, so the tab row starts on the same line as the cards below
+    paddingHorizontal: spacing.gutter,
     paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
@@ -193,15 +192,6 @@ const styles = StyleSheet.create({
   tab: { alignItems: 'center' },
   headActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headBtn: { padding: 2 },
-  bellDot: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 1.5,
-  },
   underline: {
     height: 3,
     borderRadius: 2,

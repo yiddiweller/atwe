@@ -17,6 +17,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { PostCard } from '@/components/PostCard';
 import { useTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/tokens';
 import { usePost, createPost } from '@/api/social';
 
 /**
@@ -158,7 +159,7 @@ const styles = StyleSheet.create({
   back: { width: 40, height: 28, justifyContent: 'center' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   repliesLabel: {
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.gutter,
     paddingTop: 12,
     paddingBottom: 4,
     textTransform: 'uppercase',

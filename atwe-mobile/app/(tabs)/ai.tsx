@@ -14,6 +14,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { GlassComposer } from '@/components/GlassComposer';
 import { useTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/tokens';
 import { sendChat, askAgent, runAgentAction, agentSummary, type ChatMessage, type AgentAction } from '@/api/ai';
 
 const EXAMPLES = [
@@ -204,7 +205,7 @@ const styles = StyleSheet.create({
   head: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.gutter,
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },

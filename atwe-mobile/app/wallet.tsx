@@ -5,6 +5,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Avatar } from '@/components/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/tokens';
 import { useWallet, money, txLabel, type WalletTx } from '@/api/wallet';
 import { timeAgo } from '@/lib/format';
 
@@ -160,14 +161,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingVertical: 9,
-    paddingHorizontal: 18,
+    paddingHorizontal: spacing.gutter,
     borderRadius: 22,
   },
   actionLabel: { color: '#fff', fontWeight: '700' },
   tx: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.gutter,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },

@@ -210,6 +210,36 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
   `npx expo export --platform ios` produces a **4.84 MB** bundle with all **ten** new
   nav icons at three densities each plus the new splash listed in its asset manifest.
 
+### …and the design caught up with the web too (same run)
+The phone was still on the design the web had **before** the card/margin/colour work.
+Everything below is now driven by tokens in `src/theme/tokens.ts`, so the next change
+is one number rather than a sweep:
+- **The palette was a different app's.** `accent` was X's `#1D9BF0`; the brand blue named
+  in the design law is **`#0088FF`**, and it appears nowhere on the web. Surfaces, text
+  greys, danger/success/warning and both themes are now the web's actual values (`--s2`
+  `#141416`, not `#1C1F24`).
+- **The post is a CARD, not a row with a hairline under it** — the single biggest visual
+  gap. `src/theme/tokens.ts` carries the web's CLASSIC preset with the same derivation:
+  `innerRadius = cardRadius − pad`, `shape = innerRadius × 2`. Change `pad` or
+  `cardRadius` and the avatar, the photo's corner and the pill height all follow; never
+  type those sizes separately.
+- **Five equal action pills**, each `shape` tall with the card's own padding as the gap,
+  the pill in the PAGE colour so it reads as a hole punched through the card and the
+  glyph a step quieter (`postPill` / `postPillInk` — Light takes them DOWN from the card,
+  since the card there is already a hair from white). Counts are compacted, so a
+  seven-digit like count still fits five-across on a 320px phone.
+- **One margin, 14px**, on every screen — 18 files, converted to `spacing.gutter` rather
+  than retyped. `app/(auth)/login.tsx` keeps its own wider inset: the start screen is the
+  one exception the web made too.
+- **One option-row height (55)** on the Me hub and Settings; a row with a subtitle may
+  still grow past it, as on iPhone Settings.
+- **No hollow buttons to fix** — the web's problem (a secondary button whose fill was on
+  `:hover` only, invisible on a phone) never existed here: `Button` was always solid, and
+  the only `borderWidth` left in the app is the ring around an unread dot.
+- Removed the dead `bellDot` style and the unread query left behind by the bell.
+- **Verified:** `npx tsc --noEmit` clean throughout and `npx expo export --platform ios`
+  builds, so every route and import still resolves after the sweep.
+
 ## Next up (phases 3, 4, 6, 7 remain partial)
 1. ~~Profile navigation from feed/detail~~ ✅ done (`app/user/[username].tsx`).
    ~~Stories tray + viewer~~ ✅ done (`StoriesTray` + `app/story/[userId].tsx`).

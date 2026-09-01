@@ -6,6 +6,7 @@ import { Screen } from '@/components/Screen';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useTheme } from '@/theme/ThemeProvider';
+import { spacing, row } from '@/theme/tokens';
 import { useAuth } from '@/auth/AuthProvider';
 import { money } from '@/api/wallet';
 
@@ -196,8 +197,10 @@ function NavRow({
 const styles = StyleSheet.create({
   hero: { flexDirection: 'row', alignItems: 'center', padding: 16 },
   nameRow: { flexDirection: 'row', alignItems: 'center' },
-  card: { paddingHorizontal: 16 },
-  navRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
+  card: { paddingHorizontal: spacing.gutter },
+  // One height for every option row — the web's --row-h. A row with a SUBTITLE is
+  // still allowed to grow past it, exactly as on iPhone Settings.
+  navRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, minHeight: row.height },
   navIcon: {
     width: 30,
     height: 30,

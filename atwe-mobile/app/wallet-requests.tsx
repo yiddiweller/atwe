@@ -7,6 +7,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Avatar } from '@/components/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/tokens';
 import { useMoneyRequests, payMoneyRequest, declineMoneyRequest, money, type MoneyRequest } from '@/api/wallet';
 import { timeAgo } from '@/lib/format';
 
@@ -117,7 +118,7 @@ const styles = StyleSheet.create({
   tabs: { flexDirection: 'row', gap: 24, paddingVertical: 10 },
   tab: { alignItems: 'center' },
   underline: { height: 3, borderRadius: 2, width: '100%', marginTop: 5 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: spacing.gutter, paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth },
   rowMain: { flex: 1, minWidth: 0 },
   actions: { flexDirection: 'row', gap: 8 },
   btn: { paddingHorizontal: 14, paddingVertical: 7 },

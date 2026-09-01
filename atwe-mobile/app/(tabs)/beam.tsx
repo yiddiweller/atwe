@@ -4,6 +4,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Avatar } from '@/components/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/tokens';
 import { useConversations, conversationPreview, type Conversation } from '@/api/beam';
 import { timeAgo } from '@/lib/format';
 import { useRealtimeInvalidate } from '@/lib/useRealtime';
@@ -120,13 +121,13 @@ function ConvoRow({ convo }: { convo: Conversation }) {
 }
 
 const styles = StyleSheet.create({
-  head: { paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  head: { paddingHorizontal: spacing.gutter, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyWrap: { flexGrow: 1 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.gutter,
     paddingVertical: 11,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },

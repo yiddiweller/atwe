@@ -7,6 +7,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { useTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/tokens';
 import { sendMoney } from '@/api/wallet';
 
 /**
@@ -158,12 +159,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.gutter,
     paddingBottom: 12,
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   tick: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center' },
   input: { height: 48, paddingHorizontal: 14, fontSize: 16 },
-  amountRow: { flexDirection: 'row', alignItems: 'center', height: 64, paddingHorizontal: 16, gap: 4 },
+  amountRow: { flexDirection: 'row', alignItems: 'center', height: 64, paddingHorizontal: spacing.gutter, gap: 4 },
   amountInput: { flex: 1, fontSize: 34, fontWeight: '700', paddingVertical: 0 },
 });

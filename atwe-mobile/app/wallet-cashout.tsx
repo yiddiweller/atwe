@@ -7,6 +7,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { useTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/tokens';
 import { useCashoutStatus, cashOut, connectBank, money } from '@/api/wallet';
 
 /**
@@ -54,7 +55,7 @@ export default function WalletCashOut() {
 
   const input = {
     backgroundColor: c.s2, color: c.text, borderRadius: radius.md,
-    paddingHorizontal: 16, height: 56, fontSize: 22, fontWeight: '700' as const,
+    paddingHorizontal: spacing.gutter, height: 56, fontSize: 22, fontWeight: '700' as const,
   };
 
   return (

@@ -15,6 +15,7 @@ import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { ListingCard } from '@/components/ListingCard';
 import { useTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/tokens';
 import { useMarketplace, KIND_LABEL, type ListingKind } from '@/api/marketplace';
 
 const KINDS: (ListingKind | null)[] = [null, 'physical', 'digital', 'service', 'rental'];
@@ -51,7 +52,7 @@ export default function Marketplace() {
       </View>
 
       {/* Search */}
-      <View style={{ paddingHorizontal: 16 }}>
+      <View style={{ paddingHorizontal: spacing.gutter }}>
         <View style={[styles.search, { backgroundColor: c.s2 }]}>
           <Ionicons name="search" size={18} color={c.t3} />
           <TextInput
@@ -78,7 +79,7 @@ export default function Marketplace() {
         data={KINDS}
         keyExtractor={(k) => k ?? 'all'}
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingVertical: 12 }}
+        contentContainerStyle={{ paddingHorizontal: spacing.gutter, gap: 8, paddingVertical: 12 }}
         style={{ flexGrow: 0 }}
         renderItem={({ item }) => {
           const active = kind === item;
@@ -148,7 +149,7 @@ const styles = StyleSheet.create({
     height: 42,
   },
   searchInput: { flex: 1, fontSize: 15, paddingVertical: 0 },
-  chip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999 },
+  chip: { paddingHorizontal: spacing.gutter, paddingVertical: 8, borderRadius: 999 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyWrap: { flexGrow: 1 },
 });

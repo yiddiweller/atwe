@@ -38,6 +38,9 @@ export interface Palette {
   danger: string;      // destructive red
   success: string;
   warning: string;
+  /** The fill of a post's action pill, and the glyph on it. */
+  postPill: string;
+  postPillInk: string;
   // system
   statusBar: 'light' | 'dark';
 }
@@ -46,48 +49,56 @@ export interface Palette {
 // (per founder), with slightly-raised surfaces above it for cards/inputs.
 export const black: Palette = {
   bg: '#000000',
-  s1: '#121417',
-  s2: '#1C1F24',
-  text: '#E7E9EA',
-  t2: '#AEB4BC',
-  t3: '#71767B',
-  t4: '#5A5F66',
+  s1: '#0B0B0D',
+  s2: '#141416',   // the post card, and every settings-shaped card
+  text: '#FFFFFF',
+  t2: '#8E8E93',
+  t3: '#7E7E83',
+  t4: '#48484A',
   border: '#242830',
-  accent: '#1D9BF0',
-  accentDim: 'rgba(29,155,240,0.14)',
+  // #0088FF is the brand blue named in the design law. The app was carrying X's
+  // #1D9BF0, which is a different blue and never appears anywhere on the web.
+  accent: '#0088FF',
+  accentDim: 'rgba(0,136,255,0.14)',
   accentTint: '#FFFFFF',
   primary: '#FFFFFF',
   onPrimary: '#1D1D1F',
   verify: '#D3D5D7',
   like: '#F91880',
   repost: '#00BA7C',
-  danger: '#F4212E',
-  success: '#00BA7C',
-  warning: '#D9A406',
+  danger: '#FF0033',
+  success: '#88FF00',
+  warning: '#FFBB00',
+  postPill: '#000000',      // an action pill reads as a hole punched in the card
+  postPillInk: '#8E8E93',
   statusBar: 'light',
 };
 
 // Light — X.com-style white with hairline dividers (body.light on web).
 export const light: Palette = {
   bg: '#FFFFFF',
-  s1: '#FFFFFF',
-  s2: '#F1F3F5',
-  text: '#0F1419',
-  t2: '#536471',
-  t3: '#66757F',
-  t4: '#8B98A5',
+  s1: '#F5F5F7',
+  s2: '#F5F5F7',
+  text: '#1D1D1F',
+  t2: '#65656A',
+  t3: '#6E6E73',
+  t4: '#AAB8C2',
   border: '#EFF3F4',
-  accent: '#1D9BF0',
-  accentDim: 'rgba(29,155,240,0.12)',
+  accent: '#006ACF',
+  accentDim: 'rgba(0,106,207,0.12)',
   accentTint: '#FFFFFF',
   primary: '#111114',
   onPrimary: '#FFFFFF',
   verify: '#5B7083',
   like: '#F91880',
   repost: '#00BA7C',
-  danger: '#F4212E',
-  success: '#009E6D',
-  warning: '#B8860B',
+  danger: '#C00020',
+  success: '#2F7000',
+  warning: '#805300',
+  // Light takes the pill DOWN from the card, not up: the card is already within a
+  // hair of white, so a white pill would be invisible.
+  postPill: '#DFE4EA',
+  postPillInk: '#5A5A5F',
   statusBar: 'dark',
 };
 
@@ -101,15 +112,38 @@ export const spacing = {
   lg: 16,
   xl: 20,
   xxl: 28,
-  gutter: 16, // web --feed-gutter equivalent for phone
+  gutter: 14, // the web's --feed-gutter on a phone. It was 16 here; the web moved to 14.
 } as const;
+
+/* THE POST CARD, straight from the web's CLASSIC preset. Two numbers decide it and
+   everything else is derived, exactly as in public/index.html — pad and cardRadius.
+       innerRadius = cardRadius - pad     (what makes a shape nested in the corner
+                                           concentric with it)
+       shape       = innerRadius * 2      (a capsule's radius IS half its height, so
+                                           this is the only height at which an action
+                                           pill's corner matches the photo's)
+   Change pad or cardRadius and the rest follows. Never type these sizes separately. */
+export const post = {
+  pad: 12,
+  cardRadius: 30,
+  get innerRadius() { return this.cardRadius - this.pad; },   // 18
+  get shape() { return this.innerRadius * 2; },               // 36: avatar, ⋯, pill height
+  gap: 12,      // between one card and the next
+  rowGap: 12,   // between the action pills
+} as const;
+
+/** Every text button is at least as substantial as the profile editor's Save (32). */
+export const button = { minHeight: 32 } as const;
+/** Every settings-shaped option row, and the search bar at the top of one. */
+export const row = { height: 55 } as const;
 
 /** Corner radii — mirrors the web --r-* tokens. */
 export const radius = {
   sm: 10,
   md: 14,
   lg: 20,
-  xl: 26,
+  /** The one card corner: post cards, settings cards, the Account page. Was 26. */
+  xl: 30,
   pill: 999,
 } as const;
 

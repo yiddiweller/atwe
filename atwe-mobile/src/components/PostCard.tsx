@@ -8,6 +8,9 @@ import { Text } from './Text';
 import { Avatar } from './Avatar';
 import { VerifiedBadge } from './VerifiedBadge';
 import { useTheme } from '@/theme/ThemeProvider';
+// `post` is aliased: the component's own prop is also called post, and a token that
+// silently shadows a prop is exactly the kind of thing nobody notices until it breaks.
+import { spacing, post as card, type Palette } from '@/theme/tokens';
 import { compact, timeAgo } from '@/lib/format';
 import { likePost, repostPost, bookmarkPost, type Post } from '@/api/social';
 
@@ -87,8 +90,8 @@ export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDeta
       android_ripple={undefined}
       style={({ pressed }) => [
         styles.card,
-        { borderBottomColor: c.border },
-        pressed && linkToDetail ? { backgroundColor: c.s1 } : null,
+        { backgroundColor: c.s2 },
+        pressed && linkToDetail ? { opacity: 0.85 } : null,
       ]}
     >
       {post.promoted && (
@@ -143,57 +146,61 @@ export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDeta
           </>
         )}
 
+        {/* Five EQUAL pills, each one the card's inner radius doubled so its corner
+            matches the photo's, with the card's own padding as the gap between them —
+            so the row reads as one even beat with the card's edge. They were bare
+            glyphs spread apart before the web moved to the card. */}
         <View style={styles.actions}>
-          <Stat icon="chatbubble-outline" n={post.replies} color={c.t3} />
-          <Pressable onPress={toggleRepost} style={styles.stat} hitSlop={8}>
-            <Ionicons name="repeat" size={18} color={reposted ? c.repost : c.t3} />
-            {reposts > 0 && (
-              <Text variant="caption" style={{ marginLeft: 5, color: reposted ? c.repost : c.t3 }}>
-                {compact(reposts)}
-              </Text>
-            )}
-          </Pressable>
-          <Pressable onPress={toggleLike} style={styles.stat} hitSlop={8}>
-            <Ionicons name={liked ? 'heart' : 'heart-outline'} size={17} color={liked ? c.like : c.t3} />
-            {likes > 0 && (
-              <Text variant="caption" style={{ marginLeft: 5, color: liked ? c.like : c.t3 }}>
-                {compact(likes)}
-              </Text>
-            )}
-          </Pressable>
-          <Stat icon="eye-outline" n={post.views} color={c.t3} />
-          <Pressable onPress={toggleBookmark} hitSlop={8}>
-            <Ionicons
-              name={bookmarked ? 'bookmark' : 'bookmark-outline'}
-              size={16}
-              color={bookmarked ? c.accent : c.t3}
-            />
-          </Pressable>
+          <ActionPill icon="chatbubble-outline" n={post.replies} c={c} />
+          <ActionPill icon="repeat" n={reposts} c={c} on={reposted} onColor={c.repost}
+            onPress={toggleRepost} label="Repost" />
+          <ActionPill icon={liked ? 'heart' : 'heart-outline'} n={likes} c={c} on={liked}
+            onColor={c.like} onPress={toggleLike} label="Like" />
+          <ActionPill icon="eye-outline" n={post.views} c={c} />
+          <ActionPill icon={bookmarked ? 'bookmark' : 'bookmark-outline'} c={c} on={bookmarked}
+            onColor={c.accent} onPress={toggleBookmark} label="Save" />
         </View>
       </View>
     </Pressable>
   );
 }
 
-function Stat({ icon, n, color }: { icon: IconName; n: number; color: string }) {
+/* One action. The pill is the PAGE colour, so it reads as a hole punched through the
+   card rather than a raised control, and the glyph steps down to a quiet grey — the
+   founder asked for exactly that ("fully black instead of grey, and the icon a darker
+   grey"). Every count is compacted: a raw 123456 does not fit five-across on a 320px
+   phone. flex:1 makes the five equal, so a post with counts and one without look the
+   same shape. */
+function ActionPill({ icon, n, c, on, onColor, onPress, label }: {
+  icon: IconName; n?: number; c: Palette; on?: boolean; onColor?: string;
+  onPress?: () => void; label?: string;
+}) {
+  const tint = on && onColor ? onColor : c.postPillInk;
   return (
-    <View style={styles.stat}>
-      <Ionicons name={icon} size={17} color={color} />
-      {n > 0 && (
-        <Text variant="caption" style={{ marginLeft: 5, color }}>
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      hitSlop={6}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={label}
+      style={[styles.pill, { backgroundColor: c.postPill }]}
+    >
+      <Ionicons name={icon} size={17} color={tint} />
+      {!!n && n > 0 && (
+        <Text variant="caption" style={{ marginLeft: 4, color: tint }} numberOfLines={1}>
           {compact(n)}
         </Text>
       )}
-    </View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginHorizontal: spacing.gutter,
+    marginBottom: card.gap,
+    padding: card.pad,
+    borderRadius: card.cardRadius,
   },
   top: { flexDirection: 'row', alignItems: 'center', gap: 11 },
   idcol: { flex: 1 },
@@ -206,7 +213,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
     width: '100%',
     aspectRatio: 1.6,
-    borderRadius: 16,
+    // the card's corner minus its padding: the only radius that hugs the corner
+    borderRadius: card.innerRadius,
   },
   locked: {
     marginTop: 8,
@@ -214,14 +222,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 14,
     paddingHorizontal: 14,
-    borderRadius: 14,
+    borderRadius: card.innerRadius,
   },
   actions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 12,
-    paddingRight: 8,
+    marginTop: 10,
+    gap: card.rowGap,
   },
-  stat: { flexDirection: 'row', alignItems: 'center', minWidth: 44 },
+  pill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: card.shape,
+    borderRadius: card.shape / 2,   // a capsule's radius IS half its height
+  },
 });

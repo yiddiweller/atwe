@@ -6,6 +6,7 @@ import { Text } from './Text';
 import { Avatar } from './Avatar';
 import { VerifiedBadge } from './VerifiedBadge';
 import { useTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/tokens';
 import { listingPrice, type Listing } from '@/api/marketplace';
 
 /**
@@ -79,7 +80,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
 
 const styles = StyleSheet.create({
   card: {
-    marginHorizontal: 16,
+    marginHorizontal: spacing.gutter,
     marginBottom: 14,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',

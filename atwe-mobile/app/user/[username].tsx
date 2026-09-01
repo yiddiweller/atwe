@@ -10,6 +10,7 @@ import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { PostCard } from '@/components/PostCard';
 import { useTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/tokens';
 import { useProfile, followUser, type Profile } from '@/api/social';
 import { compact, monthYear } from '@/lib/format';
 
@@ -220,7 +221,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.gutter,
     marginTop: -40,
   },
   avatarRing: { borderRadius: 48, borderWidth: 4, padding: 0 },

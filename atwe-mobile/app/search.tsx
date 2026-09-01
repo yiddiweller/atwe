@@ -9,6 +9,7 @@ import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { PostCard } from '@/components/PostCard';
 import { ListingCard } from '@/components/ListingCard';
 import { useTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/tokens';
 import { useSearch, SEARCH_SCOPES, jobPay, type SearchScope, type Job, type Service } from '@/api/search';
 import type { SearchUser } from '@/api/social';
 
@@ -198,7 +199,7 @@ const styles = StyleSheet.create({
   scopes: { flexDirection: 'row', gap: 20, paddingVertical: 10 },
   scope: { alignItems: 'center' },
   underline: { height: 2.5, borderRadius: 2, width: '100%', marginTop: 5 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 11 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: spacing.gutter, paddingVertical: 11 },
   rowMain: { flex: 1, minWidth: 0 },
   nameLine: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   sep: { height: StyleSheet.hairlineWidth, marginTop: 12 },

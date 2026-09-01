@@ -8,6 +8,7 @@ import { Screen } from '@/components/Screen';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/tokens';
 import {
   useNotifications,
   markAllNotificationsRead,
@@ -150,7 +151,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.gutter,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },

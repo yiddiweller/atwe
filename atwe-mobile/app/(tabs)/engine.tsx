@@ -17,6 +17,7 @@ import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/tokens';
 import {
   useTrending,
   useSuggestions,
@@ -338,7 +339,7 @@ function DiscoverTile({
 
 const styles = StyleSheet.create({
   searchWrap: { paddingHorizontal: 12, paddingBottom: 10 },
-  tileRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 12 },
+  tileRow: { flexDirection: 'row', paddingHorizontal: spacing.gutter, gap: 12 },
   tile: { flex: 1, padding: 14 },
   tileIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   search: {
@@ -352,22 +353,22 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 16, paddingVertical: 0 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, minHeight: 200 },
   emptyWrap: { flexGrow: 1 },
-  sectionTitle: { paddingHorizontal: 16, marginBottom: 6, fontSize: 20 },
+  sectionTitle: { paddingHorizontal: spacing.gutter, marginBottom: 6, fontSize: 20 },
   trendRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.gutter,
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   personRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.gutter,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   personMid: { flex: 1, marginLeft: 12, marginRight: 10 },
   nameLine: { flexDirection: 'row', alignItems: 'center' },
-  followBtn: { minHeight: 34, paddingHorizontal: 18 },
+  followBtn: { minHeight: 34, paddingHorizontal: spacing.gutter },
 });
