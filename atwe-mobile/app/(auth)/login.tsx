@@ -13,6 +13,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useAuth } from '@/auth/AuthProvider';
 import { api } from '@/api/client';
+import { HapticInput } from '@/components/HapticInput';
 
 /**
  * Signing in — the web's flow, screen for screen.
@@ -208,7 +209,7 @@ export default function Login() {
                 {identifier.includes('@') ? identifier : `@${identifier}`}
               </Text>
               <View style={styles.bigField}>
-                <TextInput
+                <HapticInput
                   ref={field}
                   value={password}
                   onChangeText={setPassword}
@@ -228,7 +229,7 @@ export default function Login() {
               </View>
               {needs2fa && (
                 <View style={styles.bigField}>
-                  <TextInput
+                  <HapticInput
                     value={code}
                     onChangeText={setCode}
                     placeholder="Authenticator or recovery code"
@@ -244,7 +245,7 @@ export default function Login() {
           ) : (
             <View style={styles.bigField}>
               {step === 'username' && <Text style={styles.at}>@</Text>}
-              <TextInput
+              <HapticInput
                 ref={field}
                 value={value}
                 onChangeText={(t) => { setIdentifier(t); setCreateMode(false); }}

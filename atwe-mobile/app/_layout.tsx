@@ -16,10 +16,16 @@ import { ConnectionProvider } from '@/lib/connection';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { registerForPush } from '@/api/push';
 import { routeForUrl } from '@/lib/deeplinks';
+import { loadHapticPref } from '@/lib/haptics';
 import * as Notifications from 'expo-notifications';
 import * as Linking from 'expo-linking';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+/* How the app should FEEL is read once, at launch, before anything on screen
+   can be tapped — so somebody who turned haptics off never gets one buzz on
+   the way in while the preference is still loading. */
+void loadHapticPref();
 
 /**
  * Redirect based on auth state (official expo-router guard pattern): signed-out

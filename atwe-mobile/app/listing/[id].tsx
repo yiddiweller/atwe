@@ -11,7 +11,6 @@ import {
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
@@ -25,6 +24,7 @@ import { CheckoutSheet } from '@/components/CheckoutSheet';
 import { useCart, setCartQty } from '@/api/cart';
 import { mediaUri } from '@/lib/media';
 import { useAuth } from '@/auth/AuthProvider';
+import { haptics } from '@/lib/haptics';
 
 /**
  * Listing detail (`GET /api/listings/:id`) — gallery, title, price, seller,
@@ -65,12 +65,11 @@ export default function ListingDetail() {
   const addToCart = async () => {
     if (!listing || addingToCart) return;
     setAddingToCart(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
       await setCartQty(listing.id, qty);
       await cartQ.refetch();
     } catch (e) {
-      Alert.alert('Cart', (e as Error).message);
+      haptics.error(); Alert.alert('Cart', (e as Error).message);
     } finally {
       setAddingToCart(false);
     }
@@ -80,7 +79,7 @@ export default function ListingDetail() {
     if (!listing) return;
     const next = !isSaved;
     setSaved(next);
-    Haptics.selectionAsync().catch(() => {});
+    haptics.select();
     try {
       await saveListing(listing.id, next);
     } catch {

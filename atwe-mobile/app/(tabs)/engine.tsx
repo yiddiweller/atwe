@@ -27,6 +27,7 @@ import {
   type SearchUser,
 } from '@/api/social';
 import { compact } from '@/lib/format';
+import { HapticInput } from '@/components/HapticInput';
 
 /**
  * Engine — discovery & explore. A search field over `GET /api/search?scope=people`
@@ -48,7 +49,7 @@ export default function Engine() {
       <View style={styles.searchWrap}>
         <View style={[styles.search, { backgroundColor: c.s2 }]}>
           <Ionicons name="search" size={18} color={c.t3} />
-          <TextInput
+          <HapticInput
             style={[styles.searchInput, { color: c.text }]}
             placeholder="Search Atwe"
             placeholderTextColor={c.t3}

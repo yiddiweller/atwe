@@ -12,6 +12,7 @@ import {
 import { timeAgo } from '@/lib/format';
 import { useRealtimeInvalidate } from '@/lib/useRealtime';
 import { useState } from 'react';
+import { haptics } from '@/lib/haptics';
 
 /**
  * Beam — the messaging world. Chats (1:1) and Groups, each a real list over its own
@@ -39,7 +40,7 @@ export default function Beam() {
         <Text variant="title">Beam</Text>
         <View style={styles.tabs}>
           {(['chats', 'groups'] as Tab[]).map((t) => (
-            <Pressable key={t} onPress={() => setTab(t)} hitSlop={8}
+            <Pressable key={t} onPress={() => { haptics.select(); setTab(t); }} hitSlop={8}
               accessibilityRole="tab" accessibilityState={{ selected: tab === t }}>
               <Text variant="headline" style={{ color: tab === t ? c.text : c.t3 }}>
                 {t === 'chats' ? 'Chats' : 'Groups'}

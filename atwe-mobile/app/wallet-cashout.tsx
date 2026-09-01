@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { View, TextInput, Pressable, StyleSheet, Linking, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useCashoutStatus, cashOut, connectBank, money } from '@/api/wallet';
+import { HapticInput } from '@/components/HapticInput';
+import { haptics } from '@/lib/haptics';
 
 /**
  * Taking money out to a bank account.
@@ -46,7 +47,7 @@ export default function WalletCashOut() {
     setBusy(true); setError(null);
     try {
       await cashOut({ amount: cents / 100, clientId });
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      void haptics.success();
       qc.invalidateQueries({ queryKey: ['wallet'] });
       router.back();
     } catch (e) { setError((e as Error).message); }
@@ -88,7 +89,7 @@ export default function WalletCashOut() {
             <Text variant="callout" tone="t2" style={{ marginTop: 18, marginBottom: 8 }}>
               You have {money(balance)}
             </Text>
-            <TextInput
+            <HapticInput
               style={input}
               placeholder="0.00"
               placeholderTextColor={c.t3}

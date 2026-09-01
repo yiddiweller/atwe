@@ -1,6 +1,6 @@
 import { Pressable, View, StyleSheet, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 import { Text } from './Text';
 import { useTheme } from '@/theme/ThemeProvider';
 
@@ -30,11 +30,10 @@ export function AuthButton({ label, icon, primary, onPress, disabled, style }: {
   const glass = name === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.06)';
   return (
     <Pressable
-      onPress={() => {
-        if (disabled) return;
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-        onPress();
-      }}
+      // Down, not up — see Button. The sign-in screen is the first thing anyone
+      // touches, so it is the first thing that has to feel like a real button.
+      onPressIn={() => { if (!disabled) haptics.tap(); }}
+      onPress={() => { if (!disabled) onPress(); }}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}

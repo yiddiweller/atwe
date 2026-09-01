@@ -9,13 +9,13 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { GlassComposer } from '@/components/GlassComposer';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { sendChat, askAgent, runAgentAction, agentSummary, type ChatMessage, type AgentAction } from '@/api/ai';
+import { haptics } from '@/lib/haptics';
 
 const EXAMPLES = [
   'Draft a friendly reply to a customer asking for a refund',
@@ -268,7 +268,7 @@ function ActionCard({
           <Text variant="callout" tone="t2">Not now</Text>
         </Pressable>
         <Pressable
-          onPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onConfirm(); }}
+          onPress={() => { void haptics.press(); onConfirm(); }}
           disabled={busy}
           style={[cardStyles.btn, { backgroundColor: c.primary, borderRadius: radius.pill, opacity: busy ? 0.6 : 1 }]}
           accessibilityRole="button"

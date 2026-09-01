@@ -3,7 +3,6 @@ import { View, Pressable, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { Text } from './Text';
 import { Avatar } from './Avatar';
 import { VerifiedBadge } from './VerifiedBadge';
@@ -14,6 +13,7 @@ import { spacing, post as card, type Palette } from '@/theme/tokens';
 import { compact, timeAgo } from '@/lib/format';
 import { likePost, repostPost, bookmarkPost, type Post } from '@/api/social';
 import { mediaUri } from '@/lib/media';
+import { haptics } from '@/lib/haptics';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -51,7 +51,7 @@ export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDeta
     const next = !liked;
     setLiked(next);
     setLikes((n) => Math.max(0, n + (next ? 1 : -1)));
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.tap();
     try {
       await likePost(post.id, next);
     } catch {
@@ -64,7 +64,7 @@ export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDeta
     const next = !reposted;
     setReposted(next);
     setReposts((n) => Math.max(0, n + (next ? 1 : -1)));
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.tap();
     try {
       await repostPost(post.id, next);
     } catch {
@@ -76,7 +76,7 @@ export function PostCard({ post, linkToDetail = true }: { post: Post; linkToDeta
   const toggleBookmark = async () => {
     const next = !bookmarked;
     setBookmarked(next);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.tap();
     try {
       await bookmarkPost(post.id, next);
     } catch {

@@ -12,6 +12,8 @@ import { createListing, updateListing, type ListingInput } from '@/api/selling';
 import { KIND_LABEL, type Listing, type ListingKind } from '@/api/marketplace';
 import { pickPhoto, pickPhotoMessage } from '@/lib/pickPhoto';
 import { mediaUri } from '@/lib/media';
+import { HapticInput } from '@/components/HapticInput';
+import { haptics } from '@/lib/haptics';
 
 const KINDS: ListingKind[] = ['physical', 'digital', 'service'];
 
@@ -91,9 +93,11 @@ export function ListingForm({ listing, onSaved, onCancel }: {
     // as an image.
     if (imageChanged) body.image = image;
     try {
-      onSaved(editing ? await updateListing(listing!.id, body) : await createListing(body));
+      const saved = editing ? await updateListing(listing!.id, body) : await createListing(body);
+      haptics.success();
+      onSaved(saved);
     } catch (e) {
-      Alert.alert('Listing', (e as Error).message);
+      haptics.error(); Alert.alert('Listing', (e as Error).message);
     } finally {
       setSaving(false);
     }
@@ -126,7 +130,7 @@ export function ListingForm({ listing, onSaved, onCancel }: {
           {KINDS.map((k) => (
             <Pressable
               key={k}
-              onPress={() => setKind(k)}
+              onPress={() => { haptics.select(); setKind(k); }}
               style={[styles.chip, { backgroundColor: kind === k ? c.accent : c.s1 }]}
               accessibilityRole="radio"
               accessibilityState={{ selected: kind === k }}
@@ -155,13 +159,13 @@ export function ListingForm({ listing, onSaved, onCancel }: {
 
             <Text variant="caption" tone="t3" style={styles.lbl}>Postage</Text>
             <View style={styles.chips}>
-              <Pressable onPress={() => setShipFree(true)}
+              <Pressable onPress={() => { haptics.select(); setShipFree(true); }}
                 style={[styles.chip, { backgroundColor: shipFree ? c.accent : c.s1 }]}
                 accessibilityRole="radio" accessibilityState={{ selected: shipFree }}>
                 <Text variant="callout" weight="600"
                   style={{ color: shipFree ? c.accentTint : c.text }}>Free</Text>
               </Pressable>
-              <Pressable onPress={() => setShipFree(false)}
+              <Pressable onPress={() => { haptics.select(); setShipFree(false); }}
                 style={[styles.chip, { backgroundColor: !shipFree ? c.accent : c.s1 }]}
                 accessibilityRole="radio" accessibilityState={{ selected: !shipFree }}>
                 <Text variant="callout" weight="600"
@@ -197,7 +201,7 @@ function Field({ label, value, set, c, ...rest }: {
   return (
     <View style={{ marginBottom: 12 }}>
       <Text variant="caption" tone="t3" style={{ marginBottom: 5 }}>{label}</Text>
-      <TextInput
+      <HapticInput
         value={value}
         onChangeText={set}
         placeholderTextColor={c.t3}

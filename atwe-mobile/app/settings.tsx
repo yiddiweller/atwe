@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { View, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -7,6 +8,7 @@ import { Screen } from '@/components/Screen';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, row } from '@/theme/tokens';
 import { useAuth } from '@/auth/AuthProvider';
+import { haptics } from '@/lib/haptics';
 
 /**
  * Settings — iOS-Settings-style hub. Mirrors the web `#settingsOverlay`: a back
@@ -46,7 +48,7 @@ export default function Settings() {
               return (
                 <Text
                   key={opt}
-                  onPress={() => setPref(opt)}
+                  onPress={() => { haptics.select(); setPref(opt); }}
                   variant="callout"
                   style={[
                     styles.segItem,
@@ -65,6 +67,8 @@ export default function Settings() {
           <Text variant="micro" tone="t4" style={{ paddingHorizontal: 14, paddingBottom: 12 }}>
             Currently showing the {name} theme.
           </Text>
+          <View style={{ borderTopColor: c.bg, borderTopWidth: StyleSheet.hairlineWidth }} />
+          <HapticsRow />
         </View>
 
         {/* Account */}
@@ -112,6 +116,52 @@ export default function Settings() {
         </Text>
       </ScrollView>
     </Screen>
+  );
+}
+
+/**
+ * Haptics on or off. Some people find any vibration unpleasant and iOS's own
+ * switch is buried three screens deep in Accessibility, so an app that leans on
+ * touch this hard owes them a one-tap way out. Turning it OFF is the last thing
+ * that ticks, and turning it back ON ticks immediately — so the control
+ * demonstrates itself in both directions.
+ */
+function HapticsRow() {
+  const { c, radius } = useTheme();
+  const [on, setOn] = useState(haptics.isEnabled);
+  const set = (next: boolean) => {
+    if (next) { haptics.setEnabled(true); haptics.select(); }
+    else { haptics.select(); haptics.setEnabled(false); }
+    setOn(next);
+  };
+  return (
+    <>
+      <View style={styles.segRow}>
+        <Text variant="body" style={{ flex: 1 }}>Haptics</Text>
+      </View>
+      <View style={[styles.segment, { backgroundColor: c.s2, borderRadius: radius.md }]}>
+        {([true, false] as const).map((v) => (
+          <Text
+            key={String(v)}
+            onPress={() => set(v)}
+            variant="callout"
+            style={[
+              styles.segItem,
+              {
+                color: on === v ? c.onPrimary : c.t2,
+                backgroundColor: on === v ? c.primary : 'transparent',
+                borderRadius: radius.sm,
+              },
+            ]}
+          >
+            {v ? 'On' : 'Off'}
+          </Text>
+        ))}
+      </View>
+      <Text variant="micro" tone="t4" style={{ paddingHorizontal: 14, paddingBottom: 12 }}>
+        The small taps you feel when you press, pick and confirm.
+      </Text>
+    </>
   );
 }
 

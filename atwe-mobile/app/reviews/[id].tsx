@@ -15,6 +15,8 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { useReviews, writeReview, deleteReview, type Review } from '@/api/business';
 import { timeAgo } from '@/lib/format';
+import { HapticInput } from '@/components/HapticInput';
+import { haptics } from '@/lib/haptics';
 
 /**
  * What people said about a business, and saying it yourself.
@@ -52,11 +54,12 @@ export default function Reviews() {
     setBusy(true);
     try {
       await writeReview(bid, rating, body.trim());
+      haptics.success();
       setTouched(false);
       await q.refetch();
       qc.invalidateQueries({ queryKey: ['profile'] });
     } catch (e) {
-      Alert.alert('Review', (e as Error).message);
+      haptics.error(); Alert.alert('Review', (e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -69,12 +72,13 @@ export default function Reviews() {
       {
         text: 'Delete', style: 'destructive',
         onPress: async () => {
+          haptics.warning();
           try {
             await deleteReview(mine.id);
             setRating(0); setBody(''); setTouched(false);
             await q.refetch();
             qc.invalidateQueries({ queryKey: ['profile'] });
-          } catch (e) { Alert.alert('Review', (e as Error).message); }
+          } catch (e) { haptics.error(); Alert.alert('Review', (e as Error).message); }
         },
       },
     ]);
@@ -109,7 +113,7 @@ export default function Reviews() {
             <Text variant="headline">{mine ? 'Your review' : 'Say how it went'}</Text>
             <View style={styles.picker}>
               {[1, 2, 3, 4, 5].map((n) => (
-                <Pressable key={n} onPress={() => { setRating(n); setTouched(true); }} hitSlop={4}
+                <Pressable key={n} onPress={() => { haptics.select(); setRating(n); setTouched(true); }} hitSlop={4}
                   accessibilityRole="radio" accessibilityState={{ selected: rating === n }}
                   accessibilityLabel={`${n} star${n === 1 ? '' : 's'}`}>
                   <Ionicons name={n <= rating ? 'star' : 'star-outline'} size={30}
@@ -117,7 +121,7 @@ export default function Reviews() {
                 </Pressable>
               ))}
             </View>
-            <TextInput
+            <HapticInput
               value={body}
               onChangeText={(t) => { setBody(t); setTouched(true); }}
               multiline maxLength={2000}

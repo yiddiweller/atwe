@@ -5,6 +5,8 @@ import { Button } from './Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { addAddress, type Address } from '@/api/checkout';
+import { HapticInput } from '@/components/HapticInput';
+import { haptics } from '@/lib/haptics';
 
 /**
  * A new delivery address.
@@ -30,9 +32,11 @@ export function AddressForm({ onSaved, onCancel }: {
     if (saving) return;
     setSaving(true);
     try {
-      onSaved(await addAddress({ ...v, isDefault: true }));
+      const a = await addAddress({ ...v, isDefault: true });
+      haptics.success();
+      onSaved(a);
     } catch (e) {
-      Alert.alert('Address', (e as Error).message);
+      haptics.error(); Alert.alert('Address', (e as Error).message);
     } finally {
       setSaving(false);
     }
@@ -43,7 +47,7 @@ export function AddressForm({ onSaved, onCancel }: {
   } & React.ComponentProps<typeof TextInput>) => (
     <View style={{ marginBottom: 12 }}>
       <Text variant="caption" tone="t3" style={{ marginBottom: 5 }}>{label}</Text>
-      <TextInput
+      <HapticInput
         value={v[k]}
         onChangeText={set(k)}
         style={[styles.input, { backgroundColor: c.s1, color: c.text }]}

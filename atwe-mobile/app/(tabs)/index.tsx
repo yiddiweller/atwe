@@ -4,7 +4,6 @@ import { withTiming } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
@@ -15,6 +14,7 @@ import { spacing } from '@/theme/tokens';
 import { useInfiniteFeed, type FeedScope, type Post } from '@/api/social';
 import { useAppReady } from '@/lib/appReady';
 import { useNavMorph } from '@/lib/navMorph';
+import { haptics } from '@/lib/haptics';
 
 // The same four the web Home has, in the same order.
 const TABS: { key: FeedScope; label: string }[] = [
@@ -125,7 +125,7 @@ export default function Home() {
         <View style={styles.headActions}>
           <Pressable
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              haptics.tap();
               router.push('/compose');
             }}
             hitSlop={8}

@@ -13,9 +13,10 @@ import { Image } from 'expo-image';
 import { BlurView } from 'expo-blur';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from './Text';
+import { HapticInput } from '@/components/HapticInput';
+import { haptics } from '@/lib/haptics';
 
 /**
  * GlassComposer — the ChatGPT-style chat input, in Atwe's design. A floating
@@ -132,7 +133,7 @@ export function GlassComposer({
           <Ionicons name="add" size={26} color={c.t2} />
         </Pressable>
       )}
-      <TextInput
+      <HapticInput
         style={[styles.input, { color: c.text }]}
         placeholder={placeholder}
         placeholderTextColor={c.t3}
@@ -152,12 +153,12 @@ export function GlassComposer({
       <Pressable
         onPress={() => {
           if (micMode) {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+            haptics.press();
             onStartRecord?.();
             return;
           }
           if (!canSend) return;
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+          haptics.tap();
           onSend();
         }}
         disabled={!canSend && !micMode}

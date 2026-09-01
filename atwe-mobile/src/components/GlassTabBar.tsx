@@ -12,10 +12,10 @@ import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useNavMorph } from '@/lib/navMorph';
+import { haptics } from '@/lib/haptics';
 
 /**
  * The five-world tab bar — a custom REAL Apple Liquid Glass bar (expo-glass-effect)
@@ -124,7 +124,7 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
             .map(({ route, i }) => {
             const focused = state.index === i;
             const onPress = () => {
-              Haptics.selectionAsync().catch(() => {});
+              haptics.select();
               const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
               if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
             };
@@ -156,7 +156,7 @@ export function GlassTabBar({ state, navigation }: BottomTabBarProps) {
         <Animated.View style={[StyleSheet.absoluteFill, styles.plusWrap, plusStyle]} pointerEvents={isBall ? 'auto' : 'none'}>
           <Pressable
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              haptics.tap();
               router.push('/compose');
             }}
             style={StyleSheet.absoluteFill}

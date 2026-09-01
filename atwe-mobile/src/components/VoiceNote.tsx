@@ -2,11 +2,11 @@ import { useEffect, useMemo } from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import * as Haptics from 'expo-haptics';
 import { Text } from './Text';
 import { useTheme } from '@/theme/ThemeProvider';
 import { mediaUri } from '@/lib/media';
 import { voiceTime } from '@/lib/voice';
+import { haptics } from '@/lib/haptics';
 
 /**
  * A voice note inside a message bubble: play/pause, a bar that fills as it goes,
@@ -42,7 +42,7 @@ export function VoiceNote({
   const on = mine ? '#fff' : c.accent;
 
   const toggle = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.tap();
     if (status.playing) player.pause();
     else player.play();
   };

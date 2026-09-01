@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { View, FlatList, Pressable, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
 import { router } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Avatar } from '@/components/Avatar';
@@ -10,6 +9,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useMoneyRequests, payMoneyRequest, declineMoneyRequest, money, type MoneyRequest } from '@/api/wallet';
 import { timeAgo } from '@/lib/format';
+import { haptics } from '@/lib/haptics';
 
 /**
  * Money somebody has asked you for, and what you have asked for. Paying is one
@@ -75,7 +75,7 @@ function RequestRow({ req, incoming, onDone }: { req: MoneyRequest; incoming: bo
     setBusy('pay');
     try {
       await payMoneyRequest(req.id, clientId);
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      void haptics.success();
       qc.invalidateQueries({ queryKey: ['wallet'] });
       onDone();
     } catch { /* the row stays; the server said why */ }

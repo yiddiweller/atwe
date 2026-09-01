@@ -5,6 +5,7 @@ import { Text } from './Text';
 import { Button } from './Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
+import { HapticInput } from '@/components/HapticInput';
 
 /**
  * "Tell us what went wrong" — a few lines of text and a confirm.
@@ -44,7 +45,7 @@ export function ReasonSheet({
             </Pressable>
           </View>
           {!!sub && <Text variant="body" tone="t2" style={{ marginTop: 6 }}>{sub}</Text>}
-          <TextInput
+          <HapticInput
             value={text}
             onChangeText={setText}
             multiline

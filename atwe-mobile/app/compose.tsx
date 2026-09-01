@@ -23,6 +23,8 @@ import { useAuth } from '@/auth/AuthProvider';
 import { createPost } from '@/api/social';
 import { pickPhoto, pickPhotoMessage } from '@/lib/pickPhoto';
 import { radius } from '@/theme/tokens';
+import { HapticInput } from '@/components/HapticInput';
+import { haptics } from '@/lib/haptics';
 
 const MAX = 5000;
 
@@ -66,6 +68,7 @@ export default function Compose() {
         body: body.trim(),
         ...(photo ? { image: photo, ...(alt.trim() ? { imageAlt: alt.trim() } : {}) } : {}),
       });
+      haptics.success();
       qc.invalidateQueries({ queryKey: ['feed'] });
       router.back();
     } catch (e) {
@@ -97,7 +100,7 @@ export default function Compose() {
           keyboardShouldPersistTaps="handled">
           <View style={styles.row}>
             <Avatar name={user?.name} avatar={user?.avatar} biz={biz} size={40} />
-            <TextInput
+            <HapticInput
               style={[styles.input, { color: c.text }]}
               placeholder="What's happening?"
               placeholderTextColor={c.t3}
@@ -118,7 +121,7 @@ export default function Compose() {
                 accessibilityRole="button" accessibilityLabel="Remove photo">
                 <Ionicons name="close" size={16} color={c.text} />
               </Pressable>
-              <TextInput
+              <HapticInput
                 value={alt}
                 onChangeText={setAlt}
                 placeholder="Describe the photo (optional)"

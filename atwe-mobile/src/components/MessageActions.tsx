@@ -2,11 +2,11 @@ import { Modal, View, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Haptics from 'expo-haptics';
 import { Text } from './Text';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { REACTIONS } from '@/api/beam';
+import { haptics } from '@/lib/haptics';
 
 export type MessageAction = 'reply' | 'copy' | 'delete-me' | 'delete-all';
 
@@ -36,7 +36,7 @@ export function MessageActions({
   const insets = useSafeAreaInsets();
 
   const pick = (fn: () => void) => () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    haptics.tap();
     onClose();
     // Let the sheet finish dismissing before the action moves the screen under
     // it — an Alert raised from inside a closing modal is a known iOS deadlock.

@@ -15,6 +15,8 @@ import { radius, spacing } from '@/theme/tokens';
 import { postStory, type StoryAudience } from '@/api/stories';
 import { STORY_BGS, storyGradient } from '@/lib/storyBg';
 import { pickPhoto, pickPhotoMessage } from '@/lib/pickPhoto';
+import { HapticInput } from '@/components/HapticInput';
+import { haptics } from '@/lib/haptics';
 
 /**
  * Add to your story.
@@ -59,11 +61,12 @@ export default function AddStory() {
         ...(kind === 'text' ? { bg } : {}),
         audience,
       });
+      haptics.success();
       qc.invalidateQueries({ queryKey: ['storyTray'] });
       qc.invalidateQueries({ queryKey: ['stories'] });
       router.back();
     } catch (e) {
-      Alert.alert('Story', (e as Error).message);
+      haptics.error(); Alert.alert('Story', (e as Error).message);
       setBusy(false);
     }
   };
@@ -111,7 +114,7 @@ export default function AddStory() {
         </View>
 
         <View style={styles.controls}>
-          <TextInput
+          <HapticInput
             value={caption}
             onChangeText={setCaption}
             placeholder={photo ? 'Add a caption (optional)' : 'What do you want to say?'}
@@ -127,7 +130,7 @@ export default function AddStory() {
               <Text variant="caption" tone="t3" style={styles.lbl}>Colour</Text>
               <View style={styles.swatches}>
                 {STORY_BGS.map((b) => (
-                  <Pressable key={b.id} onPress={() => setBg(b.id)}
+                  <Pressable key={b.id} onPress={() => { haptics.select(); setBg(b.id); }}
                     accessibilityRole="radio" accessibilityState={{ selected: bg === b.id }}
                     accessibilityLabel={`Background ${b.id}`}>
                     <LinearGradient
@@ -144,7 +147,7 @@ export default function AddStory() {
           <Text variant="caption" tone="t3" style={styles.lbl}>Who sees it</Text>
           <View style={styles.chips}>
             {(['all', 'close'] as StoryAudience[]).map((a) => (
-              <Pressable key={a} onPress={() => setAudience(a)}
+              <Pressable key={a} onPress={() => { haptics.select(); setAudience(a); }}
                 style={[styles.chip, { backgroundColor: audience === a ? c.accent : c.s1 }]}
                 accessibilityRole="radio" accessibilityState={{ selected: audience === a }}>
                 <Text variant="callout" weight="600"

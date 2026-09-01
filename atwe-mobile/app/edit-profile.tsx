@@ -17,6 +17,8 @@ import { saveProfile } from '@/api/profile';
 import { pickPhoto, pickPhotoMessage } from '@/lib/pickPhoto';
 import { HoursEditor, DEFAULT_HOURS, type BusinessHours } from '@/components/HoursEditor';
 import { mediaUri } from '@/lib/media';
+import { HapticInput } from '@/components/HapticInput';
+import { haptics } from '@/lib/haptics';
 
 /**
  * Change how you look to everyone else.
@@ -93,13 +95,14 @@ export default function EditProfile() {
         // hours set anywhere else.
         ...(biz && hoursChanged ? { businessHours: hours } : {}),
       });
+      haptics.success();
       setUser(next);
       // Your name and face are on posts, chats and search results all over the
       // app; every cached copy of them is now out of date.
       qc.invalidateQueries();
       router.back();
     } catch (e) {
-      Alert.alert('Profile', (e as Error).message);
+      haptics.error(); Alert.alert('Profile', (e as Error).message);
     } finally {
       setSaving(false);
     }
@@ -190,7 +193,7 @@ function Field({ label, value, set, c, ...rest }: {
   return (
     <View style={{ marginBottom: 12 }}>
       <Text variant="caption" tone="t3" style={{ marginBottom: 5 }}>{label}</Text>
-      <TextInput
+      <HapticInput
         value={value}
         onChangeText={set}
         placeholderTextColor={c.t3}

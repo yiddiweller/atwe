@@ -540,6 +540,73 @@ camelCase**), the `eta` range, and two more. A required field the server never
 sends is a failure; an optional one is reported to eyeball, because absence can
 be legitimate. An empty list is skipped, never passed.
 
+## Recently added (how the app FEELS — system-wide haptics)
+
+Every tap, tick and confirmation in Atwe now goes through **one module**,
+`src/lib/haptics.ts`, instead of 25 scattered `expo-haptics` calls that each
+picked their own intensity. Six named intents, and a screen chooses what it
+MEANS rather than how hard it should buzz:
+
+| intent | Apple generator | when |
+|---|---|---|
+| `tap()` | Impact **light** | anything you press: a button, a menu row, a card that opens |
+| `press()` | Impact **medium** | the few weighty acts — start recording, pay, go live |
+| `select()` | **selectionChanged** | a value changing: a tab, a chip, a quantity, a caret landing, a character deleted |
+| `success()` | Notification **success** | it worked — a post landed, money moved, an order was placed |
+| `warning()` | Notification **warning** | a destructive confirmation is being offered |
+| `error()` | Notification **error** | it failed or was refused |
+
+Shipped map: 10 taps · 3 presses · 26 selections · 14 successes · 8 warnings ·
+21 errors, across 37 files. Zero files import `expo-haptics` directly.
+
+**Three rules the module exists to enforce, each of which had already been
+broken:**
+
+1. **Nothing runs together.** The Taptic Engine cannot separate two events
+   fired within a few tens of milliseconds — they merge into one long buzz,
+   which is the opposite of crisp. `MIN_GAP` (45ms) coalesces them, so a fast
+   scrub through a picker ticks cleanly instead of humming.
+2. **Nothing fires twice for one gesture.** `<Button>` and `<AuthButton>` own
+   their haptic and fire it on **`onPressIn`** — a real button clicks on the way
+   DOWN, and that moment is most of what separates "mechanical" from "laggy".
+   Three handlers passed to a Button were firing their own as well (Add to cart,
+   Pay, Book it), so those buzzed again ~100ms later on the way up. Fixed.
+3. **Nothing can break.** Every call is fire-and-forget and swallows its own
+   errors: a simulator, a device with no engine, the web build — all silently do
+   nothing rather than throwing inside a press handler.
+
+**Press-in is safe inside a scrolling list**, which is not obvious: iOS's
+ScrollView holds a touch back (`delaysContentTouches`, on by default and never
+overridden here) until it knows the finger is not scrolling, so dragging the
+feed past a button never fires it. The controls that must NOT work that way are
+the ones you can start a scroll from directly — the like/repost/bookmark pills
+on a post card tick on **release** for exactly that reason.
+
+**Text fields** (`src/components/HapticInput.tsx`, now used in 21 files —
+there is no bare `<TextInput>` left in the app): a tick as the caret lands and a
+tick as a character comes back OUT. Typing forward is **deliberately silent** —
+iOS already gives the keyboard its own feedback, and a second generator per
+keystroke is the muddy buzz the whole module exists to avoid.
+
+**Settings → Appearance → Haptics** turns the lot off and remembers it
+(`atwe_haptics`, read once at launch in `app/_layout.tsx` before anything can be
+tapped). Some people find any vibration unpleasant and iOS's own switch is three
+screens deep in Accessibility. Turning it off ticks last; turning it on ticks
+first — the control demonstrates itself in both directions. Verified in the web
+preview: present in both themes, survives a reload, 0 page errors.
+
+### The standing check: `tools/check-haptics.js`
+
+```bash
+node tools/check-haptics.js
+```
+
+Feel is the one thing a screenshot cannot show, so it is the one thing that rots
+quietly. Three rules: nobody imports `expo-haptics` directly; no handler passed
+to a `<Button>` fires its own press haptic; anything declaring itself a `tab` or
+a `radio` has a selection tick. Self-tested — reintroducing each of the three
+bugs makes it fail by name.
+
 ## Next up (phases 3, 4, 6, 7 remain partial)
 1. ~~Profile navigation from feed/detail~~ ✅ done (`app/user/[username].tsx`).
    ~~Stories tray + viewer~~ ✅ done (`StoriesTray` + `app/story/[userId].tsx`).

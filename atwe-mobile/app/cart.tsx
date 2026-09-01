@@ -5,7 +5,6 @@ import {
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
@@ -16,6 +15,7 @@ import { radius, spacing } from '@/theme/tokens';
 import { money } from '@/api/wallet';
 import { useCart, setCartQty, removeFromCart, type Cart, type CartItem } from '@/api/cart';
 import { mediaUri } from '@/lib/media';
+import { haptics } from '@/lib/haptics';
 
 /**
  * The cart.
@@ -38,13 +38,13 @@ export default function CartScreen() {
 
   const change = async (i: CartItem, qty: number) => {
     setBusy(key(i));
-    Haptics.selectionAsync().catch(() => {});
+    haptics.select();
     try {
       if (qty <= 0) await removeFromCart(i.productId, i.variantId);
       else await setCartQty(i.productId, qty, i.variantId);
       await q.refetch();
     } catch (e) {
-      Alert.alert('Cart', (e as Error).message);
+      haptics.error(); Alert.alert('Cart', (e as Error).message);
     } finally {
       setBusy(null);
     }

@@ -12,13 +12,14 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
-import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { PostCard } from '@/components/PostCard';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { usePost, createPost } from '@/api/social';
+import { HapticInput } from '@/components/HapticInput';
+import { haptics } from '@/lib/haptics';
 
 /**
  * Post detail — the reading surface: the post in full, then its replies as
@@ -43,7 +44,7 @@ export default function PostDetail() {
     const body = reply.trim();
     if (!body || sending) return;
     setSending(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    haptics.press();
     try {
       await createPost({ body, parentId: Number(id) });
       setReply('');
@@ -114,7 +115,7 @@ export default function PostDetail() {
 
           {canReply && (
             <View style={[styles.replyBar, { borderTopColor: c.border, backgroundColor: c.bg }]}>
-              <TextInput
+              <HapticInput
                 style={[styles.input, { backgroundColor: c.s2, color: c.text }]}
                 placeholder="Post your reply"
                 placeholderTextColor={c.t3}

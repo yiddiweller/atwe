@@ -9,6 +9,7 @@ import { Button } from '@/components/Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { sendMoney } from '@/api/wallet';
+import { HapticInput } from '@/components/HapticInput';
 
 /**
  * Send money to a @username. Posts to /api/wallet/send (server enforces the
@@ -79,7 +80,7 @@ export default function WalletSend() {
       >
         <View style={{ padding: spacing.lg }}>
           <Field label="To (@username)">
-            <TextInput
+            <HapticInput
               style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
               placeholder="@username"
               placeholderTextColor={c.t3}
@@ -96,7 +97,7 @@ export default function WalletSend() {
               <Text variant="title" tone="t2">
                 $
               </Text>
-              <TextInput
+              <HapticInput
                 style={[styles.amountInput, { color: c.text }]}
                 placeholder="0"
                 placeholderTextColor={c.t3}
@@ -112,7 +113,7 @@ export default function WalletSend() {
           </Field>
 
           <Field label="Note (optional)">
-            <TextInput
+            <HapticInput
               style={[styles.input, { backgroundColor: c.s2, color: c.text, borderRadius: radius.md }]}
               placeholder="What's it for?"
               placeholderTextColor={c.t3}

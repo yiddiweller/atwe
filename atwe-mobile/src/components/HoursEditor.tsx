@@ -2,6 +2,7 @@ import { View, Pressable, TextInput, StyleSheet } from 'react-native';
 import { Text } from './Text';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius } from '@/theme/tokens';
+import { HapticInput } from '@/components/HapticInput';
 
 /** The week, starting Monday — which is the order the server stores and reads. */
 export const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
@@ -68,7 +69,7 @@ export function HoursEditor({ value, onChange }: {
             </Pressable>
             {!closed && (
               <>
-                <TextInput
+                <HapticInput
                   value={(d as { open: string }).open}
                   onChangeText={(t) => set(i, { open: t, close: (d as { close: string }).close })}
                   placeholder="09:00" placeholderTextColor={c.t3} maxLength={5}
@@ -76,7 +77,7 @@ export function HoursEditor({ value, onChange }: {
                   accessibilityLabel={`${label} opens`}
                 />
                 <Text variant="caption" tone="t3">to</Text>
-                <TextInput
+                <HapticInput
                   value={(d as { close: string }).close}
                   onChangeText={(t) => set(i, { open: (d as { open: string }).open, close: t })}
                   placeholder="17:00" placeholderTextColor={c.t3} maxLength={5}

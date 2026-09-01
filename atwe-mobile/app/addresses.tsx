@@ -9,6 +9,7 @@ import { AddressForm } from '@/components/AddressForm';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { useAddresses, addressLine, deleteAddress, setDefaultAddress } from '@/api/checkout';
+import { haptics } from '@/lib/haptics';
 
 /**
  * The address book. Checkout can add one, but a saved address that is WRONG has
@@ -27,7 +28,7 @@ export default function Addresses() {
   const makeDefault = async (id: number) => {
     setBusy(id);
     try { await setDefaultAddress(id); await q.refetch(); }
-    catch (e) { Alert.alert('Address', (e as Error).message); }
+    catch (e) { haptics.error(); Alert.alert('Address', (e as Error).message); }
     finally { setBusy(null); }
   };
 
@@ -37,9 +38,10 @@ export default function Addresses() {
       {
         text: 'Delete', style: 'destructive',
         onPress: async () => {
+          haptics.warning();
           setBusy(id);
           try { await deleteAddress(id); await q.refetch(); }
-          catch (e) { Alert.alert('Address', (e as Error).message); }
+          catch (e) { haptics.error(); Alert.alert('Address', (e as Error).message); }
           finally { setBusy(null); }
         },
       },

@@ -5,13 +5,14 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import * as Haptics from 'expo-haptics';
 import { Text } from './Text';
 import { Button } from './Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { money, useWallet } from '@/api/wallet';
 import { useServices, useSlots, bookAppointment, type Service } from '@/api/appointments';
+import { HapticInput } from '@/components/HapticInput';
+import { haptics } from '@/lib/haptics';
 
 /**
  * Book a business.
@@ -70,12 +71,12 @@ export function BookSheet({ visible, onClose, businessId, businessName }: {
   const book = async () => {
     if (!service || !slot || busy) return;
     setBusy(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
       await bookAppointment(businessId, {
         serviceId: service.id, service: service.name,
         whenAt: slot, note: note.trim(), slot: true,
       });
+      haptics.success();
       qc.invalidateQueries({ queryKey: ['appointments'] });
       qc.invalidateQueries({ queryKey: ['slots'] });
       qc.invalidateQueries({ queryKey: ['wallet'] });
@@ -128,7 +129,7 @@ export function BookSheet({ visible, onClose, businessId, businessName }: {
               <Text variant="callout" tone="t2" style={styles.lbl}>What for</Text>
               <View style={styles.chips}>
                 {services.map((s) => (
-                  <Pressable key={s.id} onPress={() => setServiceId(s.id)}
+                  <Pressable key={s.id} onPress={() => { haptics.select(); setServiceId(s.id); }}
                     style={[styles.chip, { backgroundColor: s.id === service?.id ? c.accent : c.s1 }]}
                     accessibilityRole="radio"
                     accessibilityState={{ selected: s.id === service?.id }}>
@@ -161,7 +162,7 @@ export function BookSheet({ visible, onClose, businessId, businessName }: {
                       {times.map((iso) => {
                         const on = slot === iso;
                         return (
-                          <Pressable key={iso} onPress={() => setSlot(iso)}
+                          <Pressable key={iso} onPress={() => { haptics.select(); setSlot(iso); }}
                             style={[styles.time, { backgroundColor: on ? c.accent : c.s1 }]}
                             accessibilityRole="radio" accessibilityState={{ selected: on }}>
                             <Text variant="callout" weight="600"
@@ -180,7 +181,7 @@ export function BookSheet({ visible, onClose, businessId, businessName }: {
               {!!slots.length && (
                 <>
                   <Text variant="callout" tone="t2" style={styles.lbl}>Anything they should know</Text>
-                  <TextInput value={note} onChangeText={setNote} multiline maxLength={500}
+                  <HapticInput value={note} onChangeText={setNote} multiline maxLength={500}
                     placeholder="Optional" placeholderTextColor={c.t3}
                     style={[styles.input, { backgroundColor: c.s1, color: c.text }]}
                     accessibilityLabel="Note" />

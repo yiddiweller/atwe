@@ -6,6 +6,8 @@ import { Button } from './Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { CARRIERS, shipOrder, type Carrier } from '@/api/orders';
+import { HapticInput } from '@/components/HapticInput';
+import { haptics } from '@/lib/haptics';
 
 /**
  * The seller marking an order sent. Carrier and tracking number are the two
@@ -32,9 +34,10 @@ export function ShipSheet({ visible, orderId, onClose, onShipped }: {
     setBusy(true);
     try {
       await shipOrder(orderId, carrier, tracking.trim());
+      haptics.success();
       onShipped();
     } catch (e) {
-      Alert.alert('Order', (e as Error).message);
+      haptics.error(); Alert.alert('Order', (e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -57,7 +60,7 @@ export function ShipSheet({ visible, orderId, onClose, onShipped }: {
             {CARRIERS.map((k) => (
               <Pressable
                 key={k}
-                onPress={() => setCarrier(k)}
+                onPress={() => { haptics.select(); setCarrier(k); }}
                 style={[styles.chip, { backgroundColor: carrier === k ? c.accent : c.s1 }]}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: carrier === k }}
@@ -73,7 +76,7 @@ export function ShipSheet({ visible, orderId, onClose, onShipped }: {
           <Text variant="callout" tone="t2" style={{ marginTop: 16, marginBottom: 8 }}>
             Tracking number (optional)
           </Text>
-          <TextInput
+          <HapticInput
             value={tracking}
             onChangeText={setTracking}
             autoCapitalize="characters"

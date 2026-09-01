@@ -13,7 +13,6 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import * as Haptics from 'expo-haptics';
 import { Alert } from 'react-native';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
@@ -35,6 +34,7 @@ import { MessageActions, type MessageAction } from '@/components/MessageActions'
 import { ReactionChips } from '@/components/ReactionChips';
 import { ReplyQuote, ReplyStrip } from '@/components/ReplyQuote';
 import * as Clipboard from 'expo-clipboard';
+import { haptics } from '@/lib/haptics';
 
 /**
  * A live 1:1 DM thread — reads GET /api/atchat/with/:id (polled) and sends via
@@ -209,10 +209,11 @@ export default function ChatThread() {
         {
           text: 'Delete', style: 'destructive',
           onPress: async () => {
+            haptics.warning();
             try {
               await deleteMessage({ messageId: m.id }, everyone ? 'everyone' : 'me');
             } catch (e) {
-              Alert.alert('Delete', (e as Error).message);
+              haptics.error(); Alert.alert('Delete', (e as Error).message);
             } finally {
               qc.invalidateQueries({ queryKey: ['thread', peerId] });
               qc.invalidateQueries({ queryKey: ['conversations'] });

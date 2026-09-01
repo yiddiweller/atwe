@@ -18,6 +18,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, radius } from '@/theme/tokens';
 import { useMarketplace, KIND_LABEL, type ListingKind } from '@/api/marketplace';
 import { useCart, cartCount } from '@/api/cart';
+import { HapticInput } from '@/components/HapticInput';
 
 const KINDS: (ListingKind | null)[] = [null, 'physical', 'digital', 'service', 'rental'];
 
@@ -68,7 +69,7 @@ export default function Marketplace() {
       <View style={{ paddingHorizontal: spacing.gutter }}>
         <View style={[styles.search, { backgroundColor: c.s2 }]}>
           <Ionicons name="search" size={18} color={c.t3} />
-          <TextInput
+          <HapticInput
             value={q}
             onChangeText={setQ}
             placeholder="Search products & services"

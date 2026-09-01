@@ -18,6 +18,7 @@ import {
   type Appointment,
 } from '@/api/appointments';
 import { useAuth } from '@/auth/AuthProvider';
+import { haptics } from '@/lib/haptics';
 
 type Tab = 'mine' | 'incoming';
 
@@ -48,7 +49,7 @@ export default function Appointments() {
         qc.invalidateQueries({ queryKey: ['appointments'] });
         qc.invalidateQueries({ queryKey: ['wallet'] });
       } catch (e) {
-        Alert.alert('Appointment', (e as Error).message);
+        haptics.error(); Alert.alert('Appointment', (e as Error).message);
       } finally {
         setBusy(null);
       }
@@ -87,7 +88,7 @@ export default function Appointments() {
       {biz && (
         <View style={styles.tabs}>
           {(['incoming', 'mine'] as Tab[]).map((t) => (
-            <Pressable key={t} onPress={() => setTab(t)} hitSlop={8}
+            <Pressable key={t} onPress={() => { haptics.select(); setTab(t); }} hitSlop={8}
               accessibilityRole="tab" accessibilityState={{ selected: tab === t }}>
               <Text variant="headline" style={{ color: tab === t ? c.text : c.t3 }}>
                 {t === 'incoming' ? 'With you' : 'You booked'}

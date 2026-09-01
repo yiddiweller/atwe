@@ -11,6 +11,8 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { useAuth } from '@/auth/AuthProvider';
 import { startSignup, checkSignupCode, resendSignupCode } from '@/api/signup';
+import { HapticInput } from '@/components/HapticInput';
+import { haptics } from '@/lib/haptics';
 
 /**
  * Making an account — the web's wizard, step for step, in the web's design: a
@@ -149,7 +151,7 @@ export default function Signup() {
               {(['personal', 'business'] as const).map((k) => (
                 <Pressable
                   key={k}
-                  onPress={() => setAccountType(k)}
+                  onPress={() => { haptics.select(); setAccountType(k); }}
                   style={[styles.kind, {
                     backgroundColor: c.s1,
                     borderColor: accountType === k ? c.accent : 'transparent',
@@ -179,7 +181,7 @@ export default function Signup() {
           ) : (
             <View style={styles.bigField}>
               {step === 'username' && <Text style={styles.at}>@</Text>}
-              <TextInput
+              <HapticInput
                 ref={field}
                 value={
                   step === 'email' ? email : step === 'code' ? code : step === 'dob' ? dob

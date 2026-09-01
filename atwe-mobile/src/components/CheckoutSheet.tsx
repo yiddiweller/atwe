@@ -4,7 +4,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { Text } from './Text';
 import { Button } from './Button';
 import { AddressForm } from './AddressForm';
@@ -16,6 +15,7 @@ import {
 } from '@/api/checkout';
 import { useWallet, money } from '@/api/wallet';
 import { useCart } from '@/api/cart';
+import { haptics } from '@/lib/haptics';
 
 /**
  * Checkout for one listing.
@@ -89,7 +89,7 @@ export function CheckoutSheet({
       if (!rateId && q.selectedRateId) setRateId(q.selectedRateId);
     } catch (e) {
       setQuote(null);
-      Alert.alert('Checkout', (e as Error).message);
+      haptics.error(); Alert.alert('Checkout', (e as Error).message);
     } finally {
       setQuoting(false);
     }
@@ -105,11 +105,10 @@ export function CheckoutSheet({
   const doPay = async () => {
     if (paying || !quote) return;
     setPaying(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
       const r = await pay(target, { addressId, shipRateId: rateId, payWith: payMethod, clientId });
       afterPurchase();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      haptics.success();
       onClose();
       Alert.alert(
         r.escrow ? 'Paid — held safely' : 'Order placed',
@@ -140,7 +139,7 @@ export function CheckoutSheet({
           return;
         }
       }
-      Alert.alert('Checkout', (e as Error).message);
+      haptics.error(); Alert.alert('Checkout', (e as Error).message);
     } finally {
       setPaying(false);
     }
@@ -189,7 +188,7 @@ export function CheckoutSheet({
                       {addresses.map((a) => (
                         <Pressable
                           key={a.id}
-                          onPress={() => { setAddressId(a.id); setRateId(null); }}
+                          onPress={() => { haptics.select(); setAddressId(a.id); setRateId(null); }}
                           style={[styles.pick, { backgroundColor: c.s1 },
                             a.id === addressId && { borderColor: c.accent, borderWidth: 1.5 }]}
                           accessibilityRole="radio"
@@ -224,7 +223,7 @@ export function CheckoutSheet({
                   {quote.shippingOptions.map((o) => (
                     <Pressable
                       key={o.id}
-                      onPress={() => setRateId(o.id)}
+                      onPress={() => { haptics.select(); setRateId(o.id); }}
                       style={[styles.pick, { backgroundColor: c.s1 },
                         o.id === rateId && { borderColor: c.accent, borderWidth: 1.5 }]}
                       accessibilityRole="radio"
@@ -350,7 +349,7 @@ function PayOption({ title, sub, icon, on, onPress }: {
   const { c } = useTheme();
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => { haptics.select(); onPress(); }}
       style={[styles.pick, { backgroundColor: c.s1 }, on && { borderColor: c.accent, borderWidth: 1.5 }]}
       accessibilityRole="radio"
       accessibilityState={{ selected: on }}

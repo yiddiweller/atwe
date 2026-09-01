@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { View, Pressable, StyleSheet, Linking, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { topUp, money } from '@/api/wallet';
+import { haptics } from '@/lib/haptics';
 
 /**
  * Putting money in. Real amounts only, and if the server has card payments set
@@ -32,7 +32,7 @@ export default function WalletTopUp() {
     try {
       const r = await topUp({ amount: amount / 100, clientId });
       if (r.url) { await Linking.openURL(r.url); router.back(); return; }
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      void haptics.success();
       qc.invalidateQueries({ queryKey: ['wallet'] });
       router.back();
     } catch (e) {
@@ -58,7 +58,7 @@ export default function WalletTopUp() {
             return (
               <Pressable
                 key={p}
-                onPress={() => { setAmount(p); void Haptics.selectionAsync(); }}
+                onPress={() => { setAmount(p); void haptics.select(); }}
                 style={[styles.chip, {
                   backgroundColor: on ? c.accent : c.s1,
                   borderRadius: radius.pill,

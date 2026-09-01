@@ -15,6 +15,7 @@ import { money } from '@/api/wallet';
 import { useMyListings, updateListing, deleteListing } from '@/api/selling';
 import { listingPrice, type Listing } from '@/api/marketplace';
 import { mediaUri } from '@/lib/media';
+import { haptics } from '@/lib/haptics';
 
 /**
  * What you are selling.
@@ -39,7 +40,7 @@ export default function Sell() {
       await updateListing(p.id, { active: !p.active });
       await q.refetch();
     } catch (e) {
-      Alert.alert('Listing', (e as Error).message);
+      haptics.error(); Alert.alert('Listing', (e as Error).message);
     } finally {
       setBusy(null);
     }
@@ -51,9 +52,10 @@ export default function Sell() {
       {
         text: 'Delete', style: 'destructive',
         onPress: async () => {
+          haptics.warning();
           setBusy(p.id);
           try { await deleteListing(p.id); await q.refetch(); }
-          catch (e) { Alert.alert('Listing', (e as Error).message); }
+          catch (e) { haptics.error(); Alert.alert('Listing', (e as Error).message); }
           finally { setBusy(null); }
         },
       },

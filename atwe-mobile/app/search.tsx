@@ -12,6 +12,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useSearch, SEARCH_SCOPES, jobPay, type SearchScope, type Job, type Service } from '@/api/search';
 import type { SearchUser } from '@/api/social';
+import { HapticInput } from '@/components/HapticInput';
 
 /**
  * Search across all of Atwe. One field, a row of scopes, and results that look
@@ -40,7 +41,7 @@ export default function Search() {
         </Pressable>
         <View style={[styles.field, { backgroundColor: c.s2, borderRadius: radius.pill }]}>
           <Ionicons name="search" size={17} color={c.t3} />
-          <TextInput
+          <HapticInput
             style={[styles.input, { color: c.text }]}
             placeholder="Search Atwe"
             placeholderTextColor={c.t3}

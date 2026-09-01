@@ -6,7 +6,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
-import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
@@ -23,6 +22,7 @@ import {
 } from '@/api/orders';
 import { useRealtime } from '@/lib/useRealtime';
 import { useCallback } from 'react';
+import { haptics } from '@/lib/haptics';
 
 /**
  * One order, from both sides.
@@ -63,11 +63,11 @@ export default function OrderDetail() {
     setBusy(true);
     try {
       await fn();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      haptics.success();
       refresh();
       if (done) Alert.alert('Order', done);
     } catch (e) {
-      Alert.alert('Order', (e as Error).message);
+      haptics.error(); Alert.alert('Order', (e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -88,7 +88,8 @@ export default function OrderDetail() {
   const cancel = () => {
     Alert.alert('Cancel this order?', 'Anything already paid is returned.', [
       { text: 'Keep it', style: 'cancel' },
-      { text: 'Cancel order', style: 'destructive', onPress: () => run(() => cancelOrder(oid)) },
+      { text: 'Cancel order', style: 'destructive',
+        onPress: () => { haptics.warning(); run(() => cancelOrder(oid)); } },
     ]);
   };
 

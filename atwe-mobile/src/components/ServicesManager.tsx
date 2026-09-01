@@ -10,6 +10,8 @@ import { radius, spacing } from '@/theme/tokens';
 import { money } from '@/api/wallet';
 import { useServices, addService, deleteService } from '@/api/appointments';
 import { useAuth } from '@/auth/AuthProvider';
+import { HapticInput } from '@/components/HapticInput';
+import { haptics } from '@/lib/haptics';
 
 /**
  * What a business offers, and for how long.
@@ -42,10 +44,11 @@ export function ServicesManager({ onDone }: { onDone: () => void }) {
         durationMin: Math.max(5, Math.min(1440, Math.round(Number(mins)) || 30)),
         depositCents: Math.round((Number(deposit.replace(/[^0-9.]/g, '')) || 0) * 100),
       });
+      haptics.success();
       setName(''); setMins('30'); setDeposit('');
       await q.refetch();
     } catch (e) {
-      Alert.alert('Service', (e as Error).message);
+      haptics.error(); Alert.alert('Service', (e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -57,8 +60,9 @@ export function ServicesManager({ onDone }: { onDone: () => void }) {
       {
         text: 'Remove', style: 'destructive',
         onPress: async () => {
+          haptics.warning();
           try { await deleteService(id); await q.refetch(); }
-          catch (e) { Alert.alert('Service', (e as Error).message); }
+          catch (e) { haptics.error(); Alert.alert('Service', (e as Error).message); }
         },
       },
     ]);
@@ -105,20 +109,20 @@ export function ServicesManager({ onDone }: { onDone: () => void }) {
         <Text variant="callout" tone="t2" style={{ marginTop: 20, marginBottom: 8 }}>
           Add something
         </Text>
-        <TextInput value={name} onChangeText={setName}
+        <HapticInput value={name} onChangeText={setName}
           placeholder="Haircut, consultation, delivery…" placeholderTextColor={c.t3}
           style={[styles.input, { backgroundColor: c.s1, color: c.text }]}
           accessibilityLabel="Service name" />
         <View style={styles.pair}>
           <View style={{ flex: 1 }}>
             <Text variant="caption" tone="t3" style={styles.lbl}>How long (minutes)</Text>
-            <TextInput value={mins} onChangeText={setMins} keyboardType="number-pad"
+            <HapticInput value={mins} onChangeText={setMins} keyboardType="number-pad"
               style={[styles.input, { backgroundColor: c.s1, color: c.text }]}
               accessibilityLabel="Minutes" />
           </View>
           <View style={{ flex: 1 }}>
             <Text variant="caption" tone="t3" style={styles.lbl}>Deposit (optional)</Text>
-            <TextInput value={deposit} onChangeText={setDeposit} keyboardType="decimal-pad"
+            <HapticInput value={deposit} onChangeText={setDeposit} keyboardType="decimal-pad"
               placeholder="0.00" placeholderTextColor={c.t3}
               style={[styles.input, { backgroundColor: c.s1, color: c.text }]}
               accessibilityLabel="Deposit" />

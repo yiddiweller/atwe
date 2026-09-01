@@ -27,6 +27,7 @@ import { useRealtime } from '@/lib/useRealtime';
 import { pickPhoto, pickPhotoMessage } from '@/lib/pickPhoto';
 import { mediaUri } from '@/lib/media';
 import { useVoiceRecorder, voiceFailMessage, VOICE_MAX_SEC } from '@/lib/voice';
+import { haptics } from '@/lib/haptics';
 
 /**
  * A live group thread — GET /api/atchat/groups/:id, sending via
@@ -212,10 +213,11 @@ export default function GroupThread() {
         {
           text: 'Delete', style: 'destructive',
           onPress: async () => {
+            haptics.warning();
             try {
               await deleteMessage({ messageId: m.id, groupId: gid }, everyone ? 'everyone' : 'me');
             } catch (e) {
-              Alert.alert('Delete', (e as Error).message);
+              haptics.error(); Alert.alert('Delete', (e as Error).message);
             } finally {
               qc.invalidateQueries({ queryKey: ['group', gid] });
               qc.invalidateQueries({ queryKey: ['groups'] });
