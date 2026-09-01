@@ -6091,6 +6091,43 @@ Covered by `scratchpad/postcard.js` (both themes: concentric corners, the card a
 44pt targets, all three contrast steps, counts, header untouched) and `scratchpad/cardsweep.js`
 (home, profile, bookmarks, hashtag, search). Reverting the design fails 8 of them.
 
+### Solid, never hollow — the buttons that were breaking the app's own rule 3
+
+The founder photographed five screens and said the buttons looked thin, naming the profile
+editor's **Save** as the one that already looked right. Measuring every text button against
+it showed the difference is **not height**: `.pf-top-save` is **32px** and one of the
+SHORTER buttons in the app. It is that Save is **solid**, while the ones they marked were
+hollow — a 1.5px outline with nothing inside.
+
+**The biggest one was `.ac-pill-btn`, the secondary button used all over the app** (Message,
+Ignore, Cancel, View…). It was `background:transparent` with its grey fill on **`:hover`
+only** — and a phone has no hover, so every secondary action rendered as bare floating text
+with no button around it. The docs already described this button as "grey-glass"; the fill
+was always the intent and simply never reached a touch device. Variants that set their own
+background (`.accent`, `.pay-bal`, `.pay-prot`, and the wallet card's own rule) are more
+specific and still win.
+
+| was | now |
+|---|---|
+| `.ac-pill-btn` — transparent, fill on hover only | solid `--s2` |
+| `.circ2-join` ("Join") — 1.5px grey outline, hollow | solid `--s2` |
+| `.circ2-gjoin` ("Follow all") — 1.5px blue outline, hollow, **26px** | solid, blue text, 32 |
+| `.ac-ad-day` (1d/3d/7d) — 1px outline, hollow | solid `--s2` |
+| `.su-chip`, `.bk-tab` — hollow | solid `--s2` |
+| `.circ2-chip`, `.ac-jv`, `.ev-tab` — solid but 29–31px | on the floor |
+
+**`--btn-h` (32px) is a FLOOR, not a fixed height** — the height of the button the founder
+named — so a button holding more (an icon, two lines) may still be taller. One control is
+deliberately under it: `.pf-ai` floats INSIDE a field's label line, where a 32px floor would
+break the row; it was already solid, and went 17 → 24 for a usable tap target.
+
+**This was not a taste change.** Design rule 3 already says *"Solid, never outlined"* — these
+were screens that predated it. `scratchpad/buttons.js` sweeps ten surfaces in both themes and
+fails on any hollow text pill or any under 32; it keys findings by **class AND fill**, since
+`.ac-pill-btn` has a solid `.accent` variant and keying on the class alone would check
+whichever appeared first and never look at the hollow one. Self-tested: restoring the two
+buttons the founder photographed fails it by name.
+
 ### One size for every option, and a capsule with no line across it
 
 Two things the founder's design team caught on a real phone, both in the same family:
