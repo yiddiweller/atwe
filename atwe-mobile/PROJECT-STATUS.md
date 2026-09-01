@@ -1447,6 +1447,84 @@ npx expo start --tunnel                    # scan QR with Expo Go
   `docs/ATWE-iOS-Architecture-Build-Plan.pdf` (10 pp) — the companion audits
   the book absorbs. Treat the book as the single source of truth.
 
+## The founder's nine-item list (this run)
+
+They opened 0.4.0 on their iPhone and named nine things. All nine were addressed;
+what is honestly incomplete is said so below rather than counted.
+
+1. **Signing up was broken** — the blocker. At "What's your name?" you could type
+   and nothing appeared. One shared `TextInput` answered all seven questions, so
+   one native UITextField carried the previous step's state across: coming off the
+   birthday step it still held a `maxLength` of 10 (iOS skips an undefined prop in
+   the diff, so a cap is never cleared, only replaced) and a delegate predicted-text
+   of the ten characters of a date, so every keystroke was measured as 10 + 1
+   against a cap of 10 and refused before it could be drawn. Each question builds
+   its own field now (`key={step}`), and the birthday no longer touches that field
+   at all. **Native-only** — on the web each step renders a fresh DOM `<input>`, so
+   the browser preview cannot prove or disprove it; what the preview DID prove is
+   that a new account now walks start → email → code → birthday → name → password →
+   @username and lands on its own feed.
+2. **The code screen** is the web's `.otp-row`: six 54px boxes at radius 16 with
+   the next one lit as the caret, and the web's resend line counting down from 30
+   under it. ONE hidden input does the typing — six real inputs with focus hopping
+   between them breaks paste, breaks backspace at an empty box, and breaks iOS's
+   one-time-code autofill.
+3. **The birthday** is the web's `.su-dob-wheels` to the pixel: 220 tall, 44 rows,
+   88 of padding, a band of two hairlines rather than a filled block, faded at both
+   ends, opening at ~25 with the 18 floor stated underneath. It also emits its value
+   on mount — the wheels showed a complete date while the field was still empty, so
+   Continue sat dead with nothing on screen saying why.
+4. **The start screen's buttons** were 334 wide against the web's 310. The reason
+   they kept missing: the start screen is TWO nested boxes on the web with different
+   padding from a wizard step's (overlay 20 + `.auth-inner` 20 = 40 a side; a step is
+   the app's one 14px margin). Built the same way now and measured at 310 at x=40,
+   the live web's own numbers. The press-and-hold glow was already there — it grows
+   to 1.04 on the web's own curve with a light wash at the finger.
+5. **The opening mark** now ROLLS on the web's 2.4s curve while its fill sweeps
+   grey → white → grey on a 2s beat, breathing .94 → 1.06. It was a flat white mark
+   dimming slightly: the roll was right, the light was missing.
+6. **Signing in plays the welcome moment**, which the phone did not have at all:
+   the mark rolls in see-through at .28, dims away as your own photo zooms up
+   through it at full colour, and the whole stage eases forward as the black lifts.
+7. **Business pictures are round**, everywhere. Checked as a business account: 28
+   avatar-shaped boxes on the feed, every one a full circle.
+8. **The top bar** carries the Atwe mark + the world's name on the left and the
+   plus / ⋯ / your photo on the right, on Home, Beam, Engine and Atwe AI.
+9. **Account and Settings are the web's design.** This was the biggest one and,
+   side by side, plainly right: the phone still had the flat list the web itself
+   threw out — ~35 rows under uppercase headings with blue-tint icon discs — while
+   the web has an identity hero, a wallet card, a search bar and section rows that
+   each open a page of their own. Both pages are rebuilt from one table each
+   (`src/me/sections.ts`, `src/settings/pages.ts`) that drives the hub, the pages
+   AND the search, so a row lands in all three in one edit.
+
+### What is honestly NOT there
+- The web's **Customers, Creating, Atwe AI and Help & feedback** sections of the
+  Account page, and Settings' **Security & access, Premium & verification, Atwe
+  Assistant and Your data & storage**, have no screen on the phone yet. A row that
+  opens an empty page is worse than one that is honestly absent, so they are left
+  out rather than stubbed. Nothing that was reachable before was dropped.
+- **Beam still has Chats + Groups where the web has All · Chats · Calls · Contacts.**
+  Calls need `react-native-webrtc`, which cannot be tested from this environment.
+- The **Liquid Glass bar** uses the real API — `GlassView` `regular` +
+  `isInteractive` inside a `GlassContainer` so the bar and its active pill merge —
+  but `isLiquidGlassAvailable()` is false in the browser preview, so the preview
+  always draws the blur fallback. **It can only be judged on a real iOS 26 phone.**
+
+### Two real bugs the rebuild turned up
+- `/jobs` and `/orders` ignored a scope, so "Jobs I posted", "My applications" and
+  "Saved jobs" would all have landed on the same unfiltered board. Both are
+  deep-linkable now.
+- The date wheels never emitted their starting value, so the birthday step's
+  Continue was dead on arrival with a complete date on screen.
+
+### Checked
+- 150 screen loads (50 screens × dark, light, and as a business account): one flag,
+  `/business-analytics` returning 403 to a personal account, which is the server
+  being right and is unreachable from the UI for one.
+- The four durable checkers: haptics (196 files), design tokens (50 colours),
+  API types (44 interfaces, 0 required-field gaps), notification verbs.
+
 ## Apple / distribution status
 - **Apple ID:** business email (ceo@atwe.com), 2FA on.
 - **Apple Developer Program: APPROVED** (founder confirmed, 28 Aug 2026), enrolled
