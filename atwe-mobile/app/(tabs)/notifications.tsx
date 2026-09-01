@@ -38,26 +38,10 @@ export default function Notifications() {
 
   return (
     <Screen edges={[]}>
-      {/* No back arrow: this is one of the five worlds now, not a page opened
-          from somewhere, and an arrow with nothing behind it is a dead control. */}
-      <ChromeBar>
-        <View style={styles.head}>
-          <Text variant="title">Notifications</Text>
-        </View>
-      </ChromeBar>
-
-      {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={c.accent} />
-        </View>
-      ) : isError ? (
-        <View style={styles.center}>
-          <Text variant="body" tone="t2">
-            Couldn't load notifications.
-          </Text>
-        </View>
-      ) : (
-        <FlatList
+      {/* One always-mounted list, and the chrome after it: iOS minimises the
+          tab bar against the scroll view it finds, and a world that swaps its
+          list out for a spinner has none to find. */}
+      <FlatList
           data={groupNotifs(notifs)}
           keyExtractor={(g) => String(g.head.id)}
           renderItem={({ item }) => <NotifRow n={item.head} count={item.count} />}
@@ -68,14 +52,27 @@ export default function Notifications() {
           }
           ListEmptyComponent={
             <View style={styles.center}>
-              <Ionicons name="notifications-outline" size={40} color={c.t3} />
-              <Text variant="body" tone="t3" style={{ marginTop: 10 }}>
-                No notifications yet.
-              </Text>
+              {isLoading ? <ActivityIndicator color={c.accent} /> : isError ? (
+                <Text variant="body" tone="t2">Couldn't load notifications.</Text>
+              ) : (
+                <>
+                  <Ionicons name="notifications-outline" size={40} color={c.t3} />
+                  <Text variant="body" tone="t3" style={{ marginTop: 10 }}>
+                    No notifications yet.
+                  </Text>
+                </>
+              )}
             </View>
           }
         />
-      )}
+
+      {/* No back arrow: this is one of the five worlds now, not a page opened
+          from somewhere, and an arrow with nothing behind it is a dead control. */}
+      <ChromeBar>
+        <View style={styles.head}>
+          <Text variant="title">Notifications</Text>
+        </View>
+      </ChromeBar>
     </Screen>
   );
 }

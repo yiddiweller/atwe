@@ -21,6 +21,7 @@ import { FeedTab } from '@/components/FeedTab';
 import { NewChatSheet } from '@/components/NewChatSheet';
 import { BeamToolsMenu } from '@/components/BeamToolsMenu';
 import { BrandBar } from '@/components/BrandBar';
+import { ComposeFab } from '@/components/ComposeFab';
 import { ChromeButton, ChromeBar, chromePad, BEAM_TABS_H } from '@/components/Chrome';
 import { RowDivider } from '@/components/RowDivider';
 
@@ -76,8 +77,127 @@ export default function Beam() {
   // screen is pulled down.
   useRealtimeInvalidate(['msg', 'read', 'read-self'], [['conversations'], ['groups']]);
 
+  /* What the one list shows, per tab: its rows, how to draw one, what to say
+     when there are none, and what a pull-to-refresh asks for. */
+  const pane = ((): {
+    rows: never[];
+    key: (item: never, i: number) => string;
+    row: ({ item }: { item: never }) => React.ReactElement;
+    empty: React.ReactNode;
+    loading: boolean;
+    refreshing: boolean;
+    refresh: () => void;
+  } => {
+    const startOne = (
+      <>
+        <View style={{ height: 18 }} />
+        <Button title="Start a conversation" onPress={() => setNewChat(true)} />
+      </>
+    );
+    if (tab === 'calls') {
+      return {
+        rows: callsQ.data?.calls ?? [],
+        key: (x: CallLog) => String(x.id),
+        row: ({ item }: { item: CallLog }) => <CallRow call={item} />,
+        empty: (
+          <>
+            <Text variant="title" tone="t2">No calls yet</Text>
+            <Text variant="body" tone="t3" style={{ marginTop: 6, textAlign: 'center' }}>
+              Calls you make or miss are listed here.
+            </Text>
+          </>
+        ),
+        loading: callsQ.isLoading,
+        refreshing: callsQ.isRefetching,
+        refresh: () => { void callsQ.refetch(); },
+      } as never;
+    }
+    if (tab === 'contacts') {
+      return {
+        rows: contactsQ.data?.contacts ?? [],
+        key: (p: Person) => String(p.id),
+        row: ({ item }: { item: Person }) => <ContactRow person={item} />,
+        empty: (
+          <>
+            <Text variant="title" tone="t2">No contacts yet</Text>
+            <Text variant="body" tone="t3" style={{ marginTop: 6, textAlign: 'center' }}>
+              People you message or connect with show up here.
+            </Text>
+          </>
+        ),
+        loading: contactsQ.isLoading,
+        refreshing: contactsQ.isRefetching,
+        refresh: () => { void contactsQ.refetch(); },
+      } as never;
+    }
+    if (tab === 'all') {
+      return {
+        rows: all,
+        key: (r: AnyRow) => (r.kind === 'dm'
+          ? `d${r.convo.id}:${r.convo.thread_id ?? 'main'}`
+          : `g${r.group.id}`),
+        row: ({ item }: { item: AnyRow }) => (item.kind === 'dm'
+          ? <ConvoRow convo={item.convo} />
+          : <GroupRow group={item.group} />),
+        empty: (
+          <>
+            <Text variant="title" tone="t2">No conversations yet</Text>
+            <Text variant="body" tone="t3" style={{ marginTop: 6, textAlign: 'center' }}>
+              Message anybody on Atwe.
+            </Text>
+            {startOne}
+          </>
+        ),
+        loading: false,
+        refreshing: isRefetching || groupsQ.isRefetching,
+        refresh: () => { void refetch(); void groupsQ.refetch(); },
+      } as never;
+    }
+    return {
+      rows: convos,
+      key: (x: Conversation) => `${x.id}:${x.thread_id ?? 'main'}`,
+      row: ({ item }: { item: Conversation }) => <ConvoRow convo={item} />,
+      empty: (
+        <>
+          <Text variant="title" tone="t2">No messages yet</Text>
+          <Text variant="body" tone="t3" style={{ marginTop: 6, textAlign: 'center' }}>
+            Message anybody on Atwe.
+          </Text>
+          {startOne}
+        </>
+      ),
+      loading: false,
+      refreshing: isRefetching,
+      refresh: () => { void refetch(); },
+    } as never;
+  })();
+
   return (
     <Screen edges={[]}>
+      {/* ONE list, whatever the tab. Four separate ones read the same on screen,
+          but iOS finds a tab's scroll view once and then minimises the bar
+          against it — swapping the whole list out on every tab tap, and mounting
+          none at all while the first page loads, is how Home and Beam ended up
+          the two worlds where the bar never shrank. Loading and error live in
+          the list's own empty slot for the same reason. */}
+      <FlatList
+        data={pane.rows as never[]}
+        keyExtractor={pane.key}
+        renderItem={pane.row}
+        contentContainerStyle={[pane.rows.length ? { paddingBottom: 24 } : styles.emptyWrap, chromePad.beam]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={pane.refreshing} onRefresh={pane.refresh} tintColor={c.t3} />
+        }
+        ListEmptyComponent={
+          <View style={styles.center}>
+            {isLoading || pane.loading ? <ActivityIndicator color={c.accent} /> : isError ? (
+              <Text variant="body" tone="t2">Couldn't load your chats.</Text>
+            ) : pane.empty}
+          </View>
+        }
+      />
+
       {/* The world's own brand row: the mark, the word "Beam", and the three
           controls — ＋ starts a conversation, ⋯ opens the tools. The bespoke
           title row it replaces had the buttons but no brand and no name. */}
@@ -107,112 +227,8 @@ export default function Beam() {
       </View>
       </ChromeBar>
 
-      {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={c.accent} />
-        </View>
-      ) : isError ? (
-        <View style={styles.center}>
-          <Text variant="body" tone="t2">
-            Couldn't load your chats.
-          </Text>
-        </View>
-      ) : tab === 'all' ? (
-        <FlatList
-          data={all}
-          keyExtractor={(r) => (r.kind === 'dm'
-            ? `d${r.convo.id}:${r.convo.thread_id ?? 'main'}`
-            : `g${r.group.id}`)}
-          renderItem={({ item }) => (item.kind === 'dm'
-            ? <ConvoRow convo={item.convo} />
-            : <GroupRow group={item.group} />)}
-          contentContainerStyle={[all.length ? { paddingBottom: 24 } : styles.emptyWrap, chromePad.beam]}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={isRefetching || groupsQ.isRefetching}
-              onRefresh={() => { void refetch(); void groupsQ.refetch(); }} tintColor={c.t3} />
-          }
-          ListEmptyComponent={
-            <View style={styles.center}>
-              <Text variant="title" tone="t2">No conversations yet</Text>
-              <Text variant="body" tone="t3" style={{ marginTop: 6, textAlign: 'center' }}>
-                Message anybody on Atwe.
-              </Text>
-              <View style={{ height: 18 }} />
-              <Button title="Start a conversation" onPress={() => setNewChat(true)} />
-            </View>
-          }
-        />
-      ) : tab === 'calls' ? (
-        <FlatList
-          data={callsQ.data?.calls ?? []}
-          keyExtractor={(x) => String(x.id)}
-          renderItem={({ item }) => <CallRow call={item} />}
-          contentContainerStyle={[(callsQ.data?.calls?.length) ? { paddingBottom: 24 } : styles.emptyWrap, chromePad.beam]}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={callsQ.isRefetching} onRefresh={callsQ.refetch} tintColor={c.t3} />
-          }
-          ListEmptyComponent={
-            <View style={styles.center}>
-              {callsQ.isLoading ? <ActivityIndicator color={c.accent} /> : (
-                <>
-                  <Text variant="title" tone="t2">No calls yet</Text>
-                  <Text variant="body" tone="t3" style={{ marginTop: 6, textAlign: 'center' }}>
-                    Calls you make or miss are listed here.
-                  </Text>
-                </>
-              )}
-            </View>
-          }
-        />
-      ) : tab === 'contacts' ? (
-        <FlatList
-          data={contactsQ.data?.contacts ?? []}
-          keyExtractor={(p) => String(p.id)}
-          renderItem={({ item }) => <ContactRow person={item} />}
-          contentContainerStyle={[(contactsQ.data?.contacts?.length) ? { paddingBottom: 24 } : styles.emptyWrap, chromePad.beam]}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={contactsQ.isRefetching} onRefresh={contactsQ.refetch} tintColor={c.t3} />
-          }
-          ListEmptyComponent={
-            <View style={styles.center}>
-              {contactsQ.isLoading ? <ActivityIndicator color={c.accent} /> : (
-                <>
-                  <Text variant="title" tone="t2">No contacts yet</Text>
-                  <Text variant="body" tone="t3" style={{ marginTop: 6, textAlign: 'center' }}>
-                    People you message or connect with show up here.
-                  </Text>
-                </>
-              )}
-            </View>
-          }
-        />
-      ) : (
-        <FlatList
-          data={convos}
-          keyExtractor={(c) => `${c.id}:${c.thread_id ?? 'main'}`}
-          renderItem={({ item }) => <ConvoRow convo={item} />}
-          contentContainerStyle={[convos.length ? { paddingBottom: 24 } : styles.emptyWrap, chromePad.beam]}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.t3} />
-          }
-          ListEmptyComponent={
-            <View style={styles.center}>
-              <Text variant="title" tone="t2">
-                No messages yet
-              </Text>
-              <Text variant="body" tone="t3" style={{ marginTop: 6, textAlign: 'center' }}>
-                Message anybody on Atwe.
-              </Text>
-              <View style={{ height: 18 }} />
-              <Button title="Start a conversation" onPress={() => setNewChat(true)} />
-            </View>
-          }
-        />
-      )}
+      <ComposeFab onPress={() => setNewChat(true)} label="New chat" />
+
       <NewChatSheet visible={newChat} onClose={() => setNewChat(false)} />
       <BeamToolsMenu visible={tools} onClose={() => setTools(false)} />
     </Screen>

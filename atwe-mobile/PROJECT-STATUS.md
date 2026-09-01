@@ -1763,6 +1763,46 @@ slide it off the bottom; hand-rolling the slide is precisely the trade that cost
 this app the real material three times over. It needs iOS 26 — on 18–25 the
 native side logs a warning and leaves the bar alone.
 
+### 0.10.0 — why the bar shrank on Account and nowhere else
+
+The founder found it themselves: on the Account page, scrolling down collapses
+the tab bar from right to left into a little pill. *"Is there a way you can do
+the same thing in the home and beam page."*
+
+**iOS finds a tab's scroll view ONCE.** `tabBarMinimizeBehavior` needs a scroll
+view to minimise against, and UIKit resolves it when the tab's view controller
+is set up. Account renders `<ScrollView>` unconditionally, so there was always
+one to find. Home, Beam, Engine and Alerts all did this instead:
+
+    {isLoading ? <spinner/> : isError ? <error/> : <FlatList .../>}
+
+— so at the moment iOS looked, there was no scroll view at all, and the bar
+never shrank on those worlds again. Each now keeps **one always-mounted list**
+with loading and error inside its own `ListEmptyComponent`. Beam went from four
+FlatLists behind a four-way tab conditional to one list whose rows, empty state
+and pull-to-refresh come from a `pane` descriptor — four lists read identically
+on screen, but swapping the whole list out on every tab tap is the same bug
+arriving a second way.
+
+**The chrome now renders AFTER the content, everywhere.** It is absolutely
+positioned with `zIndex: 20`, so it still paints and receives touches on top —
+but in the native view order the page's own vertical scroller is now first,
+rather than sitting behind a bar that (on Home) contains a HORIZONTAL ScrollView
+of feed tabs. A horizontal strip that never scrolls vertically is exactly the
+wrong thing for UIKit to pick.
+
+`tools/check-chrome.js` now guards it: all five worlds must keep a scroller
+mounted and none may hide it behind a loading branch. Self-tested by putting
+Home's list back behind `isLoading`, which it catches by name.
+
+**And the ＋ is back**, as `ComposeFab` on Home and Beam — the web's own compose
+button, white because white is the one primary action per screen. It earns its
+place precisely because the bar minimises away: it floats clear of the bar,
+stays put when the bar shrinks to its pill on the LEFT, and is what leaves you
+able to write something with the bar gone. A ＋ INSIDE the minimised pill is not
+possible — UIKit draws the active tab's icon there, and react-native-screens
+exposes no accessory API.
+
 ### Built, not yet shipped — the cards inside a conversation
 
 Beam's own pitch is *"send money in the chat: pay, request or split a bill

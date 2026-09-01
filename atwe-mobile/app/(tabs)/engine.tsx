@@ -51,6 +51,8 @@ export default function Engine() {
     <Screen edges={[]}>
       {/* No ＋ here: Engine is discovery, there is nothing to compose. The web
           hides it on this world too. */}
+      {dq.trim() ? <SearchResults q={dq} /> : <Explore spacing={spacing} />}
+
       <ChromeBar>
       <BrandBar
         world="engine"
@@ -84,8 +86,6 @@ export default function Engine() {
         </View>
       </View>
       </ChromeBar>
-
-      {dq.trim() ? <SearchResults q={dq} /> : <Explore spacing={spacing} />}
     </Screen>
   );
 }
@@ -178,14 +178,9 @@ function Explore({ spacing }: { spacing: ReturnType<typeof useTheme>['spacing'] 
     suggestions.refetch();
   };
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={c.accent} />
-      </View>
-    );
-  }
-
+  /* No early return while it loads: iOS minimises the tab bar against the
+     scroll view it found ONCE, so a world that swaps its scroller out for a
+     spinner never gets the effect. The spinner goes inside instead. */
   return (
     <ScrollView
       contentContainerStyle={[{ paddingBottom: 120 }, chromePad.engine]}
@@ -199,6 +194,9 @@ function Explore({ spacing }: { spacing: ReturnType<typeof useTheme>['spacing'] 
         />
       }
     >
+      {loading && (
+        <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
+      )}
       {/* The one thing on Engine that is not a list: ask, in your own words.
           Blue is identity here, not action — this is the assistant's own colour
           — so the gradient is the accent and the pill inside it stays white,

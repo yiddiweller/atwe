@@ -42,6 +42,14 @@ function tagEnd(s, i) {
   return -1;
 }
 
+/* The five worlds. iOS minimises the tab bar against the scroll view it finds
+   in a tab ONCE, so each of these must keep exactly one vertical scroller
+   mounted at all times — swap it out for a spinner and the bar never shrinks
+   again on that world, which is precisely how Home and Beam ended up the two
+   that did not do it. */
+const WORLDS = ['app/(tabs)/index.tsx', 'app/(tabs)/beam.tsx', 'app/(tabs)/engine.tsx',
+  'app/(tabs)/notifications.tsx', 'app/(tabs)/profile.tsx'];
+
 const problems = [];
 let checked = 0;
 
@@ -76,9 +84,21 @@ for (const root of ROOTS) {
   }
 }
 
+for (const f of WORLDS) {
+  const s = fs.readFileSync(f, 'utf8');
+  const body = s.slice(s.indexOf('<Screen'));
+  // a scroller behind a loading/error ternary is a scroller iOS cannot find
+  if (/\{\s*(isLoading|loading)[\s\S]{0,400}?\?[\s\S]{0,600}?<(FlatList|ScrollView|SectionList)/.test(body)) {
+    problems.push(`${f}: its list is behind a loading branch — the tab bar cannot minimise against a scroller that is not mounted`);
+  }
+  if (!/<(FlatList|ScrollView|SectionList)/.test(body)) {
+    problems.push(`${f}: a world with no scroll view at all`);
+  }
+}
+
 if (problems.length) {
   console.error(`chrome: ${problems.length} problem(s) across ${checked} screens\n`);
   for (const p of problems) console.error('  ' + p);
   process.exit(1);
 }
-console.log(`chrome: ok — ${checked} screens float their bar and reserve its height`);
+console.log(`chrome: ok — ${checked} screens float their bar and reserve its height, and all ${WORLDS.length} worlds keep a scroller mounted for the bar to minimise against`);

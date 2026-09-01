@@ -16,6 +16,7 @@ import { useNavMorph } from '@/lib/navMorph';
 import { haptics } from '@/lib/haptics';
 import { FeedTab } from '@/components/FeedTab';
 import { BrandBar } from '@/components/BrandBar';
+import { ComposeFab } from '@/components/ComposeFab';
 import { ChromeBar, chromePad, FEED_TABS_H } from '@/components/Chrome';
 
 // The same four the web Home has, in the same order.
@@ -89,6 +90,54 @@ export default function Home() {
 
   return (
     <Screen edges={[]}>
+      {/* ONE list, always mounted. iOS finds a tab's scroll view once and then
+          minimises the bar against it — swapping the list out for a spinner
+          while the first page loads means there is nothing to find, which is
+          why Home and Beam were the two worlds where the bar never shrank.
+          Loading and error live in the list's own empty slot instead. */}
+      <FlatList
+          data={posts}
+          keyExtractor={(p) => String(p.id)}
+          renderItem={({ item }) => <PostCard post={item} />}
+          ListHeaderComponent={<StoriesTray />}
+          contentContainerStyle={[posts.length ? { paddingBottom: 120 } : styles.emptyWrap, chromePad.home]}
+          showsVerticalScrollIndicator={false}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          onEndReachedThreshold={0.6}
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+          }}
+          ListFooterComponent={
+            isFetchingNextPage ? (
+              <View style={{ paddingVertical: 20 }}>
+                <ActivityIndicator color={c.t3} />
+              </View>
+            ) : null
+          }
+          refreshControl={
+            <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.t3} />
+          }
+          ListEmptyComponent={
+            <View style={styles.center}>
+              {isLoading ? <ActivityIndicator color={c.accent} /> : isError ? (
+                <>
+                  <Text variant="body" tone="t2">Couldn't load your feed.</Text>
+                  <View style={{ height: 14 }} />
+                  <Button title="Try again" kind="secondary" onPress={() => refetch()} />
+                </>
+              ) : (
+                <>
+                  <Text variant="title" tone="t2">Nothing here yet</Text>
+                  <Text variant="body" tone="t3" style={{ marginTop: 6, textAlign: 'center' }}>
+                    Follow people and businesses to fill your feed.
+                  </Text>
+                </>
+              )}
+            </View>
+          }
+        />
+
       {/* The bar FLOATS over the feed and the posts travel under it, showing
           through blurred — see `Chrome.tsx`. The brand row sits ABOVE the tabs, exactly as the web has it: the mark
           and the wordmark on the left, ＋ · ⋯ · your photo on the right. */}
@@ -154,54 +203,7 @@ export default function Home() {
       </View>
       </ChromeBar>
 
-      {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={c.accent} />
-        </View>
-      ) : isError ? (
-        <View style={styles.center}>
-          <Text variant="body" tone="t2">
-            Couldn't load your feed.
-          </Text>
-          <View style={{ height: 14 }} />
-          <Button title="Try again" kind="secondary" onPress={() => refetch()} />
-        </View>
-      ) : (
-        <FlatList
-          data={posts}
-          keyExtractor={(p) => String(p.id)}
-          renderItem={({ item }) => <PostCard post={item} />}
-          ListHeaderComponent={<StoriesTray />}
-          contentContainerStyle={[posts.length ? { paddingBottom: 120 } : styles.emptyWrap, chromePad.home]}
-          showsVerticalScrollIndicator={false}
-          onScroll={onScroll}
-          scrollEventThrottle={16}
-          onEndReachedThreshold={0.6}
-          onEndReached={() => {
-            if (hasNextPage && !isFetchingNextPage) fetchNextPage();
-          }}
-          ListFooterComponent={
-            isFetchingNextPage ? (
-              <View style={{ paddingVertical: 20 }}>
-                <ActivityIndicator color={c.t3} />
-              </View>
-            ) : null
-          }
-          refreshControl={
-            <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.t3} />
-          }
-          ListEmptyComponent={
-            <View style={styles.center}>
-              <Text variant="title" tone="t2">
-                Nothing here yet
-              </Text>
-              <Text variant="body" tone="t3" style={{ marginTop: 6, textAlign: 'center' }}>
-                Follow people and businesses to fill your feed.
-              </Text>
-            </View>
-          }
-        />
-      )}
+      <ComposeFab onPress={() => router.push('/compose')} />
     </Screen>
   );
 }
