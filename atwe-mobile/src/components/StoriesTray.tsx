@@ -65,7 +65,7 @@ function YourStory({ mine }: { mine?: StoryTrayEntry }) {
         <View style={[styles.ring, {
           borderColor: mine?.hasUnseen ? c.accent : mine ? c.border : 'transparent',
           backgroundColor: c.bg,
-          borderRadius: ringRadius(biz),
+          borderRadius: RING_R,
         }]}>
           <Avatar name={user.name} avatar={user.avatar} biz={biz} size={AVA} />
         </View>
@@ -104,11 +104,10 @@ const RING_GAP = 5;          // between the avatar and the ring, all the way rou
 const RING = AVA + RING_GAP * 2;
 
 /** A circle for a person; the app shape, grown by the gap, for a business. */
-function ringRadius(biz: boolean): number {
-  /* The ring follows the avatar, and the avatar is a circle now for everybody
-     — see Avatar. It used to bend around the business square. */
-  return RING / 2;
-}
+/* The ring follows the avatar, and the avatar is a circle now for EVERYBODY —
+   see Avatar. It used to bend around the business square, and took a `biz` flag
+   to do it; the flag is gone because there is nothing left for it to decide. */
+const RING_R = RING / 2;
 
 function Ring({ entry }: { entry: StoryTrayEntry }) {
   const { c } = useTheme();
@@ -124,7 +123,7 @@ function Ring({ entry }: { entry: StoryTrayEntry }) {
       accessibilityLabel={`${entry.mine ? 'Your' : entry.user.name + '’s'} story`}
     >
       <View style={[styles.ring, {
-        borderColor: ringColor, backgroundColor: c.bg, borderRadius: ringRadius(biz),
+        borderColor: ringColor, backgroundColor: c.bg, borderRadius: RING_R,
       }]}>
         <Avatar name={entry.user.name} avatar={entry.user.avatar} biz={biz} size={AVA} />
       </View>
