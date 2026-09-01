@@ -7,6 +7,7 @@ import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useCommunity, joinCommunity, joinCommunityGroup } from '@/api/discover';
 import { compact } from '@/lib/format';
@@ -43,7 +44,7 @@ export default function CommunityDetail() {
   };
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title={x?.name ?? 'Community'} />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -54,7 +55,7 @@ export default function CommunityDetail() {
           <Button title="Try again" kind="secondary" onPress={() => refetch()} />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: sp.lg, paddingBottom: 60 }}
+        <ScrollView contentContainerStyle={[{ padding: sp.lg, paddingBottom: 60 }, chromePad.header]}
           showsVerticalScrollIndicator={false}>
           <View style={styles.hero}>
             <Avatar name={x.name} avatar={x.avatar} size={72} />

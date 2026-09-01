@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Text } from './Text';
 import { Screen } from './Screen';
 import { PageHeader } from './PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import {
   useDisappearing, setDisappearing, DISAPPEAR_OPTS,
@@ -91,9 +92,9 @@ export function ChatSettingsSheet({ visible, kind, id, name, onClose }: {
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <Screen edges={['top']}>
+      <Screen edges={[]}>
         <PageHeader title={name} />
-        <ScrollView contentContainerStyle={{ padding: spacing.gutter, paddingBottom: 60 }}>
+        <ScrollView contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 60 }, chromePad.header]}>
           <Text variant="caption" tone="t3" style={styles.lbl}>DISAPPEARING MESSAGES</Text>
           {disappear.isLoading ? (
             <ActivityIndicator color={c.accent} style={{ marginVertical: 16 }} />

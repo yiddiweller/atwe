@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useBizAnalytics, type AnalyticsDay } from '@/api/bizops';
 import { compact } from '@/lib/format';
@@ -17,7 +18,7 @@ export default function BusinessAnalytics() {
   const { data, isLoading, isError, refetch, isRefetching } = useBizAnalytics();
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title="Reach" />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -27,7 +28,7 @@ export default function BusinessAnalytics() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={{ padding: spacing.gutter, paddingBottom: 120 }}
+          contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 120 }, chromePad.header]}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.accent} />}
           showsVerticalScrollIndicator={false}
         >

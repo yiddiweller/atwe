@@ -6,6 +6,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Avatar } from '@/components/Avatar';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useMessageSearch, type MessageHit } from '@/api/beam';
@@ -27,42 +28,46 @@ export default function MessageSearch() {
   const asked = q.trim().length >= 2;
 
   return (
-    <Screen edges={['top']}>
-      <PageHeader title="Search messages" />
-      <View style={[styles.search, { backgroundColor: c.s2, borderRadius: radius.pill }]}>
-        <Ionicons name="search" size={17} color={c.t3} />
-        <TextInput
-          value={q}
-          onChangeText={setQ}
-          placeholder="What was said…"
-          placeholderTextColor={c.t4}
-          autoFocus
-          autoCorrect={false}
-          accessibilityLabel="Search your messages"
-          style={[styles.input, { color: c.text }]}
-        />
-        {!!q && (
-          <Pressable onPress={() => setQ('')} hitSlop={8} accessibilityLabel="Clear">
-            <Ionicons name="close-circle" size={17} color={c.t3} />
-          </Pressable>
-        )}
-      </View>
+    <Screen edges={[]}>
+      <PageHeader
+        title="Search messages"
+        below={
+        <View style={[styles.search, { backgroundColor: c.s2, borderRadius: radius.pill }]}>
+          <Ionicons name="search" size={17} color={c.t3} />
+          <TextInput
+            value={q}
+            onChangeText={setQ}
+            placeholder="What was said…"
+            placeholderTextColor={c.t4}
+            autoFocus
+            autoCorrect={false}
+            accessibilityLabel="Search your messages"
+            style={[styles.input, { color: c.text }]}
+          />
+          {!!q && (
+            <Pressable onPress={() => setQ('')} hitSlop={8} accessibilityLabel="Clear">
+              <Ionicons name="close-circle" size={17} color={c.t3} />
+            </Pressable>
+          )}
+        </View>
+        }
+      />
 
       {!asked ? (
-        <View style={styles.center}>
+        <View style={[styles.center, chromePad.headerSearch]}>
           <Text variant="body" tone="t3" style={{ textAlign: 'center' }}>
             Type at least two letters.
           </Text>
         </View>
       ) : isLoading ? (
-        <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
+        <View style={[styles.center, chromePad.headerSearch]}><ActivityIndicator color={c.accent} /></View>
       ) : (
         <FlatList
           data={rows}
           keyExtractor={(r) => `${r.scope}-${r.id}`}
           keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => <Hit hit={item} term={q.trim()} />}
-          contentContainerStyle={{ paddingTop: 12, paddingBottom: 120 }}
+          contentContainerStyle={[{ paddingTop: 12, paddingBottom: 120 }, chromePad.headerSearch]}
           ListEmptyComponent={
             <View style={styles.center}>
               <Text variant="body" tone="t3" style={{ textAlign: 'center' }}>

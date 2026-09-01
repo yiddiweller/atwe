@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { ListingCard } from '@/components/ListingCard';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -43,75 +44,78 @@ export default function Marketplace() {
   const listings = data?.listings ?? [];
   const count = cartCount(useCart().data?.carts);
 
+  const chrome = useFloatingChrome();
+
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       {/* Header */}
-      <View style={styles.head}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back} accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
-        <Text variant="headline">Marketplace</Text>
-        <Pressable onPress={() => router.push('/cart')} hitSlop={10} style={styles.back}
-          accessibilityRole="button"
-          accessibilityLabel={count ? `Cart, ${count} item${count === 1 ? '' : 's'}` : 'Cart'}>
-          <Ionicons name="bag-outline" size={23} color={c.text} />
-          {count > 0 && (
-            <View style={[styles.badge, { backgroundColor: c.accent }]}>
-              <Text variant="micro" style={{ color: c.accentTint }}>
-                {count > 99 ? '99+' : count}
-              </Text>
-            </View>
-          )}
-        </Pressable>
-      </View>
-
-      {/* Search */}
-      <View style={{ paddingHorizontal: spacing.gutter }}>
-        <View style={[styles.search, { backgroundColor: c.s2 }]}>
-          <Ionicons name="search" size={18} color={c.t3} />
-          <HapticInput
-            value={q}
-            onChangeText={setQ}
-            placeholder="Search products & services"
-            placeholderTextColor={c.t3}
-            style={[styles.searchInput, { color: c.text }]}
-            returnKeyType="search"
-            autoCorrect={false}
-            accessibilityLabel="Search the marketplace"
-          />
-          {q.length > 0 && (
-            <Pressable onPress={() => setQ('')} hitSlop={8}>
-              <Ionicons name="close-circle" size={18} color={c.t3} />
-            </Pressable>
-          )}
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={styles.head}>
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back} accessibilityLabel="Back">
+            <Ionicons name="chevron-back" size={26} color={c.text} />
+          </Pressable>
+          <Text variant="headline">Marketplace</Text>
+          <Pressable onPress={() => router.push('/cart')} hitSlop={10} style={styles.back}
+            accessibilityRole="button"
+            accessibilityLabel={count ? `Cart, ${count} item${count === 1 ? '' : 's'}` : 'Cart'}>
+            <Ionicons name="bag-outline" size={23} color={c.text} />
+            {count > 0 && (
+              <View style={[styles.badge, { backgroundColor: c.accent }]}>
+                <Text variant="micro" style={{ color: c.accentTint }}>
+                  {count > 99 ? '99+' : count}
+                </Text>
+              </View>
+            )}
+          </Pressable>
         </View>
-      </View>
 
-      {/* Kind tabs */}
-      <FlatList
-        horizontal
-        data={KINDS}
-        keyExtractor={(k) => k ?? 'all'}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: spacing.gutter, gap: 8, paddingVertical: 12 }}
-        style={styles.rowStrip}
-        renderItem={({ item }) => {
-          const active = kind === item;
-          return (
-            <Pressable
-              onPress={() => setKind(item)}
-              style={[
-                styles.chip,
-                { backgroundColor: active ? c.primary : c.s2 },
-              ]}
-            >
-              <Text variant="callout" style={{ color: active ? c.onPrimary : c.t2 }}>
-                {item ? KIND_LABEL[item] : 'All'}
-              </Text>
-            </Pressable>
-          );
-        }}
-      />
+        {/* Search */}
+        <View style={{ paddingHorizontal: spacing.gutter }}>
+          <View style={[styles.search, { backgroundColor: c.s2 }]}>
+            <Ionicons name="search" size={18} color={c.t3} />
+            <HapticInput
+              value={q}
+              onChangeText={setQ}
+              placeholder="Search products & services"
+              placeholderTextColor={c.t3}
+              style={[styles.searchInput, { color: c.text }]}
+              returnKeyType="search"
+              autoCorrect={false}
+              accessibilityLabel="Search the marketplace"
+            />
+            {q.length > 0 && (
+              <Pressable onPress={() => setQ('')} hitSlop={8}>
+                <Ionicons name="close-circle" size={18} color={c.t3} />
+              </Pressable>
+            )}
+          </View>
+        </View>
+        {/* Kind tabs */}
+        <FlatList
+          horizontal
+          data={KINDS}
+          keyExtractor={(k) => k ?? 'all'}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: spacing.gutter, gap: 8, paddingVertical: 12 }}
+          style={styles.rowStrip}
+          renderItem={({ item }) => {
+            const active = kind === item;
+            return (
+              <Pressable
+                onPress={() => setKind(item)}
+                style={[
+                  styles.chip,
+                  { backgroundColor: active ? c.primary : c.s2 },
+                ]}
+              >
+                <Text variant="callout" style={{ color: active ? c.onPrimary : c.t2 }}>
+                  {item ? KIND_LABEL[item] : 'All'}
+                </Text>
+              </Pressable>
+            );
+          }}
+        />
+      </ChromeBar>
 
       {isLoading ? (
         <View style={styles.center}>
@@ -128,7 +132,7 @@ export default function Marketplace() {
           data={listings}
           keyExtractor={(l) => String(l.id)}
           renderItem={({ item }) => <ListingCard listing={item} />}
-          contentContainerStyle={listings.length ? { paddingTop: 4, paddingBottom: 120 } : styles.emptyWrap}
+          contentContainerStyle={[listings.length ? { paddingTop: 4, paddingBottom: 120 } : styles.emptyWrap, chrome.pad]}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.t3} />}
           ListEmptyComponent={

@@ -4,6 +4,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useCartRecovery, saveCartRecovery } from '@/api/bizops';
 import { useAuth } from '@/auth/AuthProvider';
@@ -47,7 +48,7 @@ export default function CartRecovery() {
 
   if (!isBiz) {
     return (
-      <Screen edges={['top']}>
+      <Screen edges={[]}>
         <PageHeader title="Cart reminders" />
         <View style={styles.center}>
           <Text variant="body" tone="t2" style={{ textAlign: 'center' }}>
@@ -59,12 +60,12 @@ export default function CartRecovery() {
   }
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title="Cart reminders" />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.gutter, paddingBottom: 60 }}>
+        <ScrollView contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 60 }, chromePad.header]}>
           <View style={[styles.card, { backgroundColor: c.s1, borderRadius: radius.card }]}>
             <View style={styles.head}>
               <View style={{ flex: 1 }}>

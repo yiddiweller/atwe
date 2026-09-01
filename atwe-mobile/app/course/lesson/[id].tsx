@@ -6,6 +6,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useCourse, completeLesson } from '@/api/discover';
 import { haptics } from '@/lib/haptics';
@@ -38,7 +39,7 @@ export default function LessonView() {
   };
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title={lesson?.title ?? 'Lesson'} />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -47,7 +48,7 @@ export default function LessonView() {
           <Text variant="body" tone="t2">You need to enrol to open this lesson.</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: sp.lg, paddingBottom: 60 }}
+        <ScrollView contentContainerStyle={[{ padding: sp.lg, paddingBottom: 60 }, chromePad.header]}
           showsVerticalScrollIndicator={false}>
           {!!lesson.videoUrl && (
             <VideoView

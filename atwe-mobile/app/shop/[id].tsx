@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { ListingCard } from '@/components/ListingCard';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -45,26 +46,30 @@ export default function Shop() {
   groups.sort((a, b) => (a.title === null ? 1 : 0) - (b.title === null ? 1 : 0));
   const sectioned = groups.length > 1 || (groups[0] && groups[0].title !== null);
 
+  const chrome = useFloatingChrome();
+
   return (
-    <Screen edges={['top']}>
-      <View style={styles.head}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}
-          accessibilityRole="button" accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
-        <Text variant="headline" numberOfLines={1}>{name || 'Shop'}</Text>
-        <Pressable onPress={() => router.push('/cart')} hitSlop={10} style={styles.back}
-          accessibilityRole="button" accessibilityLabel="Cart">
-          <Ionicons name="bag-outline" size={23} color={c.text} />
-          {count > 0 && (
-            <View style={[styles.badge, { backgroundColor: c.accent }]}>
-              <Text variant="micro" style={{ color: c.accentTint }}>
-                {count > 99 ? '99+' : count}
-              </Text>
-            </View>
-          )}
-        </Pressable>
-      </View>
+    <Screen edges={[]}>
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={styles.head}>
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}
+            accessibilityRole="button" accessibilityLabel="Back">
+            <Ionicons name="chevron-back" size={26} color={c.text} />
+          </Pressable>
+          <Text variant="headline" numberOfLines={1}>{name || 'Shop'}</Text>
+          <Pressable onPress={() => router.push('/cart')} hitSlop={10} style={styles.back}
+            accessibilityRole="button" accessibilityLabel="Cart">
+            <Ionicons name="bag-outline" size={23} color={c.text} />
+            {count > 0 && (
+              <View style={[styles.badge, { backgroundColor: c.accent }]}>
+                <Text variant="micro" style={{ color: c.accentTint }}>
+                  {count > 99 ? '99+' : count}
+                </Text>
+              </View>
+            )}
+          </Pressable>
+        </View>
+      </ChromeBar>
 
       {q.isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -72,7 +77,7 @@ export default function Shop() {
         <FlatList
           data={groups}
           keyExtractor={(g) => g.title ?? '__rest'}
-          contentContainerStyle={products.length ? { paddingBottom: 40 } : styles.emptyWrap}
+          contentContainerStyle={[products.length ? { paddingBottom: 40 } : styles.emptyWrap, chrome.pad]}
           refreshControl={
             <RefreshControl refreshing={q.isRefetching} onRefresh={q.refetch} tintColor={c.t3} />
           }

@@ -11,6 +11,7 @@ import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { Shelf } from '@/components/Shelf';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -32,9 +33,10 @@ export default function Newsletters() {
   const list = data?.newsletters ?? [];
 
   return (
-    <Screen edges={['top']}>
-      <PageHeader title="Newsletters" />
-      <Shelf options={SHELVES} value={scope} onChange={setScope} />
+    <Screen edges={[]}>
+      <PageHeader title="Newsletters"
+        below={<Shelf options={SHELVES} value={scope} onChange={setScope} />}
+      />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
       ) : isError ? (
@@ -48,7 +50,7 @@ export default function Newsletters() {
           data={list}
           keyExtractor={(n) => String(n.id)}
           renderItem={({ item }) => <Card n={item} />}
-          contentContainerStyle={list.length ? { paddingBottom: 120 } : styles.emptyWrap}
+          contentContainerStyle={[list.length ? { paddingBottom: 120 } : styles.emptyWrap, chromePad.headerShelf]}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.t3} />}
           ListEmptyComponent={

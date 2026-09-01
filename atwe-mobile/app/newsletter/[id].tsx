@@ -9,6 +9,7 @@ import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useNewsletter, subscribeNewsletter, priceOrFree } from '@/api/discover';
 import { mediaUri } from '@/lib/media';
@@ -42,7 +43,7 @@ export default function NewsletterDetail() {
 
   const o = n?.owner;
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title={n?.title ?? 'Newsletter'} />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -53,7 +54,7 @@ export default function NewsletterDetail() {
           <Button title="Try again" kind="secondary" onPress={() => refetch()} />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 48 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[{ paddingBottom: 48 }, chromePad.header]} showsVerticalScrollIndicator={false}>
           {!!mediaUri(n.cover) && (
             <Image source={{ uri: mediaUri(n.cover) }} style={[styles.cover, { backgroundColor: c.s2 }]}
               contentFit="cover" transition={120} />

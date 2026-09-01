@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { PostCard } from '@/components/PostCard';
@@ -33,51 +34,55 @@ export default function Search() {
   const nothing = !isLoading && q.trim().length > 0 &&
     !people.length && !posts.length && !listings.length && !jobs.length && !services.length;
 
-  return (
-    <Screen edges={['top']}>
-      <View style={[styles.head, { paddingHorizontal: spacing.lg }]}>
-        <Pressable onPress={() => router.back()} hitSlop={10} accessibilityRole="button">
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
-        <View style={[styles.field, { backgroundColor: c.s2, borderRadius: radius.pill }]}>
-          <Ionicons name="search" size={17} color={c.t3} />
-          <HapticInput
-            style={[styles.input, { color: c.text }]}
-            placeholder="Search Atwe"
-            placeholderTextColor={c.t3}
-            autoFocus
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
-            value={q}
-            onChangeText={setQ}
-            accessibilityLabel="Search"
-          />
-          {q.length > 0 && (
-            <Pressable onPress={() => setQ('')} hitSlop={8} accessibilityLabel="Clear">
-              <Ionicons name="close-circle" size={17} color={c.t3} />
-            </Pressable>
-          )}
-        </View>
-      </View>
+  const chrome = useFloatingChrome();
 
+  return (
+    <Screen edges={[]}>
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={[styles.head, { paddingHorizontal: spacing.lg }]}>
+          <Pressable onPress={() => router.back()} hitSlop={10} accessibilityRole="button">
+            <Ionicons name="chevron-back" size={26} color={c.text} />
+          </Pressable>
+          <View style={[styles.field, { backgroundColor: c.s2, borderRadius: radius.pill }]}>
+            <Ionicons name="search" size={17} color={c.t3} />
+            <HapticInput
+              style={[styles.input, { color: c.text }]}
+              placeholder="Search Atwe"
+              placeholderTextColor={c.t3}
+              autoFocus
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+              value={q}
+              onChangeText={setQ}
+              accessibilityLabel="Search"
+            />
+            {q.length > 0 && (
+              <Pressable onPress={() => setQ('')} hitSlop={8} accessibilityLabel="Clear">
+                <Ionicons name="close-circle" size={17} color={c.t3} />
+              </Pressable>
+            )}
+          </View>
+        </View>
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={[styles.scopes, { paddingHorizontal: spacing.lg }]}
-      >
-        {SEARCH_SCOPES.map((s) => {
-          const on = scope === s.key;
-          return (
-            <Pressable key={s.key} onPress={() => setScope(s.key)} hitSlop={6} style={styles.scope}>
-              <Text variant="callout" weight={on ? '700' : '400'} style={{ color: on ? c.text : c.t3 }}>
-                {s.label}
-              </Text>
-              {on && <View style={[styles.underline, { backgroundColor: c.accent }]} />}
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[styles.scopes, { paddingHorizontal: spacing.lg }]}
+        >
+          {SEARCH_SCOPES.map((s) => {
+            const on = scope === s.key;
+            return (
+              <Pressable key={s.key} onPress={() => setScope(s.key)} hitSlop={6} style={styles.scope}>
+                <Text variant="callout" weight={on ? '700' : '400'} style={{ color: on ? c.text : c.t3 }}>
+                  {s.label}
+                </Text>
+                {on && <View style={[styles.underline, { backgroundColor: c.accent }]} />}
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </ChromeBar>
+
 
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -87,6 +92,7 @@ export default function Search() {
         </View>
       ) : (
         <FlatList
+          contentContainerStyle={chrome.pad}
           data={[1]}
           keyExtractor={() => 'body'}
           renderItem={() => (

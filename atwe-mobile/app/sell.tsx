@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { ListingForm } from '@/components/ListingForm';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -74,19 +75,23 @@ export default function Sell() {
     );
   }
 
+  const chrome = useFloatingChrome();
+
   return (
-    <Screen edges={['top']}>
-      <View style={styles.head}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}
-          accessibilityRole="button" accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
-        <Text variant="headline">Your listings</Text>
-        <Pressable onPress={() => router.push('/sales')} hitSlop={10} style={styles.back}
-          accessibilityRole="button" accessibilityLabel="Sales">
-          <Ionicons name="stats-chart-outline" size={21} color={c.text} />
-        </Pressable>
-      </View>
+    <Screen edges={[]}>
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={styles.head}>
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}
+            accessibilityRole="button" accessibilityLabel="Back">
+            <Ionicons name="chevron-back" size={26} color={c.text} />
+          </Pressable>
+          <Text variant="headline">Your listings</Text>
+          <Pressable onPress={() => router.push('/sales')} hitSlop={10} style={styles.back}
+            accessibilityRole="button" accessibilityLabel="Sales">
+            <Ionicons name="stats-chart-outline" size={21} color={c.text} />
+          </Pressable>
+        </View>
+      </ChromeBar>
 
       {q.isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -94,7 +99,7 @@ export default function Sell() {
         <FlatList
           data={products}
           keyExtractor={(p) => String(p.id)}
-          contentContainerStyle={products.length ? styles.body : styles.emptyWrap}
+          contentContainerStyle={[products.length ? styles.body : styles.emptyWrap, chrome.pad]}
           refreshControl={
             <RefreshControl refreshing={q.isRefetching} onRefresh={q.refetch} tintColor={c.t3} />
           }

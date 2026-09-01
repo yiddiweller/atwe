@@ -5,6 +5,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Avatar } from '@/components/Avatar';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useOffers, type Offer } from '@/api/seller';
@@ -23,7 +24,7 @@ export default function Offers() {
   const rows = data?.offers ?? [];
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title="Offers" />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -32,7 +33,7 @@ export default function Offers() {
           data={rows}
           keyExtractor={(r) => String(r.id)}
           renderItem={({ item }) => <Row offer={item} />}
-          contentContainerStyle={{ paddingTop: 12, paddingBottom: 120 }}
+          contentContainerStyle={[{ paddingTop: 12, paddingBottom: 120 }, chromePad.header]}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.accent} />}
           ListEmptyComponent={
             <View style={styles.center}>

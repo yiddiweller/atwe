@@ -7,6 +7,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
@@ -90,15 +91,19 @@ export default function EventDetail() {
     );
   };
 
+  const chrome = useFloatingChrome();
+
   return (
-    <Screen edges={['top']}>
-      <View style={styles.head}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.icon} accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
-        <View style={{ flex: 1 }} />
-        <View style={styles.icon} />
-      </View>
+    <Screen edges={[]}>
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={styles.head}>
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.icon} accessibilityLabel="Back">
+            <Ionicons name="chevron-back" size={26} color={c.text} />
+          </Pressable>
+          <View style={{ flex: 1 }} />
+          <View style={styles.icon} />
+        </View>
+      </ChromeBar>
 
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -109,7 +114,7 @@ export default function EventDetail() {
           <Button title="Try again" kind="secondary" onPress={() => refetch()} />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 48 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[{ paddingBottom: 48 }, chrome.pad]} showsVerticalScrollIndicator={false}>
           {!!mediaUri(e.cover) && (
             <Image
               source={{ uri: mediaUri(e.cover) }}

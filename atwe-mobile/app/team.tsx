@@ -9,6 +9,7 @@ import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { Shelf } from '@/components/Shelf';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -38,30 +39,29 @@ export default function Team() {
   const mine = useMemberships();
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader
         title="Team"
         action={isBiz && shelf === 'mine'
           ? { icon: 'person-add-outline', label: 'Invite somebody', onPress: () => setInviting(true) }
           : undefined}
+        below={isBiz ? (
+          <Shelf
+            value={shelf}
+            onChange={setShelf}
+            options={[
+              { key: 'mine', label: 'Your team' },
+              { key: 'memberships', label: 'You help run' },
+            ]}
+          />
+        ) : null}
       />
-      {isBiz && (
-        <Shelf
-          value={shelf}
-          onChange={setShelf}
-          options={[
-            { key: 'mine', label: 'Your team' },
-            { key: 'memberships', label: 'You help run' },
-          ]}
-        />
-      )}
-
       {shelf === 'mine' ? (
         team.isLoading ? (
           <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
         ) : (
           <ScrollView
-            contentContainerStyle={{ padding: spacing.gutter, paddingBottom: 120 }}
+            contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 120 }, isBiz ? chromePad.headerShelf : chromePad.header]}
             refreshControl={<RefreshControl refreshing={team.isRefetching} onRefresh={team.refetch} tintColor={c.accent} />}
           >
             {(team.data?.members ?? []).length === 0 ? (
@@ -81,7 +81,7 @@ export default function Team() {
           <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
         ) : (
           <ScrollView
-            contentContainerStyle={{ padding: spacing.gutter, paddingBottom: 120 }}
+            contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 120 }, isBiz ? chromePad.headerShelf : chromePad.header]}
             refreshControl={<RefreshControl refreshing={mine.isRefetching} onRefresh={mine.refetch} tintColor={c.accent} />}
           >
             {(mine.data?.memberships ?? []).length === 0 ? (
@@ -270,9 +270,9 @@ function InviteSheet({ visible, perms, onClose, onDone }: {
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <Screen edges={['top']}>
+      <Screen edges={[]}>
         <PageHeader title="Invite somebody" />
-        <ScrollView contentContainerStyle={{ padding: spacing.gutter, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 60 }, chromePad.header]} keyboardShouldPersistTaps="handled">
           <Text variant="caption" tone="t3" style={styles.lbl}>WHO</Text>
           <TextInput
             value={username} onChangeText={setUsername}

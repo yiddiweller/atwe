@@ -6,6 +6,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useLoyalty, redeemPoints } from '@/api/money';
 import { money } from '@/api/wallet';
@@ -52,13 +53,13 @@ export default function Rewards() {
   };
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title="Rewards" />
       {isLoading || !data ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
       ) : (
         <ScrollView
-          contentContainerStyle={{ padding: spacing.gutter, paddingBottom: 120 }}
+          contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 120 }, chromePad.header]}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.accent} />}
           showsVerticalScrollIndicator={false}
         >

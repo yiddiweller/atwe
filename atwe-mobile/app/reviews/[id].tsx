@@ -7,6 +7,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
@@ -84,21 +85,25 @@ export default function Reviews() {
     ]);
   };
 
+  const chrome = useFloatingChrome();
+
   return (
-    <Screen edges={['top']}>
-      <View style={styles.head}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}
-          accessibilityRole="button" accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
-        <Text variant="headline" numberOfLines={1}>{name || 'Reviews'}</Text>
-        <View style={styles.back} />
-      </View>
+    <Screen edges={[]}>
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={styles.head}>
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}
+            accessibilityRole="button" accessibilityLabel="Back">
+            <Ionicons name="chevron-back" size={26} color={c.text} />
+          </Pressable>
+          <Text variant="headline" numberOfLines={1}>{name || 'Reviews'}</Text>
+          <View style={styles.back} />
+        </View>
+      </ChromeBar>
 
       {q.isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
       ) : (
-        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={[styles.body, chrome.pad]} keyboardShouldPersistTaps="handled">
           {!!summary && summary.count > 0 && (
             <View style={[styles.summary, { backgroundColor: c.s1 }]}>
               <Text variant="display" weight="800">{summary.average.toFixed(1)}</Text>

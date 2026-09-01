@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { HapticInput } from '@/components/HapticInput';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -75,19 +76,23 @@ export default function NewEvent() {
     } finally { setBusy(false); }
   };
 
+  const chrome = useFloatingChrome();
+
   return (
-    <Screen edges={['top']}>
-      <View style={styles.head}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.icon} accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
-        <Text variant="headline">Host an event</Text>
-        <View style={styles.icon} />
-      </View>
+    <Screen edges={[]}>
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={styles.head}>
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.icon} accessibilityLabel="Back">
+            <Ionicons name="chevron-back" size={26} color={c.text} />
+          </Pressable>
+          <Text variant="headline">Host an event</Text>
+          <View style={styles.icon} />
+        </View>
+      </ChromeBar>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
-          contentContainerStyle={{ padding: spacing.gutter, paddingBottom: 60 }}
+          contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 60 }, chrome.pad]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >

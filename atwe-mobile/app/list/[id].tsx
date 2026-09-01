@@ -4,6 +4,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { PostCard } from '@/components/PostCard';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useListTimeline, useListMembers } from '@/api/social';
@@ -21,7 +22,7 @@ export default function ListTimeline() {
   const posts = data?.posts ?? [];
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title={meta.data?.list?.name ?? 'List'} />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -30,7 +31,7 @@ export default function ListTimeline() {
           data={posts}
           keyExtractor={(p) => String(p.id)}
           renderItem={({ item }) => <PostCard post={item} />}
-          contentContainerStyle={{ paddingTop: 12, paddingBottom: 120 }}
+          contentContainerStyle={[{ paddingTop: 12, paddingBottom: 120 }, chromePad.header]}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.accent} />}
           ListEmptyComponent={
             <View style={styles.center}>

@@ -13,6 +13,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
@@ -91,26 +92,30 @@ export default function ListingDetail() {
     }
   };
 
+  const chrome = useFloatingChrome();
+
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       {/* Header */}
-      <View style={styles.head}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back} accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
-        <Text variant="headline" numberOfLines={1} style={{ flex: 1, textAlign: 'center' }}>
-          {listing?.name ?? 'Listing'}
-        </Text>
-        <Pressable onPress={toggleSave} hitSlop={10} style={styles.back} accessibilityLabel="Save">
-          {listing && (
-            <Ionicons
-              name={isSaved ? 'heart' : 'heart-outline'}
-              size={24}
-              color={isSaved ? c.like : c.text}
-            />
-          )}
-        </Pressable>
-      </View>
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={styles.head}>
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back} accessibilityLabel="Back">
+            <Ionicons name="chevron-back" size={26} color={c.text} />
+          </Pressable>
+          <Text variant="headline" numberOfLines={1} style={{ flex: 1, textAlign: 'center' }}>
+            {listing?.name ?? 'Listing'}
+          </Text>
+          <Pressable onPress={toggleSave} hitSlop={10} style={styles.back} accessibilityLabel="Save">
+            {listing && (
+              <Ionicons
+                name={isSaved ? 'heart' : 'heart-outline'}
+                size={24}
+                color={isSaved ? c.like : c.text}
+              />
+            )}
+          </Pressable>
+        </View>
+      </ChromeBar>
 
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -121,7 +126,7 @@ export default function ListingDetail() {
           <Button title="Try again" kind="secondary" onPress={() => refetch()} />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[{ paddingBottom: 40 }, chrome.pad]} showsVerticalScrollIndicator={false}>
           {/* Gallery */}
           {listing.images.length > 0 ? (
             <ScrollView

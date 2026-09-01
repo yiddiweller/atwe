@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { EventCard } from '@/components/EventCard';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -43,41 +44,45 @@ export default function Events() {
     else days.push({ day: d, items: [e] });
   }
 
-  return (
-    <Screen edges={['top']}>
-      <View style={styles.head}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.icon} accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
-        <Text variant="headline">Events</Text>
-        <Pressable onPress={() => router.push('/new-event')} hitSlop={10} style={styles.icon}
-          accessibilityRole="button" accessibilityLabel="Host an event">
-          <Ionicons name="add" size={26} color={c.text} />
-        </Pressable>
-      </View>
+  const chrome = useFloatingChrome();
 
+  return (
+    <Screen edges={[]}>
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={styles.head}>
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.icon} accessibilityLabel="Back">
+            <Ionicons name="chevron-back" size={26} color={c.text} />
+          </Pressable>
+          <Text variant="headline">Events</Text>
+          <Pressable onPress={() => router.push('/new-event')} hitSlop={10} style={styles.icon}
+            accessibilityRole="button" accessibilityLabel="Host an event">
+            <Ionicons name="add" size={26} color={c.text} />
+          </Pressable>
+        </View>
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.strip}
-        contentContainerStyle={styles.chipRow}
-      >
-        {SCOPES.map((s) => {
-          const on = scope === s.key;
-          return (
-            <Pressable
-              key={s.key}
-              onPress={() => { haptics.select(); setScope(s.key); }}
-              style={[styles.chip, { backgroundColor: on ? c.primary : c.s2 }]}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: on }}
-              accessibilityLabel={s.label}
-            >
-              <Text variant="callout" style={{ color: on ? c.onPrimary : c.t2 }}>{s.label}</Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.strip}
+          contentContainerStyle={styles.chipRow}
+        >
+          {SCOPES.map((s) => {
+            const on = scope === s.key;
+            return (
+              <Pressable
+                key={s.key}
+                onPress={() => { haptics.select(); setScope(s.key); }}
+                style={[styles.chip, { backgroundColor: on ? c.primary : c.s2 }]}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={s.label}
+              >
+                <Text variant="callout" style={{ color: on ? c.onPrimary : c.t2 }}>{s.label}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </ChromeBar>
+
 
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -97,7 +102,7 @@ export default function Events() {
               {item.items.map((e) => <EventCard key={e.id} event={e} underDayHeading />)}
             </View>
           )}
-          contentContainerStyle={days.length ? { paddingBottom: 120 } : styles.emptyWrap}
+          contentContainerStyle={[days.length ? { paddingBottom: 120 } : styles.emptyWrap, chrome.pad]}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.t3} />}
           ListEmptyComponent={<Empty scope={scope} onHost={() => router.push('/new-event')} />}

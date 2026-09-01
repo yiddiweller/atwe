@@ -15,6 +15,10 @@ import { haptics } from '@/lib/haptics';
  * column gets squashed to less than its own content height (measured 24 against
  * 35), which is what made two stacked filter rows visibly overlap on Jobs.
  */
+/** Its exact height, so a bar that carries one can reserve the space on its
+ *  first render rather than measuring it a frame late and jumping. */
+export const SHELF_H = 61;
+
 export function Shelf<T extends string>({ options, value, onChange }: {
   options: { key: T; label: string }[];
   value: T;
@@ -48,7 +52,7 @@ export function Shelf<T extends string>({ options, value, onChange }: {
 }
 
 const styles = StyleSheet.create({
-  strip: { flexGrow: 0, flexShrink: 0 },
-  row: { paddingHorizontal: spacing.gutter, gap: 8, paddingVertical: 12 },
+  strip: { flexGrow: 0, flexShrink: 0, height: SHELF_H },
+  row: { paddingHorizontal: spacing.gutter, gap: 8, alignItems: 'center' },
   chip: { paddingHorizontal: spacing.gutter, paddingVertical: 8, borderRadius: 999 },
 });

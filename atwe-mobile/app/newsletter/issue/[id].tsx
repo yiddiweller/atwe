@@ -4,6 +4,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useNewsletterIssue } from '@/api/discover';
 import { monthYear } from '@/lib/format';
@@ -16,7 +17,7 @@ export default function NewsletterIssue() {
   const i = data?.issue;
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title={i?.title ?? 'Issue'} />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -29,7 +30,7 @@ export default function NewsletterIssue() {
           <Button title="Try again" kind="secondary" onPress={() => refetch()} />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: sp.lg, paddingBottom: 60 }}
+        <ScrollView contentContainerStyle={[{ padding: sp.lg, paddingBottom: 60 }, chromePad.header]}
           showsVerticalScrollIndicator={false}>
           <Text variant="display" weight="800">{i.title}</Text>
           <Text variant="caption" tone="t3" style={{ marginTop: 4 }}>{monthYear(i.createdAt)}</Text>

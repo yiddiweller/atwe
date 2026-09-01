@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -108,18 +109,22 @@ export default function EditProfile() {
     }
   };
 
-  return (
-    <Screen edges={['top']}>
-      <View style={styles.head}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}
-          accessibilityRole="button" accessibilityLabel="Cancel">
-          <Ionicons name="close" size={24} color={c.text} />
-        </Pressable>
-        <Text variant="headline">Edit profile</Text>
-        <View style={styles.back} />
-      </View>
+  const chrome = useFloatingChrome();
 
-      <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+  return (
+    <Screen edges={[]}>
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={styles.head}>
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}
+            accessibilityRole="button" accessibilityLabel="Cancel">
+            <Ionicons name="close" size={24} color={c.text} />
+          </Pressable>
+          <Text variant="headline">Edit profile</Text>
+          <View style={styles.back} />
+        </View>
+      </ChromeBar>
+
+      <ScrollView contentContainerStyle={[styles.body, chrome.pad]} keyboardShouldPersistTaps="handled">
         {/* Banner + avatar, the way they appear on the real profile */}
         <Pressable onPress={() => choose('banner')} style={[styles.banner, { backgroundColor: c.s2 }]}
           accessibilityRole="button" accessibilityLabel="Change cover photo">

@@ -5,6 +5,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Avatar } from '@/components/Avatar';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useCloseFriends, setCloseFriend } from '@/api/social';
@@ -36,34 +37,30 @@ export default function CloseFriends() {
   };
 
   return (
-    <Screen edges={['top']}>
-      <PageHeader title="Close friends" />
-      <View style={[styles.notice, { backgroundColor: c.s1, borderRadius: radius.card }]}>
-        <Ionicons name="eye-off-outline" size={18} color={c.t2} />
-        <Text variant="caption" tone="t2" style={{ flex: 1, marginLeft: 12, lineHeight: 19 }}>
-          A close-friends story is only shown to these people. They are never
-          told they are on the list.
-        </Text>
-      </View>
-
-      <View style={[styles.search, { backgroundColor: c.s2, borderRadius: radius.pill }]}>
-        <Ionicons name="search" size={17} color={c.t3} />
-        <TextInput
-          value={q}
-          onChangeText={setQ}
-          placeholder="Add somebody"
-          placeholderTextColor={c.t4}
-          autoCapitalize="none"
-          autoCorrect={false}
-          accessibilityLabel="Find somebody to add"
-          style={[styles.input, { color: c.text }]}
-        />
-        {!!q && (
-          <Pressable onPress={() => setQ('')} hitSlop={8} accessibilityLabel="Clear">
-            <Ionicons name="close-circle" size={17} color={c.t3} />
-          </Pressable>
-        )}
-      </View>
+    <Screen edges={[]}>
+      <PageHeader
+        title="Close friends"
+        below={
+          <View style={[styles.search, { backgroundColor: c.s2, borderRadius: radius.pill }]}>
+            <Ionicons name="search" size={17} color={c.t3} />
+            <TextInput
+              value={q}
+              onChangeText={setQ}
+              placeholder="Add somebody"
+              placeholderTextColor={c.t4}
+              autoCapitalize="none"
+              autoCorrect={false}
+              accessibilityLabel="Find somebody to add"
+              style={[styles.input, { color: c.text }]}
+            />
+            {!!q && (
+              <Pressable onPress={() => setQ('')} hitSlop={8} accessibilityLabel="Clear">
+                <Ionicons name="close-circle" size={17} color={c.t3} />
+              </Pressable>
+            )}
+          </View>
+        }
+      />
 
       {(searching ? found.isLoading : list.isLoading) ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -72,7 +69,16 @@ export default function CloseFriends() {
           data={rows}
           keyExtractor={(p) => String(p.id)}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingTop: 8, paddingBottom: 120 }}
+          contentContainerStyle={[{ paddingBottom: 120 }, chromePad.headerSearch]}
+          ListHeaderComponent={
+            <View style={[styles.notice, { backgroundColor: c.s1, borderRadius: radius.card }]}>
+              <Ionicons name="eye-off-outline" size={18} color={c.t2} />
+              <Text variant="caption" tone="t2" style={{ flex: 1, marginLeft: 12, lineHeight: 19 }}>
+                A close-friends story is only shown to these people. They are
+                never told they are on the list.
+              </Text>
+            </View>
+          }
           renderItem={({ item }) => {
             const isOn = on.has(item.id);
             return (

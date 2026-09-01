@@ -1562,10 +1562,64 @@ screens load and a full new-account signup still works end to end. Whether the
 tab bar runs on a real iPhone is unproven, and **a navigation shell that fails is
 an app that does not open** — if it does, revert `89d104c` alone.
 
-**Still not glass, and deliberately for now:** every screen draws its own header
-as a plain view, so headers, sheets and menus are not Liquid Glass. Handing
-those to the system too is the same move one layer up and a much bigger job.
-Worth doing after the tab bar is proven on a phone.
+**Headers followed in 0.10.0** — see the next section. Sheets and menus are
+still plain views.
+
+### 0.10.0 — the content scrolls UNDER the chrome
+
+The founder sent three screenshots with Apple Messages beside them: *"instead of
+it should stay a black piece on top and bottom it rather go underneath that and
+it should get blurry."* They are right, and it is not a colour problem. Every bar
+in this app was a solid row sitting ABOVE the scroll view, so a screen read as
+three stacked blocks — a black slab, the content, a black slab — and a post or a
+story ring was CUT at the slab's edge rather than passing behind it. A modern iOS
+app has one continuous surface with translucent chrome floating over it. That is
+the whole reason a bar reads as glass: you can see what is behind it.
+
+**`src/components/Chrome.tsx` is the fix, and it is two halves that must agree.**
+`ChromeBar` is the bar — absolutely positioned, carrying its own safe-area inset,
+drawn as real Liquid Glass on iOS 26 (`GlassView`), as `systemChromeMaterial` —
+the exact blur UIKit's own navigation bar uses — below that, and as a near-opaque
+fill on web/Android, where a blur nobody can render reads as a smear. `chromePad`
+is the top padding the surface underneath needs, so its content STARTS below the
+bar and then travels under it.
+
+**The pad is a constant, not a measurement, and that is deliberate.** A measured
+height arrives a frame late and the whole page visibly jumps; every bar here is a
+fixed row of fixed-size controls, so each component now pins its own height
+(`SHELF_H`, `FEED_TABS_H`, `BEAM_TABS_H`, `CHAT_HEAD_H`…) and the pad is exact on
+the first render. It is safe as a constant only because the app is
+portrait-locked — the top inset never changes after launch. The ~30 inside pages
+whose bar is bespoke use `useFloatingChrome()` instead, which measures. **It
+measures the bar's CONTENT, not the bar**: putting `onLayout` on a `GlassView`
+would mean trusting a native wrapper to forward the prop, and a wrapper that
+quietly drops it leaves every one of those pages hidden behind its own header.
+
+**A search field or a filter strip belongs to the bar, not to the page.** Left in
+flow they sit as a second solid strip and the content stops at THEM instead — so
+`PageHeader` gained a `below` slot and the shelves, search rows and chip strips
+moved inside the glass. Jobs' bar is 192pt tall as a result; it occupies exactly
+the space it always did, and now the listings run underneath it.
+
+**Three traps, each of which shipped wrong once during this pass:**
+- **A JSX tag scanner must not track quotes.** JSX text is full of apostrophes
+  (`that's`), so a scanner that treats `'` as a string delimiter swallows the rest
+  of the file and silently skips the tag. Braces alone find the end of an opening
+  tag.
+- **`\bhorizontal\b` matches `swap-horizontal-outline`.** An icon name inside a
+  quoted string made the sweep skip a screen's only real scroller.
+- **A horizontal chip strip left OUTSIDE the bar renders at y=0, behind it.** Jobs
+  and Marketplace both looked like their whole header had collapsed onto itself.
+
+**Proved two ways, because the browser cannot show glass at all.**
+`tools/check-chrome.js` is the source-level invariant — 82 screens: every one
+that floats a bar drops the screen's own top inset and pads every vertical
+scroller under it (self-tested by re-breaking `starred.tsx`, which it catches on
+both counts). And a runtime probe drives 90 routes in the preview at 390×844 and
+fails if any text sits behind the bar at REST, which is how the two collapsed
+headers and a `styles.center` with no `flex: 1` were found. What the preview
+CANNOT show is the blur itself — on the web the bar is the opaque fallback, and
+the shots prove only the geometry: content ghosting through it as you scroll.
 
 ### Built, not yet shipped — the cards inside a conversation
 

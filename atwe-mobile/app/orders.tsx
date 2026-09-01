@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useOrders, orderStatusLabel, orderStatusTone, type Order } from '@/api/orders';
 import { money } from '@/api/wallet';
@@ -20,33 +21,38 @@ export default function Orders() {
   const { data, isLoading, refetch, isRefetching } = useOrders(scope);
   const orders = data?.orders ?? [];
 
-  return (
-    <Screen edges={['top']}>
-      <View style={[styles.head, { paddingHorizontal: spacing.lg, borderBottomColor: c.border }]}>
-        <Pressable onPress={() => router.back()} hitSlop={10} accessibilityRole="button">
-          {/* A chevron, like every other screen — the word "Back" was the only
-              one of its kind in the app. */}
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
-        <Text variant="headline">Orders</Text>
-        <View style={{ width: 44 }} />
-      </View>
+  const chrome = useFloatingChrome();
 
-      <View style={[styles.tabs, { paddingHorizontal: spacing.lg }]}>
-        {(['buyer', 'seller'] as const).map((k) => (
-          <Pressable key={k} onPress={() => setScope(k)} style={styles.tab} hitSlop={8}>
-            <Text variant="headline" style={{ color: scope === k ? c.text : c.t3 }}>
-              {k === 'buyer' ? 'Bought' : 'Sold'}
-            </Text>
-            {scope === k && <View style={[styles.underline, { backgroundColor: c.accent }]} />}
+  return (
+    <Screen edges={[]}>
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={[styles.head, { paddingHorizontal: spacing.lg, borderBottomColor: c.border }]}>
+          <Pressable onPress={() => router.back()} hitSlop={10} accessibilityRole="button">
+            {/* A chevron, like every other screen — the word "Back" was the only
+                one of its kind in the app. */}
+            <Ionicons name="chevron-back" size={26} color={c.text} />
           </Pressable>
-        ))}
-      </View>
+          <Text variant="headline">Orders</Text>
+          <View style={{ width: 44 }} />
+        </View>
+
+        <View style={[styles.tabs, { paddingHorizontal: spacing.lg }]}>
+          {(['buyer', 'seller'] as const).map((k) => (
+            <Pressable key={k} onPress={() => setScope(k)} style={styles.tab} hitSlop={8}>
+              <Text variant="headline" style={{ color: scope === k ? c.text : c.t3 }}>
+                {k === 'buyer' ? 'Bought' : 'Sold'}
+              </Text>
+              {scope === k && <View style={[styles.underline, { backgroundColor: c.accent }]} />}
+            </Pressable>
+          ))}
+        </View>
+      </ChromeBar>
 
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
       ) : (
         <FlatList
+          contentContainerStyle={chrome.pad}
           data={orders}
           keyExtractor={(o) => String(o.id)}
           renderItem={({ item }) => <OrderRow order={item} scope={scope} />}

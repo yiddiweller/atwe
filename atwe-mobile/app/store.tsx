@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, row as rowTokens } from '@/theme/tokens';
 import { useAuth } from '@/auth/AuthProvider';
@@ -36,9 +37,9 @@ export default function Store() {
   const isBiz = user?.accountType === 'business';
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title="Manage store" />
-      <ScrollView contentContainerStyle={{ padding: spacing.gutter, paddingBottom: 120 }}
+      <ScrollView contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 120 }, chromePad.header]}
         showsVerticalScrollIndicator={false}>
         <Group label="WHAT YOU SELL">
           <Row icon="pricetag-outline" label="Listings" onPress={() => router.push('/sell')} />

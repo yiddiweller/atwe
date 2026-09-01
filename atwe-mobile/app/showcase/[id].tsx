@@ -11,6 +11,7 @@ import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useShowcase, likeShowcase } from '@/api/discover';
 import { mediaUri } from '@/lib/media';
@@ -39,7 +40,7 @@ export default function ShowcaseDetail() {
 
   const a = s?.author;
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title={s?.title ?? 'Showcase'} />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -50,7 +51,7 @@ export default function ShowcaseDetail() {
           <Button title="Try again" kind="secondary" onPress={() => refetch()} />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 48 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[{ paddingBottom: 48 }, chromePad.header]} showsVerticalScrollIndicator={false}>
           {s.images.length > 0 && (
             <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}
               style={{ backgroundColor: c.s2 }}>

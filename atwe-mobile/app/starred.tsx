@@ -5,6 +5,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Avatar } from '@/components/Avatar';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useStarred, type StarredItem } from '@/api/beam';
@@ -20,7 +21,7 @@ export default function Starred() {
   const rows = data?.items ?? [];
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title="Starred" />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -29,7 +30,7 @@ export default function Starred() {
           data={rows}
           keyExtractor={(r) => `${r.scope}-${r.id}`}
           renderItem={({ item }) => <Row item={item} />}
-          contentContainerStyle={{ paddingTop: 12, paddingBottom: 120 }}
+          contentContainerStyle={[{ paddingTop: 12, paddingBottom: 120 }, chromePad.header]}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.accent} />}
           ListEmptyComponent={
             <View style={styles.center}>

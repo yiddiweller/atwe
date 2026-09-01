@@ -7,6 +7,7 @@ import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useInvoice, payInvoice, cancelInvoice } from '@/api/money';
 import { invoiceState } from '../invoices';
@@ -64,7 +65,7 @@ export default function InvoiceDetail() {
   const other = inv ? (inv.mine ? inv.customer : inv.issuer) : null;
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title="Invoice" />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -73,7 +74,7 @@ export default function InvoiceDetail() {
           <Text variant="body" tone="t2">This invoice is not available.</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.gutter, paddingBottom: 60 }}>
+        <ScrollView contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 60 }, chromePad.header]}>
           <View style={[styles.hero, { backgroundColor: c.s1, borderRadius: radius.card }]}>
             <Text variant="caption" tone="t3">{inv.mine ? 'You billed' : 'You owe'}</Text>
             <Text variant="display" weight="800" style={{ marginTop: 4 }}>{money(inv.amountCents)}</Text>

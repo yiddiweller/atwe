@@ -6,6 +6,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useShowcases, type Showcase } from '@/api/discover';
@@ -25,7 +26,7 @@ export default function ShowcaseDiscover() {
   const cell = (width - spacing.gutter * 2 - 12) / 2;
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title="Showcase" />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -41,7 +42,7 @@ export default function ShowcaseDiscover() {
           numColumns={2}
           keyExtractor={(s) => String(s.id)}
           columnWrapperStyle={{ gap: 12, paddingHorizontal: spacing.gutter }}
-          contentContainerStyle={items.length ? { gap: 12, paddingBottom: 120 } : styles.emptyWrap}
+          contentContainerStyle={[items.length ? { gap: 12, paddingBottom: 120 } : styles.emptyWrap, chromePad.header]}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.t3} />}
           renderItem={({ item }) => <Tile s={item} size={cell} />}

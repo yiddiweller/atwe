@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { ServicesManager } from '@/components/ServicesManager';
@@ -69,21 +70,25 @@ export default function Appointments() {
     );
   }
 
+  const chrome = useFloatingChrome();
+
   return (
-    <Screen edges={['top']}>
-      <View style={styles.head}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}
-          accessibilityRole="button" accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
-        <Text variant="headline">Appointments</Text>
-        {biz ? (
-          <Pressable onPress={() => setManaging(true)} hitSlop={10} style={styles.back}
-            accessibilityRole="button" accessibilityLabel="What you offer">
-            <Ionicons name="options-outline" size={22} color={c.text} />
+    <Screen edges={[]}>
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={styles.head}>
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}
+            accessibilityRole="button" accessibilityLabel="Back">
+            <Ionicons name="chevron-back" size={26} color={c.text} />
           </Pressable>
-        ) : <View style={styles.back} />}
-      </View>
+          <Text variant="headline">Appointments</Text>
+          {biz ? (
+            <Pressable onPress={() => setManaging(true)} hitSlop={10} style={styles.back}
+              accessibilityRole="button" accessibilityLabel="What you offer">
+              <Ionicons name="options-outline" size={22} color={c.text} />
+            </Pressable>
+          ) : <View style={styles.back} />}
+        </View>
+      </ChromeBar>
 
       {biz && (
         <View style={styles.tabs}>
@@ -104,7 +109,7 @@ export default function Appointments() {
         <FlatList
           data={appts}
           keyExtractor={(a) => String(a.id)}
-          contentContainerStyle={appts.length ? styles.body : styles.emptyWrap}
+          contentContainerStyle={[appts.length ? styles.body : styles.emptyWrap, chrome.pad]}
           refreshControl={
             <RefreshControl refreshing={q.isRefetching} onRefresh={q.refetch} tintColor={c.t3} />
           }

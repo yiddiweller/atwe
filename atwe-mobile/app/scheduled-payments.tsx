@@ -7,6 +7,7 @@ import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { Shelf } from '@/components/Shelf';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -29,12 +30,13 @@ export default function ScheduledPayments() {
   const rows = data?.payments ?? [];
 
   return (
-    <Screen edges={['top']}>
-      <PageHeader title="Scheduled payments" />
-      <Shelf
-        value={shelf}
-        onChange={setShelf}
-        options={[{ key: 'outgoing', label: 'You pay' }, { key: 'incoming', label: 'You receive' }]}
+    <Screen edges={[]}>
+      <PageHeader title="Scheduled payments"
+        below={<Shelf
+          value={shelf}
+          onChange={setShelf}
+          options={[{ key: 'outgoing', label: 'You pay' }, { key: 'incoming', label: 'You receive' }]}
+        />}
       />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -43,7 +45,7 @@ export default function ScheduledPayments() {
           data={rows}
           keyExtractor={(r) => String(r.id)}
           renderItem={({ item }) => <Row p={item} onDone={refetch} />}
-          contentContainerStyle={{ paddingBottom: 120 }}
+          contentContainerStyle={[{ paddingBottom: 120 }, chromePad.headerShelf]}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.accent} />}
           ListEmptyComponent={
             <View style={styles.center}>

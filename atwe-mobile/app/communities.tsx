@@ -7,6 +7,7 @@ import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { Shelf } from '@/components/Shelf';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -26,9 +27,10 @@ export default function Communities() {
   const list = data?.communities ?? [];
 
   return (
-    <Screen edges={['top']}>
-      <PageHeader title="Communities" />
-      <Shelf options={SHELVES} value={scope} onChange={setScope} />
+    <Screen edges={[]}>
+      <PageHeader title="Communities"
+        below={<Shelf options={SHELVES} value={scope} onChange={setScope} />}
+      />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
       ) : isError ? (
@@ -42,7 +44,7 @@ export default function Communities() {
           data={list}
           keyExtractor={(x) => String(x.id)}
           renderItem={({ item }) => <Row x={item} />}
-          contentContainerStyle={list.length ? { paddingBottom: 120 } : styles.emptyWrap}
+          contentContainerStyle={[list.length ? { paddingBottom: 120 } : styles.emptyWrap, chromePad.headerShelf]}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.t3} />}
           ListEmptyComponent={

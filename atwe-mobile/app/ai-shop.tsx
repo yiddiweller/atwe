@@ -5,6 +5,7 @@ import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { HapticInput } from '@/components/HapticInput';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { ListingCard } from '@/components/ListingCard';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
@@ -41,9 +42,9 @@ export default function AiShop() {
   };
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title="Shop with Atwe AI" />
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }} keyboardShouldPersistTaps="handled"
+      <ScrollView contentContainerStyle={[{ paddingBottom: 120 }, chromePad.header]} keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
         <View style={{ paddingHorizontal: spacing.gutter }}>
           <HapticInput

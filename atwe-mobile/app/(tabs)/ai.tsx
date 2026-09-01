@@ -15,6 +15,7 @@ import { GlassComposer } from '@/components/GlassComposer';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme/ThemeProvider';
 import { BrandBar } from '@/components/BrandBar';
+import { ChromeBar, chromePad, chromeTop } from '@/components/Chrome';
 import { spacing } from '@/theme/tokens';
 import { sendChat, askAgent, runAgentAction, agentSummary, type ChatMessage, type AgentAction } from '@/api/ai';
 import { haptics } from '@/lib/haptics';
@@ -83,11 +84,13 @@ export default function AI() {
   const empty = messages.length === 0;
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       {/* The AI page carries the lockup too — it is the fourth world with a
           brand row on the web, and its ⋯ is the only way to Settings from here.
           No ＋: you write to it in the composer below, not in a sheet. */}
-      <BrandBar world="ai" onMore={() => router.push('/settings')} />
+      <ChromeBar>
+        <BrandBar world="ai" onMore={() => router.push('/settings')} />
+      </ChromeBar>
       <View style={[styles.head, styles.hiddenHead, { borderBottomColor: c.border }]}>
         <Ionicons name="sparkles" size={18} color={c.accent} />
         <Text variant="title" style={{ marginLeft: 8 }}>
@@ -101,7 +104,7 @@ export default function AI() {
         keyboardVerticalOffset={8}
       >
         {empty ? (
-          <View style={styles.hero}>
+          <View style={[styles.hero, { paddingTop: chromeTop.brand }]}>
             <View style={[styles.orb, { backgroundColor: c.accentDim ?? c.s2 }]}>
               <Ionicons name="sparkles" size={30} color={c.accent} />
             </View>
@@ -130,7 +133,7 @@ export default function AI() {
             data={messages}
             keyExtractor={(_, i) => String(i)}
             renderItem={({ item }) => <Msg msg={item} />}
-            contentContainerStyle={{ paddingVertical: 12, paddingHorizontal: 12 }}
+            contentContainerStyle={[{ paddingVertical: 12, paddingHorizontal: 12 }, chromePad.brand]}
             showsVerticalScrollIndicator={false}
             onContentSizeChange={scrollEnd}
             ListFooterComponent={

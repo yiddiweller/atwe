@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Avatar } from '@/components/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -19,15 +20,19 @@ export default function Wallet() {
   const { data, isLoading, refetch, isRefetching } = useWallet();
   const txs = data?.transactions ?? [];
 
+  const chrome = useFloatingChrome();
+
   return (
-    <Screen edges={['top']}>
-      <View style={[styles.head, { borderBottomColor: c.border }]}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}>
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
-        <Text variant="title">Wallet</Text>
-        <View style={styles.back} />
-      </View>
+    <Screen edges={[]}>
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={[styles.head, { borderBottomColor: c.border }]}>
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}>
+            <Ionicons name="chevron-back" size={26} color={c.text} />
+          </Pressable>
+          <Text variant="title">Wallet</Text>
+          <View style={styles.back} />
+        </View>
+      </ChromeBar>
 
       {isLoading ? (
         <View style={styles.center}>
@@ -42,7 +47,7 @@ export default function Wallet() {
             <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.t3} />
           }
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 120 }}
+          contentContainerStyle={[{ paddingBottom: 120 }, chrome.pad]}
           ListHeaderComponent={
             <View style={{ padding: 16 }}>
               {/* Balance card */}

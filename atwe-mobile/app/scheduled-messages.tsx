@@ -5,6 +5,7 @@ import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useScheduledMessages, cancelScheduledMessage, type ScheduledMessage } from '@/api/beam';
@@ -20,7 +21,7 @@ export default function ScheduledMessages() {
   const rows = data?.scheduled ?? [];
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title="Scheduled" />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -29,7 +30,7 @@ export default function ScheduledMessages() {
           data={rows}
           keyExtractor={(r) => String(r.id)}
           renderItem={({ item }) => <Row m={item} onDone={refetch} />}
-          contentContainerStyle={{ paddingTop: 12, paddingBottom: 120 }}
+          contentContainerStyle={[{ paddingTop: 12, paddingBottom: 120 }, chromePad.header]}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.accent} />}
           ListEmptyComponent={
             <View style={styles.center}>

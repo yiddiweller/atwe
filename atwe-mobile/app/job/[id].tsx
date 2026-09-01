@@ -6,6 +6,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
@@ -114,25 +115,29 @@ export default function JobDetail() {
   const pay = job ? payLabel(job) : null;
   const p = job?.poster;
 
+  const chrome = useFloatingChrome();
+
   return (
-    <Screen edges={['top']}>
-      <View style={styles.head}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.icon} accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
-        {/* No title here. The role's name is the first thing in the page, in
-            Display type — repeating it in the bar put the same sentence on
-            screen twice, one above the other. */}
-        <View style={{ flex: 1 }} />
-        <Pressable onPress={toggleSave} hitSlop={10} style={styles.icon}
-          accessibilityRole="button"
-          accessibilityLabel={isSaved ? 'Saved' : 'Save this job'}>
-          {job && !job.mine && (
-            <Ionicons name={isSaved ? 'heart' : 'heart-outline'} size={24}
-              color={isSaved ? c.like : c.text} />
-          )}
-        </Pressable>
-      </View>
+    <Screen edges={[]}>
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={styles.head}>
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.icon} accessibilityLabel="Back">
+            <Ionicons name="chevron-back" size={26} color={c.text} />
+          </Pressable>
+          {/* No title here. The role's name is the first thing in the page, in
+              Display type — repeating it in the bar put the same sentence on
+              screen twice, one above the other. */}
+          <View style={{ flex: 1 }} />
+          <Pressable onPress={toggleSave} hitSlop={10} style={styles.icon}
+            accessibilityRole="button"
+            accessibilityLabel={isSaved ? 'Saved' : 'Save this job'}>
+            {job && !job.mine && (
+              <Ionicons name={isSaved ? 'heart' : 'heart-outline'} size={24}
+                color={isSaved ? c.like : c.text} />
+            )}
+          </Pressable>
+        </View>
+      </ChromeBar>
 
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -143,7 +148,7 @@ export default function JobDetail() {
           <Button title="Try again" kind="secondary" onPress={() => refetch()} />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 48 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[{ paddingBottom: 48 }, chrome.pad]} showsVerticalScrollIndicator={false}>
           <View style={{ padding: sp.lg }}>
             <Text variant="display" weight="800">{job.title}</Text>
 

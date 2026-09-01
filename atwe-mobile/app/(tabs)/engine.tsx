@@ -21,6 +21,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, radius, post as card } from '@/theme/tokens';
 import { haptics } from '@/lib/haptics';
 import { BrandBar } from '@/components/BrandBar';
+import { ChromeBar, chromePad, ENGINE_SEARCH_H } from '@/components/Chrome';
 import {
   useTrending,
   useSuggestions,
@@ -47,9 +48,10 @@ export default function Engine() {
   }, [q]);
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       {/* No ＋ here: Engine is discovery, there is nothing to compose. The web
           hides it on this world too. */}
+      <ChromeBar>
       <BrandBar world="engine" onMore={() => router.push('/settings')} />
       {/* Search bar */}
       <View style={styles.searchWrap}>
@@ -74,6 +76,7 @@ export default function Engine() {
           )}
         </View>
       </View>
+      </ChromeBar>
 
       {dq.trim() ? <SearchResults q={dq} /> : <Explore spacing={spacing} />}
     </Screen>
@@ -107,7 +110,7 @@ function SearchResults({ q }: { q: string }) {
       keyExtractor={(u) => String(u.id)}
       renderItem={({ item }) => <PersonRow user={item} />}
       keyboardShouldPersistTaps="handled"
-      contentContainerStyle={users.length ? { paddingBottom: 120 } : styles.emptyWrap}
+      contentContainerStyle={[users.length ? { paddingBottom: 120 } : styles.emptyWrap, chromePad.engine]}
       ListEmptyComponent={
         <View style={styles.center}>
           <Text variant="body" tone="t3">
@@ -178,7 +181,7 @@ function Explore({ spacing }: { spacing: ReturnType<typeof useTheme>['spacing'] 
 
   return (
     <ScrollView
-      contentContainerStyle={{ paddingBottom: 120 }}
+      contentContainerStyle={[{ paddingBottom: 120 }, chromePad.engine]}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       refreshControl={
@@ -440,7 +443,7 @@ function DiscoverTile({
 }
 
 const styles = StyleSheet.create({
-  searchWrap: { paddingHorizontal: 12, paddingBottom: 10 },
+  searchWrap: { paddingHorizontal: 12, paddingBottom: 10, height: ENGINE_SEARCH_H },
   aiHero: { marginHorizontal: spacing.gutter, marginTop: spacing.sm, borderRadius: card.cardRadius, overflow: 'hidden' },
   aiHeroFill: { flexDirection: 'row', alignItems: 'center', padding: 18 },
   aiHeroPill: {

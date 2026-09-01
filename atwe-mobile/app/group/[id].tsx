@@ -10,6 +10,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, chromePad, CHAT_HEAD_H } from '@/components/Chrome';
 import { Avatar } from '@/components/Avatar';
 import { GlassComposer } from '@/components/GlassComposer';
 import { MessageActions, type MessageAction } from '@/components/MessageActions';
@@ -229,26 +230,28 @@ export default function GroupThread() {
   };
 
   return (
-    <Screen edges={['top']}>
-      <View style={[styles.header, { borderBottomColor: c.border }]}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}
-          accessibilityRole="button" accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={26} color={c.accent} />
-        </Pressable>
-        <View style={styles.peer}>
-          <Avatar name={group?.name} avatar={group?.avatar} size={34} />
-          <View style={{ marginLeft: 8, flex: 1 }}>
-            <Text variant="headline" numberOfLines={1}>{group?.name ?? '…'}</Text>
-            {!!data?.members?.length && (
-              <Text variant="caption" tone="t3" numberOfLines={1}>
-                {data.members.length} member{data.members.length === 1 ? '' : 's'}
-                {group?.broadcast ? ' · channel' : ''}
-              </Text>
-            )}
+    <Screen edges={[]}>
+      <ChromeBar>
+        <View style={[styles.header, { borderBottomColor: c.border }]}>
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}
+            accessibilityRole="button" accessibilityLabel="Back">
+            <Ionicons name="chevron-back" size={26} color={c.accent} />
+          </Pressable>
+          <View style={styles.peer}>
+            <Avatar name={group?.name} avatar={group?.avatar} size={34} />
+            <View style={{ marginLeft: 8, flex: 1 }}>
+              <Text variant="headline" numberOfLines={1}>{group?.name ?? '…'}</Text>
+              {!!data?.members?.length && (
+                <Text variant="caption" tone="t3" numberOfLines={1}>
+                  {data.members.length} member{data.members.length === 1 ? '' : 's'}
+                  {group?.broadcast ? ' · channel' : ''}
+                </Text>
+              )}
+            </View>
           </View>
+          <View style={styles.back} />
         </View>
-        <View style={styles.back} />
-      </View>
+      </ChromeBar>
 
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -278,7 +281,7 @@ export default function GroupThread() {
                 startsRun={index === 0 || messages[index - 1]?.sender?.id !== item.sender?.id}
               />
             )}
-            contentContainerStyle={{ paddingVertical: 12, paddingHorizontal: 12 }}
+            contentContainerStyle={[{ paddingVertical: 12, paddingHorizontal: 12 }, chromePad.chat]}
             showsVerticalScrollIndicator={false}
             onContentSizeChange={scrollEnd}
             ListEmptyComponent={
@@ -411,7 +414,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   header: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: spacing.gutter, paddingBottom: 10,
+    paddingHorizontal: spacing.gutter, paddingBottom: 10, height: CHAT_HEAD_H,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   back: { width: 34, alignItems: 'flex-start' },

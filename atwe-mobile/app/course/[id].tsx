@@ -9,6 +9,7 @@ import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useCourse, enrolCourse, priceOrFree, type Lesson } from '@/api/discover';
 import { mediaUri } from '@/lib/media';
@@ -51,7 +52,7 @@ export default function CourseDetail() {
   const open = !!x && (x.enrolled || x.mine);
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title={x?.title ?? 'Course'} />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -62,7 +63,7 @@ export default function CourseDetail() {
           <Button title="Try again" kind="secondary" onPress={() => refetch()} />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[{ paddingBottom: 60 }, chromePad.header]} showsVerticalScrollIndicator={false}>
           {!!mediaUri(x.cover) && (
             <Image source={{ uri: mediaUri(x.cover) }} style={[styles.cover, { backgroundColor: c.s2 }]}
               contentFit="cover" transition={120} />

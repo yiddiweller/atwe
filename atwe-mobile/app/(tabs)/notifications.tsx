@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, chromePad, ALERTS_HEAD_H } from '@/components/Chrome';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -36,12 +37,14 @@ export default function Notifications() {
   }, [qc]);
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       {/* No back arrow: this is one of the five worlds now, not a page opened
           from somewhere, and an arrow with nothing behind it is a dead control. */}
-      <View style={[styles.head, { borderBottomColor: c.border }]}>
-        <Text variant="title">Notifications</Text>
-      </View>
+      <ChromeBar>
+        <View style={[styles.head, { borderBottomColor: c.border }]}>
+          <Text variant="title">Notifications</Text>
+        </View>
+      </ChromeBar>
 
       {isLoading ? (
         <View style={styles.center}>
@@ -58,7 +61,7 @@ export default function Notifications() {
           data={groupNotifs(notifs)}
           keyExtractor={(g) => String(g.head.id)}
           renderItem={({ item }) => <NotifRow n={item.head} count={item.count} />}
-          contentContainerStyle={notifs.length ? undefined : styles.emptyWrap}
+          contentContainerStyle={[notifs.length ? undefined : styles.emptyWrap, chromePad.alerts]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.t3} />
@@ -207,6 +210,7 @@ const styles = StyleSheet.create({
     // where a 40pt button used to hold it in.
     paddingHorizontal: spacing.gutter,
     paddingBottom: 10,
+    height: ALERTS_HEAD_H,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   back: { width: 40, alignItems: 'center' },

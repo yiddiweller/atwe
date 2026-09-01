@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
@@ -24,16 +25,20 @@ export default function Sales() {
   const a = q.data;
   const peak = Math.max(1, ...(a?.trend ?? []).map((d) => d.revenueCents));
 
+  const chrome = useFloatingChrome();
+
   return (
-    <Screen edges={['top']}>
-      <View style={styles.head}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}
-          accessibilityRole="button" accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
-        <Text variant="headline">Sales</Text>
-        <View style={styles.back} />
-      </View>
+    <Screen edges={[]}>
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={styles.head}>
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}
+            accessibilityRole="button" accessibilityLabel="Back">
+            <Ionicons name="chevron-back" size={26} color={c.text} />
+          </Pressable>
+          <Text variant="headline">Sales</Text>
+          <View style={styles.back} />
+        </View>
+      </ChromeBar>
 
       {q.isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -43,7 +48,7 @@ export default function Sales() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={styles.body}
+          contentContainerStyle={[styles.body, chrome.pad]}
           refreshControl={
             <RefreshControl refreshing={q.isRefetching} onRefresh={q.refetch} tintColor={c.t3} />
           }

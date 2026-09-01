@@ -21,6 +21,7 @@ import { FeedTab } from '@/components/FeedTab';
 import { NewChatSheet } from '@/components/NewChatSheet';
 import { BeamToolsMenu } from '@/components/BeamToolsMenu';
 import { BrandBar } from '@/components/BrandBar';
+import { ChromeBar, chromePad, BEAM_TABS_H } from '@/components/Chrome';
 import { RowDivider } from '@/components/RowDivider';
 
 /**
@@ -76,10 +77,11 @@ export default function Beam() {
   useRealtimeInvalidate(['msg', 'read', 'read-self'], [['conversations'], ['groups']]);
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       {/* The world's own brand row: the mark, the word "Beam", and the three
           controls — ＋ starts a conversation, ⋯ opens the tools. The bespoke
           title row it replaces had the buttons but no brand and no name. */}
+      <ChromeBar>
       <BrandBar
         world="beam"
         onPlus={() => setNewChat(true)}
@@ -114,6 +116,7 @@ export default function Beam() {
           ))}
         </View>
       </View>
+      </ChromeBar>
 
       {isLoading ? (
         <View style={styles.center}>
@@ -134,7 +137,7 @@ export default function Beam() {
           renderItem={({ item }) => (item.kind === 'dm'
             ? <ConvoRow convo={item.convo} />
             : <GroupRow group={item.group} />)}
-          contentContainerStyle={all.length ? { paddingBottom: 24 } : styles.emptyWrap}
+          contentContainerStyle={[all.length ? { paddingBottom: 24 } : styles.emptyWrap, chromePad.beam]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={isRefetching || groupsQ.isRefetching}
@@ -156,7 +159,7 @@ export default function Beam() {
           data={callsQ.data?.calls ?? []}
           keyExtractor={(x) => String(x.id)}
           renderItem={({ item }) => <CallRow call={item} />}
-          contentContainerStyle={(callsQ.data?.calls?.length) ? { paddingBottom: 24 } : styles.emptyWrap}
+          contentContainerStyle={[(callsQ.data?.calls?.length) ? { paddingBottom: 24 } : styles.emptyWrap, chromePad.beam]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={callsQ.isRefetching} onRefresh={callsQ.refetch} tintColor={c.t3} />
@@ -179,7 +182,7 @@ export default function Beam() {
           data={contactsQ.data?.contacts ?? []}
           keyExtractor={(p) => String(p.id)}
           renderItem={({ item }) => <ContactRow person={item} />}
-          contentContainerStyle={(contactsQ.data?.contacts?.length) ? { paddingBottom: 24 } : styles.emptyWrap}
+          contentContainerStyle={[(contactsQ.data?.contacts?.length) ? { paddingBottom: 24 } : styles.emptyWrap, chromePad.beam]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={contactsQ.isRefetching} onRefresh={contactsQ.refetch} tintColor={c.t3} />
@@ -202,7 +205,7 @@ export default function Beam() {
           data={convos}
           keyExtractor={(c) => `${c.id}:${c.thread_id ?? 'main'}`}
           renderItem={({ item }) => <ConvoRow convo={item} />}
-          contentContainerStyle={convos.length ? { paddingBottom: 24 } : styles.emptyWrap}
+          contentContainerStyle={[convos.length ? { paddingBottom: 24 } : styles.emptyWrap, chromePad.beam]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.t3} />
@@ -413,7 +416,7 @@ function ContactRow({ person }: { person: Person }) {
 
 const styles = StyleSheet.create({
   tabs: { flexDirection: 'row', gap: 22, marginTop: 10 },
-  head: { paddingHorizontal: spacing.gutter, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  head: { paddingHorizontal: spacing.gutter, paddingBottom: 12, height: BEAM_TABS_H, borderBottomWidth: StyleSheet.hairlineWidth },
   titleRow: { flexDirection: 'row', alignItems: 'center' },
   /* The old title row's controls moved into BrandBar; the row itself is kept
      out of the layout rather than deleted so the tabs below keep their

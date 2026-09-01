@@ -16,6 +16,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Alert } from 'react-native';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, chromePad, CHAT_HEAD_H } from '@/components/Chrome';
 import { Avatar } from '@/components/Avatar';
 import { GlassComposer } from '@/components/GlassComposer';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -235,31 +236,33 @@ export default function ChatThread() {
   };
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: c.border }]}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}>
-          <Ionicons name="chevron-back" size={26} color={c.accent} />
-        </Pressable>
-        <Pressable
-          style={styles.peer}
-          onPress={() => data?.peer.username && router.push(`/user/${data.peer.username}`)}
-        >
-          <Avatar name={data?.peer.name} avatar={data?.peer.avatar} size={34} />
-          <Text variant="headline" numberOfLines={1} style={{ marginLeft: 8 }}>
-            {data?.peer.name ?? '…'}
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={() => { haptics.tap(); setSettings(true); }}
-          hitSlop={10}
-          style={styles.back}
-          accessibilityRole="button"
-          accessibilityLabel="Chat settings"
-        >
-          <Ionicons name="ellipsis-horizontal" size={21} color={c.text} />
-        </Pressable>
-      </View>
+      <ChromeBar>
+        <View style={[styles.header, { borderBottomColor: c.border }]}>
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}>
+            <Ionicons name="chevron-back" size={26} color={c.accent} />
+          </Pressable>
+          <Pressable
+            style={styles.peer}
+            onPress={() => data?.peer.username && router.push(`/user/${data.peer.username}`)}
+          >
+            <Avatar name={data?.peer.name} avatar={data?.peer.avatar} size={34} />
+            <Text variant="headline" numberOfLines={1} style={{ marginLeft: 8 }}>
+              {data?.peer.name ?? '…'}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => { haptics.tap(); setSettings(true); }}
+            hitSlop={10}
+            style={styles.back}
+            accessibilityRole="button"
+            accessibilityLabel="Chat settings"
+          >
+            <Ionicons name="ellipsis-horizontal" size={21} color={c.text} />
+          </Pressable>
+        </View>
+      </ChromeBar>
 
       {isLoading ? (
         <View style={styles.center}>
@@ -284,7 +287,7 @@ export default function ChatThread() {
                 onLongPress={() => setActingOn(item.id)}
               />
             )}
-            contentContainerStyle={{ paddingVertical: 12, paddingHorizontal: 12 }}
+            contentContainerStyle={[{ paddingVertical: 12, paddingHorizontal: 12 }, chromePad.chat]}
             showsVerticalScrollIndicator={false}
             onContentSizeChange={scrollEnd}
             ListEmptyComponent={
@@ -512,7 +515,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
-    paddingBottom: 8,
+    paddingBottom: 10,
+    height: CHAT_HEAD_H,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   back: { width: 40, alignItems: 'flex-start' },

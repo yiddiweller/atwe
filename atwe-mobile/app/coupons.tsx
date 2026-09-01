@@ -7,6 +7,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import {
@@ -27,7 +28,7 @@ export default function Coupons() {
   const rows = data?.coupons ?? [];
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader
         title="Discount codes"
         action={{ icon: 'add', label: 'New code', onPress: () => setMaking(true) }}
@@ -39,7 +40,7 @@ export default function Coupons() {
           data={rows}
           keyExtractor={(r) => String(r.id)}
           renderItem={({ item }) => <Row coupon={item} onDone={refetch} />}
-          contentContainerStyle={{ paddingTop: 12, paddingBottom: 120 }}
+          contentContainerStyle={[{ paddingTop: 12, paddingBottom: 120 }, chromePad.header]}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.accent} />}
           ListEmptyComponent={
             <View style={styles.center}>
@@ -165,7 +166,7 @@ function NewCoupon({ visible, onClose, onDone }: { visible: boolean; onClose: ()
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <Screen edges={['top']}>
+      <Screen edges={[]}>
         <PageHeader title="New discount code" />
         <View style={{ padding: spacing.gutter }}>
           <Text variant="caption" tone="t3" style={styles.lbl}>THE CODE</Text>

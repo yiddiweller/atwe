@@ -6,6 +6,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { Shelf } from '@/components/Shelf';
 import { useTheme } from '@/theme/ThemeProvider';
 import {
@@ -40,16 +41,17 @@ export default function GiftCards() {
   const spent = cards.filter((k) => k.depleted);
 
   return (
-    <Screen edges={['top']}>
-      <PageHeader title="Gift cards" />
-      <Shelf
-        value={shelf}
-        onChange={setShelf}
-        options={[
-          { key: 'mine', label: 'Your cards' },
-          { key: 'buy', label: 'Buy one' },
-          { key: 'redeem', label: 'Redeem a code' },
-        ]}
+    <Screen edges={[]}>
+      <PageHeader title="Gift cards"
+        below={<Shelf
+          value={shelf}
+          onChange={setShelf}
+          options={[
+            { key: 'mine', label: 'Your cards' },
+            { key: 'buy', label: 'Buy one' },
+            { key: 'redeem', label: 'Redeem a code' },
+          ]}
+        />}
       />
 
       {shelf === 'buy' ? <BuyPane onDone={refetch} /> :
@@ -58,7 +60,7 @@ export default function GiftCards() {
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
       ) : (
         <ScrollView
-          contentContainerStyle={{ padding: spacing.gutter, paddingBottom: 120 }}
+          contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 120 }, chromePad.headerShelf]}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.accent} />}
           showsVerticalScrollIndicator={false}
         >
@@ -219,7 +221,7 @@ function BuyPane({ onDone }: { onDone: () => void }) {
   };
 
   return (
-    <ScrollView contentContainerStyle={{ padding: spacing.gutter, paddingBottom: 140 }} keyboardShouldPersistTaps="handled">
+    <ScrollView contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 140 }, chromePad.headerShelf]} keyboardShouldPersistTaps="handled">
       <Text variant="caption" tone="t3" style={styles.lbl}>HOW MUCH</Text>
       <View style={styles.amounts}>
         {PRESETS.map((p) => (
@@ -285,7 +287,7 @@ function RedeemPane({ onDone }: { onDone: () => void }) {
   };
 
   return (
-    <ScrollView contentContainerStyle={{ padding: spacing.gutter }} keyboardShouldPersistTaps="handled">
+    <ScrollView contentContainerStyle={[{ padding: spacing.gutter }, chromePad.headerShelf]} keyboardShouldPersistTaps="handled">
       <Text variant="caption" tone="t3" style={styles.lbl}>THE CODE</Text>
       <TextInput
         value={code}

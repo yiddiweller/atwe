@@ -6,6 +6,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { usePaymentLinks, createPaymentLink, setPaymentLinkActive, type PaymentLink } from '@/api/money';
@@ -27,7 +28,7 @@ export default function PaymentLinks() {
   const rows = data?.links ?? [];
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader
         title="Payment links"
         action={{ icon: 'add', label: 'New link', onPress: () => setMaking(true) }}
@@ -39,7 +40,7 @@ export default function PaymentLinks() {
           data={rows}
           keyExtractor={(r) => String(r.id)}
           renderItem={({ item }) => <Row link={item} onDone={refetch} />}
-          contentContainerStyle={{ paddingTop: 12, paddingBottom: 120 }}
+          contentContainerStyle={[{ paddingTop: 12, paddingBottom: 120 }, chromePad.header]}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.accent} />}
           ListEmptyComponent={
             <View style={styles.center}>
@@ -138,7 +139,7 @@ function NewLink({ visible, onClose, onDone }: { visible: boolean; onClose: () =
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <Screen edges={['top']}>
+      <Screen edges={[]}>
         <PageHeader title="New payment link" />
         <View style={{ padding: spacing.gutter }}>
           <Text variant="caption" tone="t3" style={styles.lbl}>AMOUNT (LEAVE EMPTY TO LET THEM CHOOSE)</Text>

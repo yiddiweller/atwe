@@ -16,6 +16,7 @@ import { useNavMorph } from '@/lib/navMorph';
 import { haptics } from '@/lib/haptics';
 import { FeedTab } from '@/components/FeedTab';
 import { BrandBar } from '@/components/BrandBar';
+import { ChromeBar, chromePad, FEED_TABS_H } from '@/components/Chrome';
 
 // The same four the web Home has, in the same order.
 const TABS: { key: FeedScope; label: string }[] = [
@@ -87,9 +88,11 @@ export default function Home() {
   };
 
   return (
-    <Screen edges={['top']}>
-      {/* The brand row sits ABOVE the tabs, exactly as the web has it: the mark
+    <Screen edges={[]}>
+      {/* The bar FLOATS over the feed and the posts travel under it, showing
+          through blurred — see `Chrome.tsx`. The brand row sits ABOVE the tabs, exactly as the web has it: the mark
           and the wordmark on the left, ＋ · ⋯ · your photo on the right. */}
+      <ChromeBar>
       <BrandBar
         world="home"
         onPlus={() => router.push('/compose')}
@@ -140,6 +143,7 @@ export default function Home() {
         />
         </View>
       </View>
+      </ChromeBar>
 
       {isLoading ? (
         <View style={styles.center}>
@@ -159,7 +163,7 @@ export default function Home() {
           keyExtractor={(p) => String(p.id)}
           renderItem={({ item }) => <PostCard post={item} />}
           ListHeaderComponent={<StoriesTray />}
-          contentContainerStyle={posts.length ? { paddingBottom: 120 } : styles.emptyWrap}
+          contentContainerStyle={[posts.length ? { paddingBottom: 120 } : styles.emptyWrap, chromePad.home]}
           showsVerticalScrollIndicator={false}
           onScroll={onScroll}
           scrollEventThrottle={16}
@@ -198,6 +202,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    // Pinned, so the floating bar's height is known before it renders.
+    height: FEED_TABS_H,
     // the app's ONE margin, so the tab row starts on the same line as the cards below
     paddingHorizontal: spacing.gutter,
     paddingBottom: 10,

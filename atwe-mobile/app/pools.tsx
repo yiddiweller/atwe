@@ -7,6 +7,7 @@ import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { Shelf } from '@/components/Shelf';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -27,15 +28,15 @@ export default function Pools() {
   const rows = data?.pools ?? [];
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader
         title="Pools"
         action={{ icon: 'add', label: 'Start a pool', onPress: () => setMaking(true) }}
-      />
-      <Shelf
-        value={shelf}
-        onChange={setShelf}
-        options={[{ key: 'mine', label: 'Yours' }, { key: 'contributed', label: 'Chipped in' }]}
+        below={<Shelf
+          value={shelf}
+          onChange={setShelf}
+          options={[{ key: 'mine', label: 'Yours' }, { key: 'contributed', label: 'Chipped in' }]}
+        />}
       />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -44,7 +45,7 @@ export default function Pools() {
           data={rows}
           keyExtractor={(r) => String(r.id)}
           renderItem={({ item }) => <Row pool={item} />}
-          contentContainerStyle={{ paddingBottom: 120 }}
+          contentContainerStyle={[{ paddingBottom: 120 }, chromePad.headerShelf]}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.accent} />}
           ListEmptyComponent={
             <View style={styles.center}>
@@ -122,7 +123,7 @@ function NewPool({ visible, onClose, onDone }: { visible: boolean; onClose: () =
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <Screen edges={['top']}>
+      <Screen edges={[]}>
         <PageHeader title="Start a pool" />
         <View style={{ padding: spacing.gutter }}>
           <Text variant="caption" tone="t3" style={styles.lbl}>WHAT IS IT FOR</Text>

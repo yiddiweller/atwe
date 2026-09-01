@@ -7,6 +7,7 @@ import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { usePool, contributeToPool, closePool } from '@/api/money';
 import { money } from '@/api/wallet';
@@ -57,7 +58,7 @@ export default function PoolDetail() {
   const pct = p?.goalCents ? Math.min(1, p.raisedCents / p.goalCents) : 0;
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title="Pool" />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -66,7 +67,7 @@ export default function PoolDetail() {
           <Text variant="body" tone="t2">This pool is not available.</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.gutter, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 60 }, chromePad.header]} keyboardShouldPersistTaps="handled">
           <View style={[styles.hero, { backgroundColor: c.s1, borderRadius: radius.card }]}>
             <Text variant="caption" tone="t3">RAISED SO FAR</Text>
             <Text variant="display" weight="800" style={{ marginTop: 4 }}>{money(p.raisedCents)}</Text>

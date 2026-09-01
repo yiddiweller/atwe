@@ -7,6 +7,7 @@ import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useBroadcast, sendBroadcast } from '@/api/beam';
 import { haptics } from '@/lib/haptics';
@@ -53,7 +54,7 @@ export default function BroadcastDetail() {
   };
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title={data?.name ?? 'Broadcast'} />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -62,7 +63,7 @@ export default function BroadcastDetail() {
           <Text variant="body" tone="t2">This list is not available.</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.gutter, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 60 }, chromePad.header]} keyboardShouldPersistTaps="handled">
           <View style={[styles.notice, { backgroundColor: c.accentDim, borderRadius: radius.card }]}>
             <Ionicons name="lock-closed-outline" size={17} color={c.accent} />
             <Text variant="caption" tone="accent" style={{ flex: 1, marginLeft: 10 }}>

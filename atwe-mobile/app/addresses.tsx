@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { AddressForm } from '@/components/AddressForm';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -57,21 +58,25 @@ export default function Addresses() {
     );
   }
 
+  const chrome = useFloatingChrome();
+
   return (
-    <Screen edges={['top']}>
-      <View style={styles.head}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}
-          accessibilityRole="button" accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
-        <Text variant="headline">Delivery addresses</Text>
-        <View style={styles.back} />
-      </View>
+    <Screen edges={[]}>
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={styles.head}>
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}
+            accessibilityRole="button" accessibilityLabel="Back">
+            <Ionicons name="chevron-back" size={26} color={c.text} />
+          </Pressable>
+          <Text variant="headline">Delivery addresses</Text>
+          <View style={styles.back} />
+        </View>
+      </ChromeBar>
 
       {q.isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
       ) : (
-        <ScrollView contentContainerStyle={styles.body}>
+        <ScrollView contentContainerStyle={[styles.body, chrome.pad]}>
           {addresses.length === 0 && (
             <Text variant="body" tone="t3" style={{ textAlign: 'center', marginVertical: 30 }}>
               No saved addresses yet.

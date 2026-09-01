@@ -7,6 +7,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useChatLabels, createChatLabel, deleteChatLabel, type ChatLabel } from '@/api/beam';
@@ -26,7 +27,7 @@ export default function ChatLabels() {
   const rows = data?.labels ?? [];
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader
         title="Labels"
         action={{ icon: 'add', label: 'New label', onPress: () => setMaking(true) }}
@@ -38,7 +39,7 @@ export default function ChatLabels() {
           data={rows}
           keyExtractor={(r) => String(r.id)}
           renderItem={({ item }) => <Row label={item} onDone={refetch} />}
-          contentContainerStyle={{ paddingTop: 12, paddingBottom: 120 }}
+          contentContainerStyle={[{ paddingTop: 12, paddingBottom: 120 }, chromePad.header]}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.accent} />}
           ListEmptyComponent={
             <View style={styles.center}>
@@ -102,7 +103,7 @@ function NewLabel({ visible, onClose, onDone }: { visible: boolean; onClose: () 
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <Screen edges={['top']}>
+      <Screen edges={[]}>
         <PageHeader title="New label" />
         <View style={{ padding: spacing.gutter }}>
           <TextInput

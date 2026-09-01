@@ -9,6 +9,7 @@ import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { CheckoutSheet } from '@/components/CheckoutSheet';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useBundle } from '@/api/seller';
@@ -34,7 +35,7 @@ export default function BundleDetail() {
   const canBuy = !!b && !mine && b.active && !b.soldOut;
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title="Bundle" />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -43,7 +44,7 @@ export default function BundleDetail() {
           <Text variant="body" tone="t2">This bundle is no longer available.</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.gutter, paddingBottom: 60 }}>
+        <ScrollView contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 60 }, chromePad.header]}>
           <Text variant="title">{b.name}</Text>
           {!!b.description && (
             <Text variant="body" tone="t2" style={{ marginTop: 8, lineHeight: 22 }}>{b.description}</Text>

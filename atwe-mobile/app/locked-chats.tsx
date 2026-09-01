@@ -7,6 +7,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useChatPrefs, setLockPin, unlockChats } from '@/api/beam';
 import { haptics } from '@/lib/haptics';
@@ -59,12 +60,12 @@ export default function LockedChats() {
   };
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title="Locked chats" />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.gutter, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 60 }, chromePad.header]} keyboardShouldPersistTaps="handled">
           <View style={[styles.notice, { backgroundColor: c.s1, borderRadius: radius.card }]}>
             <Ionicons name="lock-closed-outline" size={19} color={c.t2} />
             <Text variant="caption" tone="t2" style={{ flex: 1, marginLeft: 12, lineHeight: 19 }}>

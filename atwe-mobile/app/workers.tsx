@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
@@ -49,46 +50,50 @@ export default function Workers() {
   const { user } = useAuth();
   const workers = (data?.workers ?? []).filter((w) => w.userId !== user?.id);
 
-  return (
-    <Screen edges={['top']}>
-      <View style={styles.head}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.icon} accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
-        <Text variant="headline">Open to work</Text>
-        <View style={styles.icon} />
-      </View>
+  const chrome = useFloatingChrome();
 
-      <View style={{ paddingHorizontal: spacing.gutter }}>
-        <View style={[styles.search, { backgroundColor: c.s2 }]}>
-          <Ionicons name="search" size={18} color={c.t3} />
-          <HapticInput
-            value={q}
-            onChangeText={setQ}
-            placeholder="A trade, a skill, a role"
-            placeholderTextColor={c.t3}
-            style={[styles.searchInput, { color: c.text }]}
-            returnKeyType="search"
-            autoCorrect={false}
-            accessibilityLabel="Search people open to work"
-          />
-          {q.length > 0 && (
-            <Pressable onPress={() => setQ('')} hitSlop={8} accessibilityLabel="Clear">
-              <Ionicons name="close-circle" size={18} color={c.t3} />
-            </Pressable>
-          )}
+  return (
+    <Screen edges={[]}>
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={styles.head}>
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.icon} accessibilityLabel="Back">
+            <Ionicons name="chevron-back" size={26} color={c.text} />
+          </Pressable>
+          <Text variant="headline">Open to work</Text>
+          <View style={styles.icon} />
         </View>
-        <Pressable
-          onPress={() => { haptics.select(); setRemote((r) => !r); }}
-          style={[styles.toggle, { backgroundColor: remote ? c.accent : c.s2 }]}
-          accessibilityRole="radio"
-          accessibilityState={{ selected: remote }}
-          accessibilityLabel="Remote only"
-        >
-          <Ionicons name="globe-outline" size={15} color={remote ? c.accentTint : c.t2} />
-          <Text variant="callout" style={{ color: remote ? c.accentTint : c.t2 }}>Remote only</Text>
-        </Pressable>
-      </View>
+
+        <View style={{ paddingHorizontal: spacing.gutter }}>
+          <View style={[styles.search, { backgroundColor: c.s2 }]}>
+            <Ionicons name="search" size={18} color={c.t3} />
+            <HapticInput
+              value={q}
+              onChangeText={setQ}
+              placeholder="A trade, a skill, a role"
+              placeholderTextColor={c.t3}
+              style={[styles.searchInput, { color: c.text }]}
+              returnKeyType="search"
+              autoCorrect={false}
+              accessibilityLabel="Search people open to work"
+            />
+            {q.length > 0 && (
+              <Pressable onPress={() => setQ('')} hitSlop={8} accessibilityLabel="Clear">
+                <Ionicons name="close-circle" size={18} color={c.t3} />
+              </Pressable>
+            )}
+          </View>
+          <Pressable
+            onPress={() => { haptics.select(); setRemote((r) => !r); }}
+            style={[styles.toggle, { backgroundColor: remote ? c.accent : c.s2 }]}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: remote }}
+            accessibilityLabel="Remote only"
+          >
+            <Ionicons name="globe-outline" size={15} color={remote ? c.accentTint : c.t2} />
+            <Text variant="callout" style={{ color: remote ? c.accentTint : c.t2 }}>Remote only</Text>
+          </Pressable>
+        </View>
+      </ChromeBar>
 
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -103,7 +108,7 @@ export default function Workers() {
           data={workers}
           keyExtractor={(w) => String(w.userId)}
           renderItem={({ item }) => <WorkerCard w={item} />}
-          contentContainerStyle={{ paddingTop: 12, paddingBottom: 120 }}
+          contentContainerStyle={[{ paddingTop: 12, paddingBottom: 120 }, chrome.pad]}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.t3} />}
           ListHeaderComponent={

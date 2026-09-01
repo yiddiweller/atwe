@@ -7,6 +7,7 @@ import { Screen } from './Screen';
 import { Avatar } from './Avatar';
 import { VerifiedBadge } from './VerifiedBadge';
 import { PageHeader } from './PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useContacts, useFindPeople, type Person } from '@/api/beam';
@@ -40,26 +41,30 @@ export function NewChatSheet({ visible, onClose }: { visible: boolean; onClose: 
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <Screen edges={['top']}>
-        <PageHeader title="New chat" />
-        <View style={[styles.search, { backgroundColor: c.s2, borderRadius: radius.pill }]}>
-          <Ionicons name="search" size={17} color={c.t3} />
-          <TextInput
-            value={q}
-            onChangeText={setQ}
-            placeholder="Search for somebody"
-            placeholderTextColor={c.t4}
-            autoCapitalize="none"
-            autoCorrect={false}
-            accessibilityLabel="Search for somebody to message"
-            style={[styles.input, { color: c.text }]}
-          />
-          {!!q && (
-            <Pressable onPress={() => setQ('')} hitSlop={8} accessibilityLabel="Clear">
-              <Ionicons name="close-circle" size={17} color={c.t3} />
-            </Pressable>
-          )}
-        </View>
+      <Screen edges={[]}>
+        <PageHeader
+          title="New chat"
+          below={
+          <View style={[styles.search, { backgroundColor: c.s2, borderRadius: radius.pill }]}>
+            <Ionicons name="search" size={17} color={c.t3} />
+            <TextInput
+              value={q}
+              onChangeText={setQ}
+              placeholder="Search for somebody"
+              placeholderTextColor={c.t4}
+              autoCapitalize="none"
+              autoCorrect={false}
+              accessibilityLabel="Search for somebody to message"
+              style={[styles.input, { color: c.text }]}
+            />
+            {!!q && (
+              <Pressable onPress={() => setQ('')} hitSlop={8} accessibilityLabel="Clear">
+                <Ionicons name="close-circle" size={17} color={c.t3} />
+              </Pressable>
+            )}
+          </View>
+          }
+        />
 
         {!searching && (
           <Text variant="caption" tone="t3" style={styles.lbl}>YOUR CONTACTS</Text>
@@ -69,6 +74,7 @@ export function NewChatSheet({ visible, onClose }: { visible: boolean; onClose: 
           <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
         ) : (
           <FlatList
+          contentContainerStyle={chromePad.header}
             data={rows}
             keyExtractor={(p) => String(p.id)}
             keyboardShouldPersistTaps="handled"

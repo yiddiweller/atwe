@@ -8,6 +8,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { ShipSheet } from '@/components/ShipSheet';
@@ -100,16 +101,20 @@ export default function OrderDetail() {
     ]);
   };
 
+  const chrome = useFloatingChrome();
+
   return (
-    <Screen edges={['top']}>
-      <View style={styles.head}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}
-          accessibilityRole="button" accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
-        <Text variant="headline">Order #{oid}</Text>
-        <View style={styles.back} />
-      </View>
+    <Screen edges={[]}>
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={styles.head}>
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back}
+            accessibilityRole="button" accessibilityLabel="Back">
+            <Ionicons name="chevron-back" size={26} color={c.text} />
+          </Pressable>
+          <Text variant="headline">Order #{oid}</Text>
+          <View style={styles.back} />
+        </View>
+      </ChromeBar>
 
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -118,7 +123,7 @@ export default function OrderDetail() {
           <Text variant="body" tone="t2">Couldn't open this order.</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.body}>
+        <ScrollView contentContainerStyle={[styles.body, chrome.pad]}>
           <Text variant="title" tone={orderStatusTone(order)}>{orderStatusLabel(order)}</Text>
           {order.escrow && order.status === 'escrow' && (
             <Text variant="caption" tone="t3" style={{ marginTop: 4 }}>

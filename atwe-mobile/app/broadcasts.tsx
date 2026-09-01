@@ -9,6 +9,7 @@ import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useBroadcasts, createBroadcast, deleteBroadcast, useContacts, type BroadcastList } from '@/api/beam';
@@ -27,7 +28,7 @@ export default function Broadcasts() {
   const rows = data?.lists ?? [];
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader
         title="Broadcast lists"
         action={{ icon: 'add', label: 'New list', onPress: () => setMaking(true) }}
@@ -39,7 +40,7 @@ export default function Broadcasts() {
           data={rows}
           keyExtractor={(r) => String(r.id)}
           renderItem={({ item }) => <Row list={item} onDone={refetch} />}
-          contentContainerStyle={{ paddingTop: 12, paddingBottom: 120 }}
+          contentContainerStyle={[{ paddingTop: 12, paddingBottom: 120 }, chromePad.header]}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.accent} />}
           ListHeaderComponent={
             rows.length ? (
@@ -132,7 +133,7 @@ function NewList({ visible, onClose, onDone }: { visible: boolean; onClose: () =
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <Screen edges={['top']}>
+      <Screen edges={[]}>
         <PageHeader title="New broadcast list" />
         <View style={{ paddingHorizontal: spacing.gutter }}>
           <TextInput
@@ -152,7 +153,7 @@ function NewList({ visible, onClose, onDone }: { visible: boolean; onClose: () =
             data={rows}
             keyExtractor={(p) => String(p.id)}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingBottom: 24 }}
+            contentContainerStyle={[{ paddingBottom: 24 }, chromePad.header]}
             renderItem={({ item }) => {
               const on = picked.includes(item.id);
               return (

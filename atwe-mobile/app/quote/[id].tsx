@@ -7,6 +7,7 @@ import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useQuote, acceptQuote, declineQuote, cancelQuote } from '@/api/money';
 import { quoteState } from '../quotes';
@@ -79,7 +80,7 @@ export default function QuoteDetail() {
   const open = q?.status === 'sent';
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title="Quote" />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -88,7 +89,7 @@ export default function QuoteDetail() {
           <Text variant="body" tone="t2">This quote is not available.</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.gutter, paddingBottom: 60 }}>
+        <ScrollView contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 60 }, chromePad.header]}>
           <View style={[styles.hero, { backgroundColor: c.s1, borderRadius: radius.card }]}>
             <Text variant="caption" tone="t3">{q.mine ? 'You quoted' : 'Quoted to you'}</Text>
             <Text variant="display" weight="800" style={{ marginTop: 4 }}>{money(q.amountCents)}</Text>

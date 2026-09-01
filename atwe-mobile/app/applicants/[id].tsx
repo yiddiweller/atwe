@@ -6,6 +6,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
@@ -62,17 +63,21 @@ export default function Applicants() {
     }
   };
 
+  const chrome = useFloatingChrome();
+
   return (
-    <Screen edges={['top']}>
-      <View style={styles.head}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.icon} accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
-        <Text variant="headline" numberOfLines={1} style={{ flex: 1, textAlign: 'center' }}>
-          {q.data?.title ?? 'Applicants'}
-        </Text>
-        <View style={styles.icon} />
-      </View>
+    <Screen edges={[]}>
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={styles.head}>
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.icon} accessibilityLabel="Back">
+            <Ionicons name="chevron-back" size={26} color={c.text} />
+          </Pressable>
+          <Text variant="headline" numberOfLines={1} style={{ flex: 1, textAlign: 'center' }}>
+            {q.data?.title ?? 'Applicants'}
+          </Text>
+          <View style={styles.icon} />
+        </View>
+      </ChromeBar>
 
       {q.isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -84,7 +89,7 @@ export default function Applicants() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={all.length ? { paddingBottom: 60 } : styles.emptyWrap}
+          contentContainerStyle={[all.length ? { paddingBottom: 60 } : styles.emptyWrap, chrome.pad]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={q.isRefetching} onRefresh={q.refetch} tintColor={c.t3} />

@@ -6,6 +6,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { JobCard } from '@/components/JobCard';
 import { HapticInput } from '@/components/HapticInput';
@@ -54,95 +55,99 @@ export default function Jobs() {
     useJobs({ q: dq, type: type ?? undefined, remote, scope });
   const jobs = data?.jobs ?? [];
 
+  const chrome = useFloatingChrome();
+
   return (
-    <Screen edges={['top']}>
-      <View style={styles.head}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.icon} accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
-        <Text variant="headline">Jobs</Text>
-        <Pressable
-          onPress={() => router.push('/post-job')}
-          hitSlop={10}
-          style={styles.icon}
-          accessibilityRole="button"
-          accessibilityLabel="Post a job"
-        >
-          <Ionicons name="add" size={26} color={c.text} />
-        </Pressable>
-      </View>
-
-      {/* Search */}
-      <View style={{ paddingHorizontal: spacing.gutter }}>
-        <View style={[styles.search, { backgroundColor: c.s2 }]}>
-          <Ionicons name="search" size={18} color={c.t3} />
-          <HapticInput
-            value={q}
-            onChangeText={setQ}
-            placeholder="Job title, company or keyword"
-            placeholderTextColor={c.t3}
-            style={[styles.searchInput, { color: c.text }]}
-            returnKeyType="search"
-            autoCorrect={false}
-            accessibilityLabel="Search jobs"
-          />
-          {q.length > 0 && (
-            <Pressable onPress={() => setQ('')} hitSlop={8} accessibilityLabel="Clear">
-              <Ionicons name="close-circle" size={18} color={c.t3} />
-            </Pressable>
-          )}
+    <Screen edges={[]}>
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={styles.head}>
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.icon} accessibilityLabel="Back">
+            <Ionicons name="chevron-back" size={26} color={c.text} />
+          </Pressable>
+          <Text variant="headline">Jobs</Text>
+          <Pressable
+            onPress={() => router.push('/post-job')}
+            hitSlop={10}
+            style={styles.icon}
+            accessibilityRole="button"
+            accessibilityLabel="Post a job"
+          >
+            <Ionicons name="add" size={26} color={c.text} />
+          </Pressable>
         </View>
-      </View>
 
-      {/* Two rows that say different things, so they look different: the shelf
-          is WHERE YOU ARE (white, the one primary), the filters are WHAT YOU
-          NARROWED TO (blue, which is this app's selected-state colour).
+        {/* Search */}
+        <View style={{ paddingHorizontal: spacing.gutter }}>
+          <View style={[styles.search, { backgroundColor: c.s2 }]}>
+            <Ionicons name="search" size={18} color={c.t3} />
+            <HapticInput
+              value={q}
+              onChangeText={setQ}
+              placeholder="Job title, company or keyword"
+              placeholderTextColor={c.t3}
+              style={[styles.searchInput, { color: c.text }]}
+              returnKeyType="search"
+              autoCorrect={false}
+              accessibilityLabel="Search jobs"
+            />
+            {q.length > 0 && (
+              <Pressable onPress={() => setQ('')} hitSlop={8} accessibilityLabel="Clear">
+                <Ionicons name="close-circle" size={18} color={c.t3} />
+              </Pressable>
+            )}
+          </View>
+        </View>
 
-          Both are plain ScrollViews. A horizontal FlatList stacked under another
-          one measured 19px shorter than its own chips and the two rows visibly
-          overlapped — and for eight items there is nothing to virtualise. */}
+        {/* Two rows that say different things, so they look different: the shelf
+            is WHERE YOU ARE (white, the one primary), the filters are WHAT YOU
+            NARROWED TO (blue, which is this app's selected-state colour).
+
+            Both are plain ScrollViews. A horizontal FlatList stacked under another
+            one measured 19px shorter than its own chips and the two rows visibly
+            overlapped — and for eight items there is nothing to virtualise. */}
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.rowStrip}
-        contentContainerStyle={styles.shelfRow}
-      >
-        {SCOPES.map((s) => (
-          <Chip
-            key={s.key}
-            label={s.label}
-            active={scope === s.key}
-            onPress={() => setScope(s.key)}
-          />
-        ))}
-      </ScrollView>
-
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.rowStrip}
+          contentContainerStyle={styles.shelfRow}
+        >
+          {SCOPES.map((s) => (
+            <Chip
+              key={s.key}
+              label={s.label}
+              active={scope === s.key}
+              onPress={() => setScope(s.key)}
+            />
+          ))}
+        </ScrollView>
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.rowStrip}
-        contentContainerStyle={styles.filterRow}
-      >
-        <Chip
-          label="Remote"
-          icon="globe-outline"
-          active={remote}
-          tone="filter"
-          onPress={() => setRemote(!remote)}
-        />
-        {/* No "Any type" chip: it would sit lit up by default and make the row
-            look like something was already filtered. Tapping the chosen type
-            again clears it, which is what the lit one means. */}
-        {JOB_TYPES.map((t) => (
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.rowStrip}
+          contentContainerStyle={styles.filterRow}
+        >
           <Chip
-            key={t}
-            label={t}
-            active={type === t}
+            label="Remote"
+            icon="globe-outline"
+            active={remote}
             tone="filter"
-            onPress={() => setType(type === t ? null : t)}
+            onPress={() => setRemote(!remote)}
           />
-        ))}
-      </ScrollView>
+          {/* No "Any type" chip: it would sit lit up by default and make the row
+              look like something was already filtered. Tapping the chosen type
+              again clears it, which is what the lit one means. */}
+          {JOB_TYPES.map((t) => (
+            <Chip
+              key={t}
+              label={t}
+              active={type === t}
+              tone="filter"
+              onPress={() => setType(type === t ? null : t)}
+            />
+          ))}
+        </ScrollView>
+      </ChromeBar>
+
 
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -157,7 +162,7 @@ export default function Jobs() {
           data={jobs}
           keyExtractor={(j) => String(j.id)}
           renderItem={({ item }) => <JobCard job={item} />}
-          contentContainerStyle={jobs.length ? { paddingTop: 4, paddingBottom: 120 } : styles.emptyWrap}
+          contentContainerStyle={[jobs.length ? { paddingTop: 4, paddingBottom: 120 } : styles.emptyWrap, chrome.pad]}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.t3} />}
           ListEmptyComponent={<Empty scope={scope} q={dq} onPost={() => router.push('/post-job')} biz={user?.accountType === 'business'} />}

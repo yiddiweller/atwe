@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
@@ -37,47 +38,51 @@ export default function Businesses() {
   const { data, isLoading, isError, refetch, isRefetching } = useDirectory(dq, verifiedOnly);
   const list = data?.businesses ?? [];
 
-  return (
-    <Screen edges={['top']}>
-      <View style={styles.head}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.icon} accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
-        <Text variant="headline">Businesses</Text>
-        <View style={styles.icon} />
-      </View>
+  const chrome = useFloatingChrome();
 
-      <View style={{ paddingHorizontal: spacing.gutter }}>
-        <View style={[styles.search, { backgroundColor: c.s2 }]}>
-          <Ionicons name="search" size={18} color={c.t3} />
-          <HapticInput
-            value={q} onChangeText={setQ}
-            placeholder="A name, a trade, a place"
-            placeholderTextColor={c.t3}
-            style={[styles.searchInput, { color: c.text }]}
-            returnKeyType="search" autoCorrect={false}
-            accessibilityLabel="Search businesses"
-          />
-          {q.length > 0 && (
-            <Pressable onPress={() => setQ('')} hitSlop={8} accessibilityLabel="Clear">
-              <Ionicons name="close-circle" size={18} color={c.t3} />
-            </Pressable>
-          )}
+  return (
+    <Screen edges={[]}>
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={styles.head}>
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.icon} accessibilityLabel="Back">
+            <Ionicons name="chevron-back" size={26} color={c.text} />
+          </Pressable>
+          <Text variant="headline">Businesses</Text>
+          <View style={styles.icon} />
         </View>
-        <Pressable
-          onPress={() => { haptics.select(); setVerifiedOnly((v) => !v); }}
-          style={[styles.toggle, { backgroundColor: verifiedOnly ? c.accent : c.s2 }]}
-          accessibilityRole="radio"
-          accessibilityState={{ selected: verifiedOnly }}
-          accessibilityLabel="Verified only"
-        >
-          <Ionicons name="shield-checkmark-outline" size={15}
-            color={verifiedOnly ? c.accentTint : c.t2} />
-          <Text variant="callout" style={{ color: verifiedOnly ? c.accentTint : c.t2 }}>
-            Verified only
-          </Text>
-        </Pressable>
-      </View>
+
+        <View style={{ paddingHorizontal: spacing.gutter }}>
+          <View style={[styles.search, { backgroundColor: c.s2 }]}>
+            <Ionicons name="search" size={18} color={c.t3} />
+            <HapticInput
+              value={q} onChangeText={setQ}
+              placeholder="A name, a trade, a place"
+              placeholderTextColor={c.t3}
+              style={[styles.searchInput, { color: c.text }]}
+              returnKeyType="search" autoCorrect={false}
+              accessibilityLabel="Search businesses"
+            />
+            {q.length > 0 && (
+              <Pressable onPress={() => setQ('')} hitSlop={8} accessibilityLabel="Clear">
+                <Ionicons name="close-circle" size={18} color={c.t3} />
+              </Pressable>
+            )}
+          </View>
+          <Pressable
+            onPress={() => { haptics.select(); setVerifiedOnly((v) => !v); }}
+            style={[styles.toggle, { backgroundColor: verifiedOnly ? c.accent : c.s2 }]}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: verifiedOnly }}
+            accessibilityLabel="Verified only"
+          >
+            <Ionicons name="shield-checkmark-outline" size={15}
+              color={verifiedOnly ? c.accentTint : c.t2} />
+            <Text variant="callout" style={{ color: verifiedOnly ? c.accentTint : c.t2 }}>
+              Verified only
+            </Text>
+          </Pressable>
+        </View>
+      </ChromeBar>
 
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -92,7 +97,7 @@ export default function Businesses() {
           data={list}
           keyExtractor={(b) => String(b.id)}
           renderItem={({ item }) => <BizCard b={item} />}
-          contentContainerStyle={list.length ? { paddingTop: 12, paddingBottom: 120 } : styles.emptyWrap}
+          contentContainerStyle={[list.length ? { paddingTop: 12, paddingBottom: 120 } : styles.emptyWrap, chrome.pad]}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.t3} />}
           ListEmptyComponent={

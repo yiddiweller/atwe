@@ -9,6 +9,7 @@ import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { CheckoutSheet } from '@/components/CheckoutSheet';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useOffer, respondToOffer, cancelOffer } from '@/api/seller';
@@ -63,7 +64,7 @@ export default function OfferDetail() {
   const open = o?.status === 'pending' || o?.status === 'countered';
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title="Offer" />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -72,7 +73,7 @@ export default function OfferDetail() {
           <Text variant="body" tone="t2">This offer is not available.</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.gutter, paddingBottom: 60 }}>
+        <ScrollView contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 60 }, chromePad.header]}>
           <View style={[styles.hero, { backgroundColor: c.s1, borderRadius: radius.card }]}>
             <Text variant="caption" tone="t3">
               {o.iAmBuyer ? 'YOU OFFERED' : 'THEY OFFERED'}
@@ -187,7 +188,7 @@ function CounterSheet({ visible, asking, current, onClose, onCounter }: {
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <Screen edges={['top']}>
+      <Screen edges={[]}>
         <PageHeader title="Counter" />
         <View style={{ padding: spacing.gutter }}>
           <Text variant="body" tone="t2">

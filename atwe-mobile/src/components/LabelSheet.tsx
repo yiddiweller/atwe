@@ -5,6 +5,7 @@ import { Text } from './Text';
 import { Screen } from './Screen';
 import { Button } from './Button';
 import { PageHeader } from './PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { getLabelRates, buyLabel, DEFAULT_PARCEL, type ShipRate, type Parcel } from '@/api/bizops';
@@ -88,9 +89,9 @@ export function LabelSheet({ visible, orderId, kind = 'out', onClose, onBought }
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <Screen edges={['top']}>
+      <Screen edges={[]}>
         <PageHeader title={kind === 'return' ? 'Return label' : 'Buy a label'} />
-        <ScrollView contentContainerStyle={{ padding: spacing.gutter, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 60 }, chromePad.header]} keyboardShouldPersistTaps="handled">
           <Text variant="caption" tone="t3" style={styles.lbl}>THE PARCEL</Text>
           <View style={styles.grid}>
             <Field label="Weight (lb)" value={num(p.weightLb)} onChange={set('weightLb')} />

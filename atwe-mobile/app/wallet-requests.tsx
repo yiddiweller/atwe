@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Avatar } from '@/components/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -22,31 +23,36 @@ export default function WalletRequests() {
   const { data, isLoading, refetch, isRefetching } = useMoneyRequests(tab);
   const rows = data?.requests ?? [];
 
-  return (
-    <Screen edges={['top']}>
-      <View style={[styles.head, { paddingHorizontal: spacing.lg, borderBottomColor: c.border }]}>
-        <Pressable onPress={() => router.back()} hitSlop={10} accessibilityRole="button">
-          <Text variant="callout" tone="accent">Back</Text>
-        </Pressable>
-        <Text variant="headline">Money requests</Text>
-        <View style={{ width: 44 }} />
-      </View>
+  const chrome = useFloatingChrome();
 
-      <View style={[styles.tabs, { paddingHorizontal: spacing.lg }]}>
-        {(['incoming', 'outgoing'] as const).map((k) => (
-          <Pressable key={k} onPress={() => setTab(k)} style={styles.tab} hitSlop={8}>
-            <Text variant="headline" style={{ color: tab === k ? c.text : c.t3 }}>
-              {k === 'incoming' ? 'To pay' : 'You asked'}
-            </Text>
-            {tab === k && <View style={[styles.underline, { backgroundColor: c.accent }]} />}
+  return (
+    <Screen edges={[]}>
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={[styles.head, { paddingHorizontal: spacing.lg, borderBottomColor: c.border }]}>
+          <Pressable onPress={() => router.back()} hitSlop={10} accessibilityRole="button">
+            <Text variant="callout" tone="accent">Back</Text>
           </Pressable>
-        ))}
-      </View>
+          <Text variant="headline">Money requests</Text>
+          <View style={{ width: 44 }} />
+        </View>
+
+        <View style={[styles.tabs, { paddingHorizontal: spacing.lg }]}>
+          {(['incoming', 'outgoing'] as const).map((k) => (
+            <Pressable key={k} onPress={() => setTab(k)} style={styles.tab} hitSlop={8}>
+              <Text variant="headline" style={{ color: tab === k ? c.text : c.t3 }}>
+                {k === 'incoming' ? 'To pay' : 'You asked'}
+              </Text>
+              {tab === k && <View style={[styles.underline, { backgroundColor: c.accent }]} />}
+            </Pressable>
+          ))}
+        </View>
+      </ChromeBar>
 
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
       ) : (
         <FlatList
+          contentContainerStyle={chrome.pad}
           data={rows}
           keyExtractor={(r) => String(r.id)}
           renderItem={({ item }) => <RequestRow req={item} incoming={tab === 'incoming'} onDone={refetch} />}

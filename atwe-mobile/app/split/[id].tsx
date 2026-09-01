@@ -8,6 +8,7 @@ import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useSplit, paySplit } from '@/api/money';
 import { money } from '@/api/wallet';
@@ -43,7 +44,7 @@ export default function SplitDetail() {
   const pct = s && s.totalCents > 0 ? Math.min(1, s.paidCents / s.totalCents) : 0;
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <PageHeader title="Split" />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -52,7 +53,7 @@ export default function SplitDetail() {
           <Text variant="body" tone="t2">This split is not available.</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.gutter, paddingBottom: 60 }}>
+        <ScrollView contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 60 }, chromePad.header]}>
           <View style={[styles.hero, { backgroundColor: c.s1, borderRadius: radius.card }]}>
             <Text variant="caption" tone="t3">{s.title.toUpperCase()}</Text>
             <Text variant="display" weight="800" style={{ marginTop: 4 }}>{money(s.totalCents)}</Text>

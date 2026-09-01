@@ -6,6 +6,7 @@ import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { Avatar } from '@/components/Avatar';
 import { PageHeader } from '@/components/PageHeader';
+import { chromePad } from '@/components/Chrome';
 import { Shelf } from '@/components/Shelf';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -25,12 +26,13 @@ export default function Invoices() {
   const rows = data?.invoices ?? [];
 
   return (
-    <Screen edges={['top']}>
-      <PageHeader title="Invoices" />
-      <Shelf
-        value={shelf}
-        onChange={setShelf}
-        options={[{ key: 'received', label: 'To pay' }, { key: 'sent', label: 'You sent' }]}
+    <Screen edges={[]}>
+      <PageHeader title="Invoices"
+        below={<Shelf
+          value={shelf}
+          onChange={setShelf}
+          options={[{ key: 'received', label: 'To pay' }, { key: 'sent', label: 'You sent' }]}
+        />}
       />
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
@@ -39,7 +41,7 @@ export default function Invoices() {
           data={rows}
           keyExtractor={(r) => String(r.id)}
           renderItem={({ item }) => <Row inv={item} received={shelf === 'received'} />}
-          contentContainerStyle={{ paddingBottom: 120 }}
+          contentContainerStyle={[{ paddingBottom: 120 }, chromePad.headerShelf]}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.accent} />}
           ListEmptyComponent={
             <View style={styles.center}>

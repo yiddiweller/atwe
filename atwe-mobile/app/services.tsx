@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
+import { ChromeBar, useFloatingChrome } from '@/components/Chrome';
 import { Button } from '@/components/Button';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
@@ -43,64 +44,68 @@ export default function Services() {
   const refetch = () => { void (cat ? narrowed.refetch() : hub.refetch()); };
   const refreshing = cat ? narrowed.isRefetching : hub.isRefetching;
 
+  const chrome = useFloatingChrome();
+
   return (
-    <Screen edges={['top']}>
-      <View style={styles.head}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.icon} accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={26} color={c.text} />
-        </Pressable>
-        <Text variant="headline">Services</Text>
-        <Pressable onPress={() => router.push('/offer-service')} hitSlop={10} style={styles.icon}
-          accessibilityRole="button" accessibilityLabel="Offer a service">
-          <Ionicons name="add" size={26} color={c.text} />
-        </Pressable>
-      </View>
-
-      <View style={{ paddingHorizontal: spacing.gutter }}>
-        <View style={[styles.search, { backgroundColor: c.s2 }]}>
-          <Ionicons name="search" size={18} color={c.t3} />
-          <HapticInput
-            value={q} onChangeText={setQ}
-            placeholder="A plumber, a tutor, a photographer"
-            placeholderTextColor={c.t3}
-            style={[styles.searchInput, { color: c.text }]}
-            returnKeyType="search" autoCorrect={false}
-            accessibilityLabel="Search services"
-          />
-          {q.length > 0 && (
-            <Pressable onPress={() => setQ('')} hitSlop={8} accessibilityLabel="Clear">
-              <Ionicons name="close-circle" size={18} color={c.t3} />
-            </Pressable>
-          )}
+    <Screen edges={[]}>
+      <ChromeBar onLayout={chrome.onLayout}>
+        <View style={styles.head}>
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.icon} accessibilityLabel="Back">
+            <Ionicons name="chevron-back" size={26} color={c.text} />
+          </Pressable>
+          <Text variant="headline">Services</Text>
+          <Pressable onPress={() => router.push('/offer-service')} hitSlop={10} style={styles.icon}
+            accessibilityRole="button" accessibilityLabel="Offer a service">
+            <Ionicons name="add" size={26} color={c.text} />
+          </Pressable>
         </View>
-      </View>
 
+        <View style={{ paddingHorizontal: spacing.gutter }}>
+          <View style={[styles.search, { backgroundColor: c.s2 }]}>
+            <Ionicons name="search" size={18} color={c.t3} />
+            <HapticInput
+              value={q} onChangeText={setQ}
+              placeholder="A plumber, a tutor, a photographer"
+              placeholderTextColor={c.t3}
+              style={[styles.searchInput, { color: c.text }]}
+              returnKeyType="search" autoCorrect={false}
+              accessibilityLabel="Search services"
+            />
+            {q.length > 0 && (
+              <Pressable onPress={() => setQ('')} hitSlop={8} accessibilityLabel="Clear">
+                <Ionicons name="close-circle" size={18} color={c.t3} />
+              </Pressable>
+            )}
+          </View>
+        </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}
-        style={styles.strip} contentContainerStyle={styles.chipRow}>
-        {[null, ...SERVICE_CATEGORIES].map((k) => {
-          const on = cat === k;
-          return (
-            <Pressable
-              key={k ?? 'all'}
-              onPress={() => { haptics.select(); setCat(k); }}
-              style={[styles.chip, { backgroundColor: on ? c.primary : c.s2 }]}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: on }}
-              accessibilityLabel={k ?? 'Everything'}
-            >
-              <Text variant="callout" style={{ color: on ? c.onPrimary : c.t2 }}>
-                {k ?? 'Everything'}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+          style={styles.strip} contentContainerStyle={styles.chipRow}>
+          {[null, ...SERVICE_CATEGORIES].map((k) => {
+            const on = cat === k;
+            return (
+              <Pressable
+                key={k ?? 'all'}
+                onPress={() => { haptics.select(); setCat(k); }}
+                style={[styles.chip, { backgroundColor: on ? c.primary : c.s2 }]}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={k ?? 'Everything'}
+              >
+                <Text variant="callout" style={{ color: on ? c.onPrimary : c.t2 }}>
+                  {k ?? 'Everything'}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </ChromeBar>
+
 
       {loading ? (
         <View style={styles.center}><ActivityIndicator color={c.accent} /></View>
       ) : (
         <ScrollView
-          contentContainerStyle={{ paddingBottom: 120 }}
+          contentContainerStyle={[{ paddingBottom: 120 }, chrome.pad]}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} tintColor={c.t3} />}
         >
