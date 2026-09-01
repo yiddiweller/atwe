@@ -136,9 +136,9 @@ export default function Compose() {
               {/* A control sitting ON a photograph — glass, never a painted
                   black dot, because the material is what lets the picture
                   read through it. */}
-              <GlassIcon onPress={() => { setPhoto(null); setAlt(''); }}
+              <GlassIcon onPress={() => { setPhoto(null); setAlt(''); }} overContent
                 label="Remove photo" size={28} style={styles.photoX}>
-                <Ionicons name="close" size={16} color={c.text} />
+                <Ionicons name="close" size={16} color="#fff" />
               </GlassIcon>
               <HapticInput
                 value={alt}
@@ -222,7 +222,8 @@ export default function Compose() {
 
         {/* footer meta */}
         <View style={[styles.foot, { borderTopColor: c.border }]}>
-          <Pressable onPress={attach} hitSlop={8} disabled={!!photo}
+          {/* 23pt glyphs: slop of 11 takes the target to 45, Apple's floor. */}
+          <Pressable onPress={attach} hitSlop={11} disabled={!!photo}
             accessibilityRole="button" accessibilityLabel="Add a photo">
             <Ionicons name="image-outline" size={23} color={photo ? c.t4 : c.accent} />
           </Pressable>
@@ -232,7 +233,7 @@ export default function Compose() {
           {!quoting && (
             <Pressable
               onPress={() => { haptics.tap(); setPoll((p2) => (p2 ? null : ['', ''])); }}
-              hitSlop={8}
+              hitSlop={11}
               style={{ marginLeft: 18 }}
               accessibilityRole="button"
               accessibilityLabel={poll ? 'Remove the poll' : 'Add a poll'}

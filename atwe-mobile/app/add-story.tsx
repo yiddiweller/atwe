@@ -90,9 +90,9 @@ export default function AddStory() {
           {photo ? (
             <View style={styles.preview}>
               <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} contentFit="cover" />
-              <GlassIcon onPress={() => setPhoto(null)} label="Remove photo"
+              <GlassIcon onPress={() => setPhoto(null)} label="Remove photo" overContent
                 size={26} style={styles.x}>
-                <Ionicons name="close" size={16} color={c.text} />
+                <Ionicons name="close" size={16} color="#fff" />
               </GlassIcon>
               {!!caption.trim() && (
                 <View style={styles.capWrap}>

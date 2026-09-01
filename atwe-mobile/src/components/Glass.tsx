@@ -82,7 +82,7 @@ export const hasGlass = isLiquidGlassAvailable;
  * material collapses to when there is nothing to sample. Never a flat brand
  * fill — that is the thing that reads as "not Apple".
  */
-export function GlassSurface({ children, onPress, label, radius, prominent, disabled, style }: {
+export function GlassSurface({ children, onPress, label, radius, prominent, disabled, overContent, style }: {
   children: React.ReactNode;
   onPress?: () => void;
   label?: string;
@@ -91,13 +91,23 @@ export function GlassSurface({ children, onPress, label, radius, prominent, disa
    *  a converted button silently loses the guard its Pressable used to carry,
    *  which is a double-tap firing the same change twice. */
   disabled?: boolean;
+  /** The button sits on FULL-BLEED content — a story, a photo viewer — rather
+   *  than on the app's own background. It then keeps the DARK material in both
+   *  themes, because what is behind it is a photograph and not the page.
+   *
+   *  This is not a nicety. The fallback is picked by THEME, so a Light-theme
+   *  phone drew a near-white disc, and the glyph on a photo has to be white —
+   *  which is a white ✕ on a white disc, invisible. Caught in the story
+   *  viewer; any new control over full-bleed media needs this. */
+  overContent?: boolean;
   /** Apple's `.glassProminent`: the lighter one, for the single action a screen
    *  is for. Never two on a screen. */
   prominent?: boolean;
   style?: ViewStyle | (ViewStyle | false | undefined)[];
 }) {
   const { c, name } = useTheme();
-  const light = name === 'light';
+  /* Over a photograph the material is dark whatever the app's theme is. */
+  const light = overContent ? false : name === 'light';
   const body = (
     <Glass
       radius={radius}
@@ -143,18 +153,20 @@ export function GlassSurface({ children, onPress, label, radius, prominent, disa
  * its glass but its icon is forced white, because the material there is
  * sampling a photograph and a theme-coloured glyph can land on anything.
  */
-export function GlassIcon({ children, onPress, label, size = 38, prominent, disabled, style }: {
+export function GlassIcon({ children, onPress, label, size = 38, prominent, disabled, overContent, style }: {
   children: React.ReactNode;
   onPress: () => void;
   label: string;
   size?: number;
   prominent?: boolean;
   disabled?: boolean;
+  /** See `GlassSurface` — a control sitting on a story or a photo. */
+  overContent?: boolean;
   style?: ViewStyle;
 }) {
   return (
     <GlassSurface radius={size / 2} onPress={onPress} label={label} prominent={prominent}
-      disabled={disabled} style={[{ width: size, height: size }, style]}>
+      disabled={disabled} overContent={overContent} style={[{ width: size, height: size }, style]}>
       {children}
     </GlassSurface>
   );

@@ -135,7 +135,7 @@ export default function StoryViewer() {
             sampling whatever the story happens to be, so a theme colour could
             land on anything. */}
         <View style={styles.close}>
-          <GlassIcon onPress={close} label="Close" size={38}>
+          <GlassIcon onPress={close} label="Close" size={38} overContent>
             <Ionicons name="close" size={22} color="#fff" />
           </GlassIcon>
         </View>

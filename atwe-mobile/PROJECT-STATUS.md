@@ -2218,3 +2218,29 @@ composer's two discs measure 38×38 at the same y with 31pt of inset on each sid
 The web preview cannot draw Liquid Glass at all, so what it proves is the
 FALLBACK (a near-opaque disc with a rim) and the geometry; the material itself
 only exists on the phone.
+
+**Then the verification pass found a real one.** The story viewer's close button was a
+**white disc with a white ✕ on it** on a Light-theme phone — invisible. The material's
+fallback is chosen by THEME, and I had forced the glyph to white (correct, since it sits
+on a photograph) without making the DISC follow. My own doc-comment had anticipated it
+and named the fix; I never implemented the prop.
+
+`overContent` does now: a button on full-bleed media keeps the DARK material whatever the
+app's theme is — which is what Apple's own photo viewers do. Applied to the story close
+and the three "remove this photo" ✕ buttons (composer, compose, add-story), all of which
+sit on a picture. **Any new control over media needs it**, and `check-glass-buttons.js`
+now fails the build if a glass button forces a white glyph without it. That check had its
+own bug worth remembering: it found the opening tag's end at the first `>`, which lands
+**inside an arrow function in a prop** (`onPress={() => …}`) and hid every prop written
+after it — so it reported two correctly-marked buttons as broken. It tracks brace depth
+now.
+
+Touch targets: three controls (the tab row's "Add", the composer's photo and poll glyphs)
+drew smaller than Apple's 44pt floor and were relying on `hitSlop` 8, which only reaches
+39–41. Widened to clear 44. Nothing drawn moved.
+
+Verified after: `tsc` clean, **all nine** checkers green (including the two that need a
+live server + browser), 25 screens driven in both themes with **0 page errors and 0
+clipped elements**, and the top-bar retraction re-measured unchanged — Home 0→−98→0,
+Beam 0→−110→0, Engine 0→−105→0, Alerts 0→−35→0.
+

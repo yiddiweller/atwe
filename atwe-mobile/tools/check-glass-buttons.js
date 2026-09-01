@@ -75,6 +75,42 @@ for (const root of ROOTS) {
   }
 }
 
+/**
+ * A glass button whose glyph is a hardcoded white MUST declare `overContent`.
+ *
+ * The fallback material is chosen by THEME, so on a Light-theme phone it is a
+ * near-white disc — and a white glyph on it is invisible. That shipped once, in
+ * the story viewer: the close button was a white disc with a white cross on it.
+ * `overContent` keeps the dark material whatever the theme is, which is what a
+ * control over a photograph should always be.
+ */
+for (const root of ROOTS) {
+  if (!fs.existsSync(root)) continue;
+  for (const file of walk(root)) {
+    const src = fs.readFileSync(file, 'utf8');
+    for (const m of src.matchAll(/<(GlassIcon|GlassSurface)\b([\s\S]*?)<\/\1>/g)) {
+      const [whole, tag, inner] = m;
+      /* Find where the OPENING tag ends. It cannot be the first '>' in the
+         string — an arrow function in a prop (`onPress={() => ...}`) contains
+         one, and slicing there hides every prop written after it. That is
+         exactly how this check first reported two correctly-marked buttons as
+         broken. Track brace depth and stop at the first '>' outside braces. */
+      let depth = 0, end = 0;
+      for (let i = 1; i < whole.length; i++) {
+        const ch = whole[i];
+        if (ch === '{') depth++;
+        else if (ch === '}') depth--;
+        else if (ch === '>' && depth === 0) { end = i; break; }
+      }
+      const open = whole.slice(0, end + 1);
+      if (!/color=["{]'?#fff/.test(inner)) continue;
+      if (/\boverContent\b/.test(open)) continue;
+      const line = src.slice(0, m.index).split('\n').length;
+      bad.push(`${file}:${line}  ${tag} forces a white glyph but is not marked overContent — invisible in Light`);
+    }
+  }
+}
+
 if (bad.length) {
   console.error('Round buttons that are paint, not glass:\n' + bad.map((b) => '  ' + b).join('\n'));
   process.exit(1);

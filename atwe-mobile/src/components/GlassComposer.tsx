@@ -125,9 +125,9 @@ export function GlassComposer({
         <View style={styles.attachWrap}>
           <Image source={{ uri: attachment }} style={styles.attachImg} contentFit="cover" />
           {!!onRemoveAttachment && (
-            <GlassIcon onPress={onRemoveAttachment} label="Remove photo"
+            <GlassIcon onPress={onRemoveAttachment} label="Remove photo" overContent
               size={20} style={styles.attachX}>
-              <Ionicons name="close" size={14} color={c.text} />
+              <Ionicons name="close" size={14} color="#fff" />
             </GlassIcon>
           )}
           {/* View-once. A "1" on the photo, the way every app that has this

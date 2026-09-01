@@ -190,7 +190,9 @@ export default function Home() {
               the visible word, which is what WCAG "Label in Name" asks for. */}
           <Pressable
             onPress={() => { haptics.tap(); router.push('/compose'); }}
-            hitSlop={8}
+            /* The word draws 29x21; Apple's floor is 44. Slop is invisible, so
+               the target clears it without the label growing into a fifth tab. */
+            hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
             accessibilityRole="button"
             accessibilityLabel="Add a new post"
           >
