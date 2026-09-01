@@ -18,9 +18,14 @@ export interface User {
   username: string | null;
   plan: Plan;
   accountType: AccountType;
-  isAdmin: boolean;
   verified: boolean;
-  emailVerified: boolean;
+  /* These two are snake_case ON THE WIRE and that is not a slip — `publicUser`
+     has always sent `is_admin` / `email_verified`, and the web app reads them
+     that way. Declaring them camelCase here did not fail; it just made them
+     permanently undefined, so Settings told every account its email was "Not
+     verified" whether it was or not. Match the wire, do not rename it. */
+  is_admin: boolean;
+  email_verified: boolean;
   avatar?: string | null;
   banner?: string | null;
   headline?: string | null;

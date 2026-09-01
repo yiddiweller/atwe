@@ -10,6 +10,15 @@ export type OrderStatus =
   | 'escrow' | 'disputed' | 'released' | 'refunded';
 
 export interface OrderItem { name: string; qty: number; priceCents: number; variantLabel?: string | null }
+/** Who an order is with. The server sends a party OBJECT on each side — it does
+ *  NOT send buyerName / sellerName, which this once declared, so every order row
+ *  quietly dropped the "from …" / "to …" line and never said who it was with. */
+export interface OrderParty {
+  id: number;
+  name: string | null;
+  username: string | null;
+  avatar: string | null;
+}
 export interface Order {
   id: number;
   status: OrderStatus;
@@ -17,8 +26,8 @@ export interface Order {
   createdAt: string;
   mine: boolean;                 // I am the seller
   items?: OrderItem[];
-  buyerName?: string | null;
-  sellerName?: string | null;
+  buyer?: OrderParty | null;
+  seller?: OrderParty | null;
   carrier?: string | null;
   tracking?: string | null;
   localDelivery?: boolean;

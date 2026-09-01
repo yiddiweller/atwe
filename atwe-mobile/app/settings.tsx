@@ -77,7 +77,7 @@ export default function Settings() {
           <Row label="Plan" value={user.plan === 'pro' ? 'Atwe Pro' : 'Free'} c={c} />
           <Row
             label="Email verified"
-            value={user.emailVerified ? 'Yes' : 'Not verified'}
+            value={user.email_verified ? 'Yes' : 'Not verified'}
             c={c}
           />
           <Row

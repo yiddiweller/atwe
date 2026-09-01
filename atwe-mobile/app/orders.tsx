@@ -59,7 +59,7 @@ export default function Orders() {
 
 function OrderRow({ order, scope }: { order: Order; scope: 'buyer' | 'seller' }) {
   const { c, radius } = useTheme();
-  const who = scope === 'buyer' ? order.sellerName : order.buyerName;
+  const who = (scope === 'buyer' ? order.seller : order.buyer)?.name;
   const what = (order.items ?? []).map((i) => `${i.qty > 1 ? i.qty + '× ' : ''}${i.name}`).join(', ');
   return (
     <View style={[styles.row, { backgroundColor: c.s1, borderRadius: radius.lg }]}>
