@@ -5895,7 +5895,43 @@ the comment above it promising "the light blue tint", is **WHITE** (it means *te
 solid blue fill*). On black that renders as the white bubble the owner knows; on white it
 renders as nothing. Black is untouched; Light gets the tint the comment always described.
 
-`scratchpad/chathead.js` (29 checks) covers all of it, in both themes, plus the group case.
+**Second pass (1779), all from the owner's own list:**
+
+- **A thin rim on each of the three shapes.** Not a break with "solid, never outlined" — a
+  dark-grey fill plus a hairline IS the app's secondary-button treatment, and that is what
+  these three are.
+- **The name is WHITE, said explicitly.** A `<button>` does not inherit `color`, and on iOS
+  Safari its default text is the **system blue** — which is why the name came out blue on a
+  real phone while every headless screenshot showed it white. `.ac-h3-pill` and both spans
+  now name their colour. Worth remembering for any future button-wrapped text.
+- **The dot is GREEN ONLY.** No grey "away" dot: "Last seen …" under the name already says
+  it, and a second dimmer signal read as a smudge.
+- **The ⋯ lies flat**, three dots side by side.
+- **THE TOP FADE runs long and gradual.** This was the owner's main complaint — it held the
+  page colour solid and then stepped to clear over a short stretch ("a small tiny part where
+  it shifts"). It is `--ac-head-h + 118px` through six stops, holding solid only long enough
+  to cover the shapes. Measured on real pixels against a white block dropped into the
+  thread: the ramp from a quarter-lit to three-quarters-lit is **51px**, where the old one
+  was **14px**. That measurement must run FIRST in the probe — it prepends an element and
+  scrolls to the top, and anything that re-renders the thread wipes it (an earlier ordering
+  read a ramp of 0 for exactly that reason).
+- **The composer sits taller** (44 → 52). Its own `padding` stays at 5px on purpose: the
+  cards that ride inside it derive their 8px rhythm and 15px radius from that number, so the
+  height comes from the text row (min-height 40) and the two round buttons (36) instead.
+- **Calling is the ⋯ menu's own first section**, a grouped `.mm-group` block rather than two
+  loose rows above a hairline. It was never missing — it is absent only where there is
+  nobody to call, which is why a self-chat screenshot looked like a bug.
+- **The attach menu opens at five plus "More"** (Camera · Photos · Files · Video · Location),
+  which opens the rest out with a measured height animation and takes itself away;
+  re-opening starts short again. It is narrower (304 → 258).
+- **Its corners NEST, and this is the detail the owner cares most about**: disc radius 23,
+  inset 19 on every side (8 card padding + 10 row padding + the card's own 1px border), so
+  the card's radius is **42**. The border counts because the radius is on the OUTER edge —
+  being one pixel out is exactly what "less rounded, more pointy" looks like. Inside it the
+  row is a 999px capsule that clamps to 33, and 33 + 8 = 41 = the padding-box radius. Three
+  shapes, each the one inside it plus the gap.
+
+`scratchpad/chathead.js` (46 checks) covers all of it, in both themes, plus the group case.
 
 ### A conversation is scrolled by the BROWSER, not by us
 
