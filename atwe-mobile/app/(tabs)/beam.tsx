@@ -23,7 +23,7 @@ import { NewChatSheet } from '@/components/NewChatSheet';
 import { BeamToolsMenu } from '@/components/BeamToolsMenu';
 import { BrandBar } from '@/components/BrandBar';
 import { useChromeRetract } from '@/lib/chromeRetract';
-import { ChromeButton, ChromeBar, chromePad, BEAM_TABS_H } from '@/components/Chrome';
+import { ChromeButton, ChromeBar, BEAM_TABS_H, useFloatingChrome, BRAND_BAR_H } from '@/components/Chrome';
 import { RowDivider } from '@/components/RowDivider';
 
 /**
@@ -55,6 +55,9 @@ type AnyRow =
 export default function Beam() {
   const { c } = useTheme();
   const chrome = useChromeRetract();
+  /* The bar hands down its own measured height — see `useFloatingChrome`.
+     The estimate keeps the first frame right so nothing jumps. */
+  const bar = useFloatingChrome(BRAND_BAR_H + BEAM_TABS_H);
   const [menu, setMenu] = useState(false);
   const [tab, setTab] = useState<Tab>('all');
   const [newChat, setNewChat] = useState(false);
@@ -187,7 +190,7 @@ export default function Beam() {
         data={pane.rows as never[]}
         keyExtractor={pane.key}
         renderItem={pane.row}
-        contentContainerStyle={[pane.rows.length ? { paddingBottom: 24 } : styles.emptyWrap, chromePad.beam]}
+        contentContainerStyle={[pane.rows.length ? { paddingBottom: 24 } : styles.emptyWrap, bar.pad]}
         showsVerticalScrollIndicator={false}
         onScroll={chrome.onScroll}
         scrollEventThrottle={16}
@@ -206,7 +209,7 @@ export default function Beam() {
       {/* The world's own brand row: the mark, the word "Beam", and the three
           controls — ＋ starts a conversation, ⋯ opens the tools. The bespoke
           title row it replaces had the buttons but no brand and no name. */}
-      <ChromeBar retract={chrome.hidden}>
+      <ChromeBar retract={chrome.hidden} onLayout={bar.onLayout}>
       {/* No ＋ here — the founder asked for it gone. New chat leads the tools
           sheet instead, which is also where it belonged: the row of buttons it
           used to sit in has been display:none for a long time, so this was the

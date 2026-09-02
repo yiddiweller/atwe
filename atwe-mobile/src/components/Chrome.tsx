@@ -184,7 +184,15 @@ export function useFloatingChrome(estimate: number = PAGE_HEADER_H) {
     const n = Math.round(e.nativeEvent.layout.height);
     setH((cur) => (Math.abs(cur - n) > 0.5 ? n : cur));
   }, []);
-  return { pad: { paddingTop: TOP + h } as ViewStyle, onLayout };
+  /* The bar's REAL height, measured, with nothing added.
+     It used to be `TOP + h` where h was the bar's CONTENT and TOP came from
+     `initialWindowMetrics` read once at module load. Two numbers that both have
+     to be right, and the founder photographed ~88pt of dead black under the bar
+     on all three worlds — every one of them starting at the same y despite
+     having different bar heights, which is the signature of a padding that is
+     not tracking its bar. Measuring the whole bar makes the two impossible to
+     disagree: there is only one number now, and the bar reports it itself. */
+  return { pad: { paddingTop: h } as ViewStyle, onLayout };
 }
 
 /**
@@ -263,6 +271,9 @@ export function ChromeBar({ children, style, edge = 'top', onLayout, inset = tru
       onLayout={(e) => {
         const h = e.nativeEvent.layout.height;
         travel.value = h;
+        /* And hand the WHOLE height — safe-area padding included — to whatever
+           is scrolling underneath. See `useFloatingChrome`. */
+        onLayout?.(e);
       }}
       style={[
         {
@@ -288,7 +299,7 @@ export function ChromeBar({ children, style, edge = 'top', onLayout, inset = tru
         />
       ) : null}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: tint }]} pointerEvents="none" />
-      {onLayout ? <View onLayout={onLayout}>{children}</View> : children}
+      {children}
     </Animated.View>
   );
 }

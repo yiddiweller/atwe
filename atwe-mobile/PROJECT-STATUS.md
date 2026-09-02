@@ -2574,3 +2574,39 @@ order** — this is the third time that has bitten in this app.
 Verified: `scratchpad/drawer.js` opens it on both worlds and checks every row —
 **13/13 on Home, 13/13 on Beam, 0 errors**, in both themes.
 
+### Round twenty-one — the black band, and ~88pt of dead space (NOT SHIPPED)
+
+**The band behind the clock.** The Account page was the only world still using
+`<Screen edges={['top']}>`, so its own SafeAreaView filled that strip with the
+page colour — a hard black bar the content scrolled under, which is exactly what
+the founder photographed. It is `edges={[]}` now with the inset carried as
+padding (read LIVE from `useSafeAreaInsets`, not the module constant), so the
+content starts below the clock at rest and passes under the strip when scrolled.
+And `StatusScrim` is a **gradient** rather than a flat tint — 92% at the very
+top, gone by the bottom — because a band announces itself and a fade just keeps
+the clock legible. Their words: *"darker and darker to get invisible"*.
+
+**The ~88pt of dead space under every top bar.** Measured off their own
+screenshots rather than estimated: their phone is **1125×2436 = 375×812pt**
+(iPhone X class, 44pt inset — not the 390×844/59 I had been simulating), and the
+empty band ran **88–93pt on Home, Beam and Engine alike**. All three started at
+roughly the same y despite having three different bar heights — which is the
+signature of a padding that is not tracking its bar.
+
+It was `chromePad`: a per-world CONSTANT plus `TOP`, read once at module load
+from `initialWindowMetrics`. **Two numbers that both have to be right.** The
+four worlds now use `useFloatingChrome`, and that hook was changed to report the
+bar's **own outer height, measured, with nothing added** — `ChromeBar`'s
+existing outer `onLayout` (which already measured itself for the retraction) now
+forwards it. One number, produced by the thing it describes, so the two cannot
+disagree. Measured after, with a 44pt inset simulated: **gap 0pt on Home, Beam
+and Alerts**, 8pt on Engine (its own search-row padding).
+
+`check-chrome.js` accepts the measured form and still fails a screen that
+reserves nothing.
+
+**The lesson, and it is the same one as round nineteen.** Both were a constant
+asserting something about a bar instead of the bar being asked. When a spacing
+bug will not reproduce, check what the DEVICE differs on — here it was the
+screen size, and simulating the wrong phone hid it completely.
+

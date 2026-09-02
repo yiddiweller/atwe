@@ -18,7 +18,12 @@ const path = require('path');
 
 const ROOTS = ['app', 'src'];
 const SCROLLERS = /<(FlatList|ScrollView|SectionList|Animated\.FlatList|Animated\.ScrollView)(?=[\s/>])/g;
-const PAD = /chromePad\.|chrome\.pad/;
+/* Either the static table or — better — a bar that measured itself and handed
+   its own height down (`useFloatingChrome`, whose result the worlds call
+   `bar`). The measured form is what the four worlds use: a constant plus a
+   module-level safe-area inset is two numbers that both have to be right, and
+   when they disagreed the founder photographed ~88pt of dead black. */
+const PAD = /chromePad\.|chrome\.pad|bar\.pad|\bpad\]/;
 
 function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -79,7 +84,7 @@ for (const root of ROOTS) {
       if (/maxHeight/.test(attrs)) continue;                      // a sheet's own box
       if (PAD.test(attrs)) continue;
       const line = s.slice(0, m.index).split('\n').length;
-      problems.push(`${f}:${line}: <${m[1]}> under a floating bar with no chromePad`);
+      problems.push(`${f}:${line}: <${m[1]}> under a floating bar that reserves no room for it`);
     }
   }
 }

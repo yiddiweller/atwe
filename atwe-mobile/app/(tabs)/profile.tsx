@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { View, ScrollView, Pressable, StyleSheet, Alert, Linking } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -37,13 +38,22 @@ export default function Profile() {
   const hits = useMemo(() => (user ? meFind(q, user) : []), [q, user]);
   if (!user) return null;
 
+  const insets = useSafeAreaInsets();
   const isBiz = user.accountType === 'business';
   const searching = q.trim().length > 0;
 
+  /* NO TOP INSET. The page's own SafeAreaView filled that strip with the page
+     colour, so content scrolled under a hard black band — the founder
+     photographed exactly that. `StatusScrim` covers the clock now, and it fades
+     out instead of ending on a line. */
   return (
-    <Screen edges={['top']}>
+    <Screen edges={[]}>
       <ScrollView
-        contentContainerStyle={styles.page}
+        /* The inset is padding now, not a SafeAreaView background: the content
+           starts below the clock at rest and scrolls UNDER the fading strip,
+           instead of stopping at a painted black band. Read live rather than
+           from a module constant so it is right whatever the device. */
+        contentContainerStyle={[styles.page, { paddingTop: insets.top + 2 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -207,7 +217,7 @@ export default function Profile() {
 const styles = StyleSheet.create({
   /* Every gap down this page is 12 — the hero, the wallet, the search bar and
      each card sit the same distance apart, so the stack reads as one rhythm. */
-  page: { paddingHorizontal: spacing.gutter, paddingTop: 2, paddingBottom: 120 },
+  page: { paddingHorizontal: spacing.gutter, paddingBottom: 120 },
   hero: {
     flexDirection: 'row', alignItems: 'center', gap: 15,
     paddingVertical: 18, paddingHorizontal: 17, marginBottom: 12,

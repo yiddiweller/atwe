@@ -19,7 +19,7 @@ import { useChromeRetract } from '@/lib/chromeRetract';
 import { haptics } from '@/lib/haptics';
 import { FeedTab } from '@/components/FeedTab';
 import { BrandBar } from '@/components/BrandBar';
-import { ChromeBar, chromePad, FEED_TABS_H } from '@/components/Chrome';
+import { ChromeBar, FEED_TABS_H, useFloatingChrome, BRAND_BAR_H } from '@/components/Chrome';
 
 // The same four the web Home has, in the same order.
 const TABS: { key: FeedScope; label: string }[] = [
@@ -74,6 +74,9 @@ export default function Home() {
   /* The top chrome gets out of the way as you scroll, so the feed gets the
      whole screen — the counterpart to iOS taking the tab bar at the bottom. */
   const chrome = useChromeRetract();
+  /* The bar hands down its own measured height — see `useFloatingChrome`.
+     The estimate keeps the first frame right so nothing jumps. */
+  const bar = useFloatingChrome(BRAND_BAR_H + FEED_TABS_H);
   const [menu, setMenu] = useState(false);
   const morph = useNavMorph();
   const lastY = useRef(0);
@@ -107,7 +110,7 @@ export default function Home() {
           keyExtractor={(p) => String(p.id)}
           renderItem={({ item }) => <PostCard post={item} />}
           ListHeaderComponent={<StoriesTray />}
-          contentContainerStyle={[posts.length ? { paddingBottom: 120 } : styles.emptyWrap, chromePad.home]}
+          contentContainerStyle={[posts.length ? { paddingBottom: 120 } : styles.emptyWrap, bar.pad]}
           showsVerticalScrollIndicator={false}
           onScroll={onScroll}
           scrollEventThrottle={16}
@@ -148,7 +151,7 @@ export default function Home() {
       {/* The bar FLOATS over the feed and the posts travel under it, showing
           through blurred — see `Chrome.tsx`. The brand row sits ABOVE the tabs, exactly as the web has it: the mark
           and the wordmark on the left, ＋ · ⋯ · your photo on the right. */}
-      <ChromeBar retract={chrome.hidden}>
+      <ChromeBar retract={chrome.hidden} onLayout={bar.onLayout}>
       <BrandBar
         world="home"
         /* No ＋ here — the founder asked for it gone. Its four destinations

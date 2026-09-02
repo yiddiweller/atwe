@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   StyleSheet,
+  type ViewStyle,
 } from 'react-native';
 import { useRouter, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,7 +22,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, radius, post as card } from '@/theme/tokens';
 import { haptics } from '@/lib/haptics';
 import { BrandBar } from '@/components/BrandBar';
-import { ChromeBar, chromePad, ENGINE_SEARCH_H } from '@/components/Chrome';
+import { ChromeBar, ENGINE_SEARCH_H, useFloatingChrome, BRAND_BAR_H } from '@/components/Chrome';
 import { useChromeRetract } from '@/lib/chromeRetract';
 
 /** What a pane hands back up so the world's chrome can get out of the way. */
@@ -45,6 +46,9 @@ import { HapticInput } from '@/components/HapticInput';
 export default function Engine() {
   const { c, spacing } = useTheme();
   const chrome = useChromeRetract();
+  /* The bar hands down its own measured height — see `useFloatingChrome`.
+     The estimate keeps the first frame right so nothing jumps. */
+  const bar = useFloatingChrome(BRAND_BAR_H + ENGINE_SEARCH_H);
   const [q, setQ] = useState('');
   const [dq, setDq] = useState(''); // debounced
   useEffect(() => {
@@ -57,10 +61,10 @@ export default function Engine() {
       {/* No ＋ here: Engine is discovery, there is nothing to compose. The web
           hides it on this world too. */}
       {dq.trim()
-        ? <SearchResults q={dq} onScroll={chrome.onScroll} />
-        : <Explore spacing={spacing} onScroll={chrome.onScroll} />}
+        ? <SearchResults q={dq} onScroll={chrome.onScroll} pad={bar.pad} />
+        : <Explore spacing={spacing} onScroll={chrome.onScroll} pad={bar.pad} />}
 
-      <ChromeBar retract={chrome.hidden}>
+      <ChromeBar retract={chrome.hidden} onLayout={bar.onLayout}>
       <BrandBar
         world="engine"
         moreMenu={[
@@ -97,7 +101,7 @@ export default function Engine() {
   );
 }
 
-function SearchResults({ q, onScroll }: { q: string; onScroll: ScrollHandler }) {
+function SearchResults({ q, onScroll, pad }: { q: string; onScroll: ScrollHandler; pad: ViewStyle }) {
   const { c } = useTheme();
   const { data, isLoading, isError } = useSearchPeople(q);
   const users = data?.users ?? [];
@@ -126,7 +130,7 @@ function SearchResults({ q, onScroll }: { q: string; onScroll: ScrollHandler }) 
       keyboardShouldPersistTaps="handled"
       onScroll={onScroll}
       scrollEventThrottle={16}
-      contentContainerStyle={[users.length ? { paddingBottom: 120 } : styles.emptyWrap, chromePad.engine]}
+      contentContainerStyle={[users.length ? { paddingBottom: 120 } : styles.emptyWrap, pad]}
       ListEmptyComponent={
         <View style={styles.center}>
           <Text variant="body" tone="t3">
@@ -174,9 +178,10 @@ function PersonRow({ user }: { user: SearchUser }) {
   );
 }
 
-function Explore({ spacing, onScroll }: {
+function Explore({ spacing, onScroll, pad }: {
   spacing: ReturnType<typeof useTheme>['spacing'];
   onScroll: ScrollHandler;
+  pad: ViewStyle;
 }) {
   const { c } = useTheme();
   const router = useRouter();
@@ -195,7 +200,7 @@ function Explore({ spacing, onScroll }: {
      spinner never gets the effect. The spinner goes inside instead. */
   return (
     <ScrollView
-      contentContainerStyle={[{ paddingBottom: 120 }, chromePad.engine]}
+      contentContainerStyle={[{ paddingBottom: 120 }, pad]}
       onScroll={onScroll}
       scrollEventThrottle={16}
       keyboardShouldPersistTaps="handled"

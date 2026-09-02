@@ -1,6 +1,7 @@
 import { Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/theme/ThemeProvider';
 
 /**
@@ -25,6 +26,13 @@ import { useTheme } from '@/theme/ThemeProvider';
  * beneath, not as hitting a lid — and tinted enough that a white photo can
  * never take the clock with it.
  */
+/** `#rrggbb` + alpha -> `rgba(...)`. The theme's colours are hex. */
+function alpha(hex: string, a: number) {
+  const h = hex.replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map((x) => x + x).join('') : h, 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+}
+
 export function StatusScrim() {
   const insets = useSafeAreaInsets();
   const { c, name } = useTheme();
@@ -33,12 +41,21 @@ export function StatusScrim() {
     <View style={[styles.host, { height: insets.top }]} pointerEvents="none">
       {Platform.OS === 'ios' && (
         <BlurView
-          intensity={55}
+          intensity={28}
           tint={name === 'light' ? 'light' : 'dark'}
           style={StyleSheet.absoluteFill}
         />
       )}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: c.bg, opacity: 0.55 }]} />
+      {/* A GRADIENT, dark at the very top and gone by the bottom. A flat tint
+          was a hard black band across the top of every screen — the founder
+          photographed it on Account and said it should "get darker and darker
+          to invisible". A band announces itself; a fade just keeps the clock
+          legible and disappears. */}
+      <LinearGradient
+        colors={[alpha(c.bg, 0.92), alpha(c.bg, 0.62), alpha(c.bg, 0)]}
+        locations={[0, 0.55, 1]}
+        style={StyleSheet.absoluteFill}
+      />
     </View>
   );
 }

@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
-import { ChromeBar, chromePad, ALERTS_HEAD_H } from '@/components/Chrome';
+import { ChromeBar, ALERTS_HEAD_H, useFloatingChrome } from '@/components/Chrome';
 import { useChromeRetract } from '@/lib/chromeRetract';
 import { Avatar } from '@/components/Avatar';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
@@ -26,6 +26,9 @@ import { timeAgo } from '@/lib/format';
  */
 export default function Notifications() {
   const chrome = useChromeRetract();
+  /* The bar hands down its own measured height — see `useFloatingChrome`.
+     The estimate keeps the first frame right so nothing jumps. */
+  const bar = useFloatingChrome(ALERTS_HEAD_H);
   const { c } = useTheme();
   const qc = useQueryClient();
   const { data, isLoading, isError, refetch, isRefetching } = useNotifications();
@@ -47,7 +50,7 @@ export default function Notifications() {
           data={groupNotifs(notifs)}
           keyExtractor={(g) => String(g.head.id)}
           renderItem={({ item }) => <NotifRow n={item.head} count={item.count} />}
-          contentContainerStyle={[notifs.length ? undefined : styles.emptyWrap, chromePad.alerts]}
+          contentContainerStyle={[notifs.length ? undefined : styles.emptyWrap, bar.pad]}
           showsVerticalScrollIndicator={false}
           onScroll={chrome.onScroll}
           scrollEventThrottle={16}
@@ -72,7 +75,7 @@ export default function Notifications() {
 
       {/* No back arrow: this is one of the five worlds now, not a page opened
           from somewhere, and an arrow with nothing behind it is a dead control. */}
-      <ChromeBar retract={chrome.hidden}>
+      <ChromeBar retract={chrome.hidden} onLayout={bar.onLayout}>
         <View style={styles.head}>
           <Text variant="title">Notifications</Text>
         </View>
