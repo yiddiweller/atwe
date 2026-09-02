@@ -8,9 +8,11 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
 
 > ## ⏸ THE APP IS PAUSED — jump to **"STOPPED HERE"** at the very bottom first.
 > The work is finished and committed; it is stopped on **EAS build credits**, not
-> on code. The founder's phone runs **0.13** and the tree is **0.19.0**, so six
-> rounds of work have never been seen on a device. That section says what to do
-> first, in order, and names the two decisions of theirs not to reverse.
+> on code. **CONFIRMED by the founder on expo.dev, 2 Sep 2026** — the builds did
+> not fail on anything in this repo, they never ran for lack of credits. Their
+> phone runs **0.13** and the tree is **0.19.0**, so six rounds of work have
+> never been seen on a device. That section says what to do first, in order, and
+> names the two decisions of theirs not to reverse.
 
 ## Where we are (current)
 
@@ -26,10 +28,10 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
   fallback, so the App Store will not offer the app below 26. See round
   twenty-two.
 - **BUILDS 0.14 THROUGH 0.19 HAVE NOT REACHED THE FOUNDER'S PHONE.** Their last
-  installed build is **0.13**. That strongly suggests EAS builds have been
-  failing (or not starting) for lack of free build credits since around then.
-  Everything from round eighteen onward is committed and waiting for ONE build.
-  Check expo.dev → Builds before assuming any of it is on a phone.
+  installed build is **0.13**. **Cause confirmed on expo.dev (2 Sep 2026): the
+  free build credits ran out** — nothing in this repo failed, the builds simply
+  never ran. Everything from round eighteen onward is committed and waiting for
+  ONE build.
 
 ### Built so far
 - **Phase 0 — Foundation:** design tokens ported from the web CSS (Black/Light,
@@ -2761,8 +2763,9 @@ space, iOS 26 / real glass, and this audit — has never been seen on a device.*
 
 So the first three moves, in order:
 
-1. **Check expo.dev → Builds.** Find out what actually happened to 0.14–0.19:
-   failed, cancelled, or never queued. Do not assume.
+1. ~~Check expo.dev → Builds.~~ **DONE — the founder checked on 2 Sep 2026 and
+   it is credits.** The builds never ran; nothing here is broken. No need to
+   re-investigate this.
 2. **Get credits, then ship ONE build** (`git push origin
    claude/claude-md-docs-cajkf9:ship --force`). It carries six rounds of work at
    once, so expect the founder to have a lot to react to — walk them through it

@@ -16,8 +16,9 @@ from exactly there. **Keep `PROJECT-STATUS.md` updated** as each phase lands so 
 always reflects the true state, and commit + push every change to the working
 branch (`claude/claude-md-docs-cajkf9`).
 
-**⏸ As of 2 Sep 2026 the app is PAUSED on EAS build credits, not on code.** The
-tree is **0.19.0**; the founder's phone still runs **0.13**, so six rounds of
+**⏸ As of 2 Sep 2026 the app is PAUSED on EAS build credits, not on code** —
+confirmed by the founder on expo.dev; the builds never ran, nothing here failed.
+The tree is **0.19.0**; the founder's phone still runs **0.13**, so six rounds of
 finished work have never been seen on a device. `PROJECT-STATUS.md` opens with
 this and its **"STOPPED HERE"** section says what to do first. **Never run an EAS
 build unasked** — `git push origin claude/claude-md-docs-cajkf9:ship --force` is
