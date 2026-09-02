@@ -1,6 +1,6 @@
 # The regression suite
 
-62 probes that drive a **real browser against a real Postgres** and assert the
+63 probes that drive a **real browser against a real Postgres** and assert the
 things this app has actually got wrong before — corner geometry, icon ink,
 contrast, focus rings, paint order, offline behaviour, money invariants.
 
@@ -63,6 +63,20 @@ export TOK=$(DATABASE_URL=postgres://atwe:atwe@localhost:5432/atwescore \
 
 The `JWT_SECRET` must be the one the server is running under, or you get the insecure dev
 fallback and a token the server rejects.
+
+## The chat header (`chathead.js`)
+
+The owner redesigned the chat page from a drawing: the header is three shapes floating on
+the page colour with the conversation running BEHIND them, not a bar. The probe measures the
+geometry (one height, even gaps, even insets), that the header paints no bar and no divider,
+that the scroller reaches the top of the screen while the message list is padded to clear
+it, and — the one that caught a real bug on its first run — that **a tap in the GAP between
+two shapes reaches the message behind**. The stack and the header row inside it both span
+the full width, so making only the stack transparent to the pointer was not enough.
+
+It also covers the presence dot in all three states, calling having moved to the ⋯ menu
+(checked by geometry, since the buttons stay in the DOM), and Light theme, where it found two
+things that were invisible on a white page: the composer and a sent-but-unseen bubble.
 
 ## How a conversation scrolls (`chatscroll.js`)
 
