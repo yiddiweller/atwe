@@ -5942,7 +5942,24 @@ renders as nothing. Black is untouched; Light gets the tint the comment always d
   row is a 999px capsule that clamps to 33, and 33 + 8 = 41 = the padding-box radius. Three
   shapes, each the one inside it plus the gap.
 
-`scratchpad/chathead.js` (46 checks) covers all of it, in both themes, plus the group case.
+**The composer bar (1780).** Fully rounded ends and its three things evenly placed — and
+the reason the first attempt looked wrong is worth keeping: **the + is a bare glyph and the
+mic is a filled circle, so matching their BOXES is not enough.** Both boxes sat 6 from their
+ends, but what you SEE is the + 's ink at 13.5 against the mic's circle at 6. Both visible
+shapes now sit **10** from their own end — the + by narrowing its box to 32 around a 24px
+glyph, the mic by a 4px end margin — and the placeholder starts the same 10 from the + 's
+ink. Vertically they were 1px apart, because the row bottom-aligns (correctly: the buttons
+must stay put when the text grows to several lines) and the boxes were 38 against 36; a 2px
+bottom margin lands both centres on the text's, at 26.
+
+The pill is **`border-radius:999px`**, a true capsule at any height, falling back to 24px
+only when a card is riding inside it — a stadium end on a tall box looks wrong, and the
+cards' own 15px radius is derived from that 24. The condition list is the same one that
+reveals the wrapper, so the two cannot disagree. Its `padding` stays **5px** throughout: the
+cards' 8px rhythm is derived from it, so the bar's height comes from the text row
+(`min-height:40`) and the buttons, never from the padding.
+
+`scratchpad/chathead.js` (51 checks) covers all of it, in both themes, plus the group case.
 
 ### A conversation is scrolled by the BROWSER, not by us
 
