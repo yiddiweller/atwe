@@ -4429,8 +4429,13 @@ body.nav-mini .sb-label,body.nav-mini #projList,body.nav-mini #histList,
 body.nav-mini .sb-prof-id,body.nav-mini .sb-profile-counts,body.nav-mini #sbProfile .sb-profile-label{display:none;}
 body.nav-mini .sb-logo{justify-content:center;}
 body.nav-mini .sb-profilebtn,body.nav-mini #sbProfile{justify-content:center;padding:6px 0;}
-body.nav-mini .sb-post{width:48px;height:48px;padding:0;border-radius:50%;margin:10px auto 6px;gap:0;}
-body.nav-mini .sb-post span{display:none;}
+/* SCOPED TO THE SIDEBAR. These collapse Post into a round FAB for the icon rail — but
+   Post lives in the RIGHT RAIL now, and the rail never collapses. Unscoped, they shrank
+   the rail's full-width pill to a 48px circle at every width between 768 and 1281, where
+   body.nav-mini is on. Caught by scratchpad/deskcols.js, which checks the pill's edges
+   against the search field above it at all four bands rather than only the widest. */
+body.nav-mini .sidebar .sb-post{width:48px;height:48px;padding:0;border-radius:50%;margin:10px auto 6px;gap:0;}
+body.nav-mini .sidebar .sb-post span{display:none;}
 body.nav-mini .sb-divider{width:38px;margin-inline-start:auto;margin-inline-end:auto;}
 
 /* ── Unified sidebar look (owner request: ONE design on mobile + desktop). The desktop
@@ -21042,7 +21047,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1771'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1772'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
