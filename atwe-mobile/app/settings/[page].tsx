@@ -2,7 +2,6 @@ import { useState } from 'react';
 import {
   View, ScrollView, Pressable, StyleSheet, Linking, ActivityIndicator, Alert, Share, Platform,
 } from 'react-native';
-import { isLiquidGlassAvailable } from 'expo-glass-effect';
 import { File, Paths } from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -231,21 +230,12 @@ function AboutPage() {
       <MeGroup>
         <MeFactRow label="Version" value={APP_VERSION} />
         <MeFactRow label="iOS" value={String(Platform.Version)} />
-        {/* Which material the nav bar is actually drawing.
-
-            Liquid Glass needs iOS 26; below it the bar falls back to the same
-            chrome material a native tab bar uses, which is a different look and
-            always will be. Without this on screen there is no way to tell the
-            two apart from a photograph, and a whole round of "the bar still
-            isn't right" was spent not knowing which one was being looked at. */}
-        {/* It is not just the nav bar — this ONE flag governs every glass
-            surface in the app: the bars, every round button, the menus. If it
-            reads "off", nothing anywhere is drawing real glass and no amount of
-            styling will change that; the app needs iOS 26 and a build compiled
-            with Xcode 26. Rounds have been spent guessing at this from
-            photographs. */}
-        <MeFactRow label="Liquid Glass"
-          value={isLiquidGlassAvailable() ? 'On' : 'Off — needs iOS 26'} />
+        {/* There is no "is glass on?" row any more, and that is deliberate: the
+            app's deployment target IS iOS 26, so every glass surface is always
+            the real material. A row that can only ever read "On" is noise. If a
+            future build lowers the target, this row has to come back — it was
+            the only way to tell the real material from a fallback in a
+            photograph, and rounds were lost guessing. */}
         <MeFactRow label="Made by" value="Atwe Inc" last />
       </MeGroup>
       <MeGroup>

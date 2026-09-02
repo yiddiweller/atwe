@@ -3,7 +3,7 @@
     "name": "Atwe",
     "slug": "atwe",
     "scheme": "atwe",
-    "version": "0.18.0",
+    "version": "0.19.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -74,6 +74,14 @@
       "versionCode": 1
     },
     "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "26.0"
+          }
+        }
+      ],
       "expo-router",
       "expo-secure-store",
       "expo-local-authentication",

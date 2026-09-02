@@ -102,7 +102,7 @@ export function GlassMenu({ visible, onClose, anchor, origin, items }: {
       <Animated.View style={[pos, card, { transformOrigin: 'top right' }]}>
         <Glass
           radius={radius.xl}
-          fallback={{
+          fill={{
             backgroundColor: name === 'light' ? 'rgba(250,250,252,0.96)' : 'rgba(30,30,32,0.96)',
             borderWidth: StyleSheet.hairlineWidth,
             borderColor: name === 'light' ? c.border : 'rgba(255,255,255,0.08)',

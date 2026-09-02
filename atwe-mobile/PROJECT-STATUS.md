@@ -15,6 +15,15 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
   navigation, theming, and **real login against the live backend** all run.
 - **Delivery today:** dev preview via `npx expo start --tunnel` + Expo Go
   (needs the Mac running). TestFlight (Mac-free) comes after Apple approval.
+- **MINIMUM iOS IS 26** (`app.json` → `expo-build-properties` →
+  `ios.deploymentTarget: "26.0"`). The founder chose real Liquid Glass over a
+  fallback, so the App Store will not offer the app below 26. See round
+  twenty-two.
+- **BUILDS 0.14 THROUGH 0.19 HAVE NOT REACHED THE FOUNDER'S PHONE.** Their last
+  installed build is **0.13**. That strongly suggests EAS builds have been
+  failing (or not starting) for lack of free build credits since around then.
+  Everything from round eighteen onward is committed and waiting for ONE build.
+  Check expo.dev → Builds before assuming any of it is on a phone.
 
 ### Built so far
 - **Phase 0 — Foundation:** design tokens ported from the web CSS (Black/Light,
@@ -2610,3 +2619,65 @@ asserting something about a bar instead of the bar being asked. When a spacing
 bug will not reproduce, check what the DEVICE differs on — here it was the
 screen size, and simulating the wrong phone hid it completely.
 
+### Round twenty-two — the fallback is deleted; the app requires iOS 26 (NOT SHIPPED)
+
+The founder: *"I don't need a fake version of liquid glass and I'm fine with
+only one design. I want everything to be real and the real iOS 26 and real
+liquid glass."*
+
+`Glass` used to paint a hand-made translucent disc whenever
+`isLiquidGlassAvailable()` returned false, so on any phone below iOS 26 the
+entire app quietly wore a lookalike and nothing on screen said which one you
+were looking at. That is gone:
+
+- **`app.json` now carries `expo-build-properties` with `ios.deploymentTarget:
+  "26.0"`.** The build itself requires 26.
+- **`Glass.tsx` has no fallback branch and no `hasGlass` export.** `GlassView`
+  is the only thing it renders. The `fallback` prop is renamed **`fill`**,
+  because what it paints is now only ever the DELIBERATE solid — a destructive
+  button, a chosen filter chip — never a stand-in for glass.
+- **`GlassComposer`** lost its `BlurView` alternative; the chat pill is always
+  real glass.
+- **The Settings → About "Liquid Glass: On / Off" row is gone.** It existed
+  only to tell the two materials apart in a photograph; with 26 required it can
+  only ever read "On".
+
+**THE TRADE, stated plainly:** the App Store will not offer the app to anyone
+below iOS 26. That is a real cost at launch. It is the founder's decision,
+taken twice and in plain words — do not quietly reinstate a fallback to widen
+reach; raise it with them instead.
+
+**What is NOT a fallback and must not be "fixed":** `BlurView` behind a
+full-width bar (a real `UIVisualEffectView`, what Messages and Mail use — Liquid
+Glass LENSES and blooms at that width), and the sidebar's solid panel. Both are
+Apple's own division: **glass on CONTROLS, plain material behind a PANEL.**
+
+**A real thing fell out of deleting the fallback, and a checker caught it.**
+`overContent` had marked the four discs that sit on a PHOTOGRAPH (a story's
+close, a composer's remove-photo) so the old fallback painted dark instead of
+theme-picked — a white ✕ on a white disc was invisible in Light. Removing the
+fallback removed the flag with it, and `check-glass-buttons.js` failed on all
+four. The flag is back, but wired to what it now means: it forces the
+MATERIAL's appearance dark (`colorScheme`), the way Apple's own full-screen
+photo controls are. **And `GlassSurface` now passes the app's own theme into
+every glass surface** — left unset the material follows the PHONE, so a Black
+app on a phone in Light mode wore bright glass on every button.
+
+`tools/check-real-glass.js` is the guard: it asserts the deployment target is
+26.0 and that nothing under `app/` or `src/` branches on glass availability. It
+**strips comments before matching** — `Glass.tsx`'s own doc comment names the
+function it is explaining not to use, and matching raw text reported that file
+as violating the rule it documents (the same lesson as
+`tools/find-duplicate-vars.py`). Self-tested both ways: put a real branch back
+and it fails; lower the target and it fails.
+
+Verified: `tsc` clean, all nine offline checkers pass, and the browser suite —
+**54 screens × 2 themes, 0 problems** (the one flag is `/business-analytics`
+returning 403 to a *personal* test account, which is correct server behaviour),
+top-bar retraction on all four worlds, the status-bar clash check, the 0pt gap
+check, the drawer 13/13 on both worlds, no ＋ anywhere with all 8 destinations
+still reachable, both menus anchored, and the AI composer's 7 checks.
+
+**Not shipped.** The founder asked to stop here: *"will stop here because I
+don't think we have enough credit. I didn't get any updates since the 0.13."*
+Everything above sits on the working branch waiting for one build.

@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming, Easing } from 'react-native-reanimated';
 import { haptics } from '@/lib/haptics';
 import { Text } from './Text';
-import { Glass, hasGlass } from './Glass';
+import { Glass } from './Glass';
 import { useTheme } from '@/theme/ThemeProvider';
 
 /** The web's own press-hold curve — the same one the bottom nav uses. */
@@ -72,7 +72,7 @@ export function AuthButton({ label, icon, primary, onPress, disabled, style }: {
     lit.value = withTiming(0, { duration: 350 });
   };
 
-  const real = hasGlass();
+  const real = true;
   /* On real glass the label sits on the MATERIAL, not on a fill, so a prominent
      button reads as its tint and a plain one as whatever is behind it. The
      fallback keeps the solid-white primary the colour law asks for. */
@@ -102,7 +102,7 @@ export function AuthButton({ label, icon, primary, onPress, disabled, style }: {
         tint={c.primary}
         radius={30}
         style={styles.btn}
-        fallback={primary
+        fill={primary
           ? { backgroundColor: c.primary }
           : { backgroundColor: glass,
               borderWidth: StyleSheet.hairlineWidth, borderColor: c.border }}

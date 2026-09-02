@@ -12,8 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Glass, GlassIcon, GlassSurface } from './Glass';
 import { useComposerRadius } from '@/lib/bubbleShape';
 import { Image } from 'expo-image';
-import { BlurView } from 'expo-blur';
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
+import { GlassView } from 'expo-glass-effect';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from './Text';
@@ -81,7 +80,6 @@ export function GlassComposer({
   const { c, name } = useTheme();
   const insets = useSafeAreaInsets();
   const focused = useSharedValue(0);
-  const glass = isLiquidGlassAvailable();
   // A photo with no caption IS a message — requiring text as well would mean you
   // could attach one and then not be allowed to send it.
   const canSend = editable && (!!value.trim() || !!attachment) && !sending;
@@ -147,7 +145,7 @@ export function GlassComposer({
                   see-through toggle cannot show a state. OFF it is glass over
                   the photo. */}
               <Glass radius={10} plain={!!viewOnce}
-                fallback={{ backgroundColor: viewOnce ? c.accent : c.bg }}
+                fill={{ backgroundColor: viewOnce ? c.accent : c.bg }}
                 style={styles.attachOneFill}>
                 <Text style={{ fontSize: 11, fontWeight: '800', color: viewOnce ? '#fff' : c.t2 }}>1</Text>
               </Glass>
@@ -223,25 +221,14 @@ export function GlassComposer({
           The wrapper is what actually cuts the glass; leaving it at a fixed
           corner would square off the capsule the pill is drawing inside it. */}
       <Animated.View style={[styles.wrap, wrapStyle, { borderRadius: shape.borderRadius }]}>
-        {glass ? (
-          <GlassView
-            style={[styles.pill, { borderColor: c.border, borderRadius: shape.borderRadius }]}
-            onLayout={shape.onLayout}
-            glassEffectStyle="regular"
-            colorScheme={name === 'light' ? 'light' : 'dark'}
-          >
-            {inner}
-          </GlassView>
-        ) : (
-          <BlurView
-            intensity={40}
-            tint={name === 'light' ? 'light' : 'dark'}
-            style={[styles.pill, styles.fallback, { borderColor: c.border, borderRadius: shape.borderRadius }]}
-            onLayout={shape.onLayout}
-          >
-            {inner}
-          </BlurView>
-        )}
+        <GlassView
+          style={[styles.pill, { borderColor: c.border, borderRadius: shape.borderRadius }]}
+          onLayout={shape.onLayout}
+          glassEffectStyle="regular"
+          colorScheme={name === 'light' ? 'light' : 'dark'}
+        >
+          {inner}
+        </GlassView>
       </Animated.View>
     </Animated.View>
   );
@@ -289,7 +276,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
-  fallback: {},
   attachWrap: { position: 'relative', marginRight: 8 },
   attachImg: { width: 40, height: 40, borderRadius: 10 },
   attachOne: {

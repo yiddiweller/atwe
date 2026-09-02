@@ -1,6 +1,6 @@
 import { Pressable, ActivityIndicator, StyleSheet, type ViewStyle } from 'react-native';
 import { haptics } from '@/lib/haptics';
-import { Glass, hasGlass } from './Glass';
+import { Glass } from './Glass';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Text } from './Text';
 
@@ -20,9 +20,9 @@ interface Props {
  *   primary   → the single call-to-action per screen. On iOS 26 this is
  *                Apple's `.glassProminent` — real Liquid Glass carrying the
  *                brand's own `--primary` as its tint, which is what makes it
- *                the loud one; below 26 it is the solid white pill.
+ *                the loud one. There is no below-26: the app requires iOS 26.
  *   secondary → `.glass`: the same material with NO tint, so what shows through
- *                is the content behind it. A grey fill on the fallback.
+ *                is the content behind it.
  *   danger    → destructive red text. Deliberately NOT glass: a destructive
  *                button has to be unmistakable, and a see-through one is the
  *                opposite of that.
@@ -58,9 +58,10 @@ export function Button({ title, onPress, kind = 'primary', loading, disabled, st
     else haptics.tap();
   };
 
-  /* Real glass dims and bends under the finger by itself, so the fallback's own
-     press treatment would be painting over the material. */
-  const real = hasGlass() && kind !== 'danger';
+  /* Real glass dims and bends under the finger by itself, so a press treatment
+     of our own would be paint over the material. Only the solid `danger`
+     button needs one. */
+  const real = kind !== 'danger';
 
   return (
     <Pressable
@@ -85,8 +86,8 @@ export function Button({ title, onPress, kind = 'primary', loading, disabled, st
       plain={kind === 'danger'}
       radius={radius.pill}
       style={styles.base}
-      /* `danger` never gets glass, so its fallback is what it always draws. */
-      fallback={{ backgroundColor: bg }}
+      /* `danger` is never glass, so this fill is what it always draws. */
+      fill={{ backgroundColor: bg }}
      >
       {loading ? (
         <ActivityIndicator color={fg} />

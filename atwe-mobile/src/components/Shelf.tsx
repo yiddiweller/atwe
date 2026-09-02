@@ -51,7 +51,7 @@ export function Shelf<T extends string>({ options, value, onChange }: {
                 thing on a screen. */}
             <Glass
               radius={radius.pill}
-              fallback={{ backgroundColor: on ? c.primary : c.s2 }}
+              fill={{ backgroundColor: on ? c.primary : c.s2 }}
               plain={on}
               style={styles.chip}
             >

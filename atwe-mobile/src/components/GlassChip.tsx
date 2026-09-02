@@ -45,7 +45,7 @@ export function GlassChip({ label, on, onPress, fill, ink, icon, style }: {
         radius={radius.pill}
         /* Chosen = a real fill, so force the fallback even where glass exists. */
         plain={on}
-        fallback={{ backgroundColor: on ? bg : c.s2 }}
+        fill={{ backgroundColor: on ? bg : c.s2 }}
         style={[styles.chip, style]}
       >
         {icon}
