@@ -321,6 +321,11 @@ a{text-decoration:none;color:inherit;}
 
   /* Layout */
   --sidebar-w: 244px;
+  /* The right rail's width, as ONE number. The rail reads it, and so do the panel
+     worlds (Notifications, Settings) that have to line their centre column up with
+     the same three columns Home uses — so the two can never drift apart. 0 when
+     there is no rail, which is also what the panels want: no spacer. */
+  --rail-w: 0px;
   --topbar-h:  48px;
   --tabrow-h:  46px;   /* Home/Beam scroll-cover: content-shift + feed-pad; live-measured in JS */
   --msg-max:   780px;
@@ -10305,6 +10310,13 @@ body.light .ac-job-tag.featured{color:var(--accent);}
    discrimination the founder asked for — the steps reach the app margin, and the start
    screen (Continue with Email / Google / Apple), which they asked to leave alone, keeps
    the overlay's own 20px because when it is showing every step is .hidden. */
+/* PHONE ONLY, and the guard is load-bearing. Above 1100px the login overlay is a
+   two-pane desktop layout whose form is held in the LEFT half by
+   `padding-right: calc(48vw + 64px)` — zeroing the inline padding there dropped that
+   and every wizard step jumped to the middle of the window, straight across the
+   branding hero. The START screen was unaffected (it is .auth-inner, not .auth-step),
+   which is exactly why it looked fine and only the steps after it were wrong. */
+@media(max-width:1099px){
 .overlay:has(> .auth-step:not(.hidden)){padding-inline-start:0;padding-inline-end:0;}
 /* And again at ID strength, because #loginOverlay/#signupOverlay set `padding:20px` by ID
    inside the phone media query — (0,1,0,0) beats the class rule above however far down the
@@ -10314,6 +10326,7 @@ body.light .ac-job-tag.featured{color:var(--accent);}
    the step's padding edge on its own once the overlay stops adding 20px in front of it. */
 #loginOverlay:has(> .auth-step:not(.hidden)),
 #signupOverlay:has(> .auth-step:not(.hidden)){padding-inline-start:0;padding-inline-end:0;}
+}
 .ac-job-h{font-size:22px;font-weight:800;letter-spacing:-.02em;color:var(--t1);padding-inline-end:30px;}
 .ac-job-poster{display:flex;align-items:center;gap:11px;margin:14px 0;padding:11px;background:var(--s1);border-radius:14px;cursor:pointer;}
 .ac-job-poster .user-avatar{width:42px;height:42px;font-size:17px;}
@@ -11509,17 +11522,39 @@ body.light .ac-place:hover{background:rgba(0,0,0,.04);}
   body.feed-col:not(.rail-on) .main{margin-inline-end:auto;} /* centre nav+feed when the rail is hidden */
   /* Right rail: 350 by default, 290 in the shrink band; margin-inline-end:auto balances
      the sidebar's margin-inline-start:auto so the whole group stays centred. */
+  body.rail-on{--rail-w:350px;}
+  body.rail-on.mid-band{--rail-w:290px;}
   body.rail-on .right-rail{
-    display:flex;width:350px;height:100vh;height:100dvh;overflow-y:auto;overscroll-behavior:contain;
+    display:flex;width:var(--rail-w);height:100vh;height:100dvh;overflow-y:auto;overscroll-behavior:contain;
     background:var(--bg);margin-inline-end:auto;scrollbar-width:thin;
   }
-  body.mid-band .right-rail{width:290px;}
   /* Beam two-pane tracks the feed+rail width so the nav stays put: 890 in the
      shrink band (=600+290), 950 otherwise (=600+350). */
   body.beam2.mid-band .social-wrap .ac-win{max-width:890px;}
   body.beam2.mid-band .main{flex-basis:890px;}
 }
-.rr-inner{display:flex;flex-direction:column;gap:16px;padding:12px 20px 48px;}
+.rr-inner{display:flex;flex-direction:column;gap:16px;padding:12px 20px 20px;min-height:100%;}
+/* Post, on the rail's FLOOR. `margin-top:auto` is what puts it at the bottom of the
+   column instead of directly under the last card — with a short rail those are very
+   different places, and the bottom is the one that was asked for. Sticky keeps it in
+   view once the rail is long enough to scroll; the background is what stops the cards
+   showing through it as they pass underneath. Width comes from .rr-inner's own padding,
+   so it is edge-for-edge with the search field at the top with no number to keep in step. */
+/* THE BACKDROP IS ON THE WRAPPER, NOT THE BUTTON — and it has to be a real element.
+   .sb-post's own background IS the blue pill, so a background here would paint it out;
+   and a z-index:-1 ::before does NOT solve it, because `position:sticky` makes its host
+   a stacking context and inside one the element's own background paints BEFORE negative
+   children — so the grey landed on top of the blue and the button rendered as bare text.
+   A wrapper has no background of its own to fight with.
+   `margin-top:auto` puts it on the rail's FLOOR rather than under the last card (a short
+   rail makes those very different places, and the floor is what was asked for); sticky
+   keeps it in view once the rail scrolls. Side padding comes from .rr-inner, so the
+   pill is edge-for-edge with the search field at the top with no number repeated. */
+.rr-post{margin-top:auto;position:sticky;bottom:0;flex-shrink:0;
+  background:var(--bg);padding:14px 0 6px;}
+/* .sb-post's base is display:none (it used to be toggled directly); inside the rail
+   the wrapper does the showing, so the pill itself must always lay out. */
+.rr-post .sb-post{display:flex;margin:0;}
 .rr-search{display:flex;align-items:center;gap:11px;width:100%;background:var(--s2);border:1px solid var(--b2);
   border-radius:var(--r-pill);padding:11px 16px;color:var(--t3);font-size:15px;font-weight:500;font-family:inherit;
   cursor:pointer;text-align:start;transition:border-color var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
@@ -11596,6 +11631,19 @@ body.light .ac-place:hover{background:rgba(0,0,0,.04);}
   /* keep the shared Beam top bar (All/Chats/Calls tabs) above the panes even when a
      conversation is open, so the list pane never loses its header. */
   body.beam2 .topbar.hidden{display:flex!important;}
+  /* THE TAB ROW BELONGS TO THE LIST COLUMN, NOT THE WHOLE WINDOW. It used to span the
+     full 950 — the tabs ran on over the open conversation, which is not what any desktop
+     messenger does and is not what the header is for: Chats / Unread / Groups filter the
+     LIST, so they sit over the list. Same `clamp(300px,37%,360px)` the pane itself uses,
+     against a parent of the same width, so the two track together at every size and in
+     the mid-band with nothing to keep in step by hand. The right border continues the
+     pane's own divider, so header and list read as one column.
+     The row keeps its overflow-x + fade masks, so at this width the tabs simply scroll —
+     exactly as they do on a phone. */
+  body.beam2 #tbTabRow{flex:0 0 auto;width:clamp(300px,37%,360px);
+    border-inline-end:1px solid var(--b2);}
+  /* The refresh sweep is absolutely positioned to the row; keep it inside the column. */
+  body.beam2 #tbTabRow .tb-refresh-beam{width:100%;}
 }
 /* Beam two-pane is centred on screen exactly like the rest of the app. In beam2
    mode rail-on is off, so the sidebar never got the margin-inline-start:auto that centres
@@ -11733,8 +11781,44 @@ body.sb-open #bottomNav{z-index:0;}
    drawer's own backdrop already does (.sb-overlay). Without this, opening
    Notifications on a desktop covered the whole nav and the only way out was the
    panel's own back arrow: clicking Account did nothing and Notifications stayed lit. */
-@media(min-width:769px){
-  body.notif-tab #notifOverlay{left:var(--sidebar-w);}
+/* ── THE PANEL WORLDS SIT IN HOME'S THREE COLUMNS ─────────────────────────────
+   Notifications and Settings are full-screen overlays, which on a phone is exactly
+   right. On a desktop it read as a phone screen dropped onto a big monitor: one
+   column adrift in the middle with black on both sides, no nav, no rail — the
+   founder's "it's not so organized, I want everything to look the same way in style
+   as the home screen".
+
+   They are laid out as the SAME three columns instead. Nothing is duplicated: the
+   overlay goes see-through and the REAL sidebar and rail (already rendered in #app,
+   underneath) show through its side slots, so there is one nav in the app, not two.
+   Only the centre column is painted.
+
+   The slots are the shell's own numbers — `--sidebar-w` and `--rail-w` — so the
+   centre column lands exactly where `.main` does at every width and in the mid-band,
+   with nothing to keep in step by hand. `--rail-w` is 0 when there is no rail, which
+   collapses the right slot on its own.
+
+   `pointer-events` is the other half: none on the overlay so a click reaches the real
+   sidebar behind it (before this, opening Notifications covered the nav and clicking
+   Account did nothing), auto on the card. Neither overlay ever closed on a scrim
+   click, so nothing is lost by it. */
+@media(min-width:768px){
+  .overlay.route-view:not(.hidden){
+    display:flex;flex-direction:row;align-items:stretch;justify-content:center;
+    padding:0;background:transparent;pointer-events:none;
+    -webkit-backdrop-filter:none;backdrop-filter:none;animation:none;}
+  .overlay.route-view:not(.hidden)::before{content:'';flex:0 0 var(--sidebar-w);min-width:0;}
+  .overlay.route-view:not(.hidden)::after{content:'';flex:0 0 var(--rail-w);min-width:0;}
+  /* The centre column: the feed's own 600, full height, square, carrying the same
+     right hairline the feed does so the three columns read as one frame. Whatever
+     card the screen happens to use — a .job-card-modal, the notifications panel,
+     the settings document — becomes that column. */
+  .overlay.route-view:not(.hidden) > *{
+    flex:0 0 600px;width:600px;max-width:600px;min-width:0;margin:0;
+    height:100%;max-height:none;border-radius:0;
+    overflow-y:auto;pointer-events:auto;
+    background:var(--bg);border-inline-end:1px solid var(--b2);
+    animation:none;}
 }
 body.notif-tab #notifOverlay .notif-scroll,body.notif-tab #notifOverlay #notifList{padding-bottom:112px;}
 /* The dead-end rescue: shown wherever a search comes back with nothing. Plain on
@@ -14164,17 +14248,18 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
         <svg class="sb-login-ic" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-4 0-7 2.2-7 5 0 .6.4 1 1 1h12c.6 0 1-.4 1-1 0-2.8-3-5-7-5z"/></svg>
         <span>Log in</span>
       </button>
-      <!-- Desktop Post button (proxies the compose FAB) — sits at the bottom of the
-           sidebar, directly above the account Profile row. -->
-      <button class="sb-post" id="sbPost" onclick="sbPostClick()" title="Post" style="display:none;">
-        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        <span>Post</span>
-      </button>
-      <!-- Account: Profile, then Notifications, then Settings -->
-      <div class="sb-settings" id="sbProfile" style="display:none;position:relative;" onclick="toggleProfileMenu(event)">
+      <!-- The "Profile" row is GONE from the sidebar (owner). It never opened a profile —
+           it opened the ACCOUNT MENU, which is what made it confusing sitting above
+           Settings, and the sidebar's own avatar+name header at the top already goes to
+           the real profile.
+           IT STAYS IN THE DOM, hidden and inert, for two reasons that are easy to miss:
+           `openAddAccount` measures this row to anchor its chooser (it already falls back
+           when the rect is empty, which is the path now taken), and #userName / #userPlan /
+           #userAvatar live inside it and are read elsewhere — deleting the block would make
+           those getElementById calls return null. What moved is the WAY IN: "Add account"
+           now sits beside Log out on the Account page, which is where Log out already was. -->
+      <div class="sb-settings" id="sbProfile" hidden style="display:none!important;position:relative;">
         <span class="unread-dot"></span>
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4.3"/><path d="M4 20.5a8 8 0 0 1 16 0"/></svg>
-        <span class="sb-profile-label">Profile</span>
         <span id="userName" class="hidden"></span>
         <span id="userPlan" class="hidden"></span>
         <div id="userAvatar" class="hidden"></div>
@@ -14459,6 +14544,18 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
         <a href="/privacy.html" target="_blank" rel="noopener">Privacy</a>
         <a href="https://atwe.com" target="_blank" rel="noopener">Atwe.com</a>
         <span>© Atwe Inc</span>
+      </div>
+      <!-- Post lives at the BOTTOM of the right rail (owner). It is the last child and
+           `margin-top:auto` pushes it to the rail's floor, so it sits at the bottom of
+           the COLUMN rather than directly under the last card — which is what was asked
+           for and what a short rail would otherwise give. Being a child of .rr-inner it
+           inherits the same 20px side padding as the search field above it, so the two
+           edges line up exactly with no number repeated anywhere. -->
+      <div class="rr-post" id="rrPostWrap" style="display:none;">
+        <button class="sb-post" id="sbPost" onclick="sbPostClick()" title="Post">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span>Post</span>
+        </button>
       </div>
     </div>
   </aside>
@@ -20926,7 +21023,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1769'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1770'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -21976,7 +22073,11 @@ const APP_ROUTES = {
   'me':             { open: () => appTab('profile'),               auth: true },
 
   /* ── Account & settings (private — never under a username) ── */
-  'notifications':  { open: () => openNotifications(),             auth: true, view: 'notifOverlay' },
+  /* acNavNotifs, NOT openNotifications: the wrapper is what lights the Notifications
+     tab and sets body.notif-tab. Opening the panel directly left the sidebar showing
+     HOME as the active world, so arriving by URL or reloading on /notifications looked
+     different from tapping the bell. It calls openNotifications() itself. */
+  'notifications':  { open: () => acNavNotifs(),                   auth: true, view: 'notifOverlay' },
   'settings':       { open: () => openSettings(),                  auth: true, view: 'settingsOverlay' },
   'devices':        { open: () => openDevices(),                   auth: true, view: 'devicesOverlay' },
   'help':           { open: () => openHelp(), view: 'helpOverlay' },
@@ -22928,9 +23029,22 @@ function closeOverlay(id, noHistory) {
   acSyncPath();
 }
 // Always strip a stale 'closing' state when (re)showing an overlay.
+/* Which overlays are DESTINATIONS rather than pop-ups? The route table already
+   knows: every entry with a `view` is a place with its own URL. Tagging them from
+   that table means the desktop page layout below can never drift from the routes —
+   add a route with a view and its screen is a proper desktop page for free.
+   Done lazily on first open, so the DOM is guaranteed to exist. */
+function acTagRouteView(el) {
+  if (!el || el._rv) return;
+  el._rv = 1;
+  try {
+    for (const r of Object.values(APP_ROUTES)) if (r && r.view === el.id) { el.classList.add('route-view'); break; }
+  } catch (e) {}
+}
 function showOverlay(id) {
   const el = document.getElementById(id);
   if (!el) return;
+  acTagRouteView(el);
   requestAnimationFrame(acBindTabFades);   // strips inside this overlay: which side is cut off?
   clearTimeout(el._ct);
   if (el._closeDone) { el.removeEventListener('animationend', el._closeDone); el._closeDone = null; } // cancel any pending close-hide so a quick reopen can't vanish
@@ -24561,7 +24675,10 @@ function initUI() {
   const sbLogin = document.getElementById('sbLogin');
   const sbProfile = document.getElementById('sbProfile');
   if (sbLogin) sbLogin.style.display = guest ? 'block' : 'none';
-  if (sbProfile) sbProfile.style.display = guest ? 'none' : 'flex';   // phones hide it in CSS — see #sbProfile below
+  /* The Profile row is retired (owner) — it stays in the DOM only as an anchor and as
+     the home of #userName/#userPlan/#userAvatar, so it must never be shown again. This
+     line used to un-hide it on every initUI, which beat the inline style outright. */
+  if (sbProfile) sbProfile.style.display = 'none';
   // Guests: Settings + Help in the rail. Accounts: those move to the profile
   // menu and AtChat takes their place.
   document.getElementById('sbSettings').style.display = guest ? 'flex' : 'none';
@@ -29802,11 +29919,15 @@ function acUpdateRail() {
   const cur = AC_SCREENS.find(id => { const el = document.getElementById(id); return el && !el.classList.contains('hidden'); });
   const isAI = _appTab === 'ai';
   const railable = acct && (isAI || RAIL_SCREENS.includes(cur));
-  const sbPost = document.getElementById('sbPost');
-  // The Post button lives in the primary nav (just above Profile), so it's a
-  // persistent desktop nav action across the social worlds — not feed-only. Hidden
-  // on the Atwe AI tab (that world has its own tools) and on mobile (compose FAB there).
-  if (sbPost) sbPost.style.display = (w >= 769 && acct && !isAI) ? 'flex' : 'none';
+  /* Post now lives on the FLOOR OF THE RIGHT RAIL (owner), not in the left nav, so
+     what gets shown is its WRAPPER — the wrapper carries the sticky backdrop, and
+     toggling the button alone would leave an empty grey strip on the rail. It is a
+     persistent desktop action across the social worlds, not feed-only; hidden on the
+     Atwe AI tab (that world has its own tools) and on mobile (the compose FAB there).
+     It also needs the rail to actually be on screen — without that check the button
+     would be "shown" inside a rail that is display:none, i.e. nowhere. */
+  const rrPost = document.getElementById('rrPostWrap');
+  if (rrPost) rrPost.style.display = (w >= 769 && acct && !isAI && railable) ? 'block' : 'none';
   // X.com desktop responsive matrix:
   //   >=1282        nav 275 (labelled) + feed 600 + rail 350
   //   1095-1281     nav 68 (icons)     + feed 600 + rail 350
@@ -35943,6 +36064,11 @@ const ME_HUB_TAIL = [
 /* Sits on the hub itself, under the sections — the way Settings keeps Sign Out at the
    bottom of the account page rather than filing it under a heading. */
 const ME_HUB_FOOT = [
+  /* Add account moved here when the sidebar's Profile row was removed. That row was
+     desktop's ONLY way into the account menu (the top-bar avatar is phone-only), so
+     without this the second-account flow would have had no door at all on a desktop.
+     Beside Log out is the natural place — the two belong to the same job. */
+  { l: 'Add account', ic: _ME_IC.people, run: "openAddAccount(event)", kw: 'add account switch second another sign in' },
   { l: 'Log out', ic: _ME_IC.out, run: "logout()", kw: 'log out sign out logout exit', danger: true },
 ];
 function acGoProfileHub() {
