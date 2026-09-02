@@ -5922,6 +5922,71 @@ valid native modes on a phone** (its own container scrolls, or `body.pgscroll` h
 to the window scroller), so asking "same overflow value" failed on correct code — the
 question is "does the browser scroll it".
 
+### Dragging sideways to see the times (`--slidemag`)
+
+A drag across the thread pulls every message's timestamp in from the side (iMessage's
+gesture, except Atwe reveals BOTH sides at once). The founder: *"it doesn't come in
+smoothly."* Three separate things, all of them measurable:
+
+- **It popped.** The gesture only commits after `DRAG_TOL` (12px) of travel, but the
+  reveal was measured from a dx of zero — so its first visible frame was already 12px in.
+  It is measured from the commit point now, and starts from nothing.
+- **It clamped dead** at `MAX`, unlike the reply swipe living in the same handler, which
+  rubber-bands. Past `SOFT` (70% of MAX) it now gives `SOFT_GIVE` (0.35) — the reply
+  swipe's own number, so the two gestures read as one system.
+- **It wrote on every `touchmove`, to the whole thread.** `--slidemag` was set on
+  `#acThread` and is read inside a `transform` by every `.msg-slidetime` below it, so one
+  write invalidated up to 80 of them — and touchmove fires more often than the display
+  refreshes, so that work happened more than once per frame for no visible gain. It is
+  **coalesced to one rAF** and written to **the rows on screen only** (`slideCollect`),
+  roughly a ten-times cut in per-frame style work. Off-screen rows keep a stale value
+  harmlessly — a horizontal drag cannot scroll the thread vertically — and every row
+  touched is cleared on release. **`resetTime` must cancel the queued frame FIRST**, or it
+  lands after the reset and re-applies a stale magnitude, leaving the times half-out with
+  the transition already finished.
+- `#acThread.sliding .msg-slidetime` also carries **`will-change:transform`**, so the text
+  is composited rather than re-rasterised during the drag. Transient on purpose — the
+  same property was taken OFF `.msg-scroll` and `.pool-orb` because it is otherwise a
+  permanent GPU layer; here it exists only while `.sliding` is on.
+- `--slidemag` is registered with **`@property`** (`<length>`, inherits) so invalidation is
+  typed and the ease-back can be handed to the compositor. Harmless where unsupported.
+
+Measured curve, finger travel → reveal: `15→3.0  35→23.0  50→38.0  80→56.6  110→67.1
+125→72.0`. `scratchpad/chatscroll.js` asserts the shape rather than the numbers, and one
+of its checks needed strengthening: **`late < early` alone passes on a hard clamp** (a
+clamp gives late = 0), so it also requires the reveal to still be MOVING at the end.
+
+### A voice note that cannot be decoded says so
+
+An iPhone has **no Opus decoder at all**, so a note recorded before voice notes were
+converted to a universal format cannot be rescued on the device — not by us, not by
+Safari. What was wrong is that it looked identical to a working note: a normal play
+button and `0:00`, and tapping it did nothing visible. That is what "some voice notes
+still don't work" was.
+
+`preload="metadata"` already opens the file, so an undecodable one fires **`error` with
+`MEDIA_ERR_SRC_NOT_SUPPORTED` (4) with no user action at all**. `_bindVoiceNotes` listens
+for it (and checks `audio.error` in case it fired before wiring), adds **`.vn-dead`**, and
+replaces the time with **"Can't play"**; the bubble dims its play button and waveform, and
+tapping explains why instead of retrying. **Only codes 4 and 3 (DECODE) mark it dead** — a
+**NETWORK error (2) is a flaky connection, not a broken file**, and must stay retryable;
+that distinction is asserted in `scratchpad/voicenote.js`.
+
+When **transcription is configured** (`stt.js`, `/api/config.transcriptionEnabled`), tapping
+a dead note runs `acMsgTranscribe` instead of showing the message — the SERVER can still
+open the file, it is only this device that has no decoder, so the words are recoverable
+even when the audio is not. Without a provider it degrades to the plain explanation.
+
+On the send side, `_vnPlayableEverywhere` falling back to the original (an
+`AudioContext`/`decodeAudioData` failure) now sets **`_vnConvertFailed`** and the sender is
+told *"Sent, but this recording may not play on every phone."* — the note still goes,
+because refusing it would lose what they just recorded, but it is never silent.
+
+NB the size worry that prompted this audit was checked and is NOT real: a 16kHz mono WAV
+is ~32KB/s, `AC_MEDIA_MAX` is 16MB and the server's JSON limit is 25mb, so the conversion
+allows about **eight minutes** of speech. And an iPhone never converts at all —
+`MediaRecorder` there produces real AAC, which is already universal.
+
 ### Photos and videos draw their own edge (`--img-edge`) — in CHAT only
 
 A near-black photo vanishes into the black app and a near-white one vanishes into the

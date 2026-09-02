@@ -84,6 +84,48 @@ const BASE = process.env.BASE || 'http://localhost:3262';
   });
   say(play && !play.err && play.t > 0.2 && !play.paused,
     `it actually plays after a reload (${JSON.stringify(play)})`);
+  /* A note this device CANNOT DECODE must say so on its own, before anyone taps it.
+     Notes recorded before the conversion shipped are Opus, and an iPhone has no Opus
+     decoder at all — they cannot be rescued on the device, so the only honest thing is
+     to stop them looking identical to a working note (a play button and 0:00, which is
+     what "some voice notes still don't work" felt like). */
+  const dead = await p.evaluate(async () => {
+    const vn = document.querySelector('#acThread .msg-voice');
+    if (!vn) return { skip: true };
+    const a = vn.querySelector('.vn-audio');
+    a.src = 'data:audio/webm;base64,' + btoa('not actually audio at all');
+    vn._vnWired = false; a.dataset.dur = '';
+    _bindVoiceNotes(document.getElementById('acThread'));
+    a.load();
+    await new Promise(r => setTimeout(r, 1200));
+    return { dead: vn.classList.contains('vn-dead'), label: vn.querySelector('.vn-time').textContent,
+             code: a.error && a.error.code };
+  });
+  say(dead.skip || dead.dead, `an undecodable note marks itself unplayable on load (error ${dead.code})`);
+  say(dead.skip || /can.t play/i.test(dead.label), `and says so instead of showing 0:00 ("${dead.label}")`);
+
+  const toast = await p.evaluate(async () => {
+    document.querySelectorAll('.notif').forEach(n => n.remove());
+    const btn = document.querySelector('#acThread .msg-voice .vn-play'); if (!btn) return null;
+    btn.click();
+    await new Promise(r => setTimeout(r, 400));
+    const n = document.querySelector('.notif');
+    return n ? n.textContent.trim() : null;
+  });
+  say(!!toast && /format/i.test(toast), 'tapping it explains why, rather than doing nothing');
+
+  /* …but a NETWORK error is a flaky connection, not a broken file, and must stay
+     retryable. Only MEDIA_ERR_SRC_NOT_SUPPORTED / DECODE may mark a note dead. */
+  const net = await p.evaluate(() => {
+    const all = [...document.querySelectorAll('#acThread .msg-voice')];
+    const vn = all[1] || all[0]; if (!vn) return { skip: true };
+    vn.classList.remove('vn-dead');
+    vn._vnWired = false; _bindVoiceNotes(document.getElementById('acThread'));
+    vn.querySelector('.vn-audio').dispatchEvent(new Event('error'));  // no audio.error set
+    return { dead: vn.classList.contains('vn-dead') };
+  });
+  say(net.skip || net.dead === false, 'a network error leaves the note retryable — only an undecodable file is marked dead');
+
   say(errs.length === 0, `no JS errors${errs.length ? ' — ' + errs[0] : ''}`);
 
   await b.close();

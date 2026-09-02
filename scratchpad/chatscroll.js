@@ -212,6 +212,55 @@ const BASE = process.env.BASE || 'http://localhost:3262';
   say(sw.skip || sw.peak > 30, `swipe-to-reply still works — the row travels ${sw.peak}px sideways`);
   say(sw.skip || parseFloat(sw.rest) === 0, 'and springs back on release');
 
+  /* 8b. THE SIDEWAYS TIME REVEAL. A drag across the thread pulls every message's
+        timestamp in from the side. The founder: "it doesn't come in smoothly."
+        Three things were wrong and all three are measured here:
+          - it POPPED. The gesture only commits after 12px of travel, and the reveal was
+            measured from zero dx, so its first visible frame was already 12px in.
+          - it CLAMPED dead at the limit instead of easing, unlike the reply swipe
+            beside it, which rubber-bands.
+          - it wrote `--slidemag` to #acThread on EVERY touchmove — read by every
+            timestamp in the thread, so one write invalidated up to 80 of them, more
+            often than the display refreshes. Now one write per FRAME, to the rows on
+            screen only. */
+  await p.evaluate(() => SC.jumpTo(SC.max / 2));
+  await p.waitForTimeout(300);
+  const slide = await p.evaluate(async () => {
+    const el = document.getElementById('acThread');
+    const rows = [...el.querySelectorAll('.msg-row')];
+    const t = rows[Math.floor(rows.length / 2)]; if (!t) return { skip: true };
+    const y = t.getBoundingClientRect().top + 10;
+    const mk = (k, x) => new TouchEvent(k, { bubbles: true, cancelable: true,
+      touches: k === 'touchend' ? [] : [new Touch({ identifier: 7, target: el, clientX: x, clientY: y })],
+      changedTouches: [new Touch({ identifier: 7, target: el, clientX: x, clientY: y })] });
+    const mag = () => parseFloat(getComputedStyle(t).getPropertyValue('--slidemag')) || 0;
+    const curve = [];
+    el.dispatchEvent(mk('touchstart', 30));
+    for (let i = 1; i <= 26; i++) {
+      el.dispatchEvent(mk('touchmove', 30 + i * 5));
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      curve.push({ dx: i * 5, mag: mag() });
+    }
+    const wcDuring = getComputedStyle(t.querySelector('.msg-slidetime')).willChange;
+    el.dispatchEvent(mk('touchend', 30 + 26 * 5));
+    await new Promise(r => setTimeout(r, 700));
+    return { curve, wcDuring, after: mag(),
+      wcAfter: getComputedStyle(t.querySelector('.msg-slidetime')).willChange };
+  });
+  if (slide.skip) { say(true, 'time reveal — no rows to drag (skipped)'); }
+  else {
+    const at = (dx) => (slide.curve.find(c => c.dx === dx) || { mag: -1 }).mag;
+    say(at(15) < 6, `the reveal starts from nothing, not with a jump (at 15px of finger it is ${at(15).toFixed(1)}px in — a pop would be ~12)`);
+    say(at(50) > at(15) && at(50) < 45, `it tracks the finger through the middle (50px -> ${at(50).toFixed(1)}px)`);
+    const late = at(125) - at(110), early = at(50) - at(35);
+    /* `late < early` alone is NOT enough — a hard clamp gives late = 0 and passes it.
+       It must still be MOVING at the end, just giving less. */
+    say(late > 0.5 && late < early, `and eases off near the end instead of clamping dead (${early.toFixed(1)}px per step early vs ${late.toFixed(1)}px late — a clamp would be 0)`);
+    say(slide.after === 0, `it returns all the way home on release (${slide.after})`);
+    say(slide.wcDuring === 'transform' && slide.wcAfter === 'auto',
+      `the labels are promoted only WHILE dragging (${slide.wcDuring} -> ${slide.wcAfter}), never a permanent GPU layer`);
+  }
+
   /* 9. The keyboard. When it opens the visual viewport shrinks, and a reader at the
         newest message must stay there rather than have it slide under the composer.
         A contained scroller gets no help from the browser here, so it is still ours. */

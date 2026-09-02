@@ -4856,7 +4856,23 @@ body.light #acThreadScreen::after{background:linear-gradient(to top,rgba(255,255
 .msg-slidetime{position:absolute;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center;gap:1px;
   white-space:nowrap;pointer-events:none;letter-spacing:.02em;line-height:1.25;
   transition:transform var(--t-base) cubic-bezier(.22,.61,.36,1);}
-#acThread.sliding .msg-slidetime{transition:none;} /* follow the finger while dragging */
+/* Typed, so the engine knows it is a LENGTH rather than an arbitrary token: style
+   invalidation is narrower and the ease-back on release can be handed to the compositor.
+   Harmless where @property is unsupported — the fallbacks in the calc() still apply. */
+@property --slidemag{syntax:'<length>';inherits:true;initial-value:0px;}
+/* Follow the finger while dragging — no transition — and promote the two little time
+   labels for the duration of the gesture so their TEXT is composited rather than
+   re-rasterised on every frame. Transient on purpose: `will-change` is otherwise a
+   permanent GPU layer (which is why it was taken off .msg-scroll and .pool-orb), and
+   these only carry it while .sliding is on. */
+#acThread.sliding .msg-slidetime{transition:none;will-change:transform;}
+/* A voice note this device cannot decode. Quiet, not alarming — it is a real message
+   that simply cannot be opened here, so it keeps its bubble and says so rather than
+   showing a play button that does nothing. */
+.msg-voice.vn-dead .vn-play{opacity:.35;}
+.msg-voice.vn-dead .vn-wave{opacity:.3;}
+.msg-voice.vn-dead .vn-time{font-size:11px;font-weight:600;opacity:.75;}
+.msg-voice.vn-dead .vn-scrub{display:none;}
 .msg-row.team .msg-slidetime{right:0;align-items:flex-start;padding:0 6px 0 8px;transform:translateX(calc(100% + 16px - var(--slidemag,0px)));}
 .msg-row.me .msg-slidetime{left:0;align-items:flex-end;padding:0 8px 0 6px;transform:translateX(calc(-100% - 16px + var(--slidemag,0px)));}
 .msg-slidetime .slt-d{font-size:10px;color:var(--t3);font-weight:600;}
@@ -21090,7 +21106,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1776'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1777'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -60447,8 +60463,47 @@ function _bindThreadSwipeTime(el) {
   el._swBound = true;
   let sx = 0, sy = 0, active = false, mode = '', row = null, mid = null, mine = false, bRect = null, scrubTouch = false;
   const MAX = 72, R_TRIGGER = 54, R_MAX = 84;
+  /* The gesture only commits once the finger has travelled DRAG_TOL, so the reveal has to
+     start from there or it pops that far in on its first frame — which is most of what
+     "it doesn't come in smoothly" was. SOFT is where it stops tracking 1:1 and starts
+     giving less and less, the same rubber-band the reply swipe uses (0.35), so the two
+     gestures read as one system instead of one clamping dead and the other easing. */
+  const DRAG_TOL = 12, SOFT = MAX * 0.7, SOFT_GIVE = 0.35;
   const icon = () => document.getElementById('acSwipeReply');
-  const resetTime = () => { el.classList.remove('sliding'); el.style.setProperty('--slidemag', '0px'); };
+  /* ONE write per FRAME, and only to the rows on screen.
+     `--slidemag` used to be set on #acThread on every touchmove. It is read inside a
+     transform by every `.msg-slidetime` in the thread, so a single write invalidated up
+     to 80 of them — and touchmove can fire more often than the display refreshes, so that
+     work was being done more than once per frame for no visible gain. Coalescing to a rAF
+     and writing to the visible rows instead cuts the per-frame style work by roughly ten
+     times. Off-screen rows keep a stale value harmlessly: a horizontal drag cannot scroll
+     the thread vertically, and every row we touched is cleared on release. */
+  let slideRows = [], slidePending = null, slideRaf = 0;
+  const slideCollect = () => {
+    const vp = el.parentElement ? el.parentElement.getBoundingClientRect() : { top: 0, bottom: innerHeight };
+    slideRows = [...el.children].filter((r) => {
+      if (!r.getBoundingClientRect) return false;
+      const b = r.getBoundingClientRect();
+      return b.bottom > vp.top - 60 && b.top < vp.bottom + 60;
+    });
+  };
+  const slideFlush = () => { slideRaf = 0;
+    if (slidePending == null) return;
+    const v = slidePending.toFixed(1) + 'px';
+    for (let i = 0; i < slideRows.length; i++) slideRows[i].style.setProperty('--slidemag', v);
+  };
+  const slideWrite = (mag) => { slidePending = mag;
+    if (!slideRaf) slideRaf = requestAnimationFrame(slideFlush); };
+  const resetTime = () => {
+    /* Cancel any queued frame FIRST — otherwise it lands after the reset and re-applies a
+       stale magnitude, leaving the times half-out with the transition already finished. */
+    if (slideRaf) { cancelAnimationFrame(slideRaf); slideRaf = 0; }
+    slidePending = null;
+    el.classList.remove('sliding');
+    for (let i = 0; i < slideRows.length; i++) slideRows[i].style.setProperty('--slidemag', '0px');
+    slideRows = [];
+    el.style.setProperty('--slidemag', '0px');
+  };
   const resetReply = (animate) => {
     if (row) { if (animate) row.classList.add('reply-anim'); row.style.setProperty('--replyx', '0px');
       const r = row; setTimeout(() => r.classList.remove('reply-anim'), 250); }
@@ -60483,7 +60538,8 @@ function _bindThreadSwipeTime(el) {
         // Anything else → the both-sides time reveal.
         const replyDir = row && mid != null && AC.mode !== 'group' && ((mine && dx > 0) || (!mine && dx < 0));
         mode = replyDir ? 'reply' : 'time';
-        if (mode === 'time') el.classList.add('sliding'); else row.classList.remove('reply-anim');
+        if (mode === 'time') { slideCollect(); el.classList.add('sliding'); }
+        else row.classList.remove('reply-anim');
       } else return;
     }
     if (mode === 'reply') {
@@ -60505,7 +60561,11 @@ function _bindThreadSwipeTime(el) {
         ic.classList.toggle('ready', mag >= R_TRIGGER);
       }
     } else {
-      el.style.setProperty('--slidemag', Math.min(MAX, Math.abs(dx)) + 'px'); // magnitude → both sides
+      // Magnitude → both sides. Measured from where the gesture committed, so there is no
+      // jump on the first frame, then easing off as it approaches the full reveal.
+      let mag = Math.max(0, Math.abs(dx) - DRAG_TOL);
+      if (mag > SOFT) mag = SOFT + (mag - SOFT) * SOFT_GIVE;
+      slideWrite(Math.min(MAX, mag));
     }
     e.preventDefault();
   }, { passive: false });
@@ -61936,17 +61996,21 @@ function _vnUniversal(type) {
   if (/opus|vorbis|webm|ogg/.test(t)) return false;          // not decodable on iOS
   return /wav|mpeg|mp3|mp4|m4a|aac/.test(t);
 }
+/* Set when the last conversion attempt FAILED, so the caller can warn instead of
+   silently sending something an iPhone will not open. */
+let _vnConvertFailed = false;
 async function _vnPlayableEverywhere(blob) {
+  _vnConvertFailed = false;
   if (!blob || _vnUniversal(blob.type)) return blob;   // already universal
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return blob;
+    if (!Ctx) { _vnConvertFailed = true; return blob; }
     const ctx = new Ctx();
     const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
     const wav = _wavFromAudioBuffer(decoded, 16000);
     try { ctx.close(); } catch (_) {}
     return new Blob([wav], { type: 'audio/wav' });
-  } catch (_) { return blob; }
+  } catch (_) { _vnConvertFailed = true; return blob; }  // send it anyway; the caller warns
 }
 async function acVoiceStart(holdMode) {
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
@@ -62107,7 +62171,11 @@ function _vnSecs(startedAt) {
   return startedAt ? Math.max(1, Math.round((Date.now() - startedAt - _recPausedAccum) / 1000)) : null;
 }
 async function acVoiceSend(blob, autoSend, secs) {
-  try { blob = await _vnPlayableEverywhere(blob); } catch (_) {}
+  try { blob = await _vnPlayableEverywhere(blob); } catch (_) { _vnConvertFailed = true; }
+  /* The note still sends — refusing it outright would lose what they just recorded —
+     but it is never SILENT any more. This is the door that made a broken note look like
+     a working one: an unconverted recording is Opus, which an iPhone cannot open. */
+  if (_vnConvertFailed) showNotif('Sent, but this recording may not play on every phone.');
   if (blob.size > AC_MEDIA_MAX) { showNotif('That voice note is too long. Try a shorter one.'); return; }
   /* How long the note actually is, by our own clock — a recorded blob often carries no
      duration in its header, so a receiving browser would otherwise have to guess. */
@@ -62403,6 +62471,23 @@ function _bindVoiceNotes(el) {
       try { audio.currentTime = 1e101; } catch (_) {}
     };
     if (audio.readyState >= 1) fixDuration(); else audio.addEventListener('loadedmetadata', fixDuration, { once: true });
+    /* A note this browser CANNOT DECODE must say so on its own, before anyone taps it.
+       `preload="metadata"` already tries to open the file, so an undecodable one fires
+       `error` with MEDIA_ERR_SRC_NOT_SUPPORTED (4) without any user action — and until
+       now it looked exactly like a working note: a normal play button and 0:00, which
+       is what "some voice notes still don't work" felt like. The usual cause is a note
+       recorded before voice notes were converted to a universal format: an iPhone has
+       no Opus decoder at all, so those cannot be rescued on the device.
+       Only code 4 (and 3, DECODE) mark it dead — a NETWORK error (2) is a flaky
+       connection, not a broken file, and must stay retryable. */
+    const markDead = () => {
+      const c = audio.error && audio.error.code;
+      if (c !== 4 && c !== 3) return;
+      vn.classList.add('vn-dead');
+      timeEl.textContent = "Can't play";
+    };
+    audio.addEventListener('error', markDead);
+    if (audio.error) markDead();
     // Drive the bar with requestAnimationFrame while playing — smooth AND
     // lag-free. (The CSS transition lagged badly on short notes, so the ball
     // never reached the end before resetting.) timeupdate only covers the
@@ -62497,8 +62582,17 @@ function _bindVoiceNotes(el) {
 function vnToggle(btn, e) {
   if (AC._selectMode) return;          // let the tap select the message instead
   if (e) e.stopPropagation();
-  const audio = btn.closest('.msg-voice')?.querySelector('.vn-audio');
+  const vn = btn.closest('.msg-voice');
+  const audio = vn?.querySelector('.vn-audio');
   if (!audio) return;
+  if (vn.classList.contains('vn-dead')) {   // already known undecodable — explain, don't retry
+    /* The SERVER can still open it — the bytes are fine, it is this device that has no
+       decoder — so when transcription is set up, offer the words instead of nothing. */
+    const mid = parseInt(vn.closest('.msg-bubble')?.dataset.mid, 10);
+    if (S.config && S.config.transcriptionEnabled && mid) { acMsgTranscribe(mid); return; }
+    showNotif('This recording is in a format this device can’t open. It was sent before Atwe converted voice notes; newer ones play fine.');
+    return;
+  }
   _vnEnsureCtx(); // unlock the chime context within this user gesture
   if (audio.paused) {
     document.querySelectorAll('.msg-voice .vn-audio').forEach(a => { if (a !== audio && !a.paused) a.pause(); });
