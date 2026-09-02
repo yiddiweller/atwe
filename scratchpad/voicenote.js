@@ -37,7 +37,7 @@ const BASE = process.env.BASE || 'http://localhost:3262';
   await p.evaluate(() => { const s = document.querySelector('#introSheet:not(.hidden)');
     if (s && typeof introDismiss === 'function') introDismiss(); });
   await p.waitForTimeout(400);
-  await p.locator('#acListScreen .ac-item').first().click();
+  await p.locator('#acListScreen .ac-item[data-uid]').first().click();
   await p.waitForTimeout(2500);
 
   /* The guard itself: a container that says mp4 but carries Opus must NOT pass. */
@@ -71,7 +71,7 @@ const BASE = process.env.BASE || 'http://localhost:3262';
   await p.waitForTimeout(3500);
   await p.reload({ waitUntil: 'domcontentloaded' });
   await p.waitForTimeout(5000);
-  await p.locator('#acListScreen .ac-item').first().click().catch(() => {});
+  await p.locator('#acListScreen .ac-item[data-uid]').first().click().catch(() => {});
   await p.waitForTimeout(3000);
 
   const play = await p.evaluate(async () => {

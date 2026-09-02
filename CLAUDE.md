@@ -5841,6 +5841,73 @@ a `<button>` needs its own colour.
 automatically (give it keywords in `ADMIN_TAB_KW`); a new panel is picked up by
 adding it to `ADMIN_PANELS`; a new verb goes in `ADMIN_ACTIONS`.
 
+### The chat header is three shapes on the page, not a bar
+
+The owner's own design (a drawing, not a description). The solid bar with its hairline is
+gone; in its place, floating on the page colour:
+
+- a **round back button** (they asked for the arrow, not a ✕ — an earlier pass built the ✕
+  that was drawn and it was corrected the same day),
+- a **pill** carrying the photo, the name and a **presence dot**,
+- a **round ⋯**.
+
+All three are `--h3-size` (48px) tall and inset `--h3-gap` (16px) from the edges and from
+each other, so the row reads as one line of shapes. The pill is `flex:1` and its radius is
+`999px`, i.e. half its own height at any size.
+
+**THE CONVERSATION RUNS BEHIND THEM, and that is what forced the structure.** The owner was
+explicit — *"instead of a black bar on top it goes behind the three new options"*. So the
+header AND everything that used to sit between it and the thread (the call banner, the pin
+bar, the in-chat search, the secret notice) live in one absolutely-positioned
+**`#acTopFloat`**, leaving `#acThreadVP` as the first in-flow child and therefore the full
+height of the screen. `#acThreadScreen::before` fades the messages into the page colour as
+they pass — the mirror of the scrim above the composer.
+
+Three things are load-bearing:
+
+- **Nothing pushes the conversation down any more**, so the stack's height is MEASURED into
+  `--ac-head-h` (`acSyncHeadH`, kept honest by a `ResizeObserver` on the float) and pads the
+  top of `#acThread`. It has to track the stack: opening the in-chat search grows it 84 →
+  129 and closing it puts it back.
+- **`pointer-events` needs TWO levels, and the second is easy to miss.** The stack spans the
+  full width and so does the header ROW inside it — making only the stack transparent still
+  left the row swallowing every tap in the gaps between the shapes (measured: a tap between
+  the back button and the pill landed on `.msg-top`). `.ac-head3` is transparent too; only
+  the three shapes take a press.
+- **Presence is ONE dot**: green with no second line when they are here (the name centres in
+  the pill, as drawn), grey with "Last seen …" under the name when they are not, and hidden
+  entirely for a group, a self-chat, or an account with presence switched off. The name no
+  longer turns blue when online — the dot says it, and two signals for one fact is one too
+  many. NB `acPresenceText` reads **`last_seen`**, not `lastSeen`; with no data at all it
+  falls back to the @username, which is why a probe that seeds the wrong field sees a handle.
+
+**Phone and video left the header for the ⋯ menu**, where Voice call and Video call were
+already its first two rows, so nothing new was built. The buttons stay in the DOM (other
+code shows and hides them by id) and are hidden with CSS — which is why `chathead.js` checks
+"not in the header" by GEOMETRY rather than by absence. Tapping the pill opens the contact
+page; the old tap-the-name-to-flip-to-@username is gone with the separate name button.
+
+**The composer's mic and send are the accent BLUE**, deliberately the same blue so the
+control does not change colour the moment you start typing. This is the one place the
+"white = the one primary action" law is set aside, at the owner's direction: in a
+conversation the blue send reads as the message, which is already blue.
+
+**The attach menu keeps all 18 rows** (the owner's call — the drawing showed three because
+it was cropped) restyled to the drawing: 46px round discs, 16px labels, 26px card, and
+**Camera · Photos · Files** leading it, Files on a paperclip. Its own `max-height` is a
+little taller than the shared `--menu-maxh` because the rows grew and 18 of them behind a
+432px ceiling showed only six.
+
+**Two real bugs turned up in Light theme while checking this**, both invisible-on-white:
+the composer (`.msg-inbox` had been made a near-white solid in 1776 when the blur came off
+for phones — it is `var(--s2)` now, which is a step off the page in both themes), and a
+**sent-but-unseen outgoing bubble**, whose rule reaches for `--accent-tint` — which, despite
+the comment above it promising "the light blue tint", is **WHITE** (it means *text on a
+solid blue fill*). On black that renders as the white bubble the owner knows; on white it
+renders as nothing. Black is untouched; Light gets the tint the comment always described.
+
+`scratchpad/chathead.js` (29 checks) covers all of it, in both themes, plus the group case.
+
 ### A conversation is scrolled by the BROWSER, not by us
 
 Beam's thread used to be a **custom scroller**: `#acThreadVP` was `overflow:hidden` with

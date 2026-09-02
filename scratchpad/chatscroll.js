@@ -14,6 +14,11 @@
  * platform's own momentum. A difference in kind, not in tuning. So the thread is a plain
  * native scroller now, and the rubber band is the BROWSER'S.
  *
+ * It opens a DM specifically ([data-uid]). Taking whatever row happens to be first broke
+ * this and voicenote.js the moment a GROUP was seeded into the fixture — an empty group has
+ * nothing to scroll and no voice notes, so six checks failed for a reason that had nothing
+ * to do with the code.
+ *
  * WHAT THIS PROBE CAN AND CANNOT SEE, stated plainly because the previous version
  * asserted things that no longer exist:
  *   - It read `SC.y` going negative to prove the rubber band. A native rubber band NEVER
@@ -49,7 +54,7 @@ const BASE = process.env.BASE || 'http://localhost:3262';
     await p.evaluate(() => { const s = document.querySelector('#introSheet:not(.hidden)');
       if (s && typeof introDismiss === 'function') introDismiss(); });
     await p.waitForTimeout(400);
-    await p.locator('#acListScreen .ac-item').first().click();
+    await p.locator('#acListScreen .ac-item[data-uid]').first().click();
     await p.waitForTimeout(2600);
     return { ctx, p };
   };
@@ -95,7 +100,7 @@ const BASE = process.env.BASE || 'http://localhost:3262';
     `Home is scrolled by the browser too (${home.pg ? 'the page scrolls' : 'overflow-y: ' + home.overflowY}, no JS transform) — the thread now works the same way`);
   await p.evaluate(() => appTab('chat'));
   await p.waitForTimeout(800);
-  await p.locator('#acListScreen .ac-item').first().click();
+  await p.locator('#acListScreen .ac-item[data-uid]').first().click();
   await p.waitForTimeout(2200);
 
   /* 4. No JS scroller left behind: no bubble may carry an inline transform while the
