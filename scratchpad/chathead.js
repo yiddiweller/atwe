@@ -42,9 +42,18 @@ const BASE = process.env.BASE || 'http://localhost:3262';
     await p.waitForTimeout(300);
     return { ctx, p };
   };
+  /* Open a DM and WAIT for it. A bare querySelector().click() silently does nothing when
+     the list has not rendered yet — on a cold server that left every geometry check
+     measuring a hidden screen (zero-size rects reported as "0 / 390"). The locator waits
+     for the row, and the thread is confirmed on screen before anything is measured. */
   const openDm = async (p) => {
-    await p.evaluate(() => { const r = document.querySelector('#acListScreen .ac-item[data-uid]'); if (r) r.click(); });
-    await p.waitForTimeout(2600);
+    await p.locator('#acListScreen .ac-item[data-uid]').first().click({ timeout: 20000 });
+    await p.waitForSelector('#acThreadScreen:not(.hidden)', { timeout: 20000 });
+    await p.waitForFunction(() => {
+      const b = document.querySelector('.ac-h3-pill');
+      return b && b.getBoundingClientRect().width > 50;
+    }, { timeout: 20000 });
+    await p.waitForTimeout(1800);
   };
 
   const { ctx, p } = await open('black');
@@ -231,8 +240,32 @@ const BASE = process.env.BASE || 'http://localhost:3262';
   });
   say(comp.mic === comp.accent, `the mic is the accent blue (${comp.mic})`);
   say(comp.send === comp.mic, `and send is the same blue, so it does not flip colour as you type (${comp.send})`);
-  const inboxH = await p.evaluate(() => Math.round(document.querySelector('#acThreadScreen .msg-inbox').getBoundingClientRect().height));
-  say(inboxH >= 50, `the message box sits taller than the flat original (${inboxH}px, was 44)`);
+  /* THE BAR ITSELF — fully rounded ends, and the three things in it evenly placed.
+     The + is a bare glyph and the mic is a filled circle, so matching their BOXES is not
+     enough: the boxes were even at 6 while the INK sat at 13.5 on the left against the
+     circle's 6 on the right, which is what the owner spotted. Both visible shapes are
+     measured here, not their boxes. They were also 1px apart vertically, because the row
+     bottom-aligns (right — the buttons must stay put when the text grows) and the boxes
+     were 38 against 36. */
+  const bar = await p.evaluate(() => {
+    const box = document.querySelector('#acThreadScreen .msg-inbox');
+    const plus = box.querySelector('.msg-attach'), mic = box.querySelector('.ac-mic') || box.querySelector('.msg-send');
+    const ta = box.querySelector('textarea'), svg = plus.querySelector('svg');
+    const r = (e) => e.getBoundingClientRect();
+    const B = r(box), M = r(mic), S = r(svg), T = r(ta);
+    const n = (v) => Math.round(v * 10) / 10;
+    return { h: n(B.height), radius: parseFloat(getComputedStyle(box).borderTopLeftRadius),
+      inkLeft: n(S.left - B.left), micRight: n(B.right - M.right),
+      inkCy: n(S.top + S.height / 2 - B.top), micCy: n(M.top + M.height / 2 - B.top),
+      textGap: n(T.left + parseFloat(getComputedStyle(ta).paddingLeft) - S.right) };
+  });
+  say(bar.h >= 50, `the message box sits taller than the flat original (${bar.h}px, was 44)`);
+  say(bar.radius >= bar.h / 2 - 1, `its ends are fully rounded — a true capsule at any height (${bar.radius} for a ${bar.h}px bar)`);
+  say(Math.abs(bar.inkLeft - bar.micRight) <= 1,
+    `the + and the mic sit the same distance from their own ends (${bar.inkLeft} / ${bar.micRight})`);
+  say(Math.abs(bar.inkCy - bar.micCy) <= 0.6, `and share one centre line (${bar.inkCy} / ${bar.micCy})`);
+  say(Math.abs(bar.textGap - bar.inkLeft) <= 2,
+    `"Message" starts the same distance from the + as the + does from the edge (${bar.textGap} vs ${bar.inkLeft})`);
 
   /* Calling is the menu's own FIRST SECTION, drawn as a grouped block rather than two loose
      rows above a hairline. It is absent only where there is genuinely nobody to call — a
