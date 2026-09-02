@@ -1,6 +1,6 @@
 # The regression suite
 
-60 probes that drive a **real browser against a real Postgres** and assert the
+62 probes that drive a **real browser against a real Postgres** and assert the
 things this app has actually got wrong before — corner geometry, icon ink,
 contrast, focus rings, paint order, offline behaviour, money invariants.
 
@@ -52,7 +52,35 @@ row that no existing probe could see:
 - **`authpane.js`** — the sign-in form is centred in the LEFT panel on the start screen
   and on every wizard step, at five widths.
 
-**`TOK` must be exported** for `deskcols.js` (a bearer token for a real account).
+**`TOK` must be exported** for several probes (a bearer token for a real account). Mint one
+with `mint-token.js` — a bare `auth.signToken` is not enough, the token's hash must also
+exist in `auth_sessions` or `requireAuth` 401s:
+
+```bash
+export TOK=$(DATABASE_URL=postgres://atwe:atwe@localhost:5432/atwescore \
+  JWT_SECRET=scoresecret node scratchpad/mint-token.js)
+```
+
+The `JWT_SECRET` must be the one the server is running under, or you get the insecure dev
+fallback and a token the server rejects.
+
+## How a conversation scrolls (`chatscroll.js`)
+
+Beam's thread is a **native scroller** now — it used to be a custom transform scroller on the
+main thread, which is why it could never feel like Home. The probe was rewritten with the
+change, because its old assertions could only fail on correct code: **a native rubber band
+never appears in `scrollTop`**, so reading `SC.y` going negative is not a way to prove the
+bounce. What it checks instead is the property that decides whether the browser bounces at
+all (`overscroll-behavior:contain`, never `none`), that nothing is transforming the content,
+that a real gesture moves it, that the bottom scrim stays pinned (painted **magenta** and
+found by pixel — a plain before/after diff picks up any content that happened to shift), that
+no live `backdrop-filter` overlaps the thread on a phone, and that swipe-to-reply still
+travels. It caught a real regression on its first run: the scrim, previously a child of the
+viewport, detached the moment the viewport actually scrolled and painted a gradient band
+across the middle of the conversation.
+
+**Smoothness itself is not measurable here** — no touch digitiser, no ProMotion display, no
+iOS momentum — so the probe asserts the thread is BUILT like the surfaces it is compared to.
 
 **One trap worth repeating: Playwright's `colorScheme` does not flip this app's theme.**
 Atwe carries its own preference in `localStorage.atwe_theme` and follows the OS only when

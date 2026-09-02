@@ -5841,6 +5841,87 @@ a `<button>` needs its own colour.
 automatically (give it keywords in `ADMIN_TAB_KW`); a new panel is picked up by
 adding it to `ADMIN_PANELS`; a new verb goes in `ADMIN_ACTIONS`.
 
+### A conversation is scrolled by the BROWSER, not by us
+
+Beam's thread used to be a **custom scroller**: `#acThreadVP` was `overflow:hidden` with
+`touch-action:none`, and `#acThread` was translated inside it from `touchmove` in a rAF, so
+that a per-bubble "jelly" spring could be integrated in the same frame. The founder asked
+for two things and they were conflated once already:
+
+1. *"Remove the whole bounce scroll effect in the chats while scrolling"* — the **per-bubble
+   jelly**. Every bubble carried its own underdamped spring, so they lagged and fanned apart
+   as the thread moved. **Gone.**
+2. *"You removed the bounce back when I'm by the end of the chat, and this I actually wanna
+   keep"* — the **rubber band at the first/last message**. **Kept.**
+
+Then: *"the scrolling is better but still not good… not as smooth as home and account."* It
+never could be. A `touchmove`+`rAF` scroller is **main-thread**: capped by how often
+touchmove fires, and it stalls on any layout, paint or GC. Native scrolling runs on the
+**compositor thread** — it keeps the display's refresh rate (120Hz on ProMotion) while
+JavaScript is busy, and it gets the platform's own momentum curve. **A difference in kind,
+not in tuning**, so the whole custom scroller was deleted:
+
+- `.msg-scroll-vp` is `overflow-y:auto` + **`touch-action:pan-y`** (the browser owns
+  vertical panning; **horizontal stays with JS**, which is what keeps swipe-to-reply working)
+  + **`overscroll-behavior:contain`**. That last value is load-bearing: `contain` stops scroll
+  *chaining* to the page behind but **keeps the browser's own rubber band**; **`none` would
+  kill the bounce the founder explicitly asked to keep.**
+- `.msg-scroll` is back in normal flow (`position:relative`, no transform).
+- **`SC` is now a thin skin over `scrollTop`**, not a physics engine — `y`, `h` and `max` are
+  live getters so nothing can hold a stale copy, and the momentum/fling/spring fields survive
+  as inert stubs so none of its ~25 call sites throws. `jellyRows`, `_jellyOff`, `_scrollOff`
+  and the whole `JELLY` knob object are **deleted**; `jellyClear`/`jellyRest` stay (a thread
+  that jumps must still wipe any inline transform).
+- **`pinBottom` is a REMEMBERED field, deliberately not a getter.** Its two callers — the
+  bottom watchdog (`acAnchorBottom`) and the `ResizeObserver` — run just *after* the content
+  grew (a photo or voice note finished loading), when a live reading is already `false`, so
+  they would give up exactly when they are needed. The `scroll` listener and `jumpTo()` keep
+  it fresh via `syncPin()`; callers wanting a live answer already OR it with
+  `(SC.max - SC.y) < 16`. The old JS scroller stored it in its frame loop for the same reason.
+- The **keyboard** re-anchor (`visualViewport` `resize` → `toBottom` when pinned) is still
+  ours: the browser does not do this for a contained scroller.
+
+**Three real bugs came out of this change, and two were invisible to every existing probe:**
+
+- **The bottom scrim detached.** The iMessage-style gradient that dissolves the last messages
+  into the page colour was `.msg-scroll-vp::after` — `position:absolute; bottom:0`. That is
+  fine only while the viewport never actually scrolls. An absolutely-positioned child of a
+  **real** scroller is anchored to the bottom of the **content**, not the viewport, so the
+  gradient came unstuck: measured with the old selector it painted a band at **y 128–277** —
+  across the middle of the conversation — halfway down the thread, and vanished entirely at
+  the bottom. It is **`#acThreadScreen::after`** now (the screen is `position:relative` and
+  the viewport reaches its bottom edge, so the geometry is identical), and it holds at
+  y 694–844 at every scroll position.
+- **Two live blurs sat over the moving thread**, and they were the one thing a conversation
+  had that Home did not — the mobile home bar is deliberately **solid, no blur**, and that
+  decision is why Home feels the way it does. A `backdrop-filter` over moving content must be
+  re-rasterised **every frame**. Both are now **solid on a phone and frosted on desktop**
+  (`@media(min-width:769px)`, width rather than `hover:hover` — a tablet has no hover and
+  still has a fast GPU): the composer `.msg-inbox` (which had already been walked 28px → 16px
+  and down to 7px while scrolling — an admission of the cost), and `.ac-scrolldown`, the
+  jump-to-latest pill, which matters more than its size suggests because it is on screen
+  **exactly while you are scrolled up**, i.e. during the very gesture that felt rough.
+- **A light-theme override lost on source order.** `body.light .msg-inbox` and the new
+  desktop rule are both `(0,2,1)`; with no specificity to separate them the later one simply
+  wins, and the base rule sat ~15 lines *below* the media query. The phone-solid declaration
+  now sits **above** the desktop block.
+
+`scratchpad/chatscroll.js` (20 checks) is the guard, and it was rewritten because its old
+assertions could now only fail on correct code: **a native rubber band never appears in
+`scrollTop`** — it is composited past the edge while `scrollTop` stays clamped at 0 — so the
+old `SC.y < 0` check is impossible. What IS checkable is the property that decides whether
+the browser bounces at all (`overscroll-behavior`), the absence of any JS transform, that a
+real gesture moves it, that the scrim stays pinned (painted **magenta** and located by pixel,
+because a diff of two screenshots picks up any content that happened to shift), that no live
+blur overlaps the thread, and that swipe-to-reply still travels. **Smoothness itself is not
+measurable here** — no touch digitiser, no ProMotion display, no iOS momentum — so what the
+probe asserts is that the thread is BUILT the way the surfaces the founder compared it to
+are. Two traps it hit: swipe-to-reply moves the row by a custom property (**`--replyx`**, not
+`transform`) so an earlier version reported 0px travel on working code; and **Home has two
+valid native modes on a phone** (its own container scrolls, or `body.pgscroll` hands the page
+to the window scroller), so asking "same overflow value" failed on correct code — the
+question is "does the browser scroll it".
+
 ### Photos and videos draw their own edge (`--img-edge`) — in CHAT only
 
 A near-black photo vanishes into the black app and a near-white one vanishes into the

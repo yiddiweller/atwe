@@ -4713,17 +4713,35 @@ body.light .tb-login,body.light .btn-white{background:var(--primary);color:var(-
 .msg-bubble.acsb-hit{box-shadow:0 0 0 2px var(--accent), 0 0 0 5px color-mix(in srgb, var(--accent) 28%, transparent);}
 @keyframes msgFlash{0%,100%{background:transparent;}30%{background:var(--accent-dim);}}
 .msg-flash{animation:msgFlash 1.3s ease;}
-.msg-scroll-vp{flex:1;min-height:0;overflow:hidden;position:relative;touch-action:none;}
+/* NATIVE SCROLLING, the same as .ac-list on Home and Account — and that is the whole
+   point. This used to be overflow:hidden + touch-action:none with a JS controller
+   translating the content from touchmove + rAF. However well tuned, that can never feel
+   like the rest of the app: native scrolling is handled on the COMPOSITOR thread, so it
+   keeps the display's refresh rate (120Hz on ProMotion) and carries on smoothly while
+   JavaScript is busy; a main-thread scroller is capped by how often touchmove fires and
+   stalls on any layout, paint or GC. It is a difference in kind, not in tuning.
+   `pan-y` leaves horizontal gestures to JS, so swipe-to-reply is unaffected. */
+.msg-scroll-vp{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;position:relative;
+  touch-action:pan-y;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
 /* iMessage-style bottom scrim: messages dissolve to the page colour at the very
    bottom edge, just above the composer. Subtle at rest, a touch darker while
    scrolling (matches Apple's elastic-scroll darkening, a hair stronger). Sits
-   ABOVE the content but BELOW the composer (z6) / scroll-down pill (z5). */
-.msg-scroll-vp::after{content:"";position:absolute;left:0;right:0;bottom:0;height:150px;pointer-events:none;z-index:3;
+   ABOVE the content but BELOW the composer (z6) / scroll-down pill (z5).
+   IT LIVES ON THE SCREEN, NOT ON THE SCROLLER, and that is load-bearing. It used to
+   be `.msg-scroll-vp::after`, which was fine only while the viewport was
+   overflow:hidden and never actually scrolled. The moment the thread became a real
+   native scroller, an absolutely-positioned child of it is anchored to the bottom of
+   the CONTENT, not of the viewport — so the gradient detached and drifted through the
+   middle of the conversation as you scrolled (measured: a band at y 364 with the thread
+   at the top, y 81 halfway down). #acThreadScreen is position:relative and the viewport
+   reaches its bottom edge, so the geometry here is identical and it stays put. */
+#acThreadScreen::after{content:"";position:absolute;left:0;right:0;bottom:0;height:150px;pointer-events:none;z-index:3;
   background:linear-gradient(to top,rgba(0,0,0,.88) 0%,rgba(0,0,0,.68) 16%,rgba(0,0,0,.36) 44%,rgba(0,0,0,.12) 70%,rgba(0,0,0,0) 100%);
   opacity:.9;transition:opacity var(--t-slow) var(--ease,ease);}
-#acThreadScreen.sc-scrolling .msg-scroll-vp::after{opacity:1;}
-body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,255,.88) 0%,rgba(255,255,255,.68) 16%,rgba(255,255,255,.36) 44%,rgba(255,255,255,.12) 70%,rgba(255,255,255,0) 100%);}
-.msg-scroll{position:absolute;top:0;left:0;right:0;
+#acThreadScreen.sc-scrolling::after{opacity:1;}
+body.light #acThreadScreen::after{background:linear-gradient(to top,rgba(255,255,255,.88) 0%,rgba(255,255,255,.68) 16%,rgba(255,255,255,.36) 44%,rgba(255,255,255,.12) 70%,rgba(255,255,255,0) 100%);}
+/* In normal flow now — it is the scroller's content, not a layer being transformed. */
+.msg-scroll{position:relative;
   display:flex;flex-direction:column;gap:3px;padding:18px 14px;}
 /* Top margin is larger to offset the gap the first message of the day carries
    (.msg-row.gap, +11px below), so the date sits visually centred between them. */
@@ -5500,8 +5518,13 @@ body.light .ac-rec-lock{background:rgba(255,255,255,.55);}
 /* Anchored to the right; when a new message lands while you're scrolled up it
    grows leftward into a pill with a "New Message" label that fades in (the right
    edge stays put, so it expands to the left). Reaching the bottom collapses it. */
+/* SOLID on a phone, frosted on desktop — same reasoning as the composer, and this one
+   matters more than it looks: the pill is on screen exactly WHILE you are scrolled up,
+   i.e. exactly while the thread is moving under it, so its blur was being re-rasterised
+   every frame of the very gesture the founder said felt rough. It is small, but it was
+   the second of only two live blurs left over the conversation. */
 .ac-scrolldown{position:absolute;right:24px;bottom:84px;z-index:5;min-width:36px;height:36px;border-radius:18px;padding:0;
-  background:rgba(255,255,255,.16);backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4);
+  background:var(--s3);
   border:none;color:var(--t1);cursor:pointer;display:flex;align-items:center;justify-content:center;
   box-shadow:0 4px 14px rgba(0,0,0,.32);opacity:0;transform:translateY(8px) scale(.92);pointer-events:none;
   transition:opacity var(--t-base) var(--ease),transform var(--t-base) var(--ease),padding var(--t-slow) var(--ease);}
@@ -5513,6 +5536,9 @@ body.light .ac-rec-lock{background:rgba(255,255,255,.55);}
 .ac-scrolldown.newmsg{padding:0 7px 0 14px;}
 .ac-scrolldown.newmsg .acsd-label{max-width:130px;opacity:1;margin-inline-end:7px;}
 #acThreadScreen.selecting .ac-scrolldown{display:none;}
+@media(min-width:769px){
+  .ac-scrolldown{background:rgba(255,255,255,.16);backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4);}
+}
 /* NB a z-index here cannot lift the composer over #navBackdrop: that backdrop is a
    body-level layer and this lives inside #app, which is its own stacking context. The
    fix is above — hide the backdrop when the nav pill is hidden. */
@@ -5551,9 +5577,15 @@ body.light .ac-rec-lock{background:rgba(255,255,255,.55);}
 body.light .ac-item-unread.muted{background:var(--t3);}
 /* One unified rounded box holding the +, the text, and the send arrow. */
 .msg-inbox{display:flex;align-items:flex-end;gap:4px;
-  /* Frosted blur stays on ALWAYS (incl. while scrolling). A lighter 16px radius keeps
-     the frosted look but is much cheaper than 28px to re-compute each scroll frame. */
-  background:rgba(26,26,28,.72);backdrop-filter:blur(16px) saturate(1.7);-webkit-backdrop-filter:blur(16px) saturate(1.7);
+  /* SOLID ON A PHONE, frosted on desktop — see the media query below. This is the LAST
+     live blur over any scrolling surface in the app, and it is the one thing left that a
+     conversation had and Home did not: a backdrop-filter over moving content has to be
+     re-rasterised every single frame, which is why this had already been walked down from
+     28px to 16px and is dropped again to 7px while scrolling. The mobile home bar made
+     exactly this call long ago (solid, no blur) and it is why Home feels the way it does.
+     Desktop keeps the frost: a laptop GPU pays it easily and nothing scrolls under it in
+     the two-pane layout. */
+  background:rgba(26,26,28,.94);
   border:1px solid rgba(255,255,255,.08);
   /* flex-wrap so the cards below can take a line of their own above the text row;
      symmetric 5px padding so a nested card is inset evenly on both sides. */
@@ -5595,10 +5627,17 @@ body.light .ac-item-unread.muted{background:var(--t3);}
 .msg-incards .msg-imgx{top:-4px;left:-4px;}
 /* A pending photo is a preview, not the message — keep it from eating the screen. */
 .msg-incards .ac-postimgs:not(.multi) .ac-postimg-wrap img{max-height:180px;}
-/* While scrolling: keep it FROSTED (still a real blur, never see-through) but lighter +
-   slightly more opaque, so re-computing it each frame over the moving content is cheap.
-   Full 16px blur returns the moment scrolling stops. */
-#acThreadScreen.sc-scrolling .msg-inbox{background:rgba(24,24,26,.82);backdrop-filter:blur(7px) saturate(1.5);-webkit-backdrop-filter:blur(7px) saturate(1.5);}
+/* Light theme, phone: solid too. Declared HERE, above the desktop block, because both
+   this and the desktop override are (0,2,1) — with no specificity to separate them the
+   later rule simply wins, and it used to sit ~15 lines further down. */
+body.light .msg-inbox{background:rgba(255,255,255,.94);}
+/* Desktop only: the frosted composer. `hover:hover` is deliberately NOT the test — a
+   tablet has no hover and still has a fast GPU; width is what says "not a phone". */
+@media(min-width:769px){
+  .msg-inbox{background:rgba(26,26,28,.72);backdrop-filter:blur(16px) saturate(1.7);-webkit-backdrop-filter:blur(16px) saturate(1.7);}
+  #acThreadScreen.sc-scrolling .msg-inbox{background:rgba(24,24,26,.82);backdrop-filter:blur(7px) saturate(1.5);-webkit-backdrop-filter:blur(7px) saturate(1.5);}
+  body.light .msg-inbox{background:rgba(255,255,255,.6);}
+}
 .msg-inbox:focus-within{border-color:var(--b3);}
 .msg-attach{width:32px;height:32px;border-radius:50%;background:none;border:none;color:var(--t2);flex-shrink:0;
   display:flex;align-items:center;justify-content:center;cursor:pointer;transition:color var(--t-fast) var(--ease);}
@@ -5613,7 +5652,6 @@ body.light .ac-item-unread.muted{background:var(--t3);}
 .msg-send svg{width:19px;height:19px;stroke:currentColor;stroke-width:2.6;fill:none;}
 .msg-send:hover{background:var(--accent-light);}
 .msg-send:disabled{opacity:.4;}
-body.light .msg-inbox{background:rgba(255,255,255,.6);}
 /* Multi-row composer (ChatGPT-style): the textarea takes its own full-width row on
    top; the +/mic/send wrap to a row beneath it — + stays left, send hugs the right.
    Single-line stays exactly the one-row layout above. */
@@ -21052,7 +21090,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1775'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1776'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -59864,55 +59902,34 @@ function acScrollToDivider() {
   });
 }
 function acBindScrollDown(el) {
-  jellyInit(document.getElementById('acThreadVP')); // custom scroller owns the thread's scrolling
-  SC.measure();
+  jellyInit(document.getElementById('acThreadVP')); // the browser scrolls it; this binds what watches
 }
-/* ─── Custom transform scroller + iMessage "jelly" (true 60fps) ────────────────
-   To match iMessage we can't layer a JS spring on NATIVE momentum — the spring paints
-   a frame behind the compositor and iOS throttles it during a fling (that was the
-   stutter). So we OWN the scroll: #acThread (the content) is translated inside the
-   overflow-hidden #acThreadVP viewport, and the scroll position AND the per-bubble
-   jelly are computed together in ONE rAF — zero desync. SC = scroll controller;
-   JELLY = feel knobs for the per-bubble fan + bounce. */
-const JELLY = {
-  on: true,
-  base: 0.05,    // uniform lag per unit scroll delta
-  span: 0.66,    // extra lag at the TRAILING edge → the fan (tight at the leading edge)
-  freq: 2.1,     // per-bubble fan frequency (Hz). LOWER = softer = bubbles lag/spread MORE
-                 // and settle a touch slower — the visible "divided" state from iMessage
-  zeta: 0.5,     // per-bubble damping ratio (<1 = underdamped → overshoot/bounce)
-  max: 54,       // px clamp on a row's fan displacement (widest the gaps open on a fast flick)
-  edgeCompress: true, // bubbles bunch toward the pulled edge on overscroll (false = spread)
-  friction: 2.2, // momentum/fling decay (smaller = longer glide)
-  edgeFreq: 1.55,// edge rubber-band bounce-BACK frequency (lower = slower, gentler return)
-  edgeZeta: 0.66,// edge bounce damping (higher = less overshoot)
-  edgeMax: 90,   // MAX px you can pull/fling past an edge — the rubber band's "tightness"
-                 // (smaller = tighter, less empty space before the first/last message)
-  edgePull: 0.5, // how much the content follows the finger right at the edge (initial give)
-  /* ON, and deliberately so. The rubber band at the first/last message is the ONE bounce
-     the founder wants kept — what they asked to lose was the wobble WHILE scrolling, which
-     is `rows` below, not this. Both are switches so the two can never be confused again. */
-  edgeBounce: true,
-  /* OFF (owner): no per-bubble jelly. `jellyRows` gave every bubble its own underdamped
-     spring, so they lagged and fanned apart as you scrolled — the "bounce scroll effect
-     while scrolling". They asked for a conversation to scroll like Home and Account do:
-     the content moves as one piece. Momentum, friction and the edge rubber band are all
-     untouched. */
-  rows: false,
-};
+/* ─── The thread's scroller ────────────────────────────────────────────────────
+   The BROWSER scrolls a conversation now, exactly as it scrolls Home and Account.
+   This used to be a custom transform scroller: #acThread was translated inside an
+   overflow-hidden viewport and the position was integrated in a rAF, so that a per-bubble
+   "jelly" spring could run in the same frame. Both are gone. The founder asked for a
+   conversation to scroll like the rest of the app, and no amount of tuning gets a
+   main-thread scroller there — native scrolling runs on the COMPOSITOR thread, keeps the
+   display's refresh rate while JavaScript is busy, and gets the platform's own momentum.
+   THE EDGE BOUNCE IS KEPT and is now the browser's own rubber band (which is why the
+   viewport is `overscroll-behavior:contain` and NOT `none` — `none` would kill it).
+   What went with the JS scroller: the per-bubble fan, the fling/friction integrator and
+   the spring that bounced back from an edge. Nothing here needs a knob any more, so
+   the JELLY knob object is gone with them. `jellyClear` survives because a thread that
+   jumps must still wipe any inline transform an old build left on a row. */
 function _now() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
 function _jellyReduced() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } }
-/* TWO GUARDS, NOT ONE — and conflating them was a real bug. `_jellyOff` gates the
-   per-bubble fan; `_scrollOff` gates the SCROLLER itself. They used to be the same
-   function, which meant a reduced-motion user could not scroll a conversation AT ALL:
-   the touchmove handler returned early and nothing else moves the thread (the viewport is
-   overflow:hidden with touch-action:none, so there is no native scroll underneath to fall
-   back on). Select mode still blocks the scroll on purpose — there a drag picks messages. */
-function _jellyOff() { return !JELLY.on || !JELLY.rows || _jellyReduced() || AC._selectMode; }
-function _scrollOff() { return AC._selectMode; }
+/* SC — the thread's scroll position. It is now a thin skin over the viewport's own
+   `scrollTop` rather than a physics engine: the browser does the scrolling (see the note
+   on .msg-scroll-vp), and this keeps the API the ~25 call sites around the file already
+   use. `y`, `max` and `h` are LIVE getters, so nothing can hold a stale copy, and the
+   momentum/rubber-band/fling fields survive as inert stubs so no caller throws. */
 const SC = {
-  y: 0, max: 0, h: 0, vy: 0, raf: 0, lastY: 0, lastTs: 0,
-  drag: false, axis: 0, sx: 0, sy: 0, py: 0, pts: 0, smooth: false, target: 0, _bounce: null, _raw: 0, _lastTouch: 0, pinBottom: true, _mv: false,
+  raf: 0, lastY: 0, lastTs: 0, target: 0,
+  // Kept so existing callers keep working; the browser owns all of this now.
+  drag: false, axis: 0, sx: 0, sy: 0, py: 0, pts: 0, smooth: false, _bounce: null, _raw: 0,
+  vy: 0, _lastTouch: 0, _mv: false, _sc: 0,
   // While moving, lighten the composer's frosted blur (still blurry, never see-through):
   // re-sampling a big 16px blur over the scrolling content every frame is the heaviest
   // per-frame cost. Toggled only on state change.
@@ -59920,161 +59937,94 @@ const SC = {
   vp() { return document.getElementById('acThreadVP'); },
   el() { return document.getElementById('acThread'); },
   open() { const s = document.getElementById('acThreadScreen'); return !!(s && !s.classList.contains('hidden')); },
-  measure() { const v = this.vp(), c = this.el(); if (!v || !c) return; this.h = v.clientHeight; this.max = Math.max(0, c.offsetHeight - this.h); },
-  paint() { const c = this.el(); if (c) c.style.transform = 'translate3d(0,' + (-this.y).toFixed(2) + 'px,0)'; },
-  over() { return this.y < 0 ? -this.y : (this.y > this.max ? this.max - this.y : 0); }, // >0 past top, <0 past bottom
-  // User is actively scrolling → don't auto-stick. Also stays "busy" for a moment AFTER
-  // the last touch, so a background re-render (e.g. the SWR reload right after you open
-  // a chat) can't yank you to the bottom the instant you begin scrolling.
-  busy() { return this.drag || this.smooth || this._bounce !== null || Math.abs(this.vy) > 5 || (_now() - this._lastTouch < 400); },
-  kick() { if (!this.raf && this.open()) { this.lastTs = _now(); this.raf = requestAnimationFrame(t => SC.frame(t)); } },
-  // Programmatic positioning (open / stick / divider): snaps, no momentum, no jelly kick.
-  jumpTo(y) { this.measure(); this.y = Math.max(0, Math.min(this.max, y)); this.vy = 0; this.smooth = false; this._bounce = null; this.lastY = this.y; this.pinBottom = (this.max - this.y) < 8; this.setScrolling(false); this.paint(); jellyClear(this.el()); acUpdateScrollDown(); },
-  toBottom() { this.measure(); this.jumpTo(this.max); },
-  smoothBottom() { this.measure(); this.target = this.max; this.smooth = true; this.kick(); },
-  reclamp() { this.measure(); this.y = Math.max(0, Math.min(this.max, this.y)); this.lastY = this.y; this.paint(); },
-  frame(ts) {
-    this.raf = 0;
-    if (!this.el() || !this.open()) { this.setScrolling(false); return; }
-    const now = ts || _now(); let dt = (now - this.lastTs) / 1000; this.lastTs = now;
-    if (!(dt > 0)) dt = 1 / 60; if (dt > 0.05) dt = 0.05;
-    // NB: no measure() here — height/clientHeight are cached (they don't change while
-    // scrolling) and refreshed on render/resize/footer change. One fewer layout read
-    // per frame keeps the scroll buttery (this was an occasional dropped frame).
-    let active = false;
-    const w = 2 * Math.PI * JELLY.edgeFreq, k = w * w, cc = 2 * JELLY.edgeZeta * w; // edge bounce spring
-    const sub = Math.max(1, Math.min(4, Math.round(dt / (1 / 120)))), hh = dt / sub;
-    if (this.smooth) {                                   // animated jump-to-latest
-      const d = this.target - this.y; this.y += d * Math.min(1, 12 * dt);
-      if (Math.abs(d) < 0.5) { this.y = this.target; this.smooth = false; } else active = true;
-    } else if (!this.drag) {
-      for (let s = 0; s < sub; s++) {
-        const oob = this.y < 0 ? 0 : (this.y > this.max ? this.max : null);
-        if (oob !== null && !JELLY.edgeBounce) {          // hard stop: sit on the edge, kill the glide
-          this.y = oob; this.vy = 0; this._bounce = null; break;
-        }
-        if (oob !== null) this._bounce = oob;            // latch the edge we're bouncing to
-        if (this._bounce !== null) {                     // spring back to that edge until settled (the rubber-band)
-          const x = this.y - this._bounce;
-          this.vy += (-k * x - cc * this.vy) * hh; this.y += this.vy * hh;
-          if (Math.abs(this.y - this._bounce) < 0.3 && Math.abs(this.vy) < 6) { this.y = this._bounce; this.vy = 0; this._bounce = null; }
-          else active = true;
-        } else if (Math.abs(this.vy) > 3) {              // momentum (fling) with exponential friction
-          this.y += this.vy * hh; this.vy *= Math.exp(-JELLY.friction * hh); active = true;
-        }
-      }
-    }
-    // Cap how far a fast FLING can overshoot past an edge, so the rubber band stays
-    // tight (and kill the outward velocity at the cap) before the spring pulls it back.
-    const cap = JELLY.edgeBounce ? JELLY.edgeMax : 0;   // 0 = the edge IS the wall
-    if (this.y < -cap) { this.y = -cap; if (this.vy < 0) this.vy = 0; }
-    else if (this.y > this.max + cap) { this.y = this.max + cap; if (this.vy > 0) this.vy = 0; }
-    const dv = this.y - this.lastY; this.lastY = this.y;
-    this.pinBottom = (this.max - this.y) < 12; // track "is the user sitting at the bottom"
-    this.setScrolling(this.drag || Math.abs(this.vy) > 8 || Math.abs(dv) > 0.5); // lighten composer blur while moving
-    this.paint();
-    const alive = jellyRows(dv, this.over(), dt);
-    acUpdateScrollDown();
-    if (this.drag || active || alive || Math.abs(dv) > 0.1) this.kick();
-    else jellyClear(this.el()); // fully settled → clear any row left mid-fan (window may have skipped it)
-  },
+  get y() { const v = this.vp(); return v ? v.scrollTop : 0; },
+  set y(n) { const v = this.vp(); if (v) v.scrollTop = Math.max(0, Math.min(this.max, n)); },
+  get h() { const v = this.vp(); return v ? v.clientHeight : 0; },
+  get max() { const v = this.vp(); return v ? Math.max(0, v.scrollHeight - v.clientHeight) : 0; },
+  /* REMEMBERED, deliberately not a live getter. Its callers — the bottom watchdog and
+     the ResizeObserver — run just AFTER the content grew (a voice note or photo finished
+     loading), and at that moment a live reading is already false, so they would give up
+     exactly when they are needed. The old JS scroller stored it in its frame loop for the
+     same reason; here the `scroll` listener and jumpTo() keep it fresh. Callers wanting a
+     live answer already OR it with (SC.max - SC.y) < 16. */
+  pinBottom: true,
+  syncPin() { this.pinBottom = (this.max - this.y) < 12; },
+  measure() {},                              // the getters are live — nothing to cache
+  paint() {},                                // the browser paints the scroll
+  over() { return 0; },                      // native overscroll never shows up in scrollTop
+  /* "Don't auto-stick, the user is reading." A native scroll fires `scroll` events, so
+     recency of one is the honest signal; the touch window is kept for the moment right
+     after a flick when events have stopped but the finger only just left. */
+  busy() { return (_now() - this._sc) < 400 || (_now() - this._lastTouch) < 400; },
+  kick() {},
+  // Programmatic positioning (open / stick / divider): snaps, no animation.
+  jumpTo(y) { const v = this.vp(); if (!v) return;
+    v.scrollTop = Math.max(0, Math.min(this.max, y));
+    this.lastY = this.y; this.syncPin(); this.setScrolling(false); jellyClear(this.el()); acUpdateScrollDown(); },
+  toBottom() { this.jumpTo(this.max); },
+  /* The jump-to-latest pill. `scrollTo` with `behavior:'smooth'` hands the animation to
+     the browser (compositor again), and reduced-motion gets a straight jump. */
+  smoothBottom() { const v = this.vp(); if (!v) return;
+    const behavior = _jellyReduced() ? 'auto' : 'smooth';
+    try { v.scrollTo({ top: this.max, behavior }); }
+    catch (_) { v.scrollTop = this.max; }
+    setTimeout(() => { SC.syncPin(); acUpdateScrollDown(); }, 340); },
+  reclamp() { const v = this.vp(); if (!v) return; v.scrollTop = Math.max(0, Math.min(this.max, v.scrollTop)); this.lastY = this.y; },
+  frame() {},                                // no rAF loop any more
 };
-// Bind the custom-scroll gestures ONCE to the viewport. A vertical drag scrolls; a
-// horizontal-dominant gesture is left for swipe-to-reply / reveal-time. There is no
-// native scroll under us, so the listeners can stay passive.
+
+/* Bind what the thread still needs now that the BROWSER scrolls it: a scroll listener
+   (tracking "is the user at the bottom", the composer's blur, and the jump-to-latest
+   pill) and the re-anchor for when late-loading media makes the content taller.
+   The old touchmove / wheel handlers are GONE — they existed only to drive the JS
+   scroller, and leaving them in would fight the native one (their `SC.y = …` writes now
+   land on scrollTop, so every move would be applied twice). Horizontal gestures are
+   unaffected: touch-action:pan-y leaves them to JS, and swipe-to-reply is bound
+   separately on the content element by _bindThreadSwipeTime (it moves the row with a
+   custom property, --replyx, not a transform). */
 function jellyInit(vp) {
   if (!vp || vp._scBound) return; vp._scBound = true;
-  vp.addEventListener('touchstart', e => {
-    const t = e.touches[0]; SC.sx = t.clientX; SC.sy = t.clientY; SC.py = t.clientY; SC.pts = _now(); SC._lastTouch = _now();
-    SC.axis = 0; SC.vy = 0; SC.smooth = false; SC.drag = false; SC._bounce = null; SC.measure(); SC.kick();
+  let idle = 0;
+  vp.addEventListener('scroll', () => {
+    SC._sc = _now();
+    SC.syncPin();
+    SC.setScrolling(true);
+    acUpdateScrollDown();
+    clearTimeout(idle);
+    idle = setTimeout(() => SC.setScrolling(false), 140);
   }, { passive: true });
-  vp.addEventListener('touchmove', e => {
-    if (_scrollOff()) return;
-    SC._lastTouch = _now();
-    const t = e.touches[0], tx = t.clientX, ty = t.clientY;
-    if (SC.axis === 0) { const dx = Math.abs(tx - SC.sx), dy = Math.abs(ty - SC.sy); if (dx > 6 || dy > 6) SC.axis = dy >= dx ? 1 : 2; }
-    if (SC.axis !== 1) return;                            // horizontal gesture → not ours
-    if (!SC.drag) { SC.drag = true; SC._raw = SC.y; }     // start tracking the raw (unclamped) finger position
-    const move = ty - SC.py; SC.py = ty;
-    SC._raw -= move;                                      // raw position follows the finger 1:1
-    // iOS rubber-band: past an edge the content still follows the finger, but with
-    // DIMINISHING give — rub(x) → C·viewport asymptotically — so it "pushes and pushes
-    // until you can't scroll any further", then springs back on release.
-    // Tight rubber-band: overscroll asymptotes to edgeMax px (not a whole viewport),
-    // following the finger at edgePull right at the edge then giving less and less.
-    if (JELLY.edgeBounce) {
-      const A = JELLY.edgeMax, rub = x => A * x / (x + A / JELLY.edgePull);
-      SC.y = SC._raw < 0 ? -rub(-SC._raw) : (SC._raw > SC.max ? SC.max + rub(SC._raw - SC.max) : SC._raw);
-    } else {
-      /* No give at all past an edge. _raw keeps tracking the finger so that reversing
-         direction picks up exactly where the content is, rather than needing to "unwind"
-         a phantom overscroll first. */
-      SC.y = SC._raw < 0 ? 0 : (SC._raw > SC.max ? SC.max : SC._raw);
-    }
-    const now = _now(), dts = (now - SC.pts) / 1000; SC.pts = now;
-    if (dts > 0) SC.vy = -move / dts;
-    SC.kick();
-  }, { passive: true });
-  const end = () => { SC._lastTouch = _now(); if (SC.axis === 1) { SC.drag = false; SC.kick(); } SC.axis = 0; };
-  vp.addEventListener('touchend', end, { passive: true });
-  vp.addEventListener('touchcancel', end, { passive: true });
-  vp.addEventListener('wheel', e => {                     // desktop / trackpad
-    if (_scrollOff()) return;
-    SC.measure(); SC.smooth = false; SC.vy = 0;
-    SC.y = Math.max(0, Math.min(SC.max, SC.y + e.deltaY)); SC.kick();
-  }, { passive: true });
-  if (!window._scResize) {                                // keep position sensible when the keyboard/viewport resizes
+  /* A finger down counts as "busy" before the first scroll event, so a background
+     re-render cannot yank the view to the bottom the instant you touch the screen. */
+  const touch = () => { SC._lastTouch = _now(); };
+  vp.addEventListener('touchstart', touch, { passive: true });
+  vp.addEventListener('touchend', touch, { passive: true });
+  /* The KEYBOARD. When it opens the visual viewport shrinks, and a reader who was at the
+     newest message must stay there rather than have it slide under the composer. The
+     browser does not do this for a contained scroller, so it is still ours. `pinBottom`
+     is read BEFORE the resize lands, which is exactly why it is a remembered field. */
+  if (!window._scResize) {
     window._scResize = true;
     (window.visualViewport || window).addEventListener('resize', () => {
-      if (!SC.open()) return; const wasPinned = SC.pinBottom; SC.measure(); // pinBottom captured before re-measure
+      if (!SC.open()) return;
+      const wasPinned = SC.pinBottom;
       if (wasPinned && !SC.busy()) SC.toBottom(); else SC.reclamp();
     });
   }
-  // The content gets TALLER a beat after open as voice notes / images finish loading.
-  // Re-anchor to the bottom (if the user was pinned there and isn't scrolling) so the
-  // newest message stays in view instead of dropping below the fold ("jump to middle").
+  /* The content gets TALLER a beat after open as voice notes / images finish loading.
+     Re-anchor to the bottom if the user was pinned there and is not scrolling, so the
+     newest message stays in view instead of dropping below the fold. */
   if (window.ResizeObserver && !SC._ro) {
     const c = SC.el();
-    if (c) { SC._ro = new ResizeObserver(() => { if (!SC.open()) return; for (let i = 0; i < c.children.length; i++) { const r = c.children[i]; if (r) { r._ot = undefined; r._oh = undefined; } } SC.measure(); if (SC.pinBottom && !SC.busy()) SC.toBottom(); else SC.reclamp(); }); SC._ro.observe(c); }
+    if (c) {
+      SC._ro = new ResizeObserver(() => {
+        if (!SC.open()) return;
+        if (SC.pinBottom && !SC.busy()) SC.toBottom(); else SC.reclamp();
+      });
+      SC._ro.observe(c);
+    }
   }
 }
-// Per-bubble jelly fan + edge compression, driven by SC each frame (dv = this frame's
-// scroll delta, over = overscroll past an edge). Runs in the SAME frame as the scroll.
-function jellyRows(dv, over, dt) {
-  const el = SC.el(); if (!el) return false;
-  if (_jellyOff()) { jellyClear(el); return false; }
-  dt = dt || 1 / 60;
-  const vh = SC.h || 1, y = SC.y;
-  const w = 2 * Math.PI * JELLY.freq, k = w * w, c = 2 * JELLY.zeta * w;
-  const steps = Math.max(1, Math.min(4, Math.round(dt / (1 / 120)))), h = dt / steps;
-  const n = el.children.length, avg = (SC.max + SC.h) / Math.max(1, n); // cached content height
-  const lo = Math.max(0, Math.floor((y - vh) / avg)), hi = Math.min(n, Math.ceil((y + 2 * vh) / avg));
-  let alive = false;
-  for (let i = lo; i < hi; i++) {
-    const r = el.children[i]; if (!r || r.nodeType !== 1) continue;
-    // Cache each row's layout position once (it doesn't move while scrolling). New rows
-    // from a re-render are fresh nodes with no cache, so this self-invalidates on render.
-    let ot = r._ot; if (ot === undefined) { ot = r._ot = r.offsetTop; r._oh = r.offsetHeight; }
-    const rc = (ot - y) + r._oh / 2;                       // row centre within the viewport
-    if (rc < -140 || rc > vh + 140) { if (r._jy) jellyRest(r); continue; } // off-screen → rest
-    let x = r._jy || 0, v = r._jv || 0;
-    if (dv) {                                              // directional fan: tight leading edge, stretched trailing
-      const tNorm = dv > 0 ? (rc / vh) : (1 - rc / vh);
-      x += dv * (JELLY.base + JELLY.span * Math.max(0, Math.min(1, tNorm)));
-    }
-    if (Math.abs(over) > 0.5) {                            // edge rubber-band: bunch toward the pulled edge
-      const f = Math.max(0, Math.min(1, rc / vh));
-      let weight = over > 0 ? (1 - f) : f; if (!JELLY.edgeCompress) weight = 1 - weight;
-      x += (over * (0.34 + 0.66 * weight) - x) * 0.3;
-    }
-    for (let s = 0; s < steps; s++) { const a = -k * x - c * v; v += a * h; x += v * h; } // underdamped spring → bounce
-    if (x > JELLY.max) x = JELLY.max; else if (x < -JELLY.max) x = -JELLY.max;
-    r._jy = x; r._jv = v;
-    if (Math.abs(x) < 0.1 && Math.abs(v) < 0.8 && Math.abs(over) < 0.5) jellyRest(r);
-    else { r.style.transform = 'translate3d(0,' + x.toFixed(2) + 'px,0)'; alive = true; } // 3d → composite (no will-change churn)
-  }
-  return alive;
-}
+
 function jellyRest(r) {
   r._jy = 0; r._jv = 0;
   if (r.style.transform) r.style.transform = '';
