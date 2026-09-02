@@ -18,6 +18,7 @@
  * absence.
  */
 const { chromium } = require(process.env.PW ? process.env.PW + '/node_modules/playwright-core' : 'playwright-core');
+const { PNG } = require(process.env.PW ? process.env.PW + '/node_modules/pngjs' : 'pngjs');
 const CHROME = process.env.CHROME || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const BASE = process.env.BASE || 'http://localhost:3262';
 
@@ -69,6 +70,70 @@ const BASE = process.env.BASE || 'http://localhost:3262';
   say(Math.abs(gapL - gapR) <= 1, `the gaps between them match (${gapL} / ${gapR})`);
   say(geo.back.l === geo.vw - geo.more.r, `and the row is inset evenly from both edges (${geo.back.l} / ${geo.vw - geo.more.r})`);
   say(geo.back.w === geo.back.h && geo.more.w === geo.more.h, 'both end buttons are true circles');
+
+  /* 1a. THE TOP FADE — run FIRST, while the thread is untouched: it prepends a probe
+         element and scrolls to the top, and anything that re-renders the thread would
+         wipe it (an earlier ordering did exactly that and read a ramp of 0).
+         THE TOP FADE, and this is the one the owner cared most about: it used to hold the
+         page colour solid and then step to clear over a short stretch — "a small tiny part
+         where it shifts". It has to darken the way the BOTTOM one does, gradually, over a
+         long run.
+         Measured on real pixels, and deterministically: a tall white block is dropped in at
+         the top of the thread, so the ramp being measured is the gradient's own alpha
+         rather than whatever message happened to be there. The number that matters is how
+         far the brightness takes to travel from a quarter-lit to three-quarters-lit —
+         short means a step, long means a fade. */
+  const fade = await p.evaluate(async () => {
+    const th = document.getElementById('acThread');
+    const d = document.createElement('div');
+    d.id = '__fadeprobe'; d.style.cssText = 'height:420px;background:#fff;margin:0 -14px;';
+    th.prepend(d); SC.jumpTo(0);
+    await new Promise(r => setTimeout(r, 400));
+    return { top: Math.round(d.getBoundingClientRect().top),
+      scrimH: parseFloat(getComputedStyle(document.getElementById('acThreadScreen'), '::before').height) };
+  });
+  const shot = PNG.sync.read(await p.screenshot());
+  const colX = Math.round(195 * 2);                       // mid-screen, inside the white block
+  const lum = (y) => shot.data[(shot.width * Math.round(y * 2) + colX) * 4];
+  let lo = null, hi = null;
+  for (let y = fade.top; y < fade.top + 320; y++) {
+    const v = lum(y);
+    if (lo === null && v >= 64) lo = y;                   // a quarter of the way to white
+    if (hi === null && v >= 191) { hi = y; break; }       // three quarters
+  }
+  const ramp = (lo !== null && hi !== null) ? hi - lo : -1;
+  say(fade.scrimH >= 170, `the fade runs a long way down the screen (${fade.scrimH}px, was ~108)`);
+  say(ramp >= 45, `and darkens GRADUALLY rather than stepping (${ramp}px from a quarter-lit to three-quarters — a step would be under 25)`);
+  await p.evaluate(() => { document.getElementById('__fadeprobe')?.remove(); });
+
+
+  /* 1b. Each shape carries a thin rim (owner). This is NOT a break with "solid, never
+         outlined" — a dark-grey fill plus a hairline IS the app's own secondary-button
+         treatment, and that is what these three are. */
+  const rims = await p.evaluate(() => {
+    const w = (s) => parseFloat(getComputedStyle(document.querySelector(s)).borderTopWidth) || 0;
+    return { back: w('.ac-h3-btn'), pill: w('.ac-h3-pill'), more: w('#acThreadMenuBtn') };
+  });
+  say(rims.back >= 1 && rims.pill >= 1 && rims.more >= 1,
+    `all three shapes carry a thin rim (${rims.back} / ${rims.pill} / ${rims.more})`);
+
+  /* 1c. The name is WHITE, and said so explicitly. A <button> does not inherit colour, and
+         on iOS Safari its default text is the system BLUE — which is why the name came out
+         blue on a real phone while every headless screenshot showed it white. Checked
+         against the accent so a regression to blue fails rather than passes. */
+  const nm = await p.evaluate(() => {
+    const hex = (c) => { const m = c.match(/\d+/g); return m ? '#' + m.slice(0,3).map(n => (+n).toString(16).padStart(2,'0')).join('') : c; };
+    return { name: hex(getComputedStyle(document.getElementById('acPeerName')).color),
+      accent: getComputedStyle(document.body).getPropertyValue('--accent').trim().toLowerCase() };
+  });
+  say(nm.name !== nm.accent, `the name is not the accent blue (${nm.name})`);
+  say(/^#(f|e|d)/.test(nm.name), `it is a plain light colour (${nm.name})`);
+
+  /* 1d. The ⋯ lies FLAT, as drawn — three dots side by side, not stacked. */
+  const dots = await p.evaluate(() => [...document.querySelectorAll('#acThreadMenuBtn svg circle')]
+    .map(c => ({ x: +c.getAttribute('cx'), y: +c.getAttribute('cy') })));
+  say(dots.length === 3 && dots.every(d => d.y === dots[0].y) && new Set(dots.map(d => d.x)).size === 3,
+    `the ⋯ is flat, not stacked (${dots.map(d => d.x + ',' + d.y).join(' ')})`);
 
   /* 2. IT IS NOT A BAR. No fill of its own, no divider. */
   say(/rgba\(0, 0, 0, 0\)|transparent/.test(geo.headBg), `the header paints no bar behind the shapes (${geo.headBg})`);
@@ -133,10 +198,12 @@ const BASE = process.env.BASE || 'http://localhost:3262';
       sub: document.getElementById('acPeerHandle').textContent };
     return out;
   });
-  say(pres.on.online && !pres.on.hidden, 'online shows a green dot');
+  say(!pres.on.hidden, 'online shows a green dot');
   say(!pres.on.subShown, 'and drops the second line, so the name centres in the pill — as drawn');
-  say(!pres.off.online && !pres.off.hidden, 'offline shows a grey dot');
-  say(/last seen/i.test(pres.off.sub), `with "Last seen …" back under the name ("${pres.off.sub}")`);
+  /* NO grey dot (owner): away is said by "Last seen …" under the name, and a second, dimmer
+     signal for the same fact only read as a smudge. */
+  say(pres.off.hidden, 'offline shows NO dot at all');
+  say(/last seen/i.test(pres.off.sub), `just "Last seen …" under the name ("${pres.off.sub}")`);
 
   /* 7. The floating stack GROWS when the in-chat search opens, and the padding follows it —
         otherwise the search bar would cover the newest messages. */
@@ -164,6 +231,31 @@ const BASE = process.env.BASE || 'http://localhost:3262';
   });
   say(comp.mic === comp.accent, `the mic is the accent blue (${comp.mic})`);
   say(comp.send === comp.mic, `and send is the same blue, so it does not flip colour as you type (${comp.send})`);
+  const inboxH = await p.evaluate(() => Math.round(document.querySelector('#acThreadScreen .msg-inbox').getBoundingClientRect().height));
+  say(inboxH >= 50, `the message box sits taller than the flat original (${inboxH}px, was 44)`);
+
+  /* Calling is the menu's own FIRST SECTION, drawn as a grouped block rather than two loose
+     rows above a hairline. It is absent only where there is genuinely nobody to call — a
+     chat with yourself — which is why it looked missing in a self-chat screenshot. */
+  const callGrp = await p.evaluate(async () => {
+    document.getElementById('acThreadMenuBtn').click();
+    await new Promise(r => setTimeout(r, 400));
+    const g = document.querySelector('#acHeadMenuSheet .mm-group');
+    const first = document.querySelector('#acHeadMenuSheet .mm-item .mm-label');
+    const out = { has: !!g, rows: g ? [...g.querySelectorAll('.mm-label')].map(x => x.textContent.trim()) : [],
+      firstRow: first ? first.textContent.trim() : null,
+      r: g ? parseFloat(getComputedStyle(g).borderTopLeftRadius) : 0,
+      rowR: g ? parseFloat(getComputedStyle(g.querySelector('.mm-item')).borderTopLeftRadius) : 0,
+      pad: g ? parseFloat(getComputedStyle(g).paddingTop) : 0,
+      rowH: g ? Math.round(g.querySelector('.mm-item').getBoundingClientRect().height) : 0 };
+    document.body.click();
+    return out;
+  });
+  say(callGrp.has && callGrp.rows.join(' / ') === 'Voice call / Video call',
+    `the ⋯ menu opens with calling as its own section (${callGrp.rows.join(' / ')})`);
+  say(callGrp.firstRow === 'Voice call', `and it is the FIRST thing in the menu (${callGrp.firstRow})`);
+  say(Math.abs(callGrp.r - (Math.min(callGrp.rowR, callGrp.rowH / 2) + callGrp.pad)) <= 1,
+    `the section's corner hugs its rows (${callGrp.r} = ${Math.min(callGrp.rowR, callGrp.rowH / 2)} + ${callGrp.pad})`);
 
   /* 9. The attach menu: Camera · Photos · Files, big round discs. */
   const att = await p.evaluate(async () => {
@@ -180,6 +272,50 @@ const BASE = process.env.BASE || 'http://localhost:3262';
   say(att.rows3.join(' · ') === 'Camera · Photos · Files', `the menu leads with ${att.rows3.join(' · ')}`);
   say(att.total >= 18, `and still carries everything else (${att.total} rows)`);
   say(att.disc >= 44, `the icon discs are the bigger size (${att.disc}px)`);
+
+  /* 9b. It OPENS SHORT — five options and a "More" (owner). Eighteen rows at this size was
+         a wall. More opens the rest out and takes itself away; re-opening starts short
+         again, or the second open would jump straight to the full list. */
+  const aa = await p.evaluate(async () => {
+    const sh = document.getElementById('acAttachMenu');
+    document.querySelector('#acThreadScreen .msg-inbox .msg-attach').click();
+    await new Promise(r => setTimeout(r, 450));
+    const vis = () => [...sh.querySelectorAll('.aatile')].filter(r => r.offsetParent !== null)
+      .map(r => r.querySelector('.aat-l').textContent.trim());
+    const box = sh.getBoundingClientRect(), ic = sh.querySelector('.aat-ic').getBoundingClientRect();
+    const short = { rows: vis(), w: Math.round(box.width), h: Math.round(box.height),
+      cardR: parseFloat(getComputedStyle(sh).borderTopLeftRadius),
+      disc: Math.round(ic.width), insetX: Math.round(ic.left - box.left), insetY: Math.round(ic.top - box.top) };
+    sh.querySelector('.aa-more').click();
+    await new Promise(r => setTimeout(r, 600));
+    const long = { rows: vis().length, h: Math.round(sh.getBoundingClientRect().height),
+      moreGone: sh.querySelector('.aa-more').offsetParent === null };
+    // close and reopen — it must come back short
+    sh.classList.add('hidden');
+    document.querySelector('#acThreadScreen .msg-inbox .msg-attach').click();
+    await new Promise(r => setTimeout(r, 450));
+    const again = vis().length;
+    sh.classList.add('hidden');
+    return { short, long, again };
+  });
+  say(aa.short.rows.length === 6 && aa.short.rows[5] === 'More',
+    `it opens at five options and a More (${aa.short.rows.join(' · ')})`);
+  say(aa.long.rows > aa.short.rows.length && aa.long.h > aa.short.h,
+    `More opens the rest out (${aa.short.rows.length} rows / ${aa.short.h}px → ${aa.long.rows} / ${aa.long.h}px)`);
+  say(aa.long.moreGone, 'and takes itself away once everything is showing');
+  say(aa.again === 6, `re-opening starts short again (${aa.again} rows)`);
+  say(aa.short.w <= 270, `it is narrower — less dead space beside the labels (${aa.short.w}px)`);
+
+  /* 9c. THE CORNERS NEST, which is the thing the owner cares most about: the card's radius
+         is the disc's radius plus the gap around it, so the corner hugs the icon instead of
+         going pointy beside it. NB the radius is on the card's OUTER edge, so its own 1px
+         border counts in that gap — being one pixel out is exactly what "less rounded, more
+         pointy" looked like. */
+  const want = aa.short.disc / 2 + aa.short.insetX;
+  say(aa.short.insetX === aa.short.insetY,
+    `the disc sits the same distance from the card's edge both ways (${aa.short.insetX} / ${aa.short.insetY})`);
+  say(Math.abs(aa.short.cardR - want) <= 1,
+    `and the card's corner is concentric with it (${aa.short.cardR} vs ${want} = ${aa.short.disc / 2} + ${aa.short.insetX})`);
   say(errs.length === 0, `no JS errors${errs.length ? ' — ' + errs[0] : ''}`);
   await ctx.close();
 

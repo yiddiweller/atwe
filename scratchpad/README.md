@@ -74,9 +74,17 @@ it, and — the one that caught a real bug on its first run — that **a tap in 
 two shapes reaches the message behind**. The stack and the header row inside it both span
 the full width, so making only the stack transparent to the pointer was not enough.
 
-It also covers the presence dot in all three states, calling having moved to the ⋯ menu
-(checked by geometry, since the buttons stay in the DOM), and Light theme, where it found two
-things that were invisible on a white page: the composer and a sent-but-unseen bubble.
+It also covers the presence dot, calling having moved to the ⋯ menu (checked by geometry,
+since the buttons stay in the DOM), and Light theme, where it found two things that were
+invisible on a white page: the composer and a sent-but-unseen bubble.
+
+**The top fade is measured on real pixels, and its ordering matters.** A tall white block is
+dropped into the thread so the ramp being measured is the gradient's own alpha rather than
+whatever message happened to be there, and the number asserted is how far the brightness
+takes to travel from a quarter-lit to three-quarters-lit — short means a step, long means a
+fade (51px now, 14px before). **That block must be prepended before anything else touches
+the thread**: an earlier ordering ran it after the menu tests and read a ramp of 0, because
+the thread had been re-rendered and the block was gone.
 
 ## How a conversation scrolls (`chatscroll.js`)
 
