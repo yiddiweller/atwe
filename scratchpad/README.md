@@ -82,6 +82,18 @@ across the middle of the conversation.
 **Smoothness itself is not measurable here** — no touch digitiser, no ProMotion display, no
 iOS momentum — so the probe asserts the thread is BUILT like the surfaces it is compared to.
 
+It also covers the **sideways time reveal**, where "not smooth" WAS measurable: the reveal
+started 12px in because the gesture's own commit threshold was not subtracted, and it
+clamped dead at its limit instead of easing. The probe samples the whole response curve.
+One of its checks had to be strengthened — **`late < early` alone passes on a hard clamp**,
+since a clamp gives late = 0 — so it also requires the reveal to still be moving at the end.
+
+`voicenote.js` covers the other half of the same screen: a note this device cannot decode
+must mark itself unplayable **on load** (`preload="metadata"` already fires the error, so
+no tap is needed) and say "Can't play" rather than showing a play button and 0:00. Only
+`MEDIA_ERR_SRC_NOT_SUPPORTED`/`DECODE` count — a **network** error is a flaky connection,
+not a broken file, and must stay retryable; that is asserted separately.
+
 **One trap worth repeating: Playwright's `colorScheme` does not flip this app's theme.**
 Atwe carries its own preference in `localStorage.atwe_theme` and follows the OS only when
 that is `'system'` — so a "both themes" run that sets `colorScheme` tests Black twice and
