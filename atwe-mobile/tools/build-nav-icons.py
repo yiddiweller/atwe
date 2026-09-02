@@ -19,6 +19,22 @@ than the four rings on purpose; normalising each glyph to the same width would
 inflate it against its neighbours. One shared box keeps the relative sizes the
 generator already settled.
 
+ON A FRESH CLONE THIS SCRIPT WILL NOT FIND ITS INPUTS, AND THAT IS EXPECTED.
+It reads `tools/nav-icons/<name>-<state>.png`, which are GENERATED and
+deliberately gitignored (a committed second copy would drift out of step with
+the masks embedded in the web app). What IS committed is everything needed to
+recreate them: the founder's own reference artwork (`ref-*.jpg`, `narch.png`)
+and the generator that traces it. So the chain is:
+
+    cd tools/nav-icons
+    PW_SCRATCH=<a dir containing node_modules/playwright-core> node build.js
+    cd - && python3 atwe-mobile/tools/build-nav-icons.py
+
+The 30 finished icons in `atwe-mobile/assets/nav/` ARE committed, so the app
+builds fine without running any of this. You only need the chain to CHANGE them
+— and never by redrawing: a hand-drawn pass was tried once and rejected, close
+in idea and wrong in every detail.
+
     python3 tools/build-nav-icons.py
 """
 from PIL import Image
