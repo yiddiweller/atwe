@@ -1,3 +1,4 @@
+import { createContext, useContext } from 'react';
 import { View, Pressable, StyleSheet, type ViewStyle, type StyleProp } from 'react-native';
 import { GlassView } from 'expo-glass-effect';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -41,6 +42,45 @@ import { useTheme } from '@/theme/ThemeProvider';
  * Liquid Glass LENSES and blooms at that width; a drawer is a solid panel. Both
  * are Apple's own division: glass on CONTROLS, plain material behind a PANEL.
  */
+/**
+ * INSIDE A SHEET, A CONTROL IS SOLID — and this is a design rule, not a fallback.
+ *
+ * Two separate reasons, and they agree:
+ *
+ *  1. **Apple's own division, one step further in.** Liquid Glass is for a
+ *     control FLOATING OVER CONTENT; a panel gets the plain material. A sheet
+ *     IS a panel — it is a place you have moved to, with the page behind it
+ *     dimmed and gone. Apple's own sheets carry filled buttons, not glass ones.
+ *
+ *  2. **There is physically nothing to sample.** React Native's `Modal`
+ *     presents its own view controller, so a `GlassView` inside one has no
+ *     backdrop and cannot refract anything. It is the reason the ⋯ menu "looked
+ *     fake" (round fifteen) — that one was fixed by moving it OUT of the Modal,
+ *     which is the right answer for a small popover but NOT for a native sheet:
+ *     rebuilding a `pageSheet` in-tree would throw away the real iOS sheet
+ *     presentation, its swipe-to-dismiss and its safe areas.
+ *
+ * So a sheet's controls are honestly solid rather than dishonestly glassy.
+ * Wrap a Modal's contents in `<SheetGlass>` and every `Glass` under it paints
+ * its `fill`. A control added to a sheet later is then right by default, which
+ * is the whole point of doing this with context instead of a prop.
+ *
+ * THE REAL BUG THIS FIXED: `Glass` only ever painted `fill` when `plain` was
+ * set, so an UNSELECTED `GlassChip` inside a sheet drew empty glass with
+ * nothing behind it — a filter row of bare labels with no capsules. Its `fill`
+ * had been passed all along and silently thrown away.
+ */
+const SheetCtx = createContext(false);
+
+export function SheetGlass({ children }: { children: React.ReactNode }) {
+  return <SheetCtx.Provider value={true}>{children}</SheetCtx.Provider>;
+}
+
+/** True when this subtree is inside a sheet, so glass must render solid. */
+export function useInSheet(): boolean {
+  return useContext(SheetCtx);
+}
+
 export function Glass({
   prominent, tint, radius, style, children, plain, fill, scheme,
 }: {
@@ -66,7 +106,15 @@ export function Glass({
    *  photograph, which is what Apple's own full-screen viewers do. */
   scheme?: 'light' | 'dark';
 }) {
-  if (plain) {
+  /* A sheet has no backdrop to refract, so glass there is solid — see the note
+     on `SheetGlass`. This is the ONLY thing that turns glass off, and it turns
+     it off by CONTEXT, never by asking whether the material exists. */
+  /* CALLED UNCONDITIONALLY. `plain || useInSheet()` short-circuits, so a
+     component whose `plain` flips would call the hook on one render and not the
+     next — the classic rules-of-hooks crash. */
+  const inSheet = useInSheet();
+  const solid = plain || inSheet;
+  if (solid) {
     return <View style={[{ borderRadius: radius }, fill, style]}>{children}</View>;
   }
   return (
@@ -128,6 +176,11 @@ export function GlassSurface({
          a lighter GLASS, and what tints it is whatever is scrolling behind. */
       tint={light ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.22)'}
       scheme={light ? 'light' : 'dark'}
+      /* Only ever painted inside a sheet (see `SheetGlass`). Without it a disc
+         on a sheet would be an icon with no button around it — glass with no
+         backdrop draws nothing. Over a photograph it stays dark, matching the
+         white glyph it carries. */
+      fill={{ backgroundColor: overContent ? 'rgba(0,0,0,0.42)' : c.s2 }}
       style={[{ alignItems: 'center', justifyContent: 'center' }, style]}
     >
       {children}

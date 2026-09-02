@@ -20,6 +20,7 @@ import {
 } from '@/api/bizops';
 import { useAuth } from '@/auth/AuthProvider';
 import { haptics } from '@/lib/haptics';
+import { SheetGlass } from '@/components/Glass';
 
 /**
  * People who help run the business, and the businesses you help run. Two sides
@@ -269,7 +270,7 @@ function InviteSheet({ visible, perms, onClose, onDone }: {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}><SheetGlass>
       <Screen edges={[]}>
         <PageHeader title="Invite somebody" />
         <ScrollView contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 60 }, chromePad.header]} keyboardShouldPersistTaps="handled">
@@ -335,7 +336,7 @@ function InviteSheet({ visible, perms, onClose, onDone }: {
             disabled={username.trim().replace(/^@/, '').length < 2} />
         </ScrollView>
       </Screen>
-    </Modal>
+    </SheetGlass></Modal>
   );
 }
 

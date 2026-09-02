@@ -16,6 +16,7 @@ import {
 import { useWallet, money } from '@/api/wallet';
 import { useCart } from '@/api/cart';
 import { haptics } from '@/lib/haptics';
+import { SheetGlass } from './Glass';
 
 /**
  * Checkout for one listing.
@@ -151,7 +152,7 @@ export function CheckoutSheet({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}><SheetGlass>
       <View style={[styles.wrap, { backgroundColor: c.bg }]}>
         <View style={[styles.head, { borderBottomColor: c.border }]}>
           <Pressable onPress={onClose} hitSlop={10} style={styles.x}
@@ -329,7 +330,7 @@ export function CheckoutSheet({
           </>
         )}
       </View>
-    </Modal>
+    </SheetGlass></Modal>
   );
 }
 

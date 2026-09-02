@@ -17,6 +17,7 @@ import { useMyListings } from '@/api/selling';
 import { money } from '@/api/wallet';
 import { mediaUri } from '@/lib/media';
 import { haptics } from '@/lib/haptics';
+import { SheetGlass } from '@/components/Glass';
 
 /**
  * Several of your own things sold together for one price. The saving IS the
@@ -142,7 +143,7 @@ function NewBundle({ visible, onClose, onDone }: { visible: boolean; onClose: ()
   const valid = name.trim().length >= 2 && chosen.length >= 2 && Number.isFinite(cents) && cents > 0;
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}><SheetGlass>
       <Screen edges={[]}>
         <PageHeader title="New bundle" />
         <ScrollView contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 60 }, chromePad.header]} keyboardShouldPersistTaps="handled">
@@ -226,7 +227,7 @@ function NewBundle({ visible, onClose, onDone }: { visible: boolean; onClose: ()
           <Button title="Make the bundle" onPress={go} loading={busy} disabled={!valid} />
         </ScrollView>
       </Screen>
-    </Modal>
+    </SheetGlass></Modal>
   );
 }
 

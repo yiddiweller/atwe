@@ -6,6 +6,12 @@ _A living checkpoint so work can resume seamlessly. Update it as phases land._
 > file top-to-bottom and continue from **Next up** — same phased, hand-held,
 > one-step-at-a-time style. (Also registered in the repo's `CLAUDE.md`.)
 
+> ## ⏸ THE APP IS PAUSED — jump to **"STOPPED HERE"** at the very bottom first.
+> The work is finished and committed; it is stopped on **EAS build credits**, not
+> on code. The founder's phone runs **0.13** and the tree is **0.19.0**, so six
+> rounds of work have never been seen on a device. That section says what to do
+> first, in order, and names the two decisions of theirs not to reverse.
+
 ## Where we are (current)
 
 - **App:** `atwe-mobile/` — native iOS (and Android) client, **Expo SDK 54 +
@@ -2681,3 +2687,98 @@ still reachable, both menus anchored, and the AI composer's 7 checks.
 **Not shipped.** The founder asked to stop here: *"will stop here because I
 don't think we have enough credit. I didn't get any updates since the 0.13."*
 Everything above sits on the working branch waiting for one build.
+
+### Round twenty-three — the final sweep, and where this stops
+
+The founder: *"go over the whole thing and make sure everything is perfect solid
+and done… we're gonna leave it here because we don't have enough credit."* So
+this round is an audit, not a feature, and its job is to leave the tree in a
+state a stranger can pick up cold.
+
+**The real bug it found: a sheet's controls were drawing nothing.**
+`GlassChip` had always passed a `fill`, and `Glass` only ever painted a `fill`
+when `plain` was set — so an UNSELECTED chip rendered empty glass. That is
+harmless floating over content, where the glass has something to refract. Inside
+a **sheet** it is not: React Native's `Modal` presents its own view controller,
+so a `GlassView` in one has no backdrop at all. Unselected filter chips were a
+row of bare labels with no capsules, and **every one of the 18 sheets in the app
+had a primary `Button` in the same position** — the CTA on Apply, Book, Make the
+offer, Check out, all of them.
+
+**The fix is a rule, not 18 patches.** `SheetGlass` (a context in `Glass.tsx`)
+marks a subtree as being inside a sheet, and any `Glass` under it paints its
+`fill`. All 18 Modal bodies are wrapped, so a control added to a sheet later is
+right by default.
+
+**This is NOT the fallback coming back, and the distinction is the whole point.**
+A fallback substitutes for glass when the material is unavailable. This chooses
+solid because *the context is a panel* — the same division round seventeen
+settled on (glass on CONTROLS, plain material behind a PANEL), one step further
+in. Apple's own sheets carry filled buttons. And the ⋯ menu that "looked fake"
+in round fifteen was fixed by moving it OUT of its Modal, which is right for a
+small popover and wrong for a native `pageSheet`: rebuilding one in-tree would
+throw away the real iOS sheet presentation, its swipe-to-dismiss and its safe
+areas. **The five `transparent` overlays (MessageActions, ApplySheet, ShipSheet,
+ReasonSheet, workers' filter) COULD be moved in-tree to keep real glass. That was
+deliberately not done on a build we cannot replace** — it risks breaking working
+screens for a material nobody can see until the next TestFlight. It is the first
+thing to revisit when builds are possible again.
+
+**A hook bug went in and came straight back out**, worth recording because it
+would have crashed at runtime and `tsc` was happy: `const solid = plain ||
+useInSheet()` **short-circuits**, so a component whose `plain` flips calls the
+hook on one render and not the next. Call it unconditionally, always.
+
+**The probes are committed now** (`tools/probes/`, with a README and
+`run-all.sh`). They had lived only in a session scratchpad — one restart from
+being lost, the same mistake `tools/nav-icons/build.js` was rescued from. There
+is also a new `sheets.js`, because the wrap above was a text transform across 18
+files and a mangled span would swallow a sheet's body silently; it opens seven
+sheets for real and measures that the button is painted and on screen.
+`check-glass-buttons.js` gained the matching static rule — a sheet that renders
+glass and is not wrapped fails by name (self-tested).
+
+**What the audit found clean:** zero `console.log`, zero `any`, no TODOs, no
+duplicate exports that matter, and all 15 hardcoded hex are legitimate (theme
+swatches, gradients, splash constants, a native switch thumb, the push LED).
+`eas.json` and `.npmrc` are correct for a cloud build.
+
+**The one flag in the 54-screen sweep is not a bug.** `/business-analytics`
+returns 403 to a *personal* account, which is correct — the screen handles it
+and reads *"Only a business account has reach figures."*
+
+**State at the stop:** `tsc` clean · nine offline checkers pass · 54 screens × 2
+themes · 8 browser probes · everything committed and pushed to
+`claude/claude-md-docs-cajkf9`. **Nothing shipped.**
+
+## ⏸ STOPPED HERE — read this first when picking the app back up
+
+**The app on the founder's phone is 0.13. The tree is 0.19.0.** Builds 0.14
+through 0.19 never reached them, almost certainly because the free EAS build
+credits ran out around then. **Everything from round eighteen onward — the ＋
+removal, the smeared-edge fix, the sidebar, the status-bar band, the 88pt dead
+space, iOS 26 / real glass, and this audit — has never been seen on a device.**
+
+So the first three moves, in order:
+
+1. **Check expo.dev → Builds.** Find out what actually happened to 0.14–0.19:
+   failed, cancelled, or never queued. Do not assume.
+2. **Get credits, then ship ONE build** (`git push origin
+   claude/claude-md-docs-cajkf9:ship --force`). It carries six rounds of work at
+   once, so expect the founder to have a lot to react to — walk them through it
+   one screen at a time, as always.
+3. **Only then** judge the material. The web preview cannot render Liquid Glass
+   or a native blur; every "does it look like Apple's?" question is unanswerable
+   until it is on a phone.
+
+**Two decisions of the founder's that must not be quietly reversed:**
+- **iOS 26 minimum.** They chose real glass over reach, twice, in plain words.
+  The App Store will not offer the app below 26. If reach ever matters more,
+  raise it with them — do not reinstate a fallback.
+- **No shipping without their word.** `ship` is the trigger and it is theirs.
+
+**Still open, and none of it is blocked on code:** placing a call in Beam needs
+`react-native-webrtc`; Atwe Pro on iOS needs a decision about Apple's 15–30%
+cut; Android needs a $25 Play account; a public launch needs the Apple
+enrolment moved Individual → Organization; and Railway still has no database
+backups.

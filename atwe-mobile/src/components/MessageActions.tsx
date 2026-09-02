@@ -1,6 +1,6 @@
 import { Modal, View, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { GlassSurface } from './Glass';
+import { GlassSurface, SheetGlass } from './Glass';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from './Text';
@@ -45,13 +45,15 @@ export function MessageActions({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}><SheetGlass>
       <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close">
         {/* The card stops the press so a tap INSIDE it never dismisses. */}
         <Pressable style={[styles.dock, { paddingBottom: insets.bottom + 12 }]} onPress={() => {}}>
-          {/* The tapback bar floats over the conversation, so it is real glass
-              rather than a grey slab — iMessage's own material. The emoji
-              discs inside it stay transparent; only the chosen one fills. */}
+          {/* The tapback bar is SOLID, not glass, and that is deliberate: this
+              is a sheet, and a sheet is a panel with the conversation dimmed
+              away behind it — there is nothing left to refract. `SheetGlass`
+              (see Glass.tsx) is what makes that automatic. The emoji discs
+              inside it stay transparent; only the chosen one fills. */}
           <GlassSurface radius={radius.pill} style={styles.reacts}>
             {REACTIONS.map((e) => {
               const on = myReaction === e;
@@ -87,7 +89,7 @@ export function MessageActions({
           </BlurView>
         </Pressable>
       </Pressable>
-    </Modal>
+    </SheetGlass></Modal>
   );
 }
 

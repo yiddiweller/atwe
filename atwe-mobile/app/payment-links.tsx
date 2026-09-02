@@ -13,6 +13,7 @@ import { usePaymentLinks, createPaymentLink, setPaymentLinkActive, type PaymentL
 import { money } from '@/api/wallet';
 import { API_URL } from '@/api/config';
 import { haptics } from '@/lib/haptics';
+import { SheetGlass } from '@/components/Glass';
 
 /**
  * A link that takes money. Give it to anybody — no invoice, no back and forth.
@@ -138,7 +139,7 @@ function NewLink({ visible, onClose, onDone }: { visible: boolean; onClose: () =
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}><SheetGlass>
       <Screen edges={[]}>
         <PageHeader title="New payment link" />
         <View style={{ padding: spacing.gutter }}>
@@ -163,7 +164,7 @@ function NewLink({ visible, onClose, onDone }: { visible: boolean; onClose: () =
           <Button title="Make the link" onPress={go} loading={busy} />
         </View>
       </Screen>
-    </Modal>
+    </SheetGlass></Modal>
   );
 }
 

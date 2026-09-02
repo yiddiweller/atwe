@@ -14,6 +14,7 @@ import { useServices, useSlots, bookAppointment, type Service } from '@/api/appo
 import { HapticInput } from '@/components/HapticInput';
 import { GlassChip } from '@/components/GlassChip';
 import { haptics } from '@/lib/haptics';
+import { SheetGlass } from './Glass';
 
 /**
  * Book a business.
@@ -101,7 +102,7 @@ export function BookSheet({ visible, onClose, businessId, businessName }: {
   const reason = slotQ.data?.reason;
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}><SheetGlass>
       <View style={[styles.wrap, { backgroundColor: c.bg }]}>
         <View style={[styles.head, { borderBottomColor: c.border }]}>
           <Pressable onPress={onClose} hitSlop={10} style={styles.x}
@@ -204,7 +205,7 @@ export function BookSheet({ visible, onClose, businessId, businessName }: {
           </>
         )}
       </View>
-    </Modal>
+    </SheetGlass></Modal>
   );
 }
 

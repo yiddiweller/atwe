@@ -14,6 +14,7 @@ import { spacing } from '@/theme/tokens';
 import { usePools, createPool, type Pool } from '@/api/money';
 import { money } from '@/api/wallet';
 import { haptics } from '@/lib/haptics';
+import { SheetGlass } from '@/components/Glass';
 
 /**
  * Money pools — a shareable goal anybody can chip in toward. Different from a
@@ -122,7 +123,7 @@ function NewPool({ visible, onClose, onDone }: { visible: boolean; onClose: () =
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}><SheetGlass>
       <Screen edges={[]}>
         <PageHeader title="Start a pool" />
         <View style={{ padding: spacing.gutter }}>
@@ -156,7 +157,7 @@ function NewPool({ visible, onClose, onDone }: { visible: boolean; onClose: () =
           <Button title="Start it" onPress={go} loading={busy} disabled={title.trim().length < 2} />
         </View>
       </Screen>
-    </Modal>
+    </SheetGlass></Modal>
   );
 }
 

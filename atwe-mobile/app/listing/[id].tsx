@@ -11,7 +11,7 @@ import {
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { GlassIcon } from '@/components/Glass';
+import { GlassIcon, SheetGlass } from '@/components/Glass';
 import { Text } from '@/components/Text';
 import { Screen } from '@/components/Screen';
 import { ChromeButton, ChromeBar, useFloatingChrome } from '@/components/Chrome';
@@ -349,7 +349,7 @@ function OfferSheet({ visible, onClose, productId, name, asking }: {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}><SheetGlass>
       <Screen edges={['top']}>
         <View style={[styles.head, { paddingHorizontal: spacing.gutter }]}>
           <Pressable onPress={onClose} hitSlop={10} style={styles.back} accessibilityLabel="Close">
@@ -386,7 +386,7 @@ function OfferSheet({ visible, onClose, productId, name, asking }: {
           <Button title="Send the offer" onPress={send} loading={busy} disabled={!ok} />
         </View>
       </Screen>
-    </Modal>
+    </SheetGlass></Modal>
   );
 }
 

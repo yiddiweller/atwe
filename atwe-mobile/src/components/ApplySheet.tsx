@@ -12,6 +12,7 @@ import { radius, spacing } from '@/theme/tokens';
 import { applyToJob, aiCoverNote, type Job } from '@/api/jobs';
 import { haptics } from '@/lib/haptics';
 import { useKeyboardHeight } from '@/lib/keyboard';
+import { SheetGlass } from './Glass';
 
 /**
  * Easy Apply.
@@ -83,7 +84,7 @@ export function ApplySheet({ visible, job, onClose, onApplied }: {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}><SheetGlass>
       <View style={[{ flex: 1 }, { paddingBottom: kb }]}>
         <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close">
           <Pressable style={[styles.card, { backgroundColor: c.bg }]} onPress={() => {}}>
@@ -171,7 +172,7 @@ export function ApplySheet({ visible, job, onClose, onApplied }: {
           </Pressable>
         </Pressable>
       </View>
-    </Modal>
+    </SheetGlass></Modal>
   );
 }
 

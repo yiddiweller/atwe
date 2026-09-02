@@ -111,8 +111,41 @@ for (const root of ROOTS) {
   }
 }
 
+
+/* ── Every glass-bearing sheet is wrapped in <SheetGlass> ───────────────────
+   A `Modal` presents its own view controller, so a `GlassView` inside one has
+   no backdrop and refracts nothing — it renders as a flat pane, and an
+   UNSELECTED GlassChip renders as no capsule at all. `SheetGlass` makes the
+   controls in a sheet honestly solid. A new sheet must be wrapped or its
+   buttons come out wrong, so this is checked mechanically rather than
+   remembered.
+   Self-test: drop the wrapper from any sheet and this fails by name. */
+{
+  const GLASSY = /<(Glass|GlassIcon|GlassSurface|GlassView|GlassChip|Button|ChromeButton|ChromeSurface|AuthButton|GlassComposer|Shelf)\b/;
+  for (const f of ROOTS.filter(fs.existsSync).flatMap((r) => walk(r))) {
+    const src = fs.readFileSync(f, 'utf8');
+    let i = 0;
+    while ((i = src.indexOf('<Modal', i)) >= 0) {
+      let depth = 1, j = src.indexOf('>', i), k = j;
+      while (depth > 0) {
+        const open = src.indexOf('<Modal', k + 1), close = src.indexOf('</Modal>', k + 1);
+        if (close < 0) { k = -1; break; }
+        if (open >= 0 && open < close) { depth++; k = open; } else { depth--; k = close; }
+      }
+      if (k < 0) break;
+      const body = src.slice(j + 1, k);
+      if (GLASSY.test(body) && !/^\s*<SheetGlass>/.test(body)) {
+        const line = src.slice(0, i).split('\n').length;
+        bad.push(`${f}:${line}  a sheet renders glass but is not wrapped in <SheetGlass> — ` +
+          'its buttons will be flat panes and unselected chips will have no capsule');
+      }
+      i = k;
+    }
+  }
+}
+
 if (bad.length) {
-  console.error('Round buttons that are paint, not glass:\n' + bad.map((b) => '  ' + b).join('\n'));
+  console.error('Glass problems:\n' + bad.map((b) => '  ' + b).join('\n'));
   process.exit(1);
 }
 console.log('check-glass-buttons: every round button is real glass');

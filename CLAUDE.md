@@ -16,6 +16,16 @@ from exactly there. **Keep `PROJECT-STATUS.md` updated** as each phase lands so 
 always reflects the true state, and commit + push every change to the working
 branch (`claude/claude-md-docs-cajkf9`).
 
+**⏸ As of 2 Sep 2026 the app is PAUSED on EAS build credits, not on code.** The
+tree is **0.19.0**; the founder's phone still runs **0.13**, so six rounds of
+finished work have never been seen on a device. `PROJECT-STATUS.md` opens with
+this and its **"STOPPED HERE"** section says what to do first. **Never run an EAS
+build unasked** — `git push origin claude/claude-md-docs-cajkf9:ship --force` is
+the trigger and it is the founder's to give. Committing and pushing to the
+working branch is free and always fine. The app now **requires iOS 26** (real
+Liquid Glass, no fallback — their decision, taken twice); do not reinstate a
+fallback to widen reach without asking them.
+
 **Working style (match it exactly):** the founder is non-technical. Explain in
 plain language, **one action at a time**, verify each step (they share
 screenshots), stay patient and warm, never assume tooling familiarity, and give

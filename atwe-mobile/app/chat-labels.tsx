@@ -12,6 +12,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useChatLabels, createChatLabel, deleteChatLabel, type ChatLabel } from '@/api/beam';
 import { haptics } from '@/lib/haptics';
+import { SheetGlass } from '@/components/Glass';
 
 /**
  * Folders for conversations — "To ship", "Waiting on a quote". A business with
@@ -102,7 +103,7 @@ function NewLabel({ visible, onClose, onDone }: { visible: boolean; onClose: () 
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}><SheetGlass>
       <Screen edges={[]}>
         <PageHeader title="New label" />
         <View style={{ padding: spacing.gutter }}>
@@ -116,7 +117,7 @@ function NewLabel({ visible, onClose, onDone }: { visible: boolean; onClose: () 
           <Button title="Make the label" onPress={go} loading={busy} disabled={name.trim().length < 1} />
         </View>
       </Screen>
-    </Modal>
+    </SheetGlass></Modal>
   );
 }
 

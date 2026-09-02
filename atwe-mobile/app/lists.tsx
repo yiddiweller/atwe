@@ -13,6 +13,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useLists, createList, deleteList, type UserList } from '@/api/social';
 import { haptics } from '@/lib/haptics';
+import { SheetGlass } from '@/components/Glass';
 
 /**
  * A curated timeline — the people you want to read without unfollowing anybody
@@ -103,7 +104,7 @@ function NewList({ visible, onClose, onDone }: { visible: boolean; onClose: () =
     finally { setBusy(false); }
   };
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}><SheetGlass>
       <Screen edges={[]}>
         <PageHeader title="New list" />
         <View style={{ padding: spacing.gutter }}>
@@ -121,7 +122,7 @@ function NewList({ visible, onClose, onDone }: { visible: boolean; onClose: () =
           <Button title="Make the list" onPress={go} loading={busy} disabled={name.trim().length < 1} />
         </View>
       </Screen>
-    </Modal>
+    </SheetGlass></Modal>
   );
 }
 

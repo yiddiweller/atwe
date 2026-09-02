@@ -17,6 +17,7 @@ import { offerState } from '../offers';
 import { money } from '@/api/wallet';
 import { mediaUri } from '@/lib/media';
 import { haptics } from '@/lib/haptics';
+import { SheetGlass } from '@/components/Glass';
 
 /**
  * One offer. Whose move it is decides what the screen offers — the server works
@@ -187,7 +188,7 @@ function CounterSheet({ visible, asking, current, onClose, onCounter }: {
   const ok = Number.isFinite(cents) && cents > 0 && cents !== current;
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}><SheetGlass>
       <Screen edges={[]}>
         <PageHeader title="Counter" />
         <View style={{ padding: spacing.gutter }}>
@@ -213,7 +214,7 @@ function CounterSheet({ visible, asking, current, onClose, onCounter }: {
           <Button title="Send the counter" onPress={() => { onCounter(cents); setV(''); }} disabled={!ok} />
         </View>
       </Screen>
-    </Modal>
+    </SheetGlass></Modal>
   );
 }
 

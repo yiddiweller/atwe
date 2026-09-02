@@ -15,6 +15,7 @@ import {
 } from '@/api/seller';
 import { money } from '@/api/wallet';
 import { haptics } from '@/lib/haptics';
+import { SheetGlass } from '@/components/Glass';
 
 /**
  * Discount codes a seller issues. Buyers could already TYPE one at checkout;
@@ -165,7 +166,7 @@ function NewCoupon({ visible, onClose, onDone }: { visible: boolean; onClose: ()
   const valid = /^[A-Z0-9]{3,24}$/.test(code.trim().toUpperCase()) && parseFloat(value) > 0;
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}><SheetGlass>
       <Screen edges={[]}>
         <PageHeader title="New discount code" />
         <View style={{ padding: spacing.gutter }}>
@@ -231,7 +232,7 @@ function NewCoupon({ visible, onClose, onDone }: { visible: boolean; onClose: ()
           <Button title="Make the code" onPress={go} loading={busy} disabled={!valid} />
         </View>
       </Screen>
-    </Modal>
+    </SheetGlass></Modal>
   );
 }
 

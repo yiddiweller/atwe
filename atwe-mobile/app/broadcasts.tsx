@@ -14,6 +14,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { useBroadcasts, createBroadcast, deleteBroadcast, useContacts, type BroadcastList } from '@/api/beam';
 import { haptics } from '@/lib/haptics';
+import { SheetGlass } from '@/components/Glass';
 
 /**
  * A saved set of people you send to at once — and each of them gets it as a
@@ -132,7 +133,7 @@ function NewList({ visible, onClose, onDone }: { visible: boolean; onClose: () =
   const rows = contacts.data?.contacts ?? [];
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}><SheetGlass>
       <Screen edges={[]}>
         <PageHeader title="New broadcast list" />
         <View style={{ paddingHorizontal: spacing.gutter }}>
@@ -192,7 +193,7 @@ function NewList({ visible, onClose, onDone }: { visible: boolean; onClose: () =
             disabled={name.trim().length < 2 || picked.length === 0} />
         </View>
       </Screen>
-    </Modal>
+    </SheetGlass></Modal>
   );
 }
 

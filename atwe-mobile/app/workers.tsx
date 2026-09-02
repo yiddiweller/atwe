@@ -23,6 +23,7 @@ import {
 import { haptics } from '@/lib/haptics';
 import { useKeyboardHeight } from '@/lib/keyboard';
 import { useAuth } from '@/auth/AuthProvider';
+import { SheetGlass } from '@/components/Glass';
 
 /**
  * The other side of the jobs marketplace — people who are open to work.
@@ -362,7 +363,7 @@ function ListingEditor({ visible, current, onClose, onSaved }: {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}><SheetGlass>
       <View style={[{ flex: 1 }, { paddingBottom: kb }]}>
         <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close">
           <Pressable style={[styles.sheet, { backgroundColor: c.bg }]} onPress={() => {}}>
@@ -444,7 +445,7 @@ function ListingEditor({ visible, current, onClose, onSaved }: {
           </Pressable>
         </Pressable>
       </View>
-    </Modal>
+    </SheetGlass></Modal>
   );
 }
 

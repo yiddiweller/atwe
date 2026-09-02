@@ -11,6 +11,7 @@ import { spacing } from '@/theme/tokens';
 import { getLabelRates, buyLabel, DEFAULT_PARCEL, type ShipRate, type Parcel } from '@/api/bizops';
 import { money } from '@/api/wallet';
 import { haptics } from '@/lib/haptics';
+import { SheetGlass } from './Glass';
 
 /**
  * Buy a real shipping label. Two steps, because that is how it actually works:
@@ -88,7 +89,7 @@ export function LabelSheet({ visible, orderId, kind = 'out', onClose, onBought }
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}><SheetGlass>
       <Screen edges={[]}>
         <PageHeader title={kind === 'return' ? 'Return label' : 'Buy a label'} />
         <ScrollView contentContainerStyle={[{ padding: spacing.gutter, paddingBottom: 60 }, chromePad.header]} keyboardShouldPersistTaps="handled">
@@ -152,7 +153,7 @@ export function LabelSheet({ visible, orderId, kind = 'out', onClose, onBought }
           )}
         </ScrollView>
       </Screen>
-    </Modal>
+    </SheetGlass></Modal>
   );
 }
 

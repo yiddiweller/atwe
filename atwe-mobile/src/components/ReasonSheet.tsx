@@ -6,6 +6,7 @@ import { Button } from './Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius, spacing } from '@/theme/tokens';
 import { HapticInput } from '@/components/HapticInput';
+import { SheetGlass } from './Glass';
 
 /**
  * "Tell us what went wrong" — a few lines of text and a confirm.
@@ -34,7 +35,7 @@ export function ReasonSheet({
   useEffect(() => { if (visible) setText(''); }, [visible]);
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onCancel}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onCancel}><SheetGlass>
       <Pressable style={styles.scrim} onPress={onCancel} accessibilityLabel="Close">
         <Pressable style={[styles.card, { backgroundColor: c.bg }]} onPress={() => {}}>
           <View style={styles.head}>
@@ -64,7 +65,7 @@ export function ReasonSheet({
           />
         </Pressable>
       </Pressable>
-    </Modal>
+    </SheetGlass></Modal>
   );
 }
 

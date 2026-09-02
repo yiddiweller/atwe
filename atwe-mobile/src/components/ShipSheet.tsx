@@ -8,6 +8,7 @@ import { radius, spacing } from '@/theme/tokens';
 import { CARRIERS, shipOrder, type Carrier } from '@/api/orders';
 import { HapticInput } from '@/components/HapticInput';
 import { haptics } from '@/lib/haptics';
+import { SheetGlass } from './Glass';
 
 /**
  * The seller marking an order sent. Carrier and tracking number are the two
@@ -44,7 +45,7 @@ export function ShipSheet({ visible, orderId, onClose, onShipped }: {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}><SheetGlass>
       <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close">
         <Pressable style={[styles.card, { backgroundColor: c.bg }]} onPress={() => {}}>
           <View style={styles.head}>
@@ -92,7 +93,7 @@ export function ShipSheet({ visible, orderId, onClose, onShipped }: {
           </View>
         </Pressable>
       </Pressable>
-    </Modal>
+    </SheetGlass></Modal>
   );
 }
 
