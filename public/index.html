@@ -9498,6 +9498,11 @@ body.light .ac-brand-logo{filter:invert(1);}
    which is why this uses overflow-x:hidden and NOT touch-action:pan-y (pan-y on
    the container would freeze those inner carousels). */
 .ac-list{flex:1;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:4px 8px 10px;}
+/* No bounce in Beam (owner) — the conversation LIST scrolls natively, so unlike the
+   thread its rubber band is the browser's own and `contain` does not stop it; `none`
+   does. Scoped to Beam on purpose: every other .ac-list (the feed, a profile, the hub)
+   keeps the behaviour it has. */
+#acListScreen .ac-list{overscroll-behavior:none;}
 
 /* ─── Bulk select: a row becomes a selectable shell (checkbox + dimmed inner),
    and a frosted action bar floats above the FAB/nav. ─── */
@@ -21047,7 +21052,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1773'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1774'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -59884,6 +59889,13 @@ const JELLY = {
   edgeMax: 90,   // MAX px you can pull/fling past an edge — the rubber band's "tightness"
                  // (smaller = tighter, less empty space before the first/last message)
   edgePull: 0.5, // how much the content follows the finger right at the edge (initial give)
+  /* OFF (owner): no rubber band in a conversation. The thread now stops dead at the first
+     and last message instead of pulling past and springing back. Everything else about the
+     scroll is untouched — the fling, its friction, and the per-bubble jelly all still run;
+     only the overshoot is gone. A switch rather than edgeMax:0 because the three edge sites
+     below then read as deliberate hard stops instead of a formula that happens to
+     collapse, and the feel can be handed back by flipping one word. */
+  edgeBounce: false,
 };
 function _now() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
 function _jellyReduced() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } }
@@ -59928,6 +59940,9 @@ const SC = {
     } else if (!this.drag) {
       for (let s = 0; s < sub; s++) {
         const oob = this.y < 0 ? 0 : (this.y > this.max ? this.max : null);
+        if (oob !== null && !JELLY.edgeBounce) {          // hard stop: sit on the edge, kill the glide
+          this.y = oob; this.vy = 0; this._bounce = null; break;
+        }
         if (oob !== null) this._bounce = oob;            // latch the edge we're bouncing to
         if (this._bounce !== null) {                     // spring back to that edge until settled (the rubber-band)
           const x = this.y - this._bounce;
@@ -59941,8 +59956,9 @@ const SC = {
     }
     // Cap how far a fast FLING can overshoot past an edge, so the rubber band stays
     // tight (and kill the outward velocity at the cap) before the spring pulls it back.
-    if (this.y < -JELLY.edgeMax) { this.y = -JELLY.edgeMax; if (this.vy < 0) this.vy = 0; }
-    else if (this.y > this.max + JELLY.edgeMax) { this.y = this.max + JELLY.edgeMax; if (this.vy > 0) this.vy = 0; }
+    const cap = JELLY.edgeBounce ? JELLY.edgeMax : 0;   // 0 = the edge IS the wall
+    if (this.y < -cap) { this.y = -cap; if (this.vy < 0) this.vy = 0; }
+    else if (this.y > this.max + cap) { this.y = this.max + cap; if (this.vy > 0) this.vy = 0; }
     const dv = this.y - this.lastY; this.lastY = this.y;
     this.pinBottom = (this.max - this.y) < 12; // track "is the user sitting at the bottom"
     this.setScrolling(this.drag || Math.abs(this.vy) > 8 || Math.abs(dv) > 0.5); // lighten composer blur while moving
@@ -59976,8 +59992,15 @@ function jellyInit(vp) {
     // until you can't scroll any further", then springs back on release.
     // Tight rubber-band: overscroll asymptotes to edgeMax px (not a whole viewport),
     // following the finger at edgePull right at the edge then giving less and less.
-    const A = JELLY.edgeMax, rub = x => A * x / (x + A / JELLY.edgePull);
-    SC.y = SC._raw < 0 ? -rub(-SC._raw) : (SC._raw > SC.max ? SC.max + rub(SC._raw - SC.max) : SC._raw);
+    if (JELLY.edgeBounce) {
+      const A = JELLY.edgeMax, rub = x => A * x / (x + A / JELLY.edgePull);
+      SC.y = SC._raw < 0 ? -rub(-SC._raw) : (SC._raw > SC.max ? SC.max + rub(SC._raw - SC.max) : SC._raw);
+    } else {
+      /* No give at all past an edge. _raw keeps tracking the finger so that reversing
+         direction picks up exactly where the content is, rather than needing to "unwind"
+         a phantom overscroll first. */
+      SC.y = SC._raw < 0 ? 0 : (SC._raw > SC.max ? SC.max : SC._raw);
+    }
     const now = _now(), dts = (now - SC.pts) / 1000; SC.pts = now;
     if (dts > 0) SC.vy = -move / dts;
     SC.kick();
@@ -61905,6 +61928,52 @@ function _recWaveStop() {
   _recAnalyser = null; _recBarEls = null;
   if (_recAC) { try { _recAC.close(); } catch (e) {} _recAC = null; }
 }
+/* ── A voice note has to play on the RECIPIENT's phone, not just the sender's ──
+   iOS Safari has no WebM decoder, so a note Chrome recorded is silent on an iPhone.
+   Chrome in turn cannot RECORD mp4/AAC, so preferring mp4 alone does not close the gap.
+   WAV (plain PCM) is the one container every browser decodes, so a WebM/Ogg recording is
+   re-encoded to WAV before it is sent. A Safari recording is already AAC and is left
+   alone, which keeps the common phone-to-phone case small.
+
+   16 kHz mono is a deliberate choice: speech carries fine there and it is 32 KB/s, so a
+   minute of audio is ~2 MB rather than the ~6 MB a 48 kHz stereo WAV would cost.
+   Any failure returns the original blob — a note that might not play beats no note. */
+function _wavFromAudioBuffer(ab, rate) {
+  const inRate = ab.sampleRate, chans = ab.numberOfChannels;
+  const src = [];
+  for (let c = 0; c < chans; c++) src.push(ab.getChannelData(c));
+  const outLen = Math.max(1, Math.round(ab.length * rate / inRate));
+  const step = inRate / rate;
+  const out = new Int16Array(outLen);
+  for (let i = 0; i < outLen; i++) {
+    const at = i * step, i0 = Math.floor(at), i1 = Math.min(ab.length - 1, i0 + 1), t = at - i0;
+    let v = 0;
+    for (let c = 0; c < chans; c++) v += src[c][i0] * (1 - t) + src[c][i1] * t;   // downmix to mono
+    v /= chans;
+    out[i] = Math.max(-32768, Math.min(32767, Math.round(v * 32767)));
+  }
+  const buf = new ArrayBuffer(44 + out.length * 2), dv = new DataView(buf);
+  const str = (o, v) => { for (let i = 0; i < v.length; i++) dv.setUint8(o + i, v.charCodeAt(i)); };
+  str(0, 'RIFF'); dv.setUint32(4, 36 + out.length * 2, true); str(8, 'WAVE');
+  str(12, 'fmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true);      // PCM
+  dv.setUint16(22, 1, true); dv.setUint32(24, rate, true);                     // mono
+  dv.setUint32(28, rate * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+  str(36, 'data'); dv.setUint32(40, out.length * 2, true);
+  new Int16Array(buf, 44).set(out);
+  return buf;
+}
+async function _vnPlayableEverywhere(blob) {
+  if (!blob || /mp4|m4a|aac|mpeg|mp3|wav/i.test(blob.type || '')) return blob;   // already universal
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return blob;
+    const ctx = new Ctx();
+    const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
+    const wav = _wavFromAudioBuffer(decoded, 16000);
+    try { ctx.close(); } catch (_) {}
+    return new Blob([wav], { type: 'audio/wav' });
+  } catch (_) { return blob; }
+}
 async function acVoiceStart(holdMode) {
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
     showNotif('Voice notes aren’t supported in this browser.'); return;
@@ -61921,7 +61990,11 @@ async function acVoiceStart(holdMode) {
   // If they already slid-to-cancel before we got here, abort cleanly: don't record.
   if (_micPending === 'cancel') { _micPending = null; _micStarting = false; stream.getTracks().forEach(t => t.stop()); return; }
   acRecChunks = []; acRecCancel = false;
-  const mime = ['audio/webm', 'audio/mp4', 'audio/ogg'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+  /* MP4/AAC FIRST, and the order is the whole point. iOS Safari cannot decode WebM
+     audio AT ALL — so a note recorded as WebM is silent on an iPhone, which is most of
+     what "voice notes barely work" was. Safari records mp4 and lands here; Chrome cannot
+     record mp4, falls through to webm, and acVoiceFinalize converts that below. */
+  const mime = ['audio/mp4', 'audio/webm', 'audio/ogg'].find(t => MediaRecorder.isTypeSupported(t)) || '';
   // Cap the bitrate so voice notes stay small (the browser default can be very
   // high). 48 kbps is plenty for speech → a full 5-minute note is well under 2 MB.
   const opts = Object.assign({ audioBitsPerSecond: 48000 }, mime ? { mimeType: mime } : {});
@@ -62051,11 +62124,19 @@ function acVoiceFinalize() {
   // spin-up). Tell the user instead of dropping it silently.
   if (blob.size < 512) { if (autoSend) showNotif('Hold to record. That was too short.'); return; }
   if (blob.size > AC_MEDIA_MAX) { showNotif('That voice note is too long (16 MB max).'); return; }
-  // How long the note actually is, by our own clock. A WebM from MediaRecorder
-  // carries no duration in its header, so a receiving browser has to guess it out
-  // of the file — and that guess can land wildly wrong. Measuring it here means
-  // nobody ever has to guess.
-  const secs = acRecStart ? Math.max(1, Math.round((Date.now() - acRecStart - _recPausedAccum) / 1000)) : null;
+  /* Make it playable on the recipient's phone before it leaves this one — see
+     _vnPlayableEverywhere. The size is re-checked AFTER, because WAV is much bigger than
+     the Opus it replaces and only the converted blob is the one actually being sent. */
+  acVoiceSend(blob, autoSend, _vnSecs(acRecStart));
+}
+function _vnSecs(startedAt) {
+  return startedAt ? Math.max(1, Math.round((Date.now() - startedAt - _recPausedAccum) / 1000)) : null;
+}
+async function acVoiceSend(blob, autoSend, secs) {
+  try { blob = await _vnPlayableEverywhere(blob); } catch (_) {}
+  if (blob.size > AC_MEDIA_MAX) { showNotif('That voice note is too long. Try a shorter one.'); return; }
+  /* How long the note actually is, by our own clock — a recorded blob often carries no
+     duration in its header, so a receiving browser would otherwise have to guess. */
   const reader = new FileReader();
   reader.onload = () => { acSetAttach({ data: reader.result, kind: 'audio', name: null, durationSec: secs }); if (autoSend) acSend(); };
   reader.readAsDataURL(blob);
@@ -62452,7 +62533,14 @@ function vnToggle(btn, e) {
     if (audio.ended || audio.currentTime > 1e6 || (isFinite(audio.duration) && audio.currentTime >= audio.duration - 0.05)) {
       try { audio.currentTime = 0; } catch (_) {}
     }
-    audio.play().catch(() => {});
+    /* A rejected play() used to vanish into an empty catch, which is exactly why a
+       broken voice note looked like "nothing happens". Say so. The usual cause is a
+       format the browser cannot decode — see _vnPlayableEverywhere. */
+    audio.play().catch(() => {
+      const bad = audio.error && audio.error.code === 4;   // MEDIA_ERR_SRC_NOT_SUPPORTED
+      showNotif(bad ? 'This voice note is in a format this browser cannot play.'
+                    : 'Could not play that voice note.');
+    });
   } else audio.pause();
 }
 function vnSpeed(btn, e) {
