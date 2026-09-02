@@ -11625,9 +11625,20 @@ body.light .ac-place:hover{background:rgba(0,0,0,.04);}
 @media(min-width:768px){
   body.beam2 .social-wrap{align-items:stretch;}
   body.beam2 .social-wrap .ac-win{max-width:950px;width:100%;display:flex;flex-direction:row;border-inline-start:1px solid var(--b2);border-inline-end:1px solid var(--b2);}
-  body.beam2 #acListScreen{display:flex!important;flex:0 0 clamp(300px,37%,360px);min-width:0;border-inline-end:1px solid var(--b2);order:1;}
-  body.beam2.beam-has-chat #acThreadScreen{display:flex!important;flex:1;min-width:0;order:2;}
-  body.beam2:not(.beam-has-chat) #beamEmptyPane{display:flex;flex:1;min-width:0;order:2;}
+  /* THE CONVERSATION LIST IS BEAM'S RIGHT COLUMN (owner). It used to sit beside the nav
+     with the chat filling the rest, which made Beam the one world laid out differently
+     from every other. Now it takes the RAIL's slot and width, and the chat takes the
+     feed's 600 — so Beam is the same three columns as Home, Engine, Alerts and Account,
+     just with the list standing in for the rail. `order` does the swap; nothing moves in
+     the DOM, so every handler, probe and swipe binding is untouched.
+     --beam-list-w mirrors --rail-w exactly (350, 290 in the shrink band) so the columns
+     line up with the other worlds and the tab row can share the one number. */
+  body.beam2{--beam-list-w:350px;}
+  body.beam2.mid-band{--beam-list-w:290px;}
+  body.beam2 #acListScreen{display:flex!important;flex:0 0 var(--beam-list-w);min-width:0;
+    border-inline-start:1px solid var(--b2);border-inline-end:none;order:2;}
+  body.beam2.beam-has-chat #acThreadScreen{display:flex!important;flex:1;min-width:0;order:1;}
+  body.beam2:not(.beam-has-chat) #beamEmptyPane{display:flex;flex:1;min-width:0;order:1;}
   /* keep the shared Beam top bar (All/Chats/Calls tabs) above the panes even when a
      conversation is open, so the list pane never loses its header. */
   body.beam2 .topbar.hidden{display:flex!important;}
@@ -11640,8 +11651,11 @@ body.light .ac-place:hover{background:rgba(0,0,0,.04);}
      pane's own divider, so header and list read as one column.
      The row keeps its overflow-x + fade masks, so at this width the tabs simply scroll —
      exactly as they do on a phone. */
-  body.beam2 #tbTabRow{flex:0 0 auto;width:clamp(300px,37%,360px);
-    border-inline-end:1px solid var(--b2);}
+  /* The tab row follows its column to the right-hand side. Chats / Unread / Groups
+     filter the LIST, so the header belongs over the list wherever the list is — and it
+     reads the same --beam-list-w the pane does, so the two can never disagree. */
+  body.beam2 #tbTabRow{flex:0 0 auto;width:var(--beam-list-w);margin-inline-start:auto;
+    border-inline-start:1px solid var(--b2);border-inline-end:none;}
   /* The refresh sweep is absolutely positioned to the row; keep it inside the column. */
   body.beam2 #tbTabRow .tb-refresh-beam{width:100%;}
 }
@@ -12604,7 +12618,12 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
 
 /* Notifications panel */
 /* Notifications: a full-black page (no card/box), clean header (back arrow + title). */
-#notifOverlay{padding:0;align-items:stretch;background:var(--bg);backdrop-filter:none;-webkit-backdrop-filter:none;}
+/* The opaque fill is a PHONE need — there the panel is the whole screen. On desktop it
+   must be see-through so the real sidebar and rail show through the route-view layout
+   below, and this being an ID rule (1,0,0) it silently outranked that class rule (0,3,0)
+   and painted the nav out. Scope it, don't fight it. */
+#notifOverlay{padding:0;align-items:stretch;backdrop-filter:none;-webkit-backdrop-filter:none;}
+@media(max-width:767px){#notifOverlay{background:var(--bg);}}
 .notif-card{background:var(--bg);width:100%;max-width:600px;height:100%;max-height:none;border-radius:0;
   border:none;display:flex;flex-direction:column;overflow:hidden;margin:0 auto;position:relative;}
 /* Notification detail — a self-contained page that slides in over the list; its own
@@ -21023,7 +21042,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1770'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1771'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -30164,8 +30183,11 @@ function renderSbProfileTop() {
   if (!el) return;
   if (!isAccount() || !S.user?.username) { el.style.display = 'none'; el.innerHTML = ''; return; }
   el.style.display = '';
-  // Follow counts under the profile only on Home and Search.
-  const showCounts = (_appTab === 'home' || _appTab === 'search');
+  /* The counts stay on EVERY world (owner). They used to appear only on Home and
+     Engine, so the sidebar's header changed height as you moved between worlds and the
+     whole nav below it shifted — which is what "it feels off, it moves" was. The rail
+     is the one thing on screen that should never move. */
+  const showCounts = true;
   el.innerHTML = `<button class="sb-btn sb-profilebtn" onclick="acGoProfile()">${acAvatarHtml(S.user?.name, S.user?.avatar)}<span class="sb-prof-id"><span class="sb-prof-name">${escHtml(S.user?.name || '')}${vbadge(meVerified())}</span><span class="sb-prof-user">@${escHtml(S.user?.username || '')}</span></span></button>`
     + (showCounts ? `<div class="sb-divider"></div><div class="sb-profile-counts" id="sbProfileCounts">${acStatsText()}</div>` : '')
     + `<div class="sb-divider"></div>`;
