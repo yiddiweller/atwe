@@ -21052,7 +21052,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1774'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1775'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -59889,17 +59889,27 @@ const JELLY = {
   edgeMax: 90,   // MAX px you can pull/fling past an edge — the rubber band's "tightness"
                  // (smaller = tighter, less empty space before the first/last message)
   edgePull: 0.5, // how much the content follows the finger right at the edge (initial give)
-  /* OFF (owner): no rubber band in a conversation. The thread now stops dead at the first
-     and last message instead of pulling past and springing back. Everything else about the
-     scroll is untouched — the fling, its friction, and the per-bubble jelly all still run;
-     only the overshoot is gone. A switch rather than edgeMax:0 because the three edge sites
-     below then read as deliberate hard stops instead of a formula that happens to
-     collapse, and the feel can be handed back by flipping one word. */
-  edgeBounce: false,
+  /* ON, and deliberately so. The rubber band at the first/last message is the ONE bounce
+     the founder wants kept — what they asked to lose was the wobble WHILE scrolling, which
+     is `rows` below, not this. Both are switches so the two can never be confused again. */
+  edgeBounce: true,
+  /* OFF (owner): no per-bubble jelly. `jellyRows` gave every bubble its own underdamped
+     spring, so they lagged and fanned apart as you scrolled — the "bounce scroll effect
+     while scrolling". They asked for a conversation to scroll like Home and Account do:
+     the content moves as one piece. Momentum, friction and the edge rubber band are all
+     untouched. */
+  rows: false,
 };
 function _now() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
 function _jellyReduced() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } }
-function _jellyOff() { return !JELLY.on || _jellyReduced() || AC._selectMode; }
+/* TWO GUARDS, NOT ONE — and conflating them was a real bug. `_jellyOff` gates the
+   per-bubble fan; `_scrollOff` gates the SCROLLER itself. They used to be the same
+   function, which meant a reduced-motion user could not scroll a conversation AT ALL:
+   the touchmove handler returned early and nothing else moves the thread (the viewport is
+   overflow:hidden with touch-action:none, so there is no native scroll underneath to fall
+   back on). Select mode still blocks the scroll on purpose — there a drag picks messages. */
+function _jellyOff() { return !JELLY.on || !JELLY.rows || _jellyReduced() || AC._selectMode; }
+function _scrollOff() { return AC._selectMode; }
 const SC = {
   y: 0, max: 0, h: 0, vy: 0, raf: 0, lastY: 0, lastTs: 0,
   drag: false, axis: 0, sx: 0, sy: 0, py: 0, pts: 0, smooth: false, target: 0, _bounce: null, _raw: 0, _lastTouch: 0, pinBottom: true, _mv: false,
@@ -59979,7 +59989,7 @@ function jellyInit(vp) {
     SC.axis = 0; SC.vy = 0; SC.smooth = false; SC.drag = false; SC._bounce = null; SC.measure(); SC.kick();
   }, { passive: true });
   vp.addEventListener('touchmove', e => {
-    if (_jellyOff()) return;
+    if (_scrollOff()) return;
     SC._lastTouch = _now();
     const t = e.touches[0], tx = t.clientX, ty = t.clientY;
     if (SC.axis === 0) { const dx = Math.abs(tx - SC.sx), dy = Math.abs(ty - SC.sy); if (dx > 6 || dy > 6) SC.axis = dy >= dx ? 1 : 2; }
@@ -60009,7 +60019,7 @@ function jellyInit(vp) {
   vp.addEventListener('touchend', end, { passive: true });
   vp.addEventListener('touchcancel', end, { passive: true });
   vp.addEventListener('wheel', e => {                     // desktop / trackpad
-    if (_jellyOff()) return;
+    if (_scrollOff()) return;
     SC.measure(); SC.smooth = false; SC.vy = 0;
     SC.y = Math.max(0, Math.min(SC.max, SC.y + e.deltaY)); SC.kick();
   }, { passive: true });
@@ -61962,8 +61972,22 @@ function _wavFromAudioBuffer(ab, rate) {
   new Int16Array(buf, 44).set(out);
   return buf;
 }
+/* THE CONTAINER IS NOT THE CODEC, and trusting it is how this stayed broken.
+   Chrome answers TRUE to isTypeSupported('audio/mp4') and then records OPUS INSIDE an
+   MP4 — `audio/mp4;codecs=opus`. An iPhone opens the container happily and still cannot
+   decode a note of it, so the file looks fine and plays nothing. A check for "mp4" in
+   the type therefore passed exactly the case it needed to catch.
+   Judge the CODEC: anything Opus/Vorbis (whatever it is wrapped in), and anything WebM
+   or Ogg, gets converted. Safari's own audio/mp4 is real AAC and carries no codecs
+   parameter, so it still passes straight through — which keeps the common
+   iPhone-to-iPhone note small. Unknown types convert too: safe beats clever. */
+function _vnUniversal(type) {
+  const t = String(type || '').toLowerCase();
+  if (/opus|vorbis|webm|ogg/.test(t)) return false;          // not decodable on iOS
+  return /wav|mpeg|mp3|mp4|m4a|aac/.test(t);
+}
 async function _vnPlayableEverywhere(blob) {
-  if (!blob || /mp4|m4a|aac|mpeg|mp3|wav/i.test(blob.type || '')) return blob;   // already universal
+  if (!blob || _vnUniversal(blob.type)) return blob;   // already universal
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return blob;
