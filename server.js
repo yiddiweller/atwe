@@ -43996,6 +43996,12 @@ app.post('/api/explain', auth.requireAuth, rateLimit(40, 60000, 'explain'), asyn
 // optimizer, and the in-chat tools. One endpoint, a per-task system prompt.
 const AI_WRITE_TASKS = {
   improve: 'Improve the writing: fix grammar and clarity, keep the meaning and roughly the same length and tone. Return only the improved text.',
+  /* PROOFREAD IS NOT `improve`. It is the one-tap fix behind the composer's AI button, and
+     the whole promise is that it changes nothing but the mistakes — someone who taps it
+     expects their own message back, spelled correctly, not a rewritten one. The prompt is
+     deliberately absolute about that, and about keeping the language, so a message typed
+     in Yiddish or Spanish comes back in the same language rather than translated. */
+  proofread: 'Proofread ONLY. Correct spelling, grammar, punctuation, capitalisation and obvious typos. Do NOT rewrite, rephrase, shorten, expand, translate, or change the wording, tone, slang, names or emoji — keep the author\u2019s exact voice and the SAME language it was written in. If it is already correct, return it completely unchanged. Return only the corrected text: no quotes, no notes, no preamble.',
   expand: 'Expand this into a longer, richer version with more detail — keep the same voice and intent. Return only the new text.',
   shorten: 'Make this more concise and punchy without losing the key point. Return only the shortened text.',
   rephrase: 'Reword this in a fresh way while keeping the same meaning and tone. Return only the rephrased text.',

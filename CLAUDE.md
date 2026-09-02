@@ -5830,6 +5830,57 @@ a `<button>` needs its own colour.
 automatically (give it keywords in `ADMIN_TAB_KW`); a new panel is picked up by
 adding it to `ADMIN_PANELS`; a new verb goes in `ADMIN_ACTIONS`.
 
+### One tap to fix the spelling (`acFixText`)
+
+A small Atwe button appears in the message bar once there is something worth correcting,
+and one press hands the whole message to Atwe AI to fix its **spelling, grammar and
+punctuation — nothing else**. The owner's idea, and the "nothing else" is the promise: a
+person who taps it expects their own message back, spelled correctly, not rewritten.
+
+- **The server task is `proofread`, deliberately NOT `improve`.** `improve` rewrites for
+  clarity; this one is told in absolute terms to change only mistakes, to keep the wording,
+  tone, slang and emoji, to keep the SAME LANGUAGE it was written in (so a message typed in
+  Yiddish comes back in Yiddish rather than translated), and to return it unchanged if it is
+  already right. No probe can assert that promise — it lives in the task's own wording.
+- **The button is the real Atwe mark**, painted through a CSS mask so it takes the accent
+  colour, with **three dots nested in the swirl's own open centre** (the mark is a spiral —
+  its middle really is hollow, which is what makes the owner's drawing work). Blue is right
+  here: the colour law reserves it for identity, and the AI is one of its named uses.
+- It appears at `AC_FIX_MIN` (6) characters and **animates its own width**, which is the
+  interesting part: its arrival NARROWS the text box, so a line that just fitted can wrap.
+  `acFixSync` re-runs `acAutosize` once the width transition lands, and only fires on a real
+  change (an equality guard), so autosize → toggleSendMic → acFixSync cannot recurse.
+- **While it works the text shimmers blue-and-white.** A `<textarea>` cannot carry a
+  gradient text fill, so `.ac-fixshine` is a layer laid exactly over it — same typography,
+  and its padding and font are COPIED from the live textarea at placement time, because the
+  textarea's padding changes in multiline and a hardcoded value sits the copy a few pixels
+  off. The real text goes transparent underneath and the box is held readonly. There is a
+  620ms floor on the whole thing: without it a fast answer is a single frame nobody sees and
+  the message appears to change by itself.
+- The corrected text **splices in with a FUNCTION replacer** (`before.replace(text, () =>
+  out)`) — a `$&` or `$1` inside the correction would otherwise be read as a replacement
+  pattern — and an **Undo toast** puts the original back verbatim. The founder asked for no
+  options; an undo that disappears on its own is a safety net, not an option.
+
+**It exposed a pre-existing flip-flop and fixed it.** `.multiline` (the mode that gives a
+long message its own full-width row) was decided from the textarea's scrollHeight **measured
+in whichever mode was current** — a feedback loop, since the height depends on the width, the
+width depends on the mode, and the mode depends on the height. Through a band of message
+lengths it toggled on EVERY keystroke (traced: `.M.M.M.M.M.M`) and the bar jumped a whole row
+up and down as you typed. `acAutosize` now takes the DECISION at the single-row width always,
+then measures the final height in the mode it applied. Traced after: one change over 64
+keystrokes.
+
+`scratchpad/fixtext.js` (23 checks) covers it. **Proving the text really WAVES took four
+attempts and three of them passed on a deliberately FLAT fill** — worth knowing before
+writing a similar check: counting "some blue and some white pixels" passes flat; the
+per-pixel spread of blueness passes flat (subpixel antialiasing produces fringes at both
+extremes); per-column averages over the shimmer's whole BOX pass flat too, because the box is
+the full width of the bar and catches a few pixels of neighbouring chrome at its edge. What
+works is a **Range over the shimmer's own text** for the exact line rectangles, per-column
+averages inside those, and a threshold **calibrated against a measured flat fill** (flat
+reads ~59, the real wave ~255; the check demands 120).
+
 ### The chat header is three shapes on the page, not a bar
 
 The owner's own design (a drawing, not a description). The solid bar with its hairline is

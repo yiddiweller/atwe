@@ -1,6 +1,6 @@
 # The regression suite
 
-63 probes that drive a **real browser against a real Postgres** and assert the
+64 probes that drive a **real browser against a real Postgres** and assert the
 things this app has actually got wrong before — corner geometry, icon ink,
 contrast, focus rings, paint order, offline behaviour, money invariants.
 
@@ -63,6 +63,21 @@ export TOK=$(DATABASE_URL=postgres://atwe:atwe@localhost:5432/atwescore \
 
 The `JWT_SECRET` must be the one the server is running under, or you get the insecure dev
 fallback and a token the server rejects.
+
+## The composer's proofreader (`fixtext.js`)
+
+One tap fixes a message's spelling and grammar; while it works the text shimmers
+blue-and-white. The probe covers when the button appears, the working state, the text
+actually being replaced, Undo restoring the original verbatim, and a failure saying so.
+
+**Proving the text really WAVES took four attempts, and three passed on a deliberately FLAT
+fill** — the trap is worth knowing. Counting "some blue and some white pixels" passes flat.
+The per-pixel spread of blueness passes flat, because subpixel antialiasing produces fringes
+at both extremes. Per-column averages over the shimmer's whole box pass flat too, since the
+box spans the bar's full width and catches a few pixels of neighbouring chrome. What works is
+a **Range over the shimmer's own text** to get the exact line rectangles, column averages
+inside those, and a threshold **calibrated by measuring a flat fill** — flat reads ~59, the
+wave ~255, and the check demands 120.
 
 ## The chat header (`chathead.js`)
 
