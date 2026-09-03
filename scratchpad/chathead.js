@@ -104,15 +104,34 @@ const BASE = process.env.BASE || 'http://localhost:3262';
   const shot = PNG.sync.read(await p.screenshot());
   const colX = Math.round(195 * 2);                       // mid-screen, inside the white block
   const lum = (y) => shot.data[(shot.width * Math.round(y * 2) + colX) * 4];
-  let lo = null, hi = null;
-  for (let y = fade.top; y < fade.top + 320; y++) {
-    const v = lum(y);
-    if (lo === null && v >= 64) lo = y;                   // a quarter of the way to white
-    if (hi === null && v >= 191) { hi = y; break; }       // three quarters
+  /* THE LAW CHANGED IN 1787 AND THIS CHECK HAD TO CHANGE WITH IT. It used to measure how
+     far the brightness travelled from a quarter-lit to three-quarters, on the assumption
+     that the band STARTS fully black. It no longer does — nothing in it is opaque, so the
+     white block is already showing through at the very top and that distance is naturally
+     shorter. Loosening the number would have been the wrong fix; what is worth asserting
+     now is the law itself: something shows through at the top, and the brightness climbs
+     without a jump anywhere. */
+  const samples = [];
+  for (let y = fade.top + 2; y < fade.top + Math.round(fade.scrimH); y += 2) samples.push(lum(y));
+  const topLum = samples[0];
+  /* A STEP is an ACCELERATION, not a big number. This curve is legitimately steepest right
+     at the top and flattens out below — measured 90,108,122,133,142,149,155,160,163,166…,
+     i.e. jumps of 18,14,11,9,7,6,5,3,3… — so a flat "largest jump" ceiling fails on a
+     perfectly smooth fade (it did, at 18 against a guessed 12). What a step actually looks
+     like is a run of nothing and then a lurch: 0,0,0,0,40,60. So the test is that brightness
+     only ever climbs, and that no jump is more than twice the one before it. The floor of 6
+     absorbs 1-vs-3 quantisation noise down at the flat end, where doubling is meaningless. */
+  let dropped = 0, spike = null;
+  for (let i = 1; i < samples.length; i++) {
+    const d = samples[i] - samples[i-1];
+    if (d < -2) dropped++;
+    if (i > 1 && d > Math.max(6, 2 * (samples[i-1] - samples[i-2]))) spike = spike || `${samples[i-2]}→${samples[i-1]}→${samples[i]}`;
   }
-  const ramp = (lo !== null && hi !== null) ? hi - lo : -1;
+  if (process.env.DEBUG_FADE) console.log('    samples', samples.join(','));
   say(fade.scrimH >= 170, `the fade runs a long way down the screen (${fade.scrimH}px, was ~108)`);
-  say(ramp >= 45, `and darkens GRADUALLY rather than stepping (${ramp}px from a quarter-lit to three-quarters — a step would be under 25)`);
+  say(topLum > 12, `you can see through the band even at its darkest (white reads ${topLum}/255 at the top, not 0)`);
+  say(dropped === 0, `it only ever gets lighter going down (${dropped} reversals)`);
+  say(!spike, `and never lurches — no jump is twice the one before it${spike ? ' (' + spike + ')' : ''}`);
   await p.evaluate(() => { document.getElementById('__fadeprobe')?.remove(); });
 
 

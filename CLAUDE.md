@@ -6009,14 +6009,22 @@ renders as nothing. Black is untouched; Light gets the tint the comment always d
   note was that a dark gradient alone "doesn't feel professional", and the reason is that
   Apple's scroll edge does not DIM content, it DISSOLVES it; the tint is only what is left
   after the blur has done the work.
-  **(a) The tint ramp is EASED.** `smootherstep` (6t⁵−15t⁴+10t³) starts AND ends with zero
-  slope, so there is no line where the fade begins and none where it stops — literally
-  "very slowly darker and darker", which is how the owner asked for it. Twelve stops,
-  because a curve sampled coarsely bands on an OLED. Measured every 10% of the band, the
-  old ramp went `1.00 1.00 1.00 0.97 0.83 0.61 0.39 0.22 0.09` — solid for a third and then
-  a cliff — against `1.00 1.00 1.00 1.00 0.95 0.80 0.58 0.33 0.13` now. The band is
-  `--ac-edge-h` = head + 150px; a short band has to darken fast, and a fast ramp IS the
-  "big shift" being objected to.
+  **(a) IT IS NEVER OPAQUE, and that is the whole law.** Content stays see-through the whole
+  way up and simply gets darker and blurrier. THREE passes got this wrong in the same way,
+  and the mistake is worth naming: each held **solid black** for the first quarter of the
+  band and only then began to fade. An opaque slab shows nothing through it, so the darkness
+  appears to switch on at a fixed distance below the top — the owner described it exactly,
+  *"it's turning dark an inch under the top of the screen"*. **Easing the curve did not help,
+  because the plateau was the problem, not the curve** — the second attempt made it worse by
+  lengthening the solid part. The reference is the app's own **bottom scrim**
+  (`#acThreadScreen::after`), which the owner named: it peaks at **.88** and eases straight
+  down, and the top now uses that exact profile (.88 → .68 → .36 → .12 → 0) resampled to 13
+  stops so it cannot band on an OLED, with **no flat section anywhere**. Measured every 10%
+  of the band it went `1.00 1.00 1.00 1.00 0.95 0.80 0.58 0.33 0.13` — four tenths solid —
+  against `0.88 0.74 0.66 0.52 0.38 0.33 0.20 0.12 0.09` now. The band is `--ac-edge-h` =
+  the header's own height + the bottom scrim's 150px, so below the header the fade behaves
+  precisely like the bottom one. The status strip is covered by `#statusScrim` (a separate
+  solid element), so a translucent band never puts message text behind the clock.
   **(b) A PROGRESSIVE BLUR (`.ac-topglass`) sits under it.** One flat `backdrop-filter` is a
   sheet of frost with a hard bottom edge, which is the thing that reads as cheap. Apple
   ramps the blur RADIUS; on the web that means stacked layers — each samples the backdrop
