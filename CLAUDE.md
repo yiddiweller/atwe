@@ -6005,14 +6005,48 @@ renders as nothing. Black is untouched; Light gets the tint the comment always d
 - **The dot is GREEN ONLY.** No grey "away" dot: "Last seen …" under the name already says
   it, and a second dimmer signal read as a smudge.
 - **The ⋯ lies flat**, three dots side by side.
-- **THE TOP FADE runs long and gradual.** This was the owner's main complaint — it held the
-  page colour solid and then stepped to clear over a short stretch ("a small tiny part where
-  it shifts"). It is `--ac-head-h + 118px` through six stops, holding solid only long enough
-  to cover the shapes. Measured on real pixels against a white block dropped into the
-  thread: the ramp from a quarter-lit to three-quarters-lit is **51px**, where the old one
-  was **14px**. That measurement must run FIRST in the probe — it prepends an element and
-  scrolls to the top, and anything that re-renders the thread wipes it (an earlier ordering
-  read a ramp of 0 for exactly that reason).
+- **THE TOP EDGE IS GLASS, NOT A SCRIM — two layers, and both are needed.** The owner's
+  note was that a dark gradient alone "doesn't feel professional", and the reason is that
+  Apple's scroll edge does not DIM content, it DISSOLVES it; the tint is only what is left
+  after the blur has done the work.
+  **(a) The tint ramp is EASED.** `smootherstep` (6t⁵−15t⁴+10t³) starts AND ends with zero
+  slope, so there is no line where the fade begins and none where it stops — literally
+  "very slowly darker and darker", which is how the owner asked for it. Twelve stops,
+  because a curve sampled coarsely bands on an OLED. Measured every 10% of the band, the
+  old ramp went `1.00 1.00 1.00 0.97 0.83 0.61 0.39 0.22 0.09` — solid for a third and then
+  a cliff — against `1.00 1.00 1.00 1.00 0.95 0.80 0.58 0.33 0.13` now. The band is
+  `--ac-edge-h` = head + 150px; a short band has to darken fast, and a fast ramp IS the
+  "big shift" being objected to.
+  **(b) A PROGRESSIVE BLUR (`.ac-topglass`) sits under it.** One flat `backdrop-filter` is a
+  sheet of frost with a hard bottom edge, which is the thing that reads as cheap. Apple
+  ramps the blur RADIUS; on the web that means stacked layers — each samples the backdrop
+  *including the layers already painted behind it*, so they compound, giving a smooth
+  1→16px ramp out of four cheap passes rather than one variable-radius filter. Each layer
+  is sized to **its own mask's reach** (92/78/62/46% of the band), because a backdrop-filter
+  costs in proportion to its area and the widest blur needs the least room — 278% of the
+  band in total instead of 400%. It sits at `z-index:3`, UNDER the tint at 4: dissolve
+  first, then tint. `prefers-reduced-transparency` drops it (NOT `prefers-reduced-motion` —
+  nothing here moves, and borrowing the motion switch would take it from people who only
+  asked for stiller animation).
+  **This is the ONE deliberate exception to the "no live blur over the thread on a phone"
+  rule** set in 1776, and it is allowed because it was MEASURED, not assumed: at a 6×
+  CPU throttle the frame pacing is identical with it and without (p50 16.6ms both, zero
+  frames over 32ms). `chatscroll.js` still bans every other blur — the point of that rule
+  is that a blur must be a decision somebody measured, not one that drifted in. **Caveat
+  worth keeping: a CPU throttle does not throttle the GPU, and `backdrop-filter` is
+  GPU-bound — this bounds the CPU cost, not an iPhone's rasterisation.**
+- **`--ac-edge-h` is declared on `#acThreadScreen`, never on `:root`.** It references
+  `--ac-head-h`, which `acSyncHeadH` measures and sets *inline on that element* — and a
+  custom property resolves where it is DECLARED, so on `:root` it would have frozen at the
+  96px fallback and the band would never track a pin bar or an open in-chat search.
+- **The presence dot is SEEDED, not left over.** `acSeedThreadHeader` paints the header
+  instantly from cached data so the name never flashes, but it used to leave the dot alone
+  — so opening someone offline right after someone online showed a green "they're here" dot
+  for as long as the thread took to load, and the markup shipped without `hidden`, so the
+  first chat after a boot showed one whoever it was. Unknown presence is not "online", it
+  is unknown, and the honest thing to draw is nothing. **A probe for this must throttle the
+  thread fetch**: locally the server answers in ~10ms, so the flash is shorter than one
+  sample and the check passes on the very bug it exists to catch (verified — it did).
 - **The composer sits taller** (44 → 52). Its own `padding` stays at 5px on purpose: the
   cards that ride inside it derive their 8px rhythm and 15px radius from that number, so the
   height comes from the text row (min-height 40) and the two round buttons (36) instead.
