@@ -5842,10 +5842,22 @@ person who taps it expects their own message back, spelled correctly, not rewrit
   tone, slang and emoji, to keep the SAME LANGUAGE it was written in (so a message typed in
   Yiddish comes back in Yiddish rather than translated), and to return it unchanged if it is
   already right. No probe can assert that promise — it lives in the task's own wording.
-- **The button is the real Atwe mark**, painted through a CSS mask so it takes the accent
-  colour, with **three dots nested in the swirl's own open centre** (the mark is a spiral —
-  its middle really is hollow, which is what makes the owner's drawing work). Blue is right
-  here: the colour law reserves it for identity, and the AI is one of its named uses.
+- **The button is the real Atwe mark**, painted through a CSS mask, with **three dots
+  nested in the swirl's own open centre** (the mark is a spiral — its middle really is
+  hollow, which is what makes the owner's drawing work).
+- **It is WHITE (`--t1`) with NO disc behind it, and that is a correction.** It shipped as a
+  blue mark at `.46` on an `--accent-dim` disc, and the owner rejected it on sight: *"should
+  be white with no background circle… make sure it's the same white color."* The mark and
+  the dots are now the exact colour of the `+` at the other end of the bar, so the row reads
+  as one set of controls rather than one blue badge among plain glyphs. Blue would have been
+  defensible under the colour law (identity, and the AI is one of its named uses) — the
+  owner's point was about the BAR, not the law.
+- **The dots' size is measured, not chosen.** Decoding `public/logo-mark.png`'s alpha
+  channel, the largest clear square inside the mark is **0.421 of its bounding box** —
+  15.2px at the button's 36px — centred. The dots shipped at `3×3.4 + 2×2.2 = 14.6px`,
+  leaving 0.6px of slack, which is exactly why they read as sitting ON the swirl rather than
+  in it; at `3×2.8 + 2×1.8 = 12px` they clear the arms on both sides. `fixtext.js` asserts
+  the total against that fraction, so a future resize cannot quietly re-crowd them.
 - It appears at `AC_FIX_MIN` (6) characters and **animates its own width**, which is the
   interesting part: its arrival NARROWS the text box, so a line that just fitted can wrap.
   `acFixSync` re-runs `acAutosize` once the width transition lands, and only fires on a real
@@ -5992,10 +6004,22 @@ ink. Vertically they were 1px apart, because the row bottom-aligns (correctly: t
 must stay put when the text grows to several lines) and the boxes were 38 against 36; a 2px
 bottom margin lands both centres on the text's, at 26.
 
-The pill is **`border-radius:999px`**, a true capsule at any height, falling back to 24px
-only when a card is riding inside it — a stadium end on a tall box looks wrong, and the
-cards' own 15px radius is derived from that 24. The condition list is the same one that
-reveals the wrapper, so the two cannot disagree. Its `padding` stays **5px** throughout: the
+The pill is **`border-radius:999px`** on one line, a true capsule at any height — and
+**28px the moment the bar grows**, whether that is a card riding inside it or the message
+itself running past one line. A capsule's ends are semicircles, so on a two-line box they
+read as a giant lozenge; the owner sent ChatGPT's composer as the reference and asked for a
+rounded box instead. **28 is DERIVED, not picked:** the round send/mic is 36 across and sits
+10px in from the box's OUTER edge (1px border + 5px padding + its own 4px margin), so
+`18 + 10 = 28` is the one radius whose arc is concentric with it — the app's own corner law.
+The cards sit 9 in, hence their **19**. In multiline the buttons (and the `+`, or it would
+sit 2px lower than they do) take a **4px bottom margin** so the gap is 10 on both sides of
+that corner; without it the corner is 2px tighter below than beside, the exact near-miss the
+owner has caught before. The condition list is the same one that reveals the card wrapper,
+so the two cannot disagree.
+
+NB `chathead.js`'s "its ends are fully rounded — a true capsule at any height" check tests
+the RESTING bar, which is one line; `fixtext.js` owns the wrapped case, asserts the corner
+is `sendRadius + inset`, and self-tests (restoring `999px` fails it). Its `padding` stays **5px** throughout: the
 cards' 8px rhythm is derived from it, so the bar's height comes from the text row
 (`min-height:40`) and the buttons, never from the padding.
 
