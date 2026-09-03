@@ -1704,6 +1704,41 @@ text (`.vt-more`, >140 chars), and is **screen-reader readable** (`role="note"` 
 `aria-label`). Client caches in `AC._vt` (per session). Fully degrades: when
 transcription isn't configured (or a note can't be transcribed) no caption renders.
 
+### Letting the browser save the password
+
+Chrome, Safari and iOS Keychain decide *"that was a sign-in, shall I save it?"* by watching
+for a real `<form>` submit carrying a **username** field and a **current-password** field.
+Atwe's fields were already labelled correctly (`autocomplete="username"` /
+`current-password` / `new-password`); what was missing was the **form** and the **submit** —
+there were zero `<form>` elements in the app.
+
+- **`#authStep2` (the password step) IS the form.** The element that was a `<div class="auth-step">`
+  is now a `<form class="auth-step">` — the SAME element. `.auth-step` is already the flex
+  column, so swapping the tag adds no box and moves nothing. **Wrapping the fields in a form
+  INSIDE the step is the damaging version**: the wrapper becomes a single flex item and the
+  Continue button's `margin-top:auto` then resolves against it instead of against the step.
+- **`#loginPmUser` carries the username.** A manager will not save a password it cannot name,
+  and this step only ECHOES the address as text. `type="hidden"` is no good — managers ignore
+  hidden inputs — so it is a real text field taken out of the flow (`position:absolute`, 1px,
+  `opacity:0`), which keeps it RENDERED (a `display:none` field is ignored too) while making it
+  impossible for it to affect layout. Filled by `authSyncPmUser()` when the step opens and again
+  as the submit goes through.
+- **`authLoginSubmit` preventDefaults and calls `doLogin`.** The save prompt still fires: the
+  heuristic keys off the submit event, not off a navigation.
+- **A PRE-EXISTING DOUBLE LOGIN was found and fixed here.** The password field carried its own
+  `onkeydown` Enter → `doLogin()`, AND a global document Enter handler called `doLogin()` too —
+  so every Enter press fired **two** login requests, long before any of this. Not cosmetic:
+  login is rate-limited, so it burned the allowance twice as fast. The field's handler is gone
+  (the form submits on Enter by itself) and the global one now defers when the event came from
+  inside the form, only nudging `requestSubmit()` for an Enter pressed from outside it.
+- **Design safety is the point here, and it is proved by pixel diff** (`scratchpad/pwsave.js`
+  plus a before/after capture): every sign-in screen is byte-identical except one ~90×90 box on
+  desktop that **also differs between two runs of unchanged code** — an animated mark. Run the
+  control before believing any diff on these screens.
+- **Not done yet:** sign-up. The same treatment would let a browser offer to save a password on
+  account creation, but that flow is multi-step with an email code and is the most fragile path
+  in the app, so it deserves its own pass with a real end-to-end test.
+
 ## Auth flows, email & billing (frontend)
 
 - **Email verification:** signup triggers a verification email (or console log).
