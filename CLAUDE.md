@@ -6001,6 +6001,35 @@ code shows and hides them by id) and are hidden with CSS — which is why `chath
 "not in the header" by GEOMETRY rather than by absence. Tapping the pill opens the contact
 page; the old tap-the-name-to-flip-to-@username is gone with the separate name button.
 
+**A sent message you have not had read yet is the owner's navy, `--bubble-unseen` (#002244),
+with near-white blue ink** — dark until it is seen, then it lights up to the solid accent.
+It used to be solid WHITE, which made the least important state the loudest thing on the
+screen. Because BOTH states are now dark, everything inside a bubble keeps its one
+white-on-blue treatment: the six dark-on-light overrides this state used to need (the
+forwarded label, the reply quote and four voice-note parts) were **deleted rather than
+inverted**, so there is nothing left here to keep in step.
+
+**A money / call card nests by the app's corner law.** The icon is the shape sitting in the
+card's top-left corner, so its gap must be even on every side and the card's radius must be
+the icon's plus that gap. It is a 34px **disc** (radius 17) at `--mc-pad` **13**, against the
+card's 30 — exactly concentric. It used to be an uneven `11px 13px` around a 10px-radius
+rounded square: a third corner radius belonging to no system, which is what read as "off".
+The footer button uses the same `--mc-pad` and a 34px min-height so its capsule (radius 17)
+nests in the bottom corners the way the icon nests in the top ones. **Measure these AFTER
+the entrance animation**: it scales the card, and `getBoundingClientRect` includes
+transforms, so an early read reports every number at ~0.82× and looks like a broken rule.
+
+**The conversation's ⋯ menu opens OUT OF the button**, covering it, with the ⋯ itself faded
+away — the same behaviour the profile menu on Home has, and what makes it read as the button
+opening rather than a panel appearing beside it. `_anchorSheet(sheet, rect, {cover:true})`
+aligns the menu's near edge to the button's (right-hand buttons open leftwards, which is
+what stops a right-side menu shooting off screen and being clamped somewhere arbitrary) and
+puts its top on the button's top. `.ac-head-sheet` gets `transform-origin:top right` so it
+grows from that corner. **`acHeadMenu` had to be added to `_hideMenuSrcBtn`'s close-watcher
+list** or the ⋯ never comes back. The message glide menu and the delete sheet deliberately
+keep the old below-the-finger placement — there the "button" is a message you must still be
+able to see.
+
 **The composer's mic and send are the accent BLUE**, deliberately the same blue so the
 control does not change colour the moment you start typing. This is the one place the
 "white = the one primary action" law is set aside, at the owner's direction: in a

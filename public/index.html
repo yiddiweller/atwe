@@ -146,6 +146,14 @@ a{text-decoration:none;color:inherit;}
   --accent-hover: #0071E3;
   --accent-light: #409CFF;
   --accent-tint:  #FFFFFF;   /* text on a solid blue fill — white is the most this blue allows */
+  /* A sent message the other person has not opened yet. The owner's own colour: a deep
+     navy that reads as "the same blue, not lit up yet", against the solid --accent it
+     becomes once it IS seen. It used to be solid WHITE, which was the loudest thing in
+     the thread for the least important state. Ink is a very light blue rather than plain
+     white so the bubble still belongs to the blue family. One value for both themes —
+     it is a state, not a surface, so it should not change with the page. */
+  --bubble-unseen:     #002244;
+  --bubble-unseen-ink: #DCEBFF;
   /* The outgoing message bubble is its own case. On the brand blue the soft
      tint measures 2.87:1 and even pure white only 3.52:1 — both under the
      4.5:1 that small text needs, on the text people re-read most. The bubble
@@ -4831,7 +4839,12 @@ body.light #acThreadScreen::before{background:linear-gradient(to bottom,
 .ac-head-name:active .msg-name{opacity:.55;}
 .ac-head-acts{display:flex;align-items:center;gap:6px;margin-inline-start:auto;flex-shrink:0;}
 .ac-callbtn.ac-head-more svg{fill:currentColor;stroke:none;width:17px;height:17px;}
-.ac-head-sheet{position:fixed;width:212px;max-height:var(--menu-maxh);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
+/* It now COVERS the ⋯ rather than sitting under it, so it must grow out of the corner
+   nearest that button — top-right, since the ⋯ is at the top-right of the conversation.
+   With the default centre origin the card expands away from the button and reads as a
+   panel appearing beside it rather than as the button opening out. */
+.ac-head-sheet{position:fixed;width:212px;max-height:var(--menu-maxh);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  transform-origin:top right;}
 /* Custom scroller: the viewport clips, the content (#acThread) is translated by the
    SC controller. touch-action:none so the browser does no native scroll/zoom — JS
    owns the gesture (that's what lets scroll + jelly run in the same frame at 60fps). */
@@ -5094,19 +5107,18 @@ body.light #acThreadScreen::after{background:linear-gradient(to top,rgba(255,255
   transition:background-color var(--t-slow) ease;}
 .msg-row.team .msg-bubble{background:var(--s3);color:var(--t1);}
 .msg-row.me .msg-bubble{background:var(--bubble-out);color:var(--bubble-out-ink);}
-/* Two-state sent bubble (WhatsApp/iMessage read semantics): until the recipient
-   has actually SEEN it (read_at), the bubble stays the light blue tint with dark
-   text. The moment they read it, it smoothly fades to the solid accent blue with
-   tint text — background AND text colour animate together. So solid = seen,
-   light = sent-but-not-yet-seen. Same one blue throughout, just two states. */
-.msg-row.me .msg-bubble.msg-unseen{background:var(--accent-tint);color:var(--text-black);}
-body.light .msg-row.me .msg-bubble.msg-unseen{background:#D6E9FF;}
-/* In the light/unseen state, the in-bubble forwarded label + reply quote (tuned
-   for white-on-blue) need dark-on-light variants so they stay legible. */
-.msg-row.me .msg-bubble.msg-unseen .msg-fwd{color:rgba(0,0,0,.5);}
-.msg-row.me .msg-bubble.msg-unseen .msg-quote{background:rgba(0,0,0,.07);}
+/* Two-state sent bubble (WhatsApp/iMessage read semantics): until the recipient has
+   actually SEEN it (read_at), the bubble is the deep navy --bubble-unseen. The moment
+   they read it, it fades to the solid accent blue — background AND text animate
+   together. So lit = seen, dark = sent-but-not-yet-seen: the same blue in two states.
+   It used to be solid WHITE, which made the least important state the loudest thing on
+   the screen. Because BOTH states are now dark, everything inside a bubble can keep its
+   one white-on-blue treatment — the six dark-on-light overrides this state used to need
+   (forwarded label, reply quote, and the four voice-note parts) are gone rather than
+   inverted, which is why there is nothing here to keep in step any more. */
+.msg-row.me .msg-bubble.msg-unseen{background:var(--bubble-unseen);color:var(--bubble-unseen-ink);}
 .msg-row.me .msg-bubble.msg-deliver{animation:msgDeliver .5s var(--ease);}
-@keyframes msgDeliver{from{background:var(--accent-tint);color:var(--text-black);}to{background:var(--accent);color:var(--accent-tint);}}
+@keyframes msgDeliver{from{background:var(--bubble-unseen);color:var(--bubble-unseen-ink);}to{background:var(--accent);color:var(--accent-tint);}}
 /* New messages spring in. Received bubbles get a gentle pop; my own sent bubble
    gets a bouncier "bubble lands" inflate from the send corner (Apple-style).
    Only genuinely new bubbles get .msg-in (seen-set in JS), so opening a chat
@@ -5341,7 +5353,6 @@ body.light .msg-row.me .msg-bubble.msg-unseen{background:#D6E9FF;}
   -webkit-tap-highlight-color:transparent;transition:transform var(--t-slow) cubic-bezier(.34,1.56,.64,1),background var(--t-fast) var(--ease);}
 .msg-row.me .vn-play{background:rgba(255,255,255,.34);}
 .msg-row.team .vn-play{color:var(--t1);background:rgba(255,255,255,.14);} /* distinct disc, NOT the same grey as the dim bars */
-.msg-row.me .msg-bubble.msg-unseen .vn-play{background:rgba(29,29,31,.16);color:var(--text-black);}
 .vn-play:active{transform:scale(.82);transition:transform var(--t-fast) ease;}
 .vn-play svg{width:17px;height:17px;fill:currentColor;stroke:none;}
 .vn-ic-pause{display:none;}
@@ -5359,7 +5370,6 @@ body.light .msg-row.me .msg-bubble.msg-unseen{background:#D6E9FF;}
 @keyframes vnSpeedIn{from{opacity:0;transform:scale(.3);}to{opacity:1;transform:scale(1);}}
 .msg-row.me .vn-speed{background:rgba(255,255,255,.22);color:#fff;}
 .msg-row.team .vn-speed{background:var(--s4);color:var(--t2);}
-.msg-row.me .msg-bubble.msg-unseen .vn-speed{background:rgba(29,29,31,.12);color:var(--text-black);}
 /* Inset the bar so the resting ball doesn't hug the play button — gives even
    spacing between the avatar, the play button and the line. */
 .vn-track{flex:1;min-width:0;cursor:pointer;padding:4px 3px;-webkit-tap-highlight-color:transparent;touch-action:none;} /* tighter side padding → the waveform spans wider */
@@ -5383,15 +5393,12 @@ body.light .msg-row.me .msg-bubble.msg-unseen{background:#D6E9FF;}
 .msg-voice.started .vn-scrub{opacity:1;}
 .msg-row.team .vn-scrub{background:var(--accent-light);}            /* dark bubble: played = blue → line blue */
 .msg-row.me .vn-scrub{background:#fff;}                             /* blue bubble: played = white → line white */
-.msg-row.me .msg-bubble.msg-unseen .vn-scrub{background:var(--accent);}
 .vn-wave-row.base i{background:rgba(255,255,255,.32);}
 .msg-row.me .vn-wave-row.base i{background:rgba(255,255,255,.34);}
 .msg-row.team .vn-wave-row.base i{background:rgba(255,255,255,.34);} /* unplayed bars were nearly invisible (--s4); lift them so they read */
-.msg-row.me .msg-bubble.msg-unseen .vn-wave-row.base i{background:rgba(29,29,31,.26);}
 .vn-wave-row.fill{clip-path:inset(0 100% 0 0);will-change:clip-path;transition:clip-path var(--t-base) linear;}
 .vn-wave-row.fill i{background:#fff;}
 .msg-row.team .vn-wave-row.fill i{background:var(--accent-light);}
-.msg-row.me .msg-bubble.msg-unseen .vn-wave-row.fill i{background:var(--accent);}
 .vn-time{flex-shrink:0;font-size:12.5px;font-weight:600;opacity:.8;min-width:32px;text-align:end;font-variant-numeric:tabular-nums;}
 /* Auto AI transcript caption beneath a voice note — inherits the bubble's text
    colour so it reads on both the blue (mine) and light (theirs) bubbles. */
@@ -13384,9 +13391,19 @@ body.light{--card-hair:var(--bg);--card-fill:var(--s3);}
 .meta-card[onclick]:active,.meta-card[href]:active{background:var(--s3);}
 
 /* ── The canonical row: icon · title + one line of context · value ────────── */
+/* THE INSET IS EVEN ON EVERY SIDE, AND IT IS DERIVED. These cards sit at the app's one
+   card radius (--set-card-r), and the icon is the shape that lands in the card's top-left
+   corner — so by the app's corner law the gap around it must be the same all round, and
+   the card's radius must be the icon's plus that gap. The icon is a 34px CIRCLE (radius
+   17), so the inset is 30 − 17 = 13 and the two arcs are concentric. It used to be
+   `11px 13px` around a 10px-radius rounded square: uneven gaps, and a third corner radius
+   that belonged to no system — which is what read as "off". --mc-pad is that one number;
+   the footer below uses it too, so the button at the bottom nests exactly as the icon at
+   the top does. */
+.meta-card{--mc-pad:13px;}
 .mc-inv-top,.mc-call,.mc-contact,.mc-prod,.mc-callsched,.mc-cart-top,.mc-story-row{
-  display:flex;align-items:center;gap:11px;padding:11px 13px;margin:0;}
-.mc-inv-ic,.mc-call-ic,.mc-money-ic{flex:0 0 auto;width:34px;height:34px;border-radius:10px;
+  display:flex;align-items:center;gap:11px;padding:var(--mc-pad);margin:0;}
+.mc-inv-ic,.mc-call-ic,.mc-money-ic{flex:0 0 auto;width:34px;height:34px;border-radius:50%;
   display:grid;place-items:center;}
 .mc-inv-ic[style*="background"]{color:var(--accent-tint);}
 .mc-inv-ic[style*="--amber"]{color:var(--text-black);}
@@ -13399,11 +13416,18 @@ body.light{--card-hair:var(--bg);--card-fill:var(--s3);}
 .mc-inv-amt{flex:0 0 auto;font-size:15.5px;font-weight:800;color:var(--t1);letter-spacing:-.02em;}
 
 /* ── The footer: one full-width pill under a hairline, never floating ─────── */
-.mc-foot{border-top:1px solid var(--card-hair);padding:9px 10px;}
-.mc-foot > button,.mc-foot > .ac-pill-btn{width:100%;margin:0;}
+/* Same inset as the row above, so the button's ends sit exactly as far from the card's
+   edge as the icon does — and its own height is set so a capsule (radius = half its
+   height) nests in the card's bottom corners the way the icon nests in the top ones:
+   34 tall → radius 17, plus the 13 gap → the card's 30. Every corner in the card is then
+   the same arc. It used to be `9px 10px` around a button of whatever height it happened
+   to inherit, so no two corners agreed. */
+.mc-foot{border-top:1px solid var(--card-hair);padding:var(--mc-pad);}
+.mc-foot > button,.mc-foot > .ac-pill-btn{width:100%;margin:0;min-height:34px;}
 /* Any action button still written inline inside a card lands in the same place. */
 .meta-card > .ac-pill-btn,.meta-card > .btn-white,.meta-card > button.mc-cart-cta{
-  display:block;width:calc(100% - 20px);margin:0 10px 10px;}
+  display:block;width:calc(100% - var(--mc-pad) * 2);margin:0 var(--mc-pad) var(--mc-pad);
+  min-height:34px;}
 
 /* ── Money keeps its colour language: green is money, blue is identity ────── */
 .mc-money{display:block;padding:0;cursor:pointer;}
@@ -21450,7 +21474,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1790'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1791'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -27661,13 +27685,29 @@ let _msgMenuId = null, _menuJustOpened = false, _msgMenuAnchor = null, _msgMenuO
 function _restoreMenuOrig() { if (_msgMenuOrig) { try { _msgMenuOrig.style.visibility = ''; } catch (_) {} _msgMenuOrig = null; } }
 // Place a fixed popover sheet just below an anchor rect (flip above if there's
 // no room), clamped to the viewport. Shared by the options menu + delete sheet.
-function _anchorSheet(sheet, rect) {
+/* `cover` puts the menu ON the button instead of under it, and lines it up with whichever
+   side of the screen the button is on — the same behaviour the profile menu already has,
+   which is why that one reads as the button OPENING OUT rather than as a panel appearing
+   nearby. Its caller pairs it with `_hideMenuSrcBtn` so the button itself fades away.
+   Only opt-in: the message glide menu and the delete sheet want the old below-the-finger
+   placement, since there the "button" is a message you must still be able to see. */
+function _anchorSheet(sheet, rect, opts) {
   if (!sheet) return;
+  const cover = !!(opts && opts.cover);
   sheet.style.visibility = 'hidden';
   requestAnimationFrame(() => {
     const sw = sheet.offsetWidth, sh = sheet.offsetHeight;
     let left, top;
-    if (rect) {
+    if (rect && cover) {
+      /* Align the menu's near edge to the button's: a button in the right half opens
+         leftwards from its right edge, one in the left half opens rightwards. Anything
+         else makes a right-hand button's menu shoot off screen and get clamped, which is
+         what put the old menu in an arbitrary place rather than under the finger. */
+      const rightSide = (rect.left + rect.width / 2) > window.innerWidth / 2;
+      left = rightSide ? rect.right - sw : rect.left;
+      top = rect.top;                                        // sit ON the button
+      if (top + sh > window.innerHeight - 10) top = rect.bottom - sh;   // grow upward instead
+    } else if (rect) {
       left = rect.left;
       top = rect.bottom + 6;
       if (top + sh > window.innerHeight - 10) top = rect.top - sh - 6; // flip above
@@ -38715,7 +38755,9 @@ function _hideMenuSrcBtn(btn) {
     const obs = new MutationObserver(muts => {
       for (const m of muts) { if (m.target.classList && m.target.classList.contains('hidden')) { _restoreMenuSrcBtn(); return; } }
     });
-    ['aiMenuPop', 'chatMenuPop', 'notifMenuPop', 'contactsMorePop', 'giftCardPop', 'authQrMenu', 'alMorePop', 'profileMenu']
+    /* acHeadMenu is the conversation's ⋯ — it now covers its own button and hides it, so it
+       has to be watched too or the ⋯ never comes back after the menu closes. */
+    ['aiMenuPop', 'chatMenuPop', 'notifMenuPop', 'contactsMorePop', 'giftCardPop', 'authQrMenu', 'alMorePop', 'profileMenu', 'acHeadMenu']
       .forEach(id => { const el = document.getElementById(id); if (el) obs.observe(el, { attributes: true, attributeFilter: ['class'] }); });
   }
 }
@@ -56546,7 +56588,13 @@ function acThreadMenu(btn) {
       + `<button class="mm-item danger" onclick="acHeadAct('delete')">${IC.trash}<span class="mm-label">Delete chat</span></button>`;
   }
   showOverlay('acHeadMenu');
-  _anchorSheet(sheet, btn ? btn.getBoundingClientRect() : null);
+  /* The menu opens OUT OF the ⋯ and the ⋯ itself vanishes into it, exactly as the profile
+     menu on Home does. Capture the rect BEFORE hiding the button — `_hideMenuSrcBtn` uses
+     opacity, so the box survives, but reading it first keeps that a happy accident rather
+     than a dependency. */
+  const _r = btn ? btn.getBoundingClientRect() : null;
+  if (btn) _hideMenuSrcBtn(btn);
+  _anchorSheet(sheet, _r, { cover: true });
 }
 function acHeadAct(a) {
   closeOverlay('acHeadMenu');
