@@ -638,6 +638,11 @@ body.light .splash-mark{background-color:#d2d2d8;animation:splashPulseLight 2s e
   padding:calc(env(safe-area-inset-top) + 8px) var(--feed-gutter) max(calc(28px + env(safe-area-inset-bottom)), calc(var(--kb, 0px) + 16px));
   transition:padding-bottom var(--t-base) var(--ease);}
 .auth-step.hidden{display:none;}
+/* Out of the flow entirely — not a flex item, no box, nothing to shift. Kept RENDERED
+   (1px, transparent) rather than display:none, because a password manager ignores a field
+   it considers invisible and would then have no username to save the password against. */
+.auth-pm-user{position:absolute;width:1px;height:1px;padding:0;margin:0;border:0;
+  opacity:0;pointer-events:none;}
 /* Steps swap instantly so the shared header/back/Continue never blink; only the
    newly-revealed field animates in (see .auth-pw). */
 /* The password row rises in on its own so it feels like it "pops up" in place. */
@@ -13774,7 +13779,13 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
   </div>
 
   <!-- Step 2: password -->
-  <div class="auth-step hidden" id="authStep2">
+  <!-- A real <form>, because that is the ONE thing a browser's password manager needs in
+       order to offer "Save password?". It is the SAME element that was a div: .auth-step is
+       already the flex column, so swapping the tag adds no box and moves nothing. Wrapping
+       the fields in a form INSIDE the step would have been the damaging version — the
+       wrapper becomes a single flex item and the Continue button's margin-top:auto would
+       resolve against it instead of the step. -->
+  <form class="auth-step hidden" id="authStep2" novalidate onsubmit="return authLoginSubmit(event)">
     <div class="auth-stepbar">
       <button class="auth-backarrow" onclick="authBack()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
       <button class="auth-stepalt" onclick="forgotPassword()">Forgot password</button>
@@ -13782,25 +13793,27 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <h1 class="auth-steptitle">Enter your password</h1>
     <div class="auth-handle-static" id="authEmailEcho"><span class="auth-at">@</span> username</div>
     <div class="auth-pw">
-      <input class="auth-pw-input" type="password" id="loginPass" aria-label="Password" placeholder="Password" autocomplete="current-password" oninput="authToggleContinue()" onkeydown="if(event.key==='Enter')doLogin()"/>
+      <!-- No Enter handler: the form submits on Enter by itself now, and keeping the old
+           one would have run doLogin twice, once from the key and once from the submit. -->
+      <input class="auth-pw-input" type="password" id="loginPass" aria-label="Password" placeholder="Password" autocomplete="current-password" oninput="authToggleContinue()"/>
       <button type="button" class="auth-eye pwd-eye" onclick="togglePwd(this)" aria-label="Show password">
         <svg class="eye-open" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8.6" ry="7.4"/><circle cx="12" cy="12" r="3.1" fill="currentColor" stroke="none"/></svg>
         <svg class="eye-off" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8.6" ry="7.4"/><line x1="4.6" y1="19.4" x2="19.4" y2="4.6"/></svg>
       </button>
     </div>
     <div class="auth-pw hidden" id="login2faWrap" style="margin-top:10px;">
-      <input class="auth-pw-input" type="text" maxlength="20" id="login2fa" aria-label="Two-factor code" placeholder="Authenticator or recovery code" autocomplete="one-time-code" oninput="authToggleContinue()" onkeydown="if(event.key==='Enter')doLogin()"/>
+      <input class="auth-pw-input" type="text" maxlength="20" id="login2fa" aria-label="Two-factor code" placeholder="Authenticator or recovery code" autocomplete="one-time-code" oninput="authToggleContinue()"/>
     </div>
     <div class="auth-error" id="loginError"></div>
-    <button class="auth-btn auth-continue is-empty" id="loginBtn" onclick="doLogin()">Continue</button>
-    <!-- Shown when a suspended/banned account tries to sign in: let them appeal. -->
-    <div id="loginAppeal" class="hidden" style="margin-top:14px;">
-      <button class="auth-link" type="button" id="appealOpenBtn" onclick="openAppeal()" style="background:none;border:none;color:var(--accent);cursor:pointer;font:inherit;">Appeal this decision</button>
-      <div id="appealForm" class="hidden" style="margin-top:10px;">
-        <textarea id="appealMsg" maxlength="1500" rows="4" placeholder="Tell us why this should be reviewed (optional)…" style="width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid var(--b1);border-radius:12px;background:var(--s1);color:var(--t1);font:inherit;font-size:14px;resize:vertical;"></textarea>
-        <button class="auth-btn auth-continue" id="appealSubmitBtn" onclick="submitAppeal()" style="margin-top:8px;">Submit appeal</button>
-        <div class="auth-error" id="appealError"></div>
-      </div>
+    <!-- A submit button, so pressing it fires a real submit event — which is what Chrome,
+         Safari and iOS Keychain watch for to decide a sign-in just happened. -->
+    <button class="auth-btn auth-continue is-empty" id="loginBtn" type="submit">Continue</button>
+    <!-- The username the password belongs to. A password manager will not save a password
+         it cannot name, and this step only ECHOES the address as text. `type="hidden"` is
+         no good — managers ignore hidden inputs — so it is a real text field taken out of
+         the flow (position:absolute, so it is not a flex item and cannot move anything). -->
+    <input class="auth-pm-user" type="text" id="loginPmUser" autocomplete="username"
+      tabindex="-1" aria-hidden="true" readonly/>  </form>
     </div>
   </div>
 
@@ -21520,7 +21533,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1793'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1794'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -23125,6 +23138,23 @@ function playWelcomeSplash(user) {
   }, hold);
 }
 
+/* ── Letting the browser save the password (owner) ────────────────────────────────
+   Chrome, Safari and iOS Keychain decide "that was a sign-in, shall I save it?" by watching
+   for a real <form> submit carrying a username field and a current-password field. The
+   fields were already labelled correctly; what was missing was the form and the submit. The
+   step element itself became the <form>, so nothing about the layout changed.
+   preventDefault stops the browser navigating — this is a single-page app — and the save
+   prompt still fires, because the heuristic keys off the submit event, not the navigation. */
+function authSyncPmUser() {
+  const u = document.getElementById('loginPmUser'), src = document.getElementById('loginEmail');
+  if (u && src) u.value = src.value || '';
+}
+function authLoginSubmit(e) {
+  if (e) e.preventDefault();
+  authSyncPmUser();      // the password manager reads this field as the submit goes through
+  doLogin();
+  return false;
+}
 async function doLogin() {
   const identifier = document.getElementById('loginEmail').value.trim();
   const pass  = document.getElementById('loginPass').value;
@@ -23834,6 +23864,7 @@ async function authContinue() {
   setBtnLoading(btn, false);
   if (result.exists) {
     document.getElementById('authEmailEcho').innerHTML = '<span class="auth-at">@</span> ' + escHtml(id);
+    authSyncPmUser();
     document.getElementById('authStep1').classList.add('hidden');
     document.getElementById('authStep2').classList.remove('hidden');
     playStepIn(document.getElementById('authStep2'));
@@ -23913,6 +23944,7 @@ async function emailContinue() {
     // Hand off to the shared password step (doLogin reads #loginEmail).
     document.getElementById('loginEmail').value = email;
     document.getElementById('authEmailEcho').textContent = email;
+    authSyncPmUser();
     document.getElementById('authEmailStep').classList.add('hidden');
     document.getElementById('authStep2').classList.remove('hidden');
     playStepIn(document.getElementById('authStep2'));
@@ -64207,7 +64239,18 @@ document.addEventListener('keydown', (e) => {
   if (!document.getElementById('loginOverlay').classList.contains('hidden')) {
     // Email step → Continue; password step → Log in
     if (document.getElementById('authStep2').classList.contains('hidden')) authContinue();
-    else doLogin();
+    else {
+      /* THE PASSWORD STEP IS A REAL <form> NOW, so Enter inside it submits by itself and
+         this handler has to keep out of the way. Calling doLogin() here as well is what
+         made one Enter press fire TWO login requests — a bug that PREDATES the form: the
+         password field also carried its own Enter handler, so the two have been racing
+         since long before today. Two requests per press is not cosmetic; login is
+         rate-limited, so it burned the allowance twice as fast as it should.
+         Enter pressed from OUTSIDE the form (focus on the page, not in a field) still
+         needs a nudge, and that is the only case left here. */
+      const f = document.getElementById('authStep2');
+      if (f && !f.contains(e.target)) f.requestSubmit();
+    }
   }
   if (!document.getElementById('signupOverlay').classList.contains('hidden')) doSignup();
 });
