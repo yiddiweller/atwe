@@ -317,6 +317,22 @@ const FIXED  = 'I think we should meet tomorrow at 3 pm, ok?';
     `the wrapped text starts exactly where the + ink does (${ink.textL} / ${ink.plusL})`);
   say(ink.plusL > ink.sendR + 3,
     `and the bare + is given more room than the filled send disc (${ink.plusL} vs ${ink.sendR})`);
+
+  /* THE WRAPPED BUTTON ROW IS LEVEL. Every control there must share one centre line — and
+     that is what forces them to share one bottom margin, which in turn is what lets the
+     corner radius be derived from a single number. Giving the send its own smaller margin
+     to nest the corner dropped it 3px below the + beside it, plainly visible. */
+  const level = await l.p.evaluate(() => {
+    const bar = document.querySelector('#acThreadScreen .msg-inbox').getBoundingClientRect();
+    const cy = (sel) => { const n = document.querySelector('#acThreadScreen .msg-inbox ' + sel);
+      if (!n) return null; const q = n.getBoundingClientRect();
+      return q.width < 1 ? null : Math.round((q.top + q.bottom) / 2 - bar.top); };
+    return { plus: cy('.msg-attach'), ai: cy('.ac-fixbtn'),
+      send: cy('.msg-send') ?? cy('.ac-mic') };
+  });
+  const cys = Object.values(level).filter((v) => v !== null);
+  say(cys.length >= 2 && Math.max(...cys) - Math.min(...cys) <= 1,
+    `every control in the wrapped row shares one centre line (${JSON.stringify(level)})`);
   await l.ctx.close();
 
   await b.close();

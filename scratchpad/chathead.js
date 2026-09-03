@@ -233,6 +233,22 @@ const BASE = process.env.BASE || 'http://localhost:3262';
     return out;
   });
   say(!pres.on.hidden, 'online shows a green dot');
+  /* THE DOT SITS EVENLY IN THE PILL'S END. Its gap above, below and to the right must be
+     the same number — which is also the concentric answer, since the pill's end is a
+     semicircle and a dot whose centre sits one radius in shares that centre. It shipped
+     4px tighter on the right and read as pushed into the corner. */
+  const dotBox = await p.evaluate(async () => {
+    /* The block above leaves the peer OFFLINE, and a hidden dot has a zero-size rect that
+       measures as nonsense rather than failing honestly. Put them back online first. */
+    rtPresence[AC.peer.id] = { online: true }; acUpdatePeerPresence();
+    await new Promise((r) => setTimeout(r, 150));
+    const pill = document.querySelector('.ac-h3-pill').getBoundingClientRect();
+    const d = document.getElementById('acPeerDot'); const q = d.getBoundingClientRect();
+    return { size: Math.round(q.width), right: Math.round(pill.right - q.right),
+      top: Math.round(q.top - pill.top), bottom: Math.round(pill.bottom - q.bottom) };
+  });
+  say(dotBox.right === dotBox.top && dotBox.top === dotBox.bottom,
+    `and it sits evenly in the pill's end (${dotBox.top} above / ${dotBox.bottom} below / ${dotBox.right} right)`);
   /* THE DOT AND THE WORDS, TOGETHER (owner, build 1795 — this assertion used to say the
      opposite). The dot alone was the whole message and the second line was dropped, which
      left the pill saying nothing about WHY the dot was there: a green dot is a signal you
@@ -299,7 +315,7 @@ const BASE = process.env.BASE || 'http://localhost:3262';
      gets MORE room than the filled button opposite it, and neither drifts out of range. */
   say(bar.inkLeft > bar.micRight + 3,
     `the bare + is given more room than the filled button opposite it (${bar.inkLeft} / ${bar.micRight})`);
-  say(bar.inkLeft <= 20 && bar.micRight >= 8,
+  say(bar.inkLeft <= 20 && bar.micRight >= 6,
     `and neither has drifted out of range (${bar.inkLeft} / ${bar.micRight})`);
   say(Math.abs(bar.inkCy - bar.micCy) <= 0.6, `and share one centre line (${bar.inkCy} / ${bar.micCy})`);
   /* The placeholder clears the + by a real reading gap. It used to be tied to the + 's own

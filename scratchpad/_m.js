@@ -37,6 +37,22 @@ const { chromium } = require(process.env.PW + '/node_modules/playwright-core');
       textL:+(ta.left-bar.left+parseFloat(getComputedStyle(inp).paddingLeft)).toFixed(1) };
   });
   await p.screenshot({ path:'scratchpad/out/n-bar2.png', clip:{x:0,y:726,width:390,height:118} });
+  const rowcy = await p.evaluate(() => {
+    const bar=document.querySelector('#acThreadScreen .msg-inbox').getBoundingClientRect();
+    const cy=(sel)=>{const n=document.querySelector('#acThreadScreen .msg-inbox '+sel);
+      if(!n) return null; const q=n.getBoundingClientRect();
+      return q.width<1?null:+((q.top+q.bottom)/2 - bar.top).toFixed(1);};
+    return { plus:cy('.msg-attach'), plusSvg:cy('.msg-attach svg'), ai:cy('.ac-fixbtn'),
+      send:cy('.msg-send'), mic:cy('.ac-mic') };
+  });
+  const dot = await p.evaluate(() => {
+    const pill=document.querySelector('.ac-h3-pill').getBoundingClientRect();
+    const d=document.getElementById('acPeerDot');
+    d.classList.remove('hidden');
+    const q=d.getBoundingClientRect();
+    return { size:Math.round(q.width), right:+(pill.right-q.right).toFixed(1),
+      top:+(q.top-pill.top).toFixed(1), bottom:+(pill.bottom-q.bottom).toFixed(1) };
+  });
   const head = await p.evaluate(() => {
     const R=(s)=>{const n=document.querySelector(s); if(!n) return null; const q=n.getBoundingClientRect();
       return {x:Math.round(q.left), r:Math.round(q.right), w:Math.round(q.width)};};
@@ -77,5 +93,7 @@ const { chromium } = require(process.env.PW + '/node_modules/playwright-core');
   console.log('ONE-ROW  ', JSON.stringify(one));
   console.log('MULTILINE', JSON.stringify(two));
   console.log('HEADER   ', JSON.stringify(head));
+  console.log('DOT      ', JSON.stringify(dot));
+  console.log('ROW-CY   ', JSON.stringify(rowcy));
   await b.close();
 })().catch(e=>{console.error(e.message);process.exit(1);});
