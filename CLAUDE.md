@@ -6316,6 +6316,29 @@ number below is a direct pixel measurement at a known scale, not an estimate:
 - The corner follows from the disc: **24 = 16 + 8**, and their own two-line corner measures
   25.3, so the arithmetic and the screenshot agree to a pixel.
 
+**Seventh pass (1798) — two of those animations were walked back, at the owner's word.**
+
+- **The one-to-two-line step is INSTANT again.** 1797's morph (measure before, measure
+  after, glide between while clipping) worked and read as a *curtain* — the buttons appeared
+  to slide up out of the bar rather than the bar growing. `_barMorph` and `.h-anim` are
+  DELETED, not disabled. What survives is the simple half: the textarea's height is written
+  in px, so a plain CSS transition carries **every line after the second** and the button row
+  rides down with it — no clipping, no measuring, no layout trickery.
+- **The wrap step also suspends that transition.** At the wrap the text box grows by a whole
+  line at the same instant the buttons move to a row of their own; animating one half while
+  the other jumps is exactly what looked wrong, so `was !== want` writes the height under
+  `.no-anim`. Everything else eases.
+- **MEASURING IS NOT AN ANIMATION, and getting that order wrong is silent.** `acAutosize`
+  sets `height:auto` twice purely to read `scrollHeight`. Both measurements now suspend the
+  transition AND put the previous height straight back, so the only height that ever
+  animates is the final one. The first attempt wrote the final value while the transition
+  was still suppressed and re-enabled it afterwards — leaving nothing to travel, so the
+  third line jumped while every CSS rule said it should not.
+- **Only the GLYPH bubbles; the blue circle never moves.** 1797 ran `acDiscIn` on the
+  button, so the whole disc pumped — a lot of motion for a control that is only changing
+  what it does. The circle is the constant, the mark inside it is what changed, so the
+  animation moved to `.swap-in > svg`.
+
 **Sixth pass (1797) — nothing in a conversation "appears" any more.** The owner: *"I don't
 want everything should be like boom effect, I want it should rather be smooth like zooming in
 like a bubble… Apple style… and I'm talking about everything."* Three things in Beam were
