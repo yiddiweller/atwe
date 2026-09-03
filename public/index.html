@@ -20819,7 +20819,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
           <button class="msg-attach" id="acAttachBtn" onclick="acToggleAttachMenu(event)" aria-label="Add attachment">
             <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
-          <textarea id="acInput" rows="1" placeholder="Message" aria-label="Message" oninput="acAutosize();acTypingEmit();acSaveDraft();acChatMentionInput(this);acQrSlashExpand(this)" onfocus="acQrEnsureLoaded()" onblur="setTimeout(acChatMentionClose,150)"></textarea>
+          <textarea id="acInput" rows="1" placeholder="Message" aria-label="Message" oninput="acAutosize();acTypingEmit();acSaveDraft();acChatMentionInput(this);acQrSlashExpand(this)" onfocus="acQrEnsureLoaded();acBarFocus()" onblur="setTimeout(acChatMentionClose,150);acBarBlur()"></textarea>
           <!-- The one-tap proofreader. Appears once there is something worth fixing, sits
                beside the mic/send, and hands the whole message to Atwe AI to correct its
                spelling, grammar and punctuation — nothing else. The Atwe swirl is the
@@ -21332,7 +21332,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1782'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1783'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -55376,6 +55376,9 @@ async function acStartNewThread(peerId) {
   } catch (e) { showNotif(e.message || 'Could not start a new conversation.'); }
 }
 async function acOpenChat(id, threadId) {
+  /* The bar opens on tap and closes on blur; arriving at a NEW conversation must never
+     inherit the last one's open state if that blur never fired (a deep link, say). */
+  AC._barFocus = false;
   if (window._crashTab) _crashTab('chat-thread');
   AC.threadId = threadId || null; // which conversation (null = main)
   acThreadSearchClose(); // never carry an open in-chat search across conversations
@@ -59768,6 +59771,9 @@ async function acLoadLiveStrip() {
 }
 
 async function acOpenGroup(id) {
+  /* The bar opens on tap and closes on blur; arriving at a NEW conversation must never
+     inherit the last one's open state if that blur never fired (a deep link, say). */
+  AC._barFocus = false;
   if (window._crashTab) _crashTab('group-thread');
   // Optimistic: zero the group row's unread the instant it's opened (the badge
   // never outlives entering the chat); the server confirms on refresh.
@@ -62273,13 +62279,61 @@ function acAutosize() {
   if (was) box.classList.remove('multiline');
   inp.style.height = 'auto';
   const h = inp.scrollHeight;                       // always at the one-row width
-  const want = h > 44;
+  /* Two things open the tall layout: the message genuinely wrapping, and the bar simply
+     being TAPPED (the owner's ask — tap it, the keyboard comes up, and the text takes its
+     own row with the +/AI/send beneath, the way ChatGPT's composer does). Only the first
+     is a measurement, so `_barWrapped` keeps it on its own for the flip-flop guard: focus
+     can never feed back into the height, so adding it cannot reintroduce the loop. */
+  AC._barWrapped = h > 44;
+  const want = AC._barWrapped || !!AC._barFocus;
   if (box) box.classList.toggle('multiline', want);
   // The applied mode may be wider than the one just measured, so take the final height there.
   if (want) { inp.style.height = 'auto'; inp.style.height = Math.min(inp.scrollHeight, 130) + 'px'; }
   else inp.style.height = Math.min(h, 130) + 'px';
   acToggleSendMic();
 }
+
+/* THE BAR OPENS THE MOMENT IT IS TAPPED, not only once the message wraps — the owner's
+   design, taken from ChatGPT's composer. `acAutosize` owns the class either way, so the
+   two-row layout, the 28px corner and the button insets are all the ones already in place;
+   nothing here is a second copy of that.
+   Closing it again has one trap worth knowing: tapping the + or the send BLURS the
+   textarea, and collapsing at that instant moves the very button being pressed out from
+   under the finger, so the tap lands on nothing. A blur that arrives while a finger is
+   still down on the bar is HELD until it lifts and re-checked then; and it never closes
+   while the attach menu is open, because that menu is anchored to the + and the bar
+   shrinking underneath it would leave it floating in a gap. */
+let _acBarPress = false, _acBarBlurWait = false;
+function acBarFocus() { _acBarBlurWait = false; if (AC._barFocus) return; AC._barFocus = true; acAutosize(); }
+function acBarBlur() {
+  if (_acBarPress) { _acBarBlurWait = true; return; }
+  const am = document.getElementById('acAttachMenu');
+  if (am && !am.classList.contains('hidden')) { _acBarBlurWait = true; return; }
+  if (!AC._barFocus) return;
+  AC._barFocus = false; acAutosize();
+}
+function _acBarUp() {
+  _acBarPress = false;
+  if (!_acBarBlurWait) return;
+  /* NEVER decide at pointerup. The button's own click — the one that OPENS the attach menu —
+     has not run yet at that point, so a decision taken here reads the menu as still closed
+     and collapses the bar out from under the finger, which is the exact thing being guarded
+     against. Let the click land first, then look. */
+  _acBarLater(110);
+}
+function _acBarLater(ms) { clearTimeout(_acBarLater._t); _acBarLater._t = setTimeout(_acBarSettle, ms); }
+function _acBarSettle() {
+  if (!_acBarBlurWait) return;
+  if (document.activeElement === document.getElementById('acInput')) { _acBarBlurWait = false; return; }
+  const am = document.getElementById('acAttachMenu');
+  if (am && !am.classList.contains('hidden')) { _acBarLater(300); return; }   // keep looking while it is up
+  _acBarBlurWait = false; AC._barFocus = false; acAutosize();
+}
+document.addEventListener('pointerdown', (e) => {
+  if (e.target && e.target.closest && e.target.closest('.msg-inbox')) _acBarPress = true;
+}, true);
+document.addEventListener('pointerup', _acBarUp, true);
+document.addEventListener('pointercancel', _acBarUp, true);
 
 /* ── Voice notes (MediaRecorder) ── */
 let acRec, acRecChunks = [], acRecTimer = null, acRecStart = 0, acRecCancel = false, _micAutoSend = false;

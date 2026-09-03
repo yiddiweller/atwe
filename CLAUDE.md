@@ -6019,7 +6019,26 @@ so the two cannot disagree.
 
 NB `chathead.js`'s "its ends are fully rounded — a true capsule at any height" check tests
 the RESTING bar, which is one line; `fixtext.js` owns the wrapped case, asserts the corner
-is `sendRadius + inset`, and self-tests (restoring `999px` fails it). Its `padding` stays **5px** throughout: the
+is `sendRadius + inset`, and self-tests (restoring `999px` fails it).
+
+**The bar also opens the moment it is TAPPED, not only when the message wraps** (owner, with
+ChatGPT's composer as the reference): tap it, the keyboard comes up, and the text takes its
+own row with the +/AI/send beneath it. `acAutosize` owns `.multiline` either way, so the
+two-row layout, the 28px corner and the insets are all the ones already described — nothing
+is a second copy. Two things are load-bearing:
+- **`AC._barWrapped` is kept separate from `AC._barFocus`.** Only the wrap is a MEASUREMENT,
+  and only a measurement can feed back into itself, so the flip-flop guard above still has
+  exactly one thing to reason about. `fixtext.js` traces `_barWrapped`, not the class — the
+  class is now `M` from the first keystroke either way, which would make the trace vacuous.
+- **The collapse is NEVER decided at `pointerup`.** Tapping the + blurs the textarea, and the
+  button's own click — the one that OPENS the attach menu — has not run yet at pointerup, so
+  a decision taken there reads the menu as closed and collapses the bar out from under the
+  finger, moving the button mid-tap. A blur that arrives while a finger is down on the bar is
+  held (`_acBarBlurWait`), re-checked ~110ms later (`_acBarSettle`), and re-checked again
+  every 300ms while the attach menu is up — that menu is anchored to the +, so shrinking the
+  bar underneath it would leave it floating in a gap. `acOpenChat`/`acOpenGroup` clear
+  `_barFocus`, so arriving at a new conversation can never inherit the last one's open state
+  if its blur never fired. Its `padding` stays **5px** throughout: the
 cards' 8px rhythm is derived from it, so the bar's height comes from the text row
 (`min-height:40`) and the buttons, never from the padding.
 
