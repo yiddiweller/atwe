@@ -6305,6 +6305,29 @@ number below is a direct pixel measurement at a known scale, not an estimate:
 - The corner follows from the disc: **24 = 16 + 8**, and their own two-line corner measures
   25.3, so the arithmetic and the screenshot agree to a pixel.
 
+**Ninth pass (1800) — the CORNER was the thing that looked wrong all along.** The owner:
+*"the two sides stay fully rounded, just in a bigger bar, and after a second the edges turn
+round and the sides get straight"* — i.e. the bar seemed to take a moment to work out what
+shape it was.
+
+**A border-radius is CLAMPED to half the box's short side, so what you SEE is
+`min(declared, height/2)`.** The morph was easing the radius 999 → 24 while the height grew
+49 → 107, and the clamp made the visible corner TRACK THE GROWING BOX: measured every frame,
+it went **24.7 → 53.5 → 24** — a giant lozenge that swelled with the bar and then snapped
+square the instant the eased value finally fell under half the height. Exactly what they
+described, and invisible to any check that reads the declared value.
+
+The fix is to **not animate the corner at all**: `--bar-r` (24) is switched on instantly and
+HELD for the whole morph in both directions (`.h-grow` pins it, or the unwrap re-rounds to 34
+while the box is still tall). There is nothing to see, because at the one-line height a
+capsule renders 24.5 and this renders 24 — half a pixel apart — so the shape is already right
+on the first frame and the sides straighten purely as a CONSEQUENCE of the height. That is
+the whole effect.
+
+`smooth.js` measures the **effective** corner (`min(declared, height/2)`), never the declared
+one, and fails if it ever exceeds the resting value by more than a couple of pixels. Putting
+the transition back peaks it at 52 growing and 47 shrinking.
+
 **Eighth pass (1799) — the bar simply gets taller, and one measurement explains all of it.**
 The owner: *"I just want it to extend smoothly, bigger, to the two-line bar"* — 1797's
 animated version read as a curtain, 1798's instant step read as a pop.
