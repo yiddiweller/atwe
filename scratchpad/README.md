@@ -88,7 +88,13 @@ box once the message wraps**: 28 is asserted as `sendRadius + inset`, i.e. deriv
 send button rather than typed, so a future change to either has to move both. NB the Light-
 theme legibility check measures the dots against **the bar**, not the button — the button
 has no fill any more, so comparing to its own background compares them with `rgba(0,0,0,0)`.
-Self-tested: restoring the blue disc, the bigger dots and the capsule fails 7 of its checks.
+It also owns the **tap-to-open composer**: an empty bar nobody is in stays the short capsule,
+tapping it opens the tall two-row box, and `AC._barWrapped` proves it was the tap rather than
+a phantom wrap. The check that earned its keep is the last one — tapping the **+** must not
+collapse the bar out from under the finger. It failed on the first implementation, which
+decided at `pointerup`, before the click that opens the menu had run.
+Self-tested: restoring the blue disc, the bigger dots and the capsule fails 7 of its checks,
+and disabling the tap-to-open fails 2 more.
 
 ## The chat header (`chathead.js`)
 

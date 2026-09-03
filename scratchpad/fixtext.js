@@ -192,7 +192,11 @@ const FIXED  = 'I think we should meet tomorrow at 3 pm, ok?';
         that just fitted can wrap — and the multiline decision used to be measured in
         whichever mode was current, which is a feedback loop: it toggled on EVERY keystroke
         through a band of message lengths (traced `.M.M.M.M`) and the bar jumped a whole row
-        up and down as you typed. The decision is taken at the single-row width now. */
+        up and down as you typed. The decision is taken at the single-row width now.
+        NB the CLASS is no longer the thing to trace: the bar also opens simply on being
+        tapped, so it is `M` from the first keystroke either way. What is traced is the
+        WRAP decision itself (`AC._barWrapped`), which is the half that is measured — and
+        therefore the only half that could ever feed back into itself. */
   await p.fill('#acInput', '');
   await p.waitForTimeout(300);
   await p.click('#acInput');
@@ -200,10 +204,49 @@ const FIXED  = 'I think we should meet tomorrow at 3 pm, ok?';
   for (const ch of 'i thnk we shud meet tomorow at 3 pm ok and then go over the plan') {
     await p.keyboard.type(ch);
     await p.waitForTimeout(22);
-    trace.push(await p.evaluate(() => document.querySelector('#acThreadScreen .msg-inbox').classList.contains('multiline') ? 'M' : '.'));
+    trace.push(await p.evaluate(() => AC._barWrapped ? 'M' : '.'));
   }
   const flips = trace.join('').replace(/(.)\1+/g, '$1').length - 1;
   say(flips <= 1, `the bar settles into its tall mode once and stays — ${flips} change${flips === 1 ? '' : 's'} over ${trace.length} keystrokes (it used to flip on nearly every one)`);
+  /* 6b. AND IT OPENS THE MOMENT IT IS TAPPED — the owner's ChatGPT-style composer: tap the
+         bar, the keyboard comes up, and the text takes its own row with the buttons beneath.
+         The trap being guarded is the closing half: tapping the + BLURS the textarea, and a
+         collapse at that instant would move the button out from under the finger. */
+  await p.fill('#acInput', '');
+  await p.evaluate(() => document.getElementById('acInput').blur());
+  await p.waitForTimeout(450);
+  const rest = await p.evaluate(() => {
+    const b = document.querySelector('#acThreadScreen .msg-inbox');
+    return { ml: b.classList.contains('multiline'), h: Math.round(b.getBoundingClientRect().height) };
+  });
+  say(!rest.ml, `an empty bar nobody is typing in stays the short capsule (${rest.h}px)`);
+  await p.click('#acInput');
+  await p.waitForTimeout(450);
+  const tall = await p.evaluate(() => {
+    const b = document.querySelector('#acThreadScreen .msg-inbox');
+    return { ml: b.classList.contains('multiline'), h: Math.round(b.getBoundingClientRect().height),
+      wrapped: AC._barWrapped };
+  });
+  say(tall.ml && tall.h > rest.h + 20,
+    `tapping it opens the tall two-row box even with nothing typed (${rest.h} -> ${tall.h}px)`);
+  say(tall.wrapped === false, 'and it is the tap doing it, not a phantom wrap');
+  /* Tapping the + must not yank itself away: the bar has to still be open when the tap lands. */
+  const plusBefore = await p.evaluate(() => Math.round(document.getElementById('acAttachBtn').getBoundingClientRect().top));
+  await p.click('#acAttachBtn');
+  await p.waitForTimeout(250);
+  const afterPlus = await p.evaluate(() => ({
+    menu: !document.getElementById('acAttachMenu').classList.contains('hidden'),
+    ml: document.querySelector('#acThreadScreen .msg-inbox').classList.contains('multiline'),
+    plusTop: Math.round(document.getElementById('acAttachBtn').getBoundingClientRect().top) }));
+  say(afterPlus.menu, 'the + still opens the attach menu from the open bar');
+  say(afterPlus.ml && afterPlus.plusTop === plusBefore,
+    `and the bar does not collapse out from under it (+ stayed at ${afterPlus.plusTop})`);
+  await p.evaluate(() => acCloseAttachMenu());
+  await p.evaluate(() => document.getElementById('acInput').blur());
+  await p.waitForTimeout(700);
+  const closed = await p.evaluate(() => document.querySelector('#acThreadScreen .msg-inbox').classList.contains('multiline'));
+  say(!closed, 'and it closes again once the menu is gone and nothing has focus');
+
   say(errs.length === 0, `no JS errors${errs.length ? ' — ' + errs[0] : ''}`);
   await ctx.close();
 
@@ -236,6 +279,10 @@ const FIXED  = 'I think we should meet tomorrow at 3 pm, ok?';
         from the send button (18) plus its 10px inset, so the corner is concentric with it. */
   const shape = async (page, text) => {
     await page.fill('#acInput', text);
+    /* fill() focuses the box, and a FOCUSED bar is deliberately open whatever it holds —
+       so blur first: this is the WRAP behaviour, not the tapped one. */
+    await page.evaluate(() => document.getElementById('acInput').blur());
+    await page.waitForTimeout(450);
     await page.evaluate(() => acAutosize());
     await page.waitForTimeout(400);
     return page.evaluate(() => {
