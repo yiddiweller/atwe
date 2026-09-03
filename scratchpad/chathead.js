@@ -78,6 +78,12 @@ const BASE = process.env.BASE || 'http://localhost:3262';
   const gapL = geo.pill.l - geo.back.r, gapR = geo.more.l - geo.pill.r;
   say(Math.abs(gapL - gapR) <= 1, `the gaps between them match (${gapL} / ${gapR})`);
   say(geo.back.l === geo.vw - geo.more.r, `and the row is inset evenly from both edges (${geo.back.l} / ${geo.vw - geo.more.r})`);
+  /* THE GAP BETWEEN THE SHAPES IS SMALLER THAN THE INSET AROUND THEM, and the ratio comes
+     off Safari's own bar — the owner's reference — where the gap is 0.21 of the circle's
+     diameter. Ours was 0.33, which is what made the pill read as narrow with too much air
+     beside it. Asserted as a RATIO, not as 10px, so resizing --h3-size keeps it honest. */
+  say(gapL < geo.back.l && gapL / geo.back.h < 0.26,
+    `the shapes sit closer to each other than to the screen edge (gap ${gapL} on a ${geo.back.h} circle = ${(gapL / geo.back.h).toFixed(2)}, inset ${geo.back.l})`);
   say(geo.back.w === geo.back.h && geo.more.w === geo.more.h, 'both end buttons are true circles');
 
   /* 1a. THE TOP FADE — run FIRST, while the thread is untouched: it prepends a probe
@@ -227,7 +233,12 @@ const BASE = process.env.BASE || 'http://localhost:3262';
     return out;
   });
   say(!pres.on.hidden, 'online shows a green dot');
-  say(!pres.on.subShown, 'and drops the second line, so the name centres in the pill — as drawn');
+  /* THE DOT AND THE WORDS, TOGETHER (owner, build 1795 — this assertion used to say the
+     opposite). The dot alone was the whole message and the second line was dropped, which
+     left the pill saying nothing about WHY the dot was there: a green dot is a signal you
+     have to already know how to read. */
+  say(pres.on.subShown && /active now/i.test(pres.on.sub),
+    `and says "Active now" under the name ("${pres.on.sub}")`);
   /* NO grey dot (owner): away is said by "Last seen …" under the name, and a second, dimmer
      signal for the same fact only read as a smudge. */
   say(pres.off.hidden, 'offline shows NO dot at all');
@@ -280,11 +291,22 @@ const BASE = process.env.BASE || 'http://localhost:3262';
   });
   say(bar.h >= 50, `the message box sits taller than the flat original (${bar.h}px, was 44)`);
   say(bar.radius >= bar.h / 2 - 1, `its ends are fully rounded — a true capsule at any height (${bar.radius} for a ${bar.h}px bar)`);
-  say(Math.abs(bar.inkLeft - bar.micRight) <= 1,
-    `the + and the mic sit the same distance from their own ends (${bar.inkLeft} / ${bar.micRight})`);
+  /* THEY ARE DELIBERATELY NOT EVEN, and this assertion used to say the opposite (build
+     1795). Both ends sat at 10 and were geometrically even — and the owner still saw the +
+     as jammed against the wall, because a bare 24px glyph carries less visual weight than a
+     solid 36px disc and needs more air to read as equally placed. ChatGPT's own bar gives
+     the + ~17 and the send ~9 for exactly this reason. So the rule is now optical: the +
+     gets MORE room than the filled button opposite it, and neither drifts out of range. */
+  say(bar.inkLeft > bar.micRight + 3,
+    `the bare + is given more room than the filled button opposite it (${bar.inkLeft} / ${bar.micRight})`);
+  say(bar.inkLeft <= 20 && bar.micRight >= 8,
+    `and neither has drifted out of range (${bar.inkLeft} / ${bar.micRight})`);
   say(Math.abs(bar.inkCy - bar.micCy) <= 0.6, `and share one centre line (${bar.inkCy} / ${bar.micCy})`);
-  say(Math.abs(bar.textGap - bar.inkLeft) <= 2,
-    `"Message" starts the same distance from the + as the + does from the edge (${bar.textGap} vs ${bar.inkLeft})`);
+  /* The placeholder clears the + by a real reading gap. It used to be tied to the + 's own
+     inset, which stopped meaning anything once that inset became an optical correction for
+     the SCREEN EDGE rather than a rhythm — ink-to-ink is a different relationship. */
+  say(bar.textGap >= 8 && bar.textGap <= 18,
+    `"Message" clears the + by a clean reading gap (${bar.textGap})`);
 
   /* Calling is the menu's own FIRST SECTION, drawn as a grouped block rather than two loose
      rows above a hairline. It is absent only where there is genuinely nobody to call — a
