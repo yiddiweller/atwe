@@ -850,6 +850,26 @@ so `S.user` knows it at boot. Toggle: a **"Last seen & online"** row in the chat
 mirrors the granular 3-way picker on Privacy & safety (`apPresence`); both go through
 `setAccPriv('presenceVisibility', …)`, which syncs `S.user` + `acOnPresenceVisChanged`
 (re-render + re-poll so hidden→shown refetches what the server withheld).
+**Per-person "hide my last seen"** (`presence_hidden`, the owner's own idea) is the
+exception list on top of that global setting: from a conversation's ⋯ menu, hide your
+online/last-seen from **that one person** while everyone else still sees it. WhatsApp and
+Telegram both have the capability buried in Settings as a list you assemble in advance;
+what is new here is deciding it **in the conversation**, about the person in front of you.
+It is **RECIPROCAL** — hiding from someone hides them from you too, matching the rule the
+global `nobody` setting already follows, so nobody can watch a person while invisible to
+them. One helper, **`presenceHiddenWith(uid)`**, reads the pair in both directions and is
+wired into **all three doors presence leaves by** — `broadcastPresence` (the live fan-out;
+with an exception list in play it iterates `rtClients` instead of calling `rtBroadcast`,
+which has no per-recipient filter), `presenceVisibleTo` (the `presence-init` snapshot) and
+the `/api/atchat/presence` poll. Fixing only the poll would still have shown a green dot
+the moment the other person opened the app. It **fails open** on a DB error, like the rest
+of presence. Routes `GET/POST/DELETE /api/atchat/presence-hidden[/:id]`; the DM thread
+payload carries `presenceHidden` so the ⋯ menu can tick it. **The GET returns only rows
+this member CHOSE** (`user_id = me`) — telling someone that a person hid from them would
+hand back the exact fact the feature conceals. Client: `acToggleHideLastSeenFrom` (with a
+confirm that states the reciprocity up front rather than letting it be discovered), and a
+**Hidden from** list on Privacy & safety (`acOpenLastSeenHidden`) so a deleted conversation
+can never strand the setting somewhere unreachable. Covered by `scratchpad/lastseen.js`.
 `connections_visible` (hide your
 connections list — gates `/api/social/connections/:username`), `who_can_request`
 (everyone/network/nobody — gates `POST /api/connections/:id`),
@@ -5863,17 +5883,22 @@ person who taps it expects their own message back, spelled correctly, not rewrit
   as one set of controls rather than one blue badge among plain glyphs. Blue would have been
   defensible under the colour law (identity, and the AI is one of its named uses) — the
   owner's point was about the BAR, not the law.
-- **The mark is much smaller than the blue send beside it** (owner) — a **26px** mark against
-  the send's 36, i.e. 72%. The BOX stays 36 (`inset:5px` on the `::before`), so every
+- **The mark is much smaller than the blue send beside it** (owner, twice) — a **22px** mark
+  against the send's 36, i.e. 61%. The BOX stays 36 (`inset:7px` on the `::before`), so every
   alignment and spacing rule around it is untouched and the tap target stays a full 36:
   **shrink the mark, never the button.** This is the same move `GLYPH_SCALE` makes for the
   nav icons.
-- **The dots' size is measured, not chosen — and the right measurement is a BAND, not a
-  square.** Decoding `public/logo-mark.png`'s alpha channel, the largest clear *square*
-  inside the mark is 0.421 of its box, but a horizontal ROW of dots only needs a clear
-  horizontal band through the centre, which is **0.465** — 12.1px across the 26px mark. Using
-  the square figure is why an earlier pass thought it had less room than it did. Three 2.4px
-  dots with 1.7px gaps come to 10.6 and leave ~0.75px clear at each end.
+- **The dots' size is measured, and TWO corrections are baked into the numbers.** (1) The
+  right measurement for a ROW of dots is not the largest inscribed *square* inside the
+  artwork (0.421 of it) but the widest clear horizontal **band** through its centre —
+  **0.465**. (2) The mask is `center/contain` over the **whole 512px file**, and the artwork
+  fills only **0.8945** of it, so the drawn ink is 0.8945 of the button's box and the usable
+  band is `0.465 × 0.8945 = 0.416` of the box, NOT 0.465. **Missing that transparent padding
+  over-stated the room by 12%** and is exactly why the dots touched the arms — at a 26px
+  mark they had 0.24px of clearance, not the 0.77 the arithmetic claimed. A 22px mark gives
+  a 9.3px band; three 1.6px dots with 1.15px gaps come to 7.1 and leave ~1.1px clear each
+  side. Any measurement taken off `logo-mark.png` must be scaled by 0.8945 before it means
+  anything about the rendered box.
 - **The gap is 0.7× the dot, and that is what makes them read as three.** They shipped at
   `3.4px` dots with `2.2px` gaps and the owner's verdict was that they were not "three even
   circles" — at that ratio, and at that size, they close up into a single dash. `fixtext.js`
@@ -6042,26 +6067,19 @@ NB `chathead.js`'s "its ends are fully rounded — a true capsule at any height"
 the RESTING bar, which is one line; `fixtext.js` owns the wrapped case, asserts the corner
 is `sendRadius + inset`, and self-tests (restoring `999px` fails it).
 
-**The bar also opens the moment it is TAPPED, not only when the message wraps** (owner, with
-ChatGPT's composer as the reference): tap it, the keyboard comes up, and the text takes its
-own row with the +/AI/send beneath it. `acAutosize` owns `.multiline` either way, so the
-two-row layout, the 28px corner and the insets are all the ones already described — nothing
-is a second copy. Two things are load-bearing:
-- **`AC._barWrapped` is kept separate from `AC._barFocus`.** Only the wrap is a MEASUREMENT,
-  and only a measurement can feed back into itself, so the flip-flop guard above still has
-  exactly one thing to reason about. `fixtext.js` traces `_barWrapped`, not the class — the
-  class is now `M` from the first keystroke either way, which would make the trace vacuous.
-- **The collapse is NEVER decided at `pointerup`.** Tapping the + blurs the textarea, and the
-  button's own click — the one that OPENS the attach menu — has not run yet at pointerup, so
-  a decision taken there reads the menu as closed and collapses the bar out from under the
-  finger, moving the button mid-tap. A blur that arrives while a finger is down on the bar is
-  held (`_acBarBlurWait`), re-checked ~110ms later (`_acBarSettle`), and re-checked again
-  every 300ms while the attach menu is up — that menu is anchored to the +, so shrinking the
-  bar underneath it would leave it floating in a gap. `acOpenChat`/`acOpenGroup` clear
-  `_barFocus`, so arriving at a new conversation can never inherit the last one's open state
-  if its blur never fired. Its `padding` stays **5px** throughout: the
-cards' 8px rhythm is derived from it, so the bar's height comes from the text row
-(`min-height:40`) and the buttons, never from the padding.
+**The bar stays ONE row until the message genuinely wraps.** Build 1783 opened it on every
+tap (ChatGPT-style, at the owner's request) and 1785 took that back out at theirs — the bar
+growing on every tap is too much motion for a chat you are only glancing at. The tap-to-open
+code was **deleted**, not left dormant: it carried three document-level `pointer*` listeners,
+and a switched-off effect whose JS still runs is the exact trap the media-shield note above
+records. What survives is `AC._barWrapped`, kept as its own field beside the class because
+the wrap is the half that is MEASURED and therefore the only half that can feed back into
+itself — which is what the flip-flop guard reasons about.
+
+**Once it does wrap, the first line needs room above it.** The multiline textarea's top
+padding is **10px**, not 4: at 4 the first line sat almost against the bar's top edge (the
+owner photographed it) and read as clipped. 10 matches what the one-row textarea already
+carries, so the text sits the same distance from the bar's edge in both modes.
 
 `scratchpad/chathead.js` (51 checks) covers all of it, in both themes, plus the group case.
 

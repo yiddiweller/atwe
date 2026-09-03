@@ -914,6 +914,24 @@ async function initSchema() {
   // and it had no index — the primary key leads with blocker_id, so it cannot serve it.
   await query(`CREATE INDEX IF NOT EXISTS blocks_blocked_idx ON blocks(blocked_id);`);
 
+  /* Per-person "hide my last seen" — the exception list on top of the global
+     `users.presence_visibility`. A row means user_id has hidden their online/last-seen
+     from hidden_id, set from that conversation's ⋯ menu.
+     IT IS READ IN BOTH DIRECTIONS, deliberately: hiding from someone also hides them
+     from you, matching the reciprocity the global 'nobody' setting already has. So the
+     row is written one-way (it records who chose it) and enforced symmetrically — which
+     is why BOTH columns need an index, exactly as `blocks` does. */
+  await query(`
+    CREATE TABLE IF NOT EXISTS presence_hidden (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      hidden_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, hidden_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS presence_hidden_user_idx ON presence_hidden(user_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS presence_hidden_hidden_idx ON presence_hidden(hidden_id);`);
+
   // Reports — a user flags another for the admin dashboard to review.
   await query(`
     CREATE TABLE IF NOT EXISTS reports (
