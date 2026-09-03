@@ -1734,6 +1734,52 @@ body.light #aiMenuPop,body.light #chatMenuPop,body.light #notifMenuPop,body.ligh
 .me-hero-name .ac-prof-name-txt,.me-hero-name span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .me-hero-handle{font-size:14.5px;color:var(--t3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .me-hero-go{width:19px;height:19px;flex-shrink:0;stroke:var(--t4);stroke-width:2;fill:none;}
+/* ── The account switcher (owner, modelled on Gmail's) ──────────────────────────
+   The hero holds two controls now. `.me-hero-tap` is the person — it fills the card and
+   opens the profile. `.me-hero-switch` is the round chevron that opens the switcher. The
+   card's own press-scale has to be driven off the INNER button (`:has`), or pressing the
+   chevron would shrink the whole card as well. */
+.me-hero-tap{flex:1;min-width:0;display:flex;align-items:center;gap:15px;
+  background:none;border:none;padding:0;margin:0;font:inherit;color:inherit;text-align:start;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;}
+.me-hero{transition:transform var(--t-fast) var(--ease);}
+.me-hero:has(.me-hero-tap:active){transform:scale(.99);}
+.me-hero-switch{flex:0 0 auto;width:38px;height:38px;border-radius:50%;background:var(--s3);
+  border:none;padding:0;display:grid;place-items:center;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease);}
+.me-hero-switch svg{width:20px;height:20px;stroke:var(--t1);stroke-width:2.2;fill:none;
+  transition:transform var(--t-base) var(--ease);}
+.me-hero-switch:active{background:var(--s4);}
+.me-hero.open .me-hero-switch svg{transform:rotate(180deg);}
+/* Open, the card grows the way Gmail's does: a bigger picture, and the email appears —
+   which is the line that actually tells two accounts apart. */
+.me-hero-email{display:none;font-size:13px;color:var(--t3);margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.me-hero.open .me-hero-email:not(:empty){display:block;}
+.me-hero-ava .user-avatar{transition:width var(--t-base) var(--ease),height var(--t-base) var(--ease);}
+.me-hero.open .me-hero-ava .user-avatar{width:70px;height:70px;font-size:27px;}
+/* The panel pushes everything below it down — it is a real block in the scroll flow, not
+   an overlay, which is the whole point of the Gmail behaviour the owner asked for. Height
+   is animated from a measured value (see acToggleAccountSwitch); `hidden` cannot be used
+   because it would kill the transition. */
+.me-switch{overflow:hidden;height:0;transition:height var(--t-base) var(--ease);}
+.me-switch-in{padding-bottom:12px;}
+.me-switch-card{background:var(--s2);border-radius:var(--set-card-r);overflow:hidden;}
+.me-acct{display:flex;align-items:center;gap:14px;width:100%;min-height:var(--row-h);
+  padding:10px 16px;background:none;border:none;font-family:inherit;text-align:start;cursor:pointer;
+  color:var(--t1);border-bottom:1px solid var(--bg);-webkit-tap-highlight-color:transparent;}
+.me-switch-card > .me-acct:last-child{border-bottom:none;}
+.me-acct:active{background:var(--s3);}
+.me-acct .user-avatar{width:42px;height:42px;font-size:17px;flex-shrink:0;}
+.me-acct-main{flex:1;min-width:0;display:flex;flex-direction:column;}
+.me-acct-name{font-size:15.5px;font-weight:650;letter-spacing:-.01em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.me-acct-sub{font-size:13px;color:var(--t3);margin-top:1px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* The + sits in the avatar's slot so the label lines up with every account above it. */
+.me-acct-add-ic{width:42px;height:42px;border-radius:50%;background:var(--s3);flex-shrink:0;
+  display:grid;place-items:center;}
+.me-acct-add-ic svg{width:21px;height:21px;stroke:var(--t1);stroke-width:2.2;fill:none;}
 .me-catlabel{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);margin:18px 4px 9px;}
 /* Wallet card pinned directly under the Me-hub identity header (blueprint). */
 .me-wallet{display:block;width:100%;text-align:start;border:none;cursor:pointer;color:#fff;
@@ -21474,7 +21520,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1791'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1792'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -33639,6 +33685,9 @@ const PLACES_EXTRA = [
   { l: 'Engine',          sub: 'Discover',  kw: 'search discover explore find engine browse', run: "appTab('search')" },
   { l: 'Atwe AI',         sub: 'Assistant', kw: 'ai assistant ask chatbot help write', run: "appTab('ai')" },
   { l: 'Your profile',    sub: 'Account',   kw: 'profile me my page account', run: "appTab('profile')" },
+  /* It left ME_HUB_FOOT for the hero's switcher; without this line it would vanish from
+     app-wide search, which is exactly the trap the Account-page trim fell into once. */
+  { l: 'Add account',     sub: 'Account',   kw: 'add account switch second another sign in accounts change user', run: "acOpenAccountSwitch()" },
   /* The bell is a nav destination but was never in this list — search only found
      "Notifications" through the Account page's old App-and-help card, so trimming that
      card silently took it out of search. It belongs here: it is one of the five worlds. */
@@ -36567,17 +36616,81 @@ const ME_HUB_TAIL = [
 /* Sits on the hub itself, under the sections — the way Settings keeps Sign Out at the
    bottom of the account page rather than filing it under a heading. */
 const ME_HUB_FOOT = [
-  /* Add account moved here when the sidebar's Profile row was removed. That row was
-     desktop's ONLY way into the account menu (the top-bar avatar is phone-only), so
-     without this the second-account flow would have had no door at all on a desktop.
-     Beside Log out is the natural place — the two belong to the same job. */
-  { l: 'Add account', ic: _ME_IC.people, run: "openAddAccount(event)", kw: 'add account switch second another sign in' },
+  /* Add account used to sit here, above Log out. It moved INTO the account switcher that
+     the hero's chevron opens (owner) — which is where someone actually thinks about it,
+     next to the accounts they already have, rather than at the bottom of a long page. It
+     is still reachable on desktop, because the hero is on the Account page at every width;
+     that was the reason it was parked here in the first place, when the sidebar's Profile
+     row was removed. `acAppIndex` keeps it findable from any search bar via PLACES_EXTRA. */
   { l: 'Log out', ic: _ME_IC.out, run: "logout()", kw: 'log out sign out logout exit', danger: true },
 ];
+/* ── The account switcher on the Account page (owner, modelled on Gmail) ───────────
+   The hero's round chevron opens a panel IN THE SCROLL FLOW, so the wallet card and every
+   section below genuinely move down — that pushing-apart is the behaviour being copied,
+   and an overlay would not do it. It lists the other signed-in accounts and "Add another
+   account"; the row that adds one used to sit at the bottom of the page, above Log out.
+   Everything it does already existed (`Accounts`, `switchAccount`, `addExistingAccount`) —
+   this is a new door onto it, not a new mechanism. */
+let _meSwitchOpen = false;
+function acRenderAccountSwitch() {
+  const box = document.getElementById('meSwitch'); if (!box) return;
+  const others = (typeof Accounts !== 'undefined' ? Accounts.list() : []).filter(a => a.id !== currentAccountId());
+  const rows = others.map(a => `<button class="me-acct" onclick="acSwitchToAccount(${a.id})">
+      ${acAvatarHtml(a.name, a.avatar)}
+      <span class="me-acct-main"><span class="me-acct-name">${escHtml(a.name || '')}</span>
+      <span class="me-acct-sub">${a.username ? '@' + escHtml(a.username) : ''}</span></span>
+    </button>`).join('');
+  box.innerHTML = `<div class="me-switch-in"><div class="me-switch-card">${rows}
+      <button class="me-acct" onclick="acAddAccountFromSwitch()">
+        <span class="me-acct-add-ic"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+        <span class="me-acct-main"><span class="me-acct-name">Add another account</span></span>
+      </button></div></div>`;
+}
+function acToggleAccountSwitch(e) {
+  if (e) e.stopPropagation();            // the hero's other half opens the profile
+  const box = document.getElementById('meSwitch'), hero = document.getElementById('meHero');
+  const btn = document.getElementById('meHeroSwitch');
+  if (!box || !hero) return;
+  _meSwitchOpen = !_meSwitchOpen;
+  hero.classList.toggle('open', _meSwitchOpen);
+  if (btn) btn.setAttribute('aria-expanded', _meSwitchOpen ? 'true' : 'false');
+  if (_meSwitchOpen) {
+    acRenderAccountSwitch();
+    /* Animate from the MEASURED content height — `height:auto` cannot be transitioned.
+       Set the real height, then drop back to auto once it lands so a later re-render
+       (adding an account) is not pinned to a stale number. */
+    box.style.height = box.firstElementChild.offsetHeight + 'px';
+    clearTimeout(acToggleAccountSwitch._t);
+    acToggleAccountSwitch._t = setTimeout(() => { if (_meSwitchOpen) box.style.height = 'auto'; }, 320);
+  } else {
+    box.style.height = box.offsetHeight + 'px';   // pin the current height first…
+    void box.offsetHeight;                        // …force a reflow so 0 animates from it
+    box.style.height = '0px';
+    clearTimeout(acToggleAccountSwitch._t);
+  }
+  if (typeof announce === 'function') announce(_meSwitchOpen ? 'Account switcher open' : 'Account switcher closed');
+}
+/* Search and any deep link land here: go to the Account page, then open the panel. */
+function acOpenAccountSwitch() {
+  appTab('profile');
+  setTimeout(() => { if (!_meSwitchOpen) acToggleAccountSwitch(); }, 260);
+}
+function acAddAccountFromSwitch() { if (_meSwitchOpen) acToggleAccountSwitch(); addExistingAccount(); }
+/* switchAccount already does the real work; it just lands you on Home afterwards. Coming
+   from this panel you were ON the Account page, so come back to it as the new person. */
+async function acSwitchToAccount(id) {
+  if (_meSwitchOpen) acToggleAccountSwitch();
+  await switchAccount(id);
+  if (currentAccountId() === id) appTab('profile');
+}
+
 function acGoProfileHub() {
   requireSectionUnlock('profile', () => {
     // No top bar on this page — syncTopbar first (resets state), then acShow hides
     // the bar (acMeScreen is in AC_OWN_HEADER) so the hero leads with a clean top.
+    /* The panel is rebuilt with the page, so its open flag must not survive a visit —
+       otherwise the chevron reads "open" over a panel that is no longer there. */
+    _meSwitchOpen = false;
     acStopMic(); syncTopbar('profile'); acShow('acMeScreen', null);
     acLoadChangelogBadge(); // quiet "what's new" dot
     acCheckInboxAccess();   // does this person work a business's customer inbox?
@@ -36585,14 +36698,24 @@ function acGoProfileHub() {
     // `color` is accepted for back-compat with existing call sites but no longer
     // used — icon tiles are plain glyphs now, no per-row background at all.
     const item = (lbl, ic, onclick, color, danger, cls) => acEntryHidden(onclick) ? '' : `<button class="me-row ${danger ? 'danger' : ''} ${cls || ''}" onclick="${onclick}"><span class="me-ic">${ic}</span><span class="me-lbl">${escHtml(lbl)}</span><svg class="me-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`;
-    let html = `<button class="me-hero" onclick="acGoProfile()">
-        <div class="me-hero-ava">${acAvatarHtml(u.name, u.avatar, 'user-avatar', acIsBiz(u))}</div>
-        <div class="me-hero-main">
-          <div class="me-hero-name"><span>${escHtml(u.name || 'Your profile')}</span>${verified ? vbadge(true) : ''}</div>
-          <div class="me-hero-handle">${u.username ? '@' + escHtml(u.username) : 'Finish setting up your profile'}</div>
-        </div>
-        <svg class="me-hero-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
-      </button>`;
+    /* The hero is a CARD holding two separate controls, not one big button: tapping the
+       person opens their profile, tapping the round chevron opens the account switcher.
+       A <button> cannot contain another <button>, which is why the card itself is a div. */
+    let html = `<div class="me-hero" id="meHero">
+        <button class="me-hero-tap" onclick="acGoProfile()">
+          <div class="me-hero-ava">${acAvatarHtml(u.name, u.avatar, 'user-avatar', acIsBiz(u))}</div>
+          <div class="me-hero-main">
+            <div class="me-hero-name"><span>${escHtml(u.name || 'Your profile')}</span>${verified ? vbadge(true) : ''}</div>
+            <div class="me-hero-handle">${u.username ? '@' + escHtml(u.username) : 'Finish setting up your profile'}</div>
+            <div class="me-hero-email">${escHtml(u.email || '')}</div>
+          </div>
+        </button>
+        <button class="me-hero-switch" id="meHeroSwitch" onclick="acToggleAccountSwitch(event)"
+          aria-expanded="false" aria-controls="meSwitch" aria-label="Switch account">
+          <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+      <div class="me-switch" id="meSwitch"></div>`;
     // Wallet card sits directly under the identity header (design blueprint).
     html += `<button class="me-wallet" onclick="acOpenWallet()">
         <div class="me-wallet-head"><span class="me-wallet-cap">Atwe Wallet</span><svg class="me-wallet-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
