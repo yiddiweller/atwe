@@ -168,10 +168,17 @@ const BASE = process.env.BASE || 'http://localhost:3262';
   await p.evaluate(() => { [...document.querySelectorAll('style')].filter(s => s.textContent.includes('#FF00FF')).forEach(s => s.remove()); });
   await p.waitForTimeout(200);
 
-  /* 7c. No live blur may sit over the thread on a PHONE. A backdrop-filter over moving
-        content is re-rasterised every frame — the heaviest per-frame cost on the screen,
-        and the one thing a conversation had that Home did not (the mobile home bar is
-        deliberately solid). Desktop keeps the frost; a laptop GPU pays it easily. */
+  /* 7c. No INCIDENTAL live blur may sit over the thread on a PHONE. A backdrop-filter over
+        moving content is re-rasterised every frame — the heaviest per-frame cost on the
+        screen, and the one thing a conversation had that Home did not. Desktop keeps the
+        frost; a laptop GPU pays it easily.
+        THE TOP EDGE IS THE ONE DELIBERATE EXCEPTION (build 1786, the owner's ask for a real
+        Liquid-Glass edge). It is allowed because it was measured rather than assumed: at a
+        6x CPU throttle the frame pacing is identical with it and without (p50 16.6ms both,
+        zero frames over 32ms), and each of its four layers is sized to its own mask so the
+        widest blur covers the least area. Everything else stays banned — the point of the
+        rule is that a blur must be a decision somebody measured, not one that drifted in. */
+  const ALLOWED_BLUR = 'ac-topglass';
   const blurs = await p.evaluate(() => {
     const v = document.getElementById('acThreadVP').getBoundingClientRect();
     const out = [];
@@ -182,11 +189,13 @@ const BASE = process.env.BASE || 'http://localhost:3262';
       if (r.width < 2 || r.height < 2) return;
       if (r.right <= v.left || r.left >= v.right || r.bottom < v.top || r.top > v.bottom) return;
       if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0) return;
-      out.push((el.id || String(el.className).split(' ')[0]) + ' ' + bf);
+      const key = el.id || String(el.className).split(' ')[0];
+      if (key === ALLOWED_BLUR || (el.parentElement && el.parentElement.classList.contains(ALLOWED_BLUR))) return;
+      out.push(key + ' ' + bf);
     });
     return out;
   });
-  say(blurs.length === 0, `no live blur over the thread on a phone${blurs.length ? ' — ' + blurs.join(', ') : ''}`);
+  say(blurs.length === 0, `no blur over the thread on a phone beyond the measured top edge${blurs.length ? ' — ' + blurs.join(', ') : ''}`);
 
   /* 8. `touch-action: pan-y` gives vertical to the browser and KEEPS horizontal for us.
         Swipe-to-reply is the thing that would have died if this said `pan-x`/`auto`, and

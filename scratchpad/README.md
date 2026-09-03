@@ -121,6 +121,26 @@ control account's snapshot empty too, so the check passed for the wrong reason. 
 poll withholds presence by returning a **null `last_seen`**, not by omitting the key — so
 "can they see it" has to test the value, not `key in obj`.
 
+## The chat's top edge and the presence dot (`chatedge.js`)
+
+Two things the owner caught on a real phone: a green "they're online" dot flashing for the
+first second of every chat open, and a top fade that read as a dark bar rather than glass.
+
+**The dot checks sample THROUGHOUT the open, not after it** — the whole complaint is about
+the second in between — and the probe **holds the thread fetch back by 700ms**. That delay
+is load-bearing: locally the server answers in ~10ms, so the flash is shorter than one
+sample and the check goes green on the very bug it exists to catch. Verified by removing
+the fix: with no delay it passed, with the delay it fails.
+
+**The edge is checked from the real gradient stops, not a screenshot** — a dark gradient
+over dark content cannot be sampled honestly — and the assertion is on the largest single
+STEP in the ramp, which is what "a big shift" actually means. The blur is proved by painting
+a hard-edged black-and-white stripe into the thread and reading how much contrast survives
+under the band (107 against 255 below it). Those stripes must go INSIDE `#acThreadScreen`:
+a body-level element cannot be behind the glass at all, since `#app` is its own stacking
+context — the first version painted them on top of everything and the control read a flat
+zero, which is what a probe measuring nothing looks like.
+
 ## The chat header (`chathead.js`)
 
 The owner redesigned the chat page from a drawing: the header is three shapes floating on
