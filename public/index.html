@@ -12013,6 +12013,23 @@ body.light .ac-place:hover{background:rgba(0,0,0,.04);}
     border-inline-start:1px solid var(--b2);border-inline-end:none;}
   /* The refresh sweep is absolutely positioned to the row; keep it inside the column. */
   body.beam2 #tbTabRow .tb-refresh-beam{width:100%;}
+  /* …AND THE STRIP ITSELF LEAVES THE FLOW. Narrowing the tab ROW to the list column was
+     only half the job: `.topbar` is still a full-width bar in normal flow, so it reserved
+     50px of EMPTY black across the conversation too, and every pane started 50px below the
+     sidebar. That dead band above the chat is what the owner reported. Its one visible
+     child is already sized and pushed to the list column, so the strip is parked over that
+     column instead: the conversation pane then reaches the top, level with the sidebar,
+     and only the list pads itself to clear the row it still needs.
+     `--beam-topbar-h` keeps the two in step — the bar's height and the list's headroom are
+     one number, so they cannot drift apart. */
+  body.beam2{--beam-topbar-h:50px;}
+  body.beam2 .main{position:relative;}
+  body.beam2 .topbar{position:absolute;top:0;inset-inline-end:0;width:var(--beam-list-w);
+    height:var(--beam-topbar-h);box-sizing:border-box;}
+  body.beam2 #acListScreen{padding-top:var(--beam-topbar-h);}
+  /* The row already fills the strip, so the auto margin that used to shove it rightwards
+     across a full-width bar has nothing left to do — and would fight the fixed width. */
+  body.beam2 #tbTabRow{margin-inline-start:0;}
 }
 /* Beam two-pane is centred on screen exactly like the rest of the app. In beam2
    mode rail-on is off, so the sidebar never got the margin-inline-start:auto that centres
@@ -21433,7 +21450,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1789'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1790'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;

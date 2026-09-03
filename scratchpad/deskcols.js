@@ -47,9 +47,16 @@ const BOXES = () => {
     return (cs.display !== 'none' && r.width > 2)
       ? { x: Math.round(r.x), w: Math.round(r.width) } : null;
   };
+  const y = (s) => { const e = document.querySelector(s); if (!e) return null;
+    const r = e.getBoundingClientRect(); const cs = getComputedStyle(e);
+    return (cs.display !== 'none' && r.width > 2 && r.height > 2) ? Math.round(r.top) : null; };
   return { sb: q('.sidebar'), mid: q('.main'), rail: q('.right-rail'),
            card: q('.overlay.route-view:not(.hidden) > *'), list: q('#acListScreen'),
-           search: q('.rr-search'), post: q('#sbPost') };
+           search: q('.rr-search'), post: q('#sbPost'),
+           /* Tops, for the dead-band check below. */
+           sbY: y('.sidebar'), listY: y('#acListScreen'),
+           threadY: y('#acThreadScreen') ?? y('#beamEmptyPane'),
+           bar: q('.topbar') };
 };
 
 (async () => {
@@ -91,6 +98,22 @@ const BOXES = () => {
         say(beam.list && Math.abs(beam.list.x - home.rail.x) <= 1 && Math.abs(beam.list.w - home.rail.w) <= 1,
           `${theme}/${W} Beam's list sits where the rail does` +
           `  list=${beam.list ? beam.list.x + '/' + beam.list.w : 'MISSING'} rail=${home.rail.x}/${home.rail.w}`);
+      }
+      /* NO DEAD BAND ABOVE THE CONVERSATION. The shared top bar is a full-width strip in
+         normal flow, and its only visible child belongs to the LIST column — so on desktop
+         it reserved ~50px of empty black across the conversation as well, and every pane
+         started that far below the sidebar. The owner saw it as the chat "sitting lower
+         than it should". All three columns must begin at the same y, and the bar itself
+         must sit over the list rather than spanning the window. */
+      if (beam.sbY !== null && beam.threadY !== null) {
+        say(beam.sbY === beam.threadY && beam.listY === beam.threadY,
+          `${theme}/${W} Beam's three columns all start at the top` +
+          `  nav=${beam.sbY} chat=${beam.threadY} list=${beam.listY}`);
+      }
+      if (beam.bar && beam.list) {
+        say(Math.abs(beam.bar.x - beam.list.x) <= 2 && Math.abs(beam.bar.w - beam.list.w) <= 2,
+          `${theme}/${W} and its top bar covers the list column only, not the window` +
+          `  bar=${beam.bar.x}/${beam.bar.w} list=${beam.list.x}/${beam.list.w}`);
       }
 
       // The rail's Post pill shares the search field's edges exactly.
