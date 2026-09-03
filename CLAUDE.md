@@ -1112,6 +1112,25 @@ below).
 > a *back*, and only then does it animate — arriving from another world is not a
 > navigation within this page.
 >
+> **The hero opens an ACCOUNT SWITCHER** (owner, modelled on Gmail's). The small `›` on the
+> hero is a round chevron button (`#meHeroSwitch`) beside the person, so the card now holds
+> TWO controls — tapping the person opens their profile, tapping the chevron opens the
+> switcher. **A `<button>` cannot contain another `<button>`, which is why `.me-hero` became
+> a div**; its press-scale is driven off the inner `.me-hero-tap` via `:has()`, or pressing
+> the chevron would shrink the whole card too.
+> **The panel is a real block in the scroll flow, never an overlay** — the wallet card and
+> every section below genuinely move down, and that pushing-apart IS the behaviour being
+> copied. Height animates from a MEASURED value (`height:auto` cannot be transitioned), then
+> drops back to `auto` once it lands so a later re-render is not pinned to a stale number.
+> Open, the hero grows its picture 62 → 70 and reveals the **email**, which is the line that
+> actually tells two accounts apart. Nothing underneath is new: `Accounts`, `switchAccount`
+> and `addExistingAccount` already existed — this is a new door onto them. `acSwitchToAccount`
+> wraps the switch so you land back on the Account page as the new person rather than on Home.
+> **`Add account` left `ME_HUB_FOOT`** for this panel; it stays findable from every search bar
+> because a `PLACES_EXTRA` entry replaced it — the exact trap the earlier Account-page trim
+> fell into. `_meSwitchOpen` is reset in `acGoProfileHub`, or the chevron reads "open" over a
+> panel that was rebuilt closed.
+>
 > **The Account page has its own iOS-Settings-style search** (`#acMeSearch`,
 > `acMeSearchInput`/`acMeSearchClear`), inline in the scroll flow **under the wallet
 > card** and separate from the cards below it (owner) — the way you reach one of 98
