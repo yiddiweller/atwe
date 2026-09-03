@@ -72,6 +72,27 @@ const BASE = process.env.BASE || 'http://localhost:3262';
     say(after.wallet > before + 100, `${label}: everything below moves down instead of being covered (${before} → ${after.wallet})`);
     say(after.inFlow, `${label}: because the panel is a real block in the page, not an overlay`);
     say(after.rows === 3 && after.add, `${label}: it lists the other accounts and "Add another account" (${after.rows} rows)`);
+    /* TWO cards, not one (owner): the accounts you have, and — separately — adding a new
+       one. They are different kinds of thing, and every other stack on this page keeps that
+       separation. The gap is the page's own 12px, so the switcher reads as part of the same
+       stack rather than a thing of its own. */
+    const split = await p.evaluate(() => {
+      const c = [...document.querySelectorAll('#meSwitch .me-switch-card')];
+      const wal = document.querySelector('.me-wallet').getBoundingClientRect();
+      return { n: c.length, rows: c.map((x) => x.querySelectorAll('.me-acct').length),
+        gap: c.length > 1 ? Math.round(c[1].getBoundingClientRect().top - c[0].getBoundingClientRect().bottom) : null,
+        toWallet: Math.round(wal.top - c[c.length - 1].getBoundingClientRect().bottom),
+        addIsAlone: c[c.length - 1].querySelectorAll('.me-acct').length === 1
+          && !!c[c.length - 1].querySelector('.me-acct-add-ic') };
+    });
+    say(split.n === 2 && split.addIsAlone,
+      `${label}: the accounts and "Add another account" are SEPARATE cards (${split.n}, rows ${split.rows.join(' + ')})`);
+    say(split.gap === 12 && split.toWallet === 12,
+      `${label}: with the page's own 12px gap between them and below (${split.gap} / ${split.toWallet})`);
+    /* The email under the handle was tried and taken out again (owner). */
+    say(await p.evaluate(() => !document.querySelector('.me-hero-email')
+      && !/@[^\s]+\.[a-z]{2,}/.test(document.querySelector('.me-hero-main').innerText.replace(/@\w+/g, ''))),
+      `${label}: and no email line under the handle`);
     say(after.open && after.expanded === 'true', `${label}: the chevron reads as open, for a screen reader too`);
     say(after.ava > 62, `${label}: and the account bubble grows (${after.ava}px)`);
 
@@ -99,6 +120,28 @@ const BASE = process.env.BASE || 'http://localhost:3262';
     }
 
     say(errs.length === 0, `${label}: no JS errors${errs.length ? ' — ' + errs[0] : ''}`);
+    await ctx.close();
+  }
+
+  /* With no other accounts there is nothing to list, so the first card is DROPPED rather
+     than rendered empty — a card with no rows in it is worse than no card. */
+  {
+    const ctx = await b.newContext({ viewport: { width: 390, height: 900 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+    const p = await ctx.newPage();
+    await p.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
+    await p.evaluate((t) => { localStorage.setItem('atwe_token', t); localStorage.setItem('atwe_theme', 'black');
+      localStorage.setItem('atwe_accounts', '[]'); }, process.env.TOK);
+    await p.goto(BASE + '/me', { waitUntil: 'domcontentloaded' });
+    await p.waitForTimeout(5200);
+    await p.evaluate(() => { const s = document.querySelector('#introSheet:not(.hidden)'); if (s && typeof introDismiss === 'function') introDismiss(); });
+    await p.waitForTimeout(500);
+    await p.click('#meHeroSwitch'); await p.waitForTimeout(700);
+    const solo = await p.evaluate(() => {
+      const c = [...document.querySelectorAll('#meSwitch .me-switch-card')];
+      return { n: c.length, rows: c.map((x) => x.querySelectorAll('.me-acct').length) };
+    });
+    say(solo.n === 1 && solo.rows[0] === 1,
+      `on the only account it is just the one Add card, never an empty one (${solo.n} card, ${solo.rows.join('')} row)`);
     await ctx.close();
   }
 
