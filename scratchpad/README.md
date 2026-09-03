@@ -79,6 +79,17 @@ a **Range over the shimmer's own text** to get the exact line rectangles, column
 inside those, and a threshold **calibrated by measuring a flat fill** — flat reads ~59, the
 wave ~255, and the check demands 120.
 
+It also owns two things the owner corrected afterwards. The button is the Atwe mark in the
+same **white as the `+`** with **no disc behind it**, so it is checked against the `+`'s own
+colour rather than a hardcoded value — and its three dots must fit inside the swirl's open
+centre, so their total width is measured against the hollow's real size (0.421 of the mark's
+box, decoded from the PNG's alpha). And the bar is a **capsule on one line, a 28px rounded
+box once the message wraps**: 28 is asserted as `sendRadius + inset`, i.e. derived from the
+send button rather than typed, so a future change to either has to move both. NB the Light-
+theme legibility check measures the dots against **the bar**, not the button — the button
+has no fill any more, so comparing to its own background compares them with `rgba(0,0,0,0)`.
+Self-tested: restoring the blue disc, the bigger dots and the capsule fails 7 of its checks.
+
 ## The chat header (`chathead.js`)
 
 The owner redesigned the chat page from a drawing: the header is three shapes floating on

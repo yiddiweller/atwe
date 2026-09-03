@@ -69,19 +69,42 @@ const FIXED  = 'I think we should meet tomorrow at 3 pm, ok?';
   const s1 = await shown(p);
   say(s1.on && s1.w >= 30, `it appears once a real sentence is typed (${s1.w}px wide)`);
 
-  /* 2. It is the Atwe mark with three dots in the middle — the owner's design. */
+  /* 2. It is the Atwe mark with three dots in the middle — the owner's design.
+        WHITE, and NO disc behind it: the mark and the dots must be the same colour as the
+        + on the other end of the bar, so the bar reads as one set of controls rather than
+        one blue badge among plain glyphs. The dots must also fit INSIDE the swirl's own
+        open centre — the mark is a spiral and its middle really is hollow — so their total
+        width is checked against the measured hollow (0.421 of the mark's box). */
   const look = await p.evaluate(() => {
     const b = document.getElementById('acFixBtn');
     const before = getComputedStyle(b, '::before');
+    const dot = b.querySelector('.afx-dots i');
+    const dots = [...b.querySelectorAll('.afx-dots i')];
+    const gap = parseFloat(getComputedStyle(b.querySelector('.afx-dots')).columnGap) || 0;
+    const dw = parseFloat(getComputedStyle(dot).width);
+    const plus = document.querySelector('#acThreadScreen .msg-inbox .msg-attach svg');
     return { mask: (before.webkitMaskImage || before.maskImage || ''), maskOpacity: +before.opacity,
-      dots: b.querySelectorAll('.afx-dots i').length,
-      dotColour: getComputedStyle(b.querySelector('.afx-dots i')).backgroundColor,
-      accent: getComputedStyle(document.body).getPropertyValue('--accent').trim(),
+      dots: dots.length, markColour: before.backgroundColor,
+      dotColour: getComputedStyle(dot).backgroundColor,
+      plusColour: plus ? getComputedStyle(plus).color : '',
+      btnBg: getComputedStyle(b).backgroundColor,
+      dotsWide: dots.length * dw + (dots.length - 1) * gap,
+      btnW: parseFloat(getComputedStyle(b).width),
       round: getComputedStyle(b).borderRadius };
   });
   say(/logo-mark\.png/.test(look.mask), 'the button carries the real Atwe mark, not a redraw');
   say(look.dots === 3, `with three dots in its centre (${look.dots})`);
   say(/^50%|999/.test(look.round), `and it is a circle (${look.round})`);
+  say(/rgba\(0, 0, 0, 0\)|transparent/.test(look.btnBg),
+    `no disc behind it — the mark IS the button (${look.btnBg})`);
+  say(look.maskOpacity === 1 && look.markColour === look.plusColour,
+    `the mark is the same white as the + beside it (${look.markColour} vs ${look.plusColour}, opacity ${look.maskOpacity})`);
+  say(look.dotColour === look.plusColour, `and so are the dots (${look.dotColour})`);
+  /* The measured hollow: the largest clear square inside the mark is 0.421 of its bounding
+     box. The dots shipped at 14.6px inside a 15.2px hollow and visibly touched the arms. */
+  const hollow = look.btnW * 0.421;
+  say(look.dotsWide <= hollow - 2,
+    `the dots clear the swirl's arms (${look.dotsWide.toFixed(1)}px of dots in a ${hollow.toFixed(1)}px hollow)`);
 
   /* 3. Tapping it: the text shimmers, the box is held, the button shows it is working. */
   await stub(p, FIXED, 2600);
@@ -189,15 +212,53 @@ const FIXED  = 'I think we should meet tomorrow at 3 pm, ok?';
   await l.p.click('#acInput');
   await l.p.type('#acInput', SLOPPY, { delay: 4 });
   await l.p.waitForTimeout(500);
+  /* NB the button itself has no fill — the mark IS the button — so its legibility is
+     measured against THE BAR behind it, not against its own (transparent) background.
+     Comparing to the button would compare the dots with rgba(0,0,0,0), i.e. with black. */
   const lt = await l.p.evaluate(() => {
     const b = document.getElementById('acFixBtn');
+    const bar = document.querySelector('#acThreadScreen .msg-inbox');
     const rgb = (c) => (c.match(/\d+/g) || []).slice(0, 3).map(Number);
     const diff = (a, c) => Math.max(...a.map((v, i) => Math.abs(v - c[i])));
+    const plus = document.querySelector('#acThreadScreen .msg-inbox .msg-attach svg');
     return { on: b.classList.contains('show'),
-      contrast: diff(rgb(getComputedStyle(b).backgroundColor), rgb(getComputedStyle(b.querySelector('.afx-dots i')).backgroundColor)) };
+      sameAsPlus: getComputedStyle(b.querySelector('.afx-dots i')).backgroundColor === getComputedStyle(plus).color
+        && getComputedStyle(b, '::before').backgroundColor === getComputedStyle(plus).color,
+      contrast: diff(rgb(getComputedStyle(bar).backgroundColor), rgb(getComputedStyle(b.querySelector('.afx-dots i')).backgroundColor)) };
   });
   say(lt.on, 'it appears in Light theme too');
-  say(lt.contrast >= 40, `and its dots are clearly visible against the button (${lt.contrast})`);
+  say(lt.contrast >= 40, `and its dots are clearly visible against the bar (${lt.contrast})`);
+  say(lt.sameAsPlus, 'the mark and its dots are the same ink as the + in Light theme too');
+
+  /* 8. THE BAR IS A CAPSULE ON ONE LINE AND A ROUNDED BOX ONCE IT WRAPS.
+        A capsule's ends are semicircles, so on a two-line box they read as a giant lozenge —
+        the owner's own complaint, with a ChatGPT composer as the reference. 28 is derived
+        from the send button (18) plus its 10px inset, so the corner is concentric with it. */
+  const shape = async (page, text) => {
+    await page.fill('#acInput', text);
+    await page.evaluate(() => acAutosize());
+    await page.waitForTimeout(400);
+    return page.evaluate(() => {
+      const box = document.querySelector('#acThreadScreen .msg-inbox');
+      /* Only ONE of mic/send is showing at a time; the other is hidden and reports a zero
+         box, so take whichever actually has width rather than the first match. */
+      const send = [...document.querySelectorAll('#acThreadScreen .msg-inbox .msg-send, #acThreadScreen .msg-inbox .ac-mic')]
+        .find((n) => n.getBoundingClientRect().width > 1);
+      const B = box.getBoundingClientRect(), S = send.getBoundingClientRect();
+      return { ml: box.classList.contains('multiline'), r: parseFloat(getComputedStyle(box).borderTopLeftRadius),
+        h: Math.round(B.height), sendR: S.width / 2,
+        gapEnd: Math.round(B.right - S.right), gapBottom: Math.round(B.bottom - S.bottom) };
+    });
+  };
+  const one = await shape(l.p, 'hi there');
+  say(!one.ml && one.r >= one.h / 2 - 1, `one line stays a true capsule (${one.r} for a ${one.h}px bar)`);
+  const two = await shape(l.p, 'i thnk we shud meet tomorow at 3 pm ok and then we can go over the whole plan together');
+  say(two.ml && two.r < two.h / 2 - 4,
+    `a wrapped message becomes a rounded BOX, not a lozenge (${two.r} for a ${two.h}px bar)`);
+  say(two.gapEnd === two.gapBottom,
+    `the send button is inset the same on both sides of that corner (${two.gapEnd} / ${two.gapBottom})`);
+  say(Math.abs(two.r - (two.sendR + two.gapEnd)) <= 1,
+    `so the corner is concentric with it — radius ${two.r} = ${two.sendR} + ${two.gapEnd}`);
   await l.ctx.close();
 
   await b.close();

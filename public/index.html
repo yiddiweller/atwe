@@ -5708,12 +5708,25 @@ body.light .ac-item-unread.muted{background:var(--t3);}
   /* FULLY ROUNDED at rest (owner) — a true capsule, whatever the bar's height. It falls
      back to a rounded rectangle only when a card is riding inside it (a reply, a pending
      photo, the secret notice): a stadium end on a tall box looks wrong, and the cards'
-     own 15px radius is derived from the 24. Same condition list as the rule that reveals
+     own 19px radius is derived from the 28. Same condition list as the rule that reveals
      the wrapper, so the two can never disagree. */
   border-radius:999px;padding:5px;transition:border-color var(--t-fast) var(--ease);}
 .msg-inbox:has(> .msg-incards > .ac-reply-ctx:not(.hidden)),
 .msg-inbox:has(> .msg-incards > .ac-secret-bar:not(.hidden)),
-.msg-inbox:has(> .msg-incards > .msg-imgprev.show){border-radius:24px;}
+.msg-inbox:has(> .msg-incards > .msg-imgprev.show),
+/* …and once the message runs past one line. A capsule's ends are semicircles, so on a tall
+   box they read as a giant lozenge; every messenger that grows its composer switches to a
+   rounded rectangle at that point, which is what the owner's ChatGPT sample shows.
+   28 is DERIVED, not picked: the round send/mic sits 10px in from the box's outer edge
+   (1px border + 5px padding + its own 4px margin) and is 36 across, so 18 + 10 = 28 is
+   the only radius whose arc is concentric with it — the app's own corner law. The cards
+   sit 9 in, hence their 19. In multiline the buttons get a 4px BOTTOM margin to match
+   their end margin, so the gap is 10 on both sides of that corner and the nesting holds;
+   without it the corner is 2px tighter below than beside, which is exactly the kind of
+   near-miss the owner has caught before. */
+.msg-inbox.multiline{border-radius:28px;}
+.msg-inbox.multiline .ac-mic,.msg-inbox.multiline .msg-send,
+.msg-inbox.multiline .ac-fixbtn.show,.msg-inbox.multiline .msg-attach{margin-bottom:4px;}
 /* ── The three things in the bar line up, measured on what you SEE ──────────────
    The + is a bare glyph and the mic is a filled circle, so matching their BOXES is not
    enough: the boxes were even at 6 while the ink sat at 13.5 on the left against the
@@ -5730,7 +5743,7 @@ body.light .ac-item-unread.muted{background:var(--t3);}
    Blue is right here: the design law reserves it for identity, and the AI is one of its
    named uses. */
 .ac-fixbtn{position:relative;width:36px;height:36px;border-radius:50%;flex-shrink:0;
-  background:var(--accent-dim);border:none;padding:0;cursor:pointer;
+  background:none;border:none;padding:0;cursor:pointer;
   display:flex;align-items:center;justify-content:center;
   margin-bottom:2px;margin-inline-end:2px;-webkit-tap-highlight-color:transparent;
   /* Hidden until there is something to fix; pops in rather than appearing. */
@@ -5739,16 +5752,19 @@ body.light .ac-item-unread.muted{background:var(--t3);}
              width var(--t-base) var(--ease),margin var(--t-base) var(--ease),background var(--t-fast) var(--ease);}
 .ac-fixbtn.show{opacity:1;transform:none;width:36px;margin-inline-end:2px;pointer-events:auto;}
 .ac-fixbtn:active{transform:scale(.92);}
-/* The swirl, as the button's own ground. Quiet at rest so the dots read first. */
-.ac-fixbtn::before{content:"";position:absolute;inset:2px;background:var(--accent);opacity:.46;
+/* The mark itself — WHITE, the same white as the + beside it, and no disc behind it. */
+.ac-fixbtn::before{content:"";position:absolute;inset:0;background:var(--t1);
   -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;
   transition:opacity var(--t-base) var(--ease);}
-.afx-dots{position:relative;display:flex;align-items:center;gap:2.2px;}
-.afx-dots i{width:3.4px;height:3.4px;border-radius:50%;background:var(--accent);display:block;}
-@media(hover:hover){.ac-fixbtn:hover{background:var(--accent-mid,var(--accent-dim));}
-  .ac-fixbtn:hover::before{opacity:.5;}}
+/* The three dots sit INSIDE the swirl's open centre. The size is measured, not guessed:
+   the largest clear square inside the mark is 0.421 of its box — 15.2px at this 36px size —
+   so three 2.8px dots with 1.8px gaps come to 12px and clear the arms on both sides. Bigger
+   dots (the 14.6px this shipped with) touch them and read as sitting ON the mark. */
+.afx-dots{position:relative;display:flex;align-items:center;gap:1.8px;}
+.afx-dots i{width:2.8px;height:2.8px;border-radius:50%;background:var(--t1);display:block;}
+@media(hover:hover){.ac-fixbtn:hover{opacity:.75;}}
 /* Working: the swirl brightens and turns, and the dots breathe in turn. */
-.ac-fixbtn.working::before{opacity:.75;animation:afxSpin 1.5s linear infinite;}
+.ac-fixbtn.working::before{animation:afxSpin 1.5s linear infinite;}
 .ac-fixbtn.working .afx-dots i{animation:afxBlink 1.05s ease-in-out infinite;}
 .ac-fixbtn.working .afx-dots i:nth-child(2){animation-delay:.16s;}
 .ac-fixbtn.working .afx-dots i:nth-child(3){animation-delay:.32s;}
@@ -5805,7 +5821,7 @@ body.light .ac-item-unread.muted{background:var(--t3);}
 .msg-inbox > .msg-incards:has(> .msg-imgprev.show){display:flex;}
 .msg-incards > .ac-reply-ctx,
 .msg-incards > .ac-secret-bar,
-.msg-incards > .msg-imgprev{margin:0;width:100%;min-width:0;box-sizing:border-box;border-radius:15px;}
+.msg-incards > .msg-imgprev{margin:0;width:100%;min-width:0;box-sizing:border-box;border-radius:19px;}
 /* Clip the two text cards (the reply preview's line is nowrap and would spill) but
    NOT the photo card — its remove ✕ hangs outside the thumbnail and would be sliced
    in half. Instead the ✕ tucks a little further in, clear of the card's own corner. */
@@ -21316,7 +21332,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1781'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1782'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
