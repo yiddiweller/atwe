@@ -6,3 +6,4 @@ dist/
 .next/
 data/
 scratchpad/node_modules
+scratchpad/out/
