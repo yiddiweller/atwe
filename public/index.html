@@ -4741,12 +4741,16 @@ body.light .tb-login,body.light .btn-white{background:var(--primary);color:var(-
 #acThreadScreen{--ac-edge-h:calc(var(--ac-head-h,96px) + 150px);
   /* The BLUR has its own, much shorter band than the tint. They are different jobs: the
      tint is a long gentle fade so nothing ends on a line, while the frost belongs only
-     where content actually passes UNDER the header — which is what iOS does, and what the
-     owner asked for ("it should start under the top options, under the profile"). Sharing
-     the tint's 150px reach put visible softness ~170px below the header, on messages that
-     are plainly in open space. `--ac-head-h` is the float stack's measured height, so this
-     tracks a pin bar or an open in-chat search on its own. */
-  --ac-glass-h:calc(var(--ac-head-h,96px) + 46px);}
+     where content passes UNDER the header — which is what iOS does, and what the owner
+     asked for. Sharing the tint's 150px reach put visible softness ~170px below the header,
+     on messages plainly in open space.
+     IT ENDS AT THE PROFILE BAR'S OWN MID-LINE (owner: "right in the middle of the back of
+     the profile bar"), so it is built from that bar's geometry rather than from the float
+     stack's height: the shapes' top inset + half a shape + a short tail so it dissolves
+     instead of cutting on a line. Deriving it from `--ac-head-h` would have been wrong the
+     moment a pin bar appeared — the stack grows downward but the shapes row does not move,
+     and the frost belongs to the shapes. */
+  --ac-glass-h:calc(max(10px, env(safe-area-inset-top,0px)) + 6px + var(--h3-size) / 2 + 8px);}
 #acThreadScreen::before{content:"";position:absolute;top:0;left:0;right:0;
   height:var(--ac-edge-h);pointer-events:none;z-index:4;
   background:linear-gradient(to bottom,
@@ -21429,7 +21433,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1788'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1789'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
