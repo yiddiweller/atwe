@@ -206,6 +206,72 @@ const BASE = process.env.BASE || 'http://localhost:3262';
   say(under < below * 0.6, `a hard-edged stripe is genuinely smeared under the band (contrast ${under} vs ${below} below it)`);
   await p.evaluate(() => document.querySelectorAll('._probe').forEach((n) => n.remove()));
 
+  /* 9. THE SENT-BUT-UNSEEN BUBBLE is the owner's navy, not solid white. It used to be the
+        loudest thing in the thread for the least important state. Both states are dark now,
+        which is why the six dark-on-light overrides it needed are gone. */
+  const bub = await p.evaluate(async () => {
+    const now = new Date().toISOString();
+    AC.messages.push({ id: 9001, created_at: now, mine: true, body: 'not seen yet', read_at: null });
+    AC.messages.push({ id: 9002, created_at: now, mine: true, body: 'they read it', read_at: now });
+    acRenderThread();
+    await new Promise((r) => setTimeout(r, 1400));   // let the entrance animation finish
+    const g = (id) => { const n = [...document.querySelectorAll('#acThread .msg-bubble')]
+      .find((x) => (x.textContent || '').includes(id)); const c = getComputedStyle(n);
+      return { bg: c.backgroundColor, ink: c.color }; };
+    return { unseen: g('not seen yet'), seen: g('they read it') };
+  });
+  say(bub.unseen.bg === 'rgb(0, 34, 68)', `an unseen message is the owner's navy (${bub.unseen.bg})`);
+  say(bub.unseen.ink === 'rgb(220, 235, 255)', `with near-white blue ink (${bub.unseen.ink})`);
+  say(bub.seen.bg !== bub.unseen.bg, `and it still lights up once they read it (${bub.seen.bg})`);
+
+  /* 10. A MONEY / CALL CARD NESTS. The icon is the shape in the card's top-left corner, so
+         by the app's corner law its gap must be even and the card's radius must be the
+         icon's plus that gap. It used to be an uneven 11/13 around a 10px-radius rounded
+         square — a third corner radius belonging to no system, which is what read as off.
+         Measure AFTER the entrance animation: it scales the card, and getBoundingClientRect
+         includes transforms, so an early read reports every number ~0.82x and looks broken. */
+  const card = await p.evaluate(async () => {
+    AC.messages.push({ id: 9003, created_at: new Date().toISOString(), mine: false, body: '',
+      meta: { t: 'money', amountCents: 100, note: 'Payment received' } });
+    acRenderThread();
+    await new Promise((r) => setTimeout(r, 1400));
+    const row = [...document.querySelectorAll('#acThread .mc-inv-top')].pop();
+    const c = row && row.closest('.meta-card'); if (!c) return null;
+    const ic = row.querySelector('.mc-inv-ic,.mc-money-ic,.mc-call-ic');
+    const C = c.getBoundingClientRect(), I = ic.getBoundingClientRect();
+    return { cardR: parseFloat(getComputedStyle(c).borderTopLeftRadius),
+      icR: getComputedStyle(ic).borderTopLeftRadius, icW: Math.round(I.width),
+      left: +(I.left - C.left).toFixed(1), top: +(I.top - C.top).toFixed(1),
+      bottom: +(C.bottom - I.bottom).toFixed(1) };
+  });
+  say(card && /50%|999/.test(card.icR), `the card's icon is a disc, not a third corner radius (${card ? card.icR : '?'})`);
+  say(card && Math.abs(card.left - card.top) <= 1 && Math.abs(card.top - card.bottom) <= 1,
+    `its gap is even on every side (${card ? card.left + ' / ' + card.top + ' / ' + card.bottom : '?'})`);
+  say(card && Math.abs(card.cardR - (card.icW / 2 + card.left)) <= 1,
+    `so the card's corner is concentric with it (${card ? card.cardR + ' = ' + card.icW / 2 + ' + ' + card.left : '?'})`);
+
+  /* 11. THE ⋯ MENU OPENS OUT OF THE BUTTON, as the profile menu on Home does: it covers
+         the ⋯ rather than hanging below it, and the ⋯ itself vanishes into it. */
+  const menu = await p.evaluate(async () => {
+    const d = document.getElementById('acThreadMenuBtn');
+    const before = d.getBoundingClientRect();
+    d.click();
+    await new Promise((r) => setTimeout(r, 450));
+    const sh = document.getElementById('acHeadMenuSheet').getBoundingClientRect();
+    return { dotsTop: Math.round(before.top), dotsRight: Math.round(before.right),
+      menuTop: Math.round(sh.top), menuRight: Math.round(sh.right),
+      dotsOpacity: getComputedStyle(d).opacity };
+  });
+  say(Math.abs(menu.menuTop - menu.dotsTop) <= 2 && Math.abs(menu.menuRight - menu.dotsRight) <= 2,
+    `it opens ON the ⋯, not under it (menu ${menu.menuTop}/${menu.menuRight} vs dots ${menu.dotsTop}/${menu.dotsRight})`);
+  say(+menu.dotsOpacity === 0, 'and the ⋯ vanishes into it while it is open');
+  const back = await p.evaluate(async () => {
+    closeOverlay('acHeadMenu');
+    await new Promise((r) => setTimeout(r, 700));
+    return getComputedStyle(document.getElementById('acThreadMenuBtn')).opacity;
+  });
+  say(+back === 1, 'and comes back when the menu closes');
+
   say(errs.length === 0, `no JS errors${errs.length ? ' — ' + errs[0] : ''}`);
   await ctx.close();
 
