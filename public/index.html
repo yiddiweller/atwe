@@ -4722,44 +4722,46 @@ body.light .tb-login,body.light .btn-white{background:var(--primary);color:var(-
    of the scrim above the composer. Sits BELOW the floating stack (z6) and above the
    thread. */
 /* ── THE TOP EDGE (iOS "scroll edge" / Liquid Glass) ───────────────────────────
-   Two layers, and BOTH are needed — the owner's note was that a dark gradient alone
-   "doesn't feel professional", and they are right about why: Apple's edge does not DIM
-   the content, it DISSOLVES it. The tint is only what is left after the blur has done
-   the work.
-   (a) --ac-edge-h is the band. It is generous on purpose: a short band has to get dark
-       fast, and a fast ramp is the "big shift" they were objecting to.
-   (b) The ramp is EASED, not linear. `smootherstep` (6t^5-15t^4+10t^3) starts AND ends
-       with zero slope, so there is no edge where the fade begins and none where it stops —
-       exactly "very slowly darker and darker". Twelve stops, because a curve sampled too
-       coarsely bands on an OLED. The old ramp held solid to 34% and then fell off a cliff:
-       measured every 10% of the band it went 1.00 1.00 1.00 0.97 0.83 0.61 0.39 0.22 0.09,
-       against 1.00 1.00 1.00 1.00 0.95 0.80 0.58 0.33 0.13 now. */
-/* Declared HERE, not on :root — `--ac-head-h` is measured by acSyncHeadH and set inline on
-   #acThreadScreen, and a custom property resolves where it is DECLARED. On :root it would
-   have frozen at the 96px fallback for ever and the band would never track a pin bar or an
-   open in-chat search. Same trap `--card-r` fell into once. */
+   THE ONE RULE: it is NEVER opaque. Content stays see-through the whole way up and simply
+   gets darker and blurrier — which is what glass does, and what the BOTTOM scrim
+   (#acThreadScreen::after) has always done: it peaks at .88 and eases straight down.
+   Two earlier passes here got this wrong in the same way: they held SOLID BLACK for the
+   first quarter of the band and only then began to fade. An opaque slab shows nothing
+   through it, so the darkness appears to switch on at a fixed distance below the top —
+   the owner described it exactly, "it's turning dark an inch under the top of the screen".
+   Easing the fade did not help, because the plateau was the problem, not the curve.
+   So the profile below IS the bottom scrim's own (.88 → .68 → .36 → .12 → 0), resampled
+   to 13 stops so it cannot band on an OLED, with NO flat section anywhere. Measured every
+   10% of the band it went 1.00 1.00 1.00 1.00 0.95 0.80 0.58 0.33 0.13 — four tenths of it
+   solid — against 0.88 0.74 0.66 0.52 0.38 0.33 0.20 0.12 0.09 now.
+   The band is `--ac-edge-h` = the header's own height + the bottom scrim's 150px, so below
+   the header the fade behaves precisely like the bottom one. The status strip is covered
+   by #statusScrim (a separate, solid element), so a translucent band here never puts
+   message text behind the clock. */
 #acThreadScreen{--ac-edge-h:calc(var(--ac-head-h,96px) + 150px);}
 #acThreadScreen::before{content:"";position:absolute;top:0;left:0;right:0;
   height:var(--ac-edge-h);pointer-events:none;z-index:4;
   background:linear-gradient(to bottom,
-    rgba(0,0,0,1) 0%, rgba(0,0,0,1) 26%, rgba(0,0,0,.993) 32.7%,
-    rgba(0,0,0,.955) 39.5%, rgba(0,0,0,.871) 46.2%, rgba(0,0,0,.743) 52.9%,
-    rgba(0,0,0,.585) 59.6%, rgba(0,0,0,.415) 66.4%, rgba(0,0,0,.257) 73.1%,
-    rgba(0,0,0,.129) 79.8%, rgba(0,0,0,.045) 86.5%, rgba(0,0,0,.007) 93.3%,
+    rgba(0,0,0,.880) 0%, rgba(0,0,0,.774) 8.3%, rgba(0,0,0,.679) 16.7%,
+    rgba(0,0,0,.602) 25%, rgba(0,0,0,.464) 33.3%, rgba(0,0,0,.366) 41.7%,
+    rgba(0,0,0,.328) 50%, rgba(0,0,0,.222) 58.3%, rgba(0,0,0,.131) 66.7%,
+    rgba(0,0,0,.111) 75%, rgba(0,0,0,.070) 83.3%, rgba(0,0,0,.023) 91.7%,
     rgba(0,0,0,0) 100%);}
 body.light #acThreadScreen::before{background:linear-gradient(to bottom,
-    rgba(255,255,255,1) 0%, rgba(255,255,255,1) 26%, rgba(255,255,255,.993) 32.7%,
-    rgba(255,255,255,.955) 39.5%, rgba(255,255,255,.871) 46.2%, rgba(255,255,255,.743) 52.9%,
-    rgba(255,255,255,.585) 59.6%, rgba(255,255,255,.415) 66.4%, rgba(255,255,255,.257) 73.1%,
-    rgba(255,255,255,.129) 79.8%, rgba(255,255,255,.045) 86.5%, rgba(255,255,255,.007) 93.3%,
+    rgba(255,255,255,.880) 0%, rgba(255,255,255,.774) 8.3%, rgba(255,255,255,.679) 16.7%,
+    rgba(255,255,255,.602) 25%, rgba(255,255,255,.464) 33.3%, rgba(255,255,255,.366) 41.7%,
+    rgba(255,255,255,.328) 50%, rgba(255,255,255,.222) 58.3%, rgba(255,255,255,.131) 66.7%,
+    rgba(255,255,255,.111) 75%, rgba(255,255,255,.070) 83.3%, rgba(255,255,255,.023) 91.7%,
     rgba(255,255,255,0) 100%);}
 /* PROGRESSIVE BLUR — the half that makes it read as glass rather than as a dark bar.
    A single backdrop-filter gives one flat sheet of frost with a hard bottom edge, which is
    the thing that looks cheap. Apple ramps the blur RADIUS instead, so a message dissolves
    as it travels up. On the web that is done with stacked layers: each one samples the
    backdrop (including the layers already painted behind it, so they compound) and is
-   masked to a shorter band than the one before, giving a smooth 1 → 20px ramp from four
-   cheap passes instead of one expensive variable-radius filter.
+   masked to a shorter band than the one before, giving a smooth 1 → 23px ramp from four
+   cheap passes instead of one expensive variable-radius filter. It carries MORE of the
+   effect now that the tint is see-through: with nothing opaque to hide behind, the blur is
+   what keeps the header legible over whatever is sliding past underneath it.
    The masks are eased for the same reason the tint is — a linear mask on a blur shows its
    own edge. NB the masks must reach `transparent` well BEFORE the tint does, or the frost
    outlives the fade and there is a visible line where the blur stops. */
@@ -4777,10 +4779,10 @@ body.light #acThreadScreen::before{background:linear-gradient(to bottom,
 .ac-topglass i:nth-child(2){height:78%;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
   -webkit-mask:linear-gradient(to bottom,#000 0%,#000 54%,rgba(0,0,0,.55) 74%,transparent 100%);
           mask:linear-gradient(to bottom,#000 0%,#000 54%,rgba(0,0,0,.55) 74%,transparent 100%);}
-.ac-topglass i:nth-child(3){height:62%;backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);
+.ac-topglass i:nth-child(3){height:62%;backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);
   -webkit-mask:linear-gradient(to bottom,#000 0%,#000 48%,rgba(0,0,0,.55) 71%,transparent 100%);
           mask:linear-gradient(to bottom,#000 0%,#000 48%,rgba(0,0,0,.55) 71%,transparent 100%);}
-.ac-topglass i:nth-child(4){height:46%;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+.ac-topglass i:nth-child(4){height:46%;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
   -webkit-mask:linear-gradient(to bottom,#000 0%,#000 39%,rgba(0,0,0,.55) 65%,transparent 100%);
           mask:linear-gradient(to bottom,#000 0%,#000 39%,rgba(0,0,0,.55) 65%,transparent 100%);}
 /* Someone who has asked for less transparency gets the tint alone, which still reads
@@ -21419,7 +21421,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1786'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1787'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;

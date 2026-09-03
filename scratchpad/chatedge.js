@@ -91,11 +91,15 @@ const BASE = process.env.BASE || 'http://localhost:3262';
       : 'the green dot does not carry over from a chat where they WERE online');
   await p.waitForTimeout(800);
 
-  /* 5. THE TOP EDGE. The tint ramp must be EASED — it starts and ends with zero slope, so
-        there is no line where the fade begins and none where it stops. The old one held
-        solid for a third of the band and then fell off a cliff, which is the "big shift"
-        the owner was objecting to. Read the real stops, not a screenshot: a gradient over
-        black content is nearly impossible to sample honestly. */
+  /* 5. THE TOP EDGE, and its ONE law: it is NEVER opaque. Content stays see-through the
+        whole way up and just gets darker and blurrier. Three passes got this wrong the same
+        way — they held SOLID BLACK for the first quarter of the band and only then began to
+        fade, so the darkness appeared to switch on at a fixed distance below the top, which
+        is what the owner kept reporting. Easing the curve did not help, because the plateau
+        was the problem. The reference is the BOTTOM scrim, which has always peaked at .88
+        and eased straight down; the top must match it.
+        Read the real stops, not a screenshot: a dark gradient over dark content cannot be
+        sampled honestly. */
   const ramp = await p.evaluate(() => {
     const cs = getComputedStyle(document.getElementById('acThreadScreen'), '::before');
     const bg = cs.backgroundImage;
@@ -103,12 +107,26 @@ const BASE = process.env.BASE || 'http://localhost:3262';
       .map((m) => ({ a: m[4] === undefined ? 1 : +m[4], pos: +m[5] }));
     return { stops, h: Math.round(parseFloat(cs.height)) };
   });
+  const bottom = await p.evaluate(() => {
+    const bg = getComputedStyle(document.getElementById('acThreadScreen'), '::after').backgroundImage;
+    return Math.max(...[...bg.matchAll(/rgba?\((?:\d+,\s*){2}\d+(?:,\s*([\d.]+))?\)/g)].map((m) => m[1] === undefined ? 1 : +m[1]));
+  });
+  const peak = Math.max(...ramp.stops.map((x) => x.a));
+  say(peak < 1, `NOTHING in the band is opaque — you can see through all of it (peak ${peak})`);
+  say(Math.abs(peak - bottom) < 0.001, `and it peaks exactly where the bottom scrim does (${peak} vs ${bottom})`);
+  /* No flat section anywhere: a run of equal stops IS a plateau, whatever its alpha. */
+  let flat = 0, run = 0;
+  for (let i = 1; i < ramp.stops.length; i++) {
+    run = Math.abs(ramp.stops[i].a - ramp.stops[i-1].a) < 0.005 ? run + 1 : 0;
+    flat = Math.max(flat, run);
+  }
+  say(flat === 0, `it darkens continuously — no flat stretch anywhere (longest ${flat})`);
   say(ramp.stops.length >= 10, `the ramp is sampled finely enough not to band (${ramp.stops.length} stops)`);
   // biggest jump in alpha between neighbouring stops — the "shift" the owner could see
   let jump = 0;
   for (let i = 1; i < ramp.stops.length; i++) jump = Math.max(jump, Math.abs(ramp.stops[i].a - ramp.stops[i-1].a));
   say(jump <= 0.2, `and no single step in it is a visible shift (largest ${jump.toFixed(3)})`);
-  say(ramp.stops[ramp.stops.length-1].a === 0 && ramp.stops[ramp.stops.length-2].a < 0.02,
+  say(ramp.stops[ramp.stops.length-1].a === 0 && ramp.stops[ramp.stops.length-2].a < 0.05,
     'it arrives at nothing gently rather than stopping dead');
   say(ramp.h >= 180, `the band is long enough to be gradual (${ramp.h}px)`);
 

@@ -132,6 +132,12 @@ is load-bearing: locally the server answers in ~10ms, so the flash is shorter th
 sample and the check goes green on the very bug it exists to catch. Verified by removing
 the fix: with no delay it passed, with the delay it fails.
 
+**The law it enforces is that the band is NEVER OPAQUE** — peak alpha under 1, matching the
+bottom scrim's own .88, and no flat run of equal stops anywhere. Three passes shipped a solid
+black plateau at the top and each time the owner reported the same thing; easing the curve
+never helped because the plateau was the problem. Those three assertions fail on every one of
+those versions.
+
 **The edge is checked from the real gradient stops, not a screenshot** — a dark gradient
 over dark content cannot be sampled honestly — and the assertion is on the largest single
 STEP in the ramp, which is what "a big shift" actually means. The blur is proved by painting
