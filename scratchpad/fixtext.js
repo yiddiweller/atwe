@@ -89,7 +89,13 @@ const FIXED  = 'I think we should meet tomorrow at 3 pm, ok?';
       plusColour: plus ? getComputedStyle(plus).color : '',
       btnBg: getComputedStyle(b).backgroundColor,
       dotsWide: dots.length * dw + (dots.length - 1) * gap,
+      dw: dw, gap: gap,
+      dotBoxes: dots.map((n) => { const r = n.getBoundingClientRect(); return [+r.width.toFixed(2), +r.height.toFixed(2)]; }),
+      dotGaps: dots.slice(1).map((n, i) => +(n.getBoundingClientRect().left - dots[i].getBoundingClientRect().right).toFixed(2)),
       btnW: parseFloat(getComputedStyle(b).width),
+      markW: parseFloat(before.width),
+      sendW: (() => { const n = [...document.querySelectorAll('#acThreadScreen .msg-inbox .msg-send, #acThreadScreen .msg-inbox .ac-mic')]
+        .find((q) => q.getBoundingClientRect().width > 1); return n ? n.getBoundingClientRect().width : 0; })(),
       round: getComputedStyle(b).borderRadius };
   });
   say(/logo-mark\.png/.test(look.mask), 'the button carries the real Atwe mark, not a redraw');
@@ -100,11 +106,24 @@ const FIXED  = 'I think we should meet tomorrow at 3 pm, ok?';
   say(look.maskOpacity === 1 && look.markColour === look.plusColour,
     `the mark is the same white as the + beside it (${look.markColour} vs ${look.plusColour}, opacity ${look.maskOpacity})`);
   say(look.dotColour === look.plusColour, `and so are the dots (${look.dotColour})`);
-  /* The measured hollow: the largest clear square inside the mark is 0.421 of its bounding
-     box. The dots shipped at 14.6px inside a 15.2px hollow and visibly touched the arms. */
-  const hollow = look.btnW * 0.421;
-  say(look.dotsWide <= hollow - 2,
-    `the dots clear the swirl's arms (${look.dotsWide.toFixed(1)}px of dots in a ${hollow.toFixed(1)}px hollow)`);
+  /* The measured hollow, for a ROW of dots, is the widest clear HORIZONTAL band through the
+     mark's middle — 0.465 of it — not the largest inscribed square (0.421), which is the
+     wrong figure for this shape and the reason an earlier pass had less room than it really
+     had. Measured against the MARK, which is smaller than its button. */
+  const hollow = look.markW * 0.465;
+  say(look.dotsWide <= hollow - 1,
+    `the dots clear the swirl's arms (${look.dotsWide.toFixed(1)}px of dots in a ${hollow.toFixed(1)}px band)`);
+  /* THREE EVEN CIRCLES, which is what the owner asked for after they read as one dash:
+     same size as each other, square (so `border-radius:50%` really is a circle), evenly
+     spaced, and a gap wide enough to separate them. */
+  say(look.dotBoxes.every((d) => d[0] === look.dotBoxes[0][0] && d[1] === look.dotBoxes[0][1] && d[0] === d[1]),
+    `three even circles, not a dash (${look.dotBoxes.map((d) => d.join('x')).join(' · ')})`);
+  say(Math.abs(look.dotGaps[0] - look.dotGaps[1]) < 0.05 && look.gap >= look.dw * 0.6,
+    `evenly spaced, and the gap is wide enough to read as three (${look.dotGaps.join(' / ')} between ${look.dw}px dots)`);
+  /* And the whole mark is MUCH smaller than the blue send it sits beside (owner). The BOX
+     stays 36 so spacing and the tap target are untouched — only the artwork shrank. */
+  say(look.markW <= look.sendW * 0.8 && look.btnW === look.sendW,
+    `the mark is much smaller than the send (${look.markW} vs ${look.sendW}) while its button still matches it`);
 
   /* 3. Tapping it: the text shimmers, the box is held, the button shows it is working. */
   await stub(p, FIXED, 2600);

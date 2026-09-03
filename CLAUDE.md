@@ -5863,12 +5863,22 @@ person who taps it expects their own message back, spelled correctly, not rewrit
   as one set of controls rather than one blue badge among plain glyphs. Blue would have been
   defensible under the colour law (identity, and the AI is one of its named uses) — the
   owner's point was about the BAR, not the law.
-- **The dots' size is measured, not chosen.** Decoding `public/logo-mark.png`'s alpha
-  channel, the largest clear square inside the mark is **0.421 of its bounding box** —
-  15.2px at the button's 36px — centred. The dots shipped at `3×3.4 + 2×2.2 = 14.6px`,
-  leaving 0.6px of slack, which is exactly why they read as sitting ON the swirl rather than
-  in it; at `3×2.8 + 2×1.8 = 12px` they clear the arms on both sides. `fixtext.js` asserts
-  the total against that fraction, so a future resize cannot quietly re-crowd them.
+- **The mark is much smaller than the blue send beside it** (owner) — a **26px** mark against
+  the send's 36, i.e. 72%. The BOX stays 36 (`inset:5px` on the `::before`), so every
+  alignment and spacing rule around it is untouched and the tap target stays a full 36:
+  **shrink the mark, never the button.** This is the same move `GLYPH_SCALE` makes for the
+  nav icons.
+- **The dots' size is measured, not chosen — and the right measurement is a BAND, not a
+  square.** Decoding `public/logo-mark.png`'s alpha channel, the largest clear *square*
+  inside the mark is 0.421 of its box, but a horizontal ROW of dots only needs a clear
+  horizontal band through the centre, which is **0.465** — 12.1px across the 26px mark. Using
+  the square figure is why an earlier pass thought it had less room than it did. Three 2.4px
+  dots with 1.7px gaps come to 10.6 and leave ~0.75px clear at each end.
+- **The gap is 0.7× the dot, and that is what makes them read as three.** They shipped at
+  `3.4px` dots with `2.2px` gaps and the owner's verdict was that they were not "three even
+  circles" — at that ratio, and at that size, they close up into a single dash. `fixtext.js`
+  asserts each dot is square (so `border-radius:50%` really is a circle), that all three are
+  the same size, that the two gaps are equal, and that the gap clears 0.6× the dot.
 - It appears at `AC_FIX_MIN` (6) characters and **animates its own width**, which is the
   interesting part: its arrival NARROWS the text box, so a line that just fitted can wrap.
   `acFixSync` re-runs `acAutosize` once the width transition lands, and only fires on a real

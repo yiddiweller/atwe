@@ -82,8 +82,12 @@ wave ~255, and the check demands 120.
 It also owns two things the owner corrected afterwards. The button is the Atwe mark in the
 same **white as the `+`** with **no disc behind it**, so it is checked against the `+`'s own
 colour rather than a hardcoded value — and its three dots must fit inside the swirl's open
-centre, so their total width is measured against the hollow's real size (0.421 of the mark's
-box, decoded from the PNG's alpha). And the bar is a **capsule on one line, a 28px rounded
+centre, so their total width is measured against the hollow's real size — the widest clear
+horizontal BAND through the mark (0.465 of it, decoded from the PNG's alpha), not the largest
+inscribed square (0.421), which is the wrong figure for a row of dots. It also asserts they
+are three EVEN CIRCLES — each square, all the same size, equally spaced, with a gap over 0.6×
+the dot, which is what stops them closing into a single dash — and that the mark itself is
+under 80% of the blue send beside it while its button still matches it. And the bar is a **capsule on one line, a 28px rounded
 box once the message wraps**: 28 is asserted as `sendRadius + inset`, i.e. derived from the
 send button rather than typed, so a future change to either has to move both. NB the Light-
 theme legibility check measures the dots against **the bar**, not the button — the button
