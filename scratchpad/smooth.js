@@ -59,20 +59,33 @@ const BASE = process.env.BASE || 'http://localhost:3262';
       const btn = () => [...bar.querySelectorAll('.msg-send,.ac-mic')]
         .find(n => n.getBoundingClientRect().width > 1);
       const rows = []; const t0 = performance.now();
+      /* THE CORNER YOU SEE is min(declared, height/2) — a border-radius is clamped to half
+         the box's short side. That clamp is the whole reason easing the radius looks wrong,
+         so it is what gets measured, never the declared value. */
       const snap = () => { const B = bar.getBoundingClientRect(), b = btn();
         const S = b ? b.getBoundingClientRect() : null;
-        rows.push({ h: +B.height.toFixed(1), out: S ? +(S.bottom - B.bottom).toFixed(1) : 0 }); };
+        const d = parseFloat(getComputedStyle(bar).borderTopLeftRadius);
+        rows.push({ h: +B.height.toFixed(1), out: S ? +(S.bottom - B.bottom).toFixed(1) : 0,
+          r: +Math.min(d, B.height / 2).toFixed(1) }); };
       snap();                                  // the height BEFORE, recorded synchronously
       inp.value = text; acAutosize();
       const tick = () => { snap(); if (performance.now() - t0 < 380) requestAnimationFrame(tick); };
       requestAnimationFrame(tick);
       await new Promise(r => setTimeout(r, 460));
       return { start: rows[0].h, end: rows[rows.length - 1].h,
-        uniq: [...new Set(rows.map(r => r.h))].length, worstOut: Math.max(...rows.map(r => r.out)) };
+        uniq: [...new Set(rows.map(r => r.h))].length, worstOut: Math.max(...rows.map(r => r.out)),
+        worstR: Math.max(...rows.map(x => x.r)) };
     }, 'i thnk we shud meet tomorow at 3 pm ok and then we can go over the whole plan');
     say(grow.end > grow.start + 20, `${theme}: the bar takes a second row (${grow.start} → ${grow.end})`);
     say(grow.uniq >= 6, `${theme}: and it TRAVELS there — ${grow.uniq} distinct heights (a jump gives 2)`);
     say(grow.worstOut <= 0, `${theme}: with nothing ever hanging outside it (worst ${grow.worstOut}px past the edge)`);
+    /* THE CORNER MUST NOT SWELL. This is the owner's "it stays fully rounded in a bigger bar
+       and after a second the sides straighten": easing the radius from a capsule to 24 while
+       the box grows renders min(eased, height/2), which TRACKS the growing box — measured, it
+       ballooned to 53.5 and then snapped back to 24. Switched instantly there is nothing to
+       see, because at the one-line height a capsule and a 24 corner are half a pixel apart. */
+    say(grow.worstR <= 26,
+      `${theme}: and the corner never swells on the way — it stays the shape it lands on (peak ${grow.worstR})`);
 
     /* A third line: no layout change at all, just the text box growing. */
     const more = await p.evaluate(async () => {
@@ -99,16 +112,20 @@ const BASE = process.env.BASE || 'http://localhost:3262';
       const rows = []; const t0 = performance.now();
       const tick = () => { const B = bar.getBoundingClientRect(), b = btn();
         const S = b ? b.getBoundingClientRect() : null;
-        rows.push({ h: +B.height.toFixed(1), out: S ? +(S.bottom - B.bottom).toFixed(1) : 0 });
+        const d = parseFloat(getComputedStyle(bar).borderTopLeftRadius);
+        rows.push({ h: +B.height.toFixed(1), out: S ? +(S.bottom - B.bottom).toFixed(1) : 0,
+          r: +Math.min(d, B.height / 2).toFixed(1) });
         if (performance.now() - t0 < 380) requestAnimationFrame(tick); };
       inp.value = 'hi'; acAutosize(); requestAnimationFrame(tick);
       await new Promise(r => setTimeout(r, 460));
       return { start: rows[0].h, end: rows[rows.length - 1].h,
-        uniq: [...new Set(rows.map(r => r.h))].length, worstOut: Math.max(...rows.map(r => r.out)) };
+        uniq: [...new Set(rows.map(r => r.h))].length, worstOut: Math.max(...rows.map(r => r.out)),
+        worstR: Math.max(...rows.map(x => x.r)) };
     });
     say(shrink.end < shrink.start - 20 && shrink.uniq >= 6,
       `${theme}: and eases back down (${shrink.start} → ${shrink.end}, ${shrink.uniq} distinct heights)`);
     say(shrink.worstOut <= 0, `${theme}: still with nothing outside the bar (worst ${shrink.worstOut}px)`);
+    say(shrink.worstR <= 26, `${theme}: and the corner holds on the way back too (peak ${shrink.worstR})`);
 
     /* Nothing may be left pinned to a number — the bar has to keep growing with the text. */
     const released = await p.evaluate(() => {
