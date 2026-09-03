@@ -1751,11 +1751,9 @@ body.light #aiMenuPop,body.light #chatMenuPop,body.light #notifMenuPop,body.ligh
   transition:transform var(--t-base) var(--ease);}
 .me-hero-switch:active{background:var(--s4);}
 .me-hero.open .me-hero-switch svg{transform:rotate(180deg);}
-/* Open, the card grows the way Gmail's does: a bigger picture, and the email appears —
-   which is the line that actually tells two accounts apart. */
-.me-hero-email{display:none;font-size:13px;color:var(--t3);margin-top:2px;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.me-hero.open .me-hero-email:not(:empty){display:block;}
+/* Open, the card grows the way Gmail's does — a bigger picture, and nothing else. An email
+   line under the handle was tried here and the owner had it out: the name and @handle
+   already say who this is, and a third line made the card busy for no gain. */
 .me-hero-ava .user-avatar{transition:width var(--t-base) var(--ease),height var(--t-base) var(--ease);}
 .me-hero.open .me-hero-ava .user-avatar{width:70px;height:70px;font-size:27px;}
 /* The panel pushes everything below it down — it is a real block in the scroll flow, not
@@ -1763,7 +1761,9 @@ body.light #aiMenuPop,body.light #chatMenuPop,body.light #notifMenuPop,body.ligh
    is animated from a measured value (see acToggleAccountSwitch); `hidden` cannot be used
    because it would kill the transition. */
 .me-switch{overflow:hidden;height:0;transition:height var(--t-base) var(--ease);}
-.me-switch-in{padding-bottom:12px;}
+/* 12px between the two cards and below them — the same gap every other block on this
+   page uses, so the switcher reads as part of the same stack rather than a thing of its own. */
+.me-switch-in{padding-bottom:12px;display:flex;flex-direction:column;gap:12px;}
 .me-switch-card{background:var(--s2);border-radius:var(--set-card-r);overflow:hidden;}
 .me-acct{display:flex;align-items:center;gap:14px;width:100%;min-height:var(--row-h);
   padding:10px 16px;background:none;border:none;font-family:inherit;text-align:start;cursor:pointer;
@@ -21520,7 +21520,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1792'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1793'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -36640,7 +36640,13 @@ function acRenderAccountSwitch() {
       <span class="me-acct-main"><span class="me-acct-name">${escHtml(a.name || '')}</span>
       <span class="me-acct-sub">${a.username ? '@' + escHtml(a.username) : ''}</span></span>
     </button>`).join('');
-  box.innerHTML = `<div class="me-switch-in"><div class="me-switch-card">${rows}
+  /* TWO cards, not one (owner): the accounts you already have, and — separately — adding a
+     new one. They are different kinds of thing, and every other stack on this page keeps
+     that separation (the sections, Settings, Help, Log out are each their own card). With
+     no other accounts the first card is dropped entirely rather than rendered empty. */
+  box.innerHTML = `<div class="me-switch-in">`
+    + (rows ? `<div class="me-switch-card">${rows}</div>` : '')
+    + `<div class="me-switch-card">
       <button class="me-acct" onclick="acAddAccountFromSwitch()">
         <span class="me-acct-add-ic"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
         <span class="me-acct-main"><span class="me-acct-name">Add another account</span></span>
@@ -36707,7 +36713,6 @@ function acGoProfileHub() {
           <div class="me-hero-main">
             <div class="me-hero-name"><span>${escHtml(u.name || 'Your profile')}</span>${verified ? vbadge(true) : ''}</div>
             <div class="me-hero-handle">${u.username ? '@' + escHtml(u.username) : 'Finish setting up your profile'}</div>
-            <div class="me-hero-email">${escHtml(u.email || '')}</div>
           </div>
         </button>
         <button class="me-hero-switch" id="meHeroSwitch" onclick="acToggleAccountSwitch(event)"

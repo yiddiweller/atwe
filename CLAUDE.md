@@ -1133,8 +1133,13 @@ below).
 > every section below genuinely move down, and that pushing-apart IS the behaviour being
 > copied. Height animates from a MEASURED value (`height:auto` cannot be transitioned), then
 > drops back to `auto` once it lands so a later re-render is not pinned to a stale number.
-> Open, the hero grows its picture 62 → 70 and reveals the **email**, which is the line that
-> actually tells two accounts apart. Nothing underneath is new: `Accounts`, `switchAccount`
+> Open, the hero grows its picture 62 → 70 and **nothing else** — an email line under the
+> handle was tried and the owner had it out; the name and @handle already say who this is.
+> The panel is **TWO cards**, not one: the accounts you have, and separately adding a new
+> one. They are different kinds of thing, and every other stack on this page keeps that
+> separation. The gap is the page's own **12px**, so the switcher reads as part of the same
+> stack. On an account with no others the first card is **dropped**, never rendered empty.
+> Nothing underneath is new: `Accounts`, `switchAccount`
 > and `addExistingAccount` already existed — this is a new door onto them. `acSwitchToAccount`
 > wraps the switch so you land back on the Account page as the new person rather than on Home.
 > **`Add account` left `ME_HUB_FOOT`** for this panel; it stays findable from every search bar
