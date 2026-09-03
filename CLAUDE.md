@@ -6253,7 +6253,35 @@ carries, so the text sits the same distance from the bar's edge in both modes.
   a signal you have to already know how to read. (`chathead.js` check 6 asserted the removal
   and now asserts the restoration.)
 
-`scratchpad/chathead.js` (52 checks) covers all of it, in both themes, plus the group case.
+**Fourth pass (1796) — three measurements, and two of them turned out to be one change:**
+
+- **The wrapped bar's corner is 25, MEASURED off the owner's own ChatGPT screenshot.** Both
+  shots came from the same phone at the same scale — proved by the capital T in each message
+  rendering 35px and 36px — so the corners are directly comparable: theirs runs **76px**
+  before the left edge goes vertical, ours ran **84**. At 3× that is 25.3 against 28.
+- **The send disc moved from 10 to 7 from the bar's end**, which the owner asked for in the
+  same breath — and under the app's own corner law those are the SAME change: the disc is
+  36 across, so a concentric corner is `18 + its inset`, and 25 forces 7. Move one and you
+  must move the other. The cards riding inside the bar follow it too (19 → 16).
+- **All four controls in the wrapped row share ONE bottom margin**, and that is not
+  negotiable. Giving the send its own smaller margin to nest the corner dropped it **3px
+  below the + beside it** — plainly visible in a screenshot. They sit at 7 together, with
+  `align-self:flex-end` so a taller sibling cannot hand each shorter one half the difference
+  back. The honest consequence: the + 's ink is inset 6 inside its own 36px box, so it lands
+  **13 from the bottom while sitting 16 from the left** (it was 16/16). The BOXES are what
+  read as a line, not the ink in them — the send's disc fills its box and the + does not, and
+  that difference was always there (send 10 / + ink 16 before this).
+- **The presence dot sits evenly in the pill's end** — 19 above, below and to the right. It
+  shipped 15 from the end and read as pushed into the corner. 19 is both the even answer
+  ((48 − 2 border − 10 dot) / 2 + 1) and the concentric one (the end is a semicircle of
+  radius 24, so a dot centred 24 in shares that centre): `padding-right` 14 → 18.
+
+`scratchpad/chathead.js` (53 checks) covers all of it, in both themes, plus the group case;
+`fixtext.js` owns the wrapped-bar shape, including that the button row is level.
+**Measuring a screenshot against ours needs a shared ruler** — the `+` glyph is the wrong one
+(theirs is drawn bigger), and a circle fit over the corner is worse (it disagreed with itself
+by 40%). What works is the capital T's cap height to prove the scale, then reading the corner
+as "how far down before the edge stops moving".
 
 ### An unread notification turns the BELL blue
 

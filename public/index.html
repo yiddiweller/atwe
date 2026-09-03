@@ -4750,8 +4750,13 @@ body.light .tb-login,body.light .btn-white{background:var(--primary);color:var(-
 @media(hover:hover){.ac-h3-btn:hover{background:var(--s3);}}
 /* The pill fills whatever is left between the two circles. Its radius is half its own
    height, so it is a true capsule at any --h3-size. */
+/* padding-right 18 puts the presence dot 19 from the pill's outer edge — the SAME 19 it
+   already has above and below it ((48 − 2 border − 10 dot) / 2 + 1). At 14 it sat 15 from
+   the end and read as pushed into the corner. 19 is also the concentric answer: the pill's
+   end is a semicircle of radius 24, so a dot whose centre is 24 from the edge shares that
+   centre, and 24 − half the dot = 19. Both readings land on the same number. */
 .ac-h3-pill{flex:1;min-width:0;height:var(--h3-size);border-radius:999px;
-  background:var(--s2);border:1px solid var(--b2);cursor:pointer;padding:0 14px 0 5px;
+  background:var(--s2);border:1px solid var(--b2);cursor:pointer;padding:0 18px 0 5px;
   /* A <button> does NOT inherit colour, and on iOS Safari its default text renders in the
      system BLUE — which is why the name came out blue on a real phone while every headless
      screenshot showed it white. Say the colour explicitly here and on the two spans. */
@@ -5852,16 +5857,30 @@ body.light .ac-item-unread.muted{background:var(--t3);}
 /* …and once the message runs past one line. A capsule's ends are semicircles, so on a tall
    box they read as a giant lozenge; every messenger that grows its composer switches to a
    rounded rectangle at that point, which is what the owner's ChatGPT sample shows.
-   28 is DERIVED, not picked: the round send/mic sits 10px in from the box's outer edge
-   (1px border + 5px padding + its own 4px margin) and is 36 across, so 18 + 10 = 28 is
-   the only radius whose arc is concentric with it — the app's own corner law. The cards
-   sit 9 in, hence their 19. In multiline the buttons get a 4px BOTTOM margin to match
-   their end margin, so the gap is 10 on both sides of that corner and the nesting holds;
-   without it the corner is 2px tighter below than beside, which is exactly the kind of
-   near-miss the owner has caught before. */
-.msg-inbox.multiline{border-radius:28px;}
+   25 IS MEASURED OFF THE OWNER'S OWN CHATGPT SCREENSHOT, not chosen. Both their shots
+   came from the same phone at the same scale — proved by the capital T in each message
+   being 35px and 36px — so the corners are directly comparable: theirs runs 76px before
+   the edge goes vertical, ours ran 84. At 3x that is 25.3 against 28. Rounded to 25.
+   It is ALSO derived, and that is why their two asks turned out to be one change: the
+   round send/mic is 36 across, so a concentric corner is 18 + its inset, and 25 means the
+   inset is 7 — which is exactly the "drop the send a little further right" they asked for
+   in the same breath. Move one of these numbers and you must move the other.
+   The cards sit 9 in from the box's outer edge, hence their 16.
+   ALL FOUR SHARE ONE BOTTOM MARGIN, and that is not negotiable — it is what keeps the
+   button row level. Giving the send 1px while the + kept 4 put the disc 3px lower than
+   everything beside it, plainly visible. So they all sit at 7 (1 margin + 5 padding + 1
+   border), which is also the number the 25 corner needs.
+   The consequence, stated honestly: the + 's ink is inset 6 inside its own 36px box, so it
+   lands 13 from the bottom while sitting 16 from the left. It was 16/16 at the old numbers.
+   The BOXES are what read as a line, not the ink inside them — the send's disc fills its
+   box while the + does not, and that difference was always there (send 10 / + ink 16
+   before this). 13 against 16 is invisible at this radius; a tilted row is not. */
+.msg-inbox.multiline{border-radius:25px;}
+/* align-self:flex-end because the wrapped row is centred: without it a taller sibling
+   hands each shorter one half the difference back and the gaps stop being the number the
+   radius was derived from. */
 .msg-inbox.multiline .ac-mic,.msg-inbox.multiline .msg-send,
-.msg-inbox.multiline .ac-fixbtn.show,.msg-inbox.multiline .msg-attach{margin-bottom:4px;}
+.msg-inbox.multiline .ac-fixbtn.show,.msg-inbox.multiline .msg-attach{margin-bottom:1px;align-self:flex-end;}
 /* ── The three things in the bar line up, measured on what you SEE ──────────────
    The + is a bare glyph and the mic is a filled circle, so matching their BOXES is not
    enough: the boxes were even at 6 while the ink sat at 13.5 on the left against the
@@ -5947,7 +5966,11 @@ body.light .ac-item-unread.muted{background:var(--t3);}
    ~17, their send ~9), which is what the owner was seeing without being able to name it.
    6px of start margin puts the + ink at 16 (1 border + 5 padding + 6 + 4 inside its box). */
 .msg-inbox .msg-attach{width:32px;height:36px;margin-bottom:2px;margin-inline-start:6px;}
-.msg-inbox .ac-mic,.msg-inbox .msg-send{margin-bottom:2px;margin-inline-end:4px;}
+/* 1px of end margin puts the disc 7 from the bar's outer edge (1 border + 5 padding + 1).
+   It was 4, i.e. 10 — geometrically fine and still reading as short of the edge, because a
+   solid circle can sit closer than a line drawing before it looks cramped. 7 is also what
+   the multiline corner radius demands: 18 + 7 = 25. */
+.msg-inbox .ac-mic,.msg-inbox .msg-send{margin-bottom:2px;margin-inline-end:1px;}
 /* ── Cards INSIDE the pill (owner's ask — the Claude-app pattern) ──
    A reply you're answering, a photo/video/file about to be sent, and the secret-mode
    notice used to sit ABOVE the pill as loose strips. They now ride inside it, stacked
@@ -5973,7 +5996,7 @@ body.light .ac-item-unread.muted{background:var(--t3);}
 .msg-inbox > .msg-incards:has(> .msg-imgprev.show){display:flex;}
 .msg-incards > .ac-reply-ctx,
 .msg-incards > .ac-secret-bar,
-.msg-incards > .msg-imgprev{margin:0;width:100%;min-width:0;box-sizing:border-box;border-radius:19px;}
+.msg-incards > .msg-imgprev{margin:0;width:100%;min-width:0;box-sizing:border-box;border-radius:16px;}
 /* Clip the two text cards (the reply preview's line is nowrap and would spill) but
    NOT the photo card — its remove ✕ hangs outside the thumbnail and would be sliced
    in half. Instead the ✕ tucks a little further in, clear of the card's own corner. */
@@ -21547,7 +21570,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1795'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1796'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
