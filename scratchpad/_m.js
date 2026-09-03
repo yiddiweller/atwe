@@ -48,7 +48,7 @@ const { chromium } = require(process.env.PW + '/node_modules/playwright-core');
   const dot = await p.evaluate(() => {
     const pill=document.querySelector('.ac-h3-pill').getBoundingClientRect();
     const d=document.getElementById('acPeerDot');
-    d.classList.remove('hidden');
+    d.classList.remove('hidden','off');
     const q=d.getBoundingClientRect();
     return { size:Math.round(q.width), right:+(pill.right-q.right).toFixed(1),
       top:+(q.top-pill.top).toFixed(1), bottom:+(pill.bottom-q.bottom).toFixed(1) };

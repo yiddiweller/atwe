@@ -228,7 +228,9 @@ const BASE = process.env.BASE || 'http://localhost:3262';
       subShown: document.getElementById('acPeerHandle').getBoundingClientRect().height > 0 };
     rtPresence[AC.peer.id] = { online: false, last_seen: new Date(Date.now() - 3600e3).toISOString() }; acUpdatePeerPresence();
     await new Promise(r => setTimeout(r, 200));
+    const wOff = d.getBoundingClientRect().width;
     out.off = { online: d.classList.contains('online'), hidden: d.classList.contains('hidden'),
+      w: +wOff.toFixed(2), gone: wOff < 1 || d.classList.contains('hidden'),
       sub: document.getElementById('acPeerHandle').textContent };
     return out;
   });
@@ -257,7 +259,10 @@ const BASE = process.env.BASE || 'http://localhost:3262';
     `and says "Active now" under the name ("${pres.on.sub}")`);
   /* NO grey dot (owner): away is said by "Last seen …" under the name, and a second, dimmer
      signal for the same fact only read as a smudge. */
-  say(pres.off.hidden, 'offline shows NO dot at all');
+  /* Offline the dot takes NO ROOM — but it is still in the box, collapsed to nothing, so
+     that coming online can animate it open rather than making it appear. `display:none` is
+     kept only for a group / self-chat / presence-off, where there is no state to show. */
+  say(pres.off.gone, `offline the dot takes no room (${pres.off.w}px wide, hidden=${pres.off.hidden})`);
   say(/last seen/i.test(pres.off.sub), `just "Last seen …" under the name ("${pres.off.sub}")`);
 
   /* 7. The floating stack GROWS when the in-chat search opens, and the padding follows it —
@@ -305,7 +310,10 @@ const BASE = process.env.BASE || 'http://localhost:3262';
       inkCy: n(S.top + S.height / 2 - B.top), micCy: n(M.top + M.height / 2 - B.top),
       textGap: n(T.left + parseFloat(getComputedStyle(ta).paddingLeft) - S.right) };
   });
-  say(bar.h >= 50, `the message box sits taller than the flat original (${bar.h}px, was 44)`);
+  /* 49 — ChatGPT's own bar, measured at the owner's phone size (147 device pixels at 3x).
+     This assertion used to demand >= 50, from when the bar was walked UP from a flat 44;
+     it went too far and 54 was the "slightly thicker" the owner's team reported. */
+  say(bar.h >= 48 && bar.h <= 50, `the message box is ChatGPT's height (${bar.h}px, theirs is 49)`);
   say(bar.radius >= bar.h / 2 - 1, `its ends are fully rounded — a true capsule at any height (${bar.radius} for a ${bar.h}px bar)`);
   /* THEY ARE DELIBERATELY NOT EVEN, and this assertion used to say the opposite (build
      1795). Both ends sat at 10 and were geometrically even — and the owner still saw the +
