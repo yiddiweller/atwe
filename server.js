@@ -4328,6 +4328,23 @@ app.get('/api/rt/stream', async (req, res) => {
   });
 });
 
+/* Per-person "hide my last seen from this one person" — the exception list on top of the
+   global presence_visibility. Everyone a member has hidden from, PLUS everyone who has
+   hidden from them: the pair is read in BOTH directions on purpose, so hiding from someone
+   also hides them from you (the same reciprocity the global 'nobody' setting has, and the
+   answer the owner chose — you cannot watch someone while hiding from them).
+   Fails OPEN on a DB error, matching how presence already degrades: a glitch must never
+   silently mark a whole conversation offline. Every place presence leaves the server goes
+   through this, so a new surface cannot quietly skip it. */
+async function presenceHiddenWith(uid) {
+  try {
+    const r = await db.query(
+      `SELECT CASE WHEN user_id = $1 THEN hidden_id ELSE user_id END AS other
+         FROM presence_hidden WHERE user_id = $1 OR hidden_id = $1`, [uid]);
+    return new Set(r.rows.map((x) => x.other));
+  } catch { return new Set(); }
+}
+
 // Presence visibility ("who can see when I'm online / last active").
 // A user with presence_visibility 'nobody' never broadcasts; 'connections' only
 // to accepted connections; 'everyone' (default) broadcasts to all.
@@ -4335,12 +4352,17 @@ async function broadcastPresence(uid, payload) {
   let vis = 'everyone';
   try { const r = await db.query('SELECT presence_visibility FROM users WHERE id = $1', [uid]); vis = (r.rows[0] && r.rows[0].presence_visibility) || 'everyone'; } catch {}
   if (vis === 'nobody') return;
+  const hidden = await presenceHiddenWith(uid);   // per-person exceptions
   if (vis === 'connections') {
     const c = await db.query("SELECT CASE WHEN requester_id = $1 THEN addressee_id ELSE requester_id END AS cid FROM connections WHERE (requester_id = $1 OR addressee_id = $1) AND status = 'accepted'", [uid]);
-    for (const row of c.rows) rtPush(row.cid, 'presence', payload);
+    for (const row of c.rows) if (!hidden.has(row.cid)) rtPush(row.cid, 'presence', payload);
     return;
   }
-  rtBroadcast('presence', payload, uid);
+  /* rtBroadcast has no per-recipient filter, so with an exception list in play the fan-out
+     is done here instead — skipping the hidden pairs. With none (the common case) it is the
+     untouched broadcast. */
+  if (!hidden.size) { rtBroadcast('presence', payload, uid); return; }
+  for (const id of rtClients.keys()) if (id !== uid && !hidden.has(id)) rtPush(id, 'presence', payload);
 }
 // Filter a list of online user-ids down to those the `viewer` is allowed to see.
 async function presenceVisibleTo(viewer, ids) {
@@ -4354,9 +4376,11 @@ async function presenceVisibleTo(viewer, ids) {
   // ('nobody') cannot see anyone else's — they only ever see themselves online.
   const self = r.rows.find((x) => x.id === viewer);
   if (self && (self.presence_visibility || 'everyone') === 'nobody') return ids.filter((id) => id === viewer);
+  const hidden = await presenceHiddenWith(viewer);   // per-person exceptions, both ways
   return r.rows.filter((row) => {
     if (!ids.includes(row.id)) return false; // drop the self row if it wasn't in the online set
     if (row.id === viewer) return true;
+    if (hidden.has(row.id)) return false;
     const v = row.presence_visibility || 'everyone';
     if (v === 'nobody') return false;
     if (v === 'connections') return row.connected;
@@ -4399,11 +4423,13 @@ app.get('/api/atchat/presence', auth.requireAuth, async (req, res) => {
     // ('nobody'), they see nobody else's here either.
     const selfRow = rows.find((x) => x.id === req.user.id);
     const selfHidden = selfRow && (selfRow.presence_visibility || 'everyone') === 'nobody';
+    const hiddenWith = await presenceHiddenWith(req.user.id);   // per-person exceptions, both ways
     const presence = {};
     ids.forEach((id) => {
       const r = rows.find((x) => x.id === id);
       let visible = true;
       if (selfHidden && id !== req.user.id) visible = false;
+      else if (hiddenWith.has(id) && id !== req.user.id) visible = false;
       else if (r && id !== req.user.id) {
         const v = r.presence_visibility || 'everyone';
         if (v === 'nobody') visible = false;
@@ -4418,6 +4444,53 @@ app.get('/api/atchat/presence', auth.requireAuth, async (req, res) => {
     console.error(err);
     res.json({ presence: {} });
   }
+});
+
+/* ── Hide my last seen from ONE person ────────────────────────────────────────
+   The owner's idea: the global "Active status" setting is all-or-nothing, and what people
+   actually want is "not this one person". Set from that conversation's ⋯ menu — the whole
+   point is that it is decided about the person you are looking at, at the moment you think
+   it, rather than assembled later from a list in Settings.
+   It is RECIPROCAL by design (see presenceHiddenWith): hiding from someone hides them from
+   you too, so nobody can watch a person while invisible to them.
+   The list is also managed from Privacy & safety, so a deleted conversation can never
+   strand the setting somewhere unreachable. */
+app.get('/api/atchat/presence-hidden', auth.requireAuth, async (req, res) => {
+  try {
+    // Only the rows this member CHOSE (user_id = me). Someone who hid from them is their
+    // own business and must not be revealed here — that would leak the very thing the
+    // feature exists to hide.
+    const { rows } = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar, u.account_type, u.verified, p.created_at
+         FROM presence_hidden p JOIN users u ON u.id = p.hidden_id
+        WHERE p.user_id = $1 AND NOT u.deactivated
+        ORDER BY p.created_at DESC`, [req.user.id]);
+    res.json({ people: rows.map(mapSearchUser) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load' }); }
+});
+
+app.post('/api/atchat/presence-hidden/:id', auth.requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id) || id === req.user.id) return res.status(400).json({ error: 'Invalid' });
+  try {
+    const u = await db.query('SELECT id FROM users WHERE id = $1', [id]);
+    if (!u.rows.length) return res.status(404).json({ error: 'Not found' });
+    await db.query('INSERT INTO presence_hidden (user_id, hidden_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, id]);
+    /* Tell BOTH sides to stop showing a now-stale dot. SSE has no replay, so a peer holding
+       "online" from a second ago would keep it on screen until their next poll. */
+    rtPush(id, 'presence', { userId: req.user.id, online: false, last_seen: null });
+    rtPush(req.user.id, 'presence', { userId: id, online: false, last_seen: null });
+    res.json({ ok: true, hidden: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save' }); }
+});
+
+app.delete('/api/atchat/presence-hidden/:id', auth.requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid' });
+  try {
+    await db.query('DELETE FROM presence_hidden WHERE user_id = $1 AND hidden_id = $2', [req.user.id, id]);
+    res.json({ ok: true, hidden: false });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save' }); }
 });
 
 // Cloudflare Realtime TURN issues short-lived credentials via its API, so we
@@ -8069,6 +8142,10 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
       handledByTeam, agent,
       canMessage, request, incomingRequest, connectGated, thread,
       disappearing: await dmDisappearSeconds(req.user.id, other),
+      /* Have I hidden my last seen from THIS person? Only my own choice is reported —
+         whether they have hidden from me is theirs to know, and saying so here would
+         leak the very thing the setting exists to hide. */
+      presenceHidden: (await db.query('SELECT 1 FROM presence_hidden WHERE user_id = $1 AND hidden_id = $2', [req.user.id, other])).rowCount > 0,
       // Work out the shape of any photo we have not measured yet, once, and
       // remember it — so the chat can hold the space open before it downloads.
       messages: (backfillImageSizes(rows, 'at_messages'), rows).map((m) => {

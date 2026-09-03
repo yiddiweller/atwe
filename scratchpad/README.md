@@ -97,8 +97,29 @@ tapping it opens the tall two-row box, and `AC._barWrapped` proves it was the ta
 a phantom wrap. The check that earned its keep is the last one — tapping the **+** must not
 collapse the bar out from under the finger. It failed on the first implementation, which
 decided at `pointerup`, before the click that opens the menu had run.
-Self-tested: restoring the blue disc, the bigger dots and the capsule fails 7 of its checks,
-and disabling the tap-to-open fails 2 more.
+Self-tested: restoring the blue disc, the bigger dots and the capsule fails 7 of its checks.
+
+The clearance figure is worth knowing before changing it: the mask is `center/contain` over
+the whole 512px logo file, whose artwork fills only **0.8945** of it, so a fraction measured
+off the PNG must be scaled by that before it means anything about the rendered box. The
+usable band is `0.465 × 0.8945 = 0.416` of the button's mark. Skipping the scale over-stated
+the room by 12%, which is why the dots once touched the swirl's arms with the arithmetic
+insisting they had space.
+
+## Hiding your last seen from one person (`lastseen.js`)
+
+Pure HTTP, three accounts. Presence leaves the server by **three** doors — the live SSE
+fan-out, the `presence-init` snapshot handed out on connect, and the poll — so the probe
+checks all three, because a privacy setting that holds on two of them is worse than none:
+the member believes they are hidden. Every check is a PAIR, since the rule is reciprocal,
+and a third account is present throughout to prove the block is per-person rather than the
+broadcast being quietly switched off. The check that matters most is that the other side is
+**never told** they were hidden from — that would hand back the exact fact being concealed.
+
+Two traps it hit. Closing the hider's stream before opening the observers' made the
+control account's snapshot empty too, so the check passed for the wrong reason. And the
+poll withholds presence by returning a **null `last_seen`**, not by omitting the key — so
+"can they see it" has to test the value, not `key in obj`.
 
 ## The chat header (`chathead.js`)
 

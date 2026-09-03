@@ -5753,21 +5753,26 @@ body.light .ac-item-unread.muted{background:var(--t3);}
 .ac-fixbtn.show{opacity:1;transform:none;width:36px;margin-inline-end:2px;pointer-events:auto;}
 .ac-fixbtn:active{transform:scale(.92);}
 /* The mark itself — WHITE, the same white as the + beside it, and no disc behind it, and
-   drawn MUCH smaller than the blue send it sits next to (owner). The BOX stays 36 so every
-   alignment and spacing rule around it is untouched and the tap target stays a full 36;
-   only the artwork shrinks inside it — a 10px inset leaves a 26px mark against the send's
-   36, i.e. 72%. Shrink the mark, never the button. */
-.ac-fixbtn::before{content:"";position:absolute;inset:5px;background:var(--t1);
+   drawn much smaller than the blue send it sits next to (owner, twice). The BOX stays 36 so
+   every alignment and spacing rule around it is untouched and the tap target stays a full
+   36; only the artwork shrinks inside it — a 7px inset leaves a 22px mark against the
+   send's 36, i.e. 61%. Shrink the mark, never the button. */
+.ac-fixbtn::before{content:"";position:absolute;inset:7px;background:var(--t1);
   -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;
   transition:opacity var(--t-base) var(--ease);}
 /* The three dots sit INSIDE the swirl's open centre, and their size is measured rather than
-   guessed. The right measurement for a ROW of dots is not the largest inscribed square
-   (0.421 of the mark) but the widest clear HORIZONTAL band through its middle, which is
-   0.465 — 12.1px across the 26px mark. Three 2.4px dots with 1.7px gaps come to 10.6 and
-   leave ~0.75px clear at each end. The gap is deliberately 0.7× the dot: any tighter and
-   the three read as one dash rather than as three circles, which is what the owner saw. */
-.afx-dots{position:relative;display:flex;align-items:center;gap:1.7px;}
-.afx-dots i{width:2.4px;height:2.4px;border-radius:50%;background:var(--t1);display:block;flex:0 0 auto;}
+   guessed. TWO corrections are baked into these numbers, both from getting it wrong first:
+   (1) the right measurement for a ROW of dots is not the largest inscribed square (0.421 of
+   the artwork) but the widest clear HORIZONTAL band through its middle, 0.465; and (2) the
+   mask is `center/contain` over the WHOLE 512px file, whose artwork only fills 89.45% of it
+   — so the drawn ink is 0.8945 of the button's box, and the usable band is 0.465 × 0.8945 =
+   0.416 of it, NOT 0.465. Missing that padding over-stated the room by 12% and is exactly
+   why the dots touched the arms: at a 26px mark they had 0.24px of clearance, not 0.77.
+   So: a 22px mark gives a 9.3px band; three 1.6px dots with 1.15px gaps come to 7.1 and
+   leave ~1.1px clear at each end. The gap stays 0.7× the dot — any tighter and the three
+   read as one dash rather than as three circles, which the owner has already caught once. */
+.afx-dots{position:relative;display:flex;align-items:center;gap:1.15px;}
+.afx-dots i{width:1.6px;height:1.6px;border-radius:50%;background:var(--t1);display:block;flex:0 0 auto;}
 @media(hover:hover){.ac-fixbtn:hover{opacity:.75;}}
 /* Working: the swirl brightens and turns, and the dots breathe in turn. */
 .ac-fixbtn.working::before{animation:afxSpin 1.5s linear infinite;}
@@ -5867,7 +5872,10 @@ body.light .msg-inbox{background:var(--s2);}
    top; the +/mic/send wrap to a row beneath it — + stays left, send hugs the right.
    Single-line stays exactly the one-row layout above. */
 .msg-inbox.multiline{flex-wrap:wrap;align-items:center;}
-.msg-inbox.multiline textarea{order:1;flex:1 1 100%;width:100%;padding:4px 4px 2px;}
+/* Once the text has its own row it needs real room above it: at 4px the first line sat
+   almost against the bar's top edge (owner's screenshot). 10px reads as a margin rather
+   than a clipped line, and matches the 10px the one-row textarea already carries. */
+.msg-inbox.multiline textarea{order:1;flex:1 1 100%;width:100%;padding:10px 4px 2px;}
 .msg-inbox.multiline .msg-attach{order:2;}
 .msg-inbox.multiline .ac-fixbtn{order:3;margin-inline-start:auto;}
 .msg-inbox.multiline .ac-mic{order:4;}
@@ -14279,6 +14287,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 <div class="iset-cap" style="margin-top:18px;font-weight:600;color:var(--t2);">Connections &amp; visibility</div>
 <div class="iset-group">
   <div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></svg></span><div class="iset-main"><div class="iset-label">Active status</div><div class="iset-sub">Who sees when you’re online</div></div><select class="iset-select" id="apPresence" aria-label="Active status visibility" onchange="setAccPriv('presenceVisibility', this.value)"><option value="everyone">Everyone</option><option value="connections">Connections</option><option value="nobody">No one</option></select></div>
+  <div class="iset-row" onclick="acOpenLastSeenHidden()"><span class="iset-ic"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8.6" ry="7.4"/><line x1="4.6" y1="19.4" x2="19.4" y2="4.6"/></svg></span><div class="iset-main"><div class="iset-label">Hidden from</div><div class="iset-sub">People who can’t see your last seen</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
   <div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-4.8 5.5-4.8s5.5 1.8 5.5 4.8"/><circle cx="17.5" cy="9" r="2.4"/><path d="M16 14.4c2.2.2 4 1.6 4 3.9"/></svg></span><div class="iset-main"><div class="iset-label">Show your connections</div><div class="iset-sub">Let others see who you’re connected to</div></div><label class="ios-switch"><input type="checkbox" id="apConnVis" onchange="toggleAccPriv('connectionsVisible', this.checked)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>
   <div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.4"/><path d="M3.5 20c0-3.2 2.6-5 5.5-5s5.5 1.8 5.5 5"/><line x1="18" y1="7" x2="18" y2="13"/><line x1="15" y1="10" x2="21" y2="10"/></svg></span><div class="iset-main"><div class="iset-label">Connection requests</div></div><select class="iset-select" id="apWhoReq" aria-label="Who can send you connection requests" onchange="setAccPriv('whoCanRequest', this.value)"><option value="everyone">Everyone</option><option value="network">My network</option><option value="nobody">No one</option></select></div>
   <div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="8" cy="9" r="2.6"/><circle cx="16" cy="9" r="2.6"/><path d="M3.5 18.5c0-2.4 2-3.8 4.5-3.8s4.5 1.4 4.5 3.8M14 15c2.2 0 4.5 1.2 4.5 3.5"/></svg></span><div class="iset-main"><div class="iset-label">Add you to groups</div></div><select class="iset-select" id="apWhoGroup" aria-label="Who can add you to groups" onchange="setAccPriv('whoCanAddGroups', this.value)"><option value="everyone">Everyone</option><option value="connections">Connections</option><option value="nobody">No one</option></select></div>
@@ -14408,6 +14417,19 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 </div>
 
 <!-- Muted accounts (from Privacy settings) -->
+<!-- Everyone you have hidden your last seen from, one conversation at a time. It exists so
+     the setting is never a one-way door: deleting the chat would otherwise leave it on with
+     nowhere to find it. -->
+<div class="overlay set-fs hidden" id="lastSeenHiddenOverlay">
+  <div class="set-sheet" role="dialog" aria-label="Hidden from">
+    <div class="iset-head">
+      <button class="iset-back" onclick="closeOverlay('lastSeenHiddenOverlay')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <span class="iset-title">Hidden from</span>
+    </div>
+    <div class="iset-note" style="padding:0 18px 12px;color:var(--t3);font-size:13px;">These people can’t see when you’re online or last active — and because it works both ways, you can’t see theirs. Everyone else is unaffected.</div>
+    <div class="iset-group"><div class="lv-list" id="lastSeenHiddenList"></div></div>
+  </div>
+</div>
 <div class="overlay set-fs hidden" id="mutedOverlay">
   <div class="set-sheet" role="dialog" aria-label="Muted accounts">
     <div class="iset-head">
@@ -20825,7 +20847,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
           <button class="msg-attach" id="acAttachBtn" onclick="acToggleAttachMenu(event)" aria-label="Add attachment">
             <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
-          <textarea id="acInput" rows="1" placeholder="Message" aria-label="Message" oninput="acAutosize();acTypingEmit();acSaveDraft();acChatMentionInput(this);acQrSlashExpand(this)" onfocus="acQrEnsureLoaded();acBarFocus()" onblur="setTimeout(acChatMentionClose,150);acBarBlur()"></textarea>
+          <textarea id="acInput" rows="1" placeholder="Message" aria-label="Message" oninput="acAutosize();acTypingEmit();acSaveDraft();acChatMentionInput(this);acQrSlashExpand(this)" onfocus="acQrEnsureLoaded()" onblur="setTimeout(acChatMentionClose,150)"></textarea>
           <!-- The one-tap proofreader. Appears once there is something worth fixing, sits
                beside the mic/send, and hands the whole message to Atwe AI to correct its
                spelling, grammar and punctuation — nothing else. The Atwe swirl is the
@@ -21338,7 +21360,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1784'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1785'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -26132,6 +26154,8 @@ const SET_SEARCH_INDEX = [
   { label: 'Locked sections', sub: 'Security & access', page: 'security', kw: 'passcode pin app lock wallet storefront chats contacts notifications profile' },
   { label: 'Who can contact you', sub: 'Privacy & safety', page: 'privacy', kw: 'message call dm direct' },
   { label: 'Read receipts', sub: 'Privacy & safety', page: 'privacy', kw: 'seen ticks blue read receipt' },
+  { label: 'Active status', sub: 'Privacy & safety', page: 'privacy', kw: 'last seen online active status presence who sees when im online' },
+  { label: 'Hidden from', sub: 'Privacy & safety', page: 'privacy', kw: 'hide last seen from someone one person exception hidden online presence' },
   { label: 'Private profile views', sub: 'Privacy & safety', page: 'privacy', kw: 'anonymous browsing incognito private hide visits' },
   { label: 'Blocked accounts', sub: 'Privacy & safety', page: 'privacy', kw: 'block' },
   { label: 'Muted accounts', sub: 'Privacy & safety', page: 'privacy', kw: 'mute' },
@@ -26221,6 +26245,29 @@ async function unblockUser(id, btn) {
   } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not unblock.'); }
 }
 // Muted accounts (Privacy settings).
+/* Everyone you have hidden your last seen from — the managed list behind the per-chat
+   toggle, so the setting can always be found and undone even if the conversation is gone. */
+async function acOpenLastSeenHidden() {
+  showOverlay('lastSeenHiddenOverlay');
+  const el = document.getElementById('lastSeenHiddenList');
+  el.innerHTML = acSkelRows(3);
+  try {
+    const { people } = await API.req('GET', '/api/atchat/presence-hidden');
+    el.innerHTML = people.length
+      ? people.map((u) => `<div class="ac-item">${acAvatarHtml(u.name, u.avatar, '', acIsBiz(u))}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</span></div><div class="ac-item-last">@${escHtml(u.username || '')}</div></div><button class="ac-join-btn" onclick="acUnhideLastSeen(${u.id},this)">Show</button></div>`).join('')
+      : '<div class="ac-empty" style="padding:34px 16px;">You haven’t hidden your last seen from anyone.</div>';
+  } catch (e) { acErr(el, 'acOpenLastSeenHidden()'); }
+}
+async function acUnhideLastSeen(id, btn) {
+  btn.disabled = true;
+  try {
+    await API.req('DELETE', '/api/atchat/presence-hidden/' + id);
+    if (AC.peer && AC.peer.id === id) AC.presenceHidden = false;   // the open chat's ⋯ tick
+    const row = btn.closest('.ac-item'); if (row) row.remove();
+    const el = document.getElementById('lastSeenHiddenList');
+    if (el && !el.querySelector('.ac-item')) el.innerHTML = '<div class="ac-empty" style="padding:34px 16px;">You haven’t hidden your last seen from anyone.</div>';
+  } catch (e) { btn.disabled = false; showNotif((e && e.message) || 'Could not update.'); }
+}
 async function acOpenMutedAccounts() {
   showOverlay('mutedOverlay');
   const el = document.getElementById('mutedList');
@@ -55382,9 +55429,6 @@ async function acStartNewThread(peerId) {
   } catch (e) { showNotif(e.message || 'Could not start a new conversation.'); }
 }
 async function acOpenChat(id, threadId) {
-  /* The bar opens on tap and closes on blur; arriving at a NEW conversation must never
-     inherit the last one's open state if that blur never fired (a deep link, say). */
-  AC._barFocus = false;
   if (window._crashTab) _crashTab('chat-thread');
   AC.threadId = threadId || null; // which conversation (null = main)
   acThreadSearchClose(); // never carry an open in-chat search across conversations
@@ -55459,6 +55503,7 @@ function acApplyDmData(id, d, firstPaint, fromCache) {
       .catch(() => {});
   }
   AC.disappearing = Number(d.disappearing || 0);
+  AC.presenceHidden = !!d.presenceHidden;   // have I hidden my last seen from this person?
   document.getElementById('acPinBar').classList.add('hidden'); acLoadPins();
   AC.canMessage = d.canMessage !== false;
   AC.request = d.request || null;
@@ -56384,6 +56429,11 @@ function acThreadMenu(btn) {
       + `<button class="mm-item" onclick="acHeadAct('scheduled')">${IC.scheduled}<span class="mm-label">Scheduled messages</span></button>`
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('label')">${IC.label}<span class="mm-label">Label chat</span></button>`)
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('disappear')">${IC.disappear}<span class="mm-label">Disappearing messages${AC.disappearing ? ' · ' + acDisLabel(AC.disappearing) : ''}</span></button>`)
+      /* Hide MY last seen from THIS one person — the owner's idea, and the reason it lives
+         here rather than in Settings: it is a thought you have about the person in front of
+         you. It sits with Disappearing messages because both are privacy controls scoped to
+         this one conversation. The crossed eye is the app's own one eye, minus its pupil. */
+      + (self ? '' : `<button class="mm-item" onclick="acHeadAct('hidelastseen')"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8.6" ry="7.4"/><line x1="4.6" y1="19.4" x2="19.4" y2="4.6"/></svg><span class="mm-label">Hide my last seen${AC.presenceHidden ? ' \u2713' : ''}</span></button>`)
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('money')">${IC.money}<span class="mm-label">Send money</span></button>`)
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('split')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18"/><path d="M7.5 8.5h3M13.5 15.5h3"/></svg><span class="mm-label">Split a bill</span></button>`)
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('invoice')">${IC.invoice}<span class="mm-label">Send an invoice</span></button>`)
@@ -56412,6 +56462,7 @@ function acHeadAct(a) {
     else if (a === 'report') acReportPeer();
     else if (a === 'select') acStartSelect();
     else if (a === 'cartmute') acToggleShopReminders();
+    else if (a === 'hidelastseen') acToggleHideLastSeenFrom();
     else if (a === 'rename' && AC.peer) acRenameChatOpen();
     else if (a === 'secret' && AC.peer) acSecretToggle(AC.peer.id);
     else if (a === 'threads' && AC.peer) acOpenThreadPicker(AC.peer.id);
@@ -56522,6 +56573,34 @@ async function acToggleShopReminders() {
     showNotif(next ? 'You won’t get cart reminders from this shop.' : 'Cart reminders from this shop are back on.');
   } catch (e) { showNotif((e && e.message) || 'Could not update.'); }
 }
+
+/* ── Hide my last seen from ONE person ────────────────────────────────────────
+   The global "Active status" setting is all-or-nothing; this is the exception for a single
+   conversation, decided from that conversation's ⋯ menu. It is RECIPROCAL — hiding from
+   someone hides them from you too, the same rule the global setting already follows — so
+   the confirmation says so plainly rather than letting anyone discover it later. */
+async function acToggleHideLastSeenFrom() {
+  if (!AC.peer || !AC.peer.id) return;
+  const on = !AC.presenceHidden;
+  const who = (AC.peer.name || '').split(/\s+/)[0] || 'them';
+  if (on && !(await appConfirm({ title: 'Hide your last seen from ' + escHtml(who) + '?',
+    message: 'They won’t see when you’re online or last active. Because it works both ways, you won’t see theirs either. Everyone else is unaffected.',
+    confirmText: 'Hide', danger: false }))) return;
+  try {
+    await API.req(on ? 'POST' : 'DELETE', '/api/atchat/presence-hidden/' + AC.peer.id);
+    AC.presenceHidden = on;
+    /* The server has already told both sides to drop the dot, but this device may be holding
+       a value from a second ago — clear it and re-ask, so the header is right immediately
+       rather than at the next poll. Unhiding needs the refetch just as much: the server was
+       withholding it, so there is nothing cached to fall back to. */
+    if (rtPresence) delete rtPresence[AC.peer.id];
+    acUpdatePeerPresence();
+    API.req('GET', '/api/atchat/presence?ids=' + AC.peer.id)
+      .then((r) => { Object.assign(rtPresence, r.presence || {}); acUpdatePeerPresence(); }).catch(() => {});
+    showNotif(on ? 'Your last seen is hidden from ' + who + '.' : 'Your last seen is shown to ' + who + ' again.');
+  } catch (e) { showNotif((e && e.message) || 'Could not update.'); }
+}
+
 /* ── Export chat (WhatsApp-style: save the open conversation as a .txt) ──
    Builds a readable transcript from the already-loaded thread (the read routes
    load full history), then downloads it (or shares it on mobile). Media/rich
@@ -59777,9 +59856,6 @@ async function acLoadLiveStrip() {
 }
 
 async function acOpenGroup(id) {
-  /* The bar opens on tap and closes on blur; arriving at a NEW conversation must never
-     inherit the last one's open state if that blur never fired (a deep link, say). */
-  AC._barFocus = false;
   if (window._crashTab) _crashTab('group-thread');
   // Optimistic: zero the group row's unread the instant it's opened (the badge
   // never outlives entering the chat); the server confirms on refresh.
@@ -62285,13 +62361,12 @@ function acAutosize() {
   if (was) box.classList.remove('multiline');
   inp.style.height = 'auto';
   const h = inp.scrollHeight;                       // always at the one-row width
-  /* Two things open the tall layout: the message genuinely wrapping, and the bar simply
-     being TAPPED (the owner's ask — tap it, the keyboard comes up, and the text takes its
-     own row with the +/AI/send beneath, the way ChatGPT's composer does). Only the first
-     is a measurement, so `_barWrapped` keeps it on its own for the flip-flop guard: focus
-     can never feed back into the height, so adding it cannot reintroduce the loop. */
+  /* ONE row until the message genuinely wraps — the owner tried tap-to-open (build 1783,
+     ChatGPT-style) and asked for it back: the bar growing on every tap was too much motion
+     for a chat you are only glancing at. `_barWrapped` is kept as its own field because it
+     is the MEASUREMENT, and the flip-flop guard above reasons about exactly that. */
   AC._barWrapped = h > 44;
-  const want = AC._barWrapped || !!AC._barFocus;
+  const want = AC._barWrapped;
   if (box) box.classList.toggle('multiline', want);
   // The applied mode may be wider than the one just measured, so take the final height there.
   if (want) { inp.style.height = 'auto'; inp.style.height = Math.min(inp.scrollHeight, 130) + 'px'; }
@@ -62299,47 +62374,6 @@ function acAutosize() {
   acToggleSendMic();
 }
 
-/* THE BAR OPENS THE MOMENT IT IS TAPPED, not only once the message wraps — the owner's
-   design, taken from ChatGPT's composer. `acAutosize` owns the class either way, so the
-   two-row layout, the 28px corner and the button insets are all the ones already in place;
-   nothing here is a second copy of that.
-   Closing it again has one trap worth knowing: tapping the + or the send BLURS the
-   textarea, and collapsing at that instant moves the very button being pressed out from
-   under the finger, so the tap lands on nothing. A blur that arrives while a finger is
-   still down on the bar is HELD until it lifts and re-checked then; and it never closes
-   while the attach menu is open, because that menu is anchored to the + and the bar
-   shrinking underneath it would leave it floating in a gap. */
-let _acBarPress = false, _acBarBlurWait = false;
-function acBarFocus() { _acBarBlurWait = false; if (AC._barFocus) return; AC._barFocus = true; acAutosize(); }
-function acBarBlur() {
-  if (_acBarPress) { _acBarBlurWait = true; return; }
-  const am = document.getElementById('acAttachMenu');
-  if (am && !am.classList.contains('hidden')) { _acBarBlurWait = true; return; }
-  if (!AC._barFocus) return;
-  AC._barFocus = false; acAutosize();
-}
-function _acBarUp() {
-  _acBarPress = false;
-  if (!_acBarBlurWait) return;
-  /* NEVER decide at pointerup. The button's own click — the one that OPENS the attach menu —
-     has not run yet at that point, so a decision taken here reads the menu as still closed
-     and collapses the bar out from under the finger, which is the exact thing being guarded
-     against. Let the click land first, then look. */
-  _acBarLater(110);
-}
-function _acBarLater(ms) { clearTimeout(_acBarLater._t); _acBarLater._t = setTimeout(_acBarSettle, ms); }
-function _acBarSettle() {
-  if (!_acBarBlurWait) return;
-  if (document.activeElement === document.getElementById('acInput')) { _acBarBlurWait = false; return; }
-  const am = document.getElementById('acAttachMenu');
-  if (am && !am.classList.contains('hidden')) { _acBarLater(300); return; }   // keep looking while it is up
-  _acBarBlurWait = false; AC._barFocus = false; acAutosize();
-}
-document.addEventListener('pointerdown', (e) => {
-  if (e.target && e.target.closest && e.target.closest('.msg-inbox')) _acBarPress = true;
-}, true);
-document.addEventListener('pointerup', _acBarUp, true);
-document.addEventListener('pointercancel', _acBarUp, true);
 
 /* ── Voice notes (MediaRecorder) ── */
 let acRec, acRecChunks = [], acRecTimer = null, acRecStart = 0, acRecCancel = false, _micAutoSend = false;
