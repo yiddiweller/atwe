@@ -179,7 +179,10 @@ const BASE = process.env.BASE || 'http://localhost:3262';
         widest blur covers the least area. Everything else stays banned — the point of the
         rule is that a blur must be a decision somebody measured, not one that drifted in. */
   const ALLOWED_BLUR = 'ac-topglass';
-  const blurs = await p.evaluate(() => {
+  /* Passed IN, not closed over: the function body runs in the browser, where a const
+     declared here in Node does not exist. It threw ReferenceError and took the whole
+     probe down with it. */
+  const blurs = await p.evaluate((ALLOWED_BLUR) => {
     const v = document.getElementById('acThreadVP').getBoundingClientRect();
     const out = [];
     document.querySelectorAll('*').forEach(el => {
@@ -194,7 +197,8 @@ const BASE = process.env.BASE || 'http://localhost:3262';
       out.push(key + ' ' + bf);
     });
     return out;
-  });
+  }, ALLOWED_BLUR);
+
   say(blurs.length === 0, `no blur over the thread on a phone beyond the measured top edge${blurs.length ? ' — ' + blurs.join(', ') : ''}`);
 
   /* 8. `touch-action: pan-y` gives vertical to the browser and KEEPS horizontal for us.

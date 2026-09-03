@@ -6036,11 +6036,12 @@ Three things are load-bearing:
   left the row swallowing every tap in the gaps between the shapes (measured: a tap between
   the back button and the pill landed on `.msg-top`). `.ac-head3` is transparent too; only
   the three shapes take a press.
-- **Presence is ONE dot**: green with no second line when they are here (the name centres in
-  the pill, as drawn), grey with "Last seen …" under the name when they are not, and hidden
-  entirely for a group, a self-chat, or an account with presence switched off. The name no
-  longer turns blue when online — the dot says it, and two signals for one fact is one too
-  many. NB `acPresenceText` reads **`last_seen`**, not `lastSeen`; with no data at all it
+- **Presence is ONE dot**: green with **"Active now"** under the name when they are here
+  (build 1795 — it shipped with no second line at all, and the owner asked for the words
+  back: a green dot on its own is a signal you have to already know how to read), nothing
+  with "Last seen …" when they are not, and hidden entirely for a group, a self-chat, or an
+  account with presence switched off. The name no longer turns blue when online — the dot
+  says it, and two signals for one fact is one too many. NB `acPresenceText` reads **`last_seen`**, not `lastSeen`; with no data at all it
   falls back to the @username, which is why a probe that seeds the wrong field sees a handle.
 
 **Phone and video left the header for the ⋯ menu**, where Voice call and Video call were
@@ -6227,7 +6228,56 @@ padding is **10px**, not 4: at 4 the first line sat almost against the bar's top
 owner photographed it) and read as clipped. 10 matches what the one-row textarea already
 carries, so the text sits the same distance from the bar's edge in both modes.
 
-`scratchpad/chathead.js` (51 checks) covers all of it, in both themes, plus the group case.
+**Third pass (1795) — spacing the owner's design team measured against ChatGPT and Safari:**
+
+- **The `+` and the send are DELIBERATELY UNEVEN, and that is the point.** Both sat 10 from
+  their own end and were geometrically even — and the owner still read the `+` as jammed
+  against the wall. A bare 24px glyph carries less visual weight than a solid 36px disc and
+  needs more air before it looks equally placed; ChatGPT's own bar gives their `+` ~17 and
+  their send ~9 for exactly this reason. The `+` ink now sits at **16** and the send stays at
+  **10**, via a 6px `margin-inline-start` on `.msg-attach` — the BOX moves, so the 36px tap
+  target and the bottom alignment are untouched. `chathead.js`'s old "they sit the same
+  distance from their own ends" assertion is retired and now asserts the opposite, with the
+  reason written next to it.
+- **A wrapped message starts where the `+` ink does.** The multiline textarea's left padding
+  is **10** (16 − the bar's 1px border − its 5px padding), so the first line and the `+`
+  share one left edge instead of the text starting 6px short of it.
+- **The header's three shapes sit closer to each other than to the screen edge.**
+  `--h3-gap` (16) is the OUTER inset; the new **`--h3-inner` (10)** is the gap BETWEEN them.
+  Measured off Safari's own bar — the owner's reference — that gap is **0.21 of the circle's
+  diameter** (30 against 145), where ours was 0.33 (16 against 48). The pill gains 12px and
+  the row still starts and ends on 16. Asserted as a RATIO, so resizing `--h3-size` keeps it
+  honest.
+- **The green dot now has words beside it.** Online shows the dot AND "Active now" under the
+  name; the dot used to be the whole message and the second line was dropped. A green dot is
+  a signal you have to already know how to read. (`chathead.js` check 6 asserted the removal
+  and now asserts the restoration.)
+
+`scratchpad/chathead.js` (52 checks) covers all of it, in both themes, plus the group case.
+
+### An unread notification turns the BELL blue
+
+It used to pin a small blue count bubble to the icon's top-right corner. Beam's tab already
+says "something new" by painting its own icon accent-blue, and two languages for one idea in
+a five-icon bar is one too many — so `setNotifBadge` drives the bell through **`acSetNavNotif`**,
+Beam's own mechanism, reused as-is. The two corner badges (`#bnavNotifBadge`, `#sbNotifBadge`)
+are retired and explicitly re-hidden on every call, so neither can linger from an earlier state.
+
+**The COUNT is not lost** — it still shows on the Notifications ROW in the Account/Settings
+lists (`#notifBadge`), which is a list item with room for a number rather than a 34px icon,
+capped at 99+.
+
+`scratchpad/navnotif.js` measures the icon's own **mask**, not the tab's `color`: the nav
+artwork is a PNG mask painted with `background`, so `getComputedStyle(tab).color` reports
+white whatever the state is — an earlier version of that check read exactly that and could
+never have failed. It also compares the bell against **Account**, not Home: Home is the tab
+you are standing on, and an active tab is painted differently (visibly so in Light), so the
+reference has to be a quiet tab.
+
+**A probe bug fixed in the same pass:** `chatscroll.js`'s no-blur check declared
+`ALLOWED_BLUR` in Node and used it inside `p.evaluate` — where it does not exist. It threw a
+`ReferenceError` and took the whole probe down, silently, since build 1786. It is passed in
+as an argument now.
 
 ### A conversation is scrolled by the BROWSER, not by us
 

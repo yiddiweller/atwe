@@ -4730,9 +4730,14 @@ body.light .tb-login,body.light .btn-white{background:var(--primary);color:var(-
 .ac-topfloat > .ac-head3{pointer-events:none;}
 .ac-head3 > *{pointer-events:auto;}
 #acThreadScreen .msg-top.ac-head3{background:none;border-bottom:none;position:relative;z-index:2;
-  gap:var(--h3-gap);align-items:center;
+  gap:var(--h3-inner);align-items:center;
   padding:calc(max(10px,env(safe-area-inset-top)) + 6px) var(--h3-gap) 10px;}
-:root{--h3-size:48px;--h3-gap:16px;}
+/* --h3-gap is the OUTER inset (the row's own gutter); --h3-inner is the gap BETWEEN the
+   three shapes. They used to be one number, which made the gaps as wide as the app's
+   gutter and left the middle pill narrower than it should be. Measured off Safari's own
+   bar — the owner's reference — the gap is 0.21 of the circle's diameter (30 against 145),
+   where ours was 0.33 (16 against 48). 0.21 x 48 = 10, so the pill gains 12px. */
+:root{--h3-size:48px;--h3-gap:16px;--h3-inner:10px;}
 /* The two round buttons and the pill share ONE height, so the row reads as one line of
    shapes rather than three sizes. */
 .ac-h3-btn{width:var(--h3-size);height:var(--h3-size);border-radius:50%;flex-shrink:0;
@@ -5935,7 +5940,13 @@ body.light .ac-item-unread.muted{background:var(--t3);}
   .ac-fixshine{animation:none;background-position:60% 0;}
   .ac-fixbtn.working::before,.ac-fixbtn.working .afx-dots i{animation:none;}
 }
-.msg-inbox .msg-attach{width:32px;height:36px;margin-bottom:2px;}
+/* THE + SITS FURTHER IN THAN THE SEND, ON PURPOSE. Both used to be 10 from their own end
+   and were geometrically even — but they do not READ even, because the + is a bare 24px
+   glyph and the send is a solid 36px disc: a filled shape carries more weight and can sit
+   closer to an edge before it looks cramped. ChatGPT's own bar does exactly this (their +
+   ~17, their send ~9), which is what the owner was seeing without being able to name it.
+   6px of start margin puts the + ink at 16 (1 border + 5 padding + 6 + 4 inside its box). */
+.msg-inbox .msg-attach{width:32px;height:36px;margin-bottom:2px;margin-inline-start:6px;}
 .msg-inbox .ac-mic,.msg-inbox .msg-send{margin-bottom:2px;margin-inline-end:4px;}
 /* ── Cards INSIDE the pill (owner's ask — the Claude-app pattern) ──
    A reply you're answering, a photo/video/file about to be sent, and the secret-mode
@@ -6005,7 +6016,10 @@ body.light .msg-inbox{background:var(--s2);}
 /* Once the text has its own row it needs real room above it: at 4px the first line sat
    almost against the bar's top edge (owner's screenshot). 10px reads as a margin rather
    than a clipped line, and matches the 10px the one-row textarea already carries. */
-.msg-inbox.multiline textarea{order:1;flex:1 1 100%;width:100%;padding:10px 4px 2px;}
+/* The first line starts where the + ink does (16 from the bar's edge), not 6px short of it.
+   Left padding 10 = 16 − the 1px border − the bar's 5px padding. It read as crowding the
+   left edge because it was the only thing in the bar sitting at 10. */
+.msg-inbox.multiline textarea{order:1;flex:1 1 100%;width:100%;padding:10px 4px 2px 10px;}
 .msg-inbox.multiline .msg-attach{order:2;}
 .msg-inbox.multiline .ac-fixbtn{order:3;margin-inline-start:auto;}
 .msg-inbox.multiline .ac-mic{order:4;}
@@ -21533,7 +21547,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1794'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1795'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -34190,14 +34204,20 @@ function setNotifBadge(n) {
   AC._notifUnread = n || 0;
   acSyncBellDot();
   acSyncTabTitle();
-  /* Alerts is a world in the bar now, so the count belongs on its tab (both the
-     phone bar and the desktop sidebar) as well as on the old row. */
+  /* THE BELL ITSELF TURNS BLUE — no count bubble on the corner of the icon (owner). Beam's
+     tab already says "something new" that way, and two different languages for the same
+     idea in one bar is one too many. `acSetNavNotif` is Beam's own mechanism, reused as-is.
+     The count still shows on the old NOTIFICATIONS ROW (#notifBadge), which is a list item
+     with room for a number, not a 34px icon. */
+  acSetNavNotif('notifs', n > 0);
   const txt = n > 99 ? '99+' : String(n);
-  ['notifBadge', 'bnavNotifBadge', 'sbNotifBadge'].forEach((id) => {
+  ['notifBadge'].forEach((id) => {
     const b = document.getElementById(id); if (!b) return;
     if (n > 0) { b.textContent = txt; b.classList.remove('hidden'); }
     else b.classList.add('hidden');
   });
+  // The two nav badges are retired; make sure neither can linger from an earlier state.
+  ['bnavNotifBadge', 'sbNotifBadge'].forEach((id) => document.getElementById(id)?.classList.add('hidden'));
 }
 async function refreshNotifCount() {
   if (!isAccount()) return;
@@ -56618,9 +56638,11 @@ function acUpdatePeerPresence() {
   // Default: presence (Active now / Last seen …); tap the name to flip to @username.
   if (AC._showHandle) { el.textContent = '@' + AC.peer.username; el.classList.add('show-handle'); return; }
   el.classList.remove('show-handle');
-  /* Online: the green dot IS the message, so the subline is dropped and the name centres
-     in the pill — exactly as drawn. Offline: "Last seen …" comes back under it. */
-  el.textContent = online ? '' : (acPresenceText(AC.peer.id) || ('@' + AC.peer.username));
+  /* Online: "Active now" under the name, ALONGSIDE the green dot (owner). The dot used to
+     be the whole message and the subline was dropped, which left the pill saying nothing
+     about why the dot was there — a green dot is a signal you have to already know how to
+     read. Offline: "Last seen …" as before. */
+  el.textContent = online ? 'Active now' : (acPresenceText(AC.peer.id) || ('@' + AC.peer.username));
   acSyncHeadH();
 }
 // Tapping the header: avatar → profile/group info; name → flip the subline to the

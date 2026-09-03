@@ -295,6 +295,28 @@ const FIXED  = 'I think we should meet tomorrow at 3 pm, ok?';
     `the send button is inset the same on both sides of that corner (${two.gapEnd} / ${two.gapBottom})`);
   say(Math.abs(two.r - (two.sendR + two.gapEnd)) <= 1,
     `so the corner is concentric with it — radius ${two.r} = ${two.sendR} + ${two.gapEnd}`);
+
+  /* THE + AND THE FIRST LINE OF TEXT START ON ONE LINE, and the + sits further in than the
+     send does. Both are the owner's (build 1795), and the second one is optical rather than
+     geometric: the + is a bare 24px glyph and the send is a solid 36px disc, so a filled
+     shape carries more weight and can sit closer to an edge before it looks cramped. They
+     were geometrically even at 10 each and read as the + being jammed against the wall —
+     ChatGPT's own bar gives the + ~17 and the send ~9 for exactly this reason.
+     Measured on INK (the svg), never on the button box: the + 's box is padded around it,
+     so a box measurement says 12 where the eye sees 16. */
+  const ink = await l.p.evaluate(() => {
+    const box = document.querySelector('#acThreadScreen .msg-inbox').getBoundingClientRect();
+    const plus = document.querySelector('#acThreadScreen .msg-inbox .msg-attach svg').getBoundingClientRect();
+    const send = [...document.querySelectorAll('#acThreadScreen .msg-inbox .msg-send, #acThreadScreen .msg-inbox .ac-mic')]
+      .find((n) => n.getBoundingClientRect().width > 1).getBoundingClientRect();
+    const inp = document.getElementById('acInput');
+    return { plusL: +(plus.left - box.left).toFixed(1), sendR: +(box.right - send.right).toFixed(1),
+      textL: +(inp.getBoundingClientRect().left - box.left + parseFloat(getComputedStyle(inp).paddingLeft)).toFixed(1) };
+  });
+  say(Math.abs(ink.textL - ink.plusL) <= 1,
+    `the wrapped text starts exactly where the + ink does (${ink.textL} / ${ink.plusL})`);
+  say(ink.plusL > ink.sendR + 3,
+    `and the bare + is given more room than the filled send disc (${ink.plusL} vs ${ink.sendR})`);
   await l.ctx.close();
 
   await b.close();
