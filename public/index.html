@@ -6094,6 +6094,16 @@ body.light .msg-inbox{background:var(--s2);}
    top; the +/mic/send wrap to a row beneath it — + stays left, send hugs the right.
    Single-line stays exactly the one-row layout above. */
 .msg-inbox.multiline{flex-wrap:wrap;align-items:center;}
+/* The bar getting taller, and everything in it travelling to its new place, on ONE curve —
+   so nothing has to be clipped and nothing arrives before the room for it does. Only ever
+   on for the ~200ms the change takes. */
+/* align-content:flex-end is the load-bearing half: it holds the rows against the box's
+   BOTTOM while the height animates, so the top edge is what travels and the buttons sit
+   still. Without it the rows stack from the top and the buttons are what gets clipped —
+   which is exactly what read as a curtain in 1797. */
+.msg-inbox.h-grow{overflow:hidden;align-content:flex-end;
+  transition:height var(--t-base) var(--ease),border-radius var(--t-base) var(--ease);}
+@media (prefers-reduced-motion:reduce){.msg-inbox.h-grow{transition:none;}}
 
 /* Once the text has its own row it needs real room above it: at 4px the first line sat
    almost against the bar's top edge (owner's screenshot). 10px reads as a margin rather
@@ -21629,7 +21639,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1798'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1799'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -62813,14 +62823,21 @@ function acAutosize() {
      is the MEASUREMENT, and the flip-flop guard above reasons about exactly that. */
   AC._barWrapped = h > 44;
   const want = AC._barWrapped;
-  /* THE WRAP ITSELF IS INSTANT, and that is the owner's call (build 1798). Build 1797
-     animated it — the buttons drop onto a row of their own the instant .multiline lands,
-     which no CSS transition can carry, so the box's height was measured before and after
-     and glided between the two while clipping its own contents. It worked, and it read as
-     a curtain rather than a bar growing; they asked for the plain version back.
-     What survives is the SIMPLE half: the textarea's height is written in px, so its own
-     CSS transition carries lines 3, 4, 5 … and the button row rides down with it. No
-     clipping, no measuring, no layout trickery — the one-to-two-line step is a step again. */
+  /* THE BAR SIMPLY GETS TALLER (owner, build 1799: "I just want it to extend smoothly,
+     bigger, to the two-line bar"). Three previous goes at this are worth knowing about:
+       1797 animated the box's height while CLIPPING its contents — the buttons slid up out
+            of the bar and it read as a curtain;
+       1798 made the step instant, and the jump itself read as a pop;
+       1799 does what a native app does. A layout change still cannot be transitioned, so it
+            is FLIPPED: every control's position is recorded BEFORE the change, the change is
+            applied, and each control is then pinned back at its old place with a transform
+            and released — so the box's height and the buttons' positions travel together on
+            one curve and nothing ever has to be hidden.
+     The textarea deliberately animates its height at the same time, so the second line is
+     revealed as the box makes room for it (a textarea clips its own overflow) rather than
+     appearing outside a box that has not grown yet. */
+  const fromH = box && was !== want && !document.body.classList.contains('reduce-motion')
+    ? box.getBoundingClientRect().height : 0;
   if (box) box.classList.toggle('multiline', want);
   /* The multiline row is wider than the one just measured, so re-measure there — again
      with the transition suspended and the old height restored, so the only height that
@@ -62837,20 +62854,47 @@ function acAutosize() {
     void inp.offsetHeight;
     inp.classList.remove('no-anim');
   }
-  /* THE WRAP IS A STEP, EVERY OTHER LINE EASES. At the wrap the textarea grows by a whole
-     line at the same moment the buttons move to a row of their own, and animating that half
-     while the other half jumps is exactly what read as a curtain — so the step is taken
-     with the transition off. Once the box already has its own row, growing it is a plain
-     height change with nothing else moving, and that one is smooth. */
-  if (was !== want) {
+  /* At the wrap the BOX is the thing being animated, so the text box takes its new size at
+     once — two animations on the same edge fight each other, and on the unwrap that showed
+     up as the buttons riding 30px high for the first few frames while the textarea was
+     still shrinking underneath them. Every other line still eases (no class change, so this
+     branch is skipped and the textarea's own transition carries it). */
+  if (fromH) {
     inp.classList.add('no-anim');
     inp.style.height = target + 'px';
     void inp.offsetHeight;
     inp.classList.remove('no-anim');
   } else inp.style.height = target + 'px';
   acToggleSendMic();
+  if (fromH) _barGrow(box, fromH);
 }
+/* THE BAR IS ANCHORED TO THE BOTTOM OF THE SCREEN, and that one fact is the whole answer.
+   Nothing in it actually travels when it wraps: measured in screen coordinates the send
+   button moves HALF A PIXEL, because the box grows upward by exactly as much as the button
+   moves down inside it. What moves is the TOP EDGE. So the animation is simply the box's
+   own height, with its contents held against its BOTTOM while it runs — the first line of
+   text is then revealed as the bar makes room for it, the buttons sit still, and nothing is
+   ever outside the box.
 
+   That last part is why 1797 read as a curtain: it animated the same height but left
+   `align-content` at its default, so the content stacked from the TOP of a box that was
+   still short and the BUTTONS were the thing clipped — they appeared to slide up out of the
+   bar. Same animation, wrong end pinned.
+
+   (A FLIP was built here first and thrown away: it computes the deltas correctly and they
+   are all ~0, which is the measurement that led to this.) */
+function _barGrow(box, fromH) {
+  const to = box.getBoundingClientRect().height;
+  if (!fromH || !to || Math.abs(to - fromH) < 2) return;
+  clearTimeout(box._growT);
+  box.classList.add('h-grow');
+  box.style.height = fromH + 'px';
+  void box.offsetHeight;
+  box.style.height = to + 'px';
+  /* Hand the height back to the layout at the end — pinned to a number the bar would stop
+     growing with the next line. */
+  box._growT = setTimeout(() => { box.style.height = ''; box.classList.remove('h-grow'); }, 260);
+}
 
 /* ── Voice notes (MediaRecorder) ── */
 let acRec, acRecChunks = [], acRecTimer = null, acRecStart = 0, acRecCancel = false, _micAutoSend = false;

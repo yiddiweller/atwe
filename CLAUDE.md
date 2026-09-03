@@ -6316,6 +6316,35 @@ number below is a direct pixel measurement at a known scale, not an estimate:
 - The corner follows from the disc: **24 = 16 + 8**, and their own two-line corner measures
   25.3, so the arithmetic and the screenshot agree to a pixel.
 
+**Eighth pass (1799) — the bar simply gets taller, and one measurement explains all of it.**
+The owner: *"I just want it to extend smoothly, bigger, to the two-line bar"* — 1797's
+animated version read as a curtain, 1798's instant step read as a pop.
+
+**THE BAR IS ANCHORED TO THE BOTTOM OF THE SCREEN, and nothing inside it actually travels
+when it wraps.** Measured in screen coordinates, the send button moves **half a pixel**: the
+box grows upward by exactly as much as the button moves down inside it. So there is nothing
+to slide — the only thing that moves is the TOP EDGE, and the animation is just the box's own
+height. (A full FLIP was built here first and thrown away; computing its deltas is what
+produced that half-pixel and led to this.)
+
+**`align-content:flex-end` is the load-bearing half of the CSS**, and its absence is the
+entire difference between this and the version that was rejected. While the height animates
+the box is briefly shorter than its contents, so something must be off-screen; with the
+default `align-content` the rows stack from the TOP and the thing clipped is the BUTTON ROW —
+which is precisely why 1797 looked like a curtain being drawn up. Held to the bottom, the
+buttons sit still and the first line of text is revealed as the bar makes room for it.
+
+**Two animations on the same edge fight each other.** At the wrap the textarea takes its new
+height at once (under `.no-anim`) because the BOX is the thing being animated; leaving its own
+height transition on showed up on the unwrap as the buttons riding 30px high for the first few
+frames while the text box shrank underneath them. Every other line has no layout change at
+all, so that branch is skipped and the textarea's own transition carries it.
+
+**`smooth.js` now measures TWO numbers per direction**, and the second is the one that took
+three goes to earn: the height must travel (a jump gives two values however fast you sample),
+**and nothing may ever hang outside the bar**. Removing `align-content:flex-end` fails that
+second check with the buttons **50px past the edge** — 1797's bug, now caught by a number.
+
 **Seventh pass (1798) — two of those animations were walked back, at the owner's word.**
 
 - **The one-to-two-line step is INSTANT again.** 1797's morph (measure before, measure

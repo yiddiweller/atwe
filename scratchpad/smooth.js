@@ -6,11 +6,12 @@
  * rather than by reading a CSS rule — a transition declared on a property nothing writes
  * animates nothing, and only a sampled curve can tell the difference.
  *
- *  1. THE COMPOSER, once it already has its own row: the textarea's height is written in
- *     px, so a plain CSS transition carries every line after the second and the button row
- *     rides down with it. THE ONE-TO-TWO-LINE STEP IS DELIBERATELY INSTANT (owner, build
- *     1798) — 1797 animated it by measuring the box before and after and gliding between
- *     the two while clipping, and it read as a curtain rather than a bar growing.
+ *  1. THE COMPOSER simply GETS TALLER (owner, build 1799 — 1798's instant step read as a
+ *     pop). Two numbers matter and the second is the one that took three goes to get
+ *     right: the height must travel, AND nothing may ever hang outside the bar while it
+ *     does. 1797 animated the same height but held the content to the TOP of a box that was
+ *     still short, so the BUTTONS were what got clipped and they appeared to slide up out
+ *     of the bar — the "curtain". Held to the bottom instead, the top edge is what moves.
  *  2. THE PRESENCE DOT. It used to be display:none → visible. Now it scales up with a
  *     little overshoot and the space it takes opens with it.
  *  3. THE MIC/SEND SWAP — the GLYPH bubbles, the blue circle never moves (owner).
@@ -44,54 +45,78 @@ const BASE = process.env.BASE || 'http://localhost:3262';
     await p.waitForSelector('#acThreadScreen:not(.hidden)', { timeout: 25000 });
     await p.waitForTimeout(1500);
 
-    /* ── 1. the wrap is a STEP; growing beyond it is smooth ── */
-    const wrap = await p.evaluate(async () => {
+    /* ── 1. THE BAR JUST GETS TALLER ──
+       Sampled every frame, the bar's height must TRAVEL (a jump gives two values however
+       fast you sample) AND nothing in it may ever hang outside it. That second number is
+       the whole difference between this and the version the owner rejected: 1797 animated
+       the same height but stacked the content from the TOP of a box that was still short,
+       so the buttons were what got clipped and they appeared to slide up out of the bar.
+       Here the rows are held against the box's BOTTOM, so the top edge is what travels. */
+    const grow = await p.evaluate(async (text) => {
       const bar = document.querySelector('#acThreadScreen .msg-inbox');
       const inp = document.getElementById('acInput');
       inp.value = ''; acAutosize(); await new Promise(r => setTimeout(r, 400));
-      /* An instant change is already done by the time the first rAF runs, so the height
-         BEFORE has to be recorded synchronously — sampling alone would report start ===
-         end and read as "it never grew". */
-      const h0 = +bar.getBoundingClientRect().height.toFixed(1);
-      const seen = []; const t0 = performance.now();
-      const tick = () => { seen.push(+bar.getBoundingClientRect().height.toFixed(1));
-        if (performance.now() - t0 < 400) requestAnimationFrame(tick); };
-      inp.value = 'i thnk we shud meet tomorow at 3 pm ok and then we can go over the whole plan';
-      acAutosize();
+      const btn = () => [...bar.querySelectorAll('.msg-send,.ac-mic')]
+        .find(n => n.getBoundingClientRect().width > 1);
+      const rows = []; const t0 = performance.now();
+      const snap = () => { const B = bar.getBoundingClientRect(), b = btn();
+        const S = b ? b.getBoundingClientRect() : null;
+        rows.push({ h: +B.height.toFixed(1), out: S ? +(S.bottom - B.bottom).toFixed(1) : 0 }); };
+      snap();                                  // the height BEFORE, recorded synchronously
+      inp.value = text; acAutosize();
+      const tick = () => { snap(); if (performance.now() - t0 < 380) requestAnimationFrame(tick); };
       requestAnimationFrame(tick);
-      seen.unshift(h0);
-      await new Promise(r => setTimeout(r, 500));
-      return { start: seen[0], end: seen[seen.length - 1],
-        uniq: [...new Set(seen.slice(1))].length };   // the pre-change value is not a step
-    });
-    say(wrap.end > wrap.start + 20, `${theme}: the bar takes a second row (${wrap.start} → ${wrap.end})`);
-    /* The owner asked for this to be a plain step, not an animation. Two values is exactly
-       what a step looks like when sampled every frame. */
-    say(wrap.uniq <= 3, `${theme}: and it does it in one step, not a slide (${wrap.uniq} distinct heights)`);
+      await new Promise(r => setTimeout(r, 460));
+      return { start: rows[0].h, end: rows[rows.length - 1].h,
+        uniq: [...new Set(rows.map(r => r.h))].length, worstOut: Math.max(...rows.map(r => r.out)) };
+    }, 'i thnk we shud meet tomorow at 3 pm ok and then we can go over the whole plan');
+    say(grow.end > grow.start + 20, `${theme}: the bar takes a second row (${grow.start} → ${grow.end})`);
+    say(grow.uniq >= 6, `${theme}: and it TRAVELS there — ${grow.uniq} distinct heights (a jump gives 2)`);
+    say(grow.worstOut <= 0, `${theme}: with nothing ever hanging outside it (worst ${grow.worstOut}px past the edge)`);
 
-    /* Beyond the wrap it IS smooth: nothing is re-laid-out, only the text box grows. */
+    /* A third line: no layout change at all, just the text box growing. */
     const more = await p.evaluate(async () => {
       const bar = document.querySelector('#acThreadScreen .msg-inbox');
       const inp = document.getElementById('acInput');
       const seen = []; const t0 = performance.now();
       const tick = () => { seen.push(+bar.getBoundingClientRect().height.toFixed(1));
-        if (performance.now() - t0 < 400) requestAnimationFrame(tick); };
+        if (performance.now() - t0 < 380) requestAnimationFrame(tick); };
       inp.value = 'i thnk we shud meet tomorow at 3 pm ok and then we can go over the whole '
         + 'plan together and see what is left to do before the end of the week alright';
       acAutosize(); requestAnimationFrame(tick);
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 460));
       return { start: seen[0], end: seen[seen.length - 1], uniq: [...new Set(seen)].length };
     });
     say(more.end > more.start + 8 && more.uniq >= 5,
-      `${theme}: a third line EASES open (${more.start} → ${more.end}, ${more.uniq} distinct heights)`);
+      `${theme}: a third line eases open too (${more.start} → ${more.end}, ${more.uniq} distinct heights)`);
+
+    /* And back down again — a one-way ease reads as a snap on the way home. */
+    const shrink = await p.evaluate(async () => {
+      const bar = document.querySelector('#acThreadScreen .msg-inbox');
+      const inp = document.getElementById('acInput');
+      const btn = () => [...bar.querySelectorAll('.msg-send,.ac-mic')]
+        .find(n => n.getBoundingClientRect().width > 1);
+      const rows = []; const t0 = performance.now();
+      const tick = () => { const B = bar.getBoundingClientRect(), b = btn();
+        const S = b ? b.getBoundingClientRect() : null;
+        rows.push({ h: +B.height.toFixed(1), out: S ? +(S.bottom - B.bottom).toFixed(1) : 0 });
+        if (performance.now() - t0 < 380) requestAnimationFrame(tick); };
+      inp.value = 'hi'; acAutosize(); requestAnimationFrame(tick);
+      await new Promise(r => setTimeout(r, 460));
+      return { start: rows[0].h, end: rows[rows.length - 1].h,
+        uniq: [...new Set(rows.map(r => r.h))].length, worstOut: Math.max(...rows.map(r => r.out)) };
+    });
+    say(shrink.end < shrink.start - 20 && shrink.uniq >= 6,
+      `${theme}: and eases back down (${shrink.start} → ${shrink.end}, ${shrink.uniq} distinct heights)`);
+    say(shrink.worstOut <= 0, `${theme}: still with nothing outside the bar (worst ${shrink.worstOut}px)`);
 
     /* Nothing may be left pinned to a number — the bar has to keep growing with the text. */
     const released = await p.evaluate(() => {
       const bar = document.querySelector('#acThreadScreen .msg-inbox');
-      return { inline: bar.style.height, cls: bar.className.includes('h-anim') };
+      return { inline: bar.style.height, cls: bar.className.includes('h-grow') };
     });
     say(!released.inline && !released.cls,
-      `${theme}: and the bar's own height is never pinned (inline "${released.inline}")`);
+      `${theme}: and the bar's own height is never left pinned (inline "${released.inline}")`);
     await p.evaluate(async () => { document.getElementById('acInput').value = ''; acAutosize();
       await new Promise(r => setTimeout(r, 400)); });
 
