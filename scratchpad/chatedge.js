@@ -141,7 +141,10 @@ const BASE = process.env.BASE || 'http://localhost:3262';
       return { blur: parseFloat((cs.backdropFilter.match(/blur\(([\d.]+)px\)/) || [])[1] || 0),
         mask: cs.webkitMaskImage || cs.maskImage };
     });
+    const pill = document.querySelector('.ac-h3-pill').getBoundingClientRect();
     return { z: +getComputedStyle(g).zIndex, h: Math.round(g.getBoundingClientRect().height), layers,
+      headBottom: Math.round(pill.bottom),
+      strongest: Math.round(g.children[g.children.length-1].getBoundingClientRect().height),
       tintZ: +getComputedStyle(document.getElementById('acThreadScreen'), '::before').zIndex };
   });
   say(glass && glass.layers.length >= 3, `the blur ramps across several layers (${glass ? glass.layers.length : 0})`);
@@ -151,8 +154,17 @@ const BASE = process.env.BASE || 'http://localhost:3262';
     'and every one is masked, so the frost fades out instead of ending on a line');
   say(glass && glass.z < glass.tintZ,
     `the blur sits UNDER the tint (${glass ? glass.z : '?'} < ${glass ? glass.tintZ : '?'}) — content is dissolved first, then tinted`);
-  say(glass && Math.abs(glass.h - ramp.h) <= 1,
-    `and covers exactly the same band as the tint (${glass ? glass.h : 0} vs ${ramp.h})`);
+  /* THE BLUR AND THE TINT ARE DELIBERATELY DIFFERENT LENGTHS, and this used to assert the
+     opposite. They are different jobs: the tint is a long gentle fade so nothing ends on a
+     line, while the frost belongs only where content passes UNDER the header. Sharing the
+     tint's reach left visible softness ~170px down, on messages plainly in open space —
+     the owner's "the blurriness starts too early". */
+  say(glass && glass.h < ramp.h * 0.7,
+    `the frost is confined to the header, not stretched over the whole fade (${glass ? glass.h : 0} vs the tint's ${ramp.h})`);
+  say(glass && glass.h > glass.headBottom && glass.h < glass.headBottom * 2.4,
+    `it clears the header and stops soon after (${glass ? glass.h : 0}px against a header ending at ${glass ? glass.headBottom : '?'})`);
+  say(glass && glass.strongest <= glass.headBottom + 8,
+    `and the heaviest blur reaches no further than the header itself (${glass ? glass.strongest : 0}px)`);
 
   /* 7. It really blurs. Painting a hard-edged stripe INTO the thread and reading it back
         under the band is the only honest proof — computed style says a filter is set, not
@@ -167,7 +179,7 @@ const BASE = process.env.BASE || 'http://localhost:3262';
     const mk = (top) => { const d = document.createElement('div');
       d.style.cssText = `position:absolute;left:0;right:0;top:${top}px;height:26px;z-index:1;background:repeating-linear-gradient(90deg,#fff 0 6px,#000 6px 12px);`;
       d.className = '_probe'; sc.appendChild(d); return d; };
-    mk(40); mk(430);            // one under the band, one well below it
+    mk(40); mk(430);            // one under the frost, one well clear of it
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     return true;
   });
