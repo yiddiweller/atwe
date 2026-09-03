@@ -50,8 +50,12 @@ const BASE = process.env.BASE || 'http://localhost:3262';
         in this database has a live stream open, so every peer here is offline. */
   const flashed = await p.evaluate(async () => {
     const seen = [];
-    const t = setInterval(() => { const d = document.getElementById('acPeerDot');
-      seen.push(d && !d.classList.contains('hidden')); }, 40);
+    const on = () => { const d = document.getElementById('acPeerDot');
+      /* VISIBLE, not merely un-hidden: offline the dot stays in the box collapsed to
+         nothing so that coming online can animate it open, so the class alone would
+         report a dot nobody can see. */
+      return !!d && !d.classList.contains('hidden') && d.getBoundingClientRect().width > 1; };
+    const t = setInterval(() => seen.push(on()), 40);
     document.querySelector('#acListScreen .ac-item[data-uid]').click();
     await new Promise((r) => setTimeout(r, 3200));
     clearInterval(t);
@@ -60,13 +64,18 @@ const BASE = process.env.BASE || 'http://localhost:3262';
   await p.waitForSelector('#acThreadScreen:not(.hidden)', { timeout: 20000 });
   await p.waitForTimeout(1200);
   say(!flashed.any, `no green dot at any point while an offline chat opens (${flashed.n} samples)`);
-  say(!(await p.evaluate(() => { const d = document.getElementById('acPeerDot'); return d && !d.classList.contains('hidden'); })),
+  say(!(await p.evaluate(() => { const d = document.getElementById('acPeerDot');
+    return !!d && !d.classList.contains('hidden') && d.getBoundingClientRect().width > 1; })),
     'and none once it has settled');
 
   /* 3. It is not simply dead: told the peer IS online, it appears. */
-  say(await p.evaluate(() => { rtPresence[AC.peer.id] = { online: true, last_seen: null };
+  /* The dot now ANIMATES open, so it is not full-size in the same tick it is told to show.
+     Give it the transition's own time before measuring, or this reads zero on correct code. */
+  say(await p.evaluate(async () => { rtPresence[AC.peer.id] = { online: true, last_seen: null };
     acUpdatePeerPresence();
-    const d = document.getElementById('acPeerDot'); return d && !d.classList.contains('hidden'); }),
+    await new Promise((r) => setTimeout(r, 450));
+    const d = document.getElementById('acPeerDot');
+    return !!d && !d.classList.contains('hidden') && d.getBoundingClientRect().width > 1; }),
     'and it DOES show when they really are online');
   await p.evaluate(() => { rtPresence[AC.peer.id] = { online: false, last_seen: new Date().toISOString() }; acUpdatePeerPresence(); });
 
@@ -76,11 +85,14 @@ const BASE = process.env.BASE || 'http://localhost:3262';
     const rows = [...document.querySelectorAll('#acListScreen .ac-item[data-uid]')];
     if (rows.length < 2) return { skip: true };
     rtPresence[AC.peer.id] = { online: true, last_seen: null }; acUpdatePeerPresence();
-    const wasOn = !document.getElementById('acPeerDot').classList.contains('hidden');
+    const vis = () => { const d = document.getElementById('acPeerDot');
+      return !!d && !d.classList.contains('hidden') && d.getBoundingClientRect().width > 1; };
+    await new Promise((r) => setTimeout(r, 450));   // let it animate open before reading it
+    const wasOn = vis();
     acBackToList();
-    await new Promise((r) => setTimeout(r, 400));
+    await new Promise((r) => setTimeout(r, 700));   // …and closed again before the next chat
     const seen = [];
-    const t = setInterval(() => seen.push(!document.getElementById('acPeerDot').classList.contains('hidden')), 40);
+    const t = setInterval(() => seen.push(vis()), 40);
     document.querySelectorAll('#acListScreen .ac-item[data-uid]')[1].click();
     await new Promise((r) => setTimeout(r, 2200));
     clearInterval(t);
@@ -285,7 +297,8 @@ const BASE = process.env.BASE || 'http://localhost:3262';
     const first = (cs.backgroundImage.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/) || []).slice(1).map(Number);
     return { white: first[0] > 200 && first[1] > 200 && first[2] > 200,
       layers: document.querySelectorAll('#acThreadScreen .ac-topglass > *').length,
-      dot: !document.getElementById('acPeerDot').classList.contains('hidden') };
+      dot: (() => { const d = document.getElementById('acPeerDot');
+        return !!d && !d.classList.contains('hidden') && d.getBoundingClientRect().width > 1; })() };
   });
   say(lt.white, 'in Light the band fades to the page white, not to black');
   say(lt.layers >= 3, 'and the glass is there too');

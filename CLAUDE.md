@@ -6276,6 +6276,74 @@ carries, so the text sits the same distance from the bar's edge in both modes.
   ((48 − 2 border − 10 dot) / 2 + 1) and the concentric one (the end is a semicircle of
   radius 24, so a dot centred 24 in shares that centre): `padding-right` 14 → 18.
 
+**Fifth pass (1797) — the bar is ChatGPT's, measured element by element.** The owner sent
+two full-screen ChatGPT shots from their own phone (1125×2436 = 375pt at 3×), so every
+number below is a direct pixel measurement at a known scale, not an estimate:
+
+| | ChatGPT | Atwe before | Atwe now |
+|---|---|---|---|
+| bar height | **49** | 54, and it GREW as you typed | **49**, constant |
+| send/mic disc | **32** | 36 | **32** |
+| disc inset from the end | **8** | 7 | **8** |
+| `+` ink | **18** | 15.3 | **18** (a 28px svg — the drawn plus fills 64% of its box) |
+| `+` ink from the edge | **15** | 16 | **15** |
+| everything's centre line | centred | disc 10 above / 8 below | **9 / 9** |
+| bar width | 307 (34 margins) | 335 (20) | **335 — deliberately not copied** |
+
+- **"It gets slightly thicker when I start typing" was real and it was `.ac-fixbtn`.** The AI
+  proofread button was 36 tall with a 2px bottom margin — 38, the tallest thing in the row —
+  so IT was the flex line and the bar was 38 + 12 = 50 whatever the text box did. Trimming
+  the textarea alone changed nothing, which is exactly what made this hard to see. It is 32
+  and centred like the discs now.
+- **`acAutosize` was writing `height:0px`.** `acOpenChat` calls it before the composer is on
+  screen, where `scrollHeight` reads 0; the inline 0 then fought `min-height` and left the
+  bar's height indeterminate. It now leaves the height alone when the measurement is 0.
+- **The one thing NOT copied is the width.** ChatGPT's composer is inset 34 because there is
+  nothing else on their screen; ours lines up with the conversation above it, and a composer
+  visibly narrower than the messages reads as wrong in a messenger. Flagged to the owner
+  rather than silently ignored.
+- The corner follows from the disc: **24 = 16 + 8**, and their own two-line corner measures
+  25.3, so the arithmetic and the screenshot agree to a pixel.
+
+**Sixth pass (1797) — nothing in a conversation "appears" any more.** The owner: *"I don't
+want everything should be like boom effect, I want it should rather be smooth like zooming in
+like a bubble… Apple style… and I'm talking about everything."* Three things in Beam were
+doing exactly that:
+
+- **The composer growing to a second line.** This is two animations, not one. Lines 3, 4, 5…
+  are free — `acAutosize` writes the textarea's height in px, so a plain CSS transition
+  carries it and the button row rides down. **The WRAP itself is a layout change no
+  transition can animate** (the buttons drop onto a row of their own the instant `.multiline`
+  lands), so it is done the way the account switcher already does it: measure the box before,
+  apply the change, measure after, animate the box's own height between the two numbers
+  (`_barMorph`), then hand it back to `auto` — pinned to a number it would stop growing with
+  the next line. While that runs the box is shorter than its contents, so `.h-anim` clips and
+  the button row slides into view instead of hanging below the bar. **`.h-anim` also clips
+  the send button's 44pt tap overlay** — for ~260ms only.
+- **`h0` MUST be measured before anything is touched.** `acAutosize`'s second line strips
+  `.multiline` so the text can be measured at the one-row width — so a height read after it
+  is already the one-row height. Wrapping worked by luck (nothing had been removed yet) and
+  **unwrapping saw `from === to` and never animated at all**.
+- **The presence dot.** It was `display:none` → visible. It now scales up with a little
+  overshoot and the space it occupies opens with it, so the name eases narrower rather than
+  being shoved. Offline it stays in the box collapsed to nothing (`.off`) — there has to be
+  something to animate from. `display:none` is kept only for where presence does not apply at
+  all (a group, a self-chat, presence switched off); `acSetPeerDot(null)` also clears the
+  `armed` flag so the next thread gets its opening frame.
+- **The mic ↔ send swap.** Whichever disc takes the other's place grows into it
+  (`acDiscIn`); they still take turns in the layout, so the bar's width never moves.
+
+`scratchpad/smooth.js` proves these by **sampling over time**, not by reading a CSS rule — a
+transition declared on a property nothing writes animates nothing, and only a sampled curve
+tells a travel from a jump (a jump gives exactly two values however fast you sample).
+
+**This broke `chatedge.js` in an instructive way.** That probe guards the "phantom green dot"
+bug by asserting the dot is `.hidden`; a collapsed dot is not hidden, so it failed on correct
+code. The honest question is whether the dot is VISIBLE — not hidden **and** wider than a
+pixel — and its three "is it showing" reads now measure paint. Two more of its checks had to
+wait ~450ms before measuring, because the dot is no longer full-size in the tick it is told
+to show.
+
 `scratchpad/chathead.js` (53 checks) covers all of it, in both themes, plus the group case;
 `fixtext.js` owns the wrapped-bar shape, including that the button row is level.
 **Measuring a screenshot against ours needs a shared ruler** — the `+` glyph is the wrong one
