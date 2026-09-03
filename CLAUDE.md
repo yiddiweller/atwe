@@ -1917,6 +1917,22 @@ functions, organized by banner comments.
 > tabs) is still "Search" — only the *world* is named Engine. Full `/beam` `/engine`
 > deep-link world routing + the redesigned Beam header are Phase-0 work (not in yet).
 
+> **The shared top bar covers the LIST column only, never the window.** `.topbar` is a
+> full-width strip in normal flow, and in the desktop two-pane its one visible child
+> (`#tbTabRow`, the Chats/Unread/Groups filters) belongs to the conversation LIST — which
+> lives in the right-hand column. So the strip reserved ~50px of **empty black across the
+> conversation too**, and every pane started that far below the sidebar; the owner read it
+> as the chat "sitting lower than it should". Narrowing the tab ROW to `--beam-list-w` was
+> only half the job. In `body.beam2` the strip itself now leaves the flow —
+> `position:absolute; top:0; inset-inline-end:0; width:var(--beam-list-w)` inside a
+> `position:relative` `.main` — so the conversation pane reaches the top, level with the
+> sidebar, and only `#acListScreen` pads itself by `--beam-topbar-h` to clear the row it
+> still needs. **The bar's height and the list's headroom are one variable** so they cannot
+> drift. `#tbTabRow`'s `margin-inline-start:auto` is reset to 0: it existed to shove the row
+> rightwards across a full-width bar and would fight the fixed width. `deskcols.js` asserts
+> all three columns start at the same y AND that the bar's box matches the list's, at every
+> width and in both themes — it fails 12 times with the strip back in flow.
+>
 > **Desktop Beam two-pane (Desktop Design Spec).** On desktop (≥1000px) the Beam
 > surface becomes a two-pane master/detail: a **conversation LIST pane** (`~36%`,
 > `clamp(320px,36%,400px)`) beside the **open conversation pane** (`~64%`, flex:1),
