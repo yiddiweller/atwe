@@ -143,7 +143,7 @@ const BASE = process.env.BASE || 'http://localhost:3262';
     });
     const pill = document.querySelector('.ac-h3-pill').getBoundingClientRect();
     return { z: +getComputedStyle(g).zIndex, h: Math.round(g.getBoundingClientRect().height), layers,
-      headBottom: Math.round(pill.bottom),
+      headBottom: Math.round(pill.bottom), headMid: Math.round(pill.top + pill.height / 2),
       strongest: Math.round(g.children[g.children.length-1].getBoundingClientRect().height),
       tintZ: +getComputedStyle(document.getElementById('acThreadScreen'), '::before').zIndex };
   });
@@ -161,10 +161,19 @@ const BASE = process.env.BASE || 'http://localhost:3262';
      the owner's "the blurriness starts too early". */
   say(glass && glass.h < ramp.h * 0.7,
     `the frost is confined to the header, not stretched over the whole fade (${glass ? glass.h : 0} vs the tint's ${ramp.h})`);
-  say(glass && glass.h > glass.headBottom && glass.h < glass.headBottom * 2.4,
-    `it clears the header and stops soon after (${glass ? glass.h : 0}px against a header ending at ${glass ? glass.headBottom : '?'})`);
-  say(glass && glass.strongest <= glass.headBottom + 8,
-    `and the heaviest blur reaches no further than the header itself (${glass ? glass.strongest : 0}px)`);
+  /* It ends at the profile bar's own MID-LINE, not below the bar — the owner's last note,
+     and the reason the band is built from that bar's geometry (its top inset + half a
+     shape + a short tail) rather than from the float stack's height. */
+  say(glass && Math.abs(glass.h - glass.headMid) <= 12,
+    `it fades out at the profile bar's mid-line (${glass ? glass.h : 0}px against a mid-line at ${glass ? glass.headMid : '?'})`);
+  say(glass && glass.strongest <= glass.headMid,
+    `and the heaviest blur reaches no further than that (${glass ? glass.strongest : 0}px)`);
+  /* Derived from the bar, NOT from --ac-head-h: the stack grows downward when a pin bar
+     appears but the shapes row does not move, so the frost must not move either. */
+  say(!/--ac-head-h/.test(await p.evaluate(() =>
+    [...document.styleSheets].flatMap((ss) => { try { return [...ss.cssRules]; } catch { return []; } })
+      .filter((r) => r.selectorText === '#acThreadScreen').map((r) => r.style.getPropertyValue('--ac-glass-h')).join(''))),
+    'and it is built from the bar, not from the header stack that grows with a pin bar');
 
   /* 7. It really blurs. Painting a hard-edged stripe INTO the thread and reading it back
         under the band is the only honest proof — computed style says a filter is set, not

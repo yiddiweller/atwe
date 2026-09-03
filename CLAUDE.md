@@ -6033,15 +6033,18 @@ renders as nothing. Black is untouched; Light gets the tint the comment always d
   is sized to **its own mask's reach** (100/82/66/50% of its band), because a backdrop-filter
   costs in proportion to its area and the widest blur needs the least room. It sits at
   `z-index:3`, UNDER the tint at 4: dissolve first, then tint.
-  **The frost has its OWN, much shorter band — `--ac-glass-h` = header + 46px, against the
-  tint's header + 150.** They are different jobs, and sharing one band was wrong: the tint
-  is a long gentle fade so nothing ends on a line, while the frost belongs only where
-  content passes UNDER the header, which is what iOS does. Stretched over the tint's reach
-  it left visible softness ~170px down, on messages plainly in open space — the owner's
-  *"the blurriness starts too early… I want it to start under the top options"*. The
-  heaviest layer (20px) now covers only the header's own 60px footprint and everything is
-  sharp by 120. Both bands derive from `--ac-head-h`, so a pin bar or an open in-chat search
-  moves them together. `prefers-reduced-transparency` drops it (NOT `prefers-reduced-motion` —
+  **The frost has its OWN, much shorter band — `--ac-glass-h`, against the tint's header +
+  150px.** They are different jobs, and sharing one band was wrong: the tint is a long gentle
+  fade so nothing ends on a line, while the frost belongs only where content passes UNDER
+  the header, which is what iOS does. Stretched over the tint's reach it left visible
+  softness ~170px down, on messages plainly in open space.
+  **It fades out at the PROFILE BAR'S OWN MID-LINE** (owner: *"right in the middle of the
+  back of the profile bar"*), so it is built from that bar's geometry — the shapes' top
+  inset + half a shape + an 8px tail so it dissolves rather than cutting on a line — and
+  **NOT from `--ac-head-h`**: the float stack grows downward when a pin bar or the in-chat
+  search appears, but the shapes row does not move, and the frost belongs to the shapes.
+  Measured: a 48px band against a 40px mid-line, with the heaviest 20px layer reaching only
+  24px. The TINT still derives from `--ac-head-h`, so it alone tracks the growing stack. `prefers-reduced-transparency` drops it (NOT `prefers-reduced-motion` —
   nothing here moves, and borrowing the motion switch would take it from people who only
   asked for stiller animation).
   **This is the ONE deliberate exception to the "no live blur over the thread on a phone"
