@@ -118,13 +118,24 @@ const IMG = (fill) => 'data:image/svg+xml;base64,' + Buffer.from(
       const nm = document.querySelector('#acAttPrev .ac-att-meta b');
       if (!card || !x || !nm) return null;
       const C = card.getBoundingClientRect(), X = x.getBoundingClientRect(), N = nm.getBoundingClientRect();
+      const cs = getComputedStyle(card);
+      const ic = getComputedStyle(card.querySelector('.ac-att-ic')).backgroundColor;
+      const lum = (ic.match(/[\d.]+/g) || [0, 0, 0]).slice(0, 3).map(Number)
+        .reduce((a, v) => a + v, 0) / 3;
       return { clear: X.left >= N.right - 0.5, inCard: X.right <= C.right + 0.5,
-        r: parseFloat(getComputedStyle(card).borderTopLeftRadius) };
+        r: parseFloat(cs.borderTopLeftRadius), h: Math.round(C.height),
+        bw: parseFloat(cs.borderTopWidth), ic, icLight: lum > 200 };
     });
     say(file && file.clear && file.inCard,
       `${theme}: a file's ✕ sits after its name, not on top of it`);
     say(file && Math.abs(file.r - (one.barR - 9)) <= 1,
       `${theme}: and the file card shares the tile's corner (${file && file.r})`);
+    /* A DOCUMENT IS A BOX THE HEIGHT OF A PHOTO, WITH AN OUTLINE (owner). The height is
+       what lets a PDF and a picture sit on one line; the outline is what stops it reading
+       as loose text on the bar. Its icon is the page — light, with the glyph cut into it. */
+    say(file && file.h === 56, `${theme}: a document is the same height as a photo tile (${file && file.h})`);
+    say(file && file.bw >= 1, `${theme}: and it carries an outline (${file && file.bw}px)`);
+    say(file && file.icLight, `${theme}: with a white page for its icon (${file && file.ic})`);
 
     say(errs.length === 0, `${theme}: no JS errors` + (errs.length ? ' — ' + errs[0] : ''));
     await ctx.close();

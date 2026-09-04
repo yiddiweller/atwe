@@ -6305,6 +6305,53 @@ number below is a direct pixel measurement at a known scale, not an estimate:
 - The corner follows from the disc: **24 = 16 + 8**, and their own two-line corner measures
   25.3, so the arithmetic and the screenshot agree to a pixel.
 
+### The composer's growth: the stall, then the curve
+
+The owner, after 1799 made the bar animate: *"it still gives a shake."* Two separate causes,
+and only the second one was the animation.
+
+**1. NINE FORCED LAYOUTS PER KEYSTROKE.** `acAutosize` runs on every character, and each
+`scrollHeight` / `offsetHeight` / `getBoundingClientRect` read after a style write forces the
+browser to lay out the WHOLE document — a conversation's worth of bubbles included. Measured
+on a 6× throttled CPU (about a phone): **69ms of blocking work at the wrap**, i.e. four
+frames in which nothing could move, and then the animation caught up in one leap. There are
+**three** now — the one-row measurement, the multiline measurement, and one commit — plus a
+fourth inside `_barGrow`. The bar's own height is REMEMBERED (`box._h`) rather than
+re-measured, and on the non-wrap path the new height is derived arithmetically instead of by
+another reflow. **Do not add a flush here without measuring what it costs.**
+
+**2. THE CURVE WAS A LURCH.** `--ease` is `cubic-bezier(.22,.68,0,1)` — deliberately
+front-loaded, right for a panel flying in, wrong for a box growing 58px: sampled per frame it
+put **66% of the travel into the first two frames** (18.5px, 19.9px) and crawled the last 10px
+over ten more. The bar has its own tokens now — `--bar-dur` 240ms and `--bar-ease`
+`cubic-bezier(.4,0,.2,1)`, the standard curve for a container changing size. The profile is a
+bell: `0.6 2.5 5.4 9.1 10.8 8.8 6.4 4.6 3.3 2.4 1.6 1.1 0.7 0.3`.
+`smooth.js` asserts the SHAPE — the first frame must be under half the biggest, and no frame
+may exceed 3.5× the average. Both fail on the old curve and neither can be faked by slowing
+it down.
+
+**The order of the final write is silent if you get it wrong.** A transition cannot run FROM
+`height:auto`, which is what the measurement commits — so on the animating path the old pixel
+height must be put back and committed BEFORE the target is written. That costs one flush, and
+it is deliberately spent on the cheap path (a plain keystroke) rather than the wrap.
+
+### Opening a chat lands at the bottom, and stays there
+
+*"Sometimes I open a chat and it's not at the bottom."* It was not the scroll code — it was a
+box that did not reserve its space. **`.lp-img` (a link preview's cover) was
+`max-height:150px`**, so before the picture arrived the `<img>` was ZERO tall and the card
+grew by the full 150 the moment it decoded, shoving the thread down under the reader.
+Measured: **40px → 190px**. A fixed `height` with `object-fit:cover` holds the space from the
+first frame. `chatscroll.js` builds the card and fails if it grows at all.
+
+Belt and braces on top: **`acStickBottomOnOpen`** (the two first-paint call sites) keeps the
+3-second watchdog AND attaches a one-shot listener to every image/video in the thread that is
+still loading, re-sticking when each lands — so a slow connection cannot outlive the window.
+It stops the instant the reader scrolls up (`SC.pinBottom`).
+
+NB a chat with unread messages deliberately opens on the **"New messages" divider**, not the
+bottom (`acScrollToDivider`) — that is WhatsApp's behaviour and is not this bug.
+
 ### What you are about to send is a thumbnail, not the message
 
 One attached photo used to fill the composer at up to **180px tall**, inside a grey card,
@@ -6322,8 +6369,15 @@ the bar's own is `--bar-r − 9` = **15**. `--att-tile` and `--att-r` are declar
 96 for the POST composer and carries the same weight as a plain descendant selector — so
 without naming it, two photos in a chat still came out 96 wide, and the later rule simply won.
 
-**A file is a row of TEXT, so its ✕ goes at the END of the row.** In a corner it lands on the
-filename — which is exactly what the first attempt did. The card reserves 34px for it.
+**A DOCUMENT IS A BOX THE HEIGHT OF A PHOTO, WITH AN OUTLINE** (owner). It keeps its width —
+it is a row of TEXT, not a picture — but its height is exactly `--att-tile`, so a PDF and a
+photo sit on one line, and it carries a hairline in `--img-edge` so it reads as a thing rather
+than as loose text on the bar. That outline is the app's **content** edge, the same one a
+photo in a message gets: "solid, never outlined" is about BOXES that group things, and this is
+content whose own extent would otherwise be invisible. Its icon is the **page** — white, with
+the glyph cut into it. **Its ✕ goes at the END of the row**: a 56-tall card has no corner to
+tuck a button into without landing on the filename, which is exactly what the first attempt
+did. The card reserves 34px for it.
 
 **THE EYE WAS THE VIEW-ONCE TOGGLE**, i.e. a real feature (a photo the other person can open
 exactly once) whose only entry point was that chip. It was **moved, not deleted**: a *View

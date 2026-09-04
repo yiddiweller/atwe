@@ -72,9 +72,13 @@ const BASE = process.env.BASE || 'http://localhost:3262';
       const tick = () => { snap(); if (performance.now() - t0 < 380) requestAnimationFrame(tick); };
       requestAnimationFrame(tick);
       await new Promise(r => setTimeout(r, 460));
+      const hs = rows.map(r => r.h); const steps = [];
+      for (let i = 1; i < hs.length; i++) { const d = Math.abs(hs[i] - hs[i - 1]); if (d > 0.05) steps.push(d); }
       return { start: rows[0].h, end: rows[rows.length - 1].h,
-        uniq: [...new Set(rows.map(r => r.h))].length, worstOut: Math.max(...rows.map(r => r.out)),
-        worstR: Math.max(...rows.map(x => x.r)) };
+        uniq: [...new Set(hs)].length, worstOut: Math.max(...rows.map(r => r.out)),
+        worstR: Math.max(...rows.map(x => x.r)),
+        first: +(steps[0] || 0).toFixed(1), peak: +Math.max(...steps).toFixed(1),
+        avg: +(steps.reduce((a, x) => a + x, 0) / steps.length).toFixed(1) };
     }, 'i thnk we shud meet tomorow at 3 pm ok and then we can go over the whole plan');
     say(grow.end > grow.start + 20, `${theme}: the bar takes a second row (${grow.start} → ${grow.end})`);
     say(grow.uniq >= 6, `${theme}: and it TRAVELS there — ${grow.uniq} distinct heights (a jump gives 2)`);
@@ -86,6 +90,17 @@ const BASE = process.env.BASE || 'http://localhost:3262';
        see, because at the one-line height a capsule and a 24 corner are half a pixel apart. */
     say(grow.worstR <= 26,
       `${theme}: and the corner never swells on the way — it stays the shape it lands on (peak ${grow.worstR})`);
+    /* THE TRAVEL MUST BE A BELL, NOT A LURCH. This is what the owner kept calling a shake
+       after the height itself was already animating: the app's own `--ease` is
+       cubic-bezier(.22,.68,0,1), deliberately front-loaded for a panel flying in, and on a
+       58px box it put 66% of the distance into the FIRST TWO FRAMES (18.5px then 19.9px)
+       and crawled the last 10px over ten more. Sampled per frame that reads as a snap
+       followed by a settle. A curve that starts gently has its biggest step in the MIDDLE,
+       so both of these fail on the old one and neither can be faked by slowing it down. */
+    say(grow.first < grow.peak * 0.5,
+      `${theme}: it starts gently rather than lurching (first frame ${grow.first}px, biggest ${grow.peak}px)`);
+    say(grow.peak <= grow.avg * 3.5,
+      `${theme}: and no frame runs away with it (${grow.peak}px against a ${grow.avg}px average)`);
 
     /* A third line: no layout change at all, just the text box growing. */
     const more = await p.evaluate(async () => {
