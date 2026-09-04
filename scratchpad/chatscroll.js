@@ -206,6 +206,31 @@ const BASE = process.env.BASE || 'http://localhost:3262';
 
   say(blurs.length === 0, `no blur over the thread on a phone beyond the measured top edge${blurs.length ? ' — ' + blurs.join(', ') : ''}`);
 
+  /* 7c-ii. THE GLASS LOOKS THE SAME MOVING OR STILL. Both the composer and the fade above it
+        used to change while the thread was scrolling — the bar dropped to a lighter blur and
+        a heavier fill, the fade lifted to full opacity — on the theory that a lighter blur is
+        cheaper. The owner saw exactly that: "when I scroll and let go it has a different
+        amount of blurriness… the bottom background looks a drop different". The saving was
+        measured to be nothing, so there is one value now, and this compares the two states
+        directly rather than trusting that the rules were deleted. */
+  const states = await p.evaluate(() => {
+    const sc = document.getElementById('acThreadScreen');
+    const bar = document.querySelector('#acThreadScreen .msg-inbox');
+    const read = () => ({
+      bg: getComputedStyle(bar).backgroundColor,
+      blur: getComputedStyle(bar).backdropFilter || getComputedStyle(bar).webkitBackdropFilter,
+      fade: getComputedStyle(sc, '::after').opacity });
+    const had = sc.classList.contains('sc-scrolling');
+    sc.classList.remove('sc-scrolling'); const still = read();
+    sc.classList.add('sc-scrolling'); const moving = read();
+    sc.classList.toggle('sc-scrolling', had);
+    return { still, moving };
+  });
+  say(states.still.bg === states.moving.bg && states.still.blur === states.moving.blur,
+    `the composer's glass is the same moving or still (${states.still.blur} / ${states.still.bg})`);
+  say(states.still.fade === states.moving.fade,
+    `and so is the fade above it (${states.still.fade} vs ${states.moving.fade})`);
+
   /* 7d. NOTHING IN A CONVERSATION MAY GROW WHEN ITS PICTURE LANDS. A link preview's cover
         was `max-height:150px`, so before the image arrived the <img> was ZERO tall and the
         card grew by the full 150 the moment it decoded — shoving the thread down under the
