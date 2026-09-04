@@ -178,11 +178,15 @@ const BASE = process.env.BASE || 'http://localhost:3262';
         zero frames over 32ms), and each of its four layers is sized to its own mask so the
         widest blur covers the least area. Everything else stays banned — the point of the
         rule is that a blur must be a decision somebody measured, not one that drifted in. */
-  /* TWO blurs are allowed over the thread, and both were MEASURED rather than assumed —
-     which is the whole point of this rule. The top edge (1786) and the composer (1803, the
-     owner asking for the see-through bar back): at a 6x CPU throttle, flinging the thread
-     with each on and off gives identical frame pacing. Everything else stays banned. */
-  const ALLOWED_BLUR = ['ac-topglass', 'msg-inbox'];
+  /* THREE blurs are allowed over the thread, and every one was MEASURED rather than assumed
+     — which is the whole point of this rule. The top edge (1786), the composer (1803, the
+     owner asking for the see-through bar back) and the jump-to-latest pill (1807, the owner
+     asking for it to be the same material as the bar): at a 6x CPU throttle, flinging the
+     thread with each on and off gives identical frame pacing — for the pill, p50 16.6 vs
+     16.5ms and p95 19.7 vs 19.1 over 115 frames. Everything else stays banned. */
+  /* NB the key is the element's ID when it has one (see the collector below), so the pill
+     is listed by BOTH — `acScrollDown` is what it actually reports. */
+  const ALLOWED_BLUR = ['ac-topglass', 'msg-inbox', 'ac-scrolldown', 'acScrollDown'];
   /* Passed IN, not closed over: the function body runs in the browser, where a const
      declared here in Node does not exist. It threw ReferenceError and took the whole
      probe down with it. */

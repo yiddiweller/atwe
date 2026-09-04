@@ -347,6 +347,13 @@ a{text-decoration:none;color:inherit;}
      shipped 14px gutter the bar sits 9px inside the cards on each side. It also sets the
      bar's gap from the BOTTOM (evenly-inset pill), so the bar rides a little higher. */
   --nav-inset: 23px;
+  /* THE FLOATING GLASS OF A CONVERSATION — one material, named once. The message bar and
+     the jump-to-latest pill both float over a moving thread and must read as the same
+     kind of object; they used to be a frosted bar and a solid disc with a drop shadow.
+     Light theme and the reduced-transparency case each override these in one place. */
+  --bar-glass: rgba(26,26,28,.72);
+  --bar-glass-blur: blur(18px) saturate(1.7);
+  --bar-glass-edge: rgba(255,255,255,.08);
   /* Nav icons embedded as data URIs (NOT external files): iOS Safari evicts
      images + SW caches under memory pressure, so mask icons loaded from
      /nav-*.png could vanish for seconds on resume until re-fetched. Inline
@@ -5852,11 +5859,21 @@ body.light .ac-rec-lock{background:rgba(255,255,255,.55);}
    into the wider "New Message" pill.
    The `bottom` here is only a fallback — acSyncFooterPad sets the real one from the
    composer's measured height, so it rides up when the bar grows to two lines. */
+/* IT IS THE SAME MATERIAL AS THE MESSAGE BAR (owner: "a little see-through with a small
+   outline and the same colour — it should feel matching"). It used to be a solid `--s3`
+   disc with a drop shadow, which read as a different kind of object floating over the
+   conversation. The three values are `--bar-glass` / `--bar-glass-blur` / `--bar-glass-edge`,
+   declared once on :root and used by BOTH this and `.msg-inbox`, so the two can never drift
+   apart again — including the reduced-transparency case, where both go solid together.
+   The drop shadow is gone with the solid fill: the composer floats over the same thread
+   with no shadow, and an outline plus the blur is what separates it. */
 .ac-scrolldown{position:absolute;left:0;right:0;margin-inline:auto;width:fit-content;
   bottom:84px;z-index:5;min-width:36px;height:36px;border-radius:18px;padding:0;
-  background:var(--s3);
-  border:none;color:var(--t1);cursor:pointer;display:flex;align-items:center;justify-content:center;
-  box-shadow:0 4px 14px rgba(0,0,0,.32);opacity:0;transform:translateY(8px) scale(.92);pointer-events:none;
+  background:var(--bar-glass);
+  backdrop-filter:var(--bar-glass-blur);-webkit-backdrop-filter:var(--bar-glass-blur);
+  border:1px solid var(--bar-glass-edge);box-sizing:border-box;
+  color:var(--t1);cursor:pointer;display:flex;align-items:center;justify-content:center;
+  opacity:0;transform:translateY(8px) scale(.92);pointer-events:none;
   transition:opacity var(--t-base) var(--ease),transform var(--t-base) var(--ease),padding var(--t-slow) var(--ease);}
 .ac-scrolldown.show{opacity:1;transform:none;pointer-events:auto;}
 .ac-scrolldown:active{transform:scale(.94);}
@@ -5866,9 +5883,7 @@ body.light .ac-rec-lock{background:rgba(255,255,255,.55);}
 .ac-scrolldown.newmsg{padding:0 7px 0 14px;}
 .ac-scrolldown.newmsg .acsd-label{max-width:130px;opacity:1;margin-inline-end:7px;}
 #acThreadScreen.selecting .ac-scrolldown{display:none;}
-@media(min-width:769px){
-  .ac-scrolldown{background:rgba(255,255,255,.16);backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4);}
-}
+
 /* NB a z-index here cannot lift the composer over #navBackdrop: that backdrop is a
    body-level layer and this lives inside #app, which is its own stacking context. The
    fix is above — hide the backdrop when the nav pill is hidden. */
@@ -5925,9 +5940,9 @@ body.light .ac-item-unread.muted{background:var(--t3);}
      Caveat worth keeping: a CPU throttle does not throttle the GPU, and backdrop-filter is
      GPU-bound — this bounds the CPU cost, not an iPhone's rasterisation. It is a much
      smaller area than the top band, which is already allowed on the same evidence. */
-  background:rgba(26,26,28,.72);
-  backdrop-filter:blur(18px) saturate(1.7);-webkit-backdrop-filter:blur(18px) saturate(1.7);
-  border:1px solid rgba(255,255,255,.08);
+  background:var(--bar-glass);
+  backdrop-filter:var(--bar-glass-blur);-webkit-backdrop-filter:var(--bar-glass-blur);
+  border:1px solid var(--bar-glass-edge);
   /* flex-wrap so the cards below can take a line of their own above the text row;
      symmetric 5px padding so a nested card is inset evenly on both sides. */
   flex-wrap:wrap;
@@ -6173,10 +6188,16 @@ body.light .ac-item-unread.muted{background:var(--t3);}
 .msg-incards .msg-imgx{top:4px;left:auto;right:4px;width:19px;height:19px;
   background:rgba(0,0,0,.55);border:none;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
 .msg-incards .msg-imgx svg{width:9px;height:9px;stroke-width:2.8;}
-/* Light theme, phone: solid too. Declared HERE, above the desktop block, because both
-   this and the desktop override are (0,2,1) — with no specificity to separate them the
-   later rule simply wins, and it used to sit ~15 lines further down. */
-body.light .msg-inbox{background:rgba(255,255,255,.62);}
+/* Light theme's own glass. It is a VARIABLE now rather than a `body.light .msg-inbox`
+   rule, so the message bar and the jump-to-latest pill pick it up together and the old
+   specificity trap (that rule and a desktop override were both (0,2,1), so whichever came
+   later simply won) cannot come back. */
+body.light{--bar-glass:rgba(255,255,255,.62);
+  /* A WHITE outline on a white page is no outline at all — the message bar has always
+     carried one and it simply never showed in Light, which only became obvious when the
+     36px jump-to-latest pill started using the same material and rendered as a bare
+     chevron floating on white. Both get a faint dark edge here instead. */
+  --bar-glass-edge:rgba(0,0,0,.12);}
 /* THE BAR LOOKS THE SAME WHETHER THE THREAD IS MOVING OR NOT (owner: "when I scroll and
    let go it has a different amount of blurriness"). It used to step down to blur(8) and a
    heavier fill while scrolling, on the theory that a lighter blur is cheaper to rasterise —
@@ -6187,8 +6208,7 @@ body.light .msg-inbox{background:rgba(255,255,255,.62);}
    MOTION setting's neighbour, not the motion setting itself: someone who only wants stiller
    animation should not lose the glass. */
 @media (prefers-reduced-transparency:reduce){
-  .msg-inbox{background:var(--s2);backdrop-filter:none;-webkit-backdrop-filter:none;}
-  body.light .msg-inbox{background:var(--s2);}
+  :root,body.light{--bar-glass:var(--s2);--bar-glass-blur:none;}
 }
 .msg-inbox:focus-within{border-color:var(--b3);}
 .msg-attach{width:38px;height:38px;border-radius:50%;background:none;border:none;color:var(--t1);flex-shrink:0;
@@ -21797,7 +21817,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1806'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1807'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -56097,13 +56117,19 @@ function acApplyDmData(id, d, firstPaint, fromCache) {
   acRenderThread();
   acApplyChatPerms();
   acRestoreDraft(); // bring back any half-typed message for this chat
-  // Scroll + fade only on the OPENING paint: land at the bottom (or the unread
-  // divider). A background revalidate must NOT move the scroll — acRenderThread
-  // already preserves the reader's position (and sticks to bottom only if they
-  // were already there), so a reader scrolled up into history isn't yanked down.
+  /* Scroll + fade only on the OPENING paint. A background revalidate must NOT move the
+     scroll — acRenderThread already preserves the reader's position (and sticks to bottom
+     only if they were already there), so a reader scrolled up into history isn't yanked
+     down.
+     OPENING ALWAYS LANDS AT THE BOTTOM (owner). It used to jump to the "New messages"
+     divider whenever there were unread ones — which is what WhatsApp and Telegram do, but
+     with a long unread run it drops you into the middle of the conversation, and that is
+     exactly what the owner reported as "it doesn't take me to the bottom". The divider
+     still renders in place; you scroll UP to it, and the newest message — the one you
+     opened the chat for — is what you see first. */
   if (firstPaint) {
     acRevealThread(document.getElementById('acThread'));
-    if (AC._unreadDivId != null) acScrollToDivider(); else acStickBottomOnOpen();
+    acStickBottomOnOpen();
   }
 }
 
@@ -60551,10 +60577,11 @@ function acApplyGroupData(id, d, firstPaint, fromCache) {
   acRenderThread();
   acRestoreDraft(); // bring back any half-typed message for this group
   // Scroll + fade only on the OPENING paint (see acApplyDmData) — a background
-  // revalidate must not yank a reader who scrolled up into history.
+  // revalidate must not yank a reader who scrolled up into history, and opening
+  // always lands at the bottom, unread divider or not.
   if (firstPaint) {
     acRevealThread(document.getElementById('acThread'));
-    if (AC._unreadDivId != null) acScrollToDivider(); else acStickBottomOnOpen();
+    acStickBottomOnOpen();
   }
   // Reflect any call already in progress.
   gcRenderBanner(id);
@@ -60873,14 +60900,6 @@ function acUpdateScrollDown() {
 }
 // Land the thread on the "New messages" divider (instead of the bottom) when a
 // chat is opened with unread messages.
-function acScrollToDivider() {
-  const el = document.getElementById('acThread'); if (!el) return;
-  requestAnimationFrame(() => {
-    const d = el.querySelector('.msg-divider'); if (!d) return;
-    SC.jumpTo(Math.max(0, d.offsetTop - 64)); // a touch above the first new message
-    acUpdateScrollDown();
-  });
-}
 function acBindScrollDown(el) {
   jellyInit(document.getElementById('acThreadVP')); // the browser scrolls it; this binds what watches
 }

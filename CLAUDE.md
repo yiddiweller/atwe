@@ -2981,9 +2981,11 @@ only, not the owner's.
 - **Drafts.** A half-typed message is persisted per conversation in `localStorage`
   (`Drafts`, key `d:<peerId>`/`g:<groupId>`), restored on open, cleared on send, and
   shown as a red "Draft:" label on the chat-list row.
-- **Unread divider.** Opening a thread with unread messages shows a "New messages"
-  divider before the first unread and scrolls there (DM: first incoming with
-  `read_at=null`; group: first other-author message newer than `last_read_at`).
+- **Unread divider.** A thread with unread messages renders a "New messages" divider
+  before the first unread (DM: first incoming with `read_at=null`; group: first
+  other-author message newer than `last_read_at`). **It is no longer scrolled to** —
+  opening always lands at the bottom (owner; see "A chat opens at the bottom" below), so
+  the divider sits above and you scroll up to it.
 - **Width-hug + cache.** Plain text bubbles shrink to their longest line
   (`_hugBubbleLines`, iMessage-style); the measured width is cached on the message
   object (keyed by text + viewport) so re-renders don't re-measure unchanged bubbles.
@@ -6397,6 +6399,44 @@ centred as it grows into the wider "New Message" pill. Its `bottom` in CSS is on
 — `acSyncFooterPad` sets the real one from the composer's measured height, so it rides up
 when the bar grows to two lines.
 
+### A chat opens at the bottom, and the arrow is made of the same glass as the bar
+
+**Opening always lands at the newest message.** It used to jump to the **"New messages"
+divider** whenever there were unread ones — which is what WhatsApp and Telegram do, and it
+is defensible, but with a long unread run it drops you into the MIDDLE of the conversation,
+and that is what the owner reported as *"it should take you right away to the bottom"*. Both
+open paths (`acApplyDmData` and the group one) now call `acStickBottomOnOpen()`
+unconditionally and **`acScrollToDivider` is deleted, not left unused** — a switched-off path
+whose code still exists is the trap this file already records twice. The divider itself still
+renders in place; you scroll UP to it. **The honest trade:** with fifty unread you now start
+at the newest and scroll back, rather than starting at the first one you had not read.
+
+The landing was already instant and stays so: measured frame by frame from the tap, the
+FIRST frame in which the thread is visible at all is already at the bottom (2820 of 2820) —
+there is no paint at the top followed by a jump. That ordering is what `acRevealThread` +
+`acStickBottomOnOpen` buy, and `scratchpad/openbottom.js` asserts it that way rather than
+measuring after everything has settled, which passes on a thread that visibly jumps.
+
+**The jump-to-latest pill is the message bar, not a disc.** It was solid `--s3` with a drop
+shadow and a desktop-only frosted variant; the owner asked for *"a little see-through with a
+small outline and the same colour — it should feel matching"*. The material is now three
+tokens on `:root` — **`--bar-glass` / `--bar-glass-blur` / `--bar-glass-edge`** — used by
+`.msg-inbox` AND `.ac-scrolldown`, so the two cannot drift apart again, including the
+`prefers-reduced-transparency` case where both go solid together. The drop shadow went with
+the solid fill: the composer floats over the same thread without one.
+
+**A white outline on a white page is no outline at all.** The bar has always declared
+`rgba(255,255,255,.08)` and it simply never showed in Light — invisible on a big bar with
+content in it, and plainly wrong once a 36px pill rendered as a bare chevron floating on
+white. `body.light` now sets `--bar-glass-edge:rgba(0,0,0,.12)`, so the bar gained a faint
+edge there too. That is a deliberate change to the composer, not a side effect.
+
+**The pill's blur was MEASURED before it was allowed**, like the other two over the thread:
+at a 6× CPU throttle, flinging with it on and off gives p50 16.6 vs 16.5ms and p95 19.7 vs
+19.1 over 115 frames. `chatscroll.js`'s ban list grew to three, and the pill is listed under
+**both** its class and its id — that collector keys by `el.id` when there is one, so
+`ac-scrolldown` alone silently failed to whitelist `acScrollDown`.
+
 ### Undo sits beside the message, not in a toast
 
 Sending used to raise a bottom-centre toast reading **"Message sent · Undo"** — announcing
@@ -6496,8 +6536,10 @@ Belt and braces on top: **`acStickBottomOnOpen`** (the two first-paint call site
 still loading, re-sticking when each lands — so a slow connection cannot outlive the window.
 It stops the instant the reader scrolls up (`SC.pinBottom`).
 
-NB a chat with unread messages deliberately opens on the **"New messages" divider**, not the
-bottom (`acScrollToDivider`) — that is WhatsApp's behaviour and is not this bug.
+NB this used to say that a chat with unread messages deliberately opened on the **"New
+messages" divider** rather than the bottom, WhatsApp-style. It no longer does — the owner
+asked for the bottom every time and `acScrollToDivider` is gone (see "A chat opens at the
+bottom" below).
 
 ### What you are about to send is a thumbnail, not the message
 
