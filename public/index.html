@@ -518,7 +518,7 @@ body.light .splash-mark{background-color:#d2d2d8;animation:splashPulseLight 2s e
 /* Desktop-only branding hero is hidden on phones/tablets. */
 .auth-brand{display:none;}
 /* ── Desktop (X-style): the form on the LEFT, the branding hero on the RIGHT ── */
-@media(min-width:1100px){
+@media(min-width:1100px) and (min-height:501px){
   #loginOverlay:not(.hidden){display:flex;align-items:center;justify-content:center;
     padding:48px calc(48vw + 64px) 48px 64px;}
   .auth-brand{display:flex;position:fixed;right:0;top:0;width:48vw;height:100vh;align-items:center;justify-content:center;
@@ -631,6 +631,20 @@ body.light .splash-mark{background-color:#d2d2d8;animation:splashPulseLight 2s e
 .auth-echo{text-align:center;font-size:13.5px;color:var(--t2);margin:0;word-break:break-all;}
 .auth-row{display:flex;justify-content:space-between;align-items:center;}
 .auth-link{font-size:13.5px;color:var(--t2);cursor:pointer;background:none;border:none;font-family:inherit;padding:6px 2px;align-self:center;}
+/* A PHONE TURNED SIDEWAYS is ~390px tall, and the sign-in screen was drawn for a portrait
+   phone: a 66px mark with 84px of air under it pushes the last button and the terms line
+   off the bottom. The overlay scrolls, so nothing was ever unreachable — but having to
+   scroll a sign-in screen reads as broken. Everything simply tightens; nothing moves or
+   is hidden. Keyed off HEIGHT alone, so a short desktop window gets it too. */
+@media(max-height:500px){
+  .auth-logo{margin-bottom:20px;}
+  .auth-lm{width:44px;height:44px;}
+  .auth-btn{height:48px;border-radius:26px;font-size:15px;}
+  .auth-actions,.auth-form,#authLandingView .auth-actions{gap:9px;}
+  .auth-input{height:48px;}
+  .auth-inner{padding-top:calc(env(safe-area-inset-top) + 4px);
+    padding-bottom:max(calc(12px + env(safe-area-inset-bottom)), calc(var(--kb, 0px) + 10px));}
+}
 .auth-link:hover{color:#fff;}
 .auth-terms{text-align:center;font-size:10.5px;color:var(--t3);line-height:1.55;margin-top:20px;flex-shrink:0;}
 .auth-terms a{color:var(--t2);text-decoration:none;}
@@ -1328,7 +1342,7 @@ body.light .auth-danger,body.light .auth-input{box-shadow:none;}
 .sb-exit-project:hover{color:var(--t1);}
 .sb-exit-project svg{width:16px;height:16px;stroke:currentColor;stroke-width:2.1;fill:none;}
 /* Collapsed sidebar (desktop only) — icon rail */
-@media(min-width:769px){
+@media(min-width:769px) and (min-height:501px){
   .sidebar.collapsed{width:64px;}
   .sidebar.collapsed .sb-logo{justify-content:center;}
   .sidebar.collapsed .sb-btn{font-size:0;justify-content:center;gap:0;padding:9px 0;}
@@ -1385,7 +1399,7 @@ body.light .auth-danger,body.light .auth-input{box-shadow:none;}
 .sb-post svg{width:20px;height:20px;stroke:currentColor;stroke-width:2.4;fill:none;stroke-linecap:round;flex-shrink:0;}
 .sidebar.collapsed .sb-post{width:46px;height:46px;padding:0;border-radius:50%;margin:8px auto 4px;}
 .sidebar.collapsed .sb-post span{display:none;}
-@media(min-width:769px){ #acHomeFab{display:none!important;} }
+@media(min-width:769px) and (min-height:501px){ #acHomeFab{display:none!important;} }
 .sb-profilebtn{font-weight:700;color:var(--t1);padding-top:7px;padding-bottom:7px;}
 .sb-profilebtn .user-avatar{width:30px;height:30px;font-size:12px;flex-shrink:0;}
 .sb-prof-id{display:flex;flex-direction:column;min-width:0;line-height:1.2;}
@@ -2681,7 +2695,7 @@ body.light .topbar.tb-solo.tb-home .tb-feedtab.active,body.light .topbar.tb-solo
 .tb-ico svg circle{stroke-width:3;} /* the Engine ring reads thicker, like the nav glyph */
 @media(hover:hover){.tb-ico:hover{background:var(--s2);}}
 .tb-ico:active{transform:scale(.9);}
-@media(min-width:769px){.tb-ico.tb-ico-menu{display:none;}} /* desktop has the sidebar */
+@media(min-width:769px) and (min-height:501px){.tb-ico.tb-ico-menu{display:none;}} /* desktop has the sidebar */
 /* Beam tabs match the home row's scrollable rhythm in solo mode (they were
    space-between across the full width, which fights the icon cluster). */
 .topbar.tb-solo.tb-chat .tb-feedtabs,.topbar.tb-solo.tb-engine .tb-feedtabs{justify-content:flex-start;gap:36px;margin-inline-start:0;/* owner: more space between Beam tabs, matched to Home */}
@@ -2729,7 +2743,7 @@ body.light .topbar.tb-solo.tb-home .tb-feedtab.active,body.light .topbar.tb-solo
 .topbar.tb-solo.tb-chat .tb-icoset::after,.topbar.tb-solo.tb-engine .tb-icoset::after{width:20px;}
 /* Desktop (≥769px) keeps the sidebar + its original topbar: the mobile brand row is
    hidden and the old icoset / tab-start inset are restored, so desktop is unchanged. */
-@media(min-width:769px){
+@media(min-width:769px) and (min-height:501px){
   .topbar.tb-solo .tb-brandrow{display:none;}
   .topbar.tb-solo .tb-icoset{display:flex;}
   .topbar.tb-solo.tb-home .tb-feedtabs{padding-inline-start:26px;}
@@ -2788,7 +2802,7 @@ body.light .tb-home-dot{border-color:#fff;}
 .topbar.tb-chat .tb-feedtabs{flex:1;justify-content:space-between;gap:0;margin-inline-start:0;}
 .topbar.tb-chat .topbar-actions{flex:0 0 auto;}
 .topbar.tb-chat .tb-feedtab{padding:6px 4px;}
-@media(min-width:769px){
+@media(min-width:769px) and (min-height:501px){
   .topbar.tb-chat .tb-feedtabs{flex:1;justify-content:center;gap:6px;}
   .topbar.tb-chat .tb-feedtab{padding:9px 20px;font-size:15.5px;border-radius:var(--r-pill);
     transition:color var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
@@ -2849,7 +2863,7 @@ body.light .tb-feedtab.active{color:var(--t1);}
 @media(hover:hover){.topbar .tb-feedtabs .tb-feedtab.tb-feedtab-add:hover{color:var(--t2);background:none;}}
 /* Desktop/tablet: a centered, compact tab group at the top-middle (over the
    600px feed column) instead of a stretched left-to-right bar; hover pill. */
-@media(min-width:769px){
+@media(min-width:769px) and (min-height:501px){
   .topbar.tb-home .tb-feedtabs{flex:1;justify-content:center;gap:6px;}
   .topbar.tb-home .tb-feedtab{padding:9px 20px;font-size:15.5px;border-radius:var(--r-pill);
     transition:color var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
@@ -2860,7 +2874,7 @@ body.light .tb-feedtab.active{color:var(--t1);}
 /* Mobile home: ≡ menu at the far left, then a left-aligned, horizontally
    scrollable tab row (For You · Following · Collections · Circles). No underline;
    active = bold white and slightly larger, inactive = muted gray. (X-style.) */
-@media(max-width:768px){
+@media(max-width:768px),(max-height:500px){
   .topbar.tb-home{padding-inline-start:var(--feed-gutter);}
   /* Full-bleed the SOLO tab row to the true left screen edge (mobile only — desktop
      keeps the ≡/＋ icoset inset). The solo topbar already zeroes its own inline padding,
@@ -2994,7 +3008,7 @@ body.light .tb-feedtab.active{color:var(--t1);}
   pointer-events:none;display:none;scrollbar-width:none;}
 #tbTabTouch::-webkit-scrollbar{display:none;}
 #tbTabTouchInner{height:1px;}
-@media(max-width:768px){
+@media(max-width:768px),(max-height:500px){
   /* The content wrapper rides ABOVE the menu (z:5 > the bar's z:4) so as it rises it
      COVERS the menu — solid, fully visible, never chopped, never see-through. A
      constant upward offset (NOT scroll-driven) keeps the scroll perfectly 1:1; the
@@ -3174,7 +3188,7 @@ body.light .tb-feedtab.active{color:var(--t1);}
 /* Desktop: the Engine search box fills the centre column (it only shows on the
    Engine tab) so its left/right edges line up with the Discover grid + cards
    below, instead of floating centred and narrower than the content. */
-@media(min-width:769px){.tb-search{flex:1 1 auto;max-width:none;margin:0;}}
+@media(min-width:769px) and (min-height:501px){.tb-search{flex:1 1 auto;max-width:none;margin:0;}}
 .brand-menu{
   position:fixed;z-index:600;min-width:248px;
   background:var(--menu-bg);
@@ -4398,7 +4412,7 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
 /* ─────────────────────────────────────────────
    RESPONSIVE
 ───────────────────────────────────────────── */
-@media(max-width:768px){
+@media(max-width:768px),(max-height:500px){
   .app{flex-direction:column;}
   /* Wide X-style drawer (owner request) — extends well right, leaving a slim strip of
      feed. Trimmed a touch from 84vw. Driving it through --sidebar-w keeps the tappable
@@ -4473,7 +4487,7 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
 
 /* X.com nav widths: 275px labelled by default on desktop; collapses to a 68px
    icon rail (body.nav-mini, set by acUpdateRail between 768 and 1281px). */
-@media(min-width:768px){
+@media(min-width:769px) and (min-height:501px){
   :root{--sidebar-w:275px;}
 }
 body.nav-mini{--sidebar-w:68px;}
@@ -4510,7 +4524,7 @@ body.nav-mini .sb-divider{width:38px;margin-inline-start:auto;margin-inline-end:
    and the world-nav tabs matched to the same size/weight so the whole rail reads as one
    cohesive list. Scoped to the full rail only: the collapsed icon rails (body.nav-mini)
    and the manual collapse (.sidebar.collapsed) keep their own icon-only sizing. */
-@media(min-width:769px){
+@media(min-width:769px) and (min-height:501px){
   body:not(.nav-mini) .sidebar:not(.collapsed) .sb-btn,
   body:not(.nav-mini) .sidebar:not(.collapsed) .sb-settings{
     padding:12px 12px;font-size:18px;font-weight:600;gap:18px;color:var(--t1);border-radius:12px;}
@@ -4600,7 +4614,7 @@ body.nav-mini .sb-divider{width:38px;margin-inline-start:auto;margin-inline-end:
 .theme-seg button.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
 
 /* Mobile topbar declutter: keep wordmark + ☰ left, mini Log in right */
-@media (max-width:768px){
+@media(max-width:768px),(max-height:500px){
   .topbar .model-pill{display:none;}
   .topbar-actions .tb-btn{display:none;}
   .tb-word{display:block !important;height:16px;}
@@ -4707,7 +4721,7 @@ body.light .tb-login,body.light .btn-white{background:var(--primary);color:var(-
 .msg-win{display:flex;flex-direction:column;width:100%;max-width:620px;height:100%;
   background:var(--bg);border:none;overflow:hidden;box-shadow:none;animation:winIn .26s var(--ease);}
 @keyframes winIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
-@media(min-width:769px){
+@media(min-width:769px) and (min-height:501px){
   #messagesOverlay,#atchatOverlay{padding:26px;background:rgba(0,0,0,.72);
     backdrop-filter:blur(16px) saturate(1.4);-webkit-backdrop-filter:blur(16px) saturate(1.4);}
   .msg-win{height:min(86vh,780px);border:none;border-radius:22px;
@@ -9752,7 +9766,7 @@ body.light .cc-ic-img{filter:brightness(0);}
 /* Desktop: pop-up sheets that anchor to the bottom edge on mobile (composer, new
    chat, emoji, reply-scope, comments, more-menu, group preview) float CENTRED in
    the viewport as fully-rounded cards instead. Mobile keeps the bottom-sheet feel. */
-@media(min-width:769px){
+@media(min-width:769px) and (min-height:501px){
   #acPostScreen,.emoji-ov,#replyScopeSheet,.fcmt-sheet,.fmore-sheet,.overlay.gp-sheet,.nc-overlay{
     align-items:center!important;padding-top:24px;padding-bottom:24px;}
   .fcmt-card,.fmore-card,.gp-card{border-radius:var(--r-xl);}
@@ -10162,7 +10176,7 @@ body.light .ac-brand-logo{filter:invert(1);}
    read as "the username went small". The verification-code field and the password
    field were being shrunk the same way. None of them can trigger the zoom the rule
    guards against, because none of them is under 16px. */
-@media (max-width: 768px){
+@media(max-width: 768px),(max-height:500px){
   input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):not([type=button]):not([type=submit]):not(.auth-handle-input):not(.auth-pw-input):not(.code-input),
   textarea, select, [contenteditable]{ font-size:16px !important; }
 }
@@ -10218,7 +10232,7 @@ body.light .ac-chatsel-acts button{background:rgba(0,0,0,.05);}
 .ac-chatsel-acts button.danger{color:var(--red);}
 .ac-chatsel.none .ac-chatsel-acts button{opacity:.4;pointer-events:none;} /* nothing selected → actions inert */
 #acListScreen.selecting #acList{padding-bottom:150px;} /* clear the floating bar */
-@media(max-width:768px){
+@media(max-width:768px),(max-height:500px){
   /* lift the bar above the floating bottom nav (same clearance as the FAB) */
   .ac-chatsel{bottom:calc(max(34px, env(safe-area-inset-bottom)) + 70px);}
   #acListScreen.selecting #acList{padding-bottom:210px;}
@@ -10414,7 +10428,7 @@ body.light .gp-card{background:#fff;}
 .gp-join:active{transform:scale(.98);}
 .gp-join.requested{background:transparent;color:var(--t1);border:none;}
 .gp-note{font-size:12.5px;color:var(--t4);margin-top:14px;line-height:1.5;max-width:340px;margin-inline-start:auto;margin-inline-end:auto;}
-@media(min-width:600px){
+@media(min-width:600px) and (min-height:501px){
   .overlay.gp-sheet{align-items:center;}
   .gp-card{max-width:380px;border:none;border-radius:var(--r-xl);animation:sheetFade .4s cubic-bezier(.22,.61,.36,1);}
   .gp-grab{display:none;}
@@ -10803,7 +10817,7 @@ body.light .upd-banner{background:rgba(28,28,30,.98);}
 #peekBar .peek-btn{border-radius:999px;font-size:14px;font-weight:700;padding:9px 18px;cursor:pointer;border:1px solid transparent;white-space:nowrap;}
 #peekBar .peek-signup{background:var(--primary,#fff);color:var(--on-primary,#111114);}
 #peekBar .peek-login{background:transparent;border-color:var(--b2,rgba(255,255,255,.3));color:var(--t1,#e7e9ea);}
-@media(min-width:769px){#peekBar{justify-content:center;gap:20px;}#peekBar .peek-acts{margin-inline-start:0;}}
+@media(min-width:769px) and (min-height:501px){#peekBar{justify-content:center;gap:20px;}#peekBar .peek-acts{margin-inline-start:0;}}
 /* Undo toast (blueprint: 10s undo after posting). Bottom-center pill above the
    floating nav, with a blue text "Undo" action; auto-dismisses. */
 .undo-toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 84px);transform:translateX(-50%) translateY(12px);
@@ -10852,7 +10866,7 @@ body.light .undo-toast{background:rgba(28,28,30,.98);color:#fff;}
 .ac-recent-chip svg{width:14px;height:14px;stroke:var(--t3);stroke-width:2;fill:none;flex:0 0 auto;}
 .ac-recent-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .ac-recent-chip:active{transform:scale(.97);}
-@media(min-width:769px){.ac-search-scopes{display:none;}}
+@media(min-width:769px) and (min-height:501px){.ac-search-scopes{display:none;}}
 .ac-search-discover{display:flex;flex-direction:column;align-items:center;text-align:center;padding:44px 24px;gap:8px;}
 .ac-sd-ic{width:58px;height:58px;border-radius:50%;background:var(--accent-dim);color:var(--accent);
   display:flex;align-items:center;justify-content:center;margin-bottom:6px;}
@@ -12130,7 +12144,7 @@ body.light .ac-place:hover{background:rgba(0,0,0,.04);}
 @keyframes swirlPulse{0%,100%{scale:1;}50%{scale:1.08;}}
 
 /* Slim, self-effacing scrollbars on desktop scroll areas */
-@media(min-width:769px){
+@media(min-width:769px) and (min-height:501px){
   .ac-list::-webkit-scrollbar,.msg-scroll::-webkit-scrollbar,.search-results::-webkit-scrollbar{width:8px;}
   .ac-list::-webkit-scrollbar-thumb,.msg-scroll::-webkit-scrollbar-thumb,.search-results::-webkit-scrollbar-thumb{
     background:var(--s3);border-radius:10px;border:2px solid transparent;background-clip:padding-box;}
@@ -12164,7 +12178,7 @@ body.light .ac-place:hover{background:rgba(0,0,0,.04);}
 .sidebar.collapsed .sb-navbtn{justify-content:center;padding:9px 0;}
 .sidebar.collapsed .sb-navbtn span:not(.ac-badge):not(.sb-navic):not(.sb-ico):not(.sb-navlogo){display:none;}
 /* Desktop: roomier primary nav with a rounded pill hover (X-style). */
-@media(min-width:769px){
+@media(min-width:769px) and (min-height:501px){
   .sb-navbtn{font-size:15.5px;padding:10px 13px;border-radius:var(--r-pill);gap:14px;}
   .sb-navbtn svg{width:15px;height:15px;}
   .sb-navbtn .sb-navlogo{width:15px;height:15px;}
@@ -12188,7 +12202,7 @@ body.light .ac-place:hover{background:rgba(0,0,0,.04);}
 .social-wrap .msg-top{padding-top:max(13px,env(safe-area-inset-top));}
 /* Desktop/tablet: a centered feed column with side borders (X-style), so it
    doesn't stretch the full width on wide screens. */
-@media(min-width:769px){
+@media(min-width:769px) and (min-height:501px){
   .social-wrap{align-items:center;}
   .social-wrap .ac-win{max-width:600px;border-inline-start:1px solid var(--b2);border-inline-end:1px solid var(--b2);}
 }
@@ -12202,7 +12216,7 @@ body.light .ac-place:hover{background:rgba(0,0,0,.04);}
      1095+   nav 68  + feed 600 + rail 350   (1018)
      1005+   nav 68  + feed 600 + rail 290   (958)
      768+    nav 68  + feed 600              (668, rail hidden) */
-@media(min-width:768px){
+@media(min-width:769px) and (min-height:501px){
   /* Feed/social/AI screens: a locked 600 centre column, centred with the nav.
      The centre column carries the right hairline (its left line is the sidebar's
      own border-right); the pair is centred via auto margins. */
@@ -12298,7 +12312,7 @@ body.light .ac-place:hover{background:rgba(0,0,0,.04);}
 /* Desktop Engine listing detail: gallery LEFT / details RIGHT, using the width
    (Desktop Design Spec). The grid only applies ≥1000px, so mobile keeps the
    existing vertical stack — purely presentational, no JS/behaviour change. */
-@media(min-width:1000px){
+@media(min-width:1000px) and (min-height:501px){
   #listingView .job-card-modal{max-width:920px;}
   #listingView .lv-top{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:30px;align-items:start;}
   #listingView .lv-top .mkt-detail-imgwrap{position:sticky;top:4px;margin:0;}
@@ -12313,7 +12327,7 @@ body.light .ac-place:hover{background:rgba(0,0,0,.04);}
 .be-title{font-size:22px;font-weight:800;letter-spacing:-.02em;color:var(--t1);}
 .be-sub{font-size:14px;color:var(--t3);max-width:280px;line-height:1.45;}
 .be-new{flex:0 0 auto;align-self:center;width:auto;margin-top:12px;height:44px;padding:0 22px;font-size:15px;font-weight:700;}
-@media(min-width:768px){
+@media(min-width:769px) and (min-height:501px){
   body.beam2 .social-wrap{align-items:stretch;}
   body.beam2 .social-wrap .ac-win{max-width:950px;width:100%;display:flex;flex-direction:row;border-inline-start:1px solid var(--b2);border-inline-end:1px solid var(--b2);}
   /* THE CONVERSATION LIST IS BEAM'S RIGHT COLUMN (owner). It used to sit beside the nav
@@ -12374,7 +12388,7 @@ body.light .ac-place:hover{background:rgba(0,0,0,.04);}
    margin-inline-end:auto splits the free space evenly on both sides. Matches the app's
    own centring breakpoint (≥1100px); 1000–1099px keeps the panes full-width like the
    feed does at that width. */
-@media(min-width:768px){
+@media(min-width:769px) and (min-height:501px){
   body.beam2 .sidebar{margin-inline-start:auto;}
   body.beam2 .main{flex:0 1 950px;margin-inline-end:auto;}
 }
@@ -12524,7 +12538,7 @@ body.sb-open #bottomNav{z-index:0;}
    sidebar behind it (before this, opening Notifications covered the nav and clicking
    Account did nothing), auto on the card. Neither overlay ever closed on a scrim
    click, so nothing is lost by it. */
-@media(min-width:768px){
+@media(min-width:769px) and (min-height:501px){
   .overlay.route-view:not(.hidden){
     display:flex;flex-direction:row;align-items:stretch;justify-content:center;
     padding:0;background:transparent;pointer-events:none;
@@ -12732,7 +12746,7 @@ body.home-feed.nav-scrolling .bottom-nav{-webkit-backdrop-filter:none!important;
     color-mix(in srgb, var(--bg) 46%, transparent) calc(100vh + 62px),
     color-mix(in srgb, var(--bg) 22%, transparent) calc(100vh + 100px),
     transparent calc(100vh + 135px));}                               /* top of the fade: clear */
-@media(max-width:768px){ #navBackdrop{display:block;} }
+@media(max-width:768px),(max-height:500px){ #navBackdrop{display:block;} }
 /* Hidden wherever the pill itself is hidden (post detail, open thread, composer, …).
    THEY ARE NOT SIBLINGS: #bottomNav is a child of <body> while #navBackdrop sits inside
    <main>, so the `~` rule below could never match and the bottom fade kept painting in an
@@ -12776,7 +12790,7 @@ body.nav-ball #navBackdrop{opacity:0;}
 
 
 /* Responsive: bottom bar on mobile, sidebar nav on desktop */
-@media(max-width:768px){
+@media(max-width:768px),(max-height:500px){
   .bottom-nav{display:flex;}
   .sb-nav,.sb-nav-sep{display:none;}
   /* The drawer ("left tab") leads with the profile, not the Atwe logo */
@@ -12834,7 +12848,7 @@ body.nav-ball #navBackdrop{opacity:0;}
 }
 /* The unified top bar (profile + page label / search) shows on every tab.
    On desktop the sidebar carries the profile, so hide the top-bar avatar there. */
-@media(min-width:769px){
+@media(min-width:769px) and (min-height:501px){
   .tb-profile{display:none!important;}
   /* Desktop/tablet: float the + action button in the viewport's bottom-right
      corner with equal spacing to the right edge and the bottom edge. */
@@ -13331,7 +13345,7 @@ body.light .ac-circ-join.joined{background:var(--s2);color:var(--t2);}
    below, and this being an ID rule (1,0,0) it silently outranked that class rule (0,3,0)
    and painted the nav out. Scope it, don't fight it. */
 #notifOverlay{padding:0;align-items:stretch;backdrop-filter:none;-webkit-backdrop-filter:none;}
-@media(max-width:767px){#notifOverlay{background:var(--bg);}}
+@media(max-width:767px),(max-height:500px){#notifOverlay{background:var(--bg);}}
 .notif-card{background:var(--bg);width:100%;max-width:600px;height:100%;max-height:none;border-radius:0;
   border:none;display:flex;flex-direction:column;overflow:hidden;margin:0 auto;position:relative;}
 /* Notification detail — a self-contained page that slides in over the list; its own
@@ -21817,7 +21831,21 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1807'; // keep in step with sw.js CACHE — tells us which build a device runs
+/* THE LAYOUT'S WIDTH IS NOT ALWAYS THE WINDOW'S. A phone turned sideways is ~844px wide
+   and ~390px tall — WIDER than a small laptop — so a layout chosen by width alone hands it
+   the desktop sidebar, which is exactly what the owner reported ("when I turn the phone
+   sideways I get the computer version"). A viewport under 500px TALL is a phone in
+   landscape and nothing else: an iPad in landscape is 744-834 tall, a laptop 600+. So the
+   layout is told it is phone-sized and every threshold below it falls to mobile.
+   THE CSS DOES THE SAME THING — every phone query carries `,(max-height:500px)` and every
+   bigger-than-a-phone query `and (min-height:501px)` — and the two MUST stay in step: a
+   CSS breakpoint that disagrees with _lw() paints one layout while the JS drives another. */
+const PHONE_MAX_H = 500;
+function _lw() {
+  const w = window.innerWidth || 999;
+  return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
+}
+const ATWE_BUILD = '1808'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -25531,7 +25559,7 @@ function newChat() {
   document.getElementById('messages').classList.add('hidden');
   document.getElementById('emptyState').classList.remove('hidden');
   setInputMode('center');
-  if (window.innerWidth <= 768) closeSidebar();
+  if (_lw() <= 768) closeSidebar();
 }
 
 function renderProjects() {
@@ -25747,7 +25775,7 @@ function loadChat(id) {
   chat.messages.forEach(m => appendBubble(m.role, m.content, false));
   renderHistory();
   scrollBottom();
-  if (window.innerWidth <= 768) closeSidebar();
+  if (_lw() <= 768) closeSidebar();
 }
 
 /* ═══════════════════════════════════════════════
@@ -26264,21 +26292,21 @@ async function planFreeAction() {
    bar's fifth tab opens — and Help is that hub's own Help & feedback section, so neither
    is a new surface. */
 function acNavAccount() {
-  if (window.innerWidth <= 768) closeSidebar();
+  if (_lw() <= 768) closeSidebar();
   appTab('profile');
 }
 function acNavSettings() {
-  if (window.innerWidth <= 768) closeSidebar();
+  if (_lw() <= 768) closeSidebar();
   openSettings();
 }
 function acNavHelp() {
-  if (window.innerWidth <= 768) closeSidebar();
+  if (_lw() <= 768) closeSidebar();
   appTab('profile');
   setTimeout(() => { if (typeof acMeSection === 'function') acMeSection('app'); }, 0);
 }
 // "Upgrade" entry in the sidebar nav — close the mobile drawer, then open plans.
 function acNavUpgrade() {
-  if (window.innerWidth <= 768) closeSidebar();
+  if (_lw() <= 768) closeSidebar();
   openPlans();
 }
 // X-style verification flow: requirements checklist → apply → admin review.
@@ -26335,7 +26363,7 @@ function closeVerifyPromo() { document.getElementById('verifyPromoModal').classL
 let _installPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); _installPrompt = e; });
 async function acDownloadApp() {
-  if (window.innerWidth <= 768) closeSidebar();
+  if (_lw() <= 768) closeSidebar();
   const standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone;
   if (standalone) { showNotif('Atwe is already installed on this device.'); return; }
   if (_installPrompt) {
@@ -26354,7 +26382,7 @@ async function acDownloadApp() {
 /* ─── Contact privacy: who can call / video / message you ─── */
 let _pvAllow = []; // [{ id?, username, name?, avatar? }]
 async function openContactPrivacy() {
-  if (window.innerWidth <= 768) closeSidebar();
+  if (_lw() <= 768) closeSidebar();
   showOverlay('privacyOverlay');
   document.getElementById('pvAllowList').innerHTML = '<div class="muted" style="font-size:12.5px;">Loading…</div>';
   try {
@@ -26491,7 +26519,7 @@ function toggleSidebar() {
 // sidebar to an icon rail; a double click goes home. On mobile it goes home.
 let _logoClickTimer = null;
 function onLogoClick() {
-  if (window.innerWidth <= 768) { newChat(); return; }
+  if (_lw() <= 768) { newChat(); return; }
   if (_logoClickTimer) {            // second click → treat as double-click → home
     clearTimeout(_logoClickTimer);
     _logoClickTimer = null;
@@ -29138,7 +29166,7 @@ function openSearch() {
   inp.value = '';
   renderSearch();
   setTimeout(() => inp.focus(), 60);
-  if (window.innerWidth <= 768) closeSidebar();
+  if (_lw() <= 768) closeSidebar();
 }
 function closeSearch() {
   closeOverlay('searchOverlay');
@@ -30725,7 +30753,7 @@ function appTab(tab, opts) {
   else if (tab === 'chat') requireSectionUnlock('chats', acGoMessages);
   else if (tab === 'profile') acGoProfileHub();
   else if (tab === 'call') acGoCall();
-  if (social) { acRefreshUnread(); rtConnect(); if (window.innerWidth <= 768) closeSidebar(); }
+  if (social) { acRefreshUnread(); rtConnect(); if (_lw() <= 768) closeSidebar(); }
   if (!_silent && tab === 'ai') _introSoon('ai');   // first-visit Atwe AI welcome
   acUpdateRail();
 }
@@ -30769,7 +30797,7 @@ let _railLoaded = false;
 const RAIL_SCREENS = ['acHomeScreen', 'acSearchScreen', 'acProfileScreen', 'acMeScreen', 'acListScreen', 'acThreadScreen', 'acCallScreen', 'acCircleScreen'];
 const POST_SCREENS = ['acHomeScreen', 'acSearchScreen', 'acProfileScreen']; // the "Post" button is feed-only
 function acUpdateRail() {
-  const acct = isAccount(), w = window.innerWidth;
+  const acct = isAccount(), w = _lw();
   const cur = AC_SCREENS.find(id => { const el = document.getElementById(id); return el && !el.classList.contains('hidden'); });
   const isAI = _appTab === 'ai';
   const railable = acct && (isAI || RAIL_SCREENS.includes(cur));
@@ -30790,7 +30818,7 @@ function acUpdateRail() {
   //   <768          mobile
   const beamScreen = ['acListScreen', 'acThreadScreen'].includes(cur);
   // Left nav collapses to a 68px icon rail between 768 and 1281 (full labels >=1282).
-  document.body.classList.toggle('nav-mini', acct && w >= 768 && w < 1282);
+  document.body.classList.toggle('nav-mini', acct && w >= 769 && w < 1282);
   // Beam two-pane spans EXACTLY the feed+rail width so the nav never jumps between
   // Home and Beam: 950 (=600+350) normally, 890 (=600+290) in the shrink band, and
   // it drops to a single 600 column (feed-col) below 1005 where Home has no rail.
@@ -30798,7 +30826,7 @@ function acUpdateRail() {
   document.body.classList.toggle('beam2', beam2);
   // Feed/social/AI screens — and Beam when it's below the two-pane threshold — lock
   // the centre column at 600, centred. So every world shares one footprint.
-  const feedCol = acct && w >= 768 && railable && !beam2;
+  const feedCol = acct && w >= 769 && railable && !beam2;
   document.body.classList.toggle('feed-col', feedCol);
   // Right rail: only on non-Beam feed pages, >=1005. mid-band (1005-1094) shrinks
   // the rail to 290 AND the Beam two-pane to 890 in lockstep.
@@ -31245,7 +31273,7 @@ function acSetSearchScope(s) {
   acRenderPeopleFilters(); // the People scope's LinkedIn-style filter chips            // refresh the on-screen chips
   const inp = document.getElementById('tbSearchInput');
   if (inp) inp.placeholder = _searchPlaceholders[s] || 'Search';
-  if (window.innerWidth <= 768) closeSidebar();
+  if (_lw() <= 768) closeSidebar();
   acDoSearch(inp ? inp.value : '');
   if (inp) setTimeout(() => inp.focus(), 120);
 }
@@ -34496,7 +34524,7 @@ async function refreshNotifCount() {
 function closeNotifToHome() { acCloseNotifDetail(); closeOverlay('notifOverlay'); appTab('home'); }
 function openNotifications() {
   requireSectionUnlock('notifications', async () => {
-    if (window.innerWidth <= 768) closeSidebar();
+    if (_lw() <= 768) closeSidebar();
     acCloseNotifDetail();               // always open on the list, not a stale detail page
     /* Capture the open-state BEFORE showOverlay un-hides it: the bell re-runs this whole
        function on every tap, and replaying the arrival flourish while the panel is already
@@ -34899,7 +34927,7 @@ function acShow(screenId, tab) {
   //  • INSTALLED app → brand-collapse (inner-scroll, buttery). No browser bar to shrink there.
   //  • BROWSER → page-scroll (below) so Safari's OWN bottom bar shrinks (like X/Instagram);
   //    the header collapse then rides the WINDOW scroll (_onWinScroll).
-  const _mob = window.matchMedia && window.matchMedia('(max-width:768px)').matches;
+  const _mob = _lw() <= 768;   // phone-shaped, which includes a phone turned sideways
   const _bc = (screenId === 'acHomeScreen' || screenId === 'acListScreen' || screenId === 'acSearchScreen') && _standaloneBc && _mob;
   const _cover = (screenId === 'acHomeScreen' || screenId === 'acListScreen') && !_bc;
   if (_cover) { if (typeof _tabRowH === 'function') _tabRowH(); _covSet(0); }
@@ -60003,7 +60031,7 @@ function acWatchGroupLive() {
 async function acGoLive(groupId, title) {
   if (LIVE || CALL || GROUPCALL || SPACE) { showNotif('Finish your current call/stream first.'); return; }
   if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') { showNotif('Live isn’t supported in this browser.'); return; }
-  if (window.innerWidth <= 768) closeSidebar();
+  if (_lw() <= 768) closeSidebar();
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true }); }
   catch { showNotif('Camera & microphone permission is needed to go live.'); return; }
@@ -60231,7 +60259,7 @@ function spaceSignal(to, kind, extra) {
 async function acStartSpace(title, groupId) {
   if (LIVE || CALL || GROUPCALL || SPACE) { showNotif('Finish your current call/stream first.'); return; }
   if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') { showNotif('Audio rooms aren’t supported in this browser.'); return; }
-  if (window.innerWidth <= 768) closeSidebar();
+  if (_lw() <= 768) closeSidebar();
   let mic;
   try { mic = await navigator.mediaDevices.getUserMedia({ audio: true }); }
   catch { showNotif('Microphone permission is needed to host an audio room.'); return; }
@@ -64718,7 +64746,7 @@ document.addEventListener('click', (e) => {
 // Guarded so they never fire while typing, with a modifier held, or on mobile.
 document.addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
-  if (window.innerWidth < 769) return; // desktop keyboard shortcuts only
+  if (_lw() < 769) return; // desktop keyboard shortcuts only
   const t = e.target;
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
   // Don't hijack keys while a real modal/confirm/composer/media-viewer is open.
@@ -65213,7 +65241,7 @@ function _ttBindHold(strip) {
 // accumulated scroll delta (transform only, never a layer-swap → can't freeze the scroll).
 let _revealHide = 1e9, _revealMax = 100, _rvLast = 0, _revealVis = false, _revealEng = false, _revealArmed = false, _revealLast = -1, _rvDarkenEl = null;
 function acRevealActive() {
-  return (window.innerWidth || 999) <= 768
+  return _lw() <= 768
     && document.body.classList.contains('feed-cover')
     && (_appTab === 'home' || _appTab === 'chat')
     && !document.querySelector('.topbar')?.classList.contains('hidden');
@@ -66139,7 +66167,7 @@ const _bootDone = (async function boot() {
   applyLocale();
   loadI18nOverrides();   // fire-and-forget: re-translates in place if any exist
   try {
-    if (localStorage.getItem('atwe_sb_collapsed') === '1' && window.innerWidth > 768)
+    if (localStorage.getItem('atwe_sb_collapsed') === '1' && _lw() > 768)
       document.getElementById('sidebar').classList.add('collapsed');
   } catch (e) {}
   setInputMode('center');
