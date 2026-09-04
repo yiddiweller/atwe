@@ -8459,24 +8459,40 @@ today.
   no photos in it at all. A "fix" measured that way proves nothing. The probes now
   create a **fresh account per run**, and the fixture posts are given enough likes to
   rank deterministically. Before trusting any before/after, run the "before" twice.
-- **An element that MOVES must not stay tappable while it moves.** Scrolling up on Home
-  or Beam flies the bottom nav back from the "+" ball at the right edge by animating its
-  `left` over `--t-slow`. The five buttons ride along, and the rule that makes them inert
-  (`body.nav-morph.nav-ball .bn-tab{pointer-events:none}`) is scoped to `.nav-ball`, so it
-  lifts the instant the class comes off — while the geometry is still wrong. Measured on a
-  390px phone: **79ms into the expansion a tap on Account opened ENGINE**, at 109ms a tap on
-  Engine opened HOME, and most taps in the first ~180ms hit nothing at all. That is exactly
-  the founder's "it jumps to the wrong page / sometimes I have to tap it twice" — 19 of 25
-  timed taps landed wrong. Fixed by resolving a tap against the bar's **resting** layout
-  while it is in flight: `_navCaptureRest()` snapshots the layout just before each collapse,
-  `_navAimBtn(x)` answers "what did the finger aim at", and a document-level capture-phase
-  `click` listener (`_navMorphClick`) swallows the stray click and re-fires it on the right
-  button. It is keyed off **live geometry, not a flag or a timer**, so it can never get stuck
-  holding taps hostage — once the bar is back where it belongs it is a no-op. `_navAimBtn` is
-  used by the press pickup too, or the highlight pill still glides to the wrong icon first.
-  Covered by `scratchpad/navtap.js`, which taps at exact offsets **from inside the page** —
-  Playwright's own click latency is tens of ms and overshot the 180ms window entirely, so an
-  earlier version of the probe passed with the fix disabled, which is worse than no probe.
+- **A TAP BELONGS TO THE ELEMENT THAT WAS UNDER THE FINGER WHEN IT WENT DOWN.** Scrolling up
+  on Home or Beam flies the bottom nav back from the "+" ball at the right edge by animating
+  its `left` over `--t-slow`, and the five buttons ride along, tappable the whole way. A
+  browser resolves a click at the moment the finger **lifts** — by which time the icon that
+  was under it has slid on — so the tap opened whatever had taken its place. `_navDown`
+  records the icon on `pointerdown` (a live hit-test: the event's own target) and a
+  document-level capture-phase `click` listener (`_navMorphClick`) swallows the stray click
+  and re-fires it there. **The test is whether the bar was moving at TOUCH-DOWN, not whether
+  it still is** — a flight is ~360ms and a finger rests on the glass for a beat, so the bar
+  routinely LANDS in between; a version that asked only about the release moment left a press
+  120ms in opening the neighbouring world. A slide clears `_navDown` (the drag path owns it),
+  and so does a resize.
+  **This REPLACES a design that resolved the tap against the bar's RESTING layout**, on the
+  theory that a finger anticipates where the icons will land. It does not — a person cannot
+  aim at a position that does not exist yet. Measured on a 390px phone, 80ms into the flight
+  a tap on the icon you could SEE at Home's position opened **Engine**, a tap on Beam opened
+  Engine, and a tap on Engine opened Home while the highlight pill glided to **Notifications**
+  — the owner's *"it takes me to different pages and the grey bubble goes to a different
+  icon"*. That design also cached a snapshot of the resting geometry (`_navCaptureRest`),
+  which a rotation could leave holding the other orientation's coordinates; **nothing is
+  cached now** — `_navRestBand()` computes the resting band from `--nav-inset` and the live
+  box, because the bar only ever moves horizontally — so that whole class of bug is gone.
+  Covered by `scratchpad/navtap.js`, which hit-tests the point it is about to press **in the
+  same frame it presses it**, and asserts the app opened that icon — an invariant that holds
+  wherever the bar happens to be. Everything is dispatched **from inside the page**:
+  Playwright's own input latency is tens of ms, and an out-of-page version measured taps at
+  coordinates the bar had already left (it reported an icon "at x=475" on a 390px phone).
+  Self-tested: disabling the correction fails 7 of its 49 checks.
+- **A rotation can strand a press.** It re-lays-out the bar under the finger and the
+  `pointerup` may never arrive, which would leave `_navDragging` true — so `syncNavPill`
+  stops correcting the highlight and it sits on the wrong icon — and a stale `press.target`
+  able to navigate somewhere the finger never went. A `resize` listener inside
+  `bindNavBubble` lets go of the gesture and re-syncs the pill **twice** (a rAF and again at
+  280ms), because a real device's viewport keeps settling after the event fires.
 - **A JS-sized element whose ONLY styling lives inside a media query becomes a black
   block in normal flow everywhere else.** `#tbTabTouch` (the transparent strip laid over
   the tab row so a phone tap reaches the menu behind the covering feed) had its whole

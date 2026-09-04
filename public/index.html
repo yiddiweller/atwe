@@ -21845,7 +21845,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1808'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1809'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -65007,9 +65007,6 @@ const NAV_MORPH = true;
 function _setNavBall(on) {
   if (!NAV_MORPH) return;
   on = !!on;
-  // The bar's five buttons TRAVEL while it morphs, and they stay tappable the whole
-  // way, so remember where they rest before the collapse starts (see _navMorphClick).
-  if (on && !document.body.classList.contains('nav-ball')) _navCaptureRest();
   // Scroll down (on home/Beam) does two things together: the bottom nav morphs
   // into the "+" ball, and the top row (≡ / label / +) collapses so only the
   // tabs row stays stuck at the top. Scroll up reverses both.
@@ -65017,66 +65014,70 @@ function _setNavBall(on) {
   document.body.classList.toggle('tb-collapsed', on);
   if (typeof _syncNavBlack === 'function') _syncNavBlack();  // pill moved → realign the black strip
 }
-/* ── Taps land where you AIMED, even mid-morph ─────────────────────────────────────
-   Scrolling up flies the bar back from the "+" ball at the right edge by animating
-   its `left` over --t-slow. The five buttons ride along and are tappable the entire
-   flight — the rule that makes them inert is scoped to .nav-ball, so it lifts the
-   instant the class comes off while the geometry is still wrong. Measured on a 390px
-   phone: 79ms into the expansion a tap on Account opened ENGINE, at 109ms a tap on
-   Engine opened HOME, and most taps in the first ~180ms hit nothing at all — exactly
-   the "it jumps to the wrong page / I have to tap twice" report.
-   So while the bar is in flight we resolve the tap against its RESTING layout instead
-   of its live geometry. Keyed off live geometry rather than a flag or a timer, so it
-   can never get stuck holding taps hostage: the moment the bar is back where it
-   belongs this is a no-op and the buttons' own handlers run normally. */
-let _navRest = null;
-function _navCaptureRest() {
-  const nav = document.getElementById('bottomNav'); if (!nav) return;
-  if (document.body.classList.contains('nav-ball')) return;      // already collapsed
+/* ── A TAP OPENS THE ICON YOU TOUCHED, EVEN WHILE THE BAR IS MOVING ────────────────
+   Scrolling up flies the bar back from the "+" ball at the right edge by animating its
+   `left` over --t-slow, and the five buttons ride along, tappable the whole way. A
+   browser resolves a click at the moment the finger LIFTS, by which time the icon that
+   was under it has slid on — so the tap opened whatever had taken its place.
+
+   THE TAP BELONGS TO THE ICON THAT WAS UNDER THE FINGER WHEN IT WENT DOWN. That is what
+   the person saw and aimed at, and it is the only reading that is true whatever the bar
+   is doing. `_navDown` records it on pointerdown (live hit-test — the event's own target)
+   and this router re-fires the click there.
+
+   The version this replaces resolved the tap against the bar's RESTING layout instead,
+   on the theory that a finger anticipates where the icons are going to land. It does not:
+   measured on a 390px phone, 80ms into the flight a tap on Home opened ENGINE, a tap on
+   Beam opened ENGINE, and a tap on Engine opened Home while the highlight pill glided to
+   NOTIFICATIONS — the owner's "it takes me to different pages and the grey bubble goes to
+   a different icon". It also carried a cached snapshot of the resting geometry, which a
+   rotation could leave holding the other orientation's coordinates; nothing is cached now,
+   so that whole class of bug is gone with it. */
+let _navDown = null;              // {tab, at} — the icon under the finger on touch-down
+/* Where the bar rests, computed rather than remembered: at rest it spans --nav-inset to
+   width - --nav-inset, and it only ever moves HORIZONTALLY, so its live top/bottom are
+   already the resting ones. A snapshot would go stale on rotation; this cannot. */
+function _navRestBand() {
+  const nav = document.getElementById('bottomNav'); if (!nav) return null;
   const r = nav.getBoundingClientRect();
-  if (r.width < 120) return;                                     // desktop sidebar / hidden
-  const tabs = [].slice.call(nav.querySelectorAll('.bn-tab'));
-  if (tabs.length < 2) return;
-  _navRest = { left: r.left, right: r.right, top: r.top, bottom: r.bottom,
-    tabs: tabs.map(function (el) { const q = el.getBoundingClientRect(); return { el: el, l: q.left, r: q.right }; }) };
+  if (!r.height || r.width < 40) return null;                    // desktop sidebar / hidden
+  const inset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nav-inset')) || 23;
+  return { left: inset, right: (window.innerWidth || 0) - inset, top: r.top, bottom: r.bottom, live: r };
+}
+function _navInFlight() {
+  const band = _navRestBand(); if (!band) return false;
+  return Math.abs(band.live.left - band.left) >= 2;
 }
 function _navMorphClick(e) {
-  if (!_navRest) return;
-  const nav = document.getElementById('bottomNav'); if (!nav) return;
-  const r = nav.getBoundingClientRect();
-  if (!r.width) return;                                          // not on screen at all
-  if (Math.abs(r.left - _navRest.left) < 2) return;              // at rest — nothing to correct
+  const band = _navRestBand(); if (!band) return;
+  const r = band.live;
   const x = e.clientX, y = e.clientY;
   if (!x && !y) return;                                          // our own synthetic click
   // The band the finger is aiming at is where the bar RESTS, not where it is now.
-  if (y < _navRest.top - 6 || y > _navRest.bottom + 6) return;
-  if (x < _navRest.left || x > _navRest.right) return;
-  if (document.body.classList.contains('nav-ball')) {
+  if (y < band.top - 6 || y > band.bottom + 6) return;
+  if (x < band.left || x > band.right) return;
+  const moving = Math.abs(r.left - band.left) >= 2;
+  if (moving && document.body.classList.contains('nav-ball')) {
     // Collapsing. If the ball really is under the finger, let it have the tap.
     if (x >= r.left && x <= r.right) return;
     // Otherwise this is space the bar has already vacated — swallow it so it cannot
     // fall through and open whatever post happens to be underneath.
     e.stopPropagation(); e.preventDefault(); return;
   }
+  /* Hand the tap to the icon the finger came DOWN on. The test is whether the bar was
+     moving at TOUCH-DOWN, not whether it still is: a flight lasts ~360ms and a finger
+     rests on the glass for a beat, so the bar routinely LANDS in between — measured, a
+     press 120ms in lifted after it had settled, and a check that asked only about the
+     release moment left that tap opening the neighbouring world. */
+  const fresh = _navDown && (performance.now() - _navDown.at) < 1200 ? _navDown : null;
+  if (!fresh || !fresh.tab.isConnected) return;
+  if (!fresh.moving && !moving) return;                          // an ordinary tap on a still bar
+  const landed = e.target && e.target.closest ? e.target.closest('.bn-tab') : null;
+  if (landed === fresh.tab) return;                              // it already went to the right one
   e.stopPropagation(); e.preventDefault();
-  const hit = _navAimBtn(x);
-  if (hit) hit.click();
-}
-/* Which button did the finger AIM at? Returns null unless the bar is mid-flight, so
-   every caller keeps its normal behaviour at rest. Used by the click router above and
-   by the press pickup below — without the latter the highlight pill still glides to
-   whichever icon happened to be under the finger, and you see it sitting on the wrong
-   world for a moment before the corrected tap moves it. */
-function _navAimBtn(x) {
-  if (!_navRest || document.body.classList.contains('nav-ball')) return null;
-  const nav = document.getElementById('bottomNav'); if (!nav) return null;
-  const r = nav.getBoundingClientRect();
-  if (!r.width || Math.abs(r.left - _navRest.left) < 2) return null;   // at rest
-  const hit = _navRest.tabs.filter(function (q) { return x >= q.l && x <= q.r; })[0];
-  return hit ? hit.el : null;
+  fresh.tab.click();
 }
 document.addEventListener('click', _navMorphClick, true);
-window.addEventListener('resize', function () { try { _navCaptureRest(); } catch (_) {} }, { passive: true });
 /* Leave the Atwe AI page. It is an inside page with no icon in the bar, so this is
    the only way out — go back to the world it was opened from, or Home when it was
    restored as the last tab on boot and there is no "from". */
@@ -65705,9 +65706,11 @@ function bindNavBubble() {
   };
 
   nav.addEventListener('pointerdown', (e) => {
-    // While the bar is flying back from the "+" ball its icons are not where they look,
-    // so honour what the finger aimed at rather than what it physically landed on.
-    const btn = _navAimBtn(e.clientX) || e.target.closest('.bn-tab'); if (!btn) return;
+    /* The icon under the finger RIGHT NOW — which is what the person is looking at, even
+       while the bar is flying back. Recorded module-wide too, so the click router can hand
+       the tap to this same icon however far the bar has travelled by the time it lifts. */
+    const btn = e.target.closest('.bn-tab'); if (!btn) return;
+    _navDown = { tab: btn, at: performance.now(), moving: _navInFlight() };
     press = { id: e.pointerId, x0: e.clientX, y0: e.clientY, dragging: false, pickedUp: true, tab: btn, target: btn };
     pop(btn); barPop(); clearHold();
     // PICK UP IMMEDIATELY: the second you touch an icon, the pill glides straight to it
@@ -65732,6 +65735,7 @@ function bindNavBubble() {
       // tap or a vertical jitter stays a tap.
       if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) {
         press.dragging = true; _navDragging = true;
+        _navDown = null;                     // a slide is not a tap — the drag path owns it
         clearHold(); nav.classList.remove('bn-hold', 'bn-barpop'); nav.classList.add('bn-dragging');
         try { nav.setPointerCapture(e.pointerId); } catch (err) {}
       } else return;
@@ -65739,9 +65743,10 @@ function bindNavBubble() {
     dragMoveTo(e.clientX);
   }, { passive: true });
   nav.addEventListener('pointerup', () => endPress(true), { passive: true });
-  nav.addEventListener('pointercancel', () => endPress(false), { passive: true });
+  nav.addEventListener('pointercancel', () => { _navDown = null; endPress(false); }, { passive: true });
   nav.addEventListener('pointerleave', () => {
     if (!press || press.dragging) return;  // active drags use pointer capture
+    _navDown = null;                       // left the bar without releasing — not a tap on it
     // Finger left the bar without sliding or releasing on a tab: cancel the pickup and
     // snap the pill back to the current active tab (no navigation).
     barRelease();
@@ -65759,6 +65764,23 @@ function bindNavBubble() {
     if (e.animationName === 'bnPop' && e.target.classList) e.target.classList.remove('bn-pop');
     else if (e.animationName === 'bnBarPop' && e.target === nav) nav.classList.remove('bn-barpop');
   });
+  /* TURNING THE PHONE MID-PRESS MUST NOT STRAND THE GESTURE. A rotation re-lays-out the
+     bar underneath the finger and the pointerup can then never arrive — which would leave
+     _navDragging true (so syncNavPill stops correcting the pill, and it sits on the wrong
+     icon) and a stale press.target able to navigate somewhere the finger never went. Let
+     go of the gesture, and put the pill back where it belongs — twice, because a real
+     device's viewport keeps settling for a beat after the resize event fires, and a single
+     rAF can land while the layout is still moving. */
+  window.addEventListener('resize', () => {
+    if (press || _navDragging) {
+      press = null; _navDragging = false; clearHold();
+      nav.classList.remove('bn-dragging', 'bn-hold', 'bn-barpop');
+      const el = ind(); if (el) el.style.transition = '';
+    }
+    _navDown = null;
+    requestAnimationFrame(syncNavPill);
+    setTimeout(syncNavPill, 280);
+  }, { passive: true });
 }
 // Make non-native clickable menu rows keyboard-operable (focusable + Enter/Space).
 function a11yInit() {
