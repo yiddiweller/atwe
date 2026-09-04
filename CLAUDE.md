@@ -6316,6 +6316,35 @@ number below is a direct pixel measurement at a known scale, not an estimate:
 - The corner follows from the disc: **24 = 16 + 8**, and their own two-line corner measures
   25.3, so the arithmetic and the screenshot agree to a pixel.
 
+### What you are about to send is a thumbnail, not the message
+
+One attached photo used to fill the composer at up to **180px tall**, inside a grey card,
+with the ✕ hanging OUTSIDE its top-left corner and a small eye+"1" chip underneath. It is
+now the size ChatGPT and Claude use: a row of **56px square tiles** sitting straight on the
+bar, scrolling sideways when there are several, each with the ✕ tucked inside its own
+top-right corner. Three photos are no taller than one.
+
+**The corner is derived, not picked.** A tile sits **9** from the bar's outer edge (its
+wrapper's 3px margin + the bar's 5px padding + its 1px border), so a corner concentric with
+the bar's own is `--bar-r − 9` = **15**. `--att-tile` and `--att-r` are declared on
+`.msg-incards`, so changing the bar's radius moves the tiles with it.
+
+**`.multi` has to be named explicitly.** `.ac-postimgs.multi .ac-postimg-wrap` sizes tiles to
+96 for the POST composer and carries the same weight as a plain descendant selector — so
+without naming it, two photos in a chat still came out 96 wide, and the later rule simply won.
+
+**A file is a row of TEXT, so its ✕ goes at the END of the row.** In a corner it lands on the
+filename — which is exactly what the first attempt did. The card reserves 34px for it.
+
+**THE EYE WAS THE VIEW-ONCE TOGGLE**, i.e. a real feature (a photo the other person can open
+exactly once) whose only entry point was that chip. It was **moved, not deleted**: a *View
+once* tile in the attach menu next to Secret (shown only when `acViewOnceEligible()`, and in
+the menu's "More" half like Secret, so check its inline `display`, never the computed one),
+and while it is armed the composer says so on a slim `.ac-secret-bar` line rather than
+badging the picture. `acRemoveChatImg`/`acClearAttach` disarm it, or the notice would sit
+there describing nothing. `scratchpad/attach.js` holds that route open — without it,
+"remove the icon" would quietly have removed the feature.
+
 **Ninth pass (1800) — the CORNER was the thing that looked wrong all along.** The owner:
 *"the two sides stay fully rounded, just in a bigger bar, and after a second the edges turn
 round and the sides get straight"* — i.e. the bar seemed to take a moment to work out what

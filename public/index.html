@@ -6042,10 +6042,46 @@ body.light .ac-item-unread.muted{background:var(--t3);}
 .msg-incards > .ac-reply-ctx,.msg-incards > .ac-secret-bar{overflow:hidden;}
 .msg-incards > .ac-reply-ctx{padding:9px 11px;}
 .msg-incards > .ac-secret-bar{padding:9px 11px;border-top:none;}
-.msg-incards > .msg-imgprev{padding:10px;background:var(--s2);}
-.msg-incards .msg-imgx{top:-4px;left:-4px;}
-/* A pending photo is a preview, not the message — keep it from eating the screen. */
-.msg-incards .ac-postimgs:not(.multi) .ac-postimg-wrap img{max-height:180px;}
+/* ── WHAT YOU ARE ABOUT TO SEND IS A THUMBNAIL, NOT THE MESSAGE (owner) ───────────
+   One photo used to fill the composer at up to 180px tall, inside a grey card, with the ✕
+   hanging OUTSIDE its top-left corner. It is now the size ChatGPT and Claude use: a row of
+   small square tiles sitting straight on the bar, scrolling sideways if there are several,
+   each with the ✕ tucked inside its own top-right corner.
+   --att-tile IS THE ONE SIZE, and the radius is derived rather than picked: a tile sits 9
+   from the bar's outer edge (its wrapper's 3px margin + the bar's 5px padding + its 1px
+   border), so a corner concentric with the bar's own is --bar-r minus that 9. Change the
+   bar's radius and these follow. */
+.msg-incards{--att-tile:56px;--att-r:calc(var(--bar-r) - 9px);}
+.msg-incards > .msg-imgprev{padding:0;background:none;}
+/* A row, never a wrap — several photos read as a strip you can push sideways, which is
+   what both reference apps do; wrapping would grow the composer a row at a time. */
+.msg-incards .ac-postimgs{display:flex;flex-wrap:nowrap;gap:8px;margin:0;
+  overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+.msg-incards .ac-postimgs::-webkit-scrollbar{display:none;}
+/* `.multi` must be named explicitly: `.ac-postimgs.multi .ac-postimg-wrap` sizes tiles to
+   96 for the POST composer and carries the same weight as a plain descendant selector, so
+   without it the later rule simply won and two photos came out 96 wide in here. */
+.msg-incards .ac-postimgs .ac-postimg-wrap,
+.msg-incards .ac-postimgs.multi .ac-postimg-wrap,
+.msg-incards .msg-imgprev-wrap.ac-att-image,
+.msg-incards .msg-imgprev-wrap.ac-att-video{width:var(--att-tile);height:var(--att-tile);
+  flex:0 0 auto;border-radius:var(--att-r);overflow:hidden;position:relative;}
+.msg-incards .ac-postimgs .ac-postimg-wrap img,
+.msg-incards .ac-att-image > img,
+.msg-incards .ac-att-video > video{width:100%;height:100%;max-height:none;max-width:none;
+  object-fit:cover;border-radius:var(--att-r);display:block;}
+/* The file / voice card keeps its own shape — it is a row of TEXT, not a picture — but it
+   shares the tile's corner so the two never disagree, and its ✕ sits at the END of the row
+   rather than in a corner: a card only ~54 tall has no corner to tuck a button into without
+   landing on the filename, which is exactly what it did. The card reserves room for it. */
+.msg-incards .ac-att-card{border-radius:var(--att-r);padding-right:34px;}
+.msg-incards .ac-att-file .msg-imgx,
+.msg-incards .ac-att-audio .msg-imgx{top:50%;transform:translateY(-50%);right:8px;}
+/* INSIDE the corner, top-right. It used to hang outside the top-LEFT, which is what put a
+   white blob over the message above it. Smaller, and dark enough to read on any photo. */
+.msg-incards .msg-imgx{top:4px;left:auto;right:4px;width:19px;height:19px;
+  background:rgba(0,0,0,.55);border:none;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
+.msg-incards .msg-imgx svg{width:9px;height:9px;stroke-width:2.8;}
 /* Light theme, phone: solid too. Declared HERE, above the desktop block, because both
    this and the desktop override are (0,2,1) — with no specificity to separate them the
    later rule simply wins, and it used to sit ~15 lines further down. */
@@ -7204,9 +7240,6 @@ body.reduce-motion .ac-react-bar,body.reduce-motion .ac-rb-btn{animation:none;}
 .ac-pinned-label svg{width:14px;height:14px;stroke:currentColor;stroke-width:2;fill:none;}
 .ac-pinned-wrap .ac-post{border-bottom:none;}
 /* View-once media */
-.ac-vo-chip{display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 11px;border-radius:var(--r-pill);background:var(--s2);border:none;color:var(--t2);font-size:12.5px;font-weight:700;cursor:pointer;}
-.ac-vo-chip.on{background:var(--accent-dim);border-color:var(--accent);color:var(--t1);}
-.ac-vo-chip svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
 .msg-viewonce{display:flex;align-items:center;gap:8px;padding:11px 13px;border-radius:13px;background:rgba(255,255,255,.10);color:inherit;border:none;font:inherit;font-size:14px;cursor:pointer;width:100%;text-align:start;}
 .msg-viewonce.done{opacity:.7;cursor:default;font-style:italic;}
 .msg-viewonce svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.8;fill:none;flex:0 0 auto;}
@@ -21107,6 +21140,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
           <button class="aatile aa-rest" onclick="acScheduleMsgOpen()"><span class="aat-ic ic-sched"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></span><span class="aat-l">Schedule</span></button>
           <button class="aatile aa-rest" onclick="acStickerOpen()"><span class="aat-ic ic-sticker"><svg viewBox="0 0 24 24"><path d="M15.5 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9l5-5V5a2 2 0 0 0-2-2z"/><path d="M15 21v-4a2 2 0 0 1 2-2h4"/><circle cx="9" cy="10" r="1"/><circle cx="14" cy="10" r="1"/><path d="M9 14s1 1.5 3 1.5S15 14 15 14"/></svg></span><span class="aat-l">Sticker / GIF</span></button>
           <button class="aatile aa-rest" id="acAtileSecret" onclick="acToggleSecret()"><span class="aat-ic ic-secret"><svg viewBox="0 0 24 24"><path d="M12 2c1 4 4 5 4 9a4 4 0 0 1-8 0c0-1.5 .7-2.5 .7-2.5S9 11 10 11s1-3 2-9z"/></svg></span><span class="aat-l">Secret</span></button>
+          <button class="aatile aa-rest" id="acAtileViewOnce" onclick="acToggleViewOnce()" style="display:none;"><span class="aat-ic ic-vonce"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.4"/><path d="M12 5C5 5 2 12 2 12s3 7 10 7 10-7 10-7-3-7-10-7z"/></svg></span><span class="aat-l">View once</span></button>
           <button class="aatile aa-rest" onclick="acQuickReplyOpen()"><span class="aat-ic ic-qr"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7a8.5 8.5 0 0 1-.9-3.8A8.38 8.38 0 0 1 12.5 3a8.38 8.38 0 0 1 8.5 8.5z"/><path d="m8.5 11 2.2 2.2L15 9"/></svg></span><span class="aat-l">Quick reply</span></button>
           <button class="aatile aa-rest" id="acAtileQButtons" onclick="acQuickButtonsOpen()" style="display:none;"><span class="aat-ic ic-qr"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="10" rx="2.5"/><line x1="7" y1="18" x2="17" y2="18"/><line x1="9" y1="21" x2="15" y2="21"/></svg></span><span class="aat-l">Quick buttons</span></button>
           <button class="aatile aa-rest" onclick="acAiReplyOpen()"><span class="aat-ic ic-aireply"><img src="/logo-mark.png" alt="" style="width:22px;height:22px;border-radius:6px;"/></span><span class="aat-l">Write with AI</span></button>
@@ -21137,6 +21171,11 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
               <span class="asb-ic"><svg viewBox="0 0 24 24"><path d="M12 2c1 4 4 5 4 9a4 4 0 0 1-8 0c0-1.5 .7-2.5 .7-2.5S9 11 10 11s1-3 2-9z"/></svg></span>
               <span class="asb-txt">Secret message — vanishes ~10s after it’s seen.</span>
               <button class="arc-x" onclick="acToggleSecret()" aria-label="Turn off secret mode"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>
+            <div class="ac-secret-bar hidden" id="acViewOnceBar">
+              <span class="asb-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.4"/><path d="M12 5C5 5 2 12 2 12s3 7 10 7 10-7 10-7-3-7-10-7z"/></svg></span>
+              <span class="asb-txt">View once — they can open this one time.</span>
+              <button class="arc-x" onclick="acToggleViewOnce()" aria-label="Turn off view once"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
           </div>
           <button class="msg-attach" id="acAttachBtn" onclick="acToggleAttachMenu(event)" aria-label="Add attachment">
@@ -21655,7 +21694,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1800'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1801'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -61710,6 +61749,10 @@ function acToggleAttachMenu(e) {
   // so it can't lie ("your next message vanishes" never applies to a group send).
   const sec = document.getElementById('acAtileSecret');
   if (sec) sec.style.display = (AC.mode === 'group') ? 'none' : '';
+  /* View once only means something with a photo, video or voice note already attached in a
+     1:1 — the same rule the chip on the thumbnail used before it moved in here. */
+  const vo = document.getElementById('acAtileViewOnce');
+  if (vo) vo.style.display = acViewOnceEligible() ? '' : 'none';
   // Quick buttons: a business-account DM tool (WhatsApp Business interactive messages).
   const qb = document.getElementById('acAtileQButtons');
   if (qb) qb.style.display = (AC.mode !== 'group' && typeof acIsBiz === 'function' && acIsBiz(S.user)) ? '' : 'none';
@@ -62639,9 +62682,17 @@ function acSetAttach(att) {
   acRenderAttPrev();
   acToggleSendMic();
 }
-function acRemoveChatImg(i) { if (AC.imgs) { AC.imgs.splice(i, 1); acRenderAttPrev(); acToggleSendMic(); } }
+function acRemoveChatImg(i) {
+  if (!AC.imgs) return;
+  AC.imgs.splice(i, 1);
+  /* View once only ever applied to a SINGLE photo, so dropping to none — or back up to
+     several — has to disarm it, or the notice would sit there describing nothing. */
+  if (!acViewOnceEligible()) { AC._viewOnce = false; acRenderSecretBar(); }
+  acRenderAttPrev(); acToggleSendMic();
+}
 function acClearAttach() {
   AC.att = null; AC.imgs = []; AC._viewOnce = false;
+  acRenderSecretBar();
   const p = document.getElementById('acAttPrev');
   if (p) { p.classList.remove('show'); p.innerHTML = ''; }
 }
@@ -62651,12 +62702,20 @@ function acViewOnceEligible() {
   if (AC.imgs && AC.imgs.length === 1) return true;
   return !!(AC.att && (AC.att.kind === 'image' || AC.att.kind === 'video' || AC.att.kind === 'audio'));
 }
-function acToggleViewOnce() { AC._viewOnce = !AC._viewOnce; acRenderAttPrev(); }
-function acViewOnceChip() {
-  if (!acViewOnceEligible()) return '';
-  return `<button class="ac-vo-chip ${AC._viewOnce ? 'on' : ''}" onclick="acToggleViewOnce()" aria-label="View once" title="View once">
-    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.4"/><path d="M12 5C5 5 2 12 2 12s3 7 10 7 10-7 10-7-3-7-10-7z"/></svg><span>1</span></button>`;
+/* VIEW ONCE MOVED OFF THE THUMBNAIL AND INTO THE ATTACH MENU (owner: "remove this small
+   eye icon on the picture, I'm not sure what it is"). It is a real feature — a photo the
+   other person can open exactly once — so it is not deleted, just moved to where its
+   neighbour Secret already lives, and while it is armed the composer says so on a slim
+   line rather than a badge on the picture. */
+function acToggleViewOnce() {
+  AC._viewOnce = !AC._viewOnce;
+  if (AC._viewOnce) AC._secret = false;          // the two are mutually exclusive
+  acCloseAttachMenu();
+  acRenderSecretBar();
+  acRenderAttPrev();
+  if (AC._viewOnce) showNotif('View once is on. They can open this one time.');
 }
+
 /* ── Secret (self-destruct) messages ── */
 function acSecretLeft(exp) { const s = Math.max(0, Math.ceil((new Date(exp).getTime() - Date.now()) / 1000)); return s + 's'; }
 // One global 1s tick: removes expired secret messages from the open DM thread and
@@ -62682,8 +62741,10 @@ function acToggleSecret() {
   if (AC._secret) showNotif('Secret mode on. Your next message vanishes after it’s seen.');
 }
 function acRenderSecretBar() {
-  const bar = document.getElementById('acSecretBar'); if (!bar) return;
-  bar.classList.toggle('hidden', !AC._secret);
+  const bar = document.getElementById('acSecretBar');
+  if (bar) bar.classList.toggle('hidden', !AC._secret);
+  const vo = document.getElementById('acViewOnceBar');
+  if (vo) vo.classList.toggle('hidden', !AC._viewOnce);
 }
 function acClearImage() { acClearAttach(); } // legacy callers (acOpenChat/acOpenGroup)
 function acRenderAttPrev() {
@@ -62691,7 +62752,7 @@ function acRenderAttPrev() {
   const x = (fn) => `<button class="msg-imgx" onclick="${fn}" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
   if (AC.imgs && AC.imgs.length) {
     wrap.innerHTML = `<div class="ac-postimgs ${AC.imgs.length > 1 ? 'multi' : ''}">` +
-      AC.imgs.map((d, i) => `<div class="ac-postimg-wrap"><img src="${d}" alt=""/>${x('acRemoveChatImg(' + i + ')')}</div>`).join('') + `</div>` + acViewOnceChip();
+      AC.imgs.map((d, i) => `<div class="ac-postimg-wrap"><img src="${d}" alt=""/>${x('acRemoveChatImg(' + i + ')')}</div>`).join('') + `</div>`;
     wrap.classList.add('show');
     return;
   }
@@ -62702,7 +62763,7 @@ function acRenderAttPrev() {
   else if (a.kind === 'video') inner = `<video src="${a.data}" muted playsinline></video>`;
   else if (a.kind === 'audio') inner = `<div class="ac-att-card"><span class="ac-att-ic mic"><svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/></svg></span><span class="ac-att-meta"><b>Voice note</b><i>Ready to send</i></span></div>`;
   else inner = `<div class="ac-att-card"><span class="ac-att-ic"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span><span class="ac-att-meta"><b>${escHtml(a.name || 'File')}</b><i>File</i></span></div>`;
-  wrap.innerHTML = `<div class="msg-imgprev-wrap ac-att-${a.kind}">${inner}${x('acClearAttach()')}</div>` + acViewOnceChip();
+  wrap.innerHTML = `<div class="msg-imgprev-wrap ac-att-${a.kind}">${inner}${x('acClearAttach()')}</div>`;
   wrap.classList.add('show');
 }
 function acToggleSendMic() {
