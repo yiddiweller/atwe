@@ -91,7 +91,12 @@ const DELAYS = [30, 60, 90, 120, 150, 190, 260];
       if (got.want === null) {
         /* The bar had not reached this point yet — the finger is over space it has
            vacated, and the one thing that must NOT happen is a post opening underneath. */
-        ok(got.opened !== 'none', 'over vacated space at ' + NICE[id] + '’s spot: the tap is swallowed, nothing new opens', got.opened);
+        /* The bar has not reached this point yet. The one thing that must NOT happen is the
+           tap falling through to the feed — a photo opening in the full-screen viewer, say,
+           which then sits over the bar and eats everything after it. */
+        ok(got.opened !== 'none' && !got.overlay,
+          'over vacated space at ' + NICE[id] + '’s spot: the tap is swallowed, nothing opens underneath',
+          JSON.stringify(got));
       } else {
         ok(got.opened === got.want,
           'the icon under the finger was ' + (NICE['bnav-' + got.want] || got.want) + ' — and that is what opened',
@@ -107,6 +112,23 @@ const DELAYS = [30, 60, 90, 120, 150, 190, 260];
      remembered across a rotation any more, and this proves it end to end — including the
      case that used to be impossible to get right, where the bar COLLAPSES in one
      orientation and comes back in the other. */
+  /* Before a tap can be judged, the bar has to BE somewhere. Rotating re-flows the feed
+     and can clamp the scroll, which fires a scroll event and collapses the bar to the "+"
+     ball — and a tap into the space it has vacated is deliberately swallowed, so the probe
+     would read "nothing opened" and blame the app. Settle it first. */
+  const settleBar = async () => {
+    await p.evaluate(() => { document.scrollingElement.scrollTop = 0; window.dispatchEvent(new Event('scroll')); });
+    for (let i = 0; i < 40; i++) {
+      const done = await p.evaluate(() => {
+        const n = document.getElementById('bottomNav'); const r = n.getBoundingClientRect();
+        const inset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nav-inset')) || 23;
+        return !document.body.classList.contains('nav-ball') && Math.abs(r.left - inset) < 2;
+      });
+      if (done) return true;
+      await p.waitForTimeout(80);
+    }
+    return false;
+  };
   const tapLive = async (id) => p.evaluate(async (id) => {
     const t = document.getElementById(id), q = t.getBoundingClientRect();
     const x = Math.round(q.left + q.width / 2), y = Math.round(q.top + q.height / 2);
@@ -124,7 +146,11 @@ const DELAYS = [30, 60, 90, 120, 150, 190, 260];
     if (on && ind) { const a = on.getBoundingClientRect(), i = ind.getBoundingClientRect();
       pillOn = Math.abs((i.left + i.width / 2) - (a.left + a.width / 2)) < 4; }
     return { opened: document.body.classList.contains('notif-tab') ? 'notifs'
-      : (on ? on.id.replace('bnav-', '') : 'none'), pillOn };
+      : (on ? on.id.replace('bnav-', '') : 'none'), pillOn,
+      /* what the finger was actually on, so a failure says WHY rather than just "wrong" */
+      hit: el ? ((el.id || String(el.className).split(' ')[0]) + (el.closest && el.closest('.bn-tab') ? '/' + el.closest('.bn-tab').id : '/not-in-a-tab')) : 'nothing',
+      at: Math.round(x) + ',' + Math.round(y), ball: document.body.classList.contains('nav-ball'),
+      overlay: (document.querySelector('.overlay:not(.hidden)') || {}).id || '' };
   }, id);
 
   console.log('\n── straight after turning the phone back ──');
@@ -132,8 +158,9 @@ const DELAYS = [30, 60, 90, 120, 150, 190, 260];
     await goHome();
     await p.setViewportSize({ width: 844, height: 390 }); await p.waitForTimeout(900);
     await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(900);
+    ok(await settleBar(), 'after a rotation the bar comes back to rest');
     const got = await tapLive(id);
-    ok(got.opened === id.replace('bnav-', ''), 'after a rotation, ' + NICE[id] + ' opens ' + NICE[id], 'opened "' + got.opened + '"');
+    ok(got.opened === id.replace('bnav-', ''), 'after a rotation, ' + NICE[id] + ' opens ' + NICE[id], JSON.stringify(got));
     ok(got.pillOn !== false, 'and the highlight sits on it, not on a neighbour');
   }
 
@@ -145,11 +172,51 @@ const DELAYS = [30, 60, 90, 120, 150, 190, 260];
     for (let i = 0; i < 8; i++) { await p.mouse.wheel(0, 90); await p.waitForTimeout(55); }
     await p.waitForTimeout(600);                                   // collapsed, in landscape
     await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(700);
-    await p.evaluate(() => { const se = document.scrollingElement;
-      se.scrollTop = Math.max(0, se.scrollTop - 400); window.dispatchEvent(new Event('scroll')); });
+    /* Rotating can clamp the scroll to 0, and then a "scroll up" is a no-op and the bar
+       never leaves the ball — the tap would be swallowed and the probe would blame the app
+       for doing exactly the right thing. Put it back down first, then bring it up. */
+    await p.evaluate(() => { const se = document.scrollingElement; se.scrollTop = 900; window.dispatchEvent(new Event('scroll')); });
+    await p.waitForTimeout(700);
+    ok(await p.evaluate(() => document.body.classList.contains('nav-ball')), 'upright again, the bar still collapses on scroll');
+    await p.evaluate(() => { const se = document.scrollingElement; se.scrollTop = 0; window.dispatchEvent(new Event('scroll')); });
     await p.waitForTimeout(120);                                   // mid-flight, upright
     const got = await tapLive(id);
-    ok(got.opened === id.replace('bnav-', ''), 'collapsed sideways then upright: ' + NICE[id] + ' opens ' + NICE[id], 'opened "' + got.opened + '"');
+    ok(got.opened === id.replace('bnav-', ''), 'collapsed sideways then upright: ' + NICE[id] + ' opens ' + NICE[id], JSON.stringify(got));
+  }
+
+  /* ── AND THE GREY BUBBLE IS THE SIZE OF THE ICON IT IS ON ──────────────────────────
+     Turning the phone does not move the pill to a different TAB — only its width changes —
+     so every sync after a rotation took syncNavPill's "already on this tab" shortcut and
+     never revisited the size. If one sync had landed while the layout was still sideways,
+     the pill kept the SIDEWAYS width for good: the owner saw the grey bubble "extending to
+     the next icon". Checked two ways: after a real rotation, and by handing the pill a
+     sideways width outright — the second is the one that fails if the shortcut ever stops
+     asking about size again. */
+  console.log('\n── the highlight after turning the phone ──');
+  for (const world of ['home', 'search', 'profile']) {
+    await p.evaluate((w) => appTab(w), world);
+    await p.waitForTimeout(700);
+    await p.setViewportSize({ width: 844, height: 390 }); await p.waitForTimeout(1000);
+    await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(1200);
+    const r = await p.evaluate(() => { const i = document.getElementById('bnIndicator'),
+      a = document.querySelector('#bottomNav .bn-tab.active');
+      const q = i.getBoundingClientRect(), t = a.getBoundingClientRect();
+      return { dw: Math.round(q.width - t.width), dx: Math.round((q.left + q.width / 2) - (t.left + t.width / 2)),
+        pill: Math.round(q.width), tab: Math.round(t.width) }; });
+    ok(Math.abs(r.dw) <= 3 && Math.abs(r.dx) <= 3,
+      'after a rotation the highlight is the size of its icon (' + r.pill + 'px on a ' + r.tab + 'px tab)',
+      JSON.stringify(r));
+  }
+  {
+    const r = await p.evaluate(async () => {
+      const i = document.getElementById('bnIndicator'), a = document.querySelector('#bottomNav .bn-tab.active');
+      i.style.width = '158px';                       // exactly what a sideways sync would write
+      syncNavPill(); await new Promise(r => setTimeout(r, 700));
+      syncNavPill(); await new Promise(r => setTimeout(r, 700));
+      return { tab: Math.round(a.getBoundingClientRect().width), pill: Math.round(i.getBoundingClientRect().width) };
+    });
+    ok(Math.abs(r.pill - r.tab) <= 3,
+      'a stale sideways width is corrected by the next sync (' + r.pill + 'px on a ' + r.tab + 'px tab)', JSON.stringify(r));
   }
 
   ok(errs.length === 0, 'no JS errors', errs[0]);

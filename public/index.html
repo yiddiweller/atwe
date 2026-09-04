@@ -21845,7 +21845,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1809'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1810'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -30558,14 +30558,23 @@ function syncNavPill() {
   // around the icon). (padX/padY grow it 1px per side; -0 = tab-sized.)
   const yNudge = 0;
   const newX = active.offsetLeft + padX, newY = active.offsetTop + padY + yNudge;
+  const newW = active.offsetWidth - padX * 2, newH = active.offsetHeight - padY * 2;
   const apply = (animate) => {
     const m = /translate\(\s*(-?[\d.]+)px/.exec(ind.style.transform || '');
     const prevX = m ? parseFloat(m[1]) : null;
     const dist = prevX == null ? 999 : Math.abs(newX - prevX);
-    // A redundant sync (dist ≈ 0 — the pill is already targeting this tab) must NOT reset
-    // the transition, or it clobbers a proportional duration mid-travel and everything
-    // falls back to the same fixed time. Just keep it visible and bail.
-    if (animate && dist < 1) { ind.style.opacity = '1'; return; }
+    /* A redundant sync (the pill is already on this tab, at this size) must NOT reset the
+       transition, or it clobbers a proportional duration mid-travel and everything falls
+       back to the same fixed time. Just keep it visible and bail.
+       THE SIZE IS PART OF "REDUNDANT", and leaving it out was a real bug: turning the phone
+       does not move the pill to a different TAB, so every sync after a rotation took this
+       shortcut and never revisited the width — and if one sync had landed while the layout
+       was still sideways, the pill kept its sideways width for good. Measured: a 65px tab
+       wearing a 158px pill, still 158px after two syncs. The owner saw it as the grey
+       bubble "extending to the next icon" after turning the phone back. */
+    const sizeOk = Math.abs((parseFloat(ind.style.width) || 0) - newW) < 1
+                && Math.abs((parseFloat(ind.style.height) || 0) - newH) < 1;
+    if (animate && dist < 1 && sizeOk) { ind.style.opacity = '1'; return; }
     if (animate) {
       // Distance-proportional duration → the pill TRAVELS at a consistent speed. A short
       // adjacent hop keeps its smooth ~350ms; a long skip (e.g. Home → Profile) takes a
@@ -30576,8 +30585,8 @@ function syncNavPill() {
     } else {
       ind.style.transition = 'none';
     }
-    ind.style.width = (active.offsetWidth - padX * 2) + 'px';
-    ind.style.height = (active.offsetHeight - padY * 2) + 'px';
+    ind.style.width = newW + 'px';
+    ind.style.height = newH + 'px';
     ind.style.transform = 'translate(' + newX + 'px,' + newY + 'px)';
     ind.style.opacity = '1';
   };
@@ -65070,12 +65079,18 @@ function _navMorphClick(e) {
      press 120ms in lifted after it had settled, and a check that asked only about the
      release moment left that tap opening the neighbouring world. */
   const fresh = _navDown && (performance.now() - _navDown.at) < 1200 ? _navDown : null;
-  if (!fresh || !fresh.tab.isConnected) return;
-  if (!fresh.moving && !moving) return;                          // an ordinary tap on a still bar
-  const landed = e.target && e.target.closest ? e.target.closest('.bn-tab') : null;
-  if (landed === fresh.tab) return;                              // it already went to the right one
-  e.stopPropagation(); e.preventDefault();
-  fresh.tab.click();
+  if (fresh && fresh.tab.isConnected && (fresh.moving || moving)) {
+    const landed = e.target && e.target.closest ? e.target.closest('.bn-tab') : null;
+    if (landed === fresh.tab) return;                            // it already went to the right one
+    e.stopPropagation(); e.preventDefault();
+    fresh.tab.click();
+    return;
+  }
+  /* No icon was under the finger when it came down — the bar had not reached that spot yet.
+     Swallow it anyway while the bar is in flight, or it falls straight through and opens
+     whatever post happens to be underneath: the probe caught a tap here opening a photo in
+     the full-screen viewer, which then sat over the bar and swallowed everything after it. */
+  if (moving) { e.stopPropagation(); e.preventDefault(); }
 }
 document.addEventListener('click', _navMorphClick, true);
 /* Leave the Atwe AI page. It is an inside page with no icon in the bar, so this is
@@ -65778,8 +65793,12 @@ function bindNavBubble() {
       const el = ind(); if (el) el.style.transition = '';
     }
     _navDown = null;
-    requestAnimationFrame(syncNavPill);
-    setTimeout(syncNavPill, 280);
+    /* Snap, don't ease: clearing _navPillInit forces syncNavPill's instant path, which
+       always rewrites the pill's SIZE — the animated one is allowed to skip a pill that is
+       already on the right tab, and after a rotation it is (only its width changed). */
+    const snap = () => { AC._navPillInit = false; syncNavPill(); };
+    requestAnimationFrame(snap);
+    setTimeout(snap, 280);
   }, { passive: true });
 }
 // Make non-native clickable menu rows keyboard-operable (focusable + Enter/Space).
