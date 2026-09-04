@@ -5122,6 +5122,44 @@ body.light #acThreadScreen::after{background:linear-gradient(to top,rgba(255,255
 .msg-slidetime .slt-solo{font-size:10px;color:var(--t3);font-weight:600;} /* time-only (<24h) — bold like the date */
 .msg-row.team{justify-content:flex-start;}
 .msg-row.me{justify-content:flex-end;}
+/* ── UNDO, BESIDE THE MESSAGE YOU JUST SENT ──────────────────────────────────────
+   It used to be a toast at the bottom of the screen saying "Message sent · Undo" —
+   which told you something you could already see, in the one place your eyes were not,
+   and covered the conversation to do it. The owner's idea, and a better one: a quiet grey
+   chip next to the bubble itself, for the ten seconds it is worth offering. Grey rather
+   than any of the app's meaningful colours, because it is a way out, not an action being
+   recommended. It sits at the message's own scale and rides down the row with it. */
+/* IT IS ANCHORED TO THE BUBBLE, NOT TO THE ROW — and that is load-bearing. As a plain
+   flex child of the row it sat beside the COLUMN, which also holds the delivery status,
+   the signature and any reactions: whenever one of those is wider or taller than the
+   bubble the chip drifted away from the message (measured 93px out, and off its centre
+   line). So the bubble is wrapped in a box that hugs it exactly and the chip is positioned
+   against that — `inset-inline-end:calc(100% + 8px)` puts it 8px clear of the bubble's own
+   edge and `top:50%` on its own centre, whatever else the column carries. The wrapper is
+   used rather than the bubble itself because a photo-with-caption bubble clips its
+   overflow (.msg-bubble.has-cap) and would swallow the chip whole. */
+.msg-undoline{position:relative;display:flex;min-width:0;}
+.msg-undo{position:absolute;top:50%;inset-inline-end:calc(100% + 8px);
+  transform:translateY(-50%);white-space:nowrap;
+  background:var(--s2);border:none;color:var(--t2);font-family:inherit;
+  font-size:12.5px;font-weight:600;line-height:1;padding:6px 12px;border-radius:var(--r-pill);
+  cursor:pointer;-webkit-tap-highlight-color:transparent;
+  animation:undoIn var(--t-base) var(--ease);}
+@keyframes undoIn{from{opacity:0;transform:translateY(-50%) translateX(6px) scale(.9);}
+  to{opacity:1;transform:translateY(-50%);}}
+.msg-undo.going{animation:undoOut var(--t-base) var(--ease) forwards;pointer-events:none;}
+@keyframes undoOut{to{opacity:0;transform:translateY(-50%) translateX(6px) scale(.9);}}
+@media(hover:hover){.msg-undo:hover{background:var(--s3);color:var(--t1);}}
+.msg-undo:active{transform:translateY(-50%) scale(.94);}
+/* …and the message itself does not blink out. It shrinks away and the gap closes behind
+   it — the height is animated from a measured value because `auto` cannot be. */
+.msg-row.retracting{overflow:hidden;pointer-events:none;
+  transition:max-height var(--t-base) var(--ease),opacity var(--t-fast) var(--ease),
+             transform var(--t-base) var(--ease),margin-top var(--t-base) var(--ease);}
+.msg-row.retracting.go{max-height:0!important;opacity:0;margin-top:0;transform:scale(.9);}
+@media (prefers-reduced-motion:reduce){
+  .msg-undo,.msg-undo.going{animation:none;}
+  .msg-row.retracting{transition:opacity var(--t-fast) linear;}}
 .msg-row.gap{margin-top:11px;}
 /* Swipe-to-reply: the bubble column slides right under the finger; a reply arrow
    grows in on the left and turns blue once you pass the trigger point. */
@@ -21759,7 +21797,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1805'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1806'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -55960,6 +55998,7 @@ async function acOpenChat(id, threadId) {
   AC.threadId = threadId || null; // which conversation (null = main)
   acThreadSearchClose(); // never carry an open in-chat search across conversations
   AC._secret = false; acRenderSecretBar && acRenderSecretBar(); // secret mode doesn't carry between chats
+  acHideSendUndo && acHideSendUndo(true);   // …nor an Undo offered on a message in another one
   AC._silentMode = false; // nor does silent send — it must never quietly swallow a message elsewhere
   AC._selBusy = false; acHideSelToolbar && acHideSelToolbar(); // drop any selection toolbar
   AC.mode = 'dm'; AC.peer = null; AC.group = null; AC.messages = []; AC._unreadDivId = null; acClearImage(); acStopMic();
@@ -60404,6 +60443,7 @@ async function acLoadLiveStrip() {
 
 async function acOpenGroup(id) {
   if (window._crashTab) _crashTab('group-thread');
+  acHideSendUndo && acHideSendUndo(true);   // an Undo never carries into another conversation
   // Optimistic: zero the group row's unread the instant it's opened (the badge
   // never outlives entering the chat); the server confirms on refresh.
   const _gRow = (AC.groupsList || []).find(g => g.id === id);
@@ -61106,6 +61146,16 @@ function acEnsureMsgRendered(id) {
   if (idx !== -1 && idx < AC._winStart) { AC._winStart = Math.max(0, idx - 6); acRenderThread(); }
 }
 function acRenderThread() {
+  /* A message being undone eases away over ~240ms, and a re-render rebuilds the whole
+     thread — which would rip the animating row out mid-collapse and blink a "deleted"
+     tombstone in its place. Our OWN delete is echoed back to us over SSE (rtOnDmDeleted)
+     and lands right inside that window, so this is not theoretical. Hold any render until
+     the collapse is done, then run it once. */
+  if (AC._retractUntil && Date.now() < AC._retractUntil) {
+    clearTimeout(AC._retractRT);
+    AC._retractRT = setTimeout(acRenderThread, AC._retractUntil - Date.now() + 20);
+    return;
+  }
   const el = document.getElementById('acThread');
   acBindSendMenu(); // hold-to-send-silently (bound once)
   acApplyWallpaper(); // per-conversation wallpaper
@@ -61300,6 +61350,7 @@ function acRenderThread() {
   _bindVoiceNotes(el);
   el.classList.toggle('chat-private', acChatExportBlocked()); // hide download affordances on a privacy-locked chat
   acHydrateVoiceTranscripts(); // auto-fill AI transcript captions under voice notes
+  acPlaceSendUndo();               // a re-render mid-window must not lose the Undo chip
   _hugBubbleLines(el);   // iMessage-style: shrink each wrapped text bubble to its longest line
   acHydrateLinkPreviews(); // unfurl cards under link messages (after hug, so the card can re-widen its bubble)
   acBindScrollDown(el);
@@ -61793,9 +61844,11 @@ async function acSendOne(tmp) {
       const _bub = _el && _el.querySelector('.msg-bubble[data-mid="' + tmp.id + '"]');
       if (_bub) { _bub.dataset.mid = message.id; tmp.id = message.id; } else acRenderThread();
     } else acRenderThread();
-    // 10-second UNDO toast on a FRESH send (not a retry / sticker) — tapping it
-    // retracts the message (delete-for-everyone), matching the post-publish undo.
-    if (!_wasFailed && !isSticker) acUndoToast('Message sent', 'Undo', () => acRetractSend(message.id));
+    /* A 10-second UNDO on a FRESH send (not a retry / sticker). It used to be a toast at
+       the bottom of the screen announcing "Message sent" — which said something you could
+       already see, away from where you were looking, and covered the conversation to say
+       it. It is a quiet chip beside the message itself now (owner's idea). */
+    if (!_wasFailed && !isSticker) acShowSendUndo(message.id);
   } catch (e) {
     tmp.pending = false; tmp.failed = true; acRenderThread();
     // The group's rules first: read → agree → the message retries itself.
@@ -61820,11 +61873,94 @@ function acRetrySend(id) {
 }
 // Undo a just-sent message: remove the bubble locally and delete it for everyone
 // server-side (WhatsApp-style retract). Best-effort — leaves it sent on failure.
+/* Offer the way out for ten seconds, then take it away quietly. Inserted straight into the
+   row rather than by re-rendering the thread: a full re-render rebuilds every voice-note
+   player and flashes, which is exactly what the surgical swap above exists to avoid. */
+function acShowSendUndo(id) {
+  acHideSendUndo(true);
+  AC._undoId = id;
+  acPlaceSendUndo();
+  AC._undoT = setTimeout(() => acHideSendUndo(), 10000);
+}
+/* Put the chip beside the bubble it belongs to, wrapping that bubble in a box that hugs
+   it so the chip can be positioned against the MESSAGE rather than against the column
+   (see the CSS note). Idempotent, so a re-render can just call it again. */
+function acPlaceSendUndo() {
+  const id = AC._undoId;
+  if (id == null) return;
+  const bub = document.querySelector('#acThread .msg-bubble[data-mid="' + id + '"]');
+  const row = bub && bub.closest('.msg-row');
+  if (!row || row.classList.contains('selectable')) return;   // not while picking messages
+  let line = bub.parentElement;
+  if (!line || !line.classList.contains('msg-undoline')) {
+    /* MOVING A NODE RESTARTS ITS CSS ANIMATIONS, and a just-sent bubble is still landing
+       (bubbleLand, .44s from scale(.4)) — wrapping it mid-flight makes the message pop a
+       second time, and anything measuring it meanwhile reads 40% of its real width. So
+       wait for the landing to finish, then wrap, then jump any restart straight to its end. */
+    const running = bub.getAnimations ? bub.getAnimations().filter(a => a.playState === 'running') : [];
+    if (running.length) {
+      Promise.all(running.map(a => a.finished.catch(() => {})))
+        .then(() => { if (AC._undoId === id) acPlaceSendUndo(); });
+      return;
+    }
+    line = document.createElement('div');
+    line.className = 'msg-undoline';
+    bub.parentElement.insertBefore(line, bub);
+    line.appendChild(bub);
+    if (bub.getAnimations) bub.getAnimations().forEach(a => { try { a.finish(); } catch (e) {} });
+  }
+  if (line.querySelector('.msg-undo')) return;
+  const b = document.createElement('button');
+  b.className = 'msg-undo'; b.textContent = 'Undo';
+  b.setAttribute('aria-label', 'Undo sending this message');
+  b.onclick = (e) => { e.stopPropagation(); acRetractSend(id); };
+  line.appendChild(b);
+}
+function acHideSendUndo(now) {
+  clearTimeout(AC._undoT); AC._undoT = null;
+  AC._undoId = null;
+  /* Unwrapping moves the bubble again, which would replay its landing animation ten
+     seconds after the message arrived — so any restart is jumped to its end, exactly as
+     when it was wrapped. */
+  const unwrap = () => document.querySelectorAll('#acThread .msg-undoline').forEach((l) => {
+    if (l.querySelector('.msg-undo')) return;
+    const par = l.parentElement; if (!par) return;
+    const moved = [...l.children];
+    while (l.firstChild) par.insertBefore(l.firstChild, l);
+    l.remove();
+    moved.forEach((n) => { if (n.getAnimations) n.getAnimations().forEach((a) => { try { a.finish(); } catch (e) {} }); });
+  });
+  document.querySelectorAll('#acThread .msg-undo').forEach((b) => {
+    if (now) { b.remove(); return; }
+    b.classList.add('going');
+    setTimeout(() => { b.remove(); unwrap(); }, 240);
+  });
+  if (now) unwrap();
+}
 async function acRetractSend(id) {
   const idx = (AC.messages || []).findIndex(x => x.id === id);
   if (idx < 0) return;
-  AC.messages.splice(idx, 1);
-  acRenderThread();
+  acHideSendUndo(true);
+  /* THE MESSAGE SHRINKS AWAY rather than blinking out, and the gap closes behind it. A
+     height of `auto` cannot be animated, so the row's own height is measured and pinned
+     first; the class does the rest. The data is only spliced once it has gone, or the next
+     render would remove the very row being animated. */
+  const bub = document.querySelector('#acThread .msg-bubble[data-mid="' + id + '"]');
+  const row = bub && bub.closest('.msg-row');
+  const drop = () => {
+    AC._retractUntil = 0;
+    const i = (AC.messages || []).findIndex(x => x.id === id);
+    if (i >= 0) AC.messages.splice(i, 1);
+    acRenderThread();
+  };
+  if (row && !document.body.classList.contains('reduce-motion')) {
+    AC._retractUntil = Date.now() + 225;   // nothing re-renders the thread until it has gone
+    row.style.maxHeight = row.getBoundingClientRect().height + 'px';
+    row.classList.add('retracting');
+    void row.offsetHeight;
+    row.classList.add('go');
+    setTimeout(drop, 230);
+  } else drop();
   try { await API.req('DELETE', acMsgApi(id) + '?scope=everyone'); acLoadChats?.(); }
   catch (e) { showNotif('Couldn’t undo. The message was already delivered.'); }
 }

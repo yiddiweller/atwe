@@ -6408,6 +6408,68 @@ centred as it grows into the wider "New Message" pill. Its `bottom` in CSS is on
 — `acSyncFooterPad` sets the real one from the composer's measured height, so it rides up
 when the bar grows to two lines.
 
+### Undo sits beside the message, not in a toast
+
+Sending used to raise a bottom-centre toast reading **"Message sent · Undo"** — announcing
+something you could already see, in the one place your eyes were not, and covering the
+conversation to do it. The owner's idea, and a better one: a quiet grey **`.msg-undo`** chip
+next to the bubble itself for the ten seconds it is worth offering.
+
+**Grey, deliberately** — not any of the app's meaningful colours. It is a way out, not an
+action being recommended, and the colour ladder has no fill for "escape hatch". `--s2` on
+`--t2`, at the message's own scale (25px against a 41px bubble), 8px from it, level with it.
+
+**IT IS ANCHORED TO THE BUBBLE, NOT TO THE ROW — and the first version was not.** As a plain
+flex child of `.msg-row` it sat beside the whole `.msg-col`, which also carries the delivery
+status, the business signature and any reactions; whenever one of those was wider or taller
+than the bubble the chip drifted off the message it belonged to — measured **93px out of
+line, and off its centre**, on a short message with a wide status line under it. So
+`acPlaceSendUndo` wraps that one bubble in **`.msg-undoline`**, a box that hugs it exactly,
+and the chip is `position:absolute` against that: `inset-inline-end:calc(100% + 8px)` puts
+it 8px clear of the message's own edge and `top:50%` on its own centre line, whatever else
+the column holds. **The wrapper exists rather than positioning inside the bubble** because a
+photo-with-caption bubble clips its overflow (`.msg-bubble.has-cap`) and would swallow the
+chip whole. Both `undoIn`/`undoOut` and `:active` must repeat the `translateY(-50%)` — a
+transform in a keyframe replaces the base one, and losing it drops the chip half its height.
+
+**Placed by DOM surgery, never by re-rendering.** A full `acRenderThread` rebuilds every
+voice-note player and flashes — the same reason the send path does a surgical bubble swap —
+so `acShowSendUndo` calls `acPlaceSendUndo()`, which is idempotent; `acRenderThread` calls it
+again at the end, so a re-render inside the window does not lose the chip. `acHideSendUndo`
+unwraps once the chip has faded. It is cleared on entering any other conversation, or a later
+message's id could match and offer an Undo on a message from somewhere else.
+
+**MOVING A NODE RESTARTS ITS CSS ANIMATIONS, and this cost two flaky failures before it
+was understood.** A just-sent bubble is still landing (`bubbleLand`, .44s from `scale(.4)`),
+so wrapping it mid-flight made the message **pop a second time** — and anything measuring it
+in that moment read **40% of its real width** (a chip 106px from a bubble that was really
+168px wide). `acPlaceSendUndo` waits for any running animation on the bubble to finish before
+wrapping, then jumps any restart straight to its end; `acHideSendUndo`'s unwrap does the same,
+or the message would replay its landing ten seconds after it arrived.
+
+**The message shrinks away rather than blinking out.** `acRetractSend` measures the row,
+pins that height (`auto` cannot be animated), then lets `.retracting.go` collapse it; the
+data is spliced only once it has gone, or the next render would remove the very row being
+animated.
+
+**Nothing re-renders the thread while it is collapsing.** `acRetractSend` sets
+`AC._retractUntil` for the ~240ms of the animation and `acRenderThread` defers until it
+passes (running once afterwards) — because **our own delete is echoed back to us over SSE**,
+`rtOnDmDeleted` re-renders on it, and that lands squarely inside the window: the animating
+row was ripped out and a "message deleted" tombstone blinked in its place instead. `drop()`
+clears the window before its own render.
+
+`scratchpad/sendundo.js` sends **twice, and the short message is the one that matters** — a
+two-letter bubble is narrower and shorter than the status line beneath it, which is exactly
+the case the row-level version failed on and a long message never exposes. It checks the
+collapse **the way it actually behaves** — one frame after the tap the row must still be full
+height with the animation armed, and gone a few hundred ms later. A height sampler was tried
+first and reported zeros on an animation that was provably running (instrumented in the
+page), which is worse than no check at all.
+
+The other two undo toasts — a published post and the AI proofreader — are untouched; only
+the message-sent one was the complaint.
+
 ### Several photos in one message stack, one under the other
 
 They used to be a **swipe carousel with dots** — only the first was visible and the rest had
