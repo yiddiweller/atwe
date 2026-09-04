@@ -5299,7 +5299,11 @@ body.light #acThreadScreen::after{background:linear-gradient(to top,rgba(255,255
 /* Reply composer context — shows what you're replying to, above the input. */
 .ac-reply-ctx{display:flex;align-items:center;gap:10px;margin:0 4px 8px;padding:8px 10px;
   background:var(--s2);border-radius:12px;animation:axFade .2s var(--ease);}
-.ac-reply-ctx .arc-bar{flex:0 0 auto;width:3px;align-self:stretch;min-height:30px;border-radius:2px;background:var(--accent);}
+/* NO BLUE LINE DOWN THE SIDE (owner). The card's own fill is what separates it from the
+   bar — which reads more clearly now the bar is see-through — and the name above the quote
+   is already blue, so the stripe was saying the same thing twice. Kept in the markup as an
+   empty span so the two state rules below have something to hang on; it draws nothing. */
+.ac-reply-ctx .arc-bar{display:none;}
 .ac-reply-ctx .arc-main{flex:1;min-width:0;}
 .ac-reply-ctx .arc-name{font-size:12.5px;font-weight:700;color:var(--accent);line-height:1.3;}
 .ac-reply-ctx .arc-text{font-size:13px;color:var(--t2);line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -5810,7 +5814,15 @@ body.light .ac-rec-lock{background:rgba(255,255,255,.55);}
 /* NB a z-index here cannot lift the composer over #navBackdrop: that backdrop is a
    body-level layer and this lives inside #app, which is its own stacking context. The
    fix is above — hide the backdrop when the nav pill is hidden. */
-.msg-compose{position:relative;padding:8px 20px max(10px,env(safe-area-inset-bottom));flex-shrink:0;}
+/* EVENLY FRAMED, like the nav bar (owner: "make the whole text bar a drop lower… the bottom
+   space with the two sides should be the same exact space"). It was `max(10px, safe-area)`,
+   which on an iPhone is the full 34pt inset against 20 at the sides — 14px more space below
+   than beside, which is what made it sit high. The rule is now the one the floating nav
+   already follows: the gap below EQUALS the gap at the sides, with a max() so a device
+   reporting an unusually large inset still clears its home indicator. (The nav's own number
+   is 23 because its side gap is 23; each bar is framed by its own.) */
+.msg-compose{position:relative;flex-shrink:0;
+  padding:8px 20px max(20px, calc(env(safe-area-inset-bottom, 0px) - 14px));}
 /* Incoming chat-request bar (Allow / Decline) above the composer. */
 .ac-reqbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;border-top:1px solid var(--b1);
   background:var(--s1);flex-shrink:0;}
@@ -5845,15 +5857,18 @@ body.light .ac-rec-lock{background:rgba(255,255,255,.55);}
 body.light .ac-item-unread.muted{background:var(--t3);}
 /* One unified rounded box holding the +, the text, and the send arrow. */
 .msg-inbox{display:flex;align-items:flex-end;gap:4px;position:relative;
-  /* SOLID ON A PHONE, frosted on desktop — see the media query below. This is the LAST
-     live blur over any scrolling surface in the app, and it is the one thing left that a
-     conversation had and Home did not: a backdrop-filter over moving content has to be
-     re-rasterised every single frame, which is why this had already been walked down from
-     28px to 16px and is dropped again to 7px while scrolling. The mobile home bar made
-     exactly this call long ago (solid, no blur) and it is why Home feels the way it does.
-     Desktop keeps the frost: a laptop GPU pays it easily and nothing scrolls under it in
-     the two-pane layout. */
-  background:var(--s2);
+  /* FROSTED EVERYWHERE AGAIN (owner, build 1803: "make the text bar a drop see-through and
+     blurry, the way we used to have it"). It was made solid on phones in 1776 on the theory
+     that a backdrop-filter over a scrolling thread must be re-rasterised every frame — a
+     real cost, but one that was assumed rather than measured. Measured now, the same way
+     the top edge's glass was: at a 6x CPU throttle, flinging the thread with the blur on
+     and off gives IDENTICAL frame pacing (p50 16.7ms both, p95 16.8ms both). It also steps
+     down to a lighter blur while the thread is actually moving, which it already did.
+     Caveat worth keeping: a CPU throttle does not throttle the GPU, and backdrop-filter is
+     GPU-bound — this bounds the CPU cost, not an iPhone's rasterisation. It is a much
+     smaller area than the top band, which is already allowed on the same evidence. */
+  background:rgba(26,26,28,.72);
+  backdrop-filter:blur(18px) saturate(1.7);-webkit-backdrop-filter:blur(18px) saturate(1.7);
   border:1px solid rgba(255,255,255,.08);
   /* flex-wrap so the cards below can take a line of their own above the text row;
      symmetric 5px padding so a nested card is inset evenly on both sides. */
@@ -6103,13 +6118,18 @@ body.light .ac-item-unread.muted{background:var(--t3);}
 /* Light theme, phone: solid too. Declared HERE, above the desktop block, because both
    this and the desktop override are (0,2,1) — with no specificity to separate them the
    later rule simply wins, and it used to sit ~15 lines further down. */
-body.light .msg-inbox{background:var(--s2);}
-/* Desktop only: the frosted composer. `hover:hover` is deliberately NOT the test — a
-   tablet has no hover and still has a fast GPU; width is what says "not a phone". */
-@media(min-width:769px){
-  .msg-inbox{background:rgba(26,26,28,.72);backdrop-filter:blur(16px) saturate(1.7);-webkit-backdrop-filter:blur(16px) saturate(1.7);}
-  #acThreadScreen.sc-scrolling .msg-inbox{background:rgba(24,24,26,.82);backdrop-filter:blur(7px) saturate(1.5);-webkit-backdrop-filter:blur(7px) saturate(1.5);}
-  body.light .msg-inbox{background:rgba(255,255,255,.6);}
+body.light .msg-inbox{background:rgba(255,255,255,.62);}
+/* While the thread is genuinely moving the blur steps down — cheaper to rasterise, and a
+   heavy frost over fast-moving content reads as smear rather than glass. */
+#acThreadScreen.sc-scrolling .msg-inbox{background:rgba(24,24,26,.82);
+  backdrop-filter:blur(8px) saturate(1.5);-webkit-backdrop-filter:blur(8px) saturate(1.5);}
+body.light #acThreadScreen.sc-scrolling .msg-inbox{background:rgba(255,255,255,.78);}
+/* Anyone who has asked their phone for less transparency gets a solid bar — and this is the
+   MOTION setting's neighbour, not the motion setting itself: someone who only wants stiller
+   animation should not lose the glass. */
+@media (prefers-reduced-transparency:reduce){
+  .msg-inbox{background:var(--s2);backdrop-filter:none;-webkit-backdrop-filter:none;}
+  body.light .msg-inbox{background:var(--s2);}
 }
 .msg-inbox:focus-within{border-color:var(--b3);}
 .msg-attach{width:38px;height:38px;border-radius:50%;background:none;border:none;color:var(--t1);flex-shrink:0;
@@ -6173,7 +6193,11 @@ body.light .msg-inbox{background:var(--s2);}
    this 24, so releasing it at the end shows nothing. */
 .msg-inbox.h-grow{overflow:hidden;align-content:flex-end;border-radius:var(--bar-r);
   transition:height var(--bar-dur) var(--bar-ease);}
-@media (prefers-reduced-motion:reduce){.msg-inbox.h-grow{transition:none;}}
+/* Each mover comes back from where it was and lands with the edge. */
+@keyframes barFlip{from{transform:translateY(var(--fy,0px));}to{transform:none;}}
+.msg-inbox .bar-flip{animation:barFlip var(--bar-dur) var(--bar-ease);will-change:transform;}
+@media (prefers-reduced-motion:reduce){
+  .msg-inbox.h-grow{transition:none;}.msg-inbox .bar-flip{animation:none;}}
 
 /* Once the text has its own row it needs real room above it: at 4px the first line sat
    almost against the bar's top edge (owner's screenshot). 10px reads as a margin rather
@@ -21717,7 +21741,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1802'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1803'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -62938,10 +62962,16 @@ function acAutosize() {
      There are three now: the one-row measurement, the multiline measurement, and one
      commit. Do not add a fourth without measuring what it costs. */
   const was = box && box.classList.contains('multiline');
-  /* The bar's own height is REMEMBERED rather than re-measured — we set it last time, so
-     asking the layout engine for it again is a whole document reflow for a number we
-     already have. */
-  const fromH = box ? (box._h || box.getBoundingClientRect().height) : 0;
+  /* WHERE EVERYTHING SITS, before anything is touched — the bar's own height and the top of
+     each thing inside it that moves. Nothing has been written yet in this call, so these
+     reads are FREE: the layout is still clean from the last frame, and a read of clean
+     layout costs nothing.
+     This replaces a remembered `box._h`, which was a real bug: attaching a photo changes the
+     bar's height without going through here, so the memo went stale and the morph animated
+     from the wrong number — measured, the edge jumped 67px in one frame on the very case the
+     owner flagged (a photo attached, then typing to the second line). */
+  const snap = box ? _barSnap(box) : null;
+  const fromH = snap ? snap.h : 0;
   if (was) box.classList.remove('multiline');
   /* MEASURING IS NOT AN ANIMATION. height:auto is set only to read scrollHeight, so the
      transition stays suspended across the whole measuring phase — a transition already
@@ -62987,18 +63017,12 @@ function acAutosize() {
     void inp.offsetHeight;                          // ── forced layout 3: commit, instantly
     inp.classList.remove('no-anim');
     to = box ? box.offsetHeight : 0;                // free — nothing written since the commit
-    if (box) box._h = to;
+    if (box) _barMark(box, snap);                   // the deltas, read off the same clean layout
   } else {
     inp.style.height = prev;
     inp.classList.remove('no-anim');
     void inp.offsetHeight;                          // ── forced layout 3: the "before" frame
     inp.style.height = target + 'px';               // …so this one travels
-    /* The bar's new height is ARITHMETIC, not another reflow: the only thing that changed
-       is the text box, and it is mid-transition anyway so measuring it now would read a
-       number on its way somewhere. An empty `prev` (the very first call) has nothing to add
-       to, so drop the memo and let the next run measure. */
-    const prevPx = parseFloat(prev);
-    if (box) box._h = prevPx ? fromH + (target - prevPx) : 0;
   }
   acToggleSendMic();
   if (changing) _barGrow(box, fromH, to);
@@ -63018,6 +63042,42 @@ function acAutosize() {
 
    (A FLIP was built here first and thrown away: it computes the deltas correctly and they
    are all ~0, which is the measurement that led to this.) */
+/* ── THE CONTENTS TRAVEL WITH THE EDGE ────────────────────────────────────────────
+   The bar's height was already easing, but everything INSIDE it teleported: measured per
+   frame, the text moved its whole 58px in ONE frame and then sat still while the bar's top
+   edge crawled up behind it for 240ms. The owner: "the text comes up first before the bar
+   extends… it takes like a point of a second till it goes in the background of the text",
+   and the same for photos sitting above it. So the two things that actually move — the row
+   of attachments and the text box — are FLIPPED: recorded where they were, then pinned back
+   there and released on the bar's own curve, so everything arrives together as one thing.
+   The buttons are deliberately NOT in this list: measured, they move half a pixel, because
+   the bar is bottom-anchored and grows upward. Adding them would animate nothing and cost a
+   layer each.
+   A KEYFRAME, not a transition: `--fy` is read as the animation's own `from`, so it runs
+   whatever the element was doing before — a transition needs a previous computed value, and
+   an element that has just been re-laid-out does not reliably have one. */
+const _BAR_MOVERS = '.msg-incards,#acInput';
+function _barSnap(box) {
+  const at = [];
+  box.querySelectorAll(_BAR_MOVERS).forEach((n) => {
+    const r = n.getBoundingClientRect();
+    if (r.height > 0.5) at.push([n, r.top]);
+  });
+  return { h: box.getBoundingClientRect().height, at };
+}
+/* Work out how far each one has to come back. Called right after the commit in acAutosize,
+   so these reads land on a layout that is already clean and cost nothing extra. */
+function _barMark(box, snap) {
+  if (!snap) return;
+  box._flip = [];
+  snap.at.forEach(([n, wasTop]) => {
+    const dy = wasTop - n.getBoundingClientRect().top;
+    if (Math.abs(dy) < 0.5) return;
+    n.classList.remove('bar-flip');
+    n.style.setProperty('--fy', dy.toFixed(2) + 'px');
+    box._flip.push(n);
+  });
+}
 function _barGrow(box, fromH, to) {
   if (!fromH || !to || Math.abs(to - fromH) < 2) return;
   clearTimeout(box._growT);
@@ -63025,9 +63085,14 @@ function _barGrow(box, fromH, to) {
   box.style.height = fromH + 'px';
   void box.offsetHeight;                            // ── forced layout 4: commit the "before"
   box.style.height = to + 'px';
+  (box._flip || []).forEach((n) => n.classList.add('bar-flip'));   // …and let them all go together
   /* Hand the height back to the layout at the end — pinned to a number the bar would stop
      growing with the next line. The wait is the transition's own duration plus a frame. */
-  box._growT = setTimeout(() => { box.style.height = ''; box.classList.remove('h-grow'); }, 300);
+  box._growT = setTimeout(() => {
+    box.style.height = ''; box.classList.remove('h-grow');
+    (box._flip || []).forEach((n) => { n.classList.remove('bar-flip'); n.style.removeProperty('--fy'); });
+    box._flip = null;
+  }, 300);
 }
 
 /* ── Voice notes (MediaRecorder) ── */

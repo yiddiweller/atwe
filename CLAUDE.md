@@ -6346,6 +6346,50 @@ it down.
 height must be put back and committed BEFORE the target is written. That costs one flush, and
 it is deliberately spent on the cheap path (a plain keystroke) rather than the wrap.
 
+### The bar and everything in it move as one thing
+
+The height was already easing, but the CONTENTS teleported: measured per frame, the text
+moved its whole **58px in ONE frame** and then sat still while the top edge crawled up behind
+it for 240ms. The owner: *"the text comes up first before the bar extends… it takes like a
+point of a second till it goes in the background of the text"*, and the same for photos above
+it. So the two things that actually move — **the row of attachments and the text box** — are
+FLIPPED: recorded where they were, pinned back there, and released on the bar's own curve.
+Measured after: the edge, the text and a photo tile all move **10.8px** in their biggest
+frame. The buttons are deliberately NOT in that list — the bar is bottom-anchored, so they
+move half a pixel; animating them would cost a layer each for nothing.
+
+**A keyframe, not a transition**, for the same reason as everywhere else here: `--fy` is the
+animation's own `from`, and an element that has just been re-laid-out has no reliable previous
+computed value for a transition to start from.
+
+**`box._h` (a remembered bar height) was a real bug and is gone.** Attaching a photo changes
+the bar's height without going through `acAutosize`, so the memo went stale and the morph
+animated from the wrong number — measured, the edge jumped **67px in one frame** on exactly
+the case the owner flagged (a photo attached, then typing to the second line). The height now
+comes from the same free snapshot as the movers' positions: taken at the top of `acAutosize`
+before anything is written, where the layout is still clean and a read costs nothing.
+
+### The composer is frosted again, and evenly framed
+
+**Frosted on phones too** (owner: *"a drop see-through and blurry, the way we used to have
+it"*). It was made solid in 1776 on the theory that a `backdrop-filter` over a scrolling
+thread must be re-rasterised every frame — a real cost, but assumed rather than measured.
+Measured now the same way the top edge's glass was: at a 6× CPU throttle, flinging the thread
+with the blur on and off gives **identical frame pacing** (p50 16.7ms both, p95 16.8ms both).
+It still steps down to a lighter blur while the thread is actually moving, and
+`prefers-reduced-transparency` gets a solid bar. Same caveat as the top edge: a CPU throttle
+does not throttle the GPU.
+
+**Evenly framed, like the floating nav.** Its bottom gap was `max(10px, safe-area)` — the
+phone's full 34pt inset against 20 at the sides, i.e. 14px more space below than beside, which
+is what made it sit high. It is `max(20px, safe-area − 14px)` now: **20 / 20 / 20** on a device
+with no inset and on a real iPhone alike. Each floating bar is framed by its OWN side gap —
+the nav's number is 23 because its sides are 23.
+
+**No blue line down the reply preview** (owner). The card's own fill separates it from the bar
+— which reads more clearly now the bar is see-through — and the name above the quote is
+already blue, so the stripe said the same thing twice.
+
 ### Opening a chat lands at the bottom, and stays there
 
 *"Sometimes I open a chat and it's not at the bottom."* It was not the scroll code — it was a
