@@ -8487,6 +8487,26 @@ today.
   Playwright's own input latency is tens of ms, and an out-of-page version measured taps at
   coordinates the bar had already left (it reported an icon "at x=475" on a 390px phone).
   Self-tested: disabling the correction fails 7 of its 49 checks.
+- **THE HIGHLIGHT PILL'S SIZE HAS TO BE PART OF "NOTHING CHANGED".** `syncNavPill` skips a
+  redundant sync — the pill is already on this tab — so as not to clobber a proportional
+  transition mid-travel. That test looked only at the pill's **X**. Turning the phone does
+  not move the pill to a different TAB (only its width changes), so every sync after a
+  rotation took the shortcut and never revisited the size; and if one sync had landed while
+  the layout was still sideways, the pill kept the SIDEWAYS width for good. Measured: a 65px
+  tab wearing a **158px** pill, still 158px after two more syncs. The owner saw it as the
+  grey bubble *"extending to the next icon"* after turning the phone back. The guard now
+  also requires the width and height to already match, and the resize handler clears
+  `AC._navPillInit` before each of its two syncs so a rotation SNAPS the pill (the instant
+  path always rewrites the size) instead of easing it. `navtap.js` checks it after a real
+  rotation and by handing the pill a sideways width outright — the second is what fails if
+  the shortcut ever stops asking about size again.
+- **While the bar is in flight, a tap in its resting band NEVER falls through.** The first
+  version of the touch-down routing swallowed a click only when it had an icon to hand it
+  to — so a tap into the strip the bar had not yet reached went straight through to the feed
+  and **opened a photo in the full-screen viewer**, which then sat over the bar and ate every
+  tap after it. (That is how it showed up: four rotation checks failing with
+  `overlay:"imgViewer"`.) The band is swallowed whole whenever the bar is moving, exactly as
+  the version before it did; `navtap.js` asserts no overlay opens.
 - **A rotation can strand a press.** It re-lays-out the bar under the finger and the
   `pointerup` may never arrive, which would leave `_navDragging` true — so `syncNavPill`
   stops correcting the highlight and it sits on the wrong icon — and a stale `press.target`
