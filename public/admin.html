@@ -185,7 +185,7 @@
      in-flow centre lands a bit high. Pin the swirl to the real screen centre instead
      (offset past the 250px sidebar on desktop; full-width on mobile). */
   .ld{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:6;}
-  @media(min-width:901px){ .ld{left:250px;} }
+  @media(min-width:901px) and (min-height:501px){ .ld{left:250px;} }
 
   /* ── Overview ── */
   .ov-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:18px;}
@@ -855,7 +855,7 @@
   .notif.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
   /* ── Responsive ── */
-  @media (max-width:900px){
+  @media(max-width:900px),(max-height:500px){
     /* Off-canvas sidebar: slides in over the content, toggled by the hamburger. */
     .sidebar{position:fixed;top:0;left:0;z-index:50;height:100dvh;
       transform:translateX(-100%);transition:transform .24s var(--ease);
@@ -864,7 +864,7 @@
     .nav-toggle{display:flex;}
     .main-inner{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right));}
   }
-  @media (max-width:760px){
+  @media(max-width:760px){
     .stat-row,.ov-grid{grid-template-columns:repeat(2,1fr);}
     .u-meta{display:none;}
     .modal{padding:20px;}
@@ -876,7 +876,7 @@
   /* Features tab: the checklist page embedded full-height. */
   .feat-frame{width:100%;height:calc(100vh - 108px);min-height:520px;border:none;border-radius:14px;
     background:#0b0c0e;display:block;}
-  @media (max-width:900px){ .feat-frame{height:calc(100vh - 96px);} }
+  @media(max-width:900px),(max-height:500px){ .feat-frame{height:calc(100vh - 96px);} }
   /* Feature Controls */
   .fc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:14px;}
   .fc-intro{font-size:13.5px;color:var(--t2);line-height:1.5;max-width:60ch;}
@@ -1039,7 +1039,7 @@
   .close-x{background:var(--s2);}
 
   /* ── Mobile: app-grade drawer + spacing ── */
-  @media (max-width:900px){
+  @media(max-width:900px),(max-height:500px){
     .sidebar{border-right:none;border-radius:0 var(--r-xl) var(--r-xl) 0;
       padding-left:max(14px,env(safe-area-inset-left));background:var(--bg-1);}
     .main-top{position:sticky;top:0;z-index:30;background:var(--bg);
@@ -1051,7 +1051,7 @@
     .toolbar{flex-wrap:wrap;}
     .acts .act{padding:11px 16px;}
   }
-  @media (max-width:760px){
+  @media(max-width:760px){
     .stat-row,.ov-grid,.ac-stats{grid-template-columns:repeat(2,1fr);}
     .gc-issue{flex-direction:column;align-items:stretch;}
     .gc-issue .fld{width:100%;}

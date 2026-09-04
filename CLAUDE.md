@@ -6399,6 +6399,51 @@ centred as it grows into the wider "New Message" pill. Its `bottom` in CSS is on
 — `acSyncFooterPad` sets the real one from the composer's measured height, so it rides up
 when the bar grows to two lines.
 
+### A phone turned sideways is still a phone
+
+The owner: *"when I turn the phone sideways I get the computer version, with all the options
+on the left side — I don't want it."* They are right, and the cause is that **every
+breakpoint in the app asked only about WIDTH**. A phone in landscape is **844-956px wide**
+— wider than a small laptop — so a width-only rule hands it the desktop sidebar.
+
+**The rule now asks about HEIGHT too, and that is the whole fix.** Under **500px tall** is a
+phone in landscape and nothing else: an iPad in landscape is 744-834 tall, a laptop 600+.
+So every phone query carries **`,(max-height:500px)`** and every bigger-than-a-phone query
+**`and (min-height:501px)`**. No `not()`, no JS-set body class — just the two halves of one
+condition, which is why they can never leave a gap or overlap.
+
+| viewport | layout |
+|---|---|
+| 390×844 phone portrait · 844×390 phone landscape · 926×428 big phone landscape | phone |
+| 768×1024 tablet portrait | phone |
+| 1024×768 tablet landscape · 1440×900 desktop | desktop |
+
+**`_lw()` is the JS half and it MUST agree with the CSS.** The layout is driven from both —
+media queries paint it, `acUpdateRail` / the drawer / the keyboard shortcuts decide from a
+number — so `_lw()` returns the width the LAYOUT should use: the real width normally,
+clamped to 768 when the viewport is short. Every threshold below it then falls to mobile on
+its own, and 15 `window.innerWidth <= 768` checks became `_lw() <= 768` in one pass.
+`window.innerWidth` is still correct for POSITIONING a popover — only layout decisions moved.
+`scratchpad/layouts.js` asserts the agreement directly at every size, because a breakpoint
+that disagrees paints one layout while the JS runs the other.
+
+**A real bug fell out of this: at exactly 768px wide — an iPad in portrait — BOTH layouts
+fired.** Five rules used `min-width:768px` while the phone rules use `max-width:768px`, so
+an iPad showed the bottom bar AND the desktop icon rail at once. The desktop side starts at
+**769** everywhere now (CSS and `acUpdateRail`'s `nav-mini` / `feedCol`), so exactly one
+layout claims any size — which is the second thing that probe checks.
+
+**The dashboard had the same trap** at its own 900px breakpoint, and a big phone in
+landscape is 926 — straight over it. Same treatment on `admin.html`'s primary breakpoint
+only: its 760/720/700/560 rules are genuine WIDTH adaptations and a landscape phone has
+plenty of room for them, so re-applying those there would only cramp it.
+
+**The sign-in screen was drawn for a portrait phone** — a 66px mark with 84px of air under
+it pushed the last button and the terms line off a 390px-tall screen. Nothing was ever
+unreachable (the overlay scrolls) but having to scroll a sign-in screen reads as broken.
+One `@media(max-height:500px)` block tightens the mark, the button height and the gaps;
+all seven ways in now fit with nothing to scroll.
+
 ### A chat opens at the bottom, and the arrow is made of the same glass as the bar
 
 **Opening always lands at the newest message.** It used to jump to the **"New messages"
