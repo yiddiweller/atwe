@@ -142,6 +142,43 @@ const BASE = process.env.BASE || 'http://localhost:3262';
     say(shrink.worstOut <= 0, `${theme}: still with nothing outside the bar (worst ${shrink.worstOut}px)`);
     say(shrink.worstR <= 26, `${theme}: and the corner holds on the way back too (peak ${shrink.worstR})`);
 
+    /* ── EVERYTHING IN THE BAR TRAVELS TOGETHER ──
+       The height was already easing while the CONTENTS teleported: measured per frame, the
+       text moved its whole 58px in ONE frame and then sat still while the top edge crawled
+       up behind it for 240ms. The owner: "the text comes up first before the bar extends",
+       and the same for photos above it. So the row of attachments and the text box are
+       flipped back to where they were and released on the bar's own curve — and the test is
+       that no single frame moves any of them much further than the edge itself moves. */
+    const together = await p.evaluate(async (text) => {
+      const img = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400"><rect width="600" height="400" fill="#3a7"/></svg>');
+      const bar = document.querySelector('#acThreadScreen .msg-inbox');
+      const inp = document.getElementById('acInput');
+      AC.att = null; AC.imgs = [img]; acRenderAttPrev();
+      inp.value = ''; acAutosize(); await new Promise(r => setTimeout(r, 450));
+      const tile = () => { const n = bar.querySelector('.ac-postimg-wrap'); return n ? n.getBoundingClientRect().top : null; };
+      const rows = []; const t0 = performance.now();
+      const snap = () => rows.push({ bar: bar.getBoundingClientRect().top,
+        text: inp.getBoundingClientRect().top, tile: tile() });
+      snap(); inp.value = text; acAutosize();
+      const tick = () => { snap(); if (performance.now() - t0 < 400) requestAnimationFrame(tick); };
+      requestAnimationFrame(tick);
+      await new Promise(r => setTimeout(r, 470));
+      const worst = (k) => { let m = 0, prev = rows[0][k];
+        rows.slice(1).forEach((r) => { if (r[k] != null && prev != null) m = Math.max(m, Math.abs(r[k] - prev)); prev = r[k]; });
+        return +m.toFixed(1); };
+      return { edge: worst('bar'), text: worst('text'), tile: worst('tile') };
+    }, 'i thnk we shud meet tomorow at 3 pm ok and then we can go over the whole plan');
+    /* An ABSOLUTE bound, not one relative to the edge: comparing the two would pass if the
+       edge itself were broken. The whole move is ~58px, so a teleport shows up as a single
+       frame of ~58 and a real travel as ~11 — there is no ambiguity between them. */
+    say(together.text <= 16,
+      `${theme}: the text travels rather than teleporting — biggest frame ${together.text}px of a 58px move (edge ${together.edge})`);
+    say(together.tile <= 16,
+      `${theme}: and so do the photos sitting above it (${together.tile}px)`);
+    await p.evaluate(async () => { AC.imgs = []; acRenderAttPrev();
+      document.getElementById('acInput').value = ''; acAutosize();
+      await new Promise(r => setTimeout(r, 400)); });
+
     /* Nothing may be left pinned to a number — the bar has to keep growing with the text. */
     const released = await p.evaluate(() => {
       const bar = document.querySelector('#acThreadScreen .msg-inbox');

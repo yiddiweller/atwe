@@ -178,7 +178,11 @@ const BASE = process.env.BASE || 'http://localhost:3262';
         zero frames over 32ms), and each of its four layers is sized to its own mask so the
         widest blur covers the least area. Everything else stays banned — the point of the
         rule is that a blur must be a decision somebody measured, not one that drifted in. */
-  const ALLOWED_BLUR = 'ac-topglass';
+  /* TWO blurs are allowed over the thread, and both were MEASURED rather than assumed —
+     which is the whole point of this rule. The top edge (1786) and the composer (1803, the
+     owner asking for the see-through bar back): at a 6x CPU throttle, flinging the thread
+     with each on and off gives identical frame pacing. Everything else stays banned. */
+  const ALLOWED_BLUR = ['ac-topglass', 'msg-inbox'];
   /* Passed IN, not closed over: the function body runs in the browser, where a const
      declared here in Node does not exist. It threw ReferenceError and took the whole
      probe down with it. */
@@ -193,7 +197,8 @@ const BASE = process.env.BASE || 'http://localhost:3262';
       if (r.right <= v.left || r.left >= v.right || r.bottom < v.top || r.top > v.bottom) return;
       if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0) return;
       const key = el.id || String(el.className).split(' ')[0];
-      if (key === ALLOWED_BLUR || (el.parentElement && el.parentElement.classList.contains(ALLOWED_BLUR))) return;
+      if (ALLOWED_BLUR.includes(key)) return;
+      if (el.parentElement && ALLOWED_BLUR.some((c) => el.parentElement.classList.contains(c))) return;
       out.push(key + ' ' + bf);
     });
     return out;

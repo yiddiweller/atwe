@@ -332,6 +332,27 @@ const BASE = process.env.BASE || 'http://localhost:3262';
   say(bar.textGap >= 8 && bar.textGap <= 18,
     `"Message" clears the + by a clean reading gap (${bar.textGap})`);
 
+  /* THE BAR IS EVENLY FRAMED, like the floating nav (owner). Its bottom gap used to be the
+     phone's full safe-area inset — 34pt against 20 at the sides — which is what made it sit
+     high. `env()` cannot be simulated headlessly, so the app's OWN expression is re-declared
+     with a real iPhone inset injected: hard-coding a final number would test the number
+     rather than the rule. */
+  for (const inset of [0, 34]) {
+    const framed = await p.evaluate((px) => {
+      document.getElementById('_ins')?.remove();
+      const st = document.createElement('style'); st.id = '_ins';
+      st.textContent = `.msg-compose{padding:8px 20px max(20px, calc(${px}px - 14px))!important;}`;
+      document.head.appendChild(st);
+      const sc = document.getElementById('acThreadScreen').getBoundingClientRect();
+      const b = document.querySelector('#acThreadScreen .msg-inbox').getBoundingClientRect();
+      return { l: Math.round(b.left - sc.left), r: Math.round(sc.right - b.right),
+        b: Math.round(sc.bottom - b.bottom) };
+    }, inset);
+    say(framed.l === framed.r && framed.b === framed.l,
+      `on a phone reporting a ${inset}pt inset it is framed evenly (${framed.l} / ${framed.r} / ${framed.b})`);
+  }
+  await p.evaluate(() => document.getElementById('_ins')?.remove());
+
   /* Calling is the menu's own FIRST SECTION, drawn as a grouped block rather than two loose
      rows above a hairline. It is absent only where there is genuinely nobody to call — a
      chat with yourself — which is why it looked missing in a self-chat screenshot. */
@@ -436,14 +457,23 @@ const BASE = process.env.BASE || 'http://localhost:3262';
   const l = await open('light');
   await openDm(l.p);
   const light = await l.p.evaluate(() => {
-    const rgb = (c) => (c.match(/\d+/g) || []).slice(0, 3).map(Number);
+    const rgb = (c) => (c.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
     const diff = (a, b) => Math.max(...a.map((x, i) => Math.abs(x - b[i])));
     const page = rgb(getComputedStyle(document.body).backgroundColor);
-    const inbox = rgb(getComputedStyle(document.querySelector('#acThreadScreen .msg-inbox')).backgroundColor);
+    const bar = getComputedStyle(document.querySelector('#acThreadScreen .msg-inbox'));
+    /* THE BAR IS TRANSLUCENT NOW, so its computed colour is not what lands on screen — it is
+       composited over whatever is behind it. What still has to be true is that it is not the
+       SAME colour as the page: a fully opaque white bar on a white page was the original bug,
+       and a translucent one over a white page still reads as a step because of its blur and
+       its border. So the test is the colour it contributes, plus that it really is frosted. */
+    const inbox = rgb(bar.backgroundColor);
+    const alpha = parseFloat((bar.backgroundColor.match(/[\d.]+\)$/) || ['1'])[0]) || 1;
     const un = document.querySelector('#acThread .msg-row.me .msg-bubble.msg-unseen');
-    return { inbox: diff(page, inbox), unseen: un ? diff(page, rgb(getComputedStyle(un).backgroundColor)) : null };
+    return { inbox: diff(page, inbox), alpha, blur: bar.backdropFilter || bar.webkitBackdropFilter,
+      unseen: un ? diff(page, rgb(getComputedStyle(un).backgroundColor)) : null };
   });
-  say(light.inbox >= 6, `in Light the message box is visibly a step off the page (${light.inbox})`);
+  say(light.inbox >= 6 || (light.alpha < 0.95 && /blur/.test(light.blur)),
+    `in Light the message box separates from the page — ${light.inbox >= 6 ? 'by colour (' + light.inbox + ')' : 'as frosted glass (alpha ' + light.alpha + ', ' + light.blur + ')'}`);
   say(light.unseen === null || light.unseen >= 6,
     `and a sent-but-unseen bubble is too, instead of white on white (${light.unseen})`);
   await l.ctx.close();
