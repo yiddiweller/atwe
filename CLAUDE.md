@@ -6388,6 +6388,15 @@ the nav's number is 23 because its sides are 23.
 — which reads more clearly now the bar is see-through — and the name above the quote is
 already blue, so the stripe said the same thing twice.
 
+**The jump-to-latest pill is CENTRED** (owner, ChatGPT's placement). It used to sit at the
+right, directly over the send button — the one place a thumb is already going. Centred with
+`margin-inline:auto` between a `left:0` and a `right:0` rather than a `translateX(-50%)`,
+because the transform is already carrying the show/hide animation and the press-scale and a
+−50% would have to be repeated in every one of those states; `width:fit-content` keeps it
+centred as it grows into the wider "New Message" pill. Its `bottom` in CSS is only a fallback
+— `acSyncFooterPad` sets the real one from the composer's measured height, so it rides up
+when the bar grows to two lines.
+
 ### Several photos in one message stack, one under the other
 
 They used to be a **swipe carousel with dots** — only the first was visible and the rest had

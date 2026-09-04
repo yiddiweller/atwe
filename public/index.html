@@ -5806,7 +5806,16 @@ body.light .ac-rec-lock{background:rgba(255,255,255,.55);}
    i.e. exactly while the thread is moving under it, so its blur was being re-rasterised
    every frame of the very gesture the founder said felt rough. It is small, but it was
    the second of only two live blurs left over the conversation. */
-.ac-scrolldown{position:absolute;right:24px;bottom:84px;z-index:5;min-width:36px;height:36px;border-radius:18px;padding:0;
+/* CENTRED, like ChatGPT (owner) — it used to sit at the right, directly over the send
+   button, which is the one place a thumb is already going. `margin-inline:auto` between a
+   left:0 and a right:0 rather than a translate, because the transform is already carrying
+   the show/hide animation and the press-scale; adding a −50% to it would have to be
+   repeated in every one of those states. `width:fit-content` keeps it centred as it grows
+   into the wider "New Message" pill.
+   The `bottom` here is only a fallback — acSyncFooterPad sets the real one from the
+   composer's measured height, so it rides up when the bar grows to two lines. */
+.ac-scrolldown{position:absolute;left:0;right:0;margin-inline:auto;width:fit-content;
+  bottom:84px;z-index:5;min-width:36px;height:36px;border-radius:18px;padding:0;
   background:var(--s3);
   border:none;color:var(--t1);cursor:pointer;display:flex;align-items:center;justify-content:center;
   box-shadow:0 4px 14px rgba(0,0,0,.32);opacity:0;transform:translateY(8px) scale(.92);pointer-events:none;
@@ -21750,7 +21759,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1804'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1805'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;

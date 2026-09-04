@@ -231,6 +231,25 @@ const BASE = process.env.BASE || 'http://localhost:3262';
   say(states.still.fade === states.moving.fade,
     `and so is the fade above it (${states.still.fade} vs ${states.moving.fade})`);
 
+  /* 7c-iii. THE JUMP-TO-LATEST PILL IS CENTRED (owner, ChatGPT's placement). It used to sit
+        at the right, directly over the send button — the one place a thumb is already going.
+        Checked in BOTH of its shapes: the bare arrow and the wider "New Message" pill, which
+        must stay centred as it grows. */
+  for (const wide of [false, true]) {
+    const sd = await p.evaluate((w) => {
+      const b = document.getElementById('acScrollDown');
+      b.classList.add('show'); b.classList.toggle('newmsg', w);
+      const q = b.getBoundingClientRect(), S = document.getElementById('acThreadScreen').getBoundingClientRect();
+      const bar = document.querySelector('#acThreadScreen .msg-inbox').getBoundingClientRect();
+      return { l: +(q.left - S.left).toFixed(1), r: +(S.right - q.right).toFixed(1),
+        w: Math.round(q.width), clear: q.bottom <= bar.top + 0.5 };
+    }, wide);
+    say(Math.abs(sd.l - sd.r) < 1.5,
+      `the jump-to-latest pill is centred${wide ? ' as the wider "New Message" pill' : ''} (${sd.l} / ${sd.r}, ${sd.w}px wide)`);
+    say(sd.clear, `and sits clear above the composer${wide ? '' : ''}`);
+  }
+  await p.evaluate(() => document.getElementById('acScrollDown').classList.remove('newmsg'));
+
   /* 7d. NOTHING IN A CONVERSATION MAY GROW WHEN ITS PICTURE LANDS. A link preview's cover
         was `max-height:150px`, so before the image arrived the <img> was ZERO tall and the
         card grew by the full 150 the moment it decoded — shoving the thread down under the
