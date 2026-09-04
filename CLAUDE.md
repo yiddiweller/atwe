@@ -6380,6 +6380,15 @@ It still steps down to a lighter blur while the thread is actually moving, and
 `prefers-reduced-transparency` gets a solid bar. Same caveat as the top edge: a CPU throttle
 does not throttle the GPU.
 
+**One material, moving or still.** Both the composer and the fade above it used to change
+while the thread was scrolling — the bar dropped to `blur(8)` with a heavier fill, the fade
+lifted `.9 → 1` — on the theory that a lighter blur is cheaper to rasterise. That saving was
+the reason the blur had been cut on phones at all, and it measured as nothing; what it
+actually bought was a visible change of material every time a finger touched the thread
+(owner: *"when I scroll and let go it has a different amount of blurriness… the bottom
+background looks a drop different"*). One value now, and `chatscroll.js` compares the two
+states directly rather than trusting the rules were deleted.
+
 **Evenly framed, like the floating nav.** Its bottom gap was `max(10px, safe-area)` — the
 phone's full 34pt inset against 20 at the sides, i.e. 14px more space below than beside, which
 is what made it sit high. It is `max(20px, safe-area − 14px)` now: **20 / 20 / 20** on a device
@@ -6389,6 +6398,29 @@ the nav's number is 23 because its sides are 23.
 **No blue line down the reply preview** (owner). The card's own fill separates it from the bar
 — which reads more clearly now the bar is see-through — and the name above the quote is
 already blue, so the stripe said the same thing twice.
+
+### Several photos in one message stack, one under the other
+
+They used to be a **swipe carousel with dots** — only the first was visible and the rest had
+to be discovered. The owner asked for *"one under the other… the same way like WhatsApp,
+Telegram"*, which is what both do with an album. `.msg-imgstack` is a column at the bubble's
+width with a 3px gap, and **only the OUTER corners are rounded** (20 top and bottom, 7
+between) so the run reads as one album rather than a pile of separate cards — Telegram's
+exact treatment.
+
+**EACH CELL IS A RESERVED 4:3 CARD, and that is the load-bearing decision.** Only the FIRST
+photo's real shape is stored on the message (`image_w`/`image_h`), so sizing the rest to
+themselves would mean every one of them growing the thread as it decoded — the very bug that
+made a chat open away from the bottom. A reserved box cannot do that. `object-fit:cover`
+rather than `contain` because letterbox bars down a whole column look worse than a crop, and
+a tap opens the full picture either way. Give the message per-image dimensions and this can
+become natural sizing; until then, do not.
+
+`acHoldBottomWhileMediaSettles` counts these images (the thread must stay parked at the
+bottom as they land) but `acRevealThread`'s hold list deliberately does NOT — nothing can
+move, so holding the chat back for them would only make it slower to open. The old
+`acCarScroll` + `.ac-imgdot` + chat `.msg-imgcar` are deleted; the identically-named
+`.ac-imgcar`/`.ac-imgslide` in the FEED are a different component and are untouched.
 
 ### Opening a chat lands at the bottom, and stays there
 

@@ -137,6 +137,44 @@ const IMG = (fill) => 'data:image/svg+xml;base64,' + Buffer.from(
     say(file && file.bw >= 1, `${theme}: and it carries an outline (${file && file.bw}px)`);
     say(file && file.icLight, `${theme}: with a white page for its icon (${file && file.ic})`);
 
+    /* ── AND WHEN THEY ARE SENT, SEVERAL PHOTOS STACK ──
+       They used to be a swipe carousel with dots: only the first was visible and you had to
+       discover the rest. The owner asked for "one under the other… the same way like WhatsApp,
+       Telegram", which is what both do with an album. Only the OUTER corners are rounded so
+       the run reads as one album rather than a pile of cards. */
+    const stack = await p.evaluate(async () => {
+      const mk = (c) => 'data:image/svg+xml;base64,' + btoa(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="900"><rect width="600" height="900" fill="${c}"/></svg>`);
+      if (!AC.messages || !AC.messages.length) return { skip: true };
+      const m = AC.messages[AC.messages.length - 1];
+      m.images = [mk('#3a7'), mk('#c33'), mk('#37a')]; m.image = m.images[0]; m.body = '';
+      acRenderThread();
+      await new Promise((r) => setTimeout(r, 600));
+      const th = document.getElementById('acThread');
+      const st = th.querySelector('.msg-imgstack');
+      if (!st) return { none: true, carousel: !!th.querySelector('.msg-imgcar') };
+      const cells = [...st.querySelectorAll('img')].map((n) => {
+        const q = n.getBoundingClientRect(); const cs = getComputedStyle(n);
+        return { w: Math.round(q.width), x: Math.round(q.left), y: Math.round(q.top),
+          top: parseFloat(cs.borderTopLeftRadius), bot: parseFloat(cs.borderBottomLeftRadius) };
+      });
+      return { n: cells.length,
+        oneColumn: new Set(cells.map((c) => c.x)).size === 1,
+        oneEach: new Set(cells.map((c) => c.y)).size === cells.length,
+        sameWidth: new Set(cells.map((c) => c.w)).size === 1,
+        outerOnly: cells[0].top > 12 && cells[0].bot < 12
+          && cells[cells.length - 1].bot > 12 && cells[cells.length - 1].top < 12,
+        carousel: !!th.querySelector('.msg-imgcar') };
+    });
+    if (stack.skip) say(true, `${theme}: (no message to restyle — stack check skipped)`);
+    else {
+      say(!stack.none && stack.n === 3, `${theme}: three sent photos render as three tiles (${stack.n})`);
+      say(!stack.carousel, `${theme}: and not as a swipe carousel you have to discover`);
+      say(stack.oneColumn && stack.oneEach, `${theme}: one under the other, in a single column`);
+      say(stack.sameWidth, `${theme}: all the same width, so the column has one edge`);
+      say(stack.outerOnly, `${theme}: only the outer corners are rounded — it reads as one album`);
+    }
+
     say(errs.length === 0, `${theme}: no JS errors` + (errs.length ? ' — ' + errs[0] : ''));
     await ctx.close();
   }

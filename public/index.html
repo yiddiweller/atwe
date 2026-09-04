@@ -4978,8 +4978,9 @@ body.light #acThreadScreen::before{background:linear-gradient(to bottom,
    reaches its bottom edge, so the geometry here is identical and it stays put. */
 #acThreadScreen::after{content:"";position:absolute;left:0;right:0;bottom:0;height:150px;pointer-events:none;z-index:3;
   background:linear-gradient(to top,rgba(0,0,0,.88) 0%,rgba(0,0,0,.68) 16%,rgba(0,0,0,.36) 44%,rgba(0,0,0,.12) 70%,rgba(0,0,0,0) 100%);
-  opacity:.9;transition:opacity var(--t-slow) var(--ease,ease);}
-#acThreadScreen.sc-scrolling::after{opacity:1;}
+  opacity:.9;}
+/* …and so does the fade above it. This lifted to full opacity while scrolling, which is the
+   second half of the same complaint: "the bottom background looks a drop different". */
 body.light #acThreadScreen::after{background:linear-gradient(to top,rgba(255,255,255,.88) 0%,rgba(255,255,255,.68) 16%,rgba(255,255,255,.36) 44%,rgba(255,255,255,.12) 70%,rgba(255,255,255,0) 100%);}
 /* In normal flow now — it is the scroller's content, not a layer being transformed. */
 .msg-scroll{position:relative;
@@ -5362,11 +5363,21 @@ body.light #acThreadScreen::after{background:linear-gradient(to top,rgba(255,255
   border:1px solid var(--img-edge);}
 .msg-photo.ac-img-sized{width:auto;aspect-ratio:auto;}
 /* Multi-image message carousel */
-.msg-imgcar{width:280px;max-width:74vw;border-radius:20px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;background:#000;border:1px solid var(--img-edge);}
-.msg-imgcar::-webkit-scrollbar{display:none;}
-.msg-imgcar .ac-imgcar-track{display:flex;}
-.msg-imgcar .ac-imgslide{flex:0 0 100%;scroll-snap-align:center;display:flex;align-items:center;justify-content:center;background:#000;}
-.msg-imgcar .ac-imgslide img{width:100%;max-height:340px;object-fit:contain;cursor:pointer;display:block;}
+/* ── SEVERAL PHOTOS STACK, ONE UNDER THE OTHER ────────────────────────────────────
+   The owner's ask, and what WhatsApp and Telegram both do with an album: every picture is
+   there to see at once, rather than hidden behind a swipe you have to discover. Only the
+   OUTER corners are rounded, so the run reads as one album instead of a pile of separate
+   cards — Telegram's exact treatment.
+   EACH CELL IS A FIXED 4:3 CARD, and that is deliberate: only the first photo's real shape
+   is stored on the message, so sizing the rest to themselves would mean each one growing
+   the thread as it decoded — the very bug that made a chat open away from the bottom. A
+   reserved box cannot do that. `cover` rather than `contain` because letterbox bars down a
+   whole column look worse than a crop, and a tap opens the full picture either way. */
+.msg-imgstack{display:flex;flex-direction:column;gap:3px;width:280px;max-width:74vw;}
+.msg-imgstack img{display:block;width:100%;aspect-ratio:4 / 3;object-fit:cover;cursor:pointer;
+  background:var(--s2);border:1px solid var(--img-edge);border-radius:7px;}
+.msg-imgstack img:first-child{border-top-left-radius:20px;border-top-right-radius:20px;}
+.msg-imgstack img:last-child{border-bottom-left-radius:20px;border-bottom-right-radius:20px;}
 /* Photo + caption: the image sits in a rounded frame inside the bubble, caption below. */
 .msg-bubble.has-cap{padding:2px;}
 .msg-bubble.has-cap .msg-photo{max-width:280px;width:100%;max-height:360px;object-fit:cover;border-radius:20px 20px 12px 12px;}
@@ -6119,11 +6130,12 @@ body.light .ac-item-unread.muted{background:var(--t3);}
    this and the desktop override are (0,2,1) — with no specificity to separate them the
    later rule simply wins, and it used to sit ~15 lines further down. */
 body.light .msg-inbox{background:rgba(255,255,255,.62);}
-/* While the thread is genuinely moving the blur steps down — cheaper to rasterise, and a
-   heavy frost over fast-moving content reads as smear rather than glass. */
-#acThreadScreen.sc-scrolling .msg-inbox{background:rgba(24,24,26,.82);
-  backdrop-filter:blur(8px) saturate(1.5);-webkit-backdrop-filter:blur(8px) saturate(1.5);}
-body.light #acThreadScreen.sc-scrolling .msg-inbox{background:rgba(255,255,255,.78);}
+/* THE BAR LOOKS THE SAME WHETHER THE THREAD IS MOVING OR NOT (owner: "when I scroll and
+   let go it has a different amount of blurriness"). It used to step down to blur(8) and a
+   heavier fill while scrolling, on the theory that a lighter blur is cheaper to rasterise —
+   but that saving was the reason the blur was cut on phones at all, and it was measured to
+   be nothing (see the base rule). What it actually bought was a visible change of material
+   every time a finger touched the thread. One value, always. */
 /* Anyone who has asked their phone for less transparency gets a solid bar — and this is the
    MOTION setting's neighbour, not the motion setting itself: someone who only wants stiller
    animation should not lose the glass. */
@@ -7161,9 +7173,6 @@ body.light .art-r-actions{border-top-color:rgba(0,0,0,.1);}
 .ac-imgcar-track{display:flex;}
 .ac-imgslide{flex:0 0 100%;scroll-snap-align:center;display:flex;align-items:center;justify-content:center;background:#000;}
 .ac-imgslide img{width:100%;max-height:420px;object-fit:contain;cursor:pointer;display:block;}
-.ac-imgdots{display:flex;gap:6px;justify-content:center;padding:8px 0 2px;}
-.ac-imgdot{width:6px;height:6px;border-radius:50%;background:var(--b3);transition:background var(--t-fast) var(--ease);}
-.ac-imgdot.on{background:var(--accent);}
 /* Composer image strip (multiple selected photos) */
 .ac-postimgs{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
 .ac-postimgs.multi .ac-postimg-wrap{width:96px;height:96px;}
@@ -21741,7 +21750,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
    Heuristic: a heartbeat stamps "dirty" every 3s while visible; backgrounding
    or navigating away stamps "clean". A boot that finds a dirty stamp = crash.
 ═══════════════════════════════════════════════ */
-const ATWE_BUILD = '1803'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1804'; // keep in step with sw.js CACHE — tells us which build a device runs
 (function crashBeacon() {
   try {
     let prev = null;
@@ -38052,12 +38061,6 @@ async function acDeleteConversation() {
 // A post's media: image (opens the lightbox) or an inline video player.
 // `inFeed` adds stopPropagation so tapping the media doesn't open the post.
 // Update the active dot as a multi-image carousel scrolls (right-to-left swipe).
-function acCarScroll(el) {
-  const dots = el.parentElement && el.parentElement.querySelector('.ac-imgdots');
-  if (!dots || !el.clientWidth) return;
-  const i = Math.round(el.scrollLeft / el.clientWidth);
-  [...dots.children].forEach((d, j) => d.classList.toggle('on', j === i));
-}
 // Show an image's alt description in a small sheet (tapping the ALT chip).
 function acShowAltText(text) {
   const box = document.getElementById('altTextBody');
@@ -60568,9 +60571,11 @@ function acMsgMedia(m) {
   }
   const imgs = (m.images && m.images.length) ? m.images : (m.image ? [m.image] : []);
   if (imgs.length > 1) {
-    const slides = imgs.map((src) => `<div class="ac-imgslide"><img src="${src}" alt="" loading="eager" fetchpriority="high" decoding="async" onclick="event.stopPropagation();openImageViewer(this.src, this)"/></div>`).join('');
-    const dots = imgs.map((_, i) => `<span class="ac-imgdot${i === 0 ? ' on' : ''}"></span>`).join('');
-    return `<div class="msg-imgcar" onscroll="acCarScroll(this)" onclick="event.stopPropagation()"><div class="ac-imgcar-track">${slides}</div></div><div class="ac-imgdots">${dots}</div>`;
+    /* One under the other, all visible — see .msg-imgstack for why each cell is a reserved
+       box rather than sized to its own photo. */
+    return `<div class="msg-imgstack" onclick="event.stopPropagation()">` + imgs.map((src) =>
+      `<img src="${src}" alt="" loading="eager" fetchpriority="high" decoding="async" onclick="event.stopPropagation();openImageViewer(this.src, this)"/>`
+    ).join('') + `</div>`;
   }
   // width/height are the picture's real shape, so the browser can hold its space
   // open before a single byte of it has arrived. That is what stops the words
@@ -63548,7 +63553,11 @@ function acStopAllVoice() {
    at that point you have chosen where to look and nothing should move you. */
 function acHoldBottomWhileMediaSettles(t) {
   if (!t) return;
-  const imgs = [...t.querySelectorAll('img.msg-photo, .ac-imgslide img')].filter((im) => !im.complete);
+  /* Stacked album photos count here too — they cannot SHOVE anything (each cell is a
+     reserved 4:3 box) but the thread still has to stay parked at the bottom as they land.
+     They are deliberately NOT in the reveal-hold list below: nothing can move, so holding
+     the chat back for them would only make it slower to open. */
+  const imgs = [...t.querySelectorAll('img.msg-photo, .msg-imgstack img')].filter((im) => !im.complete);
   if (!imgs.length) return;
   // Whether we are still parked at the bottom is READ from the scroller, not
   // remembered from a scroll event — re-pinning scrolls the thread itself, and a
@@ -63573,7 +63582,7 @@ function acRevealThread(t) {
   // The one case left is a photo whose shape we have never been able to read
   // (an unrecognised or damaged file). For those, and only those, the reveal
   // still pauses briefly rather than letting them jump the words apart.
-  const unknown = [...t.querySelectorAll('img.msg-photo, .ac-imgslide img')]
+  const unknown = [...t.querySelectorAll('img.msg-photo')]
     .filter((im) => !im.complete && !(im.getAttribute('width') && im.getAttribute('height')))
     .slice(0, 4);
   if (!unknown.length) { show(); return; }
