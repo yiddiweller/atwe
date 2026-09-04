@@ -201,6 +201,30 @@ const BASE = process.env.BASE || 'http://localhost:3262';
 
   say(blurs.length === 0, `no blur over the thread on a phone beyond the measured top edge${blurs.length ? ' — ' + blurs.join(', ') : ''}`);
 
+  /* 7d. NOTHING IN A CONVERSATION MAY GROW WHEN ITS PICTURE LANDS. A link preview's cover
+        was `max-height:150px`, so before the image arrived the <img> was ZERO tall and the
+        card grew by the full 150 the moment it decoded — shoving the thread down under the
+        reader. That is the "I open a chat and it's not at the bottom" the owner reported,
+        and it is not a scroll bug at all: it is a box that did not reserve its space.
+        Built here rather than seeded, so the check does not depend on a database having a
+        link in it. */
+  const lp = await p.evaluate(async () => {
+    const host = document.createElement('div');
+    host.style.cssText = 'position:fixed;left:-9999px;top:0;width:280px;';
+    host.innerHTML = '<div class="msg-linkprev"><img class="lp-img" src="data:image/svg+xml;base64,'
+      + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400"><rect width="600" height="400" fill="#3a7"/></svg>')
+      + '" alt=""/><div style="padding:8px">Title</div></div>';
+    document.body.appendChild(host);
+    const before = host.getBoundingClientRect().height;      // before the picture decodes
+    await host.querySelector('img').decode().catch(() => {});
+    await new Promise((r) => requestAnimationFrame(r));
+    const after = host.getBoundingClientRect().height;
+    host.remove();
+    return { before: Math.round(before), after: Math.round(after) };
+  });
+  say(lp.after === lp.before,
+    `a link preview reserves its cover's box, so it cannot grow later (${lp.before} → ${lp.after})`);
+
   /* 8. `touch-action: pan-y` gives vertical to the browser and KEEPS horizontal for us.
         Swipe-to-reply is the thing that would have died if this said `pan-x`/`auto`, and
         it is DM-only, so the probe opens a 1:1 conversation for it. NB it moves the row
