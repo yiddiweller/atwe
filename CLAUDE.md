@@ -6410,6 +6410,41 @@ centred as it grows into the wider "New Message" pill. Its `bottom` in CSS is on
 — `acSyncFooterPad` sets the real one from the composer's measured height, so it rides up
 when the bar grows to two lines.
 
+### Nothing here yet, said properly (`acEmpty`)
+
+Seven screens had a real empty state — a glyph in a disc, a headline, a sentence and a way
+out — and **dozens had a bare grey line** ("You haven't ordered anything yet."). Same app,
+two standards, and the bare one tells a person nothing about what the screen is FOR or what
+to do next. **`acEmpty(icon, line, sub, ctaLabel, ctaRun)`** is the good one as one call,
+using the classes the cart already had (`.ac-feed-empty*`), so nothing new was invented and
+the screens cannot drift apart again. `_EMPTY_ICONS` holds the glyph set; `cta` is optional,
+because some screens genuinely have nowhere to send you ("Nothing to pay" is good news).
+
+Converted so far — the money and shop screens: **Orders · Sales · Saved items · Invoices ·
+Quotes · Splits · Pools · Scheduled payments**. Each headline says what is empty, each
+sentence says what the screen is for, and each way-out button goes somewhere real.
+`scratchpad/emptystates.js` checks all of that in both themes — including that **the
+button's function actually exists**, because a button that does nothing is worse than no
+button.
+
+### The marketplace filters are the app's own controls
+
+The filter row sat directly under the kind chips (full pills, solid, filled when chosen)
+and answered with a **native OS dropdown, native square checkboxes and 9px boxes** — the
+only unstyled system controls left in the app, and they read as somebody else's software.
+They are pills now: the sort control keeps its own chevron (`appearance:none` + an inline
+SVG, since the native one cannot be themed), and each tick is a pill that fills to
+`--t1`/`--bg` when on, exactly like `.ac-jv.on` beside it.
+
+**Nothing about the behaviour changed** — still a real `<select>` and real `<input
+type=checkbox>` (hidden, not removed), so the keyboard, the screen reader and every
+existing handler work as before.
+
+**It also took two goes, for the reason this file already warns about:** `.mkt-fsel` and
+`.mkt-fprice` are declared **twice**, and the later copy re-imposed `border-radius:12px`
+and its own padding — so the pill shape simply never appeared, silently. The winning copy
+is the one to edit; it now carries only its transition.
+
 ### When the app breaks for somebody, the owner finds out
 
 Nothing in the product could say that a member hit an error today. The audit log records

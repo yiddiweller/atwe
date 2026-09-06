@@ -9093,9 +9093,29 @@ body .tv-num.cert,body.light .tv-num.cert{color:var(--purple-ink);}
 .mkt-more-name{font-size:12px;color:var(--t1);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .mkt-more-price{font-size:13px;font-weight:700;color:var(--t1);}
 .mkt-filters{display:flex;gap:7px;align-items:center;margin-bottom:10px;flex-wrap:wrap;}
-.mkt-fsel{background:var(--s2);color:var(--t1);border:none;border-radius:9px;padding:7px 9px;font-size:13px;}
-.mkt-fprice{width:74px;background:var(--s2);color:var(--t1);border:none;border-radius:9px;padding:7px 9px;font-size:13px;}
-.mkt-fstock{display:flex;align-items:center;gap:5px;font-size:13px;color:var(--t2);}
+/* THE MARKETPLACE FILTERS ARE THE APP'S OWN CONTROLS, not the browser's. This row sat
+   directly under the kind chips (full pills, solid, filled when chosen) and answered with
+   a native OS dropdown, native square checkboxes and 9px boxes — the only unstyled system
+   controls left in the app, and they read as somebody else's software. Nothing about the
+   BEHAVIOUR changed: they are still a real <select> and real checkboxes, so the keyboard,
+   the screen reader and the existing handlers all work exactly as before. */
+.mkt-fsel{appearance:none;-webkit-appearance:none;background:var(--s2);color:var(--t1);border:none;
+  border-radius:var(--r-pill);padding:0 30px 0 14px;height:var(--btn-h);font-size:13px;font-weight:600;
+  font-family:inherit;cursor:pointer;
+  /* its own chevron, in the app's line style — the native one cannot be themed */
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;background-size:13px;}
+.mkt-fprice{width:82px;background:var(--s2);color:var(--t1);border:none;border-radius:var(--r-pill);
+  padding:0 14px;height:var(--btn-h);font-size:13px;font-family:inherit;}
+/* Each tick is a pill you switch on, exactly like the kind chips above it — the checkbox
+   itself is still there, just not drawn by the operating system. */
+.mkt-fstock{display:inline-flex;align-items:center;height:var(--btn-h);padding:0 14px;
+  border-radius:var(--r-pill);background:var(--s2);color:var(--t2);font-size:13px;font-weight:600;
+  cursor:pointer;user-select:none;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
+.mkt-fstock input{position:absolute;opacity:0;width:0;height:0;}
+.mkt-fstock:has(input:checked){background:var(--t1);color:var(--bg);}
+.mkt-fstock:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px;}
+@media(hover:hover){.mkt-fstock:hover{background:var(--s3);}.mkt-fstock:has(input:checked):hover{background:var(--t1);}}
 .prod-thumbs{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px;}
 .prod-thumb{position:relative;width:54px;height:54px;border-radius:9px;background:var(--s2) center/cover;}
 .prod-thumb.add{display:grid;place-items:center;font-size:22px;color:var(--t3);cursor:pointer;border:1px dashed var(--b3);}
@@ -9107,7 +9127,10 @@ body .tv-num.cert,body.light .tv-num.cert{color:var(--purple-ink);}
 .sa-chart{display:flex;align-items:flex-end;gap:3px;height:80px;padding:8px 0;}
 .sa-bar{flex:1;min-height:2px;background:linear-gradient(180deg,var(--accent),var(--green));border-radius:3px 3px 0 0;}
 /* Shop polish: align filter controls to .jp-in, enlarge tap targets, micro-interactions */
-.mkt-fsel,.mkt-fprice{border-radius:12px;padding:9px 11px;transition:border-color var(--t-fast);}
+/* NB this is the SECOND declaration of .mkt-fsel/.mkt-fprice in this file and it WINS —
+   it used to re-impose a 12px radius and its own padding over the pill shape set above,
+   silently (the shape simply never appeared). Only the transition is left here. */
+.mkt-fsel,.mkt-fprice{transition:border-color var(--t-fast);}
 .mkt-fsel:focus,.mkt-fprice:focus{border-color:var(--accent);outline:none;}
 .addr-acts button{padding:7px 8px;border-radius:8px;transition:background var(--t-fast);}
 .mkt-save svg,.mkt-card-save svg{transition:fill var(--t-fast),stroke var(--t-fast),transform var(--t-fast);}
@@ -18630,7 +18653,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
       <button class="ac-jv on" id="ordTabBuyer" onclick="acOrdersTab('buyer')">My orders</button>
       <button class="ac-jv" id="ordTabSeller" onclick="acOrdersTab('seller')">Sales</button>
     </div>
-    <input class="jp-in" id="ordSearch" type="text" maxlength="80" placeholder="Search orders — item, name, #number, tracking" aria-label="Search orders" oninput="acOrdSearchDebounced()" style="margin:0 0 10px;"/>
+    <input class="jp-in" id="ordSearch" type="text" maxlength="80" placeholder="Search your orders" aria-label="Search orders" oninput="acOrdSearchDebounced()" style="margin:0 0 10px;"/>
     <div id="ordersBody"></div>
   </div>
 </div>
@@ -19183,7 +19206,7 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 <div class="overlay hidden" id="marketplaceView" onclick="if(event.target===this)closeOverlay('marketplaceView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Marketplace">
     <button class="sheet-close" onclick="closeOverlay('marketplaceView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-    <div class="jp-title" style="display:flex;align-items:center;justify-content:space-between;">Marketplace<button class="ac-link-btn" onclick="acOpenMarketSearches()" style="font-size:13px;">🔔 Saved searches</button></div>
+    <div class="jp-title" style="display:flex;align-items:center;justify-content:space-between;">Marketplace<button class="ac-link-btn" onclick="acOpenMarketSearches()" style="font-size:13px;">Saved searches</button></div>
     <input class="jp-in" id="mktSearch" type="text" placeholder="Search items & services" oninput="acMktSearch(this.value)" style="margin-bottom:8px;"/>
     <button class="ac-link-btn" id="mktSaveSearch" style="margin:0 2px 8px;display:none;" onclick="acSaveMktSearch()">＋ Save this search &amp; get alerts</button>
     <div class="ac-job-views" id="mktKindTabs" style="margin-bottom:10px;">
@@ -21861,7 +21884,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1811'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1812'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
@@ -43963,7 +43986,9 @@ async function acLoadInvoices() {
         <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(inv.title)}</span>${acInvStatusChip(inv.status)}</div>
           <div class="ac-item-last">${AC._invScope === 'sent' ? 'To ' : 'From '}${escHtml(who.name)} · $${(inv.amountCents / 100).toFixed(2)}</div></div>
       </div>`;
-    }).join('') : (rinvHtml ? '' : `<div class="ac-empty" style="padding:26px;">${AC._invScope === 'sent' ? 'You haven’t sent any invoices.' : 'No invoices to pay.'}</div>`);
+    }).join('') : (rinvHtml ? '' : (AC._invScope === 'sent'
+      ? acEmpty('receipt', 'No invoices sent', 'Bill someone for work you have done — they can pay it straight from the message.', 'Send an invoice', "acInvoiceCreateOpen()")
+      : acEmpty('receipt', 'Nothing to pay', 'Invoices someone sends you land here, and in your messages.')));
     body.innerHTML = rinvHtml + list;
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
@@ -44147,7 +44172,9 @@ async function acLoadQuotes() {
         <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(q.title)}</span>${acQuoteChip(q.status)}</div>
           <div class="ac-item-last">${AC._qScope === 'sent' ? 'To ' : 'From '}${escHtml(who.name)} · $${(q.amountCents / 100).toFixed(2)}</div></div>
       </div>`;
-    }).join('') : `<div class="ac-empty" style="padding:26px;">${AC._qScope === 'sent' ? 'You haven’t sent any quotes.' : 'No quotes to review.'}</div>`;
+    }).join('') : (AC._qScope === 'sent'
+      ? acEmpty('tag', 'No quotes sent', 'Price a job before you start it — they accept, and it turns into an invoice by itself.', 'Send a quote', "acQuoteCreateOpen()")
+      : acEmpty('tag', 'No quotes to review', 'When someone prices a job for you, it arrives here to accept or decline.'));
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
 async function acOpenQuote(id) {
@@ -45412,7 +45439,8 @@ async function acOpenSaved() {
   const b = document.getElementById('savedBody'); b.innerHTML = acSkelRows(3);
   try {
     const { listings } = await API.req('GET', '/api/saved-products');
-    b.innerHTML = (listings && listings.length) ? listings.map(acListingCard).join('') : '<div class="ac-empty" style="padding:26px;">No saved items yet. Tap the ♥ on a product to save it for later.</div>';
+    b.innerHTML = (listings && listings.length) ? listings.map(acListingCard).join('')
+      : acEmpty('heart', 'Nothing saved yet', 'Tap the heart on anything in the marketplace and it waits for you here — and you are told if the price drops.', 'Browse the marketplace', "closeOverlay('savedView');acOpenMarketplace()");
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
 // Does the signed-in user have enough balance to cover an amount (in cents)?
@@ -45692,7 +45720,9 @@ async function acLoadPools() {
   try {
     const { pools } = await API.req('GET', '/api/pools?scope=' + AC._poolScope);
     body.innerHTML = pools.length ? pools.map(acPoolRow).join('')
-      : `<div class="ac-empty" style="padding:24px;">${AC._poolScope === 'mine' ? 'No pools yet. Create one to start raising.' : 'You haven’t contributed to any pools yet.'}</div>`;
+      : (AC._poolScope === 'mine'
+        ? acEmpty('people', 'No pools yet', 'Set a goal and share the link — anyone can chip in, and you watch it fill.', 'Start a pool', "acPoolCreateOpen()")
+        : acEmpty('people', 'You have not chipped in yet', 'Pools you contribute to are kept here so you can see how they are doing.'));
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">Could not load pools.</div>'; }
 }
 function acPoolRow(p) {
@@ -48078,13 +48108,18 @@ function acRenderOrders() {
   const body = document.getElementById('ordersBody'); if (!body) return;
   const orders = AC._orders || [];
   if (!orders.length) {
-    const empty = AC._ordFilter === 'archived' ? 'Nothing archived.' : (AC._ordScope === 'seller' ? 'No sales yet.' : 'You haven’t ordered anything yet.');
+    /* A bare grey line told a person nothing about what to do next. Each of the three
+       cases now says what this screen is FOR, and offers the one thing worth doing. */
+    const empty = AC._ordFilter === 'archived'
+      ? acEmpty('bag', 'Nothing archived', 'Orders you archive are kept here, out of the way.')
+      : (AC._ordScope === 'seller'
+        ? acEmpty('bag', 'No sales yet', 'When someone buys from you, the order lands here to fulfil — with the address and a packing slip.', 'Manage your store', "closeOverlay('ordersView');acOpenStoreManage()")
+        : acEmpty('bag', 'No orders yet', 'Anything you buy on Atwe shows up here, with tracking and your receipt.', 'Browse the marketplace', "closeOverlay('ordersView');acOpenMarketplace()"));
     const back = AC._ordFilter === 'archived' ? '<div style="text-align:center;margin-top:10px;"><button class="wf-chip" onclick="acOrdFilter(\'all\')">Back to orders</button></div>' : '';
     // Searched for an order and found none? The assistant can find it from a
     // description ("the blue jacket I bought in March") where the box cannot.
     const oq = ((document.getElementById('ordSearch') || {}).value || '').trim();
-    body.innerHTML = (oq ? acAskAiEmpty(oq, 'No orders match “' + escHtml(oq) + '”.')
-                         : `<div class="ac-empty" style="padding:26px;">${empty}</div>`) + back;
+    body.innerHTML = (oq ? acAskAiEmpty(oq, 'No orders match “' + escHtml(oq) + '”.') : empty) + back;
     return;
   }
   const f = AC._ordFilter || 'all';
@@ -50200,7 +50235,9 @@ async function acLoadSplits() {
   const b = document.getElementById('splitBody'); b.innerHTML = acSkelRows(2);
   try {
     const { splits } = await API.req('GET', '/api/splits?scope=' + AC._splitScope);
-    if (!splits.length) { b.innerHTML = `<div class="ac-empty" style="padding:22px;">${AC._splitScope === 'owed' ? 'Nothing to pay right now.' : 'You haven’t split any bills yet.'}</div>`; return; }
+    if (!splits.length) { b.innerHTML = AC._splitScope === 'owed'
+      ? acEmpty('money', 'Nothing to pay', 'When someone splits a bill with you, your share appears here — and in the chat.')
+      : acEmpty('money', 'No bills split yet', 'Split a bill with anyone by @username; each person pays their own share from their balance.', 'Split a bill', "acSplitCreateOpen()"); return; }
     b.innerHTML = splits.map(s => {
       const pct = s.totalCents ? Math.round(s.paidCents / s.totalCents * 100) : 0;
       const right = AC._splitScope === 'owed'
@@ -51984,7 +52021,9 @@ async function acLoadSchedPays() {
   const b = document.getElementById('schedPayBody'); b.innerHTML = acSkelRows(2);
   try {
     const { payments } = await API.req('GET', '/api/scheduled-payments?scope=' + AC._spScope);
-    if (!payments.length) { b.innerHTML = `<div class="ac-empty" style="padding:22px;">${AC._spScope === 'outgoing' ? 'No scheduled payments. Set up a one-off or recurring payment to anyone.' : 'No one has scheduled a payment to you.'}</div>`; return; }
+    if (!payments.length) { b.innerHTML = AC._spScope === 'outgoing'
+      ? acEmpty('clock', 'No scheduled payments', 'Pay someone on a date, or on repeat — rent, a retainer, an allowance.', 'Schedule a payment', "acSchedPayCreateOpen()")
+      : acEmpty('clock', 'Nothing scheduled to you', 'Standing payments other people set up to pay you will show here.'); return; }
     b.innerHTML = payments.map(acSchedPayRow).join('');
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
@@ -62112,6 +62151,33 @@ async function acRetractSend(id) {
   } else drop();
   try { await API.req('DELETE', acMsgApi(id) + '?scope=everyone'); acLoadChats?.(); }
   catch (e) { showNotif('Couldn’t undo. The message was already delivered.'); }
+}
+
+/* ── NOTHING HERE YET, SAID PROPERLY ──────────────────────────────────────────────
+   Seven screens had a real empty state — a glyph, a headline, a sentence and a way out —
+   and dozens more had a bare grey line of text ("You haven't ordered anything yet."). Same
+   app, two standards, and the bare one tells a person nothing about what to do next. This
+   is the good one, as one call, so every screen can have it and they cannot drift.
+   The classes are the ones the cart already used (.ac-feed-empty*), so nothing new was
+   invented for it. `cta` is optional: some screens genuinely have nowhere to send you. */
+const _EMPTY_ICONS = {
+  bag: '<path d="M6 7h12l-1 13H7L6 7Z"/><path d="M9 7V5.5a3 3 0 0 1 6 0V7"/>',
+  receipt: '<path d="M6 3.5h12v17l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4-2 1.4v-17Z"/><path d="M9.5 8.5h5M9.5 12h5"/>',
+  tag: '<path d="M3.5 11.2V4.5a1 1 0 0 1 1-1h6.7a1 1 0 0 1 .7.3l8 8a1 1 0 0 1 0 1.4l-6.7 6.7a1 1 0 0 1-1.4 0l-8-8a1 1 0 0 1-.3-.7Z"/><circle cx="7.8" cy="7.8" r="1.3"/>',
+  heart: '<path d="M12 20s-7.5-4.7-7.5-9.6A4.4 4.4 0 0 1 12 7.4a4.4 4.4 0 0 1 7.5 3C19.5 15.3 12 20 12 20Z"/>',
+  money: '<rect x="2.5" y="6" width="19" height="12" rx="2.5"/><circle cx="12" cy="12" r="2.6"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  people: '<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16.5 6.6a3.2 3.2 0 0 1 0 6.3M17 14.8c2.2.4 3.8 2.2 3.8 4.7"/>',
+  calendar: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3.5v3M16 3.5v3"/>',
+};
+function acEmpty(icon, line, sub, ctaLabel, ctaRun) {
+  const g = _EMPTY_ICONS[icon] || _EMPTY_ICONS.bag;
+  return `<div class="ac-feed-empty">
+    <div class="ac-feed-empty-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${g}</svg></div>
+    <div class="ac-feed-empty-line">${escHtml(line)}</div>
+    ${sub ? `<div class="ac-feed-empty-sub">${escHtml(sub)}</div>` : ''}
+    ${ctaLabel ? `<button class="ac-pill-btn accent ac-feed-empty-cta" onclick="${ctaRun}">${escHtml(ctaLabel)}</button>` : ''}
+  </div>`;
 }
 
 /* ── Attachments: photo / video / file ── */
