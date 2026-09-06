@@ -1480,6 +1480,12 @@ app.use((req, res, next) => {
 setInterval(() => {
   db.query("DELETE FROM page_views WHERE created_at < now() - interval '400 days'").catch(() => {});
 }, 24 * 60 * 60 * 1000).unref?.();
+/* And the fault log, the same way. A fault that is FIXED stops being interesting quickly;
+   one still open is worth keeping even if it has been quiet for a while — so they age out
+   on different clocks. The per-person rows go with their fault (ON DELETE CASCADE). */
+setInterval(() => {
+  db.query("DELETE FROM client_errors WHERE (resolved AND last_seen < now() - interval '30 days') OR last_seen < now() - interval '120 days'").catch(() => {});
+}, 24 * 60 * 60 * 1000).unref?.();
 
 // Sign in with Apple domain verification: serve the association file Apple
 // gives you (set its contents as APPLE_DOMAIN_ASSOCIATION). Kept above the site
@@ -4155,6 +4161,7 @@ async function notifySelf(userId, type, productId) {
 
 // Short server-side verb map for push bodies (mirrors the client's notif copy).
 const PUSH_VERBS = {
+  app_error: 'Something broke for someone — open the dashboard',
   certified: 'You are now Atwe Certified',
   review_invite: 'How did it go? Leave a review',
   delivery_offer: 'offered to deliver your order',
@@ -26271,6 +26278,130 @@ app.delete('/api/admin/drive/:id', auth.requireAdmin, async (req, res) => {
 });
 // Background-job health — is each scheduled flusher alive? A job is `stale` if it
 // hasn't run within ~2.5× its interval, `error` if its last run threw. Superadmin only.
+/* ── WHEN THE APP BREAKS FOR SOMEBODY, THE OWNER FINDS OUT ─────────────────────────
+   Nothing in the product could say that a member hit an error today: the audit log
+   records what STAFF did and the activity feed what members did, but a thrown exception
+   in someone's browser was seen by nobody at all. The client reports one, this stores it
+   ONE ROW PER DISTINCT FAULT, and a brand-new fault notifies every admin — the same way
+   a payment does — so a bug announces itself instead of waiting to be found.
+   It deliberately holds NO message text, NO names and NO page content: only what broke,
+   where, and on which build. Public + rate-limited, because an error is most worth
+   hearing about when it happened before the person could even sign in. */
+const CLIENT_ERR_MAX = 2000;                       // never store more than this per field-set
+/* A new fault is worth interrupting someone for; twenty in a minute is not. At most a few
+   alerts an hour — everything else still lands in the dashboard, quietly. */
+let _errAlerts = [];
+function _errAlertOk() {
+  const now = Date.now();
+  _errAlerts = _errAlerts.filter((t) => now - t < 3600000);
+  if (_errAlerts.length >= 3) return false;
+  _errAlerts.push(now); return true;
+}
+app.post('/api/client-error', rateLimit(20, 60000, 'clienterr'), auth.optionalAuth, async (req, res) => {
+  res.json({ ok: true });                          // never make the app wait on its own bad news
+  if (!db.isConfigured()) return;
+  try {
+    const b = req.body || {};
+    const cut = (v, n) => String(v == null ? '' : v).slice(0, n);
+    const message = cut(b.message, 300).trim();
+    if (!message) return;
+    const source = cut(b.source, 200);
+    const stack = cut(b.stack, CLIENT_ERR_MAX);
+    const path = cut(b.path, 200);
+    const build = cut(b.build, 20);
+    const platform = cut(b.platform || 'web', 20);
+    /* The fingerprint is what makes this ONE line instead of a thousand: the fault itself,
+       not the visit. Digits are flattened out of it so "post 4821 not found" and
+       "post 9137 not found" are recognised as the same bug rather than two. */
+    /* `crypto` at module scope here is the WEB crypto global, which has no createHash —
+       Node's is required inline, exactly as visitorHash does a few hundred lines up. */
+    const fp = require('crypto').createHash('sha256')
+      .update((message + '|' + source).replace(/\d+/g, '#').toLowerCase()).digest('hex').slice(0, 32);
+    const agent = cut(req.get('user-agent'), 200);
+    const uid = req.user ? req.user.id : null;
+    const ins = await db.query(
+      `INSERT INTO client_errors (fingerprint, message, source, stack, path, build, platform, last_user_id, last_agent)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       ON CONFLICT (fingerprint) DO UPDATE SET
+         hits = client_errors.hits + 1, last_seen = now(),
+         path = EXCLUDED.path, build = EXCLUDED.build, platform = EXCLUDED.platform,
+         last_user_id = EXCLUDED.last_user_id, last_agent = EXCLUDED.last_agent,
+         stack = COALESCE(NULLIF(client_errors.stack, ''), EXCLUDED.stack),
+         /* It is only NEWS again if it survived the fix — a straggler still running the
+            build it was resolved on is not a reopening. */
+         resolved = CASE WHEN client_errors.resolved AND EXCLUDED.build IS DISTINCT FROM client_errors.resolved_build
+                         THEN false ELSE client_errors.resolved END
+       RETURNING id, hits, (xmax = 0) AS is_new`,
+      [fp, message, source, stack, path, build, platform, uid, agent]);
+    const row = ins.rows[0]; if (!row) return;
+    /* How many DIFFERENT people, so "12 people" is a real count and not one phone in a
+       retry loop. The key is the account when there is one, else the same ip+agent hash
+       the visitor count uses — never anything that identifies a person on its own. */
+    const key = uid ? 'u' + uid : 'a' + visitorHash(clientIp(req), agent).slice(0, 16);
+    const seen = await db.query(
+      'INSERT INTO client_error_users (error_id, user_key) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING error_id', [row.id, key]);
+    if (seen.rowCount) await db.query('UPDATE client_errors SET users_hit = users_hit + 1 WHERE id = $1', [row.id]);
+    if (row.is_new) {
+      /* A HANDFUL OF ADMINS, AWAITED — not every admin, fired off at once. The first
+         version selected every is_admin row and launched a notify() per admin without
+         awaiting: with two admins that is invisible, and on a database with 923 it
+         opened ~900 concurrent queries, drowned the pool and NOTHING was delivered
+         (the misses are swallowed, so it failed silently — measured, 0 notifications
+         from 2 real faults). Five is plenty for "somebody tell me", and a burst of
+         new faults cannot turn into a burst of alerts. */
+      /* notifySelf, NOT notify: `notifications.actor_id` is NOT NULL, and a fault has no
+         actor — whoever happened to be on screen did not cause it. notify(admin, null, …)
+         therefore failed its insert every single time, silently, because notification
+         delivery is best-effort and swallows its errors (measured: 0 alerts from 2 real
+         faults). notifySelf is the door every other system alert already uses, and the
+         client renders this type with the Atwe mark rather than an actor. */
+      if (_errAlertOk()) {
+        const admins = await db.query('SELECT id FROM users WHERE is_admin = true ORDER BY id LIMIT 5');
+        for (const a of admins.rows) await notifySelf(a.id, 'app_error');
+      }
+      logEvent('system', 'app_error', { actorId: uid, subjectType: 'client_error', subjectId: row.id, meta: { message, path, build } });
+    }
+  } catch (e) { console.error('client-error', e.message); }
+});
+// What is breaking, worst first. Superadmin: it is diagnostics, not a scoped desk.
+app.get('/api/admin/client-errors', auth.requireAdmin, async (req, res) => {
+  if (!db.isConfigured()) return res.status(503).json({ error: 'Database not configured' });
+  try {
+    const state = String(req.query.state || 'open');
+    const where = state === 'resolved' ? 'WHERE resolved = true' : state === 'all' ? '' : 'WHERE resolved = false';
+    const { rows } = await db.query(
+      `SELECT e.*, u.username AS last_username FROM client_errors e
+         LEFT JOIN users u ON u.id = e.last_user_id
+       ${where} ORDER BY e.last_seen DESC LIMIT 200`);
+    const open = await db.query('SELECT COUNT(*)::int AS n FROM client_errors WHERE resolved = false');
+    res.json({ errors: rows.map(r => ({
+      id: r.id, message: r.message, source: r.source, stack: r.stack, path: r.path,
+      build: r.build, platform: r.platform, hits: r.hits, usersHit: r.users_hit,
+      firstSeen: r.first_seen, lastSeen: r.last_seen, resolved: r.resolved,
+      lastUsername: r.last_username, agent: r.last_agent })), openCount: open.rows[0].n });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not load errors.' }); }
+});
+app.post('/api/admin/client-errors/:id/resolve', auth.requireAdmin, async (req, res) => {
+  if (!db.isConfigured()) return res.status(503).json({ error: 'Database not configured' });
+  try {
+    const on = req.body && req.body.resolved === false ? false : true;
+    /* Remember WHICH build it was resolved on, so the same fault arriving from a device
+       still running that build does not reopen it — only a newer one does. */
+    /* The casts are load-bearing: inside a CASE, Postgres infers a bare parameter as text
+       and then refuses to put it in an integer column ("resolved_by is of type integer but
+       expression is of type text") — the whole route 500'd on its first real use. */
+    const { rows } = await db.query(
+      `UPDATE client_errors SET resolved = $2::boolean,
+         resolved_at = CASE WHEN $2::boolean THEN now() ELSE NULL END,
+         resolved_by = CASE WHEN $2::boolean THEN $3::int ELSE NULL END,
+         resolved_build = CASE WHEN $2::boolean THEN build ELSE NULL END
+       WHERE id = $1::bigint RETURNING id, resolved`, [req.params.id, on, req.user.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    adminAudit(req, on ? 'error.resolve' : 'error.reopen', 'client_error', req.params.id, {});
+    res.json({ ok: true, resolved: rows[0].resolved });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not update.' }); }
+});
+
 app.get('/api/admin/jobs', auth.requireAdmin, (_req, res) => {
   const now = Date.now();
   const jobs = Object.values(jobHealth).map((j) => {

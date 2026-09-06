@@ -14247,10 +14247,23 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
   </div>
 
   <!-- SU password -->
-  <div class="auth-step hidden" id="suPassStep" role="dialog" aria-label="Choose a password">
-    <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('pass')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
+  <!-- LETTING THE BROWSER OFFER TO SAVE THE NEW PASSWORD. Chrome, Safari and iOS Keychain
+       decide "that was a sign-up, shall I save it?" by watching for a real <form> submit
+       carrying a username field and a new-password field. Signing IN already had this
+       (build 1785); creating an account did not, so a brand-new member could close the tab
+       with a password nothing had remembered — the fastest way to lose someone on day one.
+       Same treatment as the login step: this element IS the form (a <div class="auth-step">
+       became a <form class="auth-step">, so the flex column and the button's margin-top:auto
+       are untouched — wrapping the fields INSIDE the step is the version that breaks it). -->
+  <form class="auth-step hidden" id="suPassStep" role="dialog" aria-label="Choose a password" onsubmit="return suPassSubmit(event)">
+    <div class="auth-stepbar"><button type="button" class="auth-backarrow" onclick="suBack('pass')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
+    <!-- A manager will not save a password it cannot name, and this step only knows the
+         address from a previous step. type="hidden" is ignored by managers and so is
+         display:none, so it is a REAL text field taken out of the flow. -->
+    <input id="suPmUser" type="text" autocomplete="username" tabindex="-1" aria-hidden="true"
+           style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:-9999px;"/>
     <div class="auth-pw" style="margin-top:18px;">
-      <input class="auth-pw-input" type="password" id="suPass" aria-label="Password" placeholder="Password" autocomplete="new-password" oninput="suPassToggle()" onkeydown="if(event.key==='Enter')suPassContinue()"/>
+      <input class="auth-pw-input" type="password" id="suPass" aria-label="Password" placeholder="Password" autocomplete="new-password" oninput="suPassToggle()"/>
       <button type="button" class="auth-eye pwd-eye" onclick="togglePwd(this)" aria-label="Show password">
         <svg class="eye-open" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8.6" ry="7.4"/><circle cx="12" cy="12" r="3.1" fill="currentColor" stroke="none"/></svg>
         <svg class="eye-off" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8.6" ry="7.4"/><line x1="4.6" y1="19.4" x2="19.4" y2="4.6"/></svg>
@@ -14261,9 +14274,12 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
     <div class="pw-strength-label" id="suPwStrengthLabel" aria-live="polite"></div>
     <div class="auth-error" id="suPassError"></div>
     <p class="auth-fieldhint auth-pwnote hidden" id="suPassGoogleHint">Add a password to also sign in with your username or email. You can skip and set one later.</p>
-    <button class="auth-btn auth-continue is-empty" id="suPassBtn" style="margin-top:auto;" onclick="suPassContinue()">Continue</button>
-    <button class="auth-skiplink hidden" id="suPassSkip" onclick="suPassSkip()">Skip for now</button>
-  </div>
+    <!-- A real submit is what triggers the save prompt; Enter in the field submits the form
+         by itself, which is why the field's own Enter handler is gone (on the login step
+         keeping both fired doLogin TWICE and burned the rate limit at double speed). -->
+    <button type="submit" class="auth-btn auth-continue is-empty" id="suPassBtn" style="margin-top:auto;">Continue</button>
+    <button type="button" class="auth-skiplink hidden" id="suPassSkip" onclick="suPassSkip()">Skip for now</button>
+  </form>
 
   <!-- SU username -->
   <div class="auth-step hidden" id="suUserStep" role="dialog" aria-label="Choose a username">
@@ -21845,7 +21861,58 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1810'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1811'; // keep in step with sw.js CACHE — tells us which build a device runs
+/* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
+   Until now a thrown error in a member's browser was seen by nobody: the owner could
+   not know that anyone hit a bug today, let alone which one. This reports the fault —
+   and ONLY the fault. No message text, no names, no page content, and deliberately not
+   even the URL (a path like /john IS somebody's name); it sends the WORLD and the SCREEN
+   instead, which is both more useful and tells nobody who was there.
+   Rules it follows: it never throws (a reporter that breaks is worse than none), it
+   never blocks (fire-and-forget, keepalive so a report survives the page closing), it
+   sends each distinct fault ONCE per session and at most a handful in total, and it
+   ignores the cross-origin "Script error." that browser extensions produce, which is
+   noise nobody can act on. */
+const _ERR_MAX_PER_SESSION = 8;
+let _errSent = 0; const _errSeen = new Set();
+function _errWhere() {
+  try {
+    const ov = [...document.querySelectorAll('.overlay:not(.hidden)')].pop();
+    /* AC_SCREENS is a top-level `const`, so it is NOT a window property — reading it
+       through `window.` silently gave undefined and lost the screen name. Read directly;
+       an error thrown before it is initialised throws in here and the catch answers '?'. */
+    const scr = AC_SCREENS.find((id) => {
+      const el = document.getElementById(id); return el && !el.classList.contains('hidden');
+    });
+    return [(typeof _appTab === 'string' ? _appTab : '?'), scr || '', ov ? ov.id : ''].filter(Boolean).join(' / ');
+  } catch (e) { return '?'; }
+}
+function _reportError(message, source, stack) {
+  try {
+    if (_errSent >= _ERR_MAX_PER_SESSION) return;
+    message = String(message || '').slice(0, 300);
+    if (!message || /^script error\.?$/i.test(message)) return;   // cross-origin: nothing to act on
+    const key = message + '|' + String(source || '');
+    if (_errSeen.has(key)) return;
+    _errSeen.add(key); _errSent++;
+    fetch('/api/client-error', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+      body: JSON.stringify({ message, source: String(source || '').slice(0, 200),
+        stack: String(stack || '').slice(0, 2000), path: _errWhere(),
+        build: ATWE_BUILD, platform: 'web' }),
+    }).catch(() => {});
+  } catch (e) { /* a reporter must never be the thing that breaks */ }
+}
+window.addEventListener('error', (e) => {
+  if (!e) return;
+  if (e.target && e.target !== window && e.target.tagName) return;   // a failed image/script tag, not a fault
+  _reportError(e.message, (e.filename || '') + ':' + (e.lineno || 0) + ':' + (e.colno || 0),
+    e.error && e.error.stack);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const r = e && e.reason;
+  _reportError(r && r.message ? r.message : String(r), 'promise', r && r.stack);
+});
 (function crashBeacon() {
   try {
     let prev = null;
@@ -23457,6 +23524,19 @@ function playWelcomeSplash(user) {
    step element itself became the <form>, so nothing about the layout changed.
    preventDefault stops the browser navigating — this is a single-page app — and the save
    prompt still fires, because the heuristic keys off the submit event, not the navigation. */
+/* Fill the manager's username field from the address this signup is for, and hand the
+   step to the code that was already there. Called when the step opens AND as the submit
+   goes through, because the address is chosen a step earlier. */
+function suSyncPmUser() {
+  const u = document.getElementById('suPmUser');
+  if (u) u.value = (SU && SU.email) || '';
+}
+function suPassSubmit(e) {
+  if (e) e.preventDefault();
+  suSyncPmUser();
+  suPassContinue();
+  return false;
+}
 function authSyncPmUser() {
   const u = document.getElementById('loginPmUser'), src = document.getElementById('loginEmail');
   if (u && src) u.value = src.value || '';
@@ -24307,6 +24387,7 @@ function suShow(id) {
   const step = document.getElementById(id);
   step.classList.remove('hidden');
   if (id === 'suNameStep') suNameAdapt();   // "your name" vs "company name"
+  if (id === 'suPassStep') suSyncPmUser();  // the manager needs a username to save against
   authFitVisible();   // measure/shrink prefilled fields BEFORE the fade so the
   playStepIn(step);   // animation itself runs free of any layout thrash (smooth 60fps)
   authBrandFor(id);
@@ -34694,6 +34775,18 @@ function notifRow(n, i) {
       <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
       <div class="ac-item-main"><div class="notif-text"><b>Your week in your shop</b>${n.metaNum ? ` — ${n.metaNum} order${n.metaNum === 1 ? '' : 's'}` : ''} · <span class="notif-time">${acTime(n.created_at)}</span></div>
         <div class="notif-snip">Tap for the full picture — sales, orders and top products.</div></div>
+      ${n.read ? '' : '<span class="notif-dot"></span>'}
+    </div>`;
+  }
+  /* SOMETHING BROKE FOR SOMEBODY — a system alert, staff only, and the one notification
+     whose whole job is to arrive before the owner hears it from a member. It is a fault,
+     not a person's doing, so it wears the Atwe mark rather than attributing the bug to
+     whoever happened to be on screen when it fired. */
+  if (n.type === 'app_error') {
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');openSettings();setNav('admin')">
+      <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
+      <div class="ac-item-main"><div class="notif-text"><b>Something broke for someone</b> · <span class="notif-time">${acTime(n.created_at)}</span></div>
+        <div class="notif-snip">A new fault was reported. Open the dashboard → Site to see it.</div></div>
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
