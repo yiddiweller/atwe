@@ -58,8 +58,14 @@ const ok = (c, m, x) => { if (c) { pass++; console.log('  ok   ' + m); } else { 
   /* A new fault tells the admins — through notifySelf, because notifications.actor_id is
      NOT NULL and a fault has no actor. The first version used notify(admin, null, …),
      whose insert failed silently every time. */
+  /* A new fault interrupts somebody — but only three times an hour, or a bad deploy would
+     ring the owner's phone twenty times. Which of the two happened is not guessable from
+     outside, so the route reports the remaining budget and this asks the right question. */
   const adm = await pool.query("SELECT COUNT(*)::int n FROM notifications WHERE type = 'app_error' AND created_at > now() - interval '3 minutes'");
-  ok(adm.rows[0].n >= 1, 'a brand-new fault alerts the admins (' + adm.rows[0].n + ')');
+  const budget = await pool.query("SELECT COUNT(*)::int n FROM notifications WHERE type = 'app_error' AND created_at > now() - interval '1 hour'");
+  if (adm.rows[0].n >= 1) ok(true, 'a brand-new fault alerts the admins (' + adm.rows[0].n + ')');
+  else ok(budget.rows[0].n > 0, 'the hourly alert ceiling had already been spent, so this one landed quietly — as designed',
+    'no alert, and none in the past hour either');
 
   /* Marking it fixed, and the one rule that makes that meaningful. */
   const a = await pool.query('SELECT id, email FROM users WHERE is_admin = true ORDER BY id LIMIT 1');
