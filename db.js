@@ -847,6 +847,44 @@ async function initSchema() {
   // Location is resolved once per ip into `ip_geo` (below) and JOINed at query time,
   // so a later resolution backfills the location of all that ip's past views.
   await query(`
+    /* WHEN THE APP BREAKS FOR A REAL PERSON, SOMEBODY HAS TO FIND OUT. Nothing in the
+       product could tell the owner that a member hit an error today — the audit log
+       records what STAFF did and the activity feed what members did, but a thrown
+       exception in someone's browser was seen by nobody. One row per DISTINCT fault
+       (the message plus where it was thrown), so a bug that fires a
+       thousand times is one line with a count, not a thousand lines. Deliberately holds
+       no message text, no names and no page content — only what broke and where. */
+    CREATE TABLE IF NOT EXISTS client_errors (
+      id           BIGSERIAL PRIMARY KEY,
+      fingerprint  TEXT UNIQUE NOT NULL,
+      message      TEXT,
+      source       TEXT,          -- file:line:col, or 'promise' for an unhandled rejection
+      stack        TEXT,
+      path         TEXT,          -- which screen it happened on
+      build        TEXT,          -- which build the device was running
+      platform     TEXT,          -- web / ios / android
+      hits         INTEGER NOT NULL DEFAULT 1,
+      users_hit    INTEGER NOT NULL DEFAULT 0,
+      last_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      last_agent   TEXT,
+      first_seen   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      last_seen    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      resolved     BOOLEAN NOT NULL DEFAULT false,
+      resolved_at  TIMESTAMPTZ,
+      resolved_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      /* WHICH build it was resolved on. A device still running that build reporting the
+         same fault is a straggler, not a reopening — only a newer build reopens it. */
+      resolved_build TEXT
+    );
+    CREATE INDEX IF NOT EXISTS client_errors_open_idx ON client_errors (resolved, last_seen DESC);
+    /* Who has hit it, so "12 people" is a real count rather than 12 reports from one
+       phone in a retry loop. Bounded by the same 14-day sweep as the errors themselves. */
+    CREATE TABLE IF NOT EXISTS client_error_users (
+      error_id  BIGINT NOT NULL REFERENCES client_errors(id) ON DELETE CASCADE,
+      user_key  TEXT NOT NULL,
+      seen_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (error_id, user_key)
+    );
     CREATE TABLE IF NOT EXISTS page_views (
       id         BIGSERIAL PRIMARY KEY,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

@@ -6410,6 +6410,74 @@ centred as it grows into the wider "New Message" pill. Its `bottom` in CSS is on
 — `acSyncFooterPad` sets the real one from the composer's measured height, so it rides up
 when the bar grows to two lines.
 
+### When the app breaks for somebody, the owner finds out
+
+Nothing in the product could say that a member hit an error today. The audit log records
+what STAFF did and the activity feed what members did; a thrown exception in someone's
+browser was seen by **nobody**. Now the client reports it, the server keeps **one row per
+distinct fault**, and a brand-new fault notifies the admins the way a payment does.
+
+**It holds no personal data at all** — no message text, no names, and deliberately **not the
+URL**: a path like `/john` IS somebody's name. It sends the **world and the screen**
+(`home / acHomeScreen`), which is both more useful and identifies nobody.
+
+| piece | where |
+|---|---|
+| `client_errors` + `client_error_users` | `db.js` — fingerprint UNIQUE, hits, users_hit, resolved, `resolved_build` |
+| `POST /api/client-error` | public + rate-limited: a fault is most worth hearing about when it happened *before* someone could sign in |
+| `GET/POST /api/admin/client-errors[/:id/resolve]` | `requireAdmin` — diagnostics, not a scoped desk |
+| the reporter | `_reportError` in `index.html`, on `error` + `unhandledrejection` |
+| the panel | admin **Site** tab, above Crash reports |
+
+**The fingerprint flattens digits** (`message + '|' + source` with `\d+` → `#`), so "post 4821
+not found" and "post 9137 not found" are ONE line rather than two. The client sends each
+distinct fault **once per session** and at most 8 in total, so a bug in a retry loop is one
+report — which is why the dashboard says "reported 8 times", not "8 times".
+
+**Four things were got wrong first, each silently:**
+- **`notifications.actor_id` is NOT NULL**, and a fault has no actor. `notify(admin, null,
+  'app_error')` therefore failed its insert *every* time — and notification delivery is
+  best-effort, so it swallowed the error and reported nothing (measured: 0 alerts from 2
+  real faults). **`notifySelf` is the door for a system alert**, as `week_summary` and
+  `follower_milestone` already use; the client renders the type with the Atwe mark.
+- **It notified EVERY admin, unawaited.** With two admins that is invisible; on a database
+  with 923 it opened ~900 concurrent queries and drowned the pool. Five, awaited, with an
+  hourly ceiling (`_errAlertOk`).
+- **`crypto` at module scope in `server.js` is the WEB crypto global** — no `createHash`.
+  Node's is required inline, exactly as `visitorHash` does.
+- **A bare parameter inside a `CASE` is inferred as text**, so `resolved_by = CASE WHEN $2
+  THEN $3 …` 500'd with "resolved_by is of type integer but expression is of type text".
+  Cast every one (`$2::boolean`, `$3::int`).
+
+**Resolving means something:** marking a fault fixed records the build it was fixed on, and
+a device still running THAT build reporting it again is a straggler, not a reopening — only
+a **newer** build reopens it. Old faults age out on two clocks (resolved: 30 days; anything:
+120).
+
+`scratchpad/apperrors.js` throws a real error in a real browser and reads it back through
+the real admin API. Two of its own bugs are recorded in it, because both make a probe pass
+on broken code: re-sending a fault must use the **exact message the browser reported** (a
+thrown error arrives as "Uncaught Error: …", so the bare text is a different fingerprint and
+a second row — after which the straggler check passes for the wrong reason), and **a
+synthetic KeyboardEvent never performs a form's implicit submit**, so testing "one Enter
+submits once" needs a real `keyboard.press`.
+
+### Signing up offers to save the password too
+
+Build 1785 gave the LOGIN step what a browser needs to offer "shall I save this?" — a real
+`<form>` submit carrying a username field and a `current-password` field — and left sign-up
+for its own pass, being the most fragile flow in the app. It has it now, by the same recipe:
+`#suPassStep` **is** the form (a `<div class="auth-step">` became a `<form class="auth-step">`
+— the same element, so the flex column and the button's `margin-top:auto` are untouched;
+wrapping the fields INSIDE the step is the version that breaks it), `#suPmUser` carries the
+address as a rendered-but-invisible `autocomplete="username"` field, Continue is a real
+`type="submit"`, and Skip is explicitly `type="button"`.
+
+**The field's own Enter handler is gone** — the form submits on Enter by itself, and keeping
+both is exactly what made the login step fire `doLogin` TWICE and burn its rate limit at
+double speed. `suSyncPmUser` fills the username field when the step opens and again as the
+submit goes through, because the address is chosen a step earlier.
+
 ### A phone turned sideways is still a phone
 
 The owner: *"when I turn the phone sideways I get the computer version, with all the options
