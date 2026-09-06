@@ -26291,11 +26291,15 @@ const CLIENT_ERR_MAX = 2000;                       // never store more than this
 /* A new fault is worth interrupting someone for; twenty in a minute is not. At most a few
    alerts an hour — everything else still lands in the dashboard, quietly. */
 let _errAlerts = [];
-function _errAlertOk() {
+const ERR_ALERTS_PER_HOUR = 3;
+function _errAlertsLeft() {
   const now = Date.now();
   _errAlerts = _errAlerts.filter((t) => now - t < 3600000);
-  if (_errAlerts.length >= 3) return false;
-  _errAlerts.push(now); return true;
+  return Math.max(0, ERR_ALERTS_PER_HOUR - _errAlerts.length);
+}
+function _errAlertOk() {
+  if (!_errAlertsLeft()) return false;
+  _errAlerts.push(Date.now()); return true;
 }
 app.post('/api/client-error', rateLimit(20, 60000, 'clienterr'), auth.optionalAuth, async (req, res) => {
   res.json({ ok: true });                          // never make the app wait on its own bad news
@@ -26378,7 +26382,10 @@ app.get('/api/admin/client-errors', auth.requireAdmin, async (req, res) => {
       id: r.id, message: r.message, source: r.source, stack: r.stack, path: r.path,
       build: r.build, platform: r.platform, hits: r.hits, usersHit: r.users_hit,
       firstSeen: r.first_seen, lastSeen: r.last_seen, resolved: r.resolved,
-      lastUsername: r.last_username, agent: r.last_agent })), openCount: open.rows[0].n });
+      lastUsername: r.last_username, agent: r.last_agent })), openCount: open.rows[0].n,
+      /* How many more new faults will interrupt someone this hour. Everything still lands
+         here either way — the ceiling only governs the notification. */
+      alertsLeftThisHour: _errAlertsLeft() });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Could not load errors.' }); }
 });
 app.post('/api/admin/client-errors/:id/resolve', auth.requireAdmin, async (req, res) => {
