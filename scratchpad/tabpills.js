@@ -13,7 +13,13 @@
  *     because on Light the selected tab is near-black;
  *  4. "Add" at the end of the Home/Beam row is NOT a pill: it is an extra action, not
  *     one of the choices, and must stay a bare quiet word;
- *  5. no tab still draws the old underline.
+ *  5. no tab still draws the old underline;
+ *  6. a RESTING tab carries a rim and the SELECTED one does not — measured off the
+ *     Apple Fitness+ row the founder sent as the reference, where the unselected pill
+ *     has a one-physical-pixel hairline and the white pill has none at all;
+ *  7. a resting LABEL is full strength. Apple's unselected labels read 247-254; ours
+ *     were a dimmed grey and visibly receded beside them. The fill says which tab you
+ *     are on, so the text does not have to.
  *
  * Self-test: point any tab family back at --accent-dim, or give .tb-feedtab
  * background:none, and this goes red.
@@ -70,8 +76,10 @@ const ROWS = [
         const add = host.querySelector('.tb-feedtab-add');
         return {
           n: tabs.length, primary, fill,
+          ink: tokenOf('var(--tab-ink)'),
           rows: tabs.map((e) => { const q = e.getBoundingClientRect(); const cs = getComputedStyle(e);
             return { bg: cs.backgroundColor, rad: parseFloat(cs.borderRadius) || 0, h: q.height,
+              bw: parseFloat(cs.borderTopWidth) || 0, bc: cs.borderTopColor, fg: cs.color,
               under: getComputedStyle(e, '::after').content !== 'none' && parseFloat(getComputedStyle(e, '::after').height) > 0 };
           }),
           addBg: add ? getComputedStyle(add).backgroundColor : null,
@@ -85,6 +93,14 @@ const ROWS = [
       chk(r.rows.filter((t) => t.bg === r.fill).length === r.n - on.length,
         `${T} every other tab is the shared resting grey`);
       chk(!r.rows.some((t) => t.under), `${T} no tab still draws an underline`);
+      const rest = r.rows.filter((t) => t.bg !== r.primary);
+      const clear = (c) => /rgba\([^)]*,\s*0\)/.test(c);
+      chk(rest.every((t) => t.bw >= 1 && !clear(t.bc)),
+        `${T} every resting tab carries a rim (${rest.map((t) => t.bw + 'px').join(',')})`);
+      chk(on.every((t) => clear(t.bc)),
+        `${T} ...and the selected one does not (${on.map((t) => t.bc).join(',')})`);
+      chk(rest.every((t) => t.fg === r.ink),
+        `${T} a resting label is full strength, not dimmed (${rest[0] ? rest[0].fg : '-'} for ${r.ink})`);
       if (r.addBg !== null) chk(r.addBg === 'rgba(0, 0, 0, 0)', `${T} "Add" stays a bare word, not a pill (${r.addBg})`);
       await p.evaluate(() => { document.querySelectorAll('.overlay:not(.hidden)').forEach((o) => closeOverlay(o.id, true)); });
       await p.waitForTimeout(400);

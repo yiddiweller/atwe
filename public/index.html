@@ -2996,7 +2996,11 @@ body.light .tb-home-dot{border-color:#fff;}
    than the tabs' --t2 (6.44 / 5.80) and still legible. The hover/press state brightens
    to --t2 and paints NO background pill — the tabs' own :hover pill would make "Add"
    read as a sixth tab on desktop, which is the whole thing this change avoids. */
-.topbar .tb-feedtabs .tb-feedtab.tb-feedtab-add{color:var(--t3);}
+/* One step quieter than an inactive tab — which moved when the tabs went to full
+   strength, so this moves with it (--t3 would now be two steps down). --t2 is 5.4:1 on
+   black, clear of the 4.5 floor for 15px text; --t4 would not be, and this repo has
+   shipped that exact mistake before. */
+.topbar .tb-feedtabs .tb-feedtab.tb-feedtab-add{color:var(--t2);}
 .topbar .tb-feedtabs .tb-feedtab.tb-feedtab-add:active{color:var(--t2);background:none;}
 @media(hover:hover){.topbar .tb-feedtabs .tb-feedtab.tb-feedtab-add:hover{color:var(--t2);background:none;}}
 /* Desktop/tablet: a centered, compact tab group at the top-middle (over the
@@ -4822,11 +4826,25 @@ body{
      hide. Declared here beside the tab tokens for the same reason. */
   --tb-tail: 0px;
   --tab-fill:    var(--s3);      /* at rest — the app's own secondary-button grey */
-  --tab-ink:     var(--t2);
+  /* A RESTING LABEL IS FULL STRENGTH, not a dimmed one — measured off the same Apple
+     screenshot, where the unselected labels read 247-254 (essentially white) and only
+     the FILL says which tab you are on. Ours were --t2 (142) and visibly receded beside
+     it. The white pill is unmissable on its own; double-encoding the state in the text
+     as well only made three of the four choices look switched off. */
+  --tab-ink:     var(--t1);
   --tab-fill-on: var(--primary); /* selected — white on Black, near-black on Light */
   --tab-ink-on:  var(--on-primary);
   --tab-fill-hv: var(--s4);
+  /* The rim on a resting tab. MEASURED off Apple Fitness+, which the founder sent as
+     the reference: its unselected pill is a #1D1D1D fill with a ONE-PHYSICAL-PIXEL rim
+     that composites to grey 65 — i.e. white at .16 over that fill — and its selected
+     white pill has no rim at all. Ours keeps that alpha but draws a full CSS pixel,
+     which on a 3x phone is three times Apple's width: the founder asked for it thicker.
+     It is deliberately stronger than the .05 rim on an ordinary secondary button — a row
+     of choices has to be countable at a glance, and that is what the rim buys. */
+  --tab-edge: rgba(255,255,255,.16);
 }
+body.light{ --tab-edge: rgba(0,0,0,.12); }
 body.light{
   --bg:#ffffff;--bg-1:#F5F5F7;--bg-2:#F5F5F7;--bg-3:#eff3f4;
   --s1:#F5F5F7;--s2:#F5F5F7;--s3:#e6ecf0;--s4:#d9e1e8;
@@ -14097,6 +14115,20 @@ body.light .mc-loc-map::before,body.light .mc-loc-map::after{background:rgba(0,0
 .mc-form-f,.mc-ans{font-size:12.5px;color:var(--t3);}
 .mc-form-note{font-size:12.5px;color:var(--t3);margin-top:6px;}
 .mc-form-btn{margin-top:10px;}
+
+/* ── The rim on a segmented tab (founder, from Apple Fitness+) ────────────────
+   A resting pill carries a hairline; the SELECTED one does not — it is already the
+   loudest thing in the row and a rim on white would only muddy its edge (Apple's
+   selected pill has none either). Declared here, after every family's own rule, so a
+   `border:none` further up cannot beat it; box-sizing is border-box app-wide, so the
+   rim costs no layout and nothing shifts when a tab is picked. */
+.tb-feedtab:not(.tb-feedtab-add),.ac-scope-chip,.ac-ptab,.ntf-tab,.ev-tab,.bk-tab,
+.ac-jv,.wf-chip,.sell-sortchip,.fb-cat,.ac-jbtab,.ja-fchip,.dir-ind,.svc-cat,
+.rx-tab,.rev-chip,.stt-chip,.ev-seg-btn,.cash-stab,.cash-range{border:1px solid var(--tab-edge);}
+.tb-feedtab.active:not(.tb-feedtab-add),.ac-scope-chip.active,.ac-ptab.on,.ntf-tab.on,
+.ev-tab.on,.bk-tab.on,.ac-jv.on,.wf-chip.on,.sell-sortchip.on,.fb-cat.on,.ac-jbtab.on,
+.ja-fchip.on,.dir-ind.on,.svc-cat.on,.rx-tab.on,.rev-chip.on,.stt-chip.on,
+.ev-seg-btn.on,.cash-stab.on,.cash-range.on{border-color:transparent;}
 </style>
 </head>
 <body style="background:#000">
@@ -22097,7 +22129,7 @@ function _lw() {
   const w = window.innerWidth || 999;
   return (window.innerHeight || 999) <= PHONE_MAX_H ? Math.min(w, 768) : w;
 }
-const ATWE_BUILD = '1819'; // keep in step with sw.js CACHE — tells us which build a device runs
+const ATWE_BUILD = '1820'; // keep in step with sw.js CACHE — tells us which build a device runs
 /* ── WHEN SOMETHING BREAKS, SAY SO ────────────────────────────────────────────────
    Until now a thrown error in a member's browser was seen by nobody: the owner could
    not know that anyone hit a bug today, let alone which one. This reports the fault —
